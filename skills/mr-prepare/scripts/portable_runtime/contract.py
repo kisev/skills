@@ -90,6 +90,7 @@ def parse_project(value: str) -> dict[str, object]:
         or parsed.username
         or parsed.password
         or len(parts) < 2
+        or "-" in parts
         or any(part in {".", ".."} for part in parts)
     ):
         raise WorkflowError("project must be an exact HTTPS GitLab project URL")
@@ -169,13 +170,16 @@ def glab_json(hostname: str, endpoint: str) -> object:
     glab = shutil.which("glab")
     if glab is None:
         raise WorkflowError("glab is unavailable; install and authenticate it outside this skill")
-    completed = subprocess.run(
-        [glab, "api", "--hostname", hostname, "--method", "GET", endpoint],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=45,
-    )
+    try:
+        completed = subprocess.run(
+            [glab, "api", "--hostname", hostname, "--method", "GET", endpoint],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=45,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise WorkflowError("GitLab GET could not be completed") from exc
     if completed.returncode:
         raise WorkflowError(f"GitLab GET failed: {completed.stderr.strip() or completed.returncode}")
     if len(completed.stdout.encode()) > MAX_BYTES:
@@ -362,8 +366,11 @@ def finalize(root_value: str) -> dict[str, object]:
 
 
 def local_bundle(repo_root: str, profile: str, ref: str | None) -> dict[str, object]:
-    root = Path(repo_root).resolve()
-    if root.is_symlink() or not (root / ".git").exists():
+    raw_root = Path(repo_root)
+    if raw_root.is_symlink():
+        raise WorkflowError("repo root must not be a symbolic link")
+    root = raw_root.resolve()
+    if not (root / ".git").exists():
         raise WorkflowError("repo root must be a real Git checkout")
     git = shutil.which("git")
     if git is None:
@@ -375,11 +382,37 @@ def local_bundle(repo_root: str, profile: str, ref: str | None) -> dict[str, obj
         return completed.stdout
     head = run("rev-parse", "HEAD").strip()
     base = run("merge-base", ref or "HEAD", "HEAD").strip() if ref else head
-    diff = run("diff", "--find-renames", base, head, "--")
+    diff = run("diff", "--find-renames", base, head, "--") if ref else run("diff", "--find-renames", "HEAD", "--")
     artifact = state_directory(profile, {"hostname": "local", "project_path": str(root), "kind": "local", "iid": 1})
-    bundle = {"schema_version": 1, "profile": profile, "repo_root": str(root), "base_sha": base, "head_sha": head, "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(), "diff": diff, "artifact_root": str(artifact), "retrieval_complete": True}
+    bundle = {"schema_version": 1, "profile": profile, "repo_root": str(root), "base_sha": base, "head_sha": head, "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(), "diff": diff, "artifact_root": str(artifact), "working_tree": ref is None, "retrieval_complete": True}
     write_json(artifact / "local-bundle.json", bundle)
     return bundle
+
+
+def finalize_local(bundle_file: str) -> dict[str, object]:
+    bundle = read_json(Path(bundle_file), "local bundle")
+    root_value = bundle.get("repo_root")
+    base = bundle.get("base_sha")
+    head = bundle.get("head_sha")
+    digest = bundle.get("diff_sha256")
+    if not all(isinstance(value, str) and value for value in (root_value, base, head, digest)):
+        raise WorkflowError("local bundle identity is incomplete")
+    root = Path(root_value)
+    if root.is_symlink() or not (root / ".git").exists():
+        raise WorkflowError("local bundle repository is unsafe")
+    git = shutil.which("git")
+    if git is None:
+        raise WorkflowError("git is unavailable")
+    def run(*arguments: str) -> str:
+        completed = subprocess.run([git, "-C", str(root), *arguments], check=False, capture_output=True, text=True)
+        if completed.returncode:
+            raise WorkflowError("local Git input can no longer be read")
+        return completed.stdout
+    current_head = run("rev-parse", "HEAD").strip()
+    current_diff = run("diff", "--find-renames", "HEAD", "--") if bundle.get("working_tree") is True else run("diff", "--find-renames", base, current_head, "--")
+    current_digest = hashlib.sha256(current_diff.encode()).hexdigest()
+    result = {"status": "ok" if current_head == head and current_digest == digest else "stale", "head_sha": current_head, "diff_sha256": current_digest}
+    return result
 
 
 def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
@@ -401,6 +434,8 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     local = subparsers.add_parser("prepare-local")
     local.add_argument("--repo-root", required=True)
     local.add_argument("--ref")
+    local_final = subparsers.add_parser("finalize-local")
+    local_final.add_argument("--bundle", required=True)
     mode = subparsers.add_parser("assess-mode")
     mode.add_argument("--mode", choices=("fast", "normal", "deep"), required=True)
     mode.add_argument("--critic-available", action="store_true")
@@ -420,6 +455,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     bundle = collect(target, profile)
                     results.append({"target": target["url"], "status": "ok", "artifact_root": bundle["artifact_root"], "head_sha": bundle["head_sha"], "complete": bundle["retrieval_complete"]})
                 except WorkflowError as exc:
+                    print(redact(str(exc)), file=sys.stderr)
                     results.append({"target": target["url"], "status": "error", "error": redact(str(exc))})
             status = "ok" if all(item["status"] == "ok" for item in results) else "partial"
             emit({"status": status, "items": results, "external_mutations": False})
@@ -475,6 +511,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             bundle = local_bundle(args.repo_root, profile, args.ref)
             emit({"status": "ok", "bundle": str(Path(str(bundle["artifact_root"])) / "local-bundle.json"), "head_sha": bundle["head_sha"], "external_mutations": False})
             return 0
+        if args.command == "finalize-local":
+            result = finalize_local(args.bundle)
+            emit(result)
+            return 0 if result["status"] == "ok" else 2
         if args.command == "assess-mode":
             if args.mode in {"normal", "deep"} and not args.critic_available:
                 emit({"status": "unsupported", "reason": "independent critic host capability is required", "details": {"mode": args.mode}})

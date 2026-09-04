@@ -112,6 +112,25 @@ class PortableWorkflowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 4)
         self.assertEqual(json.loads(result.stdout)["status"], "unsupported")
 
+    def test_local_review_finalization_rejects_changed_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            for arguments in (("init", "-q"), ("config", "user.email", "test@example.invalid"), ("config", "user.name", "Test")):
+                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+            source = repository / "sample.txt"
+            source.write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True, capture_output=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True, capture_output=True)
+            source.write_text("first\n", encoding="utf-8")
+            environment = {"XDG_STATE_HOME": str(repository / "state")}
+            prepared = self.run_runner("code-review", "prepare-local", "--repo-root", str(repository), cwd=repository, env=environment)
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            bundle = json.loads(prepared.stdout)["bundle"]
+            source.write_text("second\n", encoding="utf-8")
+            finalized = self.run_runner("code-review", "finalize-local", "--bundle", bundle, cwd=repository, env=environment)
+            self.assertEqual(finalized.returncode, 2)
+            self.assertEqual(json.loads(finalized.stdout)["status"], "stale")
+
 
 class MattermostAndTeamTests(unittest.TestCase):
     def run_script(self, skill: str, runner: str, *arguments: str, cwd: Path | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
