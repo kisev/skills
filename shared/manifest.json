@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "askme/references/question-guidelines.md"
+    }
+  ]
+}
