@@ -38,6 +38,15 @@ Codex и OpenCode; skills не требуют специфичного для ta
 | `skill-improver` | Цикл проверки и улучшения одного Agent Skill. |
 | `stopit` | Обезличенная передача контекста во временный файл. |
 | `summary` | Точный структурированный итог транскрипции, заметок или исследования. |
+| `task-triage` | Read-only содержательный разбор конкретных GitLab-задач. |
+| `task-review` | Проверка оформления и служебных полей GitLab-задач и MR. |
+| `task-prepare` | Подготовка одной задачи или явного пакета задач без публикации. |
+| `mr-prepare` | Подготовка обычного GitLab MR по diff, коммитам и CI. |
+| `code-review` | Глубокое ревью GitLab MR или локального WIP. |
+| `release-prepare` | Подготовка релизного MR, inventory и плана публикации. |
+| `release-review` | Read-only проверка готовности релизного MR. |
+| `mattermost` | Ограниченное read-only чтение Mattermost по ссылке. |
+| `team-workflow` | Одно явное действие командного цикла по явному context. |
 | `walkthrough` | Read-only карта чтения current diff, range или diff-file. |
 
 ## Границы
