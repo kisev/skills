@@ -4,6 +4,54 @@
     {
       "source": "references/question-guidelines.md",
       "destination": "askme/references/question-guidelines.md"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "ast-grep/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "ast-grep/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "ast-grep/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "rtk/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "rtk/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "rtk/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "skill-improver/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "skill-improver/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "skill-improver/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "walkthrough/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "walkthrough/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "walkthrough/scripts/portable_runtime/contract.py"
     }
   ]
 }
