@@ -157,6 +157,33 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertNotIn("private-value", result.stdout + result.stderr)
 
+    def test_mattermost_pagination_keeps_partial_posts(self) -> None:
+        module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_pages")
+        posts = {
+            str(index): {"id": str(index), "create_at": index}
+            for index in range(200)
+        }
+
+        class FakeClient:
+            def get(self, path: str):
+                if path == "/teams/name/team":
+                    return {"id": "team-id"}
+                if path == "/teams/team-id/channels/name/channel":
+                    return {"id": "channel-id"}
+                if path == "/channels/channel-id/posts?page=0&per_page=200":
+                    return {"posts": posts}
+                raise module.MattermostError("temporary response failure")
+
+        result, complete, warnings = module.read_channel(
+            FakeClient(),
+            {"team": "team", "channel": "channel"},
+            None,
+            None,
+        )
+        self.assertFalse(complete)
+        self.assertEqual(len(result), 200)
+        self.assertTrue(warnings)
+
     def test_team_confirmation_is_stale_after_content_changes_and_path_escape_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
