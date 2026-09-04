@@ -24,6 +24,12 @@ class WorkflowError(ValueError):
     """Expected safe workflow failure."""
 
 
+class ContractArgumentParser(argparse.ArgumentParser):
+    """Return invalid CLI input through the JSON runner contract."""
+
+    def error(self, message: str) -> None:
+        raise WorkflowError(message)
+
 def emit(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, sort_keys=True))
 
@@ -84,7 +90,7 @@ def atomic(path: Path, content: bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
-def validate_context(value: dict[str, Any]) -> dict[str, Any]:
+def assert_safe_context(value: dict[str, Any]) -> None:
     def scan(item: Any) -> None:
         if isinstance(item, dict):
             if any(str(key).lower() in FORBIDDEN for key in item):
@@ -95,11 +101,19 @@ def validate_context(value: dict[str, Any]) -> dict[str, Any]:
             for child in item:
                 scan(child)
     scan(value)
-    required = ("goals", "scope", "cadence", "baseline", "projects", "delivery_signals")
-    missing = [key for key in required if key not in value or value[key] in (None, "", [], {})]
+
+
+def validate_context(value: dict[str, Any]) -> dict[str, Any]:
+    assert_safe_context(value)
+    missing = context_missing(value)
     if missing:
         raise WorkflowError("setup-required: " + ", ".join(missing))
     return value
+
+
+def context_missing(value: dict[str, Any]) -> list[str]:
+    required = ("goals", "scope", "cadence", "baseline", "projects", "delivery_signals")
+    return [key for key in required if key not in value or value[key] in (None, "", [], {})]
 
 
 def valid_name(value: str) -> str:
@@ -163,14 +177,19 @@ def load_context(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = ContractArgumentParser(description=__doc__)
     parser.add_argument("--capabilities", action="store_true")
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", parser_class=ContractArgumentParser)
     check = subparsers.add_parser("action-check")
     check.add_argument("--action", required=True, choices=sorted(ACTIONS))
     check.add_argument("--context-file")
     check.add_argument("--context-name")
     check.add_argument("--chat-input")
+    inspect = subparsers.add_parser("context-inspect")
+    inspect.add_argument("--input", required=True)
+    subparsers.add_parser("context-list")
+    show = subparsers.add_parser("context-show")
+    show.add_argument("--name", required=True)
     prepare = subparsers.add_parser("context-prepare")
     prepare.add_argument("--input", required=True)
     prepare.add_argument("--name", required=True)
@@ -185,7 +204,10 @@ def main(argv: list[str] | None = None) -> int:
     artifact_apply.add_argument("--target", required=True)
     artifact_apply.add_argument("--input", required=True)
     artifact_apply.add_argument("--confirmation-id", required=True)
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except WorkflowError as exc:
+        return fail("invalid_input", str(exc))
     if args.capabilities:
         emit({"schema_version": 1, "payload_version": "1.0.0", "mutation": "local-write-confirmed", "dry_run": True, "state_protocol": "confirmation-receipts", "external_tools": {}, "destructive_flags": ["context-save", "artifact-apply"]})
         return 0
@@ -193,6 +215,28 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "action-check":
             context, _, source = load_context(args)
             emit({"status": "ok", "action": args.action, "context_source": source, "projects": len(context["projects"]), "external_mutations": False})
+            return 0
+        if args.command == "context-inspect":
+            context, _ = read_json(Path(args.input), "context input")
+            assert_safe_context(context)
+            missing = context_missing(context)
+            emit({"status": "ok" if not missing else "setup-required", "context": context, "missing": missing, "external_mutations": False})
+            return 0 if not missing else 3
+        if args.command == "context-list":
+            root = state_root() / "contexts"
+            names = []
+            if root.exists():
+                if root.is_symlink() or not root.is_dir():
+                    raise WorkflowError("contexts directory is unsafe")
+                for path in sorted(root.iterdir()):
+                    if path.suffix == ".json" and path.is_file() and not path.is_symlink():
+                        names.append(path.stem)
+            emit({"status": "ok", "contexts": names, "external_mutations": False})
+            return 0
+        if args.command == "context-show":
+            name = valid_name(args.name)
+            context, _ = read_json(state_root() / "contexts" / f"{name}.json", "saved context")
+            emit({"status": "ok", "name": name, "context": validate_context(context), "external_mutations": False})
             return 0
         if args.command == "context-prepare":
             context, raw = read_json(Path(args.input), "context input")

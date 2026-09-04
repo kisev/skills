@@ -59,6 +59,13 @@ class PortableWorkflowTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(json.loads(result.stdout)["error"]["code"], "invalid_input")
 
+    def test_invalid_runner_syntax_uses_json_error_contract(self) -> None:
+        for skill in GITLAB_RUNNERS:
+            with self.subTest(skill=skill):
+                result = self.run_runner(skill, "prepare")
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["status"], "error")
+
     def test_pagination_deduplicates_and_preserves_partial_failure(self) -> None:
         module = load_module(ROOT / "skills/task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_contract")
         pages = [list(range(100)), [99, 100]]
@@ -184,6 +191,47 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(len(result), 200)
         self.assertTrue(warnings)
 
+    def test_mattermost_authorization_failure_is_not_partial_success(self) -> None:
+        module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_auth")
+
+        class FakeClient:
+            def get(self, path: str):
+                if path == "/teams/name/team":
+                    return {"id": "team-id"}
+                if path == "/teams/team-id/channels/name/channel":
+                    return {"id": "channel-id"}
+                raise module.AuthorizationRequired("session expired")
+
+        with self.assertRaises(module.AuthorizationRequired):
+            module.read_channel(
+                FakeClient(),
+                {"team": "team", "channel": "channel"},
+                None,
+                None,
+            )
+
+    def test_mattermost_members_stays_within_one_channel(self) -> None:
+        module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_members")
+        calls: list[str] = []
+
+        class FakeClient:
+            def get(self, path: str):
+                calls.append(path)
+                responses = {
+                    "/teams/name/team": {"id": "team-id"},
+                    "/teams/team-id/channels/name/channel": {"id": "channel-id", "name": "channel"},
+                    "/channels/channel-id/members?page=0&per_page=200": [{"user_id": "one"}],
+                    "/users/one": {"username": "alice"},
+                }
+                return responses[path]
+
+        with patch.object(module, "read_token", return_value="token"):
+            with patch.object(module, "Client", return_value=FakeClient()):
+                result = module.collect_members("https://chat.example/team/channels/channel")
+        self.assertTrue(result["complete"])
+        self.assertEqual(result["members"][0]["username"], "alice")
+        self.assertTrue(all("channel-id" in path or path.startswith("/teams/") or path.startswith("/users/one") for path in calls))
+
     def test_team_confirmation_is_stale_after_content_changes_and_path_escape_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -203,6 +251,26 @@ class MattermostAndTeamTests(unittest.TestCase):
             linked.symlink_to(root.parent / "outside.txt")
             symlink = self.run_script("team-workflow", "team_workflow.py", "artifact-prepare", "--target", "linked.txt", "--input", str(source), cwd=root, env=environment)
             self.assertNotEqual(symlink.returncode, 0)
+
+    def test_team_context_inspect_reports_missing_without_writing_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            context = root / "context.json"
+            context.write_text('{"goals": ["goal"]}', encoding="utf-8")
+            state = root / "state"
+            result = self.run_script("team-workflow", "team_workflow.py", "context-inspect", "--input", str(context), cwd=root, env={"XDG_STATE_HOME": str(state)})
+            self.assertEqual(result.returncode, 3, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "setup-required")
+            self.assertIn("scope", payload["missing"])
+            self.assertFalse(state.exists())
+
+    def test_collaboration_runners_report_invalid_syntax_as_json(self) -> None:
+        for skill, runner in (("mattermost", "mattermost.py"), ("team-workflow", "team_workflow.py")):
+            with self.subTest(skill=skill):
+                result = self.run_script(skill, runner, "unknown-command")
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(json.loads(result.stdout)["status"], "error")
 
 
 def stat_mode(path: Path) -> int:

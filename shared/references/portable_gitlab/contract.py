@@ -30,6 +30,13 @@ class WorkflowError(ValueError):
     """An expected input, collection, or safety error."""
 
 
+class ContractArgumentParser(argparse.ArgumentParser):
+    """Report invalid CLI input through the runner JSON contract."""
+
+    def error(self, message: str) -> None:
+        raise WorkflowError(message)
+
+
 def redact(value: str) -> str:
     return SECRET_RE.sub(r"\1=[REDACTED]", value)
 
@@ -421,9 +428,9 @@ def finalize_local(bundle_file: str) -> dict[str, object]:
 
 
 def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Portable read-only GitLab workflow helper")
+    parser = ContractArgumentParser(description="Portable read-only GitLab workflow helper")
     parser.add_argument("--capabilities", action="store_true")
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", parser_class=ContractArgumentParser)
     prepare = subparsers.add_parser("prepare")
     prepare.add_argument("--url", action="append")
     prepare.add_argument("--project-url")
@@ -444,7 +451,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     mode = subparsers.add_parser("assess-mode")
     mode.add_argument("--mode", choices=("fast", "normal", "deep"), required=True)
     mode.add_argument("--critic-available", action="store_true")
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except WorkflowError as exc:
+        return error("invalid_input", str(exc))
     if args.capabilities:
         return capabilities(profile)
     try:

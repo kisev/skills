@@ -31,6 +31,13 @@ class AuthorizationRequired(MattermostError):
     """No valid origin-bound credential is available."""
 
 
+class ContractArgumentParser(argparse.ArgumentParser):
+    """Return invalid CLI input through the JSON runner contract."""
+
+    def error(self, message: str) -> None:
+        raise MattermostError(message)
+
+
 def emit(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, sort_keys=True))
 
@@ -181,6 +188,8 @@ def read_post(client: Client, post_id: str) -> tuple[list[dict[str, Any]], bool,
     try:
         thread = client.get(f"/posts/{urllib.parse.quote(str(root_id), safe='')}/thread")
         return normalize_posts(thread), True, []
+    except AuthorizationRequired:
+        raise
     except MattermostError as exc:
         return [post], False, [f"thread retrieval incomplete: {exc}"]
 
@@ -194,6 +203,8 @@ def read_channel(client: Client, target: dict[str, str | None], since: str | Non
         try:
             value = client.get(f"/channels/{channel['id']}/posts?page={page}&per_page={PAGE_SIZE}")
             posts = normalize_posts(value)
+        except AuthorizationRequired:
+            raise
         except MattermostError as exc:
             complete = False
             warnings.append(f"pagination stopped: {exc}")
@@ -249,6 +260,63 @@ def read_one(url: str, since: str | None, until: str | None, read_cache: bool, w
     return result
 
 
+def collect_members(url: str) -> dict[str, object]:
+    target = classify_url(url)
+    if target["kind"] == "post":
+        raise MattermostError("members requires a channel, direct, or group chat URL")
+    client = Client(str(target["origin"]), read_token(str(target["origin"])))
+    channel = resolve_channel(client, target)
+    member_ids: list[str] = []
+    seen: set[str] = set()
+    warnings: list[str] = []
+    complete = True
+    for page in range(MAX_PAGES):
+        try:
+            page_value = client.get(f"/channels/{channel['id']}/members?page={page}&per_page={PAGE_SIZE}")
+        except AuthorizationRequired:
+            raise
+        except MattermostError as exc:
+            complete = False
+            warnings.append(f"member pagination stopped: {exc}")
+            break
+        if not isinstance(page_value, list):
+            complete = False
+            warnings.append("member pagination response is incomplete")
+            break
+        for item in page_value:
+            user_id = item.get("user_id") if isinstance(item, dict) else None
+            if isinstance(user_id, str) and user_id and user_id not in seen:
+                seen.add(user_id)
+                member_ids.append(user_id)
+        if len(page_value) < PAGE_SIZE:
+            break
+    else:
+        complete = False
+        warnings.append("member pagination protective limit reached")
+    members: list[dict[str, str]] = []
+    for user_id in member_ids:
+        try:
+            profile = client.get(f"/users/{urllib.parse.quote(user_id, safe='')}")
+        except AuthorizationRequired:
+            raise
+        except MattermostError as exc:
+            complete = False
+            warnings.append(f"member profile unavailable: {user_id}: {exc}")
+            continue
+        if not isinstance(profile, dict) or not isinstance(profile.get("username"), str):
+            complete = False
+            warnings.append(f"member profile is incomplete: {user_id}")
+            continue
+        members.append(
+            {
+                "id": user_id,
+                "username": profile["username"],
+                "display_name": str(profile.get("nickname") or profile.get("first_name") or profile["username"]),
+            }
+        )
+    return {"status": "ok" if complete else "partial", "scope": "members", "target": url, "channel": {"id": channel["id"], "name": channel.get("name")}, "members": members, "complete": complete, "errors": [], "warnings": warnings, "counts": {"members": len(member_ids), "resolved": len(members), "unresolved": len(member_ids) - len(members)}, "source_timestamp": datetime.now(UTC).isoformat()}
+
+
 def import_browser_cookie(url: str) -> int:
     origin = normalized_origin(url)
     try:
@@ -272,9 +340,9 @@ def default_since() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = ContractArgumentParser(description=__doc__)
     parser.add_argument("--capabilities", action="store_true")
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(dest="command", parser_class=ContractArgumentParser)
     read = subparsers.add_parser("read")
     read.add_argument("url")
     read.add_argument("--since")
@@ -285,11 +353,16 @@ def main(argv: list[str] | None = None) -> int:
     many.add_argument("urls", nargs="+")
     many.add_argument("--since")
     many.add_argument("--until")
+    members = subparsers.add_parser("members")
+    members.add_argument("url")
     auth = subparsers.add_parser("auth")
     auth.add_argument("url")
     cache = subparsers.add_parser("cache")
     cache.add_argument("action", choices=("status", "clear"))
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except MattermostError as exc:
+        return fail("invalid_input", str(exc))
     if args.capabilities:
         emit({"schema_version": 1, "payload_version": "1.0.0", "mutation": "local-write", "dry_run": False, "state_protocol": "cache-and-origin-token", "external_tools": {"browser_auth": False}, "destructive_flags": ["cache clear"]})
         return 0
@@ -319,6 +392,10 @@ def main(argv: list[str] | None = None) -> int:
             complete = all(result.get("complete") for result in results)
             emit({"status": "ok" if complete else "partial", "targets": results, "complete": complete, "errors": [result.get("error") for result in results if result.get("error")]})
             return 0 if complete else 1
+        if args.command == "members":
+            result = collect_members(args.url)
+            emit(result)
+            return 0 if result["complete"] else 1
         return fail("invalid_command", "a supported subcommand is required")
     except AuthorizationRequired as exc:
         return fail("authentication_required", str(exc), AUTH_REQUIRED)

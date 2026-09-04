@@ -19,6 +19,15 @@
 | `skill-improver` | read-only checker | Цикл проверки одного Agent Skill. |
 | `stopit` | write с preview | Обезличенная передача контекста вне репозитория. |
 | `summary` | read-only по умолчанию | Структурированный итог переданных материалов. |
+| `task-triage` | read-only | Содержательный разбор конкретных GitLab-задач. |
+| `task-review` | read-only | Проверка оформления и служебных полей GitLab-задач и MR. |
+| `task-prepare` | local plan | Подготовка одной или пакета GitLab-задач без публикации. |
+| `mr-prepare` | local plan | Подготовка обычного GitLab MR по diff, коммитам и CI. |
+| `code-review` | read-only и local plan | Глубокое ревью GitLab MR или local WIP. |
+| `release-prepare` | local plan | Подготовка release MR, inventory и плана публикации. |
+| `release-review` | read-only | Проверка готовности release MR. |
+| `mattermost` | read-only с private cache | Ограниченное чтение Mattermost и состава канала. |
+| `team-workflow` | read/write с confirmation | Одно явное действие командного цикла по explicit context. |
 | `walkthrough` | read-only runner | Карта чтения current diff, Git range или diff-file. |
 
 Skills не наследуют runtime state, providers, глобальные конфигурации или имена
