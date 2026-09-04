@@ -52,6 +52,90 @@
     {
       "source": "references/python_runtime/contract.py",
       "destination": "walkthrough/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "task-triage/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "task-triage/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "task-triage/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "task-review/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "task-review/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "task-review/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "task-prepare/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "task-prepare/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "task-prepare/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "mr-prepare/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "mr-prepare/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "mr-prepare/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "code-review/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "code-review/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "code-review/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "release-prepare/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "release-prepare/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "release-prepare/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "release-review/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "release-review/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "release-review/references/gitlab-workflow.md"
     }
   ]
 }
