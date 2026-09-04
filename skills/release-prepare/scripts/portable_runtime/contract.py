@@ -256,6 +256,7 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
         raise WorkflowError("GitLab target response is incomplete")
     changed: dict[str, object] = {"items": [], "complete": True, "errors": [], "pages": 0}
     pipelines: dict[str, object] = {"items": [], "complete": True, "errors": [], "pages": 0}
+    discussions: dict[str, object] = {"items": [], "complete": True, "errors": [], "pages": 0}
     refs = object_value.get("diff_refs")
     head_sha = refs.get("head_sha") if isinstance(refs, dict) else None
     if kind == "merge_requests":
@@ -266,6 +267,7 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
             changed = {"items": [], "complete": False, "errors": ["GitLab changed-files response is incomplete"], "pages": 1}
         if isinstance(head_sha, str) and head_sha:
             pipelines = paginated(hostname, f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}")
+        discussions = paginated(hostname, f"projects/{project_id}/merge_requests/{iid}/discussions")
     root = state_directory(profile, target)
     bundle: dict[str, object] = {
         "schema_version": 1,
@@ -276,10 +278,11 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
         "labels": labels,
         "changed_files": changed,
         "pipelines": pipelines,
+        "discussions": discussions,
         "head_sha": head_sha,
         "artifact_root": str(root),
         "prepared_at": datetime.now(UTC).isoformat(),
-        "retrieval_complete": bool(labels["complete"]) and bool(changed["complete"]) and bool(pipelines["complete"]),
+        "retrieval_complete": bool(labels["complete"]) and bool(changed["complete"]) and bool(pipelines["complete"]) and bool(discussions["complete"]),
     }
     if persist:
         write_json(root / "bundle.json", bundle)
@@ -360,6 +363,8 @@ def finalize(root_value: str) -> dict[str, object]:
         raise WorkflowError("bundle object is missing")
     fields = ("updated_at", "labels", "diff_refs")
     changed = [field for field in fields if baseline_object.get(field) != current_object.get(field)]
+    if not current.get("retrieval_complete"):
+        changed.append("collection")
     result = {"status": "stale" if changed else "ok", "changed": changed, "head_sha": current.get("head_sha"), "retrieval_complete": current.get("retrieval_complete")}
     write_json(root / "finalize.json", result)
     return result

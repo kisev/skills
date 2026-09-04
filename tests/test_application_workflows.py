@@ -93,6 +93,7 @@ class PortableWorkflowTests(unittest.TestCase):
                 with patch.object(module, "glab_json", side_effect=fake):
                     bundle = module.collect(target, "task-triage")
         self.assertTrue(bundle["retrieval_complete"])
+        self.assertTrue(bundle["discussions"]["complete"])
         self.assertTrue(calls)
         self.assertTrue(all("projects/" in endpoint for _, endpoint in calls))
 
