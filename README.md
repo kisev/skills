@@ -1,30 +1,54 @@
 # Agent Skills
 
-Этот репозиторий - публичный источник переносимых Agent Skills и будущего
-необязательного npm package для интеграции с OpenCode.
+Этот репозиторий - публичный источник переносимых Agent Skills. Каждый каталог в
+`skills/` является самодостаточной единицей установки и работы.
 
-## Установка skill
+## Установка
 
-Установите canary skill напрямую из этого репозитория через `npx skills`:
+Установите весь набор напрямую из checkout через `npx skills`:
 
 ```shell
-npx skills add . --skill askme --agent codex --agent opencode --copy
+npx skills add . --agent codex --agent opencode --copy
 ```
 
-Чтобы посмотреть доступные в checkout skills, выполните
-`npx skills add . --list`.
+Для установки одного skill укажите его имя:
+
+```shell
+npx skills add . --skill project-spec --agent codex --copy
+```
+
+Список доступных skills выводит `npx skills add . --list`. Проверенные targets -
+Codex и OpenCode; skills не требуют специфичного для target runtime и используют
+только стандартные возможности host и файлы под собственным корнем.
+
+## Набор skills
+
+| Skill | Назначение |
+| --- | --- |
+| `agents-md` | Создание и проверка инструкций `AGENTS.md` по фактам репозитория. |
+| `askme` | Последовательное интервью для уточнения задачи или решения. |
+| `commit-msg` | Одно английское Conventional Commit сообщение по локальным изменениям. |
+| `docs-prepare` | Подготовка одного пользовательского документа Diataxis. |
+| `docs-review` | Read-only проверка пользовательской документации. |
+| `humanize` | Естественный русский текст без канцелярита. |
+| `project-spec` | Четыре режима работы с canonical `specs/`: init, onboard, update и audit. |
+| `stopit` | Обезличенная передача контекста во временный файл. |
+| `summary` | Точный структурированный итог транскрипции, заметок или исследования. |
 
 ## Границы
 
 - `skills/` содержит переносимые самодостаточные skills, устанавливаемые через
   `npx skills`.
-- `packages/opencode/` описывает границу будущего необязательного package для
-  agents, commands и plugins OpenCode. Сейчас он не реализован.
-- Пользовательского CLI нет. Python используется только в runners skills и
-  maintainer scripts.
+- Пользовательского CLI, runners, agents, commands и plugins нет. Python
+  используется только в maintainer scripts.
 - После установки skill должен работать, не читая файлы за пределами своего
   каталога. Общие исходные материалы перед выпуском детерминированно
   копируются в каждый skill-потребитель.
+- Skills, которые могут записывать файлы, показывают точный предпросмотр и ждут
+  явного подтверждения. Интерактивные вопросы используют штатный механизм host,
+  а при его отсутствии задаются в чате.
+- Skills не заменяют политики репозитория, проверку секретов, ревью или команды
+  проекта. Они не создают slash-команды и не устанавливают зависимости.
 
 Репозиторий распространяется по лицензии MIT. См. [LICENSE](LICENSE).
 
@@ -35,8 +59,8 @@ python3 scripts/sync_shared.py
 python3 scripts/sync_shared.py --check
 python3 -m unittest discover -s tests -v
 npx --yes skills add . --list
-uvx --from skills-ref agentskills validate skills/askme
+for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; done
 ```
 
 Команда `npx skills` - интерфейс установки. Репозиторий не добавляет другой
-установщик и не содержит скрытой зависимости от OpenCode.
+установщик и не содержит скрытой зависимости от конкретного host.

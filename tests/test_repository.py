@@ -12,6 +12,55 @@ from unittest.mock import patch
 from scripts import sync_shared
 
 ROOT = Path(__file__).resolve().parents[1]
+PORTABLE_SKILLS = (
+    "agents-md",
+    "askme",
+    "commit-msg",
+    "docs-prepare",
+    "docs-review",
+    "humanize",
+    "project-spec",
+    "stopit",
+    "summary",
+)
+FORBIDDEN_PORTABLE_MARKERS = (
+    "../..",
+    "bedrock.",
+    "catalog.yml",
+    "~/.config/opencode",
+    "~/.local/state/opencode",
+    "opencode",
+)
+PROJECT_REFERENCES = (
+    "references/requirements.md",
+    "references/architecture.md",
+    "references/interviewing.md",
+    "references/onboarding.md",
+    "references/consolidation.md",
+    "references/adr.md",
+    "references/auditing.md",
+)
+SPEC_TEMPLATE_READMES = (
+    "templates/specs/README.md",
+    "templates/specs/requirements/README.md",
+    "templates/specs/requirements/functional/README.md",
+    "templates/specs/requirements/interfaces/README.md",
+    "templates/specs/requirements/quality/README.md",
+    "templates/specs/requirements/constraints/README.md",
+    "templates/specs/architecture/README.md",
+    "templates/specs/architecture/01-introduction-and-goals/README.md",
+    "templates/specs/architecture/02-architecture-constraints/README.md",
+    "templates/specs/architecture/03-context-and-scope/README.md",
+    "templates/specs/architecture/04-solution-strategy/README.md",
+    "templates/specs/architecture/05-building-block-view/README.md",
+    "templates/specs/architecture/06-runtime-view/README.md",
+    "templates/specs/architecture/07-deployment-view/README.md",
+    "templates/specs/architecture/08-crosscutting-concepts/README.md",
+    "templates/specs/architecture/09-architecture-decisions/README.md",
+    "templates/specs/architecture/10-quality-requirements/README.md",
+    "templates/specs/architecture/11-risks-and-technical-debt/README.md",
+    "templates/specs/architecture/12-glossary/README.md",
+)
 
 
 class SyncSharedTests(unittest.TestCase):
@@ -136,23 +185,50 @@ class SyncSharedTests(unittest.TestCase):
 
 
 class PortableSkillValidationTests(unittest.TestCase):
-    def test_askme_frontmatter_and_references(self) -> None:
+    def test_all_portable_skills_have_required_frontmatter(self) -> None:
+        for name in PORTABLE_SKILLS:
+            skill = ROOT / "skills" / name / "SKILL.md"
+            with self.subTest(skill=name):
+                self.assertTrue(skill.is_file())
+                lines = skill.read_text(encoding="utf-8").splitlines()
+                self.assertEqual(lines[0], "---")
+                end = lines.index("---", 1)
+                fields = {
+                    line.split(":", 1)[0]
+                    for line in lines[1:end]
+                    if line and not line.startswith(" ") and ":" in line
+                }
+                self.assertEqual(fields, {"name", "description", "license", "metadata"})
+                self.assertEqual(lines[1], f"name: {name}")
+                self.assertIn("license: MIT", lines)
+                self.assertIn('  author: "Kirill Sevriugin"', lines)
+                self.assertIn('  version: "1.0.0"', lines)
+
+    def test_referenced_resources_are_self_contained(self) -> None:
+        resources = {
+            "askme": ("references/question-guidelines.md",),
+            "agents-md": ("references/agents-md-guidelines.md",),
+            "project-spec": (*PROJECT_REFERENCES, "templates/adr.md", *SPEC_TEMPLATE_READMES),
+        }
+        for name, paths in resources.items():
+            skill = ROOT / "skills" / name
+            text = (skill / "SKILL.md").read_text(encoding="utf-8")
+            for relative in paths:
+                with self.subTest(skill=name, resource=relative):
+                    self.assertTrue((skill / relative).is_file())
+                    if relative.startswith("references/"):
+                        self.assertIn(relative, text)
+
+    def test_project_spec_has_complete_nineteen_file_contract(self) -> None:
+        self.assertEqual(len(SPEC_TEMPLATE_READMES), 19)
+        skill = ROOT / "skills/project-spec"
+        self.assertTrue((skill / "templates/adr.md").is_file())
+        for relative in SPEC_TEMPLATE_READMES:
+            self.assertTrue((skill / relative).is_file(), relative)
+
+    def test_askme_remains_compatible_with_portable_contract(self) -> None:
         skill = ROOT / "skills/askme/SKILL.md"
         lines = skill.read_text(encoding="utf-8").splitlines()
-        self.assertEqual(lines[0], "---")
-        end = lines.index("---", 1)
-        fields = {
-            line.split(":", 1)[0]
-            for line in lines[1:end]
-            if line and not line.startswith(" ") and ":" in line
-        }
-        self.assertEqual(
-            fields, {"name", "description", "license", "metadata"}
-        )
-        self.assertEqual(lines[1], "name: askme")
-        self.assertIn("license: MIT", lines)
-        self.assertIn('  author: "Kirill Sevriugin"', lines)
-        self.assertIn('  version: "1.0.0"', lines)
         text = skill.read_text(encoding="utf-8")
         self.assertIn("references/question-guidelines.md", text)
         self.assertIn("Если у host нет такого инструмента, задай вопросы в чате.", text)
@@ -167,14 +243,31 @@ class PortableSkillValidationTests(unittest.TestCase):
         )
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
-        forbidden = ("../..", "~/.config/opencode", "~/.local/state/opencode", "bedrock.")
         for path in (ROOT / "skills").rglob("*"):
             if path.is_file():
-                text = path.read_text(encoding="utf-8")
-                for marker in forbidden:
+                text = path.read_text(encoding="utf-8").lower()
+                for marker in FORBIDDEN_PORTABLE_MARKERS:
                     self.assertNotIn(marker, text, f"{marker} in {path}")
 
-    def test_npx_installs_askme_into_codex_and_opencode_targets(self) -> None:
+    def test_npx_lists_all_portable_skills(self) -> None:
+        result = subprocess.run(
+            ["npx", "--yes", "skills", "add", ".", "--list"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name in PORTABLE_SKILLS:
+            self.assertIn(name, result.stdout)
+
+    def test_npx_installs_each_skill_for_codex_and_opencode(self) -> None:
+        for name in PORTABLE_SKILLS:
+            for agent in ("codex", "opencode"):
+                with self.subTest(skill=name, agent=agent):
+                    self.assert_isolated_install(name, agent)
+
+    def assert_isolated_install(self, name: str, agent: str) -> None:
         home = Path(tempfile.mkdtemp())
         checkout = home / "checkout"
         shutil.copytree(ROOT, checkout)
@@ -191,11 +284,9 @@ class PortableSkillValidationTests(unittest.TestCase):
                 "add",
                 str(checkout),
                 "--skill",
-                "askme",
+                name,
                 "--agent",
-                "codex",
-                "--agent",
-                "opencode",
+                agent,
                 "--copy",
                 "--global",
                 "--yes",
@@ -207,14 +298,15 @@ class PortableSkillValidationTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        installed = home / ".agents/skills/askme"
+        installed = home / ".agents/skills" / name
         self.assertTrue((installed / "SKILL.md").is_file())
-        self.assertTrue((installed / "references/question-guidelines.md").is_file())
         shutil.rmtree(checkout / "shared")
-        self.assertEqual(
-            (installed / "references/question-guidelines.md").read_bytes(),
-            (ROOT / "skills/askme/references/question-guidelines.md").read_bytes(),
-        )
+        shutil.rmtree(checkout)
+        source = ROOT / "skills" / name
+        for path in source.rglob("*"):
+            if path.is_file():
+                relative = path.relative_to(source)
+                self.assertEqual((installed / relative).read_bytes(), path.read_bytes())
 
 
 if __name__ == "__main__":
