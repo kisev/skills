@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -61,6 +62,47 @@ SPEC_TEMPLATE_READMES = (
     "templates/specs/architecture/11-risks-and-technical-debt/README.md",
     "templates/specs/architecture/12-glossary/README.md",
 )
+WORKFLOW_CONTRACTS = {
+    "humanize": (
+        "точные цитаты, код, вывод команд",
+        "не подменяй роль автора ролью ревьюера",
+    ),
+    "summary": (
+        "не добавляй фактов, которых нет в исходных данных",
+        "строго различай текущую ситуацию, предложение, принятое решение",
+    ),
+    "commit-msg": (
+        "git diff --cached",
+        "выведи ровно одну строку",
+        "не выполняй `git add`, `git commit`",
+    ),
+    "agents-md": (
+        "до 20 однострочных пунктов",
+        "покажи точный diff и получи явное подтверждение",
+    ),
+    "docs-prepare": (
+        "один пользовательский документ diataxis",
+        "покажи путь и черновик либо diff",
+    ),
+    "docs-review": (
+        "не изменяй репозиторий, документы, внешние системы",
+        "сообщай только подтверждённые замечания",
+    ),
+    "project-spec": (
+        "пользователь должен явно передать один режим",
+        "`spec-init`",
+        "`spec-onboard`",
+        "`spec-update`",
+        "`spec-audit`",
+        "все 19 обязательных `readme.md`",
+        "этот режим полностью read-only",
+    ),
+    "stopit": (
+        "во временной директории ос, не в репозитории",
+        "покажи полный черновик и временный путь",
+    ),
+}
+CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 
 
 class SyncSharedTests(unittest.TestCase):
@@ -203,6 +245,35 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn("license: MIT", lines)
                 self.assertIn('  author: "Kirill Sevriugin"', lines)
                 self.assertIn('  version: "1.0.0"', lines)
+                metadata_start = lines.index("metadata:") + 1
+                self.assertEqual(
+                    lines[metadata_start:end],
+                    ['  author: "Kirill Sevriugin"', '  version: "1.0.0"'],
+                )
+
+    def test_public_skill_and_repository_texts_are_russian(self) -> None:
+        paths = [
+            ROOT / "README.md",
+            *(ROOT / "docs").rglob("*.md"),
+            *(ROOT / "skills" / name / "SKILL.md" for name in PORTABLE_SKILLS),
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                self.assertRegex(path.read_text(encoding="utf-8"), CYRILLIC)
+        for name in PORTABLE_SKILLS:
+            lines = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8").splitlines()
+            frontmatter_end = lines.index("---", 1)
+            with self.subTest(skill=name, section="description"):
+                self.assertRegex("\n".join(lines[1:frontmatter_end]), CYRILLIC)
+            with self.subTest(skill=name, section="body"):
+                self.assertRegex("\n".join(lines[frontmatter_end + 1 :]), CYRILLIC)
+
+    def test_portable_workflows_preserve_source_contracts(self) -> None:
+        for name, contracts in WORKFLOW_CONTRACTS.items():
+            text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8").lower()
+            for contract in contracts:
+                with self.subTest(skill=name, contract=contract):
+                    self.assertIn(contract, text)
 
     def test_referenced_resources_are_self_contained(self) -> None:
         resources = {
@@ -228,12 +299,13 @@ class PortableSkillValidationTests(unittest.TestCase):
 
     def test_askme_remains_compatible_with_portable_contract(self) -> None:
         skill = ROOT / "skills/askme/SKILL.md"
-        lines = skill.read_text(encoding="utf-8").splitlines()
         text = skill.read_text(encoding="utf-8")
         self.assertIn("references/question-guidelines.md", text)
         self.assertIn("Если у host нет такого инструмента, задай вопросы в чате.", text)
         self.assertIn("Если фактов достаточно", text)
         self.assertIn("`task-prepare`", text)
+        self.assertIn("Не меняй репозиторий, внешние системы, документы", text)
+        self.assertIn("Не запускай отдельный workflow без нового запроса", text)
         self.assertNotIn("native OpenCode", text)
         self.assertNotIn("../../", text)
         self.assertNotIn("Каталог", text)
