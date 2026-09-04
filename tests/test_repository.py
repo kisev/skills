@@ -62,6 +62,31 @@ SPEC_TEMPLATE_READMES = (
     "templates/specs/architecture/11-risks-and-technical-debt/README.md",
     "templates/specs/architecture/12-glossary/README.md",
 )
+PROJECT_REFERENCE_CONTRACTS = {
+    "references/requirements.md": "существующие id не перенумеровывай",
+    "references/architecture.md": "дополнительные markdown-файлы разрешены только",
+    "references/interviewing.md": "readiness check",
+    "references/onboarding.md": "`known`",
+    "references/consolidation.md": "consolidation: required",
+    "references/adr.md": "не переписывай старый adr",
+    "references/auditing.md": "`implementation_ahead`",
+}
+PROJECT_TEMPLATE_SECTIONS = (
+    "## назначение",
+    "## сюда относится",
+    "## сюда не относится",
+    "## правила декомпозиции",
+    "## ожидаемая структура",
+    "## шаблон содержания",
+)
+ADR_TEMPLATE_SECTIONS = (
+    "## контекст и постановка проблемы",
+    "## драйверы решения",
+    "## рассмотренные варианты",
+    "## итоговое решение",
+    "## последствия",
+    "## связи",
+)
 WORKFLOW_CONTRACTS = {
     "humanize": (
         "точные цитаты, код, вывод команд",
@@ -255,7 +280,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         paths = [
             ROOT / "README.md",
             *(ROOT / "docs").rglob("*.md"),
-            *(ROOT / "skills" / name / "SKILL.md" for name in PORTABLE_SKILLS),
+            *(ROOT / "skills").rglob("*.md"),
         ]
         for path in paths:
             with self.subTest(path=path):
@@ -296,6 +321,21 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertTrue((skill / "templates/adr.md").is_file())
         for relative in SPEC_TEMPLATE_READMES:
             self.assertTrue((skill / relative).is_file(), relative)
+
+    def test_project_spec_resources_preserve_semantic_guidance(self) -> None:
+        skill = ROOT / "skills/project-spec"
+        for relative, contract in PROJECT_REFERENCE_CONTRACTS.items():
+            with self.subTest(resource=relative, contract=contract):
+                self.assertIn(contract, (skill / relative).read_text(encoding="utf-8").lower())
+        for relative in SPEC_TEMPLATE_READMES:
+            text = (skill / relative).read_text(encoding="utf-8").lower()
+            for section in PROJECT_TEMPLATE_SECTIONS:
+                with self.subTest(template=relative, section=section):
+                    self.assertIn(section, text)
+        adr = (skill / "templates/adr.md").read_text(encoding="utf-8").lower()
+        for section in ADR_TEMPLATE_SECTIONS:
+            with self.subTest(template="templates/adr.md", section=section):
+                self.assertIn(section, adr)
 
     def test_askme_remains_compatible_with_portable_contract(self) -> None:
         skill = ROOT / "skills/askme/SKILL.md"
