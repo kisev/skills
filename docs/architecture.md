@@ -1,30 +1,32 @@
-# Architecture
+# Архитектура
 
-## Source of truth
+## Источник истины
 
-Portable skills live under `skills/<name>/` and are complete installation
-units. A skill may use only files below its own root at runtime. `shared/` is
-maintainer input, never an installed runtime dependency. `scripts/sync_shared.py`
-materializes exact copies from the manifest and committed copies are checked in
-under each skill.
+Переносимые skills находятся в `skills/<name>/` и являются законченными
+единицами установки. Во время работы skill может использовать только файлы под
+собственным корнем. `shared/` - входные данные сопровождающего, а не runtime-
+зависимость установленного skill. `scripts/sync_shared.py` создаёт точные копии
+по manifest, а эти копии хранятся в Git под соответствующими skills.
 
-The repository has no user-facing CLI. Maintainer scripts may be Python
-stdlib-only; Python runners, when a skill needs them, belong to that skill.
+В репозитории нет пользовательского CLI. Maintainer scripts могут использовать
+только Python stdlib; Python runners, если они нужны skill, находятся внутри
+этого skill.
 
-## Host integration
+## Интеграция с host
 
-Portable skills describe intent without requiring a particular host. A host
-may provide its normal interactive question facility; if it cannot, the agent
-asks in chat. OpenCode-only adapters and future agents/plugins belong in the
-optional `packages/opencode/` package and are not required to install or run a
-portable skill.
+Переносимые skills описывают задачу и не требуют конкретного host. Host может
+предоставить штатный инструмент интерактивных вопросов; если его нет, agent
+задаёт вопрос в чате. OpenCode-only adapters и будущие agents/plugins относятся
+к необязательному package `packages/opencode/` и не нужны для установки или
+работы portable skill.
 
-## Materialization invariants
+## Инварианты materialization
 
-- The JSON manifest is the only mapping from shared sources to skill paths.
-- Paths are relative, normalized, and confined to `shared/references/` and
-  `skills/` respectively.
-- Symlinks are rejected in source and destination paths.
-- Normalization and all source reads happen before writes.
-- Staged files are replaced atomically, with rollback on replacement failure.
-- `--check` is read-only and reports drift through a non-zero exit status.
+- JSON manifest - единственное отображение общих исходников в пути skills.
+- Пути относительные, нормализованные и ограничены соответственно каталогами
+  `shared/references/` и `skills/`.
+- Symlinks в исходных и конечных путях отклоняются.
+- Нормализация и чтение всех исходников выполняются до записи.
+- Подготовленные файлы заменяются атомарно; при ошибке замены выполняется
+  откат.
+- `--check` работает только на чтение и сообщает о drift ненулевым exit status.

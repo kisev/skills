@@ -1,20 +1,21 @@
-# Migration Inventory
+# Инвентарь миграции
 
-This inventory records the intended split from the Bedrock-managed bundle.
-Only `askme` is implemented in this repository at this stage.
+Этот инвентарь фиксирует запланированное разделение Bedrock-managed bundle.
+На этом этапе в репозитории реализован только `askme`.
 
-| Inventory | Count | Destination | Status |
+| Инвентарь | Количество | Назначение | Статус |
 | --- | ---: | --- | --- |
-| Portable skills | 23 | `skills/` | Planned; `askme` is the canary |
-| OpenCode-specific skills | 7 | optional OpenCode integration | Planned |
+| Portable skills | 23 | `skills/` | Запланировано; `askme` - canary |
+| OpenCode-specific skills | 7 | необязательная интеграция OpenCode | Запланировано |
 
-The portable inventory must not inherit Bedrock runtime state, catalog files,
-providers, or OpenCode tool names. `agent-profiles`, `capabilities`, `doctor`,
-not portable skills in this repository.
+Portable inventory не должен наследовать Bedrock runtime state, catalog files,
+providers или имена инструментов OpenCode. `agent-profiles`, `capabilities`,
+`doctor` и `bedrock` заменяются возможностями host или package либо удаляются;
+они не являются portable skills этого репозитория.
 
-Commands become thin OpenCode adapters. They select or invoke a portable skill
-but do not become a second workflow implementation. OpenCode agents and plugins
-are supplied by the future optional npm package, not by a skill installation.
+Commands становятся тонкими OpenCode adapters. Они выбирают или вызывают
+portable skill, но не реализуют второй workflow. OpenCode agents и plugins
+поставляются будущим необязательным npm package, а не установкой skill.
 
-The migration deliberately does not implement the remaining skills, the npm
-package, agents, commands, or plugins.
+В рамках этой миграции намеренно не реализуются остальные skills, npm package,
+agents, commands и plugins.

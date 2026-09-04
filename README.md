@@ -1,32 +1,34 @@
 # Agent Skills
 
-This repository is the public source of portable Agent Skills and, later, an
-optional npm package for OpenCode integration.
+Этот репозиторий - публичный источник переносимых Agent Skills и будущего
+необязательного npm package для интеграции с OpenCode.
 
-## Install a skill
+## Установка skill
 
-Install the canary skill directly from this repository with `npx skills`:
+Установите canary skill напрямую из этого репозитория через `npx skills`:
 
 ```shell
 npx skills add . --skill askme --agent codex --agent opencode --copy
 ```
 
-Use `npx skills add . --list` to inspect the skills available in the checkout.
+Чтобы посмотреть доступные в checkout skills, выполните
+`npx skills add . --list`.
 
-## Boundaries
+## Границы
 
-- `skills/` contains portable, self-contained skills installable by `npx skills`.
-- `packages/opencode/` documents the future optional package boundary for
-  OpenCode agents, commands, and plugins. It is not implemented yet.
-- There is no user-facing CLI. Python is used only by skill runners and
+- `skills/` содержит переносимые самодостаточные skills, устанавливаемые через
+  `npx skills`.
+- `packages/opencode/` описывает границу будущего необязательного package для
+  agents, commands и plugins OpenCode. Сейчас он не реализован.
+- Пользовательского CLI нет. Python используется только в runners skills и
   maintainer scripts.
-- A skill must work after installation without reading files outside its own
-  directory. Shared source material is copied deterministically into each
-  consumer skill before release.
+- После установки skill должен работать, не читая файлы за пределами своего
+  каталога. Общие исходные материалы перед выпуском детерминированно
+  копируются в каждый skill-потребитель.
 
-The repository is MIT licensed. See [LICENSE](LICENSE).
+Репозиторий распространяется по лицензии MIT. См. [LICENSE](LICENSE).
 
-## Maintainer checks
+## Проверки сопровождающего
 
 ```shell
 python3 scripts/sync_shared.py
@@ -36,5 +38,5 @@ npx --yes skills add . --list
 uvx --from skills-ref agentskills validate skills/askme
 ```
 
-The `npx skills` command is the installation interface; this repository does
-not add another installer or a hidden OpenCode dependency.
+Команда `npx skills` - интерфейс установки. Репозиторий не добавляет другой
+установщик и не содержит скрытой зависимости от OpenCode.

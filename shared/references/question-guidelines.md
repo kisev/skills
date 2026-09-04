@@ -1,12 +1,12 @@
-# Question Guidelines
+# Правила вопросов
 
-Do not show free-form input and an option with the same meaning in one
-question. Avoid options such as "other", "custom", "another", or equivalent
-when free-form input is already available.
+Не показывайте в одном вопросе свободный ввод и option с тем же смыслом. Не
+используйте options вроде "other", "custom", "another" и их эквиваленты, если
+свободный ввод уже доступен.
 
-Use exactly one mechanism:
+Используйте ровно один механизм:
 
-- an `other` or `custom` option followed by a request for details;
-- free-form input without an equivalent option.
+- option `other` или `custom` с последующим запросом деталей;
+- свободный ввод без эквивалентного option.
 
-Do not duplicate these mechanisms in one question.
+Не дублируйте эти механизмы в одном вопросе.

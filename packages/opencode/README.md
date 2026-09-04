@@ -1,9 +1,9 @@
-# Optional OpenCode Package
+# Необязательный package OpenCode
 
-This directory reserves the boundary for a future optional npm package. The
-package may ship OpenCode-specific agents, thin commands that adapt host input
-to portable skills, and plugins. It must not become a runtime dependency of
-anything under `skills/`.
+Этот каталог задаёт границу будущего необязательного npm package. Package может
+поставлять OpenCode-specific agents, тонкие commands для адаптации входных
+данных host к portable skills и plugins. Он не должен становиться runtime-
+зависимостью чего-либо под `skills/`.
 
-No package metadata or implementation is present until its public API,
-distribution format, and compatibility policy are designed and reviewed.
+Metadata и реализация package не добавляются до проектирования и review его
+публичного API, формата распространения и политики совместимости.
