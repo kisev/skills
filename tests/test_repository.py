@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -70,6 +71,11 @@ class SyncSharedTests(unittest.TestCase):
         (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
         self.assertFalse((root / "outside.md").exists())
+        manifest["files"][0]["destination"] = "demo/references/result.md"
+        manifest["files"][0]["source"] = "../outside.md"
+        (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
+        self.assertFalse((skills / "demo/references/result.md").exists())
 
     def test_rejects_source_and_destination_symlinks_before_writing(self) -> None:
         root, shared, skills = self.make_fixture()
@@ -86,6 +92,48 @@ class SyncSharedTests(unittest.TestCase):
         (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
         self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
 
+    def test_rolls_back_all_destinations_after_replacement_failure(self) -> None:
+        root, shared, skills = self.make_fixture()
+        first_source = shared / "references/source.md"
+        second_source = shared / "references/second.md"
+        second_source.write_text("second before\n", encoding="utf-8")
+        manifest = {
+            "version": 1,
+            "files": [
+                {
+                    "source": "references/source.md",
+                    "destination": "demo/references/first.md",
+                },
+                {
+                    "source": "references/second.md",
+                    "destination": "demo/references/second.md",
+                },
+            ],
+        }
+        (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+        self.assertEqual(self.run_fixture(root, shared, skills, False), 0)
+        first_destination = skills / "demo/references/first.md"
+        second_destination = skills / "demo/references/second.md"
+        first_before = first_destination.read_bytes()
+        second_before = second_destination.read_bytes()
+        first_source.write_text("first after\n", encoding="utf-8")
+        second_source.write_text("second after\n", encoding="utf-8")
+        replace = sync_shared.os.replace
+
+        def fail_second_replacement(source: Path, destination: Path) -> None:
+            if (
+                Path(source).name == "1"
+                and Path(destination) == second_destination
+                and Path(source).parent.name.startswith("sync-shared-")
+            ):
+                raise OSError("simulated replacement failure")
+            replace(source, destination)
+
+        with patch.object(sync_shared.os, "replace", side_effect=fail_second_replacement):
+            self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
+        self.assertEqual(first_destination.read_bytes(), first_before)
+        self.assertEqual(second_destination.read_bytes(), second_before)
+
 
 class PortableSkillValidationTests(unittest.TestCase):
     def test_askme_frontmatter_and_references(self) -> None:
@@ -99,13 +147,20 @@ class PortableSkillValidationTests(unittest.TestCase):
             if line and not line.startswith(" ") and ":" in line
         }
         self.assertEqual(
-            fields, {"name", "description", "license", "compatibility", "metadata"}
+            fields, {"name", "description", "license", "metadata"}
         )
         self.assertEqual(lines[1], "name: askme")
         self.assertIn("license: MIT", lines)
-        self.assertIn("  author: Kirill Sevriugin", lines)
-        self.assertIn("  version: 1.0.0", lines)
-        self.assertIn("references/question-guidelines.md", skill.read_text(encoding="utf-8"))
+        self.assertIn('  author: "Kirill Sevriugin"', lines)
+        self.assertIn('  version: "1.0.0"', lines)
+        text = skill.read_text(encoding="utf-8")
+        self.assertIn("references/question-guidelines.md", text)
+        self.assertIn("Если у host нет такого инструмента, задай вопросы в чате.", text)
+        self.assertIn("Если фактов достаточно", text)
+        self.assertIn("`task-prepare`", text)
+        self.assertNotIn("native OpenCode", text)
+        self.assertNotIn("../../", text)
+        self.assertNotIn("Каталог", text)
         self.assertEqual(
             (ROOT / "skills/askme/references/question-guidelines.md").read_bytes(),
             (ROOT / "shared/references/question-guidelines.md").read_bytes(),
@@ -121,6 +176,8 @@ class PortableSkillValidationTests(unittest.TestCase):
 
     def test_npx_installs_askme_into_codex_and_opencode_targets(self) -> None:
         home = Path(tempfile.mkdtemp())
+        checkout = home / "checkout"
+        shutil.copytree(ROOT, checkout)
         environment = {
             **os.environ,
             "HOME": str(home),
@@ -132,7 +189,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 "--yes",
                 "skills",
                 "add",
-                str(ROOT),
+                str(checkout),
                 "--skill",
                 "askme",
                 "--agent",
@@ -143,7 +200,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 "--global",
                 "--yes",
             ],
-            cwd=ROOT,
+            cwd=checkout,
             env=environment,
             capture_output=True,
             text=True,
@@ -153,7 +210,11 @@ class PortableSkillValidationTests(unittest.TestCase):
         installed = home / ".agents/skills/askme"
         self.assertTrue((installed / "SKILL.md").is_file())
         self.assertTrue((installed / "references/question-guidelines.md").is_file())
-        self.assertFalse((installed.parent.parent.parent / "shared").exists())
+        shutil.rmtree(checkout / "shared")
+        self.assertEqual(
+            (installed / "references/question-guidelines.md").read_bytes(),
+            (ROOT / "skills/askme/references/question-guidelines.md").read_bytes(),
+        )
 
 
 if __name__ == "__main__":

@@ -86,6 +86,7 @@ def load_manifest() -> list[tuple[Path, Path]]:
         if not source.is_file():
             raise SyncError(f"source is not a regular file: {source_rel}")
         result.append((source, destination))
+    result.sort(key=lambda pair: pair[1].relative_to(SKILLS).as_posix())
     return result
 
 
