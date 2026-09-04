@@ -30,7 +30,16 @@ PORTABLE_SKILLS = (
     "skill-improver",
     "stopit",
     "summary",
+    "task-prepare",
+    "task-review",
+    "task-triage",
+    "team-workflow",
     "walkthrough",
+    "mr-prepare",
+    "code-review",
+    "release-prepare",
+    "release-review",
+    "mattermost",
 )
 FORBIDDEN_PORTABLE_MARKERS = (
     "../..",
@@ -166,6 +175,15 @@ RUNNERS = {
     "rtk": "scripts/rtk.py",
     "skill-improver": "scripts/skill_improver.py",
     "walkthrough": "scripts/walkthrough.py",
+    "task-triage": "scripts/triage_task.py",
+    "task-review": "scripts/review_task.py",
+    "task-prepare": "scripts/prepare_task.py",
+    "mr-prepare": "scripts/prepare_mr.py",
+    "code-review": "scripts/review_mr.py",
+    "release-prepare": "scripts/prepare_release.py",
+    "release-review": "scripts/review_release.py",
+    "mattermost": "scripts/mattermost.py",
+    "team-workflow": "scripts/team_workflow.py",
 }
 
 
@@ -436,7 +454,10 @@ class PortableSkillValidationTests(unittest.TestCase):
             for entry in manifest["files"]
             if entry["source"].startswith("references/python_runtime/")
         ]
-        self.assertEqual(len(runtime_entries), len(RUNNERS) * 3)
+        self.assertEqual(
+            len(runtime_entries),
+            len(("ast-grep", "rtk", "skill-improver", "walkthrough")) * 3,
+        )
         for entry in runtime_entries:
             source = ROOT / "shared" / entry["source"]
             destination = ROOT / "skills" / entry["destination"]
@@ -453,6 +474,26 @@ class PortableSkillValidationTests(unittest.TestCase):
                 text = path.read_text(encoding="utf-8").lower()
                 for marker in FORBIDDEN_PORTABLE_MARKERS:
                     self.assertNotIn(marker, text, f"{marker} in {path}")
+
+    def test_gitlab_skills_materialize_their_own_contract_and_runtime(self) -> None:
+        names = (
+            "task-triage",
+            "task-review",
+            "task-prepare",
+            "mr-prepare",
+            "code-review",
+            "release-prepare",
+            "release-review",
+        )
+        for name in names:
+            root = ROOT / "skills" / name
+            with self.subTest(skill=name):
+                self.assertTrue((root / "references/gitlab-workflow.md").is_file())
+                self.assertTrue((root / "scripts/portable_runtime/contract.py").is_file())
+                self.assertEqual(
+                    (root / "scripts/portable_runtime/contract.py").read_bytes(),
+                    (ROOT / "shared/references/portable_gitlab/contract.py").read_bytes(),
+                )
 
     def test_npx_lists_all_portable_skills(self) -> None:
         result = subprocess.run(
