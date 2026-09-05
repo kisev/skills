@@ -83,6 +83,13 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
     assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 57);
     assert.equal(readdirSync(join(home, ".config", "opencode", "plugins")).length, 8);
+    for (const name of ["background-attempts", "schedule", "goal-loop", "autonomy-policy"]) {
+      const installed = await readFile(join(home, ".config", "opencode", "plugins", `${name}.js`), "utf8");
+      const packaged = await readFile(join(PACKAGE, "assets", "plugins", `${name}.js`), "utf8");
+      assert.equal(installed, packaged);
+      assert.match(installed, /plugin\(input, \{ enabled: false \}\)/);
+      assert.doesNotMatch(installed, /enabled: true/);
+    }
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), { code: "ENOENT" });
     await assert.rejects(lstat(join(project, ".opencode")), { code: "ENOENT" });
     await install("project", project, home);
