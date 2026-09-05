@@ -35,40 +35,77 @@ npx --yes skills add kisev/skills --agent opencode \
 npx --yes skills add kisev/skills --list
 ```
 
+## Разработка репозитория
+
+Локальная обвязка не зависит от других checkout. Установите все закреплённые
+runtimes и CLI из корня репозитория одной командой:
+
+```shell
+mise install
+```
+
+`mise.toml` фиксирует Python 3.12, Node.js 22 и standalone-инструменты.
+Python-зависимости проверок находятся в `pyproject.toml` и `uv.lock`; переносимые
+runners по-прежнему используют только standard library. Отдельный npm package в
+`packages/opencode/` сохраняет собственные `package.json` и `package-lock.json`.
+Корневого npm workspace нет.
+
+Единый локальный и CI quality gate:
+
+```shell
+task check
+```
+
+Доступные задачи показывает `task --list`. Только `task format` и
+`task generate` изменяют tracked-файлы. `task format` работает с canonical
+sources, после чего вызывает generation. `task generate:check` проверяет shared
+materialization и OpenCode command assets без записи.
+
+Установить Git hooks можно командой `lefthook install`. `pre-commit` запускает
+быстрый non-mutating набор через `task pre-commit`, а `pre-push` запускает полный
+`task check`. Hooks не форматируют файлы и не добавляют их в index.
+
+Если проверка не видит нужный executable, запустите `mise install`, затем
+`mise current`. При ошибке `uv.lock` используйте `uv sync --locked`: изменение
+lock-файла при этом считается drift. Для generated drift меняйте источник в
+`shared/references/` или `packages/opencode/src/registry.ts` и запускайте
+`task generate`, а не редактируйте materialized-файл вручную. Полная структура
+проверок описана в [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Каталог skills
 
-| Skill | Назначение |
-| --- | --- |
-| `agents-md` | Создание и проверка инструкций `AGENTS.md` по фактам репозитория. |
-| `askme` | Последовательное интервью для уточнения задачи или решения. |
-| `ast-grep` | Структурный поиск и подтверждённый AST rewrite через внешний CLI. |
-| `commit-msg` | Одно английское Conventional Commit сообщение по локальным изменениям. |
-| `doit` | Выполнение инженерной задачи с preview, проверками и отдельным commit. |
-| `docs-prepare` | Подготовка одного пользовательского документа Diataxis. |
-| `docs-review` | Read-only проверка пользовательской документации. |
-| `humanize` | Естественный русский текст без канцелярита. |
-| `project-spec` | Четыре режима работы с canonical `specs/`: init, onboard, update и audit. |
-| `rtk` | Выборочное применение внешнего RTK для шумного вывода. |
-| `skill-improver` | Цикл проверки и улучшения одного Agent Skill. |
-| `stopit` | Обезличенная передача контекста во временный файл. |
-| `summary` | Точный структурированный итог транскрипции, заметок или исследования. |
-| `task-triage` | Read-only содержательный разбор конкретных GitLab-задач. |
-| `task-review` | Проверка оформления и служебных полей GitLab-задач и MR. |
-| `task-prepare` | Подготовка одной задачи или явного пакета задач без публикации. |
-| `mr-prepare` | Подготовка обычного GitLab MR по diff, коммитам и CI. |
-| `code-review` | Глубокое ревью GitLab MR или локального WIP. |
-| `release-prepare` | Подготовка релизного MR, inventory и плана публикации. |
-| `release-review` | Read-only проверка готовности релизного MR. |
-| `mattermost` | Ограниченное read-only чтение Mattermost по ссылке. |
-| `team-workflow` | Одно явное действие командного цикла по явному context. |
-| `walkthrough` | Read-only карта чтения current diff, range или diff-file. |
-| `attempt` | Чтение и безопасная отмена Background Attempts OpenCode. |
-| `goal` | Проверяемая цель, привязанная к session OpenCode. |
-| `schedule` | Явные disabled-by-default definitions для scheduler OpenCode. |
-| `multi-run` | Изолированные attempts и подтверждённый fusion. |
-| `usage` | Read-only ledger токенов и стоимости OpenCode. |
-| `overview` | Read-only сводка durable OpenCode state. |
-| `lsp-report` | Применимость LSP OpenCode без запуска и установки. |
+| Skill             | Назначение                                                                |
+| ----------------- | ------------------------------------------------------------------------- |
+| `agents-md`       | Создание и проверка инструкций `AGENTS.md` по фактам репозитория.         |
+| `askme`           | Последовательное интервью для уточнения задачи или решения.               |
+| `ast-grep`        | Структурный поиск и подтверждённый AST rewrite через внешний CLI.         |
+| `commit-msg`      | Одно английское Conventional Commit сообщение по локальным изменениям.    |
+| `doit`            | Выполнение инженерной задачи с preview, проверками и отдельным commit.    |
+| `docs-prepare`    | Подготовка одного пользовательского документа Diataxis.                   |
+| `docs-review`     | Read-only проверка пользовательской документации.                         |
+| `humanize`        | Естественный русский текст без канцелярита.                               |
+| `project-spec`    | Четыре режима работы с canonical `specs/`: init, onboard, update и audit. |
+| `rtk`             | Выборочное применение внешнего RTK для шумного вывода.                    |
+| `skill-improver`  | Цикл проверки и улучшения одного Agent Skill.                             |
+| `stopit`          | Обезличенная передача контекста во временный файл.                        |
+| `summary`         | Точный структурированный итог транскрипции, заметок или исследования.     |
+| `task-triage`     | Read-only содержательный разбор конкретных GitLab-задач.                  |
+| `task-review`     | Проверка оформления и служебных полей GitLab-задач и MR.                  |
+| `task-prepare`    | Подготовка одной задачи или явного пакета задач без публикации.           |
+| `mr-prepare`      | Подготовка обычного GitLab MR по diff, коммитам и CI.                     |
+| `code-review`     | Глубокое ревью GitLab MR или локального WIP.                              |
+| `release-prepare` | Подготовка релизного MR, inventory и плана публикации.                    |
+| `release-review`  | Read-only проверка готовности релизного MR.                               |
+| `mattermost`      | Ограниченное read-only чтение Mattermost по ссылке.                       |
+| `team-workflow`   | Одно явное действие командного цикла по явному context.                   |
+| `walkthrough`     | Read-only карта чтения current diff, range или diff-file.                 |
+| `attempt`         | Чтение и безопасная отмена Background Attempts OpenCode.                  |
+| `goal`            | Проверяемая цель, привязанная к session OpenCode.                         |
+| `schedule`        | Явные disabled-by-default definitions для scheduler OpenCode.             |
+| `multi-run`       | Изолированные attempts и подтверждённый fusion.                           |
+| `usage`           | Read-only ledger токенов и стоимости OpenCode.                            |
+| `overview`        | Read-only сводка durable OpenCode state.                                  |
+| `lsp-report`      | Применимость LSP OpenCode без запуска и установки.                        |
 
 Подробная классификация режимов и границ записана в
 [migration inventory](docs/migration-inventory.md).

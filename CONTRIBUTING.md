@@ -14,31 +14,69 @@ agents, commands и plugins находятся только в `packages/opencod
 
 ## Локальная проверка
 
-Используйте Python 3.12+ и Node.js 22+. Перед отправкой изменения выполните
-проверки, относящиеся к затронутой области:
+Установите закреплённые runtimes и standalone tools из корня репозитория:
 
 ```shell
-python3 scripts/sync_shared.py --check
-python3 -m unittest discover -s tests -v
-for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; done
-npx --yes skills add . --list
+mise install
+task --list
 ```
 
-Для изменения `packages/opencode/` выполните также:
+`taskfile.yml` является единственным task graph. Локальная разработка, Lefthook
+и GitHub Actions вызывают его публичные задачи, а не дублируют команды tools.
+Перед отправкой любого изменения выполните единый quality gate:
 
 ```shell
-npm ci
-npm run typecheck
-npm run generate-assets
-git diff --exit-code
-npm test
-npm pack --dry-run
+task check
 ```
 
-Последние шесть команд запускаются из `packages/opencode/`. Если меняются shared
-references, сначала измените канонический файл в `shared/references/`, затем
-запустите `python3 scripts/sync_shared.py` и включите materialized copies в тот же
-изменение. Не редактируйте такие copies вручную.
+Публичный Task API разделяет проверки следующим образом:
+
+| Задача                       | Назначение                                                  |
+| ---------------------------- | ----------------------------------------------------------- |
+| `tools`                      | Показать активные закреплённые инструменты.                 |
+| `format`, `format:check`     | Изменить canonical formatting или проверить его без записи. |
+| `lint`, `typecheck`, `test`  | Запустить языковые проверки и тесты.                        |
+| `generate`, `generate:check` | Создать materialized assets или проверить drift без записи. |
+| `skills:validate`            | Запустить agnix, pinned skills-ref и internal contracts.    |
+| `package:check`              | Выполнить полный lifecycle OpenCode package.                |
+| `security`                   | Проверить историю Git через gitleaks.                       |
+| `check`                      | Запустить полный локальный и CI quality gate.               |
+| `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.               |
+
+Только `format` и `generate` меняют tracked checkout. Если меняются shared
+references, сначала измените canonical-файл в `shared/references/`, затем
+запустите `task generate` и включите materialized copies в то же изменение.
+Команды из `packages/opencode/assets/commands/` также генерируются: их источником
+служит `packages/opencode/src/registry.ts`.
+
+`package:check` сам выполняет `npm ci`, Prettier, oxlint, tsc, Node tests,
+generated-assets drift, smoke через закреплённый OpenCode и npm pack allowlist.
+Запускать отдельные npm-команды для обычной проверки не требуется.
+
+## Git hooks
+
+Установите hooks после bootstrap:
+
+```shell
+lefthook install
+```
+
+`pre-commit` вызывает быстрый non-mutating `task pre-commit`. `pre-push` вызывает
+полный `task check`. Hooks не применяют fixes и не выполняют `git add`.
+
+## Диагностика
+
+- Если executable не найден, выполните `mise install` и проверьте версии через
+  `mise current`.
+- Если `uv run --locked` сообщает drift, не обновляйте зависимости неявно.
+  Осознанно измените pin в `pyproject.toml`, затем выполните `uv lock`.
+- Если `generate:check` сообщает drift, исправьте canonical source и выполните
+  `task generate`. Не форматируйте generated/materialized copy напрямую.
+- Agnix errors блокируют проверку. Существующие warnings печатаются полностью и
+  хранятся в точном `.agnix-warnings.json`; новый warning также блокирует gate,
+  пока его причина не устранена или baseline не изменён осознанно.
+- Для воспроизведения package failure запустите `task package:check` из корня,
+  чтобы сохранить те же версии и порядок шагов, что в CI.
 
 ## Качество и review
 
