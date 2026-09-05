@@ -23,6 +23,7 @@ head SHA и полный пагинированный список меток.
 неполную collection и непроверенные дополнительные проверки.
 
 Подготовь один Markdown-план с title, description, изменением меток и ownership.
-Перед ручной публикацией выполни `scripts/prepare_mr.py finalize --artifact-root
-<path>`: изменившийся SHA, объект или метки блокируют план. Не создавай, не
+Перед ручной публикацией выполни
+`scripts/prepare_mr.py finalize --artifact-root <path>`: изменившийся SHA, объект
+или метки блокируют план. Не создавай, не
 обновляй, не approve, не merge и не push MR.

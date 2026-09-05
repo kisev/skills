@@ -14,7 +14,7 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import quote as urlquote
 from urllib.parse import urlsplit
 
@@ -33,7 +33,7 @@ class WorkflowError(ValueError):
 class ContractArgumentParser(argparse.ArgumentParser):
     """Report invalid CLI input through the runner JSON contract."""
 
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         raise WorkflowError(message)
 
 
@@ -237,7 +237,10 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
         raise WorkflowError("GitLab project identity is incomplete")
     project_id = project["id"]
     kind = str(target["kind"])
-    iid = int(target["iid"])
+    iid_value = target["iid"]
+    if not isinstance(iid_value, int):
+        raise WorkflowError("GitLab target iid is invalid")
+    iid = iid_value
     labels = paginated(hostname, f"projects/{project_id}/labels")
     if kind == "new_issue":
         root = state_directory(profile, target)
@@ -276,7 +279,7 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
             pipelines = paginated(hostname, f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}")
         discussions = paginated(hostname, f"projects/{project_id}/merge_requests/{iid}/discussions")
     root = state_directory(profile, target)
-    bundle: dict[str, object] = {
+    bundle = {
         "schema_version": 1,
         "profile": profile,
         "target": target,
@@ -360,7 +363,7 @@ def finalize(root_value: str) -> dict[str, object]:
     if not isinstance(target, dict):
         raise WorkflowError("bundle target is missing")
     if target.get("kind") == "new_issue":
-        result = {"status": "not_applicable", "changed": [], "head_sha": None, "retrieval_complete": bundle.get("retrieval_complete")}
+        result: dict[str, object] = {"status": "not_applicable", "changed": [], "head_sha": None, "retrieval_complete": bundle.get("retrieval_complete")}
         write_json(root / "finalize.json", result)
         return result
     current = collect(target, str(bundle.get("profile", "gitlab-workflow")), persist=False)
@@ -409,6 +412,10 @@ def finalize_local(bundle_file: str) -> dict[str, object]:
     digest = bundle.get("diff_sha256")
     if not all(isinstance(value, str) and value for value in (root_value, base, head, digest)):
         raise WorkflowError("local bundle identity is incomplete")
+    assert isinstance(root_value, str)
+    assert isinstance(base, str)
+    assert isinstance(head, str)
+    assert isinstance(digest, str)
     root = Path(root_value)
     if root.is_symlink() or not (root / ".git").exists():
         raise WorkflowError("local bundle repository is unsafe")
@@ -423,7 +430,7 @@ def finalize_local(bundle_file: str) -> dict[str, object]:
     current_head = run("rev-parse", "HEAD").strip()
     current_diff = run("diff", "--find-renames", "HEAD", "--") if bundle.get("working_tree") is True else run("diff", "--find-renames", base, current_head, "--")
     current_digest = hashlib.sha256(current_diff.encode()).hexdigest()
-    result = {"status": "ok" if current_head == head and current_digest == digest else "stale", "head_sha": current_head, "diff_sha256": current_digest}
+    result: dict[str, object] = {"status": "ok" if current_head == head and current_digest == digest else "stale", "head_sha": current_head, "diff_sha256": current_digest}
     return result
 
 
@@ -500,19 +507,22 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 object_value = bundle.get("object")
                 project = bundle.get("project")
                 refs = object_value.get("diff_refs") if isinstance(object_value, dict) else None
-                if not isinstance(project, dict) or not isinstance(refs, dict):
+                if not isinstance(object_value, dict) or not isinstance(project, dict) or not isinstance(refs, dict):
                     raise WorkflowError("release review bundle identity is incomplete")
+                target_value = bundle.get("target")
                 expected_inputs = {
                     "hostname": project.get("hostname"),
                     "project_id": project.get("id"),
-                    "iid": bundle.get("target", {}).get("iid") if isinstance(bundle.get("target"), dict) else None,
+                    "iid": target_value.get("iid") if isinstance(target_value, dict) else None,
                     "target_branch": object_value.get("target_branch"),
                     "base_sha": refs.get("base_sha"),
                     "start_sha": refs.get("start_sha"),
                     "head_sha": bundle.get("head_sha"),
                 }
                 for gate_name, gate in gates.items():
+                    assert isinstance(gate, dict)
                     inputs = gate["inputs"]
+                    assert isinstance(inputs, dict)
                     if any(inputs.get(key) != value for key, value in expected_inputs.items()):
                         raise WorkflowError("release review gate does not bind the exact target identity")
                     if gate_name == "ci" and (inputs.get("pipeline_sha") != bundle.get("head_sha") or not isinstance(inputs.get("pipeline_status"), str) or not inputs["pipeline_status"]):

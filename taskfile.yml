@@ -1,0 +1,173 @@
+---
+version: "3"
+
+set: [pipefail, errexit, nounset]
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  tools:
+    desc: Show the pinned toolchain
+    cmds:
+      - mise ls --current --local
+
+  format:
+    desc: Format canonical maintained sources and regenerate assets
+    cmds:
+      - uv run --locked ruff format scripts shared/references tests skills
+      - prettier --write .
+      - tombi format mise.toml pyproject.toml tombi.toml
+      - task: package:format
+      - task: generate
+
+  format:check:
+    desc: Check formatting without changing tracked files
+    cmds:
+      - uv run --locked ruff format --check scripts shared/references tests skills
+      - prettier --check .
+      - tombi format --check mise.toml pyproject.toml tombi.toml
+      - task: package:format:check
+
+  lint:
+    desc: Run source, document, data, workflow, and shell linters
+    cmds:
+      - uv run --locked ruff check scripts shared/references tests skills
+      - markdownlint-cli2
+      - uv run --locked yamllint .github lefthook.yml taskfile.yml .yamllint.yml
+      - actionlint
+      - oxlint packages/opencode/src packages/opencode/test
+      - task: lint:data
+      - task: lint:shell
+
+  lint:data:
+    internal: true
+    cmds:
+      - fd --hidden --type f --extension json --exclude node_modules --exclude dist --exec jq empty
+      - >-
+        yq --exit-status '.' .github/workflows/ci.yml .github/workflows/publish.yml
+        lefthook.yml taskfile.yml .yamllint.yml >/dev/null
+      - rg --files --hidden -g '*.toml' -g '!packages/opencode/node_modules/**' | xargs tombi lint
+
+  lint:shell:
+    internal: true
+    cmds:
+      - fd --hidden --type f --extension sh --exclude node_modules --exec shfmt -d
+      - fd --hidden --type f --extension sh --exclude node_modules --exec shellcheck
+
+  typecheck:
+    desc: Run strict Python and TypeScript type checks
+    cmds:
+      - uv run --locked mypy
+      - task: package:typecheck
+
+  test:
+    desc: Run Python and Node contract tests
+    cmds:
+      - SKILLS_BINARY="$(mise which skills)" uv run --locked pytest
+      - task: package:test
+
+  generate:
+    desc: Materialize all generated files
+    cmds:
+      - uv run --locked python scripts/sync_shared.py
+      - task: package:generate
+
+  generate:check:
+    desc: Check generated files for drift without writing them
+    cmds:
+      - uv run --locked python scripts/sync_shared.py --check
+      - task: package:generate:check
+
+  skills:validate:
+    desc: Validate Agent Skills with complementary validators
+    cmds:
+      - uv run --locked python scripts/check_agnix.py
+      - for:
+          var: SKILLS
+        cmd: uv run --locked agentskills validate "{{.ITEM}}"
+      - uv run --locked pytest tests/test_skill_contracts.py
+    vars:
+      SKILLS:
+        sh: fd --type f --glob 'SKILL.md' skills --exec dirname | sort
+
+  package:check:
+    desc: Verify the complete OpenCode package lifecycle and tarball
+    dir: packages/opencode
+    cmds:
+      - npm ci
+      - npm run format:check
+      - npm run lint
+      - npm run typecheck
+      - npm run generate-assets:check
+      - npm test
+      - npm run smoke
+      - node test/pack-allowlist.mjs
+
+  security:
+    desc: Scan the repository for committed secrets
+    cmds:
+      - gitleaks git --config .gitleaks.toml --redact --no-banner
+      - gitleaks dir . --config .gitleaks.toml --redact --no-banner
+
+  check:
+    desc: Run the complete local and CI quality gate
+    cmds:
+      - task: format:check
+      - task: lint
+      - task: typecheck
+      - task: test
+      - task: generate:check
+      - task: skills:validate
+      - task: package:check
+      - task: security
+
+  pre-commit:
+    desc: Run fast non-mutating commit checks
+    cmds:
+      - task: format:check
+      - task: lint
+      - task: generate:check
+
+  pre-push:
+    desc: Run the complete quality gate before push
+    cmds:
+      - task: check
+
+  package:format:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm run format
+
+  package:format:check:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm run format:check
+
+  package:typecheck:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm run typecheck
+
+  package:test:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm test
+
+  package:generate:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm run generate-assets
+
+  package:generate:check:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm run generate-assets:check

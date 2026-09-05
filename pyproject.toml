@@ -1,0 +1,61 @@
+[project]
+name = "kisev-skills-tooling"
+version = "0.0.0"
+description = "Development tooling for the Agent Skills repository"
+requires-python = "==3.12.*"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "mypy==2.3.1",
+  "pytest==9.0.2",
+  "ruff==0.16.6",
+  "skills-ref==0.1.1",
+  "yamllint==1.38.0",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+explicit_package_bases = true
+files = ["scripts", "shared/references", "tests"]
+exclude = ["^skills/.*/scripts/portable_runtime/"]
+
+[tool.pytest.ini_options]
+addopts = ["-ra"]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["skills/*/scripts/portable_runtime"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+"skills/*/scripts/*.py" = ["E402"]
+
+[tool.ruff.format]
+exclude = [
+  "shared/references/portable_gitlab/contract.py",
+  "shared/references/python_runtime/lsp.py",
+  "skills/*/scripts/portable_runtime",
+  "skills/ast-grep/scripts/ast_grep.py",
+  "skills/goal/scripts/goal.py",
+  "skills/lsp-report/scripts/lsp_report.py",
+  "skills/mattermost/scripts/mattermost.py",
+  "skills/multi-run/scripts/multi_run.py",
+  "skills/overview/scripts/overview.py",
+  "skills/schedule/scripts/schedule.py",
+  "skills/skill-improver/scripts/skill_improver.py",
+  "skills/team-workflow/scripts/team_workflow.py",
+  "skills/usage/scripts/usage.py",
+  "skills/walkthrough/scripts/walkthrough.py",
+  "tests/test_application_workflows.py",
+  "tests/test_repository.py",
+]
+
+[tool.uv]
+package = false

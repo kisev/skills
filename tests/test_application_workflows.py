@@ -8,7 +8,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 
@@ -24,7 +25,7 @@ GITLAB_RUNNERS = {
 }
 
 
-def load_module(path: Path, name: str):
+def load_module(path: Path, name: str) -> ModuleType:
     specification = importlib.util.spec_from_file_location(name, path)
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
@@ -88,7 +89,7 @@ class PortableWorkflowTests(unittest.TestCase):
             "kind": "issues",
             "iid": 7,
         }
-        def fake(hostname: str, endpoint: str):
+        def fake(hostname: str, endpoint: str) -> object:
             calls.append((hostname, endpoint))
             if endpoint.startswith("projects/group%2Fproject"):
                 return {"id": 1}
@@ -172,7 +173,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         }
 
         class FakeClient:
-            def get(self, path: str):
+            def get(self, path: str) -> object:
                 if path == "/teams/name/team":
                     return {"id": "team-id"}
                 if path == "/teams/team-id/channels/name/channel":
@@ -195,7 +196,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_auth")
 
         class FakeClient:
-            def get(self, path: str):
+            def get(self, path: str) -> object:
                 if path == "/teams/name/team":
                     return {"id": "team-id"}
                 if path == "/teams/team-id/channels/name/channel":
@@ -215,7 +216,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         calls: list[str] = []
 
         class FakeClient:
-            def get(self, path: str):
+            def get(self, path: str) -> Any:
                 calls.append(path)
                 responses = {
                     "/teams/name/team": {"id": "team-id"},

@@ -52,6 +52,23 @@ test("registry generates exactly fifty-seven thin command assets", () => {
   assert.deepEqual(COMMAND_REGISTRY.filter((entry) => entry.packageTool).map((entry) => entry.name).sort(), ["capabilities", "doctor", "route"]);
 });
 
+test("generated asset drift rejects obsolete files", async () => {
+  const directory = temporary();
+  try {
+    execFileSync("node", ["dist/generate-assets.js", "--root", directory], { cwd: PACKAGE });
+    await writeFile(join(directory, "obsolete.md"), "stale\n");
+    const result = spawnSync(
+      "node",
+      ["dist/generate-assets.js", "--check", "--root", directory],
+      { cwd: PACKAGE, encoding: "utf8" },
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /unexpected generated asset: obsolete\.md/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("agent assets contain six contract-bound profiles without model selection", () => {
   const agents = readdirSync(join(PACKAGE, "assets", "agents")).filter((name) => name.endsWith(".md")).sort();
   assert.deepEqual(agents, ["architect.md", "critic.md", "manager.md", "mapper.md", "review.md", "worker.md"]);

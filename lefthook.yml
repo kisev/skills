@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/evilmartians/lefthook/master/schema.json
+---
+pre-commit:
+  commands:
+    task:
+      run: task pre-commit
+
+pre-push:
+  commands:
+    task:
+      run: task pre-push

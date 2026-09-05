@@ -1,0 +1,18 @@
+# Agnix has no OpenCode target. OpenCode agent metadata and host-specific tool
+# names are covered by repository contracts instead of Claude dialect checks.
+severity = "Warning"
+exclude = [".git/**", "packages/opencode/node_modules/**", "packages/opencode/dist/**"]
+target = "Generic"
+max_files_to_validate = 10000
+
+[rules]
+agents = false
+tool_names = false
+
+[[overrides]]
+paths = ["**/attempt/SKILL.md", "**/goal/SKILL.md"]
+disabled_rules = ["CC-SK-008"]
+
+[[overrides]]
+paths = ["**/release-prepare/SKILL.md", "**/release-review/SKILL.md"]
+disabled_rules = ["CC-SK-006"]

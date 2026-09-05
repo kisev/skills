@@ -16,6 +16,7 @@ from unittest.mock import patch
 from scripts import sync_shared
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILLS_BINARY = os.environ.get("SKILLS_BINARY", "skills")
 PORTABLE_SKILLS = (
     "agents-md",
     "askme",
@@ -307,7 +308,7 @@ class SyncSharedTests(unittest.TestCase):
         second_before = second_destination.read_bytes()
         first_source.write_text("first after\n", encoding="utf-8")
         second_source.write_text("second after\n", encoding="utf-8")
-        replace = sync_shared.os.replace
+        replace = os.replace
 
         def fail_second_replacement(source: Path, destination: Path) -> None:
             if (
@@ -319,7 +320,7 @@ class SyncSharedTests(unittest.TestCase):
             replace(source, destination)
 
         with patch.object(
-            sync_shared.os, "replace", side_effect=fail_second_replacement
+            os, "replace", side_effect=fail_second_replacement
         ):
             self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
         self.assertEqual(first_destination.read_bytes(), first_before)
@@ -486,7 +487,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 and path.suffix in {".md", ".py"}
             ):
                 text = path.read_text(encoding="utf-8").lower()
-                markers = FORBIDDEN_PORTABLE_MARKERS
+                markers: tuple[str, ...] = FORBIDDEN_PORTABLE_MARKERS
                 if path.relative_to(ROOT / "skills").parts[0] in opencode_skills:
                     markers = tuple(marker for marker in markers if marker not in {"~/.config/opencode", "~/.local/state/opencode"})
                 for marker in markers:
@@ -512,9 +513,9 @@ class PortableSkillValidationTests(unittest.TestCase):
                     (ROOT / "shared/references/portable_gitlab/contract.py").read_bytes(),
                 )
 
-    def test_npx_lists_all_portable_skills(self) -> None:
+    def test_pinned_cli_lists_all_portable_skills(self) -> None:
         result = subprocess.run(
-            ["npx", "--yes", "skills", "add", ".", "--list"],
+            [SKILLS_BINARY, "add", ".", "--list"],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -524,7 +525,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         for name in PORTABLE_SKILLS:
             self.assertIn(name, result.stdout)
 
-    def test_npx_installs_each_skill_for_codex_and_opencode(self) -> None:
+    def test_pinned_cli_installs_each_skill_for_codex_and_opencode(self) -> None:
         for name in PORTABLE_SKILLS:
             for agent in ("codex", "opencode"):
                 with self.subTest(skill=name, agent=agent):
@@ -541,9 +542,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         }
         result = subprocess.run(
             [
-                "npx",
-                "--yes",
-                "skills",
+                SKILLS_BINARY,
                 "add",
                 str(checkout),
                 "--skill",
@@ -785,9 +784,9 @@ class PortableRunnerTests(unittest.TestCase):
     def test_ast_atomic_replacement_rolls_back_after_failure(self) -> None:
         script = ROOT / "skills/ast-grep/scripts/ast_grep.py"
         specification = spec_from_file_location("portable_ast_grep", script)
-        self.assertIsNotNone(specification)
+        if specification is None or specification.loader is None:
+            self.fail("cannot load portable ast-grep module")
         module = module_from_spec(specification)
-        self.assertIsNotNone(specification.loader)
         specification.loader.exec_module(module)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
