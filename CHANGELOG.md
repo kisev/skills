@@ -9,7 +9,7 @@
 ### Добавлено
 
 - Первый публичный стабильный выпуск переносимых Agent Skills.
-- Независимый npm package `agent-skills-opencode` с opt-in OpenCode installer,
+- Независимый npm package `@kisev/skills-opencode` с opt-in OpenCode installer,
   agents, commands и plugin factories.
 - Документация по установке skills, подключению OpenCode, обновлению, удалению и
   security boundaries.

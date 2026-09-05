@@ -2,7 +2,7 @@
 name: attempt
 description: Читать состояние и безопасно отменять durable Background Attempts через OpenCode package tool.
 license: MIT
-compatibility: Requires OpenCode 1.18.29+ and agent-skills-opencode background-attempts plugin.
+compatibility: Requires OpenCode 1.18.29+ and @kisev/skills-opencode background-attempts plugin.
 allowed-tools: native Question, background_attempts
 metadata:
   author: "Kirill Sevriugin"

@@ -21,7 +21,7 @@ const PACKAGE = resolve(import.meta.dirname, "..");
 const REPOSITORY = resolve(PACKAGE, "../..");
 
 function temporary() {
-  return mkdtempSync(join(tmpdir(), "agent-skills-opencode-test-"));
+  return mkdtempSync(join(tmpdir(), "skills-opencode-test-"));
 }
 
 function capable(agent, capabilities, tools) {
@@ -112,7 +112,7 @@ test("installer rejects stale plans, unmanaged collisions, traversal, and symlin
     await mkdir(join(separate, ".opencode"), { recursive: true });
     symlinkSync(join(directory, "outside"), join(separate, ".opencode", "agents"));
     await assert.rejects(preview("install", "project", separate, home), (error) => error instanceof InstallerError && error.code === "unsafe_path");
-    await writeFile(join(separate, ".opencode", ".agent-skills-opencode-manifest.json"), JSON.stringify({ schema_version: 1, package: "agent-skills-opencode", version: "0.1.0", files: { "../outside": { sha256: "0".repeat(64) } } }));
+    await writeFile(join(separate, ".opencode", ".skills-opencode-manifest.json"), JSON.stringify({ schema_version: 1, package: "@kisev/skills-opencode", version: "1.0.0", files: { "../outside": { sha256: "0".repeat(64) } } }));
     await assert.rejects(preview("uninstall", "project", separate, home), (error) => error instanceof InstallerError && error.code === "unsafe_path");
 
     const nonregular = join(directory, "nonregular");
@@ -132,7 +132,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     const { applied } = await install("project", project, home);
     const root = join(project, ".opencode");
     assert.equal(readdirSync(root).filter((name) => name.includes(".tmp")).length, 0);
-    const manifest = join(root, ".agent-skills-opencode-manifest.json");
+    const manifest = join(root, ".skills-opencode-manifest.json");
     const before = await readFile(manifest);
     const repeat = await preview("install", "project", project, home);
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
@@ -155,7 +155,7 @@ test("upgrade removes only an unchanged stale managed asset", async () => {
     const retired = join(root, "commands", "retired.md");
     const content = "retired\n";
     await writeFile(retired, content);
-    const manifestPath = join(root, ".agent-skills-opencode-manifest.json");
+    const manifestPath = join(root, ".skills-opencode-manifest.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     manifest.files["commands/retired.md"] = { sha256: createHash("sha256").update(content).digest("hex") };
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -179,7 +179,7 @@ test("an applying manifest resumes an interrupted managed update", async () => {
     const manager = join(root, "agents", "manager.md");
     const previous = "previous managed version\n";
     await writeFile(manager, previous);
-    const manifestPath = join(root, ".agent-skills-opencode-manifest.json");
+    const manifestPath = join(root, ".skills-opencode-manifest.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
     const current = readFileSync(join(PACKAGE, "assets", "agents", "manager.md"));
     manifest.state = "applying";
@@ -213,7 +213,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     await apply("uninstall", "project", plan.digest, project, home);
     assert.equal(await readFile(changed, "utf8"), "user change\n");
     await assert.rejects(lstat(join(project, ".opencode", "agents", "manager.md")), { code: "ENOENT" });
-    const manifest = JSON.parse(await readFile(join(project, ".opencode", ".agent-skills-opencode-manifest.json"), "utf8"));
+    const manifest = JSON.parse(await readFile(join(project, ".opencode", ".skills-opencode-manifest.json"), "utf8"));
     assert.deepEqual(Object.keys(manifest.files), ["commands/askme.md"]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -333,7 +333,7 @@ test("package catalog and doctor tools are strictly observational", async () => 
 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
   const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
-  assert.equal(packageJson.name, "agent-skills-opencode");
+  assert.equal(packageJson.name, "@kisev/skills-opencode");
   assert.equal(packageJson.version, "1.0.0");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.type, "git");
@@ -344,7 +344,7 @@ test("published package metadata and tarball expose only the OpenCode integratio
   assert.deepEqual(packageJson.files, ["assets", "dist", "README.md"]);
   assert.equal(packageJson.engines.node, ">=22");
   assert.equal(packageJson.exports["."].import, "./dist/index.js");
-  assert.equal(packageJson.bin["agent-skills-opencode"], "./dist/cli.js");
+  assert.equal(packageJson.bin["skills-opencode"], "./dist/cli.js");
   const invalid = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "install", "--dry-run"], { encoding: "utf8" });
   assert.equal(invalid.status, 2);
   assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");

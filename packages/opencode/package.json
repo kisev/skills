@@ -1,5 +1,5 @@
 {
-  "name": "agent-skills-opencode",
+  "name": "@kisev/skills-opencode",
   "version": "1.0.0",
   "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
   "license": "MIT",
@@ -52,7 +52,7 @@
     }
   },
   "bin": {
-    "agent-skills-opencode": "./dist/cli.js"
+    "skills-opencode": "./dist/cli.js"
   },
   "files": [
     "assets",

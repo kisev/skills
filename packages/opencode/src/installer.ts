@@ -5,8 +5,8 @@ import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, join, normalize, parse, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const PACKAGE_NAME = "agent-skills-opencode";
-const MANIFEST_NAME = ".agent-skills-opencode-manifest.json";
+const PACKAGE_NAME = "@kisev/skills-opencode";
+const MANIFEST_NAME = ".skills-opencode-manifest.json";
 const MANIFEST_SCHEMA_VERSION = 1;
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsRoot = resolve(packageRoot, "assets");

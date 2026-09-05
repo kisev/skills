@@ -63,7 +63,7 @@ const plugin = (async () => {
     description: "Read package health and opt-in defaults without installing or repairing anything.",
     args: {},
     async execute() {
-      return JSON.stringify({ schema_version: 1, status: "ok", package: "agent-skills-opencode", opencode: ">=1.18.29", state: "not-inspected", mutations: false, defaults: { backgroundAttempts: false, goalLoop: false, scheduler: false, autonomyPolicy: false, zedBell: false, zedClickablePaths: false } });
+      return JSON.stringify({ schema_version: 1, status: "ok", package: "@kisev/skills-opencode", opencode: ">=1.18.29", state: "not-inspected", mutations: false, defaults: { backgroundAttempts: false, goalLoop: false, scheduler: false, autonomyPolicy: false, zedBell: false, zedClickablePaths: false } });
     },
   });
   return {

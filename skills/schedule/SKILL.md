@@ -2,7 +2,7 @@
 name: schedule
 description: Управлять явными disabled-by-default scheduled task definitions для opt-in OpenCode scheduler.
 license: MIT
-compatibility: Requires OpenCode 1.18.29+ and agent-skills-opencode; Python 3.12+ stdlib-only runner.
+compatibility: Requires OpenCode 1.18.29+ and @kisev/skills-opencode; Python 3.12+ stdlib-only runner.
 metadata:
   author: "Kirill Sevriugin"
   version: "1.0.0"

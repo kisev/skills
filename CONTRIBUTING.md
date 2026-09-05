@@ -56,7 +56,7 @@ references, сначала измените канонический файл в
 ## Выпуски
 
 Версии portable skills фиксируются в их metadata. Версия
-`agent-skills-opencode`, tag и GitHub Release должны относиться к одному commit.
+`@kisev/skills-opencode`, tag и GitHub Release должны относиться к одному commit.
 Не изменяйте опубликованную версию: исправление выпускается новой patch-версией.
 Публикация npm package запускается только push tag из
 `.github/workflows/publish.yml`: workflow сверяет tag с версией package и

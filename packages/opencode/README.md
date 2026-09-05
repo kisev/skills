@@ -1,6 +1,6 @@
 # Интеграция OpenCode
 
-`agent-skills-opencode` - npm package с capability router, OpenCode runtime и
+`@kisev/skills-opencode` - npm package с capability router, OpenCode runtime и
 opt-in installer для agents, commands и plugins. Он не включает portable skills и
 не меняет user config при import, plugin load или npm lifecycle. Package требует
 Node.js 22+ и OpenCode 1.18.29+.
@@ -25,19 +25,19 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 Установите npm package там, где OpenCode сможет разрешить plugin:
 
 ```shell
-npm install agent-skills-opencode@1.0.0
+npm install @kisev/skills-opencode@1.0.0
 ```
 
 Сначала покажите план installer. Эта команда не создаёт files:
 
 ```shell
-npm exec -- agent-skills-opencode install --scope global --dry-run
+npm exec -- skills-opencode install --scope global --dry-run
 ```
 
 Проверьте exact operations и примените только показанный digest:
 
 ```shell
-npm exec -- agent-skills-opencode install --scope global --confirm <digest>
+npm exec -- skills-opencode install --scope global --confirm <digest>
 ```
 
 `global` устанавливает assets в `~/.config/opencode/agents`,
@@ -45,8 +45,8 @@ npm exec -- agent-skills-opencode install --scope global --confirm <digest>
 repository используйте `project`:
 
 ```shell
-npm exec -- agent-skills-opencode install --scope project --dry-run
-npm exec -- agent-skills-opencode install --scope project --confirm <digest>
+npm exec -- skills-opencode install --scope project --dry-run
+npm exec -- skills-opencode install --scope project --confirm <digest>
 ```
 
 Project assets находятся в `.opencode/agents`, `.opencode/commands` и
@@ -59,7 +59,7 @@ Project assets находятся в `.opencode/agents`, `.opencode/commands` и
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["agent-skills-opencode"]
+  "plugin": ["@kisev/skills-opencode"]
 }
 ```
 
@@ -72,8 +72,8 @@ agents и commands строится до plugin hooks.
 Installer обновляет только files с совпадающим managed SHA-256.
 
 ```shell
-npm exec -- agent-skills-opencode uninstall --scope global --dry-run
-npm exec -- agent-skills-opencode uninstall --scope global --confirm <digest>
+npm exec -- skills-opencode uninstall --scope global --dry-run
+npm exec -- skills-opencode uninstall --scope global --confirm <digest>
 ```
 
 Uninstall удаляет только files из ownership manifest, если их SHA-256 не
@@ -88,7 +88,7 @@ Scheduler и Autonomy Policy отключены по умолчанию. Zed int
 optional. Включайте subsystem только в собственном user-owned plugin wrapper:
 
 ```js
-import goalLoop from "agent-skills-opencode/plugins/goal-loop";
+import goalLoop from "@kisev/skills-opencode/plugins/goal-loop";
 
 export default (input) => goalLoop(input, { enabled: true });
 ```

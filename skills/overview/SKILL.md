@@ -2,7 +2,7 @@
 name: overview
 description: Построить read-only сводку durable OpenCode state текущего проекта или явного project registry.
 license: MIT
-compatibility: Requires OpenCode 1.18.29+ and agent-skills-opencode; Python 3.12+ stdlib-only runner.
+compatibility: Requires OpenCode 1.18.29+ and @kisev/skills-opencode; Python 3.12+ stdlib-only runner.
 metadata:
   author: "Kirill Sevriugin"
   version: "1.0.0"

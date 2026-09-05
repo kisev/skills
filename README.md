@@ -80,15 +80,15 @@ Portable skills и OpenCode integration устанавливаются неза�
 установите integration:
 
 ```shell
-npm install agent-skills-opencode@1.0.0
-npm exec -- agent-skills-opencode install --scope global --dry-run
+npm install @kisev/skills-opencode@1.0.0
+npm exec -- skills-opencode install --scope global --dry-run
 ```
 
 Dry-run выводит точный план и SHA-256 digest. Применяйте только digest из этого
 вывода:
 
 ```shell
-npm exec -- agent-skills-opencode install --scope global --confirm <digest>
+npm exec -- skills-opencode install --scope global --confirm <digest>
 ```
 
 `global` размещает управляемые assets в OpenCode user config. Для текущего
@@ -100,7 +100,7 @@ npm exec -- agent-skills-opencode install --scope global --confirm <digest>
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["agent-skills-opencode"]
+  "plugin": ["@kisev/skills-opencode"]
 }
 ```
 
@@ -117,7 +117,7 @@ installer, plugin factories и ownership-границ есть в
   standard library. Большинству skills Python не нужен.
 - `ast-grep` и `rtk` требуют заранее установленный одноимённый CLI; skills не
   выполняют их установку.
-- OpenCode-specific skills и `agent-skills-opencode` требуют OpenCode 1.18.29+.
+- OpenCode-specific skills и `@kisev/skills-opencode` требуют OpenCode 1.18.29+.
   npm package требует Node.js 22+.
 - OpenCode assets являются опциональными: portable skills продолжают работать без
   npm package, commands, agents и plugins.
@@ -134,9 +134,9 @@ npx --yes skills update --yes
 подтвердите новый digest:
 
 ```shell
-npm install agent-skills-opencode@1.0.0
-npm exec -- agent-skills-opencode install --scope global --dry-run
-npm exec -- agent-skills-opencode install --scope global --confirm <digest>
+npm install @kisev/skills-opencode@1.0.0
+npm exec -- skills-opencode install --scope global --dry-run
+npm exec -- skills-opencode install --scope global --confirm <digest>
 ```
 
 Удаление одного portable skill выполняется явно по имени:
@@ -148,8 +148,8 @@ npx --yes skills remove project-spec --agent opencode --yes
 Удаление OpenCode assets также начинается с dry-run:
 
 ```shell
-npm exec -- agent-skills-opencode uninstall --scope global --dry-run
-npm exec -- agent-skills-opencode uninstall --scope global --confirm <digest>
+npm exec -- skills-opencode uninstall --scope global --dry-run
+npm exec -- skills-opencode uninstall --scope global --confirm <digest>
 ```
 
 Uninstaller удаляет только неизменённые managed files. Пользовательские изменения

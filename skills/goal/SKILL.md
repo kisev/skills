@@ -2,7 +2,7 @@
 name: goal
 description: Управлять проверяемой целью, привязанной к OpenCode session, когда нужен ограниченный и аудируемый автономный цикл.
 license: MIT
-compatibility: Requires OpenCode 1.18.29+ and agent-skills-opencode; Python 3.12+ stdlib-only runner.
+compatibility: Requires OpenCode 1.18.29+ and @kisev/skills-opencode; Python 3.12+ stdlib-only runner.
 allowed-tools: native Question
 metadata:
   author: "Kirill Sevriugin"
