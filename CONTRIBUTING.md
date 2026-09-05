@@ -60,4 +60,5 @@ references, сначала измените канонический файл в
 Не изменяйте опубликованную версию: исправление выпускается новой patch-версией.
 Публикация npm package запускается только push tag из
 `.github/workflows/publish.yml`: workflow сверяет tag с версией package и
-использует npm trusted publishing через OIDC.
+использует npm trusted publishing через OIDC. v1.0.0 - одноразовый
+интерактивный bootstrap до создания package relationship.

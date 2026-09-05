@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   publish:
+    # v1.0.0 precedes the package's trusted-publisher bootstrap.
+    if: github.ref_name != 'v1.0.0'
     runs-on: ubuntu-latest
     defaults:
       run:
