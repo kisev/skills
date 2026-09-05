@@ -122,6 +122,22 @@ installer, plugin factories и ownership-границ есть в
 - OpenCode assets являются опциональными: portable skills продолжают работать без
   npm package, commands, agents и plugins.
 
+## Known limitations v1.0.0
+
+Релиз `v1.0.0` структурно целостен, но следующие ограничения делают stateful
+OpenCode plugins небезопасными для включения:
+
+- Background Attempts пока не гарантируют managed worktree и terminal
+  reconciliation.
+- Cron scheduler требует исправления перед эксплуатацией.
+- GitLab/code-review и Mattermost имеют неполный parity с заявленными
+  сценариями.
+- Runtime state и `doctor` требуют дополнительного hardening.
+
+До исправляющего релиза wrappers `background-attempts`, `schedule`, `goal-loop`
+и `autonomy-policy` должны оставаться выключенными. Не включайте их через
+user-owned wrappers, даже если package позволяет явно передать `enabled: true`.
+
 ## Обновление и удаление
 
 Обновите установленные skills стандартной командой `skills`:
