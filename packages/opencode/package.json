@@ -1,0 +1,33 @@
+{
+  "name": "agent-skills-opencode",
+  "version": "0.1.0",
+  "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "assets",
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "generate-assets": "npm run build && node dist/generate-assets.js"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "^1.18.29"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.29",
+    "@types/node": "22.15.30",
+    "typescript": "5.8.3"
+  }
+}
