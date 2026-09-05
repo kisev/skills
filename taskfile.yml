@@ -19,7 +19,7 @@ tasks:
     cmds:
       - uv run --locked ruff format scripts shared/references tests skills
       - prettier --write .
-      - tombi format mise.toml pyproject.toml tombi.toml
+      - tombi format --offline mise.toml pyproject.toml tombi.toml
       - task: package:format
       - task: generate
 
@@ -28,7 +28,7 @@ tasks:
     cmds:
       - uv run --locked ruff format --check scripts shared/references tests skills
       - prettier --check .
-      - tombi format --check mise.toml pyproject.toml tombi.toml
+      - tombi format --offline --check mise.toml pyproject.toml tombi.toml
       - task: package:format:check
 
   lint:
@@ -49,7 +49,9 @@ tasks:
       - >-
         yq --exit-status '.' .github/workflows/ci.yml .github/workflows/publish.yml
         lefthook.yml taskfile.yml .yamllint.yml >/dev/null
-      - rg --files --hidden -g '*.toml' -g '!packages/opencode/node_modules/**' | xargs tombi lint
+      - >-
+        rg --files --hidden -g '*.toml' -g '!packages/opencode/node_modules/**'
+        | xargs tombi lint --offline --error-on-warnings
 
   lint:shell:
     internal: true
@@ -151,23 +153,33 @@ tasks:
   package:typecheck:
     internal: true
     dir: packages/opencode
+    deps: [package:install]
     cmds:
       - npm run typecheck
 
   package:test:
     internal: true
     dir: packages/opencode
+    deps: [package:install]
     cmds:
       - npm test
 
   package:generate:
     internal: true
     dir: packages/opencode
+    deps: [package:install]
     cmds:
       - npm run generate-assets
 
   package:generate:check:
     internal: true
     dir: packages/opencode
+    deps: [package:install]
     cmds:
       - npm run generate-assets:check
+
+  package:install:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm ci
