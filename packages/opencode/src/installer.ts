@@ -117,12 +117,13 @@ function destination(root: string, relativePath: string): string {
 
 async function assets(): Promise<Asset[]> {
   const result: Asset[] = [];
-  for (const category of ["agents", "commands"]) {
+  for (const category of ["agents", "commands", "plugins"]) {
     const directory = resolve(assetsRoot, category);
     await assertSafeAncestors(directory);
     const entries = await readdir(directory, { withFileTypes: true });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(".md")) throw new InstallerError("asset_error", `Asset is not a regular Markdown file: ${entry.name}`);
+      const extension = category === "plugins" ? ".js" : ".md";
+      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(extension)) throw new InstallerError("asset_error", `Asset is not a regular ${extension} asset: ${entry.name}`);
       const relativePath = `${category}/${entry.name}`;
       assertSafeRelative(relativePath);
       const source = destination(assetsRoot, relativePath);

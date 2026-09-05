@@ -9,6 +9,12 @@ import test from "node:test";
 import { pathToFileURL } from "node:url";
 
 import plugin, { COMMAND_REGISTRY, RoutingGate, renderCommand, resolveRouting } from "../dist/index.js";
+import backgroundAttempts from "../dist/plugins/background-attempts.js";
+import goalLoop from "../dist/plugins/goal-loop.js";
+import scheduler from "../dist/plugins/schedule.js";
+import autonomyPolicy from "../dist/plugins/autonomy-policy.js";
+import zedBell from "../dist/plugins/zed-bell.js";
+import zedClickablePaths from "../dist/plugins/zed-clickable-paths.js";
 import { InstallerError, apply, preview } from "../dist/installer.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
@@ -27,21 +33,23 @@ async function install(scope, cwd, home) {
   return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
 }
 
-test("registry generates exactly thirty-one thin portable command assets", () => {
-  assert.equal(COMMAND_REGISTRY.length, 31);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 31);
+test("registry generates exactly fifty-seven thin command assets", () => {
+  assert.equal(COMMAND_REGISTRY.length, 57);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 57);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
   for (const entry of COMMAND_REGISTRY) {
-    assert.ok(skills.has(entry.skill), entry.skill);
+    if (entry.skill) assert.ok(skills.has(entry.skill), entry.skill);
     const rendered = renderCommand(entry);
-    assert.match(rendered, /native Skill tool/);
+    assert.match(rendered, entry.packageTool ? /package tool/ : /native Skill tool/);
     assert.match(rendered, /недоверенный ввод/);
     assert.match(rendered, /\$ARGUMENTS/);
-    assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
+    if (entry.skill) assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
     assert.doesNotMatch(rendered, /python|runner|curl|fetch\(/i);
     assert.equal(readFileSync(join(PACKAGE, "assets", "commands", `${entry.name}.md`), "utf8"), rendered);
   }
-  for (const forbidden of ["attempt", "goal", "schedule", "multi-run", "overview", "lsp-report", "agent-profiles", "capabilities", "doctor"]) assert.ok(!COMMAND_REGISTRY.some((entry) => entry.skill === forbidden));
+  for (const expected of ["attempt", "goal", "schedule", "multi-run", "overview", "lsp-report"]) assert.ok(COMMAND_REGISTRY.some((entry) => entry.skill === expected));
+  for (const forbidden of ["agent-profiles", "bedrock"]) assert.ok(!COMMAND_REGISTRY.some((entry) => entry.skill === forbidden));
+  assert.deepEqual(COMMAND_REGISTRY.filter((entry) => entry.packageTool).map((entry) => entry.name).sort(), ["capabilities", "doctor", "route"]);
 });
 
 test("agent assets contain six contract-bound profiles without model selection", () => {
@@ -69,11 +77,12 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second, first);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 37);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 71);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 31);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 57);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "plugins")).length, 8);
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), { code: "ENOENT" });
     await assert.rejects(lstat(join(project, ".opencode")), { code: "ENOENT" });
     await install("project", project, home);
@@ -129,7 +138,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", repeat.digest, project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 37);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 71);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -199,7 +208,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     const changed = join(project, ".opencode", "commands", "askme.md");
     await writeFile(changed, "user change\n");
     const plan = await preview("uninstall", "project", project, home);
-    assert.equal(plan.operations.filter((item) => item.operation === "remove").length, 36);
+    assert.equal(plan.operations.filter((item) => item.operation === "remove").length, 70);
     assert.deepEqual(plan.operations.find((item) => item.path === "commands/askme.md").operation, "conflict");
     await apply("uninstall", "project", plan.digest, project, home);
     assert.equal(await readFile(changed, "utf8"), "user change\n");
@@ -242,6 +251,31 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("stateful and Zed plugins are opt-in and create no disabled runtime", async () => {
+  const directory = temporary();
+  try {
+    assert.deepEqual(await backgroundAttempts({}), {});
+    assert.deepEqual(await goalLoop({}), {});
+    assert.deepEqual(await scheduler({}), {});
+    assert.deepEqual(await autonomyPolicy({}), {});
+    assert.deepEqual(await zedBell(), {});
+    assert.deepEqual(await zedClickablePaths(), {});
+    assert.equal(readdirSync(directory).length, 0);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("package catalog and doctor tools are strictly observational", async () => {
+  const hooks = await plugin({});
+  const catalog = JSON.parse(await hooks.tool.capabilities.execute({}, { sessionID: "bound" }));
+  const doctor = JSON.parse(await hooks.tool.doctor.execute({}, { sessionID: "bound" }));
+  assert.deepEqual(catalog.replacements, ["capabilities", "route", "doctor"]);
+  assert.equal(doctor.mutations, false);
+  assert.ok(!catalog.skills.includes("agent-profiles"));
+  assert.ok(!catalog.skills.includes("bedrock"));
 });
 
 test("CLI requires explicit scope and a tarball imports without portable skills", async () => {
