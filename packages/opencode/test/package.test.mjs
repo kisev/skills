@@ -268,6 +268,59 @@ test("stateful and Zed plugins are opt-in and create no disabled runtime", async
   }
 });
 
+test("background attempts enforce parent concurrency and stale cancellation", async () => {
+  const directory = temporary();
+  const originalState = process.env.XDG_STATE_HOME;
+  try {
+    process.env.XDG_STATE_HOME = join(directory, "state");
+    const project = join(directory, "project");
+    await mkdir(project);
+    const client = { session: { create: async () => ({ id: `child-${Math.random()}` }), prompt: async () => undefined, abort: async () => true } };
+    const hooks = await backgroundAttempts({ client, directory: project }, { enabled: true });
+    const decision = { agent: "worker", decision_digest: "decision" };
+    const first = JSON.parse(await hooks.tool.background_attempts.execute({ action: "start", task: "one", category: "implementation", decision }, { sessionID: "parent" }));
+    const second = JSON.parse(await hooks.tool.background_attempts.execute({ action: "start", task: "two", category: "implementation", decision }, { sessionID: "parent" }));
+    const firstStatus = JSON.parse(await hooks.tool.background_attempts.execute({ action: "status", attempt_id: first.attempt_id }, { sessionID: "parent" }));
+    const secondStatus = JSON.parse(await hooks.tool.background_attempts.execute({ action: "status", attempt_id: second.attempt_id }, { sessionID: "parent" }));
+    assert.equal(firstStatus.status, "running");
+    assert.equal(secondStatus.status, "queued");
+    await assert.rejects(hooks.tool.background_attempts.execute({ action: "cancel", attempt_id: first.attempt_id, expected_revision: 0, expected_status: "running" }, { sessionID: "parent" }), /changed since cancellation preview/);
+    const cancelled = JSON.parse(await hooks.tool.background_attempts.execute({ action: "cancel", attempt_id: first.attempt_id, expected_revision: 1, expected_status: "running" }, { sessionID: "parent" }));
+    assert.equal(cancelled.status, "cancelled");
+  } finally {
+    if (originalState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = originalState;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("scheduler seeds slots and does not replay missed intervals", async () => {
+  const directory = temporary();
+  const originalState = process.env.XDG_STATE_HOME;
+  try {
+    process.env.XDG_STATE_HOME = join(directory, "state");
+    const project = join(directory, "project");
+    await mkdir(project);
+    const digest = createHash("sha256").update(resolve(project)).digest("hex");
+    const definitions = join(process.env.XDG_STATE_HOME, "opencode", "skills", "schedule", digest, "definitions");
+    await mkdir(definitions, { recursive: true });
+    await writeFile(join(definitions, "hourly.json"), JSON.stringify({ schema_version: 1, id: "hourly", name: "Hourly", schedule: "every: 1h", agent: "worker", model: "model", run_as_goal: false, token_budget: 0, max_runtime: 60, prompt: "inspect", enabled: true }));
+    let current = 0;
+    let starts = 0;
+    const hooks = await scheduler({ client: { session: { create: async () => { starts += 1; return { id: "scheduled" }; }, prompt: async () => undefined } }, directory: project }, { enabled: true, clock: () => current });
+    await hooks.event({ event: { type: "session.created" } });
+    current = 24 * 60 * 60 * 1000;
+    await hooks.event({ event: { type: "session.created" } });
+    assert.equal(starts, 1);
+    await hooks.event({ event: { type: "session.created" } });
+    assert.equal(starts, 1);
+  } finally {
+    if (originalState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = originalState;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("package catalog and doctor tools are strictly observational", async () => {
   const hooks = await plugin({});
   const catalog = JSON.parse(await hooks.tool.capabilities.execute({}, { sessionID: "bound" }));

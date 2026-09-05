@@ -3,7 +3,7 @@ import { listState, readState, stateRoot, writeState } from "../runtime/state.js
 
 type Goal = { schema_version: 1; goal_id: string; session_id: string; status: "running" | "paused" | "complete" | "blocked"; revision: number; limits: { turn_cap: number; token_budget: number }; usage: { turns: number; tokens: number }; receipts: Array<Record<string, unknown>>; updated_at: string };
 type Client = { session: { messages: (input: { path: { id: string } }) => Promise<unknown>; prompt: (input: { path: { id: string }; body: Record<string, unknown> }) => Promise<unknown> } };
-export type GoalLoopOptions = { enabled?: boolean; quietWindowMs?: number; now?: () => number };
+export type GoalLoopOptions = { enabled?: boolean; quietWindowMs?: number; now?: () => number; audit?: (goal: Readonly<Goal>) => Promise<"continue" | "complete" | "blocked"> };
 
 function sessionID(event: { properties?: Record<string, unknown> }): string | undefined {
   const value = event.properties?.sessionID ?? event.properties?.session_id;
@@ -51,6 +51,8 @@ export async function goalLoop({ client }: { client: Client }, options: GoalLoop
       await writeState(item.path, root, item.state);
       if (item.state.usage.turns >= item.state.limits.turn_cap) return settle(session, "blocked", "turn cap reached");
       if (item.state.limits.token_budget > 0 && item.state.usage.tokens >= item.state.limits.token_budget) return settle(session, "blocked", "token budget reached");
+      const verdict = await (options.audit?.(item.state) ?? Promise.resolve("continue"));
+      if (verdict === "complete" || verdict === "blocked") return settle(session, verdict, "audit verdict");
       await client.session.prompt({ path: { id: session }, body: { parts: [{ type: "text", text: "Continue the current goal within its declared constraints and boundaries." }] } });
     } catch (error) {
       await settle(session, "blocked", String(error));

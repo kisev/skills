@@ -21,6 +21,8 @@ multi_run.py apply --confirmation-id ID --confirmation-digest SHA256
 multi_run.py status|compare --multi-run-id ID
 multi_run.py fusion-preview --multi-run-id ID --source-run-ids ID[,ID] --strengths TEXT
 multi_run.py fusion-apply --confirmation-id ID --confirmation-digest SHA256
+multi_run.py cancel-preview --multi-run-id ID [--run-id ID]
+multi_run.py cancel-apply --confirmation-id ID --confirmation-digest SHA256
 ```
 
 Каждый run обязан иметь уникальные attempt/session/workspace identifiers. До

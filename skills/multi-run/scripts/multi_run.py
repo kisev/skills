@@ -222,6 +222,34 @@ def fusion_apply(args: argparse.Namespace) -> dict[str, Any]:
     return {"status": "started", "fusion": checked}
 
 
+def cancel_preview(args: argparse.Namespace) -> dict[str, Any]:
+    state = load(args.multi_run_id)
+    targets = [item for item in state.get("runs", []) if isinstance(item, dict) and item.get("status") not in TERMINAL and (not args.run_id or item.get("run_id") == args.run_id)]
+    if args.run_id and not targets:
+        raise MultiRunError("run is terminal or missing", "run_not_cancellable")
+    payload = {"multi_run_id": args.multi_run_id, "run_id": args.run_id, "state_revision": revision(state), "affected_run_ids": [item.get("run_id") for item in targets]}
+    return {"status": "preview", "confirmation_request": issue("multi-run-cancel", payload)}
+
+
+def cancel_apply(args: argparse.Namespace) -> dict[str, Any]:
+    record = consume(args.confirmation_id, args.confirmation_digest, "multi-run-cancel")
+    if record.get("consumed"):
+        return {"status": "already_cancelled"}
+    payload = record["payload"]
+    state = load(payload["multi_run_id"])
+    if revision(state) != payload["state_revision"]:
+        raise MultiRunError("cancel preview is stale", "stale_revision")
+    results = []
+    for run_id in payload["affected_run_ids"]:
+        response = invoke("AGENT_SKILLS_ATTEMPTS_API", {"operation": "cancel", "multi_run_id": payload["multi_run_id"], "run_id": run_id})
+        if response is None:
+            emit_escalation("attempts_api_unavailable", {"variable": "AGENT_SKILLS_ATTEMPTS_API"})
+        results.append(response)
+    record["consumed"] = True
+    write(confirmation_path(args.confirmation_id), record)
+    return {"status": "cancel_requested", "results": results}
+
+
 def parser() -> argparse.ArgumentParser:
     result = ContractArgumentParser(prog="multi-run")
     result.add_argument("--capabilities", action="store_true", help=argparse.SUPPRESS)
@@ -252,6 +280,14 @@ def parser() -> argparse.ArgumentParser:
     item.add_argument("--confirmation-id", required=True)
     item.add_argument("--confirmation-digest", required=True)
     item.set_defaults(handler=fusion_apply)
+    item = commands.add_parser("cancel-preview")
+    item.add_argument("--multi-run-id", required=True)
+    item.add_argument("--run-id")
+    item.set_defaults(handler=cancel_preview)
+    item = commands.add_parser("cancel-apply")
+    item.add_argument("--confirmation-id", required=True)
+    item.add_argument("--confirmation-digest", required=True)
+    item.set_defaults(handler=cancel_apply)
     return result
 
 
