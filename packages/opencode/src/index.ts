@@ -1,9 +1,36 @@
 import { tool, type Plugin } from "@opencode-ai/plugin";
 
 import { CATEGORIES, type AvailableAgent, type Category, RoutingGate, type RoutingInput } from "./routing.js";
+import backgroundAttempts, { type BackgroundAttemptsOptions } from "./plugins/background-attempts.js";
+import goalLoop, { type GoalLoopOptions } from "./plugins/goal-loop.js";
+import scheduler, { type SchedulerOptions } from "./plugins/schedule.js";
+import autonomyPolicy, { type AutonomyPolicyOptions } from "./plugins/autonomy-policy.js";
+import rulesInjector, { type RulesInjectorOptions } from "./plugins/rules-injector.js";
+import rtk, { type RtkOptions } from "./plugins/rtk.js";
+import zedBell, { type ZedBellOptions } from "./plugins/zed-bell.js";
+import zedClickablePaths, { type ZedClickablePathsOptions } from "./plugins/zed-clickable-paths.js";
 
 export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
 export { CATEGORIES, resolveRouting, RoutingGate } from "./routing.js";
+export { backgroundAttempts, goalLoop, scheduler, autonomyPolicy, rulesInjector, rtk, zedBell, zedClickablePaths };
+
+export type OpenCodeOptions = {
+  backgroundAttempts?: BackgroundAttemptsOptions;
+  goalLoop?: GoalLoopOptions;
+  scheduler?: SchedulerOptions;
+  autonomyPolicy?: AutonomyPolicyOptions;
+  rulesInjector?: RulesInjectorOptions;
+  rtk?: RtkOptions;
+  zedBell?: ZedBellOptions;
+  zedClickablePaths?: ZedClickablePathsOptions;
+};
+
+const CATALOG = {
+  skills: ["attempt", "goal", "schedule", "multi-run", "usage", "overview", "lsp-report"],
+  plugins: ["background-attempts", "goal-loop", "schedule", "autonomy-policy", "rules-injector", "rtk", "zed-bell", "zed-clickable-paths"],
+  replacements: ["capabilities", "route", "doctor"],
+  version: "1.0.0",
+} as const;
 
 const plugin = (async () => {
   const gate = new RoutingGate();
@@ -27,8 +54,20 @@ const plugin = (async () => {
       return JSON.stringify({ decision, status: "routed" });
     }
   });
+  const capabilities = tool({
+    description: "Show the bundled OpenCode capability catalog without installing or changing anything.",
+    args: {},
+    async execute() { return JSON.stringify({ schema_version: 1, status: "ok", ...CATALOG }); },
+  });
+  const doctor = tool({
+    description: "Read package health and opt-in defaults without installing or repairing anything.",
+    args: {},
+    async execute() {
+      return JSON.stringify({ schema_version: 1, status: "ok", package: "agent-skills-opencode", opencode: ">=1.18.29", state: "not-inspected", mutations: false, defaults: { backgroundAttempts: false, goalLoop: false, scheduler: false, autonomyPolicy: false, zedBell: false, zedClickablePaths: false } });
+    },
+  });
   return {
-    tool: { route },
+    tool: { route, capabilities, doctor },
     "tool.execute.before": async (input: { tool: string; sessionID: string }, output: { args: unknown }) => {
       if (input.tool !== "task") return;
       const args = output.args && typeof output.args === "object" ? output.args as Record<string, unknown> : {};

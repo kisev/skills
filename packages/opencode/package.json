@@ -7,6 +7,38 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./plugins/background-attempts": {
+      "types": "./dist/plugins/background-attempts.d.ts",
+      "import": "./dist/plugins/background-attempts.js"
+    },
+    "./plugins/goal-loop": {
+      "types": "./dist/plugins/goal-loop.d.ts",
+      "import": "./dist/plugins/goal-loop.js"
+    },
+    "./plugins/schedule": {
+      "types": "./dist/plugins/schedule.d.ts",
+      "import": "./dist/plugins/schedule.js"
+    },
+    "./plugins/autonomy-policy": {
+      "types": "./dist/plugins/autonomy-policy.d.ts",
+      "import": "./dist/plugins/autonomy-policy.js"
+    },
+    "./plugins/rules-injector": {
+      "types": "./dist/plugins/rules-injector.d.ts",
+      "import": "./dist/plugins/rules-injector.js"
+    },
+    "./plugins/rtk": {
+      "types": "./dist/plugins/rtk.d.ts",
+      "import": "./dist/plugins/rtk.js"
+    },
+    "./plugins/zed-bell": {
+      "types": "./dist/plugins/zed-bell.d.ts",
+      "import": "./dist/plugins/zed-bell.js"
+    },
+    "./plugins/zed-clickable-paths": {
+      "types": "./dist/plugins/zed-clickable-paths.d.ts",
+      "import": "./dist/plugins/zed-clickable-paths.js"
     }
   },
   "bin": {
