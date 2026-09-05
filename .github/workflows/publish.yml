@@ -1,0 +1,35 @@
+name: Publish npm package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/opencode
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false
+      - name: Verify tag and package version
+        run: |
+          expected_version="${GITHUB_REF_NAME#v}"
+          actual_version="$(node -p 'require("./package.json").version')"
+          test "$actual_version" = "$expected_version"
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run generate-assets
+      - run: git diff --exit-code
+      - run: npm test
+      - run: npm publish --access public

@@ -19,3 +19,5 @@
 - Write-capable skills и installer используют preview с явным подтверждением.
 - OpenCode installer сохраняет ownership manifest и не перезаписывает чужие либо
   изменённые пользователем files.
+- Публикация npm package выполняется из GitHub Actions через OIDC trusted
+  publishing без long-lived publish token.
