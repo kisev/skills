@@ -1,27 +1,41 @@
 # Agent Skills
 
-Этот репозиторий - публичный источник переносимых Agent Skills. Каждый каталог в
-`skills/` является самодостаточной единицей установки и работы.
+Переносимый набор Agent Skills для инженерной работы с репозиториями,
+документацией, GitLab-процессами и OpenCode. Каждый каталог в `skills/` -
+самодостаточная единица установки: после установки skill не читает checkout и
+не зависит от runtime конкретного host.
 
-## Установка
+## Быстрый старт
 
-Установите весь набор напрямую из checkout через `npx skills`:
-
-```shell
-npx skills add . --agent codex --agent opencode --copy
-```
-
-Для установки одного skill укажите его имя:
+Установите весь набор для OpenCode в текущий проект:
 
 ```shell
-npx skills add . --skill project-spec --agent codex --copy
+npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
 
-Список доступных skills выводит `npx skills add . --list`. Проверенные targets -
-Codex и OpenCode; skills не требуют специфичного для target runtime и используют
-только стандартные возможности host и файлы под собственным корнем.
+Для воспроизводимой установки первого публичного релиза используйте GitHub tag:
 
-## Набор skills
+```shell
+npx --yes skills add https://github.com/kisev/skills/tree/v1.0.0 \
+  --agent opencode --skill '*' --copy --yes
+```
+
+Для одного skill замените `--skill '*'` его именем:
+
+```shell
+npx --yes skills add kisev/skills --agent opencode \
+  --skill project-spec --copy --yes
+```
+
+`npx skills` по умолчанию устанавливает в project scope. Добавьте `--global`,
+если skills должны быть доступны всем проектам пользователя. Перед установкой
+можно просмотреть каталог без записи:
+
+```shell
+npx --yes skills add kisev/skills --list
+```
+
+## Каталог skills
 
 | Skill | Назначение |
 | --- | --- |
@@ -56,42 +70,117 @@ Codex и OpenCode; skills не требуют специфичного для ta
 | `overview` | Read-only сводка durable OpenCode state. |
 | `lsp-report` | Применимость LSP OpenCode без запуска и установки. |
 
-## Границы
+Подробная классификация режимов и границ записана в
+[migration inventory](docs/migration-inventory.md).
 
-- `skills/` содержит переносимые самодостаточные skills, устанавливаемые через
-  `npx skills`.
-- Пользовательского CLI нет. Некоторые skills включают автономные Python runners
-  со стандартной библиотекой Python 3.12+. Необязательная OpenCode-интеграция с
-  agents, commands, runtime plugin и явным installer находится в
-  `packages/opencode/` и не входит в установку skills.
-- После установки skill должен работать, не читая файлы за пределами своего
-  каталога. Общие исходные материалы перед выпуском детерминированно
-  копируются в каждый skill-потребитель.
-- Skills, которые могут записывать файлы, показывают точный предпросмотр и ждут
-  явного подтверждения. Интерактивные вопросы используют штатный механизм host,
-  а при его отсутствии задаются в чате.
-- Skills не заменяют политики репозитория, проверку секретов, ревью или команды
-  проекта. Они не создают slash-команды и не устанавливают зависимости.
-- `ast-grep` и `rtk` требуют соответствующий внешний CLI. Их runners проверяют
-  доступность и возвращают `escalate`, но никогда не выполняют установку.
-- Семь OpenCode-specialized skills требуют OpenCode 1.18.29+ и optional package
-  `agent-skills-opencode`, но по-прежнему устанавливаются отдельно через `npx skills`.
-  Их Python runners используют только stdlib, работают из foreign CWD и хранят
-  state только в XDG/OpenCode user-owned roots.
+## OpenCode integration
 
-Репозиторий распространяется по лицензии MIT. См. [LICENSE](LICENSE).
-
-## Проверки сопровождающего
+Portable skills и OpenCode integration устанавливаются независимо. Сначала
+установите skills, затем в каталоге, из которого OpenCode разрешает npm packages,
+установите integration:
 
 ```shell
-python3 scripts/sync_shared.py
-python3 scripts/sync_shared.py --check
-python3 -m unittest discover -s tests -v
-npx --yes skills add . --list
-for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; done
+npm install agent-skills-opencode@1.0.0
+npm exec -- agent-skills-opencode install --scope global --dry-run
 ```
 
-Команда `npx skills` - интерфейс установки. Репозиторий не добавляет другой
-установщик и не содержит скрытой зависимости от конкретного host. OpenCode
-assets устанавливаются отдельным opt-in installer из `packages/opencode/` после
-установки skills.
+Dry-run выводит точный план и SHA-256 digest. Применяйте только digest из этого
+вывода:
+
+```shell
+npm exec -- agent-skills-opencode install --scope global --confirm <digest>
+```
+
+`global` размещает управляемые assets в OpenCode user config. Для текущего
+репозитория используйте `--scope project`; installer добавляет только файлы под
+`.opencode/`. Он не создаёт и не редактирует `opencode.json`.
+
+Подключите plugin вручную в `opencode.json` или `opencode.jsonc`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["agent-skills-opencode"]
+}
+```
+
+После установки, обновления или удаления integration полностью перезапустите
+OpenCode: agents и commands обнаруживаются до plugin hooks. Полное описание
+installer, plugin factories и ownership-границ есть в
+[README package](packages/opencode/README.md).
+
+## Совместимость и требования
+
+- Portable skills устанавливаются через актуальный `npx skills`; целевые hosts
+  должны поддерживать Agent Skills.
+- Раннеры, которые входят в отдельные skills, используют только Python 3.12+
+  standard library. Большинству skills Python не нужен.
+- `ast-grep` и `rtk` требуют заранее установленный одноимённый CLI; skills не
+  выполняют их установку.
+- OpenCode-specific skills и `agent-skills-opencode` требуют OpenCode 1.18.29+.
+  npm package требует Node.js 22+.
+- OpenCode assets являются опциональными: portable skills продолжают работать без
+  npm package, commands, agents и plugins.
+
+## Обновление и удаление
+
+Обновите установленные skills стандартной командой `skills`:
+
+```shell
+npx --yes skills update --yes
+```
+
+Для OpenCode integration установите требуемую версию, затем повторите dry-run и
+подтвердите новый digest:
+
+```shell
+npm install agent-skills-opencode@1.0.0
+npm exec -- agent-skills-opencode install --scope global --dry-run
+npm exec -- agent-skills-opencode install --scope global --confirm <digest>
+```
+
+Удаление одного portable skill выполняется явно по имени:
+
+```shell
+npx --yes skills remove project-spec --agent opencode --yes
+```
+
+Удаление OpenCode assets также начинается с dry-run:
+
+```shell
+npm exec -- agent-skills-opencode uninstall --scope global --dry-run
+npm exec -- agent-skills-opencode uninstall --scope global --confirm <digest>
+```
+
+Uninstaller удаляет только неизменённые managed files. Пользовательские изменения
+сохраняются как конфликт и требуют ручного решения.
+
+## Безопасность и ограничения
+
+- Skills с записью сначала показывают preview и требуют явное подтверждение.
+- Installer не имеет lifecycle hooks, не выполняет автоматическую установку skills
+  и не изменяет пользовательскую конфигурацию OpenCode. Он не перезаписывает
+  неизвестные или изменённые файлы.
+- Stateful OpenCode plugins и Zed integrations выключены по умолчанию. Включайте
+  их только в своём user-owned plugin wrapper.
+- Skills не заменяют review, policies, проверку секретов и контроль доступа
+  проекта. Внешние CLI и сервисы остаются отдельными пользовательскими границами.
+- Некоторые skills требуют уже настроенную авторизацию внешнего инструмента. Не
+  передавайте пароли, MFA-коды или tokens в prompt, argv или логи.
+- `npx skills remove --all` затрагивает все skills в выбранном scope; для этого
+  набора безопаснее удалять skills по одному имени.
+
+Сведения о сообщении уязвимостей приведены в [SECURITY.md](SECURITY.md), а правила
+внесения изменений - в [CONTRIBUTING.md](CONTRIBUTING.md). История выпусков - в
+[CHANGELOG.md](CHANGELOG.md).
+
+## Для сопровождающих
+
+```shell
+python3 scripts/sync_shared.py --check
+python3 -m unittest discover -s tests -v
+for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; done
+npx --yes skills add . --list
+```
+
+Репозиторий распространяется по лицензии MIT. См. [LICENSE](LICENSE).
