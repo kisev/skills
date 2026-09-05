@@ -16,11 +16,21 @@
 
 Переносимые skills описывают задачу и не требуют конкретного host. Host может
 предоставить штатный инструмент интерактивных вопросов; если его нет, agent
-задаёт вопрос в чате. OpenCode-only adapters, agents, commands и capability
-router относятся к необязательному package `packages/opencode/` и не нужны для
-установки или работы portable skill. Package не содержит копий skills. Его
-явный installer materialize-ит только OpenCode assets после dry-run и matching
-digest; runtime plugin не пишет user files.
+задаёт вопрос в чате. OpenCode-only adapters, agents, commands, plugins и
+capability router относятся к необязательному package `packages/opencode/` и не
+нужны для установки или работы portable skill. Package не содержит копий skills.
+Его явный installer materialize-ит assets после dry-run и matching digest;
+upgrade/uninstall сохраняют user drift через ownership manifest. Stateful plugins
+являются opt-in и при отключении не создают state, timers, sessions или mutations.
+
+## OpenCode runtime
+
+Семь specialized skills устанавливаются как обычные self-contained Agent Skills.
+Их Python runner materialize-ит общий stdlib runtime внутрь skill и использует
+только XDG/OpenCode user-owned config/state. Package runtime не ссылается на
+checkout и экспортирует восемь независимых plugin factories. `capabilities`,
+`route` и `doctor` являются package tools и read-only command replacements;
+они не устанавливают, не исправляют и не управляют agent profiles.
 
 ## Инварианты materialization
 

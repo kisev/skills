@@ -48,6 +48,13 @@ Codex и OpenCode; skills не требуют специфичного для ta
 | `mattermost` | Ограниченное read-only чтение Mattermost по ссылке. |
 | `team-workflow` | Одно явное действие командного цикла по явному context. |
 | `walkthrough` | Read-only карта чтения current diff, range или diff-file. |
+| `attempt` | Чтение и безопасная отмена Background Attempts OpenCode. |
+| `goal` | Проверяемая цель, привязанная к session OpenCode. |
+| `schedule` | Явные disabled-by-default definitions для scheduler OpenCode. |
+| `multi-run` | Изолированные attempts и подтверждённый fusion. |
+| `usage` | Read-only ledger токенов и стоимости OpenCode. |
+| `overview` | Read-only сводка durable OpenCode state. |
+| `lsp-report` | Применимость LSP OpenCode без запуска и установки. |
 
 ## Границы
 
@@ -67,6 +74,10 @@ Codex и OpenCode; skills не требуют специфичного для ta
   проекта. Они не создают slash-команды и не устанавливают зависимости.
 - `ast-grep` и `rtk` требуют соответствующий внешний CLI. Их runners проверяют
   доступность и возвращают `escalate`, но никогда не выполняют установку.
+- Семь OpenCode-specialized skills требуют OpenCode 1.18.29+ и optional package
+  `agent-skills-opencode`, но по-прежнему устанавливаются отдельно через `npx skills`.
+  Их Python runners используют только stdlib, работают из foreign CWD и хранят
+  state только в XDG/OpenCode user-owned roots.
 
 Репозиторий распространяется по лицензии MIT. См. [LICENSE](LICENSE).
 

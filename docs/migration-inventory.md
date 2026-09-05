@@ -29,6 +29,13 @@
 | `mattermost` | read-only с private cache | Ограниченное чтение Mattermost и состава канала. |
 | `team-workflow` | read/write с confirmation | Одно явное действие командного цикла по explicit context. |
 | `walkthrough` | read-only runner | Карта чтения current diff, Git range или diff-file. |
+| `attempt` | package tool | Чтение и подтверждённая отмена bounded Background Attempts. |
+| `goal` | write с session binding | Проверяемые goals с limits, audit и terminal state. |
+| `schedule` | write с confirmation | Явные definitions, disabled по умолчанию, без replay пропущенных slots. |
+| `multi-run` | write с confirmation | 2-5 isolated attempts, compare terminal manifests и fusion. |
+| `usage` | read-only runner | Ledger observed tokens/cost с честным unknown. |
+| `overview` | read-only runner | Partial-tolerant сводка file-backed OpenCode state. |
+| `lsp-report` | read-only runner | Применимые LSP без запуска servers и установки tools. |
 
 Skills не наследуют runtime state, providers, глобальные конфигурации или имена
 инструментов конкретного host. Интерактивность выражена нейтрально: штатный
@@ -38,6 +45,6 @@ Skills не наследуют runtime state, providers, глобальные к
 находится в `SKILL.md`; runner-ы при необходимости лежат в собственном каталоге
 skill. Их общий минимальный stdlib-код хранится в `shared/references/` и
 детерминированно materialize-ится в каждую зависимую установку. Необязательный
-package `packages/opencode/` содержит OpenCode-specific assets и opt-in
+package `packages/opencode/` содержит OpenCode-specific assets, runtime и opt-in
 installer, но не поставляет копии skills и не меняет их установку через
-`npx skills`.
+`npx skills`. Stateful plugins выключены по умолчанию.

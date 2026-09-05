@@ -1,7 +1,7 @@
 # Интеграция OpenCode
 
-`agent-skills-opencode` - npm package с runtime capability router и opt-in
-installer для OpenCode agents и slash-команд. Он не включает portable skills и
+`agent-skills-opencode` - npm package с capability router, OpenCode runtime и
+opt-in installer для agents, commands и plugins. Он не включает portable skills и
 не меняет user config при import, plugin load или npm lifecycle.
 
 ## Установка skills
@@ -37,16 +37,17 @@ agent-skills-opencode install --scope global --dry-run
 agent-skills-opencode install --scope global --confirm <digest>
 ```
 
-`global` устанавливает assets в `~/.config/opencode/agents` и
-`~/.config/opencode/commands`. Для текущего repository используйте `project`:
+`global` устанавливает assets в `~/.config/opencode/agents`,
+`~/.config/opencode/commands` и `~/.config/opencode/plugins`. Для текущего
+repository используйте `project`:
 
 ```shell
 agent-skills-opencode install --scope project --dry-run
 agent-skills-opencode install --scope project --confirm <digest>
 ```
 
-Project assets находятся в `.opencode/agents` и `.opencode/commands` текущего
-working directory. Scope обязателен. Installer не изменяет `opencode.json`, не
+Project assets находятся в `.opencode/agents`, `.opencode/commands` и
+`.opencode/plugins` текущего working directory. Scope обязателен. Installer не изменяет `opencode.json`, не
 перезаписывает неизвестные или изменённые files и сохраняет ownership manifest
 только после confirmed apply.
 
@@ -75,6 +76,24 @@ agent-skills-opencode uninstall --scope global --confirm <digest>
 Uninstall удаляет только files из ownership manifest, если их SHA-256 не
 изменился. Изменённые пользователем files остаются как `conflict`.
 
+## Runtime options
+
+Package экспортирует independent plugin factories `background-attempts`,
+`goal-loop`, `schedule`, `autonomy-policy`, `rules-injector`, `rtk`, `zed-bell`
+и `zed-clickable-paths`. Stateful plugins Background Attempts, Goal Loop,
+Scheduler и Autonomy Policy отключены по умолчанию. Zed integrations также
+optional. Включайте subsystem только в собственном user-owned plugin wrapper:
+
+```js
+import goalLoop from "agent-skills-opencode/plugins/goal-loop";
+
+export default (input) => goalLoop(input, { enabled: true });
+```
+
+`rules-injector` fail-soft применяет ограниченный budget и пропускает native
+project/global rules. `rtk` fail-open сжимает большой bash output и добавляет
+подсказку для edit error, но не содержит ownership guard.
+
 ## Границы
 
 Portable skills в корне `skills/` универсальны и устанавливаются только через
@@ -82,3 +101,5 @@ Portable skills в корне `skills/` универсальны и устана
 router. Команды - тонкие adapters: передают `$ARGUMENTS` как недоверенный ввод
 в native Skill tool, а target validation, confirmation, batch/review rules и
 формат результата остаются ответственностью skill или runner.
+`capabilities`, `route` и `doctor` - package tools/commands только для catalog,
+routing и health; они не устанавливают и не исправляют package или skills.
