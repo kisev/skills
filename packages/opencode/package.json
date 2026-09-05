@@ -9,6 +9,9 @@
       "import": "./dist/index.js"
     }
   },
+  "bin": {
+    "agent-skills-opencode": "./dist/cli.js"
+  },
   "files": [
     "assets",
     "dist",
@@ -20,7 +23,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "generate-assets": "npm run build && node dist/generate-assets.js"
+    "generate-assets": "npm run build && node dist/generate-assets.js",
+    "test": "npm run build && node --test test/package.test.mjs",
+    "smoke": "npm run build && node test/smoke.mjs"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": "^1.18.29"
