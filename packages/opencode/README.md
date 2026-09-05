@@ -2,19 +2,22 @@
 
 `agent-skills-opencode` - npm package с capability router, OpenCode runtime и
 opt-in installer для agents, commands и plugins. Он не включает portable skills и
-не меняет user config при import, plugin load или npm lifecycle.
+не меняет user config при import, plugin load или npm lifecycle. Package требует
+Node.js 22+ и OpenCode 1.18.29+.
 
 ## Установка skills
 
-Сначала установите нужные portable skills через `npx skills` из checkout или
-публичного источника:
+Сначала установите нужные portable skills через `npx skills` из публичного
+репозитория:
 
 ```shell
-npx skills add <repository-or-path> --agent opencode --copy
+npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
 
-Для одного skill добавьте `--skill <name>`. Package никогда не устанавливает и
-не обновляет skills. Если команда не нашла skill, она сообщает точную команду
+Для одного skill укажите `--skill <name>`. Для воспроизводимой установки можно
+передать URL GitHub tag, например
+`https://github.com/kisev/skills/tree/v1.0.0`. Package никогда не устанавливает
+и не обновляет skills. Если команда не нашла skill, она сообщает точную команду
 `npx skills add` для его установки.
 
 ## Установка integration
@@ -22,19 +25,19 @@ npx skills add <repository-or-path> --agent opencode --copy
 Установите npm package там, где OpenCode сможет разрешить plugin:
 
 ```shell
-npm install agent-skills-opencode
+npm install agent-skills-opencode@1.0.0
 ```
 
 Сначала покажите план installer. Эта команда не создаёт files:
 
 ```shell
-agent-skills-opencode install --scope global --dry-run
+npm exec -- agent-skills-opencode install --scope global --dry-run
 ```
 
 Проверьте exact operations и примените только показанный digest:
 
 ```shell
-agent-skills-opencode install --scope global --confirm <digest>
+npm exec -- agent-skills-opencode install --scope global --confirm <digest>
 ```
 
 `global` устанавливает assets в `~/.config/opencode/agents`,
@@ -42,8 +45,8 @@ agent-skills-opencode install --scope global --confirm <digest>
 repository используйте `project`:
 
 ```shell
-agent-skills-opencode install --scope project --dry-run
-agent-skills-opencode install --scope project --confirm <digest>
+npm exec -- agent-skills-opencode install --scope project --dry-run
+npm exec -- agent-skills-opencode install --scope project --confirm <digest>
 ```
 
 Project assets находятся в `.opencode/agents`, `.opencode/commands` и
@@ -69,8 +72,8 @@ agents и commands строится до plugin hooks.
 Installer обновляет только files с совпадающим managed SHA-256.
 
 ```shell
-agent-skills-opencode uninstall --scope global --dry-run
-agent-skills-opencode uninstall --scope global --confirm <digest>
+npm exec -- agent-skills-opencode uninstall --scope global --dry-run
+npm exec -- agent-skills-opencode uninstall --scope global --confirm <digest>
 ```
 
 Uninstall удаляет только files из ownership manifest, если их SHA-256 не
@@ -103,3 +106,6 @@ router. Команды - тонкие adapters: передают `$ARGUMENTS` к
 формат результата остаются ответственностью skill или runner.
 `capabilities`, `route` и `doctor` - package tools/commands только для catalog,
 routing и health; они не устанавливают и не исправляют package или skills.
+
+Package распространяется по лицензии MIT. Полные инструкции по portable skills,
+upgrade и security boundaries находятся в корневом README репозитория.

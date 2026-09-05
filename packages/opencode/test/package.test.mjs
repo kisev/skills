@@ -331,7 +331,20 @@ test("package catalog and doctor tools are strictly observational", async () => 
   assert.ok(!catalog.skills.includes("bedrock"));
 });
 
-test("CLI requires explicit scope and a tarball imports without portable skills", async () => {
+test("published package metadata and tarball expose only the OpenCode integration", async () => {
+  const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
+  assert.equal(packageJson.name, "agent-skills-opencode");
+  assert.equal(packageJson.version, "1.0.0");
+  assert.equal(packageJson.license, "MIT");
+  assert.equal(packageJson.repository.type, "git");
+  assert.equal(packageJson.repository.url, "git+https://github.com/kisev/skills.git");
+  assert.equal(packageJson.repository.directory, "packages/opencode");
+  assert.equal(packageJson.homepage, "https://github.com/kisev/skills#readme");
+  assert.equal(packageJson.bugs.url, "https://github.com/kisev/skills/issues");
+  assert.deepEqual(packageJson.files, ["assets", "dist", "README.md"]);
+  assert.equal(packageJson.engines.node, ">=22");
+  assert.equal(packageJson.exports["."].import, "./dist/index.js");
+  assert.equal(packageJson.bin["agent-skills-opencode"], "./dist/cli.js");
   const invalid = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "install", "--dry-run"], { encoding: "utf8" });
   assert.equal(invalid.status, 2);
   assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
@@ -339,6 +352,14 @@ test("CLI requires explicit scope and a tarball imports without portable skills"
   try {
     const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", directory], { cwd: PACKAGE, encoding: "utf8" }));
     const tarball = join(directory, packed[0].filename);
+    const filenames = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" }).trim().split("\n");
+    assert.ok(filenames.includes("package/package.json"));
+    assert.ok(filenames.includes("package/README.md"));
+    assert.ok(filenames.some((name) => name.startsWith("package/assets/")));
+    assert.ok(filenames.some((name) => name.startsWith("package/dist/")));
+    for (const forbidden of ["package/test/", "package/tests/", "package/node_modules/", "package/skills/"]) {
+      assert.equal(filenames.some((name) => name.startsWith(forbidden)), false, forbidden);
+    }
     execFileSync("tar", ["-xzf", tarball, "-C", directory], { encoding: "utf8" });
     const unpacked = join(directory, "package");
     assert.equal(readdirSync(unpacked).includes("skills"), false);

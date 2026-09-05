@@ -1,7 +1,17 @@
 {
   "name": "agent-skills-opencode",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kisev/skills.git",
+    "directory": "packages/opencode"
+  },
+  "homepage": "https://github.com/kisev/skills#readme",
+  "bugs": {
+    "url": "https://github.com/kisev/skills/issues"
+  },
   "type": "module",
   "exports": {
     ".": {
