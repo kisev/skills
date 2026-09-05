@@ -1,9 +1,84 @@
-# Необязательный package OpenCode
+# Интеграция OpenCode
 
-Этот каталог задаёт границу будущего необязательного npm package. Package может
-поставлять OpenCode-specific agents, тонкие commands для адаптации входных
-данных host к portable skills и plugins. Он не должен становиться runtime-
-зависимостью чего-либо под `skills/`.
+`agent-skills-opencode` - npm package с runtime capability router и opt-in
+installer для OpenCode agents и slash-команд. Он не включает portable skills и
+не меняет user config при import, plugin load или npm lifecycle.
 
-Metadata и реализация package не добавляются до проектирования и review его
-публичного API, формата распространения и политики совместимости.
+## Установка skills
+
+Сначала установите нужные portable skills через `npx skills` из checkout или
+публичного источника:
+
+```shell
+npx skills add <repository-or-path> --agent opencode --copy
+```
+
+Для одного skill добавьте `--skill <name>`. Package никогда не устанавливает и
+не обновляет skills. Если команда не нашла skill, она сообщает точную команду
+`npx skills add` для его установки.
+
+## Установка integration
+
+Установите npm package там, где OpenCode сможет разрешить plugin:
+
+```shell
+npm install agent-skills-opencode
+```
+
+Сначала покажите план installer. Эта команда не создаёт files:
+
+```shell
+agent-skills-opencode install --scope global --dry-run
+```
+
+Проверьте exact operations и примените только показанный digest:
+
+```shell
+agent-skills-opencode install --scope global --confirm <digest>
+```
+
+`global` устанавливает assets в `~/.config/opencode/agents` и
+`~/.config/opencode/commands`. Для текущего repository используйте `project`:
+
+```shell
+agent-skills-opencode install --scope project --dry-run
+agent-skills-opencode install --scope project --confirm <digest>
+```
+
+Project assets находятся в `.opencode/agents` и `.opencode/commands` текущего
+working directory. Scope обязателен. Installer не изменяет `opencode.json`, не
+перезаписывает неизвестные или изменённые files и сохраняет ownership manifest
+только после confirmed apply.
+
+Добавьте plugin в `opencode.json` вручную:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["agent-skills-opencode"]
+}
+```
+
+Полностью перезапустите OpenCode после install, upgrade или uninstall: registry
+agents и commands строится до plugin hooks.
+
+## Upgrade и uninstall
+
+После обновления npm package снова выполните dry-run и подтвердите новый digest.
+Installer обновляет только files с совпадающим managed SHA-256.
+
+```shell
+agent-skills-opencode uninstall --scope global --dry-run
+agent-skills-opencode uninstall --scope global --confirm <digest>
+```
+
+Uninstall удаляет только files из ownership manifest, если их SHA-256 не
+изменился. Изменённые пользователем files остаются как `conflict`.
+
+## Границы
+
+Portable skills в корне `skills/` универсальны и устанавливаются только через
+`npx skills`. Этот package поставляет только OpenCode-specific assets и runtime
+router. Команды - тонкие adapters: передают `$ARGUMENTS` как недоверенный ввод
+в native Skill tool, а target validation, confirmation, batch/review rules и
+формат результата остаются ответственностью skill или runner.

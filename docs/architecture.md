@@ -16,9 +16,11 @@
 
 Переносимые skills описывают задачу и не требуют конкретного host. Host может
 предоставить штатный инструмент интерактивных вопросов; если его нет, agent
-задаёт вопрос в чате. OpenCode-only adapters и будущие agents/plugins относятся
-к необязательному package `packages/opencode/` и не нужны для установки или
-работы portable skill.
+задаёт вопрос в чате. OpenCode-only adapters, agents, commands и capability
+router относятся к необязательному package `packages/opencode/` и не нужны для
+установки или работы portable skill. Package не содержит копий skills. Его
+явный installer materialize-ит только OpenCode assets после dry-run и matching
+digest; runtime plugin не пишет user files.
 
 ## Инварианты materialization
 

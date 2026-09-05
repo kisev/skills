@@ -53,8 +53,10 @@ Codex и OpenCode; skills не требуют специфичного для ta
 
 - `skills/` содержит переносимые самодостаточные skills, устанавливаемые через
   `npx skills`.
-- Пользовательского CLI, agents, commands и plugins нет. Некоторые skills
-  включают автономные Python runners со стандартной библиотекой Python 3.12+.
+- Пользовательского CLI нет. Некоторые skills включают автономные Python runners
+  со стандартной библиотекой Python 3.12+. Необязательная OpenCode-интеграция с
+  agents, commands, runtime plugin и явным installer находится в
+  `packages/opencode/` и не входит в установку skills.
 - После установки skill должен работать, не читая файлы за пределами своего
   каталога. Общие исходные материалы перед выпуском детерминированно
   копируются в каждый skill-потребитель.
@@ -79,4 +81,6 @@ for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; d
 ```
 
 Команда `npx skills` - интерфейс установки. Репозиторий не добавляет другой
-установщик и не содержит скрытой зависимости от конкретного host.
+установщик и не содержит скрытой зависимости от конкретного host. OpenCode
+assets устанавливаются отдельным opt-in installer из `packages/opencode/` после
+установки skills.

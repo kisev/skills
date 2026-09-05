@@ -24,3 +24,13 @@ jobs:
         run: for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; done
       - name: List installable skills
         run: npx --yes skills add . --list
+  opencode-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build, typecheck, test and pack OpenCode integration
+        working-directory: packages/opencode
+        run: npm ci && npm run typecheck && npm run generate-assets && git diff --exit-code && npm test && npm pack --dry-run

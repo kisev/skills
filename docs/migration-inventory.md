@@ -34,7 +34,10 @@ Skills не наследуют runtime state, providers, глобальные к
 инструментов конкретного host. Интерактивность выражена нейтрально: штатный
 механизм host, а при его отсутствии - вопрос в чате.
 
-Каталог `skills/` не содержит commands, agents, plugins или package. Контекстная
-логика находится в `SKILL.md`; runner-ы при необходимости лежат в собственном
-каталоге skill. Их общий минимальный stdlib-код хранится в `shared/references/` и
-детерминированно materialize-ится в каждую зависимую установку.
+Каталог `skills/` не содержит commands, agents или plugins. Контекстная логика
+находится в `SKILL.md`; runner-ы при необходимости лежат в собственном каталоге
+skill. Их общий минимальный stdlib-код хранится в `shared/references/` и
+детерминированно materialize-ится в каждую зависимую установку. Необязательный
+package `packages/opencode/` содержит OpenCode-specific assets и opt-in
+installer, но не поставляет копии skills и не меняет их установку через
+`npx skills`.
