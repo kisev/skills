@@ -136,6 +136,106 @@
     {
       "source": "references/gitlab-workflow.md",
       "destination": "release-review/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "goal/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "goal/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "goal/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/state.py",
+      "destination": "goal/scripts/portable_runtime/state.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "schedule/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "schedule/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "schedule/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/state.py",
+      "destination": "schedule/scripts/portable_runtime/state.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "multi-run/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "multi-run/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "multi-run/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/state.py",
+      "destination": "multi-run/scripts/portable_runtime/state.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "usage/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "usage/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "usage/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/state.py",
+      "destination": "usage/scripts/portable_runtime/state.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "overview/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "overview/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "overview/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/state.py",
+      "destination": "overview/scripts/portable_runtime/state.py"
+    },
+    {
+      "source": "references/python_runtime/lsp.py",
+      "destination": "overview/scripts/portable_runtime/lsp.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "lsp-report/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "lsp-report/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "lsp-report/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/lsp.py",
+      "destination": "lsp-report/scripts/portable_runtime/lsp.py"
     }
   ]
 }

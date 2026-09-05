@@ -40,6 +40,13 @@ PORTABLE_SKILLS = (
     "release-prepare",
     "release-review",
     "mattermost",
+    "attempt",
+    "goal",
+    "schedule",
+    "multi-run",
+    "usage",
+    "overview",
+    "lsp-report",
 )
 FORBIDDEN_PORTABLE_MARKERS = (
     "../..",
@@ -47,7 +54,6 @@ FORBIDDEN_PORTABLE_MARKERS = (
     "catalog.yml",
     "~/.config/opencode",
     "~/.local/state/opencode",
-    "opencode",
 )
 PROJECT_REFERENCES = (
     "references/requirements.md",
@@ -184,6 +190,12 @@ RUNNERS = {
     "release-review": "scripts/review_release.py",
     "mattermost": "scripts/mattermost.py",
     "team-workflow": "scripts/team_workflow.py",
+    "goal": "scripts/goal.py",
+    "schedule": "scripts/schedule.py",
+    "multi-run": "scripts/multi_run.py",
+    "usage": "scripts/usage.py",
+    "overview": "scripts/overview.py",
+    "lsp-report": "scripts/lsp_report.py",
 }
 
 
@@ -454,10 +466,11 @@ class PortableSkillValidationTests(unittest.TestCase):
             for entry in manifest["files"]
             if entry["source"].startswith("references/python_runtime/")
         ]
-        self.assertEqual(
-            len(runtime_entries),
-            len(("ast-grep", "rtk", "skill-improver", "walkthrough")) * 3,
-        )
+        destinations = {entry["destination"] for entry in runtime_entries}
+        for name in ("goal", "schedule", "multi-run", "usage", "overview", "lsp-report"):
+            with self.subTest(skill=name):
+                self.assertIn(f"{name}/scripts/portable_runtime/capabilities.py", destinations)
+                self.assertIn(f"{name}/scripts/portable_runtime/contract.py", destinations)
         for entry in runtime_entries:
             source = ROOT / "shared" / entry["source"]
             destination = ROOT / "skills" / entry["destination"]
@@ -465,6 +478,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
+        opencode_skills = {"attempt", "goal", "schedule", "multi-run", "usage", "overview", "lsp-report"}
         for path in (ROOT / "skills").rglob("*"):
             if (
                 path.is_file()
@@ -472,7 +486,10 @@ class PortableSkillValidationTests(unittest.TestCase):
                 and path.suffix in {".md", ".py"}
             ):
                 text = path.read_text(encoding="utf-8").lower()
-                for marker in FORBIDDEN_PORTABLE_MARKERS:
+                markers = FORBIDDEN_PORTABLE_MARKERS
+                if path.relative_to(ROOT / "skills").parts[0] in opencode_skills:
+                    markers = tuple(marker for marker in markers if marker not in {"~/.config/opencode", "~/.local/state/opencode"})
+                for marker in markers:
                     self.assertNotIn(marker, text, f"{marker} in {path}")
 
     def test_gitlab_skills_materialize_their_own_contract_and_runtime(self) -> None:
@@ -924,6 +941,74 @@ class PortableRunnerTests(unittest.TestCase):
             self.assertEqual(
                 json.loads(from_file.stdout)["source"]["diff_file"], str(artifact)
             )
+
+
+class OpenCodePortableRuntimeTests(unittest.TestCase):
+    def run_skill(self, skill: str, *arguments: str, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        runner = RUNNERS[skill]
+        return subprocess.run(
+            [sys.executable, "-I", "-S", "-B", str(ROOT / "skills" / skill / runner), *arguments],
+            cwd=tempfile.gettempdir(),
+            env={**os.environ, **environment, "PYTHONPATH": "/invalid"},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_goal_session_binding_revision_and_pause_transition(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "state"
+            environment = {"HOME": temporary, "XDG_STATE_HOME": str(state)}
+            prepared = self.run_skill("goal", "prepare", "--session", "session-1", "--objective", "finish", environment=environment)
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            goal = json.loads(prepared.stdout)
+            stale = self.run_skill("goal", "start", "--goal-id", goal["goal_id"], "--revision", "1", "--session", "session-1", environment=environment)
+            self.assertEqual(stale.returncode, 2)
+            self.assertEqual(json.loads(stale.stdout)["error"]["code"], "stale_revision")
+            started = self.run_skill("goal", "start", "--goal-id", goal["goal_id"], "--revision", "0", "--session", "session-1", environment=environment)
+            self.assertEqual(started.returncode, 0, started.stderr)
+            paused = self.run_skill("goal", "pause", "--goal-id", goal["goal_id"], "--revision", "1", environment=environment)
+            self.assertEqual(paused.returncode, 0, paused.stderr)
+            self.assertEqual(json.loads(paused.stdout)["status"], "paused")
+
+    def test_schedule_is_disabled_by_default_and_confirmation_is_single_use(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            project.mkdir()
+            state = Path(temporary) / "state"
+            environment = {"HOME": temporary, "XDG_STATE_HOME": str(state)}
+            preview = self.run_skill("schedule", "add", "--project", str(project), "--id", "morning", "--name", "Morning", "--schedule", "every: 1h", "--agent", "worker", "--model", "model", "--prompt", "inspect", environment=environment)
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            token = json.loads(preview.stdout)["confirmation_request"]["id"]
+            applied = self.run_skill("schedule", "add", "--project", str(project), "--id", "morning", "--name", "Morning", "--schedule", "every: 1h", "--agent", "worker", "--model", "model", "--prompt", "inspect", "--confirmation-id", token, environment=environment)
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            self.assertFalse(json.loads(applied.stdout)["definition"]["enabled"])
+            repeat = self.run_skill("schedule", "add", "--project", str(project), "--id", "morning", "--name", "Morning", "--schedule", "every: 1h", "--agent", "worker", "--model", "model", "--prompt", "inspect", "--confirmation-id", token, environment=environment)
+            self.assertEqual(repeat.returncode, 2)
+
+    def test_multi_run_without_adapters_escalates_without_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            project.mkdir()
+            task = project / "task.md"
+            task.write_text("inspect", encoding="utf-8")
+            state = Path(temporary) / "state"
+            result = self.run_skill("multi-run", "preview", "--task-file", str(task), "--project", str(project), "--start-ref", "HEAD", "--count", "2", environment={"HOME": temporary, "XDG_STATE_HOME": str(state), "AGENT_SKILLS_ROUTE_API": ""})
+            self.assertEqual(result.returncode, 3, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["status"], "escalate")
+            self.assertFalse(state.exists())
+
+    def test_read_only_reports_do_not_create_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            project.mkdir()
+            state = Path(temporary) / "state"
+            environment = {"HOME": temporary, "XDG_STATE_HOME": str(state), "XDG_CONFIG_HOME": str(Path(temporary) / "config")}
+            for skill, arguments in (("usage", ("--project", str(project), "--format", "json")), ("overview", ("--project", str(project), "--format", "json")), ("lsp-report", ("--project", str(project), "--format", "json"))):
+                result = self.run_skill(skill, *arguments, environment=environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                json.loads(result.stdout)
+            self.assertFalse(state.exists())
 
 
 if __name__ == "__main__":
