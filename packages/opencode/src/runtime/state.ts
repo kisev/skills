@@ -3,7 +3,7 @@ import { lstat, mkdir, readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
-import { appendPrivate, writeAtomic } from "../lifecycle.js";
+import { appendPrivate, withLifecycleLock, writeAtomic } from "../lifecycle.js";
 
 function home(value = process.env.HOME ?? homedir()): string {
   if (!isAbsolute(value) || value.split(sep).includes("..")) throw new Error("HOME must be an absolute safe path");
@@ -84,14 +84,22 @@ export async function listState(boundary: string, suffix = ".json"): Promise<str
 
 export async function writeState(path: string, boundary: string, value: unknown): Promise<void> {
   if (!inside(boundary, path)) throw new Error("state path escapes its boundary");
-  await safeDirectory(dirname(path), boundary, true);
-  await writeAtomic(path, Buffer.from(`${JSON.stringify(value)}\n`), 0o600);
+  await withLifecycleLock(boundary, async () => {
+    await safeDirectory(dirname(path), boundary, true);
+    await writeAtomic(path, Buffer.from(`${JSON.stringify(value)}\n`), 0o600);
+  });
 }
 
 export async function appendState(path: string, boundary: string, value: unknown): Promise<void> {
   if (!inside(boundary, path)) throw new Error("state path escapes its boundary");
-  await safeDirectory(dirname(path), boundary, true);
-  await appendPrivate(path, value);
+  await withLifecycleLock(boundary, async () => {
+    await safeDirectory(dirname(path), boundary, true);
+    await appendPrivate(path, value);
+  });
+}
+
+export async function withStateLock<T>(boundary: string, callback: () => Promise<T>): Promise<T> {
+  return withLifecycleLock(boundary, callback);
 }
 
 export function digest(value: unknown): string {

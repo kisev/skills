@@ -28,12 +28,22 @@ export async function backgroundAttempts({ client, directory, cwd }: { client: C
     await appendState(join(root, "receipts.jsonl"), root, { attempt_id: item.attempt_id, event, status: item.status, revision: item.revision, at: new Date().toISOString() });
   };
   const transition = async (item: Attempt, status: Status, event: string) => {
-    if (!TERMINAL.has(item.status)) {
-      item.status = status;
-      item.revision += 1;
-    }
+    const allowed: Record<Status, readonly Status[]> = {
+      queued: ["running", "failed", "cancelled"],
+      running: ["waiting", "completed", "failed", "cancelled", "orphaned"],
+      waiting: ["running", "completed", "failed", "cancelled", "orphaned"],
+      completed: [], failed: [], cancelled: [], orphaned: [],
+    };
+    if (!allowed[item.status].includes(status)) throw new Error(`Invalid background-attempt transition: ${item.status} -> ${status}`);
+    item.status = status;
+    item.revision += 1;
     await save(item, event);
   };
+  for (const item of await all()) {
+    if (item.project === project && (item.status === "running" || item.status === "waiting")) {
+      await transition(item, "orphaned", "recovery.orphaned");
+    }
+  }
   const pump = async () => {
     const records = await all();
     const running = records.filter((item) => item.status === "running" || item.status === "waiting");

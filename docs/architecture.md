@@ -44,6 +44,9 @@ requirements, execution-card digest/revision, matrix revision и TTL; перех
 `agent_profiles` - optional adapter над package-domain planner; основной интерфейс
 управления agents - прямой CLI без LLM. Все mutations используют private receipt,
 lifecycle lock, final revalidation и journaled rollback/recovery.
+Stateful runtime records используют те же private 0600 atomic writes и lock;
+при повторной загрузке незавершённые background attempts переходят в
+`orphaned`, а недопустимые status transitions отклоняются.
 
 ## Инварианты materialization
 
