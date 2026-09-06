@@ -1,7 +1,9 @@
-import { createHash, randomUUID } from "node:crypto";
-import { lstat, mkdir, open, readFile, rename, readdir, unlink } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, mkdir, readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+
+import { appendPrivate, writeAtomic } from "../lifecycle.js";
 
 function home(value = process.env.HOME ?? homedir()): string {
   if (!isAbsolute(value) || value.split(sep).includes("..")) throw new Error("HOME must be an absolute safe path");
@@ -34,7 +36,19 @@ async function safeDirectory(path: string, boundary: string, create = false): Pr
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
-  if (create) await mkdir(target, { recursive: true, mode: 0o700 });
+  if (create) {
+    let current = resolve(target).startsWith(sep) ? sep : "";
+    for (const piece of resolve(target).split(sep).filter(Boolean)) {
+      current = join(current, piece);
+      try {
+        const info = await lstat(current);
+        if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("state directory is unsafe");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        await mkdir(current, { mode: 0o700 });
+      }
+    }
+  }
   const rootInfo = await lstat(boundary);
   if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) throw new Error("state directory is unsafe");
   let current = resolve(boundary);
@@ -71,39 +85,13 @@ export async function listState(boundary: string, suffix = ".json"): Promise<str
 export async function writeState(path: string, boundary: string, value: unknown): Promise<void> {
   if (!inside(boundary, path)) throw new Error("state path escapes its boundary");
   await safeDirectory(dirname(path), boundary, true);
-  const temporary = join(dirname(path), `.${randomUUID()}.tmp`);
-  const handle = await open(temporary, "wx", 0o600);
-  try {
-    await handle.writeFile(`${JSON.stringify(value)}\n`, "utf8");
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
-  try {
-    try {
-      const previous = await lstat(path);
-      if (!previous.isFile() || previous.isSymbolicLink()) throw new Error("state file is unsafe");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    }
-    await rename(temporary, path);
-  } finally {
-    await unlink(temporary).catch(() => undefined);
-  }
+  await writeAtomic(path, Buffer.from(`${JSON.stringify(value)}\n`), 0o600);
 }
 
 export async function appendState(path: string, boundary: string, value: unknown): Promise<void> {
   if (!inside(boundary, path)) throw new Error("state path escapes its boundary");
   await safeDirectory(dirname(path), boundary, true);
-  const handle = await open(path, "a", 0o600);
-  try {
-    const info = await handle.stat();
-    if (!info.isFile()) throw new Error("state file is unsafe");
-    await handle.writeFile(`${JSON.stringify(value)}\n`, "utf8");
-    await handle.sync();
-  } finally {
-    await handle.close();
-  }
+  await appendPrivate(path, value);
 }
 
 export function digest(value: unknown): string {

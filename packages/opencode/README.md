@@ -1,9 +1,9 @@
 # Интеграция OpenCode
 
-`@kisev/skills-opencode` - npm package с capability router, OpenCode runtime и
-opt-in installer для agents, commands и plugins. Он не включает portable skills и
-не меняет user config при import, plugin load или npm lifecycle. Package требует
-Node.js 22+ и OpenCode 1.18.29+.
+`@kisev/skills-opencode` - npm package с capability router, OpenCode runtime,
+управлением agent profiles и opt-in installer для agents, commands и plugins. Он
+не включает portable skills и не меняет конфигурацию при import, plugin load или
+npm lifecycle. Package требует Node.js 22+ и OpenCode 1.18.29+.
 
 ## Установка skills
 
@@ -16,7 +16,7 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 
 Для одного skill укажите `--skill <name>`. Для воспроизводимой установки можно
 передать URL GitHub tag, например
-`https://github.com/kisev/skills/tree/v1.0.0`. Package никогда не устанавливает
+`https://github.com/kisev/skills/tree/v1.1.0`. Package никогда не устанавливает
 и не обновляет skills. Если команда не нашла skill, она сообщает точную команду
 `npx skills add` для его установки.
 
@@ -25,7 +25,7 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 Установите npm package там, где OpenCode сможет разрешить plugin:
 
 ```shell
-npm install @kisev/skills-opencode@1.0.0
+npm install @kisev/skills-opencode@1.1.0
 ```
 
 Сначала покажите план installer. Эта команда не создаёт files:
@@ -51,7 +51,7 @@ npm exec -- skills-opencode install --scope project --confirm <digest>
 
 Project assets находятся в `.opencode/agents`, `.opencode/commands` и
 `.opencode/plugins` текущего working directory. Scope обязателен. Installer не изменяет `opencode.json`, не
-перезаписывает неизвестные или изменённые files и сохраняет ownership manifest
+перезаписывает неизвестные или изменённые files и сохраняет ownership manifests
 только после confirmed apply.
 
 Добавьте plugin в `opencode.json` вручную:
@@ -66,10 +66,67 @@ Project assets находятся в `.opencode/agents`, `.opencode/commands` и
 Полностью перезапустите OpenCode после install, upgrade или uninstall: registry
 agents и commands строится до plugin hooks.
 
+## Управление agents
+
+Рекомендуемый интерфейс - прямой terminal CLI: он не вызывает LLM и не расходует
+токены. Fixed roles `manager`, `architect`, `mapper`, `worker`, `review` и
+стандартный `critic` всегда сохраняют имена и canonical prompts/permissions.
+Меняются только `model` и `variant`:
+
+```shell
+npm exec -- skills-opencode agent list --scope global
+npm exec -- skills-opencode agent configure manager --scope global --dry-run
+npm exec -- skills-opencode agent model-set worker --scope global \
+  --model openai/gpt-5 --variant high --dry-run
+npm exec -- skills-opencode agent reconcile --scope global --dry-run
+```
+
+`agent configure` предлагает terminal selection в порядке provider, model,
+variant по cached output `opencode models`; refresh не выполняется. Если catalog
+недоступен, передайте exact `--provider <provider> --model <model>` или
+`--model <provider/model>`.
+
+Additional critic имеет имя `critic-<safe-suffix>`. Стандартный `critic` и fixed
+roles нельзя удалить или переименовать:
+
+```shell
+npm exec -- skills-opencode critic add security --scope global \
+  --model anthropic/claude-sonnet-4-6 --dry-run
+npm exec -- skills-opencode critic remove security --scope global --dry-run
+```
+
+Для любой mutation замените `--dry-run` на `--confirm <digest>` и повторите те же
+аргументы. Plan содержит TLDR operations без полного diff. Digest связан с
+одноразовым private receipt, действует 10 минут и повторно не применяется.
+Успешный machine-readable result содержит `requires_restart`; после `true`
+полностью перезапустите OpenCode.
+
+В global scope profile configuration хранится в
+`~/.config/opencode/.skills-opencode/agent-profiles.json`, а semantic deployment
+manifest - рядом в `agent-profiles.manifest.json`. Для project scope те же файлы
+находятся под `.opencode/.skills-opencode/`. Configuration хранит выбранные
+model/variant и additional critics; package update её не сбрасывает. Manifest
+хранит package version, exact critic pool и hashes canonical configuration и
+rendered files.
+
+Inventory различает `package-owned`, `managed`, `user-owned`, `drift` и exact-name
+`collision`. User-owned и неизвестные agents не изменяются. Collision блокирует
+apply; drift исправляется только явным `agent reconcile`. Все mutations проходят
+под lifecycle lock, повторно проверяют inventory, используют journaled
+all-or-rollback transaction и выполняют final validation. После прерывания
+следующая mutation безопасно восстанавливает before-images и требует свежий plan.
+
 ## Upgrade и uninstall
 
 После обновления npm package снова выполните dry-run и подтвердите новый digest.
 Installer обновляет только files с совпадающим managed SHA-256.
+
+При первом upgrade с `1.0.0` installer передаёт ownership шести fixed agents из
+generic manifest в profile domain только при точном совпадении package/version,
+manifest records и SHA-256 каждого файла. Любое отличие остаётся конфликтом.
+Commands и plugins продолжают принадлежать generic installer. Uninstall удаляет
+неизменённые deployments, но сохраняет profile configuration для последующей
+установки.
 
 ```shell
 npm exec -- skills-opencode uninstall --scope global --dry-run
@@ -104,8 +161,10 @@ Portable skills в корне `skills/` универсальны и устана
 router. Команды - тонкие adapters: передают `$ARGUMENTS` как недоверенный ввод
 в native Skill tool, а target validation, confirmation, batch/review rules и
 формат результата остаются ответственностью skill или runner.
-`capabilities`, `route` и `doctor` - package tools/commands только для catalog,
-routing и health; они не устанавливают и не исправляют package или skills.
+`capabilities`, `route` и `doctor` - package tools/commands для catalog, routing и
+health. Tool `agent_profiles` и четыре slash-команды `agent-list`,
+`agent-model-set`, `critic-add`, `critic-remove` - optional thin UX над теми же
+plan/apply contracts. Отдельного skill `agent-profiles` нет.
 
 Package распространяется по лицензии MIT. Полные инструкции по portable skills,
 upgrade и security boundaries находятся в корневом README репозитория.

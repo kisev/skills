@@ -1,319 +1,323 @@
-import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { lstat, mkdir, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { lstat, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, normalize, parse, relative, resolve, sep } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import {
+  buildAgentProfilePlan,
+  listAgentProfiles,
+  validateBuiltAgentProfilePlan,
+  type LegacyInstallerManifest,
+} from "./agent-profiles.js";
+import {
+  applyTransaction,
+  consumeReceipt,
+  deploymentRoot,
+  destination,
+  digest,
+  LifecycleError,
+  lifecycleRoot,
+  readRegular,
+  recoverTransaction,
+  saveReceipt,
+  sha256,
+  stable,
+  withLifecycleLock,
+  type FileMutation,
+  type Scope,
+  type TransactionOptions,
+} from "./lifecycle.js";
+
+export type { Scope } from "./lifecycle.js";
 
 const PACKAGE_NAME = "@kisev/skills-opencode";
 const MANIFEST_NAME = ".skills-opencode-manifest.json";
-const MANIFEST_SCHEMA_VERSION = 1;
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsRoot = resolve(packageRoot, "assets");
 
-export type Scope = "global" | "project";
 export type Action = "install" | "uninstall";
 export type Operation = "create" | "update" | "remove" | "unchanged" | "missing" | "conflict";
 export type PlanItem = { path: string; operation: Operation; reason?: string; sha256?: string };
-export type Plan = { schema_version: 1; action: Action; scope: Scope; root: string; operations: PlanItem[]; manifest_sha256?: string; digest: string };
-type Asset = { relativePath: string; content: Buffer; sha256: string };
-type ManifestFile = { sha256: string; previous_sha256?: string };
-type Manifest = { schema_version: 1; package: string; version: string; state?: "applying"; files: Record<string, ManifestFile> };
+export type Plan = {
+  schema_version: 1;
+  action: Action;
+  scope: Scope;
+  root: string;
+  package_version: string;
+  operations: PlanItem[];
+  digest: string;
+  receipt_expires_at?: string;
+  requires_restart: boolean;
+};
+type Asset = { relativePath: string; content: Buffer; sha256: string; mode: number };
+type ManifestFile = { sha256: string };
+type Manifest = { schema_version: 1; package: string; version: string; files: Record<string, ManifestFile> };
+type BuiltInstallerPlan = {
+  plan: Plan;
+  mutations: FileMutation[];
+  expectedManifest?: Buffer;
+  profiles: Awaited<ReturnType<typeof buildAgentProfilePlan>>;
+};
 
-export class InstallerError extends Error {
-  constructor(readonly code: string, message: string) {
-    super(message);
-  }
-}
-
-function stable(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map(stable).join(",")}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object).sort().map((key) => `${JSON.stringify(key)}:${stable(object[key])}`).join(",")}}`;
-}
-
-function sha256(value: Buffer | string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function planDigest(plan: Omit<Plan, "digest">): string {
-  return sha256(stable(plan));
-}
+export class InstallerError extends LifecycleError {}
 
 function packageVersion(): string {
-  const metadata = JSON.parse(requireReadFile(resolve(packageRoot, "package.json"))) as { version?: unknown };
+  const metadata = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as { version?: unknown };
   if (typeof metadata.version !== "string" || !metadata.version) throw new InstallerError("invalid_package", "Package version is unavailable");
   return metadata.version;
 }
 
-function requireReadFile(path: string): string {
-  try {
-    return readFileSync(path, "utf8");
-  } catch (error) {
-    throw new InstallerError("asset_error", `Cannot read ${path}: ${String(error)}`);
-  }
-}
-
-function isInside(root: string, target: string): boolean {
-  const difference = relative(root, target);
-  return difference === "" || (!difference.startsWith(`..${sep}`) && difference !== ".." && !isAbsolute(difference));
-}
-
-function assertSafeRelative(value: string): void {
-  if (!value || isAbsolute(value) || normalize(value) !== value || value.split(/[\\/]/).some((part) => !part || part === "." || part === "..")) {
-    throw new InstallerError("unsafe_path", `Unsafe relative path: ${value}`);
-  }
-}
-
-async function lstatSafe(path: string) {
-  try {
-    return await lstat(path);
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
-  }
-}
-
-async function assertSafeAncestors(path: string): Promise<void> {
-  const parsed = parse(resolve(path));
-  let current = parsed.root;
-  const pieces = resolve(path).slice(parsed.root.length).split(sep).filter(Boolean);
-  for (const piece of pieces) {
-    current = join(current, piece);
-    const stat = await lstatSafe(current);
-    if (!stat) return;
-    if (stat.isSymbolicLink()) throw new InstallerError("unsafe_path", `Symlink is not allowed: ${current}`);
-    if (current !== resolve(path) && !stat.isDirectory()) throw new InstallerError("unsafe_path", `Path parent is not a directory: ${current}`);
-  }
-}
-
-async function readRegular(path: string): Promise<Buffer | undefined> {
-  await assertSafeAncestors(path);
-  const stat = await lstatSafe(path);
-  if (!stat) return undefined;
-  if (!stat.isFile()) throw new InstallerError("unsafe_path", `Target is not a regular file: ${path}`);
-  return readFile(path);
-}
-
-async function ensureSafeDirectory(path: string): Promise<void> {
-  await assertSafeAncestors(path);
-  const stat = await lstatSafe(path);
-  if (stat && !stat.isDirectory()) throw new InstallerError("unsafe_path", `Destination root is not a directory: ${path}`);
-  await mkdir(path, { recursive: true });
-  await assertSafeAncestors(path);
-}
-
-function rootFor(scope: Scope, cwd = process.cwd(), home = homedir()): string {
-  return scope === "global" ? resolve(home, ".config", "opencode") : resolve(cwd, ".opencode");
-}
-
-function destination(root: string, relativePath: string): string {
-  assertSafeRelative(relativePath);
-  const target = resolve(root, relativePath);
-  if (!isInside(root, target)) throw new InstallerError("unsafe_path", `Path escapes destination root: ${relativePath}`);
-  return target;
-}
-
 async function assets(): Promise<Asset[]> {
   const result: Asset[] = [];
-  for (const category of ["agents", "commands", "plugins"]) {
+  for (const category of ["commands", "plugins"] as const) {
     const directory = resolve(assetsRoot, category);
-    await assertSafeAncestors(directory);
-    const entries = await readdir(directory, { withFileTypes: true });
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
       const extension = category === "plugins" ? ".js" : ".md";
-      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(extension)) throw new InstallerError("asset_error", `Asset is not a regular ${extension} asset: ${entry.name}`);
+      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(extension)) throw new InstallerError("asset_error", `Asset is not a regular ${extension} file: ${entry.name}`);
       const relativePath = `${category}/${entry.name}`;
-      assertSafeRelative(relativePath);
-      const source = destination(assetsRoot, relativePath);
-      const content = await readRegular(source);
+      const content = await readRegular(destination(assetsRoot, relativePath));
       if (!content) throw new InstallerError("asset_error", `Asset is missing: ${relativePath}`);
-      result.push({ relativePath, content, sha256: sha256(content) });
+      result.push({ relativePath, content, sha256: sha256(content), mode: 0o644 });
     }
   }
   return result.sort((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
-function manifestPath(root: string): string {
-  return destination(root, MANIFEST_NAME);
-}
-
-function parseManifest(value: Buffer, path: string): Manifest {
-  let parsed: unknown;
+function parseManifest(raw: Buffer, path: string): Manifest {
+  let value: unknown;
   try {
-    parsed = JSON.parse(value.toString("utf8"));
+    value = JSON.parse(raw.toString("utf8"));
   } catch {
     throw new InstallerError("invalid_manifest", `Ownership manifest is not valid JSON: ${path}`);
   }
-  if (!parsed || typeof parsed !== "object") throw new InstallerError("invalid_manifest", `Ownership manifest is not an object: ${path}`);
-  const manifest = parsed as Partial<Manifest>;
-  if (manifest.schema_version !== MANIFEST_SCHEMA_VERSION || manifest.package !== PACKAGE_NAME || typeof manifest.version !== "string" || (manifest.state !== undefined && manifest.state !== "applying") || !manifest.files || typeof manifest.files !== "object" || Array.isArray(manifest.files)) throw new InstallerError("invalid_manifest", `Ownership manifest has an unexpected format: ${path}`);
+  const manifest = value as Partial<Manifest>;
+  if (manifest.schema_version !== 1 || manifest.package !== PACKAGE_NAME || typeof manifest.version !== "string" || !manifest.files || typeof manifest.files !== "object" || Array.isArray(manifest.files)) {
+    throw new InstallerError("invalid_manifest", `Ownership manifest has an unexpected format: ${path}`);
+  }
   for (const [relativePath, record] of Object.entries(manifest.files)) {
-    assertSafeRelative(relativePath);
-    if (!record || typeof record !== "object" || typeof (record as { sha256?: unknown }).sha256 !== "string" || !/^[a-f0-9]{64}$/.test((record as { sha256: string }).sha256) || ((record as { previous_sha256?: unknown }).previous_sha256 !== undefined && (typeof (record as { previous_sha256: unknown }).previous_sha256 !== "string" || !/^[a-f0-9]{64}$/.test((record as { previous_sha256: string }).previous_sha256)))) throw new InstallerError("invalid_manifest", `Ownership manifest has an invalid record: ${relativePath}`);
+    destination("/", relativePath);
+    if (!record || typeof record !== "object" || typeof (record as ManifestFile).sha256 !== "string" || !/^[a-f0-9]{64}$/.test((record as ManifestFile).sha256)) {
+      throw new InstallerError("invalid_manifest", `Ownership manifest has an invalid record: ${relativePath}`);
+    }
   }
   return manifest as Manifest;
 }
 
-async function manifestFor(root: string): Promise<{ manifest?: Manifest; sha256?: string }> {
-  const path = manifestPath(root);
-  const content = await readRegular(path);
-  return content ? { manifest: parseManifest(content, path), sha256: sha256(content) } : {};
+async function currentManifest(root: string): Promise<{ manifest?: Manifest; raw?: Buffer }> {
+  const path = destination(root, MANIFEST_NAME);
+  const raw = await readRegular(path);
+  return raw ? { manifest: parseManifest(raw, path), raw } : {};
 }
 
-function makePlan(action: Action, scope: Scope, root: string, operations: PlanItem[], manifestHash?: string): Plan {
-  const base = { schema_version: 1 as const, action, scope, root, operations, ...(manifestHash ? { manifest_sha256: manifestHash } : {}) };
-  return { ...base, digest: planDigest(base) };
-}
-
-async function installPlan(scope: Scope, cwd?: string, home?: string): Promise<{ plan: Plan; assets: Asset[]; manifest?: Manifest }> {
-  const root = rootFor(scope, cwd, home);
-  await assertSafeAncestors(root);
-  const [owned, currentAssets] = await Promise.all([manifestFor(root), assets()]);
-  const manifest = owned.manifest;
-  const operations: PlanItem[] = [];
-  for (const asset of currentAssets) {
-    const target = destination(root, asset.relativePath);
+async function validateGenericDeployment(
+  root: string,
+  action: Action,
+  expectedAssets: readonly Asset[],
+  plannedOperations: readonly PlanItem[],
+  expectedManifest: Buffer | undefined,
+): Promise<void> {
+  const owned = await currentManifest(root);
+  if (
+    (expectedManifest && (!owned.raw || !owned.raw.equals(expectedManifest))) ||
+    (!expectedManifest && owned.raw)
+  )
+    throw new InstallerError(
+      "final_validation_failed",
+      "Generic ownership manifest does not match the planned state",
+    );
+  if (!owned.manifest) {
+    if (action === "install")
+      throw new InstallerError("final_validation_failed", "Generic ownership manifest is missing");
+    return;
+  }
+  if (((await lstat(destination(root, MANIFEST_NAME))).mode & 0o777) !== 0o600)
+    throw new InstallerError(
+      "final_validation_failed",
+      "Generic ownership manifest is not private",
+    );
+  const expected = new Map(expectedAssets.map((asset) => [asset.relativePath, asset]));
+  if (
+    action === "install" &&
+    Object.keys(owned.manifest.files).sort().join(",") !== [...expected.keys()].sort().join(",")
+  ) {
+    throw new InstallerError("final_validation_failed", "Generic ownership inventory is incomplete");
+  }
+  for (const [relativePath, record] of Object.entries(owned.manifest.files)) {
+    if (relativePath.startsWith("agents/"))
+      throw new InstallerError("final_validation_failed", "Generic installer retained agent ownership");
+    const target = destination(root, relativePath);
     const content = await readRegular(target);
-    if (!content) {
-      operations.push({ path: asset.relativePath, operation: "create", sha256: asset.sha256 });
-      continue;
+    const planned = plannedOperations.find((item) => item.path === relativePath);
+    const preservedDrift =
+      action === "uninstall" &&
+      content &&
+      planned?.operation === "conflict" &&
+      planned.sha256 === sha256(content);
+    if (!content || (sha256(content) !== record.sha256 && !preservedDrift))
+      throw new InstallerError(
+        "final_validation_failed",
+        `Generic managed file failed final validation: ${relativePath}`,
+      );
+    const asset = expected.get(relativePath);
+    if (action === "install" && (!asset || asset.sha256 !== record.sha256))
+      throw new InstallerError(
+        "final_validation_failed",
+        `Generic manifest does not match package asset: ${relativePath}`,
+      );
+    if (action === "install" && ((await lstat(target)).mode & 0o777) !== asset!.mode)
+      throw new InstallerError(
+        "final_validation_failed",
+        `Generic managed file has an unexpected mode: ${relativePath}`,
+      );
+  }
+}
+
+function asLegacy(manifest: Manifest | undefined): LegacyInstallerManifest | undefined {
+  return manifest?.version === "1.0.0" ? (manifest as LegacyInstallerManifest) : undefined;
+}
+
+async function build(action: Action, scope: Scope, cwd = process.cwd(), home = homedir()): Promise<BuiltInstallerPlan> {
+  const root = deploymentRoot(scope, cwd, home);
+  const [owned, bundled] = await Promise.all([currentManifest(root), assets()]);
+  const legacyRecord = owned.manifest && owned.raw && asLegacy(owned.manifest)
+    ? { manifest: asLegacy(owned.manifest)!, manifestPath: destination(root, MANIFEST_NAME), manifestSha256: sha256(owned.raw) }
+    : undefined;
+  const profiles = await buildAgentProfilePlan({ action }, scope, cwd, home, legacyRecord);
+  const operations: PlanItem[] = profiles.plan.operations.map((item) => ({ path: item.path, operation: item.operation, reason: item.reason }));
+  const mutations: FileMutation[] = [...profiles.mutations];
+  const desiredFiles: Record<string, ManifestFile> = {};
+
+  if (action === "install") {
+    for (const asset of bundled) {
+      desiredFiles[asset.relativePath] = { sha256: asset.sha256 };
+      const current = await readRegular(destination(root, asset.relativePath));
+      const record = owned.manifest?.files[asset.relativePath];
+      if (!current) {
+        operations.push({ path: asset.relativePath, operation: "create", sha256: asset.sha256 });
+        mutations.push({ path: asset.relativePath, operation: "write", content: asset.content, mode: asset.mode, expected: { absent: true } });
+      } else if (!record) {
+        operations.push({ path: asset.relativePath, operation: "conflict", reason: "unmanaged_file", sha256: sha256(current) });
+      } else if (sha256(current) !== record.sha256) {
+        operations.push({ path: asset.relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+      } else if (
+        current.equals(asset.content) &&
+        ((await lstat(destination(root, asset.relativePath))).mode & 0o777) === asset.mode
+      ) {
+        operations.push({ path: asset.relativePath, operation: "unchanged", sha256: asset.sha256 });
+      } else {
+        operations.push({ path: asset.relativePath, operation: "update", sha256: asset.sha256 });
+        mutations.push({ path: asset.relativePath, operation: "write", content: asset.content, mode: asset.mode, expected: { sha256: record.sha256 } });
+      }
     }
-    const currentHash = sha256(content);
-    const record = manifest?.files[asset.relativePath];
-    if (!record) operations.push({ path: asset.relativePath, operation: "conflict", reason: "unmanaged_file", sha256: currentHash });
-    else if (record.sha256 !== currentHash && !(manifest?.state === "applying" && record.previous_sha256 === currentHash)) operations.push({ path: asset.relativePath, operation: "conflict", reason: "managed_file_changed", sha256: currentHash });
-    else if (currentHash === asset.sha256) operations.push({ path: asset.relativePath, operation: "unchanged", sha256: currentHash });
-    else operations.push({ path: asset.relativePath, operation: "update", sha256: asset.sha256 });
+    const active = new Set(bundled.map((asset) => asset.relativePath));
+    for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      if (active.has(relativePath) || profiles.legacyTransferred.includes(relativePath)) continue;
+      if (relativePath.startsWith("agents/")) {
+        operations.push({ path: relativePath, operation: "conflict", reason: "v1.0.0_agent_ownership_mismatch" });
+        continue;
+      }
+      const current = await readRegular(destination(root, relativePath));
+      if (!current) operations.push({ path: relativePath, operation: "missing" });
+      else if (sha256(current) === record.sha256) {
+        operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
+        mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
+      } else operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+    }
+  } else {
+    for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      const current = await readRegular(destination(root, relativePath));
+      if (!current) operations.push({ path: relativePath, operation: "missing" });
+      else if (sha256(current) === record.sha256) {
+        operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
+        mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
+      } else {
+        operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+        desiredFiles[relativePath] = record;
+      }
+    }
   }
-  const active = new Set(currentAssets.map((asset) => asset.relativePath));
-  for (const [relativePath, record] of Object.entries(manifest?.files ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
-    if (active.has(relativePath)) continue;
-    const content = await readRegular(destination(root, relativePath));
-    if (!content) operations.push({ path: relativePath, operation: "missing" });
-    else if (sha256(content) === record.sha256) operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
-    else operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(content) });
+
+  const nextManifest: Manifest | undefined = action === "install" || Object.keys(desiredFiles).length
+    ? { schema_version: 1, package: PACKAGE_NAME, version: packageVersion(), files: desiredFiles }
+    : undefined;
+  const manifestContent = nextManifest ? Buffer.from(`${stable(nextManifest)}\n`) : undefined;
+  if (manifestContent && (!owned.raw || !owned.raw.equals(manifestContent))) {
+    operations.push({ path: MANIFEST_NAME, operation: owned.raw ? "update" : "create", reason: "generic installer ownership" });
+    mutations.push({ path: MANIFEST_NAME, operation: "write", content: manifestContent, mode: 0o600, expected: owned.raw ? { sha256: sha256(owned.raw) } : { absent: true } });
+  } else if (!manifestContent && owned.raw) {
+    operations.push({ path: MANIFEST_NAME, operation: "remove", reason: "generic assets uninstalled" });
+    mutations.push({ path: MANIFEST_NAME, operation: "remove", expected: { sha256: sha256(owned.raw) } });
   }
-  return { plan: makePlan("install", scope, root, operations, owned.sha256), assets: currentAssets, manifest };
+
+  const sorted = operations.sort((left, right) => left.path.localeCompare(right.path) || left.operation.localeCompare(right.operation));
+  const base = { schema_version: 1 as const, action, scope, root, package_version: packageVersion(), operations: sorted, requires_restart: profiles.plan.requires_restart || sorted.some((item) => item.path.startsWith("commands/") || item.path.startsWith("plugins/")) };
+  return {
+    plan: { ...base, digest: digest(base) },
+    mutations,
+    expectedManifest: manifestContent,
+    profiles,
+  };
 }
 
-async function uninstallPlan(scope: Scope, cwd?: string, home?: string): Promise<{ plan: Plan; manifest?: Manifest }> {
-  const root = rootFor(scope, cwd, home);
-  await assertSafeAncestors(root);
-  const owned = await manifestFor(root);
-  if (!owned.manifest) return { plan: makePlan("uninstall", scope, root, []) };
-  const operations: PlanItem[] = [];
-  for (const [relativePath, record] of Object.entries(owned.manifest.files).sort(([left], [right]) => left.localeCompare(right))) {
-    const content = await readRegular(destination(root, relativePath));
-    if (!content) operations.push({ path: relativePath, operation: "missing" });
-    else if (sha256(content) === record.sha256) operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
-    else operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(content) });
-  }
-  return { plan: makePlan("uninstall", scope, root, operations, owned.sha256), manifest: owned.manifest };
-}
-
-export async function preview(action: Action, scope: Scope, cwd?: string, home?: string): Promise<Plan> {
-  return action === "install" ? (await installPlan(scope, cwd, home)).plan : (await uninstallPlan(scope, cwd, home)).plan;
-}
-
-async function writeAtomically(path: string, content: Buffer): Promise<void> {
-  await ensureSafeDirectory(dirname(path));
-  await assertSafeAncestors(path);
-  const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
+export async function preview(action: Action, scope: Scope, cwd = process.cwd(), home = homedir()): Promise<Plan> {
+  const stateRoot = lifecycleRoot(scope, cwd, home);
+  const root = deploymentRoot(scope, cwd, home);
   try {
-    await writeFile(temporary, content, { flag: "wx", mode: 0o644 });
-    await rename(temporary, path);
-  } finally {
-    await rm(temporary, { force: true });
+    return await withLifecycleLock(stateRoot, async () => {
+      if (await recoverTransaction(root, stateRoot)) throw new InstallerError("recovered_transaction", "Recovered an interrupted transaction; request a fresh plan");
+      const built = await build(action, scope, cwd, home);
+      const receipt = await saveReceipt(stateRoot, `installer:${action}`, scope, root, { digest: built.plan.digest });
+      return { ...built.plan, digest: receipt.digest, receipt_expires_at: receipt.expires_at };
+    });
+  } catch (error) {
+    if (error instanceof InstallerError) throw error;
+    if (error instanceof LifecycleError) throw new InstallerError(error.code, error.message);
+    throw error;
   }
 }
 
-async function writeManifest(root: string, manifest: Manifest, existingHash?: string, expectAbsent = false): Promise<string> {
-  const target = manifestPath(root);
-  const current = await readRegular(target);
-  if (existingHash && (!current || sha256(current) !== existingHash)) throw new InstallerError("stale_plan", "Ownership manifest changed after preview");
-  if (expectAbsent && current) throw new InstallerError("stale_plan", "Ownership manifest appeared after preview");
-  const content = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
-  if (!current || !current.equals(content)) await writeAtomically(target, content);
-  return sha256(content);
-}
-
-async function applyInstall(scope: Scope, expectedDigest: string, cwd?: string, home?: string): Promise<Plan> {
-  const initial = await installPlan(scope, cwd, home);
-  if (initial.plan.digest !== expectedDigest) throw new InstallerError("stale_plan", "Install plan changed; request a new dry-run");
-  if (initial.plan.operations.some((item) => item.operation === "conflict")) throw new InstallerError("conflict", "Install plan contains conflicts");
-  const verified = await installPlan(scope, cwd, home);
-  if (verified.plan.digest !== expectedDigest) throw new InstallerError("stale_plan", "Install plan changed before apply");
-  await ensureSafeDirectory(verified.plan.root);
-  const staged: Manifest = {
-    schema_version: MANIFEST_SCHEMA_VERSION,
-    package: PACKAGE_NAME,
-    version: packageVersion(),
-    state: "applying",
-    files: Object.fromEntries(verified.assets.map((asset) => {
-      const operation = verified.plan.operations.find((item) => item.path === asset.relativePath)?.operation;
-      const previous = operation === "update" ? verified.manifest?.files[asset.relativePath]?.previous_sha256 ?? verified.manifest?.files[asset.relativePath]?.sha256 : undefined;
-      return [asset.relativePath, { sha256: asset.sha256, ...(previous ? { previous_sha256: previous } : {}) }];
-    }))
-  };
-  const stagedHash = await writeManifest(verified.plan.root, staged, verified.plan.manifest_sha256, !verified.plan.manifest_sha256);
-  for (const asset of verified.assets) {
-    const item = verified.plan.operations.find((candidate) => candidate.path === asset.relativePath);
-    if (item?.operation === "create" || item?.operation === "update") {
-      const target = destination(verified.plan.root, asset.relativePath);
-      const current = await readRegular(target);
-      const expected = item.operation === "create" ? undefined : verified.manifest?.files[asset.relativePath]?.previous_sha256 ?? verified.manifest?.files[asset.relativePath]?.sha256;
-      if ((current && sha256(current)) !== expected) throw new InstallerError("stale_plan", `Destination changed: ${asset.relativePath}`);
-      await writeAtomically(target, asset.content);
-    }
+export async function apply(action: Action, scope: Scope, confirmationDigest: string, cwd = process.cwd(), home = homedir(), options: TransactionOptions = {}): Promise<Plan> {
+  const stateRoot = lifecycleRoot(scope, cwd, home);
+  const root = deploymentRoot(scope, cwd, home);
+  try {
+    return await withLifecycleLock(stateRoot, async () => {
+      if (await recoverTransaction(root, stateRoot)) throw new InstallerError("recovered_transaction", "Recovered an interrupted transaction; request a fresh plan");
+      const receipt = (await consumeReceipt(stateRoot, { digest: confirmationDigest, kind: `installer:${action}`, scope, root })) as { digest?: string };
+      const built = await build(action, scope, cwd, home);
+      if (built.plan.digest !== receipt.digest) throw new InstallerError("stale_plan", "Installer plan changed after preview");
+      if (built.plan.operations.some((item) => item.operation === "conflict" && (item.reason === "unmanaged_file" || item.reason === "v1.0.0_agent_ownership_mismatch" || item.reason?.includes("collision")))) {
+        throw new InstallerError("conflict", "Installer plan contains an exact-name ownership conflict");
+      }
+      if (action === "install" && built.plan.operations.some((item) => item.operation === "conflict")) throw new InstallerError("conflict", "Installer plan contains managed drift");
+      await applyTransaction(root, stateRoot, built.mutations, {
+        ...options,
+        validateFinal: async () => {
+          await options.validateFinal?.();
+          await validateBuiltAgentProfilePlan(built.profiles);
+          await validateGenericDeployment(
+            root,
+            action,
+            await assets(),
+            built.plan.operations,
+            built.expectedManifest,
+          );
+          if (action !== "install") return;
+          const inventory = await listAgentProfiles(scope, cwd, home);
+          if (inventory.collisions.length || inventory.drift.length || inventory.profiles.filter((item) => item.ownership !== "user-owned").some((item) => item.state !== "current")) {
+            throw new InstallerError("final_validation_failed", "Final installed agent inventory is invalid");
+          }
+        },
+      });
+      return { ...built.plan, digest: confirmationDigest };
+    });
+  } catch (error) {
+    if (error instanceof InstallerError) throw error;
+    if (error instanceof LifecycleError) throw new InstallerError(error.code, error.message);
+    throw error;
   }
-  for (const item of verified.plan.operations.filter((candidate) => candidate.operation === "remove")) {
-    const target = destination(verified.plan.root, item.path);
-    const current = await readRegular(target);
-    if (!current || sha256(current) !== item.sha256) throw new InstallerError("stale_plan", `Destination changed: ${item.path}`);
-    await unlink(target);
-  }
-  const completed: Manifest = {
-    schema_version: MANIFEST_SCHEMA_VERSION,
-    package: PACKAGE_NAME,
-    version: packageVersion(),
-    files: Object.fromEntries(verified.assets.map((asset) => [asset.relativePath, { sha256: asset.sha256 }]))
-  };
-  await writeManifest(verified.plan.root, completed, stagedHash);
-  return verified.plan;
-}
-
-async function applyUninstall(scope: Scope, expectedDigest: string, cwd?: string, home?: string): Promise<Plan> {
-  const initial = await uninstallPlan(scope, cwd, home);
-  if (initial.plan.digest !== expectedDigest) throw new InstallerError("stale_plan", "Uninstall plan changed; request a new dry-run");
-  if (!initial.manifest) return initial.plan;
-  const verified = await uninstallPlan(scope, cwd, home);
-  if (verified.plan.digest !== expectedDigest || !verified.manifest) throw new InstallerError("stale_plan", "Uninstall plan changed before apply");
-  const remaining: Record<string, ManifestFile> = {};
-  for (const item of verified.plan.operations) {
-    if (item.operation === "remove") {
-      const target = destination(verified.plan.root, item.path);
-      const current = await readRegular(target);
-      if (!current || sha256(current) !== item.sha256) throw new InstallerError("stale_plan", `Destination changed: ${item.path}`);
-      await unlink(target);
-    } else if (item.operation === "conflict") {
-      remaining[item.path] = verified.manifest.files[item.path];
-    }
-  }
-  const manifestTarget = manifestPath(verified.plan.root);
-  const manifestContent = await readRegular(manifestTarget);
-  if (!manifestContent || sha256(manifestContent) !== verified.plan.manifest_sha256) throw new InstallerError("stale_plan", "Ownership manifest changed after preview");
-  if (Object.keys(remaining).length) await writeManifest(verified.plan.root, { schema_version: MANIFEST_SCHEMA_VERSION, package: PACKAGE_NAME, version: packageVersion(), files: remaining }, verified.plan.manifest_sha256);
-  else await unlink(manifestTarget);
-  return verified.plan;
-}
-
-export async function apply(action: Action, scope: Scope, digest: string, cwd?: string, home?: string): Promise<Plan> {
-  if (!/^[a-f0-9]{64}$/.test(digest)) throw new InstallerError("invalid_digest", "Confirmation digest must be a SHA-256 hex value");
-  return action === "install" ? applyInstall(scope, digest, cwd, home) : applyUninstall(scope, digest, cwd, home);
 }
 
 export function result(plan: Plan, applied: boolean): string {
-  return JSON.stringify({ status: "ok", applied, plan }, null, 2);
+  return JSON.stringify({ status: "ok", applied, requires_restart: applied && plan.requires_restart, plan }, null, 2);
 }

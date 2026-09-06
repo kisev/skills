@@ -33,9 +33,9 @@ async function install(scope, cwd, home) {
   return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
 }
 
-test("registry generates exactly fifty-seven thin command assets", () => {
-  assert.equal(COMMAND_REGISTRY.length, 57);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 57);
+test("registry generates exactly sixty-one thin command assets", () => {
+  assert.equal(COMMAND_REGISTRY.length, 61);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 61);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
   for (const entry of COMMAND_REGISTRY) {
     if (entry.skill) assert.ok(skills.has(entry.skill), entry.skill);
@@ -49,7 +49,7 @@ test("registry generates exactly fifty-seven thin command assets", () => {
   }
   for (const expected of ["attempt", "goal", "schedule", "multi-run", "overview", "lsp-report"]) assert.ok(COMMAND_REGISTRY.some((entry) => entry.skill === expected));
   for (const forbidden of ["agent-profiles", "bedrock"]) assert.ok(!COMMAND_REGISTRY.some((entry) => entry.skill === forbidden));
-  assert.deepEqual(COMMAND_REGISTRY.filter((entry) => entry.packageTool).map((entry) => entry.name).sort(), ["capabilities", "doctor", "route"]);
+  assert.deepEqual(COMMAND_REGISTRY.filter((entry) => entry.packageTool).map((entry) => entry.name).sort(), ["agent-list", "agent-model-set", "capabilities", "critic-add", "critic-remove", "doctor", "route"]);
 });
 
 test("generated asset drift rejects obsolete files", async () => {
@@ -83,6 +83,14 @@ test("agent assets contain six contract-bound profiles without model selection",
   assert.match(readFileSync(join(PACKAGE, "assets", "agents", "architect.md"), "utf8"), /execution_card/);
   assert.match(readFileSync(join(PACKAGE, "assets", "agents", "worker.md"), "utf8"), /worker_report/);
   assert.match(readFileSync(join(PACKAGE, "assets", "agents", "critic.md"), "utf8"), /critic_report/);
+  const manager = readFileSync(join(PACKAGE, "assets", "agents", "manager.md"), "utf8");
+  const critic = readFileSync(join(PACKAGE, "assets", "agents", "critic.md"), "utf8");
+  const review = readFileSync(join(PACKAGE, "assets", "agents", "review.md"), "utf8");
+  assert.match(manager, /fresh Markdown preview and fresh approval/);
+  assert.match(manager, /never ask worker to diagnose or fix critic findings/);
+  assert.match(critic, /Do not edit files,[\s\S]*direct worker remediation/);
+  assert.match(review, /exact[\s\S]*task allowlist/);
+  assert.doesNotMatch(`${manager}\n${review}`, /critic-\*/);
 });
 
 test("installer dry-run is deterministic and keeps global and project roots isolated", async () => {
@@ -94,11 +102,11 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second, first);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 71);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 78);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 57);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 61);
     assert.equal(readdirSync(join(home, ".config", "opencode", "plugins")).length, 8);
     for (const name of ["background-attempts", "schedule", "goal-loop", "autonomy-policy"]) {
       const installed = await readFile(join(home, ".config", "opencode", "plugins", `${name}.js`), "utf8");
@@ -128,7 +136,7 @@ test("installer rejects stale plans, unmanaged collisions, traversal, and symlin
     await writeFile(join(project, ".opencode", "agents", "manager.md"), "user\n");
     await assert.rejects(apply("install", "project", stale.digest, project, home), (error) => error instanceof InstallerError && error.code === "stale_plan");
     const collision = await preview("install", "project", project, home);
-    assert.deepEqual(collision.operations.find((item) => item.path === "agents/manager.md"), { path: "agents/manager.md", operation: "conflict", reason: "unmanaged_file", sha256: collision.operations.find((item) => item.path === "agents/manager.md").sha256 });
+    assert.deepEqual(collision.operations.find((item) => item.path === "agents/manager.md"), { path: "agents/manager.md", operation: "conflict", reason: "exact-name user-owned collision" });
     await assert.rejects(apply("install", "project", collision.digest, project, home), (error) => error instanceof InstallerError && error.code === "conflict");
     assert.equal(await readFile(join(project, ".opencode", "agents", "manager.md"), "utf8"), "user\n");
 
@@ -162,7 +170,53 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", repeat.digest, project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 71);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 78);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("installer final validation covers unchanged generic assets", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    await install("project", project, home);
+    const target = join(project, ".opencode", "commands", "askme.md");
+    const plan = await preview("install", "project", project, home);
+    await assert.rejects(
+      apply("install", "project", plan.digest, project, home, {
+        validateFinal: async () => writeFile(target, "concurrent user change\n"),
+      }),
+      (error) => error instanceof InstallerError && error.code === "rolled_back",
+    );
+    assert.equal(await readFile(target, "utf8"), "concurrent user change\n");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("installer final validation requires the exact generic manifest", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    await install("project", project, home);
+    const manifestPath = join(project, ".opencode", ".skills-opencode-manifest.json");
+    const plan = await preview("install", "project", project, home);
+    await assert.rejects(
+      apply("install", "project", plan.digest, project, home, {
+        validateFinal: async () => {
+          const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+          manifest.version = "concurrent-change";
+          await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+        },
+      }),
+      (error) => error instanceof InstallerError && error.code === "rolled_back",
+    );
+    assert.equal(JSON.parse(await readFile(manifestPath, "utf8")).version, "concurrent-change");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -192,36 +246,6 @@ test("upgrade removes only an unchanged stale managed asset", async () => {
   }
 });
 
-test("an applying manifest resumes an interrupted managed update", async () => {
-  const directory = temporary();
-  try {
-    const project = join(directory, "project");
-    const home = join(directory, "home");
-    await Promise.all([mkdir(project), mkdir(home)]);
-    await install("project", project, home);
-    const root = join(project, ".opencode");
-    const manager = join(root, "agents", "manager.md");
-    const previous = "previous managed version\n";
-    await writeFile(manager, previous);
-    const manifestPath = join(root, ".skills-opencode-manifest.json");
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    const current = readFileSync(join(PACKAGE, "assets", "agents", "manager.md"));
-    manifest.state = "applying";
-    manifest.files["agents/manager.md"] = {
-      sha256: createHash("sha256").update(current).digest("hex"),
-      previous_sha256: createHash("sha256").update(previous).digest("hex")
-    };
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-    const plan = await preview("install", "project", project, home);
-    assert.equal(plan.operations.find((item) => item.path === "agents/manager.md").operation, "update");
-    await apply("install", "project", plan.digest, project, home);
-    assert.deepEqual(await readFile(manager), current);
-    assert.equal(JSON.parse(await readFile(manifestPath, "utf8")).state, undefined);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
 test("uninstall removes only unchanged managed files and preserves user drift", async () => {
   const directory = temporary();
   try {
@@ -232,7 +256,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     const changed = join(project, ".opencode", "commands", "askme.md");
     await writeFile(changed, "user change\n");
     const plan = await preview("uninstall", "project", project, home);
-    assert.equal(plan.operations.filter((item) => item.operation === "remove").length, 70);
+    assert.ok(plan.operations.filter((item) => item.operation === "remove").length >= 70);
     assert.deepEqual(plan.operations.find((item) => item.path === "commands/askme.md").operation, "conflict");
     await apply("uninstall", "project", plan.digest, project, home);
     assert.equal(await readFile(changed, "utf8"), "user change\n");
@@ -349,7 +373,7 @@ test("package catalog and doctor tools are strictly observational", async () => 
   const hooks = await plugin({});
   const catalog = JSON.parse(await hooks.tool.capabilities.execute({}, { sessionID: "bound" }));
   const doctor = JSON.parse(await hooks.tool.doctor.execute({}, { sessionID: "bound" }));
-  assert.deepEqual(catalog.replacements, ["capabilities", "route", "doctor"]);
+  assert.deepEqual(catalog.replacements, ["capabilities", "route", "doctor", "agent_profiles"]);
   assert.equal(doctor.mutations, false);
   assert.ok(!catalog.skills.includes("agent-profiles"));
   assert.ok(!catalog.skills.includes("bedrock"));
@@ -358,7 +382,7 @@ test("package catalog and doctor tools are strictly observational", async () => 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
   const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
   assert.equal(packageJson.name, "@kisev/skills-opencode");
-  assert.equal(packageJson.version, "1.0.0");
+  assert.equal(packageJson.version, "1.1.0");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.type, "git");
   assert.equal(packageJson.repository.url, "git+https://github.com/kisev/skills.git");

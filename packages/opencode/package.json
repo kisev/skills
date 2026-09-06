@@ -1,6 +1,6 @@
 {
   "name": "@kisev/skills-opencode",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
   "license": "MIT",
   "repository": {
@@ -70,7 +70,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate-assets": "npm run build && node dist/generate-assets.js",
     "generate-assets:check": "npm run build && node dist/generate-assets.js --check",
-    "test": "npm run build && node --test test/package.test.mjs",
+    "test": "npm run build && node --test test/*.test.mjs",
     "smoke": "npm run build && node test/smoke.mjs"
   },
   "peerDependencies": {

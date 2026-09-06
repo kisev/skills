@@ -9,9 +9,46 @@ import rulesInjector, { type RulesInjectorOptions } from "./plugins/rules-inject
 import rtk, { type RtkOptions } from "./plugins/rtk.js";
 import zedBell, { type ZedBellOptions } from "./plugins/zed-bell.js";
 import zedClickablePaths, { type ZedClickablePathsOptions } from "./plugins/zed-clickable-paths.js";
+import {
+  applyAgentProfileChange,
+  listAgentProfiles,
+  previewAgentProfileChange,
+  type AgentProfileAction,
+  type AgentProfileRequest,
+} from "./agent-profiles.js";
 
 export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
 export { CATEGORIES, resolveRouting, RoutingGate } from "./routing.js";
+export {
+  AgentProfileError,
+  FIXED_AGENT_ROLES,
+  applyAgentProfileChange,
+  availableModels,
+  availableModelVariants,
+  listAgentProfiles,
+  previewAgentProfileChange,
+  renderAgentProfile,
+  validateAgentName,
+  validateModel,
+  validateVariant,
+} from "./agent-profiles.js";
+export type {
+  AgentInventory,
+  AgentModelSelection,
+  AgentOwnership,
+  AgentProfileAction,
+  AgentProfileConfig,
+  AgentProfileOperation,
+  AgentProfilePlan,
+  AgentProfileRecord,
+  AgentProfileRequest,
+  AgentProfileResult,
+  AgentProfileScope,
+  AgentState,
+  DeploymentManifest,
+  DeploymentRecord,
+  FixedAgentRole,
+} from "./agent-profiles.js";
 export { backgroundAttempts, goalLoop, scheduler, autonomyPolicy, rulesInjector, rtk, zedBell, zedClickablePaths };
 
 export type OpenCodeOptions = {
@@ -28,11 +65,11 @@ export type OpenCodeOptions = {
 const CATALOG = {
   skills: ["attempt", "goal", "schedule", "multi-run", "usage", "overview", "lsp-report"],
   plugins: ["background-attempts", "goal-loop", "schedule", "autonomy-policy", "rules-injector", "rtk", "zed-bell", "zed-clickable-paths"],
-  replacements: ["capabilities", "route", "doctor"],
-  version: "1.0.0",
+  replacements: ["capabilities", "route", "doctor", "agent_profiles"],
+  version: "1.1.0",
 } as const;
 
-const plugin = (async () => {
+const plugin = (async (input: { directory?: string }) => {
   const gate = new RoutingGate();
   const route = tool({
     description: "Resolve a capability category and dispatch one eligible agent through a one-use Task receipt gate.",
@@ -66,8 +103,33 @@ const plugin = (async () => {
       return JSON.stringify({ schema_version: 1, status: "ok", package: "@kisev/skills-opencode", opencode: ">=1.18.29", state: "not-inspected", mutations: false, defaults: { backgroundAttempts: false, goalLoop: false, scheduler: false, autonomyPolicy: false, zedBell: false, zedClickablePaths: false } });
     },
   });
+  const agentProfiles = tool({
+    description: "List, preview, or apply package-owned OpenCode agent profile configuration without editing opencode.json.",
+    args: {
+      action: tool.schema.enum(["list", "model_set", "critic_add", "critic_remove"]),
+      phase: tool.schema.enum(["preview", "apply"]).optional(),
+      scope: tool.schema.enum(["global", "project"]),
+      name: tool.schema.string().optional(),
+      model: tool.schema.string().optional(),
+      variant: tool.schema.string().nullable().optional(),
+      confirmation_digest: tool.schema.string().optional(),
+    },
+    async execute(args: { action: "list" | "model_set" | "critic_add" | "critic_remove"; phase?: "preview" | "apply"; scope: "global" | "project"; name?: string; model?: string; variant?: string | null; confirmation_digest?: string }) {
+      const cwd = input.directory ?? process.cwd();
+      if (args.action === "list") {
+        if (args.phase || args.name || args.model || args.variant !== undefined || args.confirmation_digest) throw new Error("agent_profiles list accepts only scope");
+        return JSON.stringify({ status: "ok", inventory: await listAgentProfiles(args.scope, cwd) });
+      }
+      if (!args.phase) throw new Error("agent_profiles mutation requires preview or apply phase");
+      const action = ({ model_set: "model-set", critic_add: "critic-add", critic_remove: "critic-remove" } as const)[args.action] satisfies AgentProfileAction;
+      const request: AgentProfileRequest = { action, ...(args.name ? { name: args.name } : {}), ...(args.model ? { model: args.model } : {}), ...(args.variant !== undefined ? { variant: args.variant } : {}) };
+      if (args.phase === "preview") return JSON.stringify({ status: "ok", applied: false, requires_restart: false, plan: await previewAgentProfileChange(request, args.scope, cwd) });
+      if (!args.confirmation_digest) throw new Error("agent_profiles apply requires confirmation_digest");
+      return JSON.stringify(await applyAgentProfileChange(request, args.scope, args.confirmation_digest, cwd));
+    },
+  });
   return {
-    tool: { route, capabilities, doctor },
+    tool: { route, capabilities, doctor, agent_profiles: agentProfiles },
     "tool.execute.before": async (input: { tool: string; sessionID: string }, output: { args: unknown }) => {
       if (input.tool !== "task") return;
       const args = output.args && typeof output.args === "object" ? output.args as Record<string, unknown> : {};
