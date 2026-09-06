@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-import plugin, { COMMAND_REGISTRY, RoutingGate, renderCommand, resolveRouting } from "../dist/index.js";
+import plugin, { COMMAND_REGISTRY, ExecutionCardLifecycle, RoutingGate, renderCommand, resolveRouting, validateExecutionCard } from "../dist/index.js";
 import backgroundAttempts from "../dist/plugins/background-attempts.js";
 import goalLoop from "../dist/plugins/goal-loop.js";
 import scheduler from "../dist/plugins/schedule.js";
@@ -331,6 +331,81 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("routing receipts bind task requirements card agent revision and expiry", () => {
+  const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "bash"]);
+  const card = {
+    status: "READY",
+    card_id: "card-1",
+    revision: 1,
+    objective: "Implement the change",
+    changed_behavior: ["The requested behavior changes."],
+    risks: ["No confirmed risks."],
+    write_set: ["src/example.ts"],
+    control_markers: [{ path: "src/example.ts", expected: "marker" }],
+    decisions: ["Use the existing pattern."],
+    steps: [{ path: "src/example.ts", operation: "apply the change" }],
+    acceptance_criteria: ["The behavior is implemented."],
+    checks: ["npm test"],
+    boundaries: { forbidden_paths: ["src/other.ts"] },
+  };
+  const input = { category: "implementation", task: "Implement the change", requirements: ["verify"], agents: [worker], execution_card: card };
+  const gate = new RoutingGate();
+  const decision = gate.dispatch(input, gate.preview(input));
+  gate.grant("bound", decision, { task: input.task, requirements: input.requirements, card });
+  assert.throws(() => gate.consume("bound", "worker", { task: "Changed task", requirements: input.requirements, card }), /task/);
+
+  gate.grant("requirements", decision, { task: input.task, requirements: input.requirements, card });
+  assert.throws(() => gate.consume("requirements", "worker", { task: input.task, requirements: ["read"], card }), /requirements/);
+
+  gate.grant("card", decision, { task: input.task, requirements: input.requirements, card });
+  assert.throws(() => gate.consume("card", "worker", { task: input.task, requirements: input.requirements, card: { ...card, revision: 2 } }), /execution card/);
+
+  gate.grant("agent", decision, { task: input.task, requirements: input.requirements, card });
+  assert.throws(() => gate.consume("agent", "critic", { task: input.task, requirements: input.requirements, card }), /agent/);
+
+  assert.throws(() => gate.dispatch({ ...input, task: "Changed task" }, decision), /stale/);
+  gate.cancel("agent");
+  assert.throws(() => gate.consume("agent", "worker"), /active routing receipt/);
+
+  gate.grant("expiry", decision, { task: input.task, requirements: input.requirements, card });
+  const now = Date.now;
+  Date.now = () => now() + 11 * 60 * 1000;
+  try {
+    assert.throws(() => gate.consume("expiry", "worker", { task: input.task, requirements: input.requirements, card }), /expired/);
+  } finally {
+    Date.now = now;
+  }
+});
+
+test("execution card validation and lifecycle reject malformed and replay transitions", () => {
+  const card = {
+    status: "READY",
+    card_id: "card-1",
+    revision: 1,
+    objective: "Implement the change",
+    changed_behavior: ["The requested behavior changes."],
+    risks: ["No confirmed risks."],
+    write_set: ["src/example.ts"],
+    control_markers: [{ path: "src/example.ts", expected: "marker" }],
+    decisions: ["Use the existing pattern."],
+    steps: [{ path: "src/example.ts", operation: "apply the change" }],
+    acceptance_criteria: ["The behavior is implemented."],
+    checks: ["npm test"],
+    boundaries: { forbidden_paths: ["src/other.ts"] },
+  };
+  assert.equal(validateExecutionCard(card).valid, true);
+  assert.equal(validateExecutionCard({ ...card, objective: "" }).failedField, "objective");
+  assert.equal(validateExecutionCard({ ...card, steps: [{ path: "src/other.ts", operation: "escape" }] }).failedField, "steps");
+  assert.equal(validateExecutionCard({ ...card, boundaries: { forbidden_paths: ["src/example.ts"] } }).failedField, "boundaries");
+
+  const lifecycle = new ExecutionCardLifecycle(card);
+  assert.equal(lifecycle.transition("RUNNING", { card_id: "card-1", revision: 1 }), "RUNNING");
+  assert.equal(lifecycle.transition("COMPLETED", { card_id: "card-1", revision: 1 }), "COMPLETED");
+  assert.equal(lifecycle.transition("APPROVED", { card_id: "card-1", revision: 1 }), "APPROVED");
+  assert.throws(() => lifecycle.transition("RUNNING", { card_id: "card-1", revision: 1 }), /transition/);
+  assert.throws(() => new ExecutionCardLifecycle({ ...card, revision: 2 }).transition("RUNNING", { card_id: "card-1", revision: 1 }), /identity/);
 });
 
 test("stateful and Zed plugins are opt-in and create no disabled runtime", async () => {

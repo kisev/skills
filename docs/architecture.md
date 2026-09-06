@@ -37,7 +37,10 @@ state, timers, sessions или mutations.
 Их Python runner materialize-ит общий stdlib runtime внутрь skill и использует
 только XDG/OpenCode user-owned config/state. Package runtime не ссылается на
 checkout и экспортирует восемь независимых plugin factories. `capabilities`,
-`route` и `doctor` являются package tools для catalog/routing/health.
+`route` и `doctor` являются package tools для catalog/routing/health. Routing
+receipt одноразово связывает выбранного agent с canonical task text, exact
+requirements, execution-card digest/revision, matrix revision и TTL; переходы
+отклоняют stale, replay, изменённый task/card и просроченный receipt.
 `agent_profiles` - optional adapter над package-domain planner; основной интерфейс
 управления agents - прямой CLI без LLM. Все mutations используют private receipt,
 lifecycle lock, final revalidation и journaled rollback/recovery.

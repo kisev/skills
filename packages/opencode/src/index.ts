@@ -18,7 +18,8 @@ import {
 } from "./agent-profiles.js";
 
 export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
-export { CATEGORIES, resolveRouting, RoutingGate } from "./routing.js";
+export { CATEGORIES, resolveRouting, RoutingGate, ExecutionCardLifecycle, validateExecutionCard } from "./routing.js";
+export type { ExecutionCard, ExecutionCardStatus } from "./routing.js";
 export {
   AgentProfileError,
   FIXED_AGENT_ROLES,
@@ -79,15 +80,16 @@ const plugin = (async (input: { directory?: string }) => {
       task: tool.schema.string(),
       requirements: tool.schema.array(tool.schema.string()).default([]),
       agents: tool.schema.array(tool.schema.object({ agent: tool.schema.string(), available: tool.schema.boolean().optional(), capabilities: tool.schema.array(tool.schema.string()).optional(), tools: tool.schema.array(tool.schema.string()).optional() })),
+      execution_card: tool.schema.any().optional(),
       override: tool.schema.string().optional(),
       budget: tool.schema.object({ cost_class: tool.schema.string().optional(), latency_class: tool.schema.string().optional() }).optional(),
       decision: tool.schema.any().optional()
     },
-    async execute(args: { action: "preview" | "dispatch"; category: Category; task: string; requirements: string[]; agents: AvailableAgent[]; override?: string; budget?: RoutingInput["budget"]; decision?: unknown }, context: { sessionID: string }) {
-      const input: RoutingInput = { category: args.category, requirements: args.requirements, agents: args.agents, override: args.override, budget: args.budget };
+    async execute(args: { action: "preview" | "dispatch"; category: Category; task: string; requirements: string[]; agents: AvailableAgent[]; execution_card?: unknown; override?: string; budget?: RoutingInput["budget"]; decision?: unknown }, context: { sessionID: string }) {
+      const input: RoutingInput = { category: args.category, task: args.task, requirements: args.requirements, agents: args.agents, execution_card: args.execution_card, override: args.override, budget: args.budget };
       if (args.action === "preview") return JSON.stringify(gate.preview(input));
       const decision = gate.dispatch(input, args.decision);
-      gate.grant(context.sessionID, decision);
+      gate.grant(context.sessionID, decision, { task: args.task, requirements: args.requirements, card: args.execution_card });
       return JSON.stringify({ decision, status: "routed" });
     }
   });
@@ -135,7 +137,13 @@ const plugin = (async (input: { directory?: string }) => {
       const args = output.args && typeof output.args === "object" ? output.args as Record<string, unknown> : {};
       const agent = typeof args.agent === "string" ? args.agent : typeof args.subagent_type === "string" ? args.subagent_type : undefined;
       if (!agent) throw new Error("Native Task requires an explicit agent and an active routing receipt");
-      gate.consume(input.sessionID, agent);
+      const hasBinding = "task" in args || "requirements" in args || "execution_card" in args;
+      if (!hasBinding) gate.consume(input.sessionID, agent);
+      else {
+        const task = typeof args.task === "string" ? args.task : "";
+        const requirements = Array.isArray(args.requirements) ? args.requirements as string[] : [];
+        gate.consume(input.sessionID, agent, { task, requirements, card: args.execution_card });
+      }
     }
   };
 }) satisfies Plugin;
