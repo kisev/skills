@@ -16,7 +16,7 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 Для воспроизводимой установки актуального релиза используйте GitHub tag:
 
 ```shell
-npx --yes skills add https://github.com/kisev/skills/tree/v1.1.0 \
+npx --yes skills add https://github.com/kisev/skills/tree/v1.1.1 \
   --agent opencode --skill '*' --copy --yes
 ```
 
@@ -117,16 +117,19 @@ Portable skills и OpenCode integration устанавливаются неза�
 установите integration:
 
 ```shell
-npm install @kisev/skills-opencode@1.1.0
+npm install @kisev/skills-opencode@1.1.1
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
-Dry-run выводит точный план и SHA-256 digest. Применяйте только digest из этого
-вывода:
+Dry-run выводит короткий план по группам, только изменяемые paths, conflicts,
+restart flag, SHA-256 digest и готовую confirm-команду. Применяйте только digest
+из этого вывода:
 
 ```shell
 npm exec -- skills-opencode install --scope global --confirm <digest>
 ```
+
+Для scripts и полного machine-readable плана добавьте `--json`.
 
 `global` размещает управляемые assets в OpenCode user config. Для текущего
 репозитория используйте `--scope project`; installer добавляет только файлы под
@@ -203,7 +206,7 @@ npx --yes skills update --yes
 подтвердите новый digest:
 
 ```shell
-npm install @kisev/skills-opencode@1.1.0
+npm install @kisev/skills-opencode@1.1.1
 npm exec -- skills-opencode install --scope global --dry-run
 npm exec -- skills-opencode install --scope global --confirm <digest>
 ```

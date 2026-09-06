@@ -4,6 +4,15 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [1.1.1] - 2026-09-06
+
+### Изменено
+
+- Installer CLI по умолчанию показывает короткий человекочитаемый plan и таблицу
+  agent inventory; полный стабильный JSON доступен только с `--json`.
+- Preview печатает готовую confirm-команду и сворачивает длинные группы paths, не
+  скрывая conflicts, digest, TTL и restart flag.
+
 ## [1.1.0] - 2026-09-06
 
 ### Добавлено

@@ -16,7 +16,7 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 
 Для одного skill укажите `--skill <name>`. Для воспроизводимой установки можно
 передать URL GitHub tag, например
-`https://github.com/kisev/skills/tree/v1.1.0`. Package никогда не устанавливает
+`https://github.com/kisev/skills/tree/v1.1.1`. Package никогда не устанавливает
 и не обновляет skills. Если команда не нашла skill, она сообщает точную команду
 `npx skills add` для его установки.
 
@@ -25,16 +25,18 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 Установите npm package там, где OpenCode сможет разрешить plugin:
 
 ```shell
-npm install @kisev/skills-opencode@1.1.0
+npm install @kisev/skills-opencode@1.1.1
 ```
 
-Сначала покажите план installer. Эта команда не создаёт files:
+Сначала покажите план installer. По умолчанию CLI выводит короткую сводку:
+счётчики по группам, только изменяемые paths, conflicts, restart flag, digest и
+готовую confirm-команду. Эта команда не меняет deployment:
 
 ```shell
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
-Проверьте exact operations и примените только показанный digest:
+Проверьте сводку и примените только показанный digest:
 
 ```shell
 npm exec -- skills-opencode install --scope global --confirm <digest>
@@ -53,6 +55,14 @@ Project assets находятся в `.opencode/agents`, `.opencode/commands` и
 `.opencode/plugins` текущего working directory. Scope обязателен. Installer не изменяет `opencode.json`, не
 перезаписывает неизвестные или изменённые files и сохраняет ownership manifests
 только после confirmed apply.
+
+Для automation добавьте `--json`. Этот режим сохраняет полный стабильный
+machine-readable plan, включая `operations` и `requires_restart`:
+
+```shell
+npm exec -- skills-opencode install --scope global --dry-run --json
+npm exec -- skills-opencode agent list --scope global --json
+```
 
 Добавьте plugin в `opencode.json` вручную:
 
@@ -95,11 +105,12 @@ npm exec -- skills-opencode critic add security --scope global \
 npm exec -- skills-opencode critic remove security --scope global --dry-run
 ```
 
-Для любой mutation замените `--dry-run` на `--confirm <digest>` и повторите те же
-аргументы. Plan содержит TLDR operations без полного diff. Digest связан с
-одноразовым private receipt, действует 10 минут и повторно не применяется.
-Успешный machine-readable result содержит `requires_restart`; после `true`
-полностью перезапустите OpenCode.
+Для любой mutation используйте готовую confirm-команду из preview либо замените
+`--dry-run` на `--confirm <digest>` и повторите те же аргументы. Человекочитаемый
+plan не печатает полный JSON и сворачивает длинные группы paths. Digest связан с
+одноразовым private receipt, действует 10 минут и повторно не применяется. Для
+machine-readable result добавьте `--json`; поле `requires_restart` сообщает о
+необходимости полностью перезапустить OpenCode.
 
 В global scope profile configuration хранится в
 `~/.config/opencode/.skills-opencode/agent-profiles.json`, а semantic deployment

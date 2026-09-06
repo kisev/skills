@@ -8,7 +8,7 @@ license: MIT
 compatibility: Требует установленный CLI rtk; проверочный runner требует Python 3.12+ только со стандартной библиотекой.
 metadata:
   author: "Kirill Sevriugin"
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # Выборочное использование RTK

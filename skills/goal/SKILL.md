@@ -6,7 +6,7 @@ compatibility: Requires OpenCode 1.18.29+ and @kisev/skills-opencode; Python 3.1
 allowed-tools: native Question
 metadata:
   author: "Kirill Sevriugin"
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # Goal

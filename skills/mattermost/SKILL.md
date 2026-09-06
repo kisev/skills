@@ -8,7 +8,7 @@ license: MIT
 compatibility: Requires Python 3.12+; browser authentication is an optional host capability.
 metadata:
   author: "Kirill Sevriugin"
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # Mattermost только для чтения

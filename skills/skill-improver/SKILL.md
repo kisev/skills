@@ -8,7 +8,7 @@ license: MIT
 compatibility: Требует Python 3.12+ только со стандартной библиотекой.
 metadata:
   author: "Kirill Sevriugin"
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # Итеративное улучшение skill

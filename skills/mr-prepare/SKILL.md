@@ -8,7 +8,7 @@ license: MIT
 compatibility: Requires Python 3.12+ and an authenticated glab CLI for collection.
 metadata:
   author: "Kirill Sevriugin"
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # Подготовка обычного MR

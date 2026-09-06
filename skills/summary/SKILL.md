@@ -7,7 +7,7 @@ description: >-
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # Итог материалов

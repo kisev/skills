@@ -66,7 +66,7 @@ const CATALOG = {
   skills: ["attempt", "goal", "schedule", "multi-run", "usage", "overview", "lsp-report"],
   plugins: ["background-attempts", "goal-loop", "schedule", "autonomy-policy", "rules-injector", "rtk", "zed-bell", "zed-clickable-paths"],
   replacements: ["capabilities", "route", "doctor", "agent_profiles"],
-  version: "1.1.0",
+  version: "1.1.1",
 } as const;
 
 const plugin = (async (input: { directory?: string }) => {
