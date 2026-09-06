@@ -91,10 +91,14 @@ npm exec -- skills-opencode agent model-set worker --scope global \
 npm exec -- skills-opencode agent reconcile --scope global --dry-run
 ```
 
-`agent configure` предлагает terminal selection в порядке provider, model,
-variant по cached output `opencode models`; refresh не выполняется. Если catalog
-недоступен, передайте exact `--provider <provider> --model <model>` или
-`--model <provider/model>`.
+`agent configure` предлагает настоящий terminal wizard: стрелками выбираются
+agent из inventory, затем provider, только его models и, если metadata выбранной
+модели публикует variants, variant. Текущие model/variant и target показываются
+перед выбором; доступны `keep`, `change`, `clear variant`, `back` и `cancel`.
+Wizard не вызывает LLM, OpenCode Question или refresh catalog. Если catalog
+недоступен, он завершается без записи и печатает инструкцию для exact
+`--model <provider/model>` с optional `--variant`. Для модели без variants
+дополнительный selector не показывается.
 
 Additional critic имеет имя `critic-<safe-suffix>`. Стандартный `critic` и fixed
 roles нельзя удалить или переименовать:

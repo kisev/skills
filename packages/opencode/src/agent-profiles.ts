@@ -1054,12 +1054,13 @@ export async function availableModelVariants(model: string): Promise<string[]> {
         document += `${lines[index]}\n`;
         try {
           const metadata = JSON.parse(document) as { variants?: unknown };
+          if (metadata.variants === undefined) return [];
           if (
             !metadata.variants ||
             typeof metadata.variants !== "object" ||
             Array.isArray(metadata.variants)
           )
-            throw new Error("variants missing");
+            throw new Error("invalid variants metadata");
           const variants = Object.keys(metadata.variants);
           if (!variants.every((variant) => VARIANT_PATTERN.test(variant)))
             throw new Error("unsafe variant");

@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-import { createInterface } from "node:readline/promises";
-
 import {
   AgentProfileError,
   applyAgentProfileChange,
@@ -17,6 +15,7 @@ import {
 import { renderInventory, renderPlan, shellCommand, terminalSafe } from "./cli-output.js";
 import { apply, InstallerError, preview, type Action } from "./installer.js";
 import { LifecycleError, type Scope } from "./lifecycle.js";
+import { promptText, selectOption } from "./terminal-wizard.js";
 
 type Options = { scope?: Scope; dryRun: boolean; json: boolean; confirm?: string; provider?: string; model?: string; variant?: string | null; name?: string };
 
@@ -77,49 +76,122 @@ function exactModel(options: Options): string | undefined {
   return validateModel(`${options.provider}/${options.model}`);
 }
 
-async function choose(label: string, values: readonly string[], input: ReturnType<typeof createInterface>): Promise<string> {
-  process.stderr.write(`${label}:\n${values.map((value, index) => `  ${index + 1}. ${value}`).join("\n")}\n`);
-  const answer = await input.question("> ");
-  const index = Number(answer) - 1;
-  if (!Number.isSafeInteger(index) || !values[index]) throw new InstallerError("invalid_input", `Invalid ${label.toLowerCase()} selection`);
-  return values[index];
-}
+async function interactiveSelection(options: Options, action: "model-set" | "critic-add" = "model-set"): Promise<{ name: string; model: string; variant?: string }> {
+  if (!process.stdin.isTTY || !process.stderr.isTTY) {
+    throw new InstallerError("terminal_required", "agent configure requires a terminal or explicit --provider and --model");
+  }
+  const inventory = await listAgentProfiles(options.scope!);
+  const configurable = inventory.profiles.filter((item) => item.ownership !== "user-owned");
 
-async function interactiveSelection(options: Options): Promise<{ name: string; model: string; variant?: string }> {
-  if (!process.stdin.isTTY || !process.stderr.isTTY) throw new InstallerError("terminal_required", "agent configure requires a terminal or explicit --provider and --model");
-  const input = createInterface({ input: process.stdin, output: process.stderr });
-  try {
-    const inventory = await listAgentProfiles(options.scope!);
-    const configurable = inventory.profiles.filter((item) => item.ownership !== "user-owned").map((item) => item.name);
-    const name = options.name ? validateAgentName(options.name) : await choose("Agent", configurable.length ? configurable : FIXED_AGENT_ROLES, input);
-    if (options.provider && options.model) return { name, model: exactModel(options)!, ...(validateVariant(options.variant) ? { variant: validateVariant(options.variant) } : {}) };
-    let models: string[];
-    try {
-      models = await availableModels();
-    } catch (error) {
-      if (!(error instanceof AgentProfileError) || error.code !== "catalog_unavailable") throw error;
-      const provider = options.provider ?? (await input.question("Provider: ")).trim();
-      const model = options.model ?? (await input.question("Model: ")).trim();
-      const variant = options.variant === undefined ? (await input.question("Variant (optional): ")).trim() : options.variant;
-      return { name, model: validateModel(model.includes("/") ? model : `${provider}/${model}`), ...(validateVariant(variant) ? { variant: validateVariant(variant) } : {}) };
+  let name: string;
+  if (options.name) {
+    name = action === "critic-add" && !options.name.startsWith("critic-")
+      ? validateAgentName(`critic-${options.name}`)
+      : validateAgentName(options.name);
+  } else if (action === "critic-add") {
+    const raw = await promptText("Critic name (critic-<suffix>):");
+    if (raw === null) throw new InstallerError("cancelled", "Wizard cancelled");
+    name = raw.startsWith("critic-") ? raw : `critic-${raw}`;
+    validateAgentName(name);
+  } else {
+    const agentNames = configurable.map((item) => item.name);
+    if (agentNames.length === 0) agentNames.push(...FIXED_AGENT_ROLES);
+    const index = await selectOption("Select agent:", agentNames);
+    if (index === null) throw new InstallerError("cancelled", "Wizard cancelled");
+    name = agentNames[index];
+  }
+
+  const currentProfile = configurable.find((item) => item.name === name);
+  const currentModel = currentProfile?.model;
+  const currentVariant = currentProfile?.variant;
+  const showTarget = (model: string, variant?: string): void => {
+    process.stderr.write(`Target: ${model}${variant ? ` / ${variant}` : ""}\n`);
+  };
+
+  if (options.provider && options.model) {
+    const model = exactModel(options)!;
+    const variant = validateVariant(options.variant);
+    return { name, model, ...(variant ? { variant } : {}) };
+  }
+
+  while (true) {
+    const actions: string[] = [];
+    if (currentModel) {
+      actions.push(`Keep current (${currentModel}${currentVariant ? ` / ${currentVariant}` : ""})`);
     }
-    const providers = [...new Set(models.map((model) => model.split("/", 1)[0]))].sort();
-    const provider = options.provider ?? (await choose("Provider", providers, input));
-    const selectedModel = options.model
-      ? exactModel({ ...options, provider })!
-      : await choose("Model", models.filter((model) => model.startsWith(`${provider}/`)), input);
-    let variants: string[] = [];
-    try {
-      variants = await availableModelVariants(selectedModel);
-    } catch (error) {
-      if (!(error instanceof AgentProfileError) || error.code !== "catalog_unavailable") throw error;
+    actions.push("Change model");
+    if (currentVariant) actions.push("Clear variant");
+    if (!options.name && action === "model-set") actions.push("Back");
+    actions.push("Cancel");
+
+    const currentLabel = `Agent: ${name}${currentModel ? ` (current: ${currentModel}${currentVariant ? ` / ${currentVariant}` : ""})` : ""}`;
+    const actionIndex = await selectOption(currentLabel, actions);
+    if (actionIndex === null) throw new InstallerError("cancelled", "Wizard cancelled");
+
+    const chosen = actions[actionIndex];
+
+    if (chosen.startsWith("Keep current")) {
+      if (!currentModel) throw new InstallerError("invalid_state", "No current model to keep");
+      showTarget(currentModel, currentVariant);
+      return { name, model: currentModel, ...(currentVariant ? { variant: currentVariant } : {}) };
     }
-    const variant = options.variant === null
-      ? undefined
-      : options.variant ?? (variants.length ? await choose("Variant", ["none", ...variants.filter((value) => value !== "none")], input) : (await input.question("Variant (optional): ")).trim());
-    return { name, model: selectedModel, ...(variant && variant !== "none" ? { variant: validateVariant(variant) } : {}) };
-  } finally {
-    input.close();
+
+    if (chosen === "Change model") {
+      let models: string[];
+      try {
+        models = await availableModels();
+      } catch (error) {
+        if (error instanceof AgentProfileError && error.code === "catalog_unavailable") {
+          process.stderr.write("\nModel catalog is unavailable.\nUse direct CLI with exact --model provider/model and optional --variant.\n\n");
+          throw new InstallerError("catalog_unavailable", "Use direct CLI with exact --model provider/model");
+        }
+        throw error;
+      }
+
+      const providers = [...new Set(models.map((m) => m.split("/", 1)[0]))].sort();
+      const providerIndex = await selectOption("Select provider:", providers);
+      if (providerIndex === null) continue;
+      const provider = providers[providerIndex];
+
+      const filteredModels = models.filter((m) => m.startsWith(`${provider}/`));
+      const modelIndex = await selectOption("Select model:", filteredModels);
+      if (modelIndex === null) continue;
+      const selectedModel = filteredModels[modelIndex];
+
+      let selectedVariant: string | undefined;
+      try {
+        const variants = await availableModelVariants(selectedModel);
+        if (variants.length) {
+          const variantOptions = ["(none)", ...variants];
+          const variantIndex = await selectOption("Select variant:", variantOptions);
+          if (variantIndex === null) continue;
+          if (variantIndex > 0) selectedVariant = variantOptions[variantIndex];
+        }
+      } catch (error) {
+        if (error instanceof AgentProfileError && error.code === "catalog_unavailable") {
+          process.stderr.write("\nModel variant metadata is unavailable.\nUse direct CLI with exact --model provider/model and optional --variant.\n\n");
+          throw new InstallerError("catalog_unavailable", "Use direct CLI with exact --model provider/model");
+        }
+        throw error;
+      }
+
+      showTarget(selectedModel, selectedVariant);
+      return { name, model: selectedModel, ...(selectedVariant ? { variant: selectedVariant } : {}) };
+    }
+
+    if (chosen === "Clear variant") {
+      if (!currentModel) throw new InstallerError("invalid_state", "No model to clear variant for");
+      showTarget(currentModel);
+      return { name, model: currentModel };
+    }
+
+    if (chosen === "Back") {
+      return interactiveSelection({ ...options, name: undefined }, action);
+    }
+
+    if (chosen === "Cancel") {
+      throw new InstallerError("cancelled", "Wizard cancelled");
+    }
   }
 }
 
@@ -180,7 +252,7 @@ async function run(arguments_: string[]): Promise<void> {
     requireConfirmationMode(options);
     const selected = options.provider && options.model && options.name
       ? { name: validateAgentName(options.name), model: exactModel(options)!, ...(validateVariant(options.variant) ? { variant: validateVariant(options.variant) } : {}) }
-      : await interactiveSelection(options);
+      : await interactiveSelection(options, "model-set");
     await runProfile({ action: "model-set", ...selected, variant: selected.variant ?? null }, options);
     return;
   }
@@ -206,8 +278,12 @@ async function run(arguments_: string[]): Promise<void> {
         : `critic-${options.name ?? ""}`;
     if (operation === "add") {
       const model = exactModel(options);
-      if (!model) throw new InstallerError("invalid_input", "critic add requires --provider and --model, or exact --model provider/model");
-      await runProfile({ action: "critic-add", name, model, variant: options.variant ?? null }, options);
+      if (!model) {
+        const selected = await interactiveSelection(options, "critic-add");
+        await runProfile({ action: "critic-add", name: selected.name, model: selected.model, variant: selected.variant ?? null }, options);
+      } else {
+        await runProfile({ action: "critic-add", name, model, variant: options.variant ?? null }, options);
+      }
     } else {
       if (options.provider || options.model || options.variant !== undefined) throw new InstallerError("invalid_input", "critic remove does not accept model options");
       await runProfile({ action: "critic-remove", name }, options);

@@ -12,6 +12,7 @@ import {
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 
 import plugin from "../dist/index.js";
@@ -24,6 +25,7 @@ import {
   listAgentProfiles,
   previewAgentProfileChange,
 } from "../dist/agent-profiles.js";
+import { promptText, selectOption } from "../dist/terminal-wizard.js";
 import { apply, preview } from "../dist/installer.js";
 import {
   LifecycleError,
@@ -135,7 +137,11 @@ test("model catalog and variants use cached opencode commands without refresh", 
       executable,
       `#!/bin/sh
 if [ "$1" = "models" ] && [ "$3" = "--verbose" ]; then
-  printf '%s\n' 'openai/gpt-5' '{"variants":{"none":{},"low":{},"high":{}}}'
+  if [ "$2" = "anthropic" ]; then
+    printf '%s\n' 'anthropic/claude' '{"id":"anthropic/claude"}'
+  else
+    printf '%s\n' 'openai/gpt-5' '{"variants":{"none":{},"low":{},"high":{}}}'
+  fi
 else
   printf '%s\n' 'anthropic/claude' 'openai/gpt-5'
 fi
@@ -144,6 +150,7 @@ fi
     chmodSync(executable, 0o755);
     process.env.PATH = directory;
     assert.deepEqual(await availableModels(), ["anthropic/claude", "openai/gpt-5"]);
+    assert.deepEqual(await availableModelVariants("anthropic/claude"), []);
     assert.deepEqual(await availableModelVariants("openai/gpt-5"), ["none", "low", "high"]);
     process.env.PATH = join(directory, "missing");
     await assert.rejects(
@@ -158,6 +165,82 @@ fi
     else process.env.PATH = originalPath;
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("incomplete non-TTY configure exits with JSON guidance and leaves no receipt", async () => {
+  const context = await roots();
+  const result = spawnSync(
+    process.execPath,
+    [
+      join(PACKAGE, "dist", "cli.js"),
+      "agent",
+      "configure",
+      "--scope",
+      "project",
+      "--dry-run",
+      "--json",
+    ],
+    {
+      cwd: context.project,
+      env: { ...process.env, HOME: context.home, XDG_STATE_HOME: join(context.home, ".state") },
+      encoding: "utf8",
+    },
+  );
+  try {
+    assert.equal(result.status, 2);
+    assert.equal(JSON.parse(result.stdout).error.code, "terminal_required");
+    assert.deepEqual(await fileSnapshot(join(context.project, ".opencode")), {});
+    await assert.rejects(lstat(join(context.home, ".state")), { code: "ENOENT" });
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
+test("keyboard selector flow is deterministic and never asks for model text", async () => {
+  const makeTTY = () => {
+    const stdin = new PassThrough();
+    const stderr = new PassThrough();
+    stdin.isTTY = true;
+    stderr.isTTY = true;
+    stdin.setRawMode = () => stdin;
+    return { stdin, stderr };
+  };
+  const select = async (label, values, keys) => {
+    const { stdin, stderr } = makeTTY();
+    const result = selectOption(label, values, stdin, stderr);
+    stdin.write(keys);
+    return result;
+  };
+
+  assert.equal(await select("Agent", ["manager", "critic"], "\r"), 0);
+  assert.equal(await select("Provider", ["anthropic", "openai"], "\x1b[B\r"), 1);
+  assert.equal(await select("Model", ["openai/gpt-5", "openai/gpt-5-mini"], "\r"), 0);
+  assert.equal(await select("Variant", ["(none)", "low", "high"], "\x1b[B\x1b[B\r"), 2);
+});
+
+test("keyboard selector supports cancel and text prompt only for critic identity", async () => {
+  const stdin = new PassThrough();
+  const stderr = new PassThrough();
+  stdin.isTTY = true;
+  stderr.isTTY = true;
+  stdin.setRawMode = () => stdin;
+  const cancelled = selectOption(
+    "Action",
+    ["Keep", "Change", "Clear variant", "Back", "Cancel"],
+    stdin,
+    stderr,
+  );
+  stdin.write("\x1b");
+  assert.equal(await cancelled, null);
+
+  const nameInput = new PassThrough();
+  const nameOutput = new PassThrough();
+  nameInput.isTTY = true;
+  nameOutput.isTTY = true;
+  nameInput.setRawMode = () => nameInput;
+  const name = promptText("Critic name", nameInput, nameOutput);
+  nameInput.write("security\r");
+  assert.equal(await name, "security");
 });
 
 test("model and variant configuration survives package install", async () => {
