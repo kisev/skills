@@ -13,10 +13,10 @@
 npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
 
-Для воспроизводимой установки первого публичного релиза используйте GitHub tag:
+Для воспроизводимой установки актуального релиза используйте GitHub tag:
 
 ```shell
-npx --yes skills add https://github.com/kisev/skills/tree/v1.0.0 \
+npx --yes skills add https://github.com/kisev/skills/tree/v1.1.0 \
   --agent opencode --skill '*' --copy --yes
 ```
 
@@ -117,7 +117,7 @@ Portable skills и OpenCode integration устанавливаются неза�
 установите integration:
 
 ```shell
-npm install @kisev/skills-opencode@1.0.0
+npm install @kisev/skills-opencode@1.1.0
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -146,6 +146,22 @@ OpenCode: agents и commands обнаруживаются до plugin hooks. П�
 installer, plugin factories и ownership-границ есть в
 [README package](packages/opencode/README.md).
 
+Управление моделями fixed agents и additional critics выполняется напрямую через
+CLI без LLM-токенов. Например:
+
+```shell
+npm exec -- skills-opencode agent list --scope global
+npm exec -- skills-opencode agent configure manager --scope global --dry-run
+npm exec -- skills-opencode critic add security --scope global \
+  --model anthropic/claude-sonnet-4-6 --dry-run
+```
+
+Каждая mutation сначала создаёт короткий plan и private одноразовый receipt с
+TTL. Применить plan можно только командой с `--confirm <digest>`. Команды
+`/agent-list`, `/agent-model-set`, `/critic-add` и `/critic-remove` и package tool
+`agent_profiles` остаются опциональными thin adapters; рекомендуемый интерфейс -
+прямой CLI.
+
 ## Совместимость и требования
 
 - Portable skills устанавливаются через актуальный `npx skills`; целевые hosts
@@ -159,9 +175,9 @@ installer, plugin factories и ownership-границ есть в
 - OpenCode assets являются опциональными: portable skills продолжают работать без
   npm package, commands, agents и plugins.
 
-## Known limitations v1.0.0
+## Ограничения runtime
 
-Релиз `v1.0.0` структурно целостен, но следующие ограничения делают stateful
+Следующие ограничения делают stateful
 OpenCode plugins небезопасными для включения:
 
 - Background Attempts пока не гарантируют managed worktree и terminal
@@ -187,7 +203,7 @@ npx --yes skills update --yes
 подтвердите новый digest:
 
 ```shell
-npm install @kisev/skills-opencode@1.0.0
+npm install @kisev/skills-opencode@1.1.0
 npm exec -- skills-opencode install --scope global --dry-run
 npm exec -- skills-opencode install --scope global --confirm <digest>
 ```

@@ -12,9 +12,10 @@
 зависимость установленного skill. `scripts/sync_shared.py` создаёт точные копии
 по manifest, а эти копии хранятся в Git под соответствующими skills.
 
-В репозитории нет пользовательского CLI. Maintainer scripts могут использовать
-только Python stdlib; Python runners, если они нужны skill, находятся внутри
-этого skill.
+В корне репозитория нет пользовательского CLI. Отдельный npm package предоставляет
+CLI `skills-opencode` только для OpenCode integration. Maintainer scripts могут
+использовать только Python stdlib; Python runners, если они нужны skill, находятся
+внутри этого skill.
 
 ## Интеграция с host
 
@@ -24,8 +25,11 @@
 capability router относятся к необязательному package `packages/opencode/` и не
 нужны для установки или работы portable skill. Package не содержит копий skills.
 Его явный installer materialize-ит assets после dry-run и matching digest;
-upgrade/uninstall сохраняют user drift через ownership manifest. Stateful plugins
-являются opt-in и при отключении не создают state, timers, sessions или mutations.
+upgrade/uninstall сохраняют user drift через ownership manifests. Canonical agent
+assets содержат prompts/permissions, отдельная profile configuration -
+models/variants и additional critics, а semantic manifest - rendered hashes и
+package version. Stateful plugins являются opt-in и при отключении не создают
+state, timers, sessions или mutations.
 
 ## OpenCode runtime
 
@@ -33,8 +37,10 @@ upgrade/uninstall сохраняют user drift через ownership manifest. S
 Их Python runner materialize-ит общий stdlib runtime внутрь skill и использует
 только XDG/OpenCode user-owned config/state. Package runtime не ссылается на
 checkout и экспортирует восемь независимых plugin factories. `capabilities`,
-`route` и `doctor` являются package tools и read-only command replacements;
-они не устанавливают, не исправляют и не управляют agent profiles.
+`route` и `doctor` являются package tools для catalog/routing/health.
+`agent_profiles` - optional adapter над package-domain planner; основной интерфейс
+управления agents - прямой CLI без LLM. Все mutations используют private receipt,
+lifecycle lock, final revalidation и journaled rollback/recovery.
 
 ## Инварианты materialization
 

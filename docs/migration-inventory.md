@@ -47,4 +47,6 @@ skill. Их общий минимальный stdlib-код хранится в 
 детерминированно materialize-ится в каждую зависимую установку. Необязательный
 package `packages/opencode/` содержит OpenCode-specific assets, runtime и opt-in
 installer, но не поставляет копии skills и не меняет их установку через
-`npx skills`. Stateful plugins выключены по умолчанию.
+`npx skills`. Agent profiles управляются package domain и прямым CLI, а не
+отдельным skill; четыре slash-команды и tool `agent_profiles` только адаптируют
+этот интерфейс. Stateful plugins выключены по умолчанию.

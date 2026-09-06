@@ -34,4 +34,4 @@ jobs:
           test "$actual_version" = "$expected_version"
       - name: Publish package
         working-directory: packages/opencode
-        run: npm publish --access public
+        run: npm publish --access public --provenance

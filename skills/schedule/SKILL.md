@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires OpenCode 1.18.29+ and @kisev/skills-opencode; Python 3.12+ stdlib-only runner.
 metadata:
   author: "Kirill Sevriugin"
-  version: "1.0.0"
+  version: "1.1.0"
 ---
 
 # Schedule

@@ -359,11 +359,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(lines[1], f"name: {name}")
                 self.assertIn("license: MIT", lines)
                 self.assertIn('  author: "Kirill Sevriugin"', lines)
-                self.assertIn('  version: "1.0.0"', lines)
+                self.assertIn('  version: "1.1.0"', lines)
                 metadata_start = lines.index("metadata:") + 1
                 self.assertEqual(
                     lines[metadata_start:end],
-                    ['  author: "Kirill Sevriugin"', '  version: "1.0.0"'],
+                    ['  author: "Kirill Sevriugin"', '  version: "1.1.0"'],
                 )
 
     def test_public_skill_and_repository_texts_are_russian(self) -> None:
