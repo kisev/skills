@@ -14,13 +14,14 @@ import {
   validateVariant,
   type AgentProfileRequest,
 } from "./agent-profiles.js";
-import { apply, InstallerError, preview, result, type Action } from "./installer.js";
+import { renderInventory, renderPlan, shellCommand, terminalSafe } from "./cli-output.js";
+import { apply, InstallerError, preview, type Action } from "./installer.js";
 import { LifecycleError, type Scope } from "./lifecycle.js";
 
-type Options = { scope?: Scope; dryRun: boolean; confirm?: string; provider?: string; model?: string; variant?: string | null; name?: string };
+type Options = { scope?: Scope; dryRun: boolean; json: boolean; confirm?: string; provider?: string; model?: string; variant?: string | null; name?: string };
 
 function parseOptions(values: string[]): Options {
-  const options: Options = { dryRun: false };
+  const options: Options = { dryRun: false, json: false };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (!value.startsWith("--")) {
@@ -50,6 +51,9 @@ function parseOptions(values: string[]): Options {
     } else if (value === "--clear-variant") {
       if (options.variant !== undefined) throw new InstallerError("invalid_input", "Use only one variant option");
       options.variant = null;
+    } else if (value === "--json") {
+      if (options.json) throw new InstallerError("invalid_input", "--json may be supplied once");
+      options.json = true;
     } else {
       throw new InstallerError("invalid_input", `Unknown argument: ${value}`);
     }
@@ -123,10 +127,24 @@ async function runProfile(request: AgentProfileRequest, options: Options): Promi
   requireConfirmationMode(options);
   if (options.dryRun) {
     const plan = await previewAgentProfileChange(request, options.scope!);
-    process.stdout.write(`${JSON.stringify({ status: "ok", applied: false, requires_restart: false, plan }, null, 2)}\n`);
+    if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: false, requires_restart: false, plan }, null, 2)}\n`);
+    else process.stdout.write(renderPlan(plan, { applied: false, confirmationCommand: shellCommand(profileConfirmationArguments(request, options.scope!, plan.digest)) }));
   } else {
-    process.stdout.write(`${JSON.stringify(await applyAgentProfileChange(request, options.scope!, options.confirm!), null, 2)}\n`);
+    const applied = await applyAgentProfileChange(request, options.scope!, options.confirm!);
+    if (options.json) process.stdout.write(`${JSON.stringify(applied, null, 2)}\n`);
+    else process.stdout.write(renderPlan(applied.plan, { applied: true }));
   }
+}
+
+function profileConfirmationArguments(request: AgentProfileRequest, scope: Scope, digest: string): string[] {
+  if (request.action === "reconcile") return ["agent", "reconcile", "--scope", scope, "--confirm", digest];
+  if (request.action === "critic-remove") return ["critic", "remove", request.name!, "--scope", scope, "--confirm", digest];
+  const command = request.action === "critic-add" ? ["critic", "add", request.name!] : ["agent", "model-set", request.name!];
+  command.push("--scope", scope, "--model", request.model!);
+  if (request.variant) command.push("--variant", request.variant);
+  else if (request.action === "model-set") command.push("--clear-variant");
+  command.push("--confirm", digest);
+  return command;
 }
 
 async function run(arguments_: string[]): Promise<void> {
@@ -138,13 +156,23 @@ async function run(arguments_: string[]): Promise<void> {
     if (options.name || options.provider || options.model || options.variant !== undefined) throw new InstallerError("invalid_input", "Installer accepts only scope and confirmation options");
     requireConfirmationMode(options);
     const action = domain as Action;
-    process.stdout.write(`${result(options.dryRun ? await preview(action, options.scope!) : await apply(action, options.scope!, options.confirm!), !options.dryRun)}\n`);
+    if (options.dryRun) {
+      const plan = await preview(action, options.scope!);
+      if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: false, requires_restart: false, plan }, null, 2)}\n`);
+      else process.stdout.write(renderPlan(plan, { applied: false, confirmationCommand: shellCommand([action, "--scope", options.scope!, "--confirm", plan.digest]) }));
+    } else {
+      const plan = await apply(action, options.scope!, options.confirm!);
+      if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan }, null, 2)}\n`);
+      else process.stdout.write(renderPlan(plan, { applied: true }));
+    }
     return;
   }
   if (domain === "agent" && operation === "list") {
     const options = parseOptions(rest);
     if (options.dryRun || options.confirm || options.name || options.provider || options.model || options.variant !== undefined) throw new InstallerError("invalid_input", "agent list accepts only --scope");
-    process.stdout.write(`${JSON.stringify({ status: "ok", inventory: await listAgentProfiles(options.scope!) }, null, 2)}\n`);
+    const inventory = await listAgentProfiles(options.scope!);
+    if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", inventory }, null, 2)}\n`);
+    else process.stdout.write(renderInventory(inventory));
     return;
   }
   if (domain === "agent" && operation === "configure") {
@@ -194,7 +222,8 @@ async function main(): Promise<void> {
     await run(process.argv.slice(2));
   } catch (error) {
     const known = error instanceof LifecycleError ? error : new InstallerError("internal_error", error instanceof Error ? error.message : String(error));
-    process.stdout.write(`${JSON.stringify({ status: "error", error: { code: known.code, message: known.message } })}\n`);
+    if (process.argv.includes("--json")) process.stdout.write(`${JSON.stringify({ status: "error", error: { code: known.code, message: known.message } })}\n`);
+    else process.stderr.write(`Error [${known.code}]: ${terminalSafe(known.message)}\n`);
     process.exitCode = 2;
   }
 }

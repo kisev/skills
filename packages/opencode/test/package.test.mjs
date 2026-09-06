@@ -222,6 +222,38 @@ test("installer final validation requires the exact generic manifest", async () 
   }
 });
 
+test("package-only upgrade requires restart while same-version reinstall does not", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    await install("project", project, home);
+    const root = join(project, ".opencode");
+    const genericPath = join(root, ".skills-opencode-manifest.json");
+    const semanticPath = join(root, ".skills-opencode", "agent-profiles.manifest.json");
+    const generic = JSON.parse(await readFile(genericPath, "utf8"));
+    const semantic = JSON.parse(await readFile(semanticPath, "utf8"));
+    const expectedVersion = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8")).version;
+    generic.version = "previous-version";
+    semantic.package_version = "previous-version";
+    await writeFile(genericPath, `${JSON.stringify(generic)}\n`);
+    await writeFile(semanticPath, `${JSON.stringify(semantic)}\n`);
+
+    const upgrade = await preview("install", "project", project, home);
+    assert.equal(upgrade.requires_restart, true);
+    assert.ok(upgrade.operations.filter((item) => item.operation !== "unchanged").every((item) => item.path.startsWith(".skills-opencode")));
+    await apply("install", "project", upgrade.digest, project, home);
+    assert.equal(JSON.parse(await readFile(genericPath, "utf8")).version, expectedVersion);
+    assert.equal(JSON.parse(await readFile(semanticPath, "utf8")).package_version, expectedVersion);
+
+    const repeat = await preview("install", "project", project, home);
+    assert.equal(repeat.requires_restart, false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("upgrade removes only an unchanged stale managed asset", async () => {
   const directory = temporary();
   try {
@@ -393,9 +425,18 @@ test("published package metadata and tarball expose only the OpenCode integratio
   assert.equal(packageJson.engines.node, ">=22");
   assert.equal(packageJson.exports["."].import, "./dist/index.js");
   assert.equal(packageJson.bin["skills-opencode"], "./dist/cli.js");
-  const invalid = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "install", "--dry-run"], { encoding: "utf8" });
+  const invalid = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "install", "--dry-run", "--json"], { encoding: "utf8" });
   assert.equal(invalid.status, 2);
   assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
+  const humanInvalid = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "install", "--dry-run"], { encoding: "utf8" });
+  assert.equal(humanInvalid.status, 2);
+  assert.equal(humanInvalid.stdout, "");
+  assert.match(humanInvalid.stderr, /^Error \[invalid_input\]:/);
+  const hostileArgument = "bad\u001b[31m\u0085\u061c\u2028\u2029\u202e\ufeff";
+  const hostileInvalid = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "install", hostileArgument], { encoding: "utf8" });
+  assert.equal(hostileInvalid.status, 2);
+  for (const escaped of ["\\x1b", "\\x85", "\\u061c", "\\u2028", "\\u2029", "\\u202e", "\\ufeff"]) assert.ok(hostileInvalid.stderr.includes(escaped), escaped);
+  for (const code of [0x1b, 0x85, 0x061c, 0x2028, 0x2029, 0x202e, 0xfeff]) assert.equal(hostileInvalid.stderr.includes(String.fromCodePoint(code)), false);
   const directory = temporary();
   try {
     const packed = JSON.parse(execFileSync("npm", ["pack", "--json", "--pack-destination", directory], { cwd: PACKAGE, encoding: "utf8" }));

@@ -251,7 +251,7 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
   }
 
   const sorted = operations.sort((left, right) => left.path.localeCompare(right.path) || left.operation.localeCompare(right.operation));
-  const base = { schema_version: 1 as const, action, scope, root, package_version: packageVersion(), operations: sorted, requires_restart: profiles.plan.requires_restart || sorted.some((item) => item.path.startsWith("commands/") || item.path.startsWith("plugins/")) };
+  const base = { schema_version: 1 as const, action, scope, root, package_version: packageVersion(), operations: sorted, requires_restart: (action === "install" && owned.manifest?.version !== packageVersion()) || profiles.plan.requires_restart || mutations.some((item) => item.path.startsWith("agents/") || item.path.startsWith("commands/") || item.path.startsWith("plugins/")) };
   return {
     plan: { ...base, digest: digest(base) },
     mutations,

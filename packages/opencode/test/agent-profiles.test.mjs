@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -31,6 +39,7 @@ import {
 
 const PACKAGE = resolve(import.meta.dirname, "..");
 const REPOSITORY = resolve(PACKAGE, "../..");
+const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8")).version;
 const FIXED = ["architect", "critic", "manager", "mapper", "review", "worker"];
 
 function temporary() {
@@ -786,6 +795,142 @@ test("uninstall preserves managed agent drift with semantic ownership", async ()
   }
 });
 
+test("CLI defaults to a concise human plan and table", async () => {
+  const context = await roots();
+  const executable = join(PACKAGE, "dist", "cli.js");
+  const environment = {
+    ...process.env,
+    HOME: context.home,
+    XDG_STATE_HOME: join(context.home, ".state"),
+  };
+  const invoke = (arguments_) =>
+    spawnSync(process.execPath, [executable, ...arguments_], {
+      cwd: context.project,
+      env: environment,
+      encoding: "utf8",
+    });
+  try {
+    const previewResult = invoke(["install", "--scope", "project", "--dry-run"]);
+    assert.equal(previewResult.status, 0, previewResult.stderr);
+    assert.ok(
+      previewResult.stdout.startsWith(
+        `Install @kisev/skills-opencode ${PACKAGE_VERSION} (project)\n`,
+      ),
+    );
+    assert.match(previewResult.stdout, /^  Commands: create 61$/m);
+    assert.match(previewResult.stdout, /^  Commands\/create: .+ \(\+53 more\)$/m);
+    assert.match(previewResult.stdout, /^Conflicts: none$/m);
+    assert.match(previewResult.stdout, /^Digest: [a-f0-9]{64}$/m);
+    assert.match(previewResult.stdout, /^Apply:\n  npm exec -- skills-opencode install /m);
+    assert.doesNotMatch(previewResult.stdout, /"operations"|"status"/);
+    assert.ok(previewResult.stdout.length < 2500);
+    const digest = previewResult.stdout.match(/^Digest: ([a-f0-9]{64})$/m)?.[1];
+    assert.ok(digest);
+
+    const applied = invoke(["install", "--scope", "project", "--confirm", digest]);
+    assert.equal(applied.status, 0, applied.stderr);
+    assert.match(applied.stdout, /^Applied changes:$/m);
+    assert.match(applied.stdout, /^Restart required: yes$/m);
+    assert.doesNotMatch(applied.stdout, /"operations"/);
+
+    const hostileCodes = [
+      0x1b, 0x85, 0x061c, 0x200e, 0x200f, 0x2028, 0x2029, 0x202e, 0x2060, 0xfeff, 0xe0001,
+    ];
+    const hostileName = `evil\n\t${hostileCodes.map((code) => String.fromCodePoint(code)).join("")}[31m.md`;
+    await writeFile(join(context.root, "agents", hostileName), "user-owned\n");
+    const listed = invoke(["agent", "list", "--scope", "project"]);
+    assert.equal(listed.status, 0, listed.stderr);
+    assert.match(listed.stdout, /^NAME\s+MODEL\s+VARIANT\s+OWNER\s+STATE$/m);
+    assert.match(listed.stdout, /^manager\s+default\s+-\s+package-owned\s+current$/m);
+    assert.match(listed.stdout, /^Critic pool: critic$/m);
+    for (const escaped of [
+      "\\x1b",
+      "\\x85",
+      "\\u061c",
+      "\\u200e",
+      "\\u200f",
+      "\\u2028",
+      "\\u2029",
+      "\\u202e",
+      "\\u2060",
+      "\\ufeff",
+      "\\u{e0001}",
+    ]) {
+      assert.ok(listed.stdout.includes(escaped), escaped);
+    }
+    for (const code of hostileCodes) {
+      assert.equal(listed.stdout.includes(String.fromCodePoint(code)), false);
+    }
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
+test("CLI human plan explains exact-name conflicts", async () => {
+  const context = await roots();
+  const executable = join(PACKAGE, "dist", "cli.js");
+  try {
+    await mkdir(join(context.root, "agents"), { recursive: true });
+    await writeFile(join(context.root, "agents", "manager.md"), "user-owned\n");
+    const result = spawnSync(
+      process.execPath,
+      [executable, "install", "--scope", "project", "--dry-run"],
+      {
+        cwd: context.project,
+        env: {
+          ...process.env,
+          HOME: context.home,
+          XDG_STATE_HOME: join(context.home, ".state"),
+        },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^Conflicts: 1$/m);
+    assert.match(
+      result.stdout,
+      /^  Agents\/conflict: manager \(exact-name user-owned collision\)$/m,
+    );
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
+test("CLI human plan never truncates conflicts", async () => {
+  const context = await roots();
+  const executable = join(PACKAGE, "dist", "cli.js");
+  try {
+    const commands = readdirSync(join(PACKAGE, "assets", "commands")).slice(0, 25);
+    await mkdir(join(context.root, "commands"), { recursive: true });
+    await Promise.all(
+      commands.map((name) =>
+        writeFile(join(context.root, "commands", name), "user-owned collision\n"),
+      ),
+    );
+    const result = spawnSync(
+      process.execPath,
+      [executable, "install", "--scope", "project", "--dry-run"],
+      {
+        cwd: context.project,
+        env: {
+          ...process.env,
+          HOME: context.home,
+          XDG_STATE_HOME: join(context.home, ".state"),
+        },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^Conflicts: 25$/m);
+    assert.doesNotMatch(result.stdout, /Commands\/conflict: .*\(\+\d+ more\)/);
+    for (const name of commands) {
+      assert.ok(result.stdout.includes(name.slice(0, -3)), name);
+    }
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
 test("direct CLI and package tool are thin non-LLM profile interfaces", async () => {
   const context = await roots();
   const executable = join(PACKAGE, "dist", "cli.js");
@@ -797,7 +942,7 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
     XDG_STATE_HOME: join(context.home, ".state"),
   };
   const run = (arguments_) => {
-    const result = spawnSync(process.execPath, [executable, ...arguments_], {
+    const result = spawnSync(process.execPath, [executable, ...arguments_, "--json"], {
       cwd: context.project,
       env: environment,
       encoding: "utf8",
