@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import importlib.util
 import json
 import os
@@ -11,6 +12,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
 from unittest.mock import patch
+from contextlib import redirect_stdout
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,9 +36,22 @@ def load_module(path: Path, name: str) -> ModuleType:
 
 
 class PortableWorkflowTests(unittest.TestCase):
-    def run_runner(self, skill: str, *arguments: str, cwd: Path | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    def run_runner(
+        self,
+        skill: str,
+        *arguments: str,
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, "-I", "-S", "-B", str(ROOT / "skills" / skill / GITLAB_RUNNERS[skill]), *arguments],
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                str(ROOT / "skills" / skill / GITLAB_RUNNERS[skill]),
+                *arguments,
+            ],
             cwd=cwd or Path(tempfile.gettempdir()),
             env={**os.environ, "PYTHONPATH": "/invalid", **(env or {})},
             capture_output=True,
@@ -56,7 +71,9 @@ class PortableWorkflowTests(unittest.TestCase):
     def test_invalid_target_is_rejected_before_external_collection(self) -> None:
         for skill in GITLAB_RUNNERS:
             with self.subTest(skill=skill):
-                result = self.run_runner(skill, "prepare", "--url", "https://gitlab.example/group/project/-/issues")
+                result = self.run_runner(
+                    skill, "prepare", "--url", "https://gitlab.example/group/project/-/issues"
+                )
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(json.loads(result.stdout)["error"]["code"], "invalid_input")
 
@@ -68,19 +85,26 @@ class PortableWorkflowTests(unittest.TestCase):
                 self.assertEqual(json.loads(result.stdout)["status"], "error")
 
     def test_pagination_deduplicates_and_preserves_partial_failure(self) -> None:
-        module = load_module(ROOT / "skills/task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_contract")
+        module = load_module(
+            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py",
+            "portable_gitlab_contract",
+        )
         pages = [list(range(100)), [99, 100]]
         with patch.object(module, "glab_json", side_effect=pages):
             result = module.paginated("gitlab.example", "projects/1/labels")
         self.assertTrue(result["complete"])
         self.assertEqual(len(result["items"]), 101)
-        with patch.object(module, "glab_json", side_effect=module.WorkflowError("temporary failure")):
+        with patch.object(
+            module, "glab_json", side_effect=module.WorkflowError("temporary failure")
+        ):
             partial = module.paginated("gitlab.example", "projects/1/labels")
         self.assertFalse(partial["complete"])
         self.assertTrue(partial["errors"])
 
     def test_collection_calls_only_get_and_batch_failure_is_isolated(self) -> None:
-        module = load_module(ROOT / "skills/task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_get")
+        module = load_module(
+            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_get"
+        )
         calls: list[tuple[str, str]] = []
         target = {
             "url": "https://gitlab.example/group/project/-/issues/7",
@@ -89,6 +113,7 @@ class PortableWorkflowTests(unittest.TestCase):
             "kind": "issues",
             "iid": 7,
         }
+
         def fake(hostname: str, endpoint: str) -> object:
             calls.append((hostname, endpoint))
             if endpoint.startswith("projects/group%2Fproject"):
@@ -96,6 +121,7 @@ class PortableWorkflowTests(unittest.TestCase):
             if endpoint == "projects/1/issues/7":
                 return {"iid": 7, "updated_at": "2026-01-01T00:00:00Z", "labels": []}
             return []
+
         with tempfile.TemporaryDirectory() as temporary:
             with patch.dict(os.environ, {"XDG_STATE_HOME": temporary}):
                 with patch.object(module, "glab_json", side_effect=fake):
@@ -105,8 +131,48 @@ class PortableWorkflowTests(unittest.TestCase):
         self.assertTrue(calls)
         self.assertTrue(all("projects/" in endpoint for _, endpoint in calls))
 
+    def test_gitlab_read_only_prepare_returns_compact_artifact_without_confirmation(self) -> None:
+        module = load_module(
+            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py",
+            "portable_gitlab_preview",
+        )
+
+        def fake(hostname: str, endpoint: str) -> object:
+            if endpoint.startswith("projects/group%2Fproject"):
+                return {"id": 1}
+            if endpoint.startswith("projects/1/labels"):
+                return []
+            if endpoint == "projects/1/issues/7":
+                return {"iid": 7, "updated_at": "2026-01-01T00:00:00Z", "labels": []}
+            if endpoint.startswith("projects/1/issues/7/discussions"):
+                return []
+            return []
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(os.environ, {"XDG_STATE_HOME": temporary}),
+            patch.object(module, "glab_json", side_effect=fake),
+            redirect_stdout(io.StringIO()) as output,
+        ):
+            exit_code = module.run(
+                "task-triage",
+                {"issues"},
+                ["prepare", "--url", "https://gitlab.example/group/project/-/issues/7"],
+            )
+            payload = json.loads(output.getvalue())
+            artifact_exists = Path(str(payload["items"][0]["artifact_path"])).is_file()
+        self.assertEqual(exit_code, 0)
+        item = payload["items"][0]
+        self.assertEqual(payload["status"], "ok")
+        self.assertTrue(artifact_exists)
+        self.assertEqual(len(str(item["digest"])), 64)
+        self.assertNotIn("confirmation", payload)
+
     def test_glab_boundary_forces_get_without_shell_or_credentials(self) -> None:
-        module = load_module(ROOT / "skills/task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_boundary")
+        module = load_module(
+            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py",
+            "portable_gitlab_boundary",
+        )
         completed = SimpleNamespace(returncode=0, stdout="{}", stderr="token=hidden")
         with patch.object(module.shutil, "which", return_value="/fake/glab"):
             with patch.object(module.subprocess, "run", return_value=completed) as run:
@@ -124,27 +190,56 @@ class PortableWorkflowTests(unittest.TestCase):
     def test_local_review_finalization_rejects_changed_diff(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
-            for arguments in (("init", "-q"), ("config", "user.email", "test@example.invalid"), ("config", "user.name", "Test")):
+            for arguments in (
+                ("init", "-q"),
+                ("config", "user.email", "test@example.invalid"),
+                ("config", "user.name", "Test"),
+            ):
                 subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
             source = repository / "sample.txt"
             source.write_text("base\n", encoding="utf-8")
             subprocess.run(["git", "add", "."], cwd=repository, check=True, capture_output=True)
-            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "commit", "-qm", "base"], cwd=repository, check=True, capture_output=True
+            )
             source.write_text("first\n", encoding="utf-8")
             environment = {"XDG_STATE_HOME": str(repository / "state")}
-            prepared = self.run_runner("code-review", "prepare-local", "--repo-root", str(repository), cwd=repository, env=environment)
+            prepared = self.run_runner(
+                "code-review",
+                "prepare-local",
+                "--repo-root",
+                str(repository),
+                cwd=repository,
+                env=environment,
+            )
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
             bundle = json.loads(prepared.stdout)["bundle"]
             source.write_text("second\n", encoding="utf-8")
-            finalized = self.run_runner("code-review", "finalize-local", "--bundle", bundle, cwd=repository, env=environment)
+            finalized = self.run_runner(
+                "code-review", "finalize-local", "--bundle", bundle, cwd=repository, env=environment
+            )
             self.assertEqual(finalized.returncode, 2)
             self.assertEqual(json.loads(finalized.stdout)["status"], "stale")
 
 
 class MattermostAndTeamTests(unittest.TestCase):
-    def run_script(self, skill: str, runner: str, *arguments: str, cwd: Path | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    def run_script(
+        self,
+        skill: str,
+        runner: str,
+        *arguments: str,
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            [sys.executable, "-I", "-S", "-B", str(ROOT / "skills" / skill / "scripts" / runner), *arguments],
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                str(ROOT / "skills" / skill / "scripts" / runner),
+                *arguments,
+            ],
             cwd=cwd or Path(tempfile.gettempdir()),
             env={**os.environ, "PYTHONPATH": "/invalid", **(env or {})},
             capture_output=True,
@@ -153,7 +248,9 @@ class MattermostAndTeamTests(unittest.TestCase):
         )
 
     def test_mattermost_origin_binding_and_missing_auth_do_not_leak_secret(self) -> None:
-        module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost")
+        module = load_module(
+            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost"
+        )
         with tempfile.TemporaryDirectory() as temporary:
             with patch.dict(os.environ, {"XDG_CONFIG_HOME": temporary}):
                 first = module.origin_token_file("https://chat.example/team/channels/main")
@@ -161,16 +258,17 @@ class MattermostAndTeamTests(unittest.TestCase):
                 self.assertNotEqual(first, second)
                 module.save_token("https://chat.example", "private-value")
                 self.assertEqual(stat_mode(first), 0o600)
-        result = self.run_script("mattermost", "mattermost.py", "read", "https://chat.example/team/channels/main")
+        result = self.run_script(
+            "mattermost", "mattermost.py", "read", "https://chat.example/team/channels/main"
+        )
         self.assertEqual(result.returncode, 3)
         self.assertNotIn("private-value", result.stdout + result.stderr)
 
     def test_mattermost_pagination_keeps_partial_posts(self) -> None:
-        module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_pages")
-        posts = {
-            str(index): {"id": str(index), "create_at": index}
-            for index in range(200)
-        }
+        module = load_module(
+            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_pages"
+        )
+        posts = {str(index): {"id": str(index), "create_at": index} for index in range(200)}
 
         class FakeClient:
             def get(self, path: str) -> object:
@@ -193,7 +291,9 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertTrue(warnings)
 
     def test_mattermost_authorization_failure_is_not_partial_success(self) -> None:
-        module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_auth")
+        module = load_module(
+            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_auth"
+        )
 
         class FakeClient:
             def get(self, path: str) -> object:
@@ -212,7 +312,9 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
 
     def test_mattermost_members_stays_within_one_channel(self) -> None:
-        module = load_module(ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_members")
+        module = load_module(
+            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_members"
+        )
         calls: list[str] = []
 
         class FakeClient:
@@ -231,26 +333,183 @@ class MattermostAndTeamTests(unittest.TestCase):
                 result = module.collect_members("https://chat.example/team/channels/channel")
         self.assertTrue(result["complete"])
         self.assertEqual(result["members"][0]["username"], "alice")
-        self.assertTrue(all("channel-id" in path or path.startswith("/teams/") or path.startswith("/users/one") for path in calls))
+        self.assertTrue(
+            all(
+                "channel-id" in path or path.startswith("/teams/") or path.startswith("/users/one")
+                for path in calls
+            )
+        )
 
-    def test_team_confirmation_is_stale_after_content_changes_and_path_escape_is_rejected(self) -> None:
+    def test_team_digest_rejects_stale_tampered_and_expired_plans_then_reports_apply(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "artifact.txt"
             source.write_text("first", encoding="utf-8")
             environment = {"XDG_STATE_HOME": str(root / "state")}
-            preview = self.run_script("team-workflow", "team_workflow.py", "artifact-prepare", "--target", "out.txt", "--input", str(source), cwd=root, env=environment)
+            preview = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-prepare",
+                "--target",
+                "out.txt",
+                "--input",
+                str(source),
+                cwd=root,
+                env=environment,
+            )
             self.assertEqual(preview.returncode, 0, preview.stderr)
-            token = json.loads(preview.stdout)["confirmation_id"]
+            prepared = json.loads(preview.stdout)
+            digest = prepared["digest"]
+            self.assertEqual(prepared["status"], "prepared")
+            self.assertIn(digest, prepared["apply_command"])
+            self.assertTrue(Path(prepared["artifact_path"]).is_file())
             source.write_text("second", encoding="utf-8")
-            stale = self.run_script("team-workflow", "team_workflow.py", "artifact-apply", "--target", "out.txt", "--input", str(source), "--confirmation-id", token, cwd=root, env=environment)
+            stale = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-apply",
+                "--target",
+                "out.txt",
+                "--input",
+                str(source),
+                "--digest",
+                digest,
+                cwd=root,
+                env=environment,
+            )
             self.assertNotEqual(stale.returncode, 0)
-            escaped = self.run_script("team-workflow", "team_workflow.py", "artifact-prepare", "--target", "../outside.txt", "--input", str(source), cwd=root, env=environment)
+            self.assertIn("digest", json.loads(stale.stdout)["error"]["message"])
+            fresh = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-prepare",
+                "--target",
+                "out.txt",
+                "--input",
+                str(source),
+                cwd=root,
+                env=environment,
+            )
+            fresh_digest = json.loads(fresh.stdout)["digest"]
+            plan = Path(json.loads(fresh.stdout)["artifact_path"])
+            tampered = json.loads(plan.read_text(encoding="utf-8"))
+            tampered["payload"]["target"] = "other.txt"
+            plan.write_text(json.dumps(tampered), encoding="utf-8")
+            tampered_apply = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-apply",
+                "--target",
+                "out.txt",
+                "--input",
+                str(source),
+                "--digest",
+                fresh_digest,
+                cwd=root,
+                env=environment,
+            )
+            self.assertNotEqual(tampered_apply.returncode, 0)
+            expired = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-prepare",
+                "--target",
+                "expired.txt",
+                "--input",
+                str(source),
+                cwd=root,
+                env=environment,
+            )
+            expired_payload = json.loads(expired.stdout)
+            expired_plan = Path(expired_payload["artifact_path"])
+            expired_document = json.loads(expired_plan.read_text(encoding="utf-8"))
+            expired_document["expires_at"] = 0
+            expired_plan.write_text(json.dumps(expired_document), encoding="utf-8")
+            expired_apply = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-apply",
+                "--target",
+                "expired.txt",
+                "--input",
+                str(source),
+                "--digest",
+                expired_payload["digest"],
+                cwd=root,
+                env=environment,
+            )
+            self.assertNotEqual(expired_apply.returncode, 0)
+            valid = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-prepare",
+                "--target",
+                "valid.txt",
+                "--input",
+                str(source),
+                cwd=root,
+                env=environment,
+            )
+            valid_digest = json.loads(valid.stdout)["digest"]
+            applied = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-apply",
+                "--target",
+                "valid.txt",
+                "--input",
+                str(source),
+                "--digest",
+                valid_digest,
+                cwd=root,
+                env=environment,
+            )
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            applied_payload = json.loads(applied.stdout)
+            self.assertEqual(applied_payload["status"], "applied")
+            self.assertTrue(Path(applied_payload["report_path"]).is_file())
+            self.assertEqual(
+                self.run_script(
+                    "team-workflow",
+                    "team_workflow.py",
+                    "artifact-apply",
+                    "--target",
+                    "valid.txt",
+                    "--input",
+                    str(source),
+                    "--digest",
+                    valid_digest,
+                    cwd=root,
+                    env=environment,
+                ).returncode,
+                2,
+            )
+            escaped = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-prepare",
+                "--target",
+                "../outside.txt",
+                "--input",
+                str(source),
+                cwd=root,
+                env=environment,
+            )
             self.assertNotEqual(escaped.returncode, 0)
             self.assertFalse((root.parent / "outside.txt").exists())
             linked = root / "linked.txt"
             linked.symlink_to(root.parent / "outside.txt")
-            symlink = self.run_script("team-workflow", "team_workflow.py", "artifact-prepare", "--target", "linked.txt", "--input", str(source), cwd=root, env=environment)
+            symlink = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "artifact-prepare",
+                "--target",
+                "linked.txt",
+                "--input",
+                str(source),
+                cwd=root,
+                env=environment,
+            )
             self.assertNotEqual(symlink.returncode, 0)
 
     def test_team_context_inspect_reports_missing_without_writing_state(self) -> None:
@@ -259,7 +518,15 @@ class MattermostAndTeamTests(unittest.TestCase):
             context = root / "context.json"
             context.write_text('{"goals": ["goal"]}', encoding="utf-8")
             state = root / "state"
-            result = self.run_script("team-workflow", "team_workflow.py", "context-inspect", "--input", str(context), cwd=root, env={"XDG_STATE_HOME": str(state)})
+            result = self.run_script(
+                "team-workflow",
+                "team_workflow.py",
+                "context-inspect",
+                "--input",
+                str(context),
+                cwd=root,
+                env={"XDG_STATE_HOME": str(state)},
+            )
             self.assertEqual(result.returncode, 3, result.stderr)
             payload = json.loads(result.stdout)
             self.assertEqual(payload["status"], "setup-required")
@@ -267,7 +534,10 @@ class MattermostAndTeamTests(unittest.TestCase):
             self.assertFalse(state.exists())
 
     def test_collaboration_runners_report_invalid_syntax_as_json(self) -> None:
-        for skill, runner in (("mattermost", "mattermost.py"), ("team-workflow", "team_workflow.py")):
+        for skill, runner in (
+            ("mattermost", "mattermost.py"),
+            ("team-workflow", "team_workflow.py"),
+        ):
             with self.subTest(skill=skill):
                 result = self.run_script(skill, runner, "unknown-command")
                 self.assertEqual(result.returncode, 2, result.stderr)

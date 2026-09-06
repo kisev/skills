@@ -13,7 +13,8 @@ metadata:
 
 # Ревью релизного MR
 
-Прочитай `references/gitlab-workflow.md`. Принимай один точный MR URL; без него
+Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`.
+Принимай один точный MR URL; без него
 попроси ссылку. Не создавай worktree и не изменяй repository, MR, issue, release,
 pipeline или другую внешнюю систему.
 

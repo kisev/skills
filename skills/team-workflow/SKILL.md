@@ -29,9 +29,11 @@ metadata:
 presentation или изображения. Не выдавай `merged`, `tagged` и `shipped` за одно
 состояние.
 
-Запись context, roadmap, presentation или prompts проходит два шага:
-`context-prepare` либо `artifact-prepare` показывает точный preview и confirmation
-id, затем после явного подтверждения `context-save` либо `artifact-apply` повторно
-проверяет digest, срок, одноразовость и путь. Workspace context file не изменяй.
-Symlink, traversal и stale confirmation отклоняй. Внешняя публикация не входит в
-этот skill.
+Прочитай `references/interaction-contract.md`. Запись context, roadmap,
+presentation или prompts проходит `prepare -> present -> confirm -> apply ->
+report`: `context-prepare` либо `artifact-prepare` возвращает compact summary,
+content-addressed artifact path, SHA-256 digest, TTL и готовую apply-команду.
+`context-save` либо `artifact-apply --digest <SHA-256>` повторно проверяет digest,
+срок, одноразовость и путь, затем возвращает отдельный report. Workspace context
+file не изменяй. Symlink, traversal, tampered и stale plan отклоняй. Внешняя
+публикация не входит в этот skill.

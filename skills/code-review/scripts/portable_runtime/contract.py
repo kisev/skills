@@ -162,6 +162,29 @@ def write_json(path: Path, value: object) -> None:
     os.replace(temporary, target)
 
 
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(regular_file(path, "artifact").read_bytes()).hexdigest()
+
+
+def write_preview(root: Path, name: str, value: object) -> tuple[Path, str]:
+    """Write immutable content-addressed evidence without exposing it in stdout."""
+    content = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True).encode() + b"\n"
+    digest = hashlib.sha256(content).hexdigest()
+    path = root / "previews" / f"{name}-{digest}.json"
+    private_directory(path.parent)
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        if regular_file(path, "preview artifact").read_bytes() != content:
+            raise WorkflowError("preview artifact digest conflicts with existing content")
+        return path, digest
+    with os.fdopen(descriptor, "wb") as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return path, digest
+
+
 def read_json(path: Path, label: str) -> dict[str, Any]:
     source = regular_file(path, label)
     try:
@@ -260,6 +283,9 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
         }
         if persist:
             write_json(root / "bundle.json", bundle)
+            artifact_path, artifact_digest = write_preview(root, "bundle", bundle)
+            bundle["preview_artifact_path"] = str(artifact_path)
+            bundle["preview_digest"] = artifact_digest
         return bundle
     object_value = glab_json(hostname, f"projects/{project_id}/{kind}/{iid}")
     if not isinstance(object_value, dict):
@@ -296,6 +322,9 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
     }
     if persist:
         write_json(root / "bundle.json", bundle)
+        artifact_path, artifact_digest = write_preview(root, "bundle", bundle)
+        bundle["preview_artifact_path"] = str(artifact_path)
+        bundle["preview_digest"] = artifact_digest
     return bundle
 
 
@@ -346,14 +375,21 @@ def plan_text(bundle: dict[str, Any], content: dict[str, Any]) -> str:
 def scaffold(bundle_file: str, content_file: str, plan_name: str) -> dict[str, object]:
     bundle = read_json(Path(bundle_file), "bundle")
     root = bundle_path(bundle)
-    if Path(bundle_file).resolve() != root / "bundle.json":
-        raise WorkflowError("bundle must be the canonical artifact bundle")
+    bundle_path_value = Path(bundle_file).resolve()
+    if bundle_path_value != root / "bundle.json" and bundle_path_value.parent != root / "previews":
+        raise WorkflowError("bundle must be a canonical or content-addressed artifact")
     content = read_json(Path(content_file), "content")
-    plan = root / plan_name
-    plan.write_text(plan_text(bundle, content), encoding="utf-8")
-    plan.chmod(0o600)
-    write_json(root / "scaffold.json", {"bundle_sha256": hashlib.sha256((root / "bundle.json").read_bytes()).hexdigest(), "plan": str(plan)})
-    return {"status": "ok", "artifact_root": str(root), "plan": str(plan), "external_mutations": False}
+    text = plan_text(bundle, content)
+    plan_digest = hashlib.sha256(text.encode()).hexdigest()
+    plan = root / "previews" / f"{Path(plan_name).stem}-{plan_digest}.md"
+    private_directory(plan.parent)
+    if not plan.exists():
+        plan.write_text(text, encoding="utf-8")
+        plan.chmod(0o600)
+    elif regular_file(plan, "publication plan").read_text(encoding="utf-8") != text:
+        raise WorkflowError("publication plan digest conflicts with existing content")
+    write_json(root / "scaffold.json", {"bundle_sha256": sha256_file(bundle_path_value), "plan": str(plan), "plan_sha256": plan_digest})
+    return {"status": "ok", "summary": {"tldr": "Подготовлен read-only план ручной публикации.", "scope": [str(bundle.get("target", {}).get("url", "local"))], "risks": [] if bundle.get("retrieval_complete") else ["collection incomplete"], "checks": ["bundle identity", "content-addressed artifact"]}, "artifact_path": str(plan), "digest": plan_digest, "external_mutations": False}
 
 
 def finalize(root_value: str) -> dict[str, object]:
@@ -475,17 +511,18 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             for target in targets:
                 try:
                     bundle = collect(target, profile)
-                    results.append({"target": target["url"], "status": "ok", "artifact_root": bundle["artifact_root"], "head_sha": bundle["head_sha"], "complete": bundle["retrieval_complete"]})
+                    results.append({"target": target["url"], "status": "ok", "summary": {"tldr": "Собраны read-only evidence GitLab.", "scope": [target["url"]], "risks": [] if bundle["retrieval_complete"] else ["collection incomplete"], "checks": ["exact target", "GET-only collection", "pagination"]}, "artifact_path": bundle.get("preview_artifact_path"), "digest": bundle.get("preview_digest"), "artifact_root": bundle["artifact_root"], "head_sha": bundle["head_sha"], "complete": bundle["retrieval_complete"]})
                 except WorkflowError as exc:
                     print(redact(str(exc)), file=sys.stderr)
                     results.append({"target": target["url"], "status": "error", "error": redact(str(exc))})
             status = "ok" if all(item["status"] == "ok" for item in results) else "partial"
-            emit({"status": status, "items": results, "external_mutations": False})
+            emit({"status": status, "summary": {"tldr": "Завершена read-only подготовка GitLab evidence.", "scope": [item["target"] for item in results], "risks": ["one or more targets failed"] if status != "ok" else [], "checks": ["exact targets", "GET-only collection"]}, "items": results, "external_mutations": False})
             return 0 if status == "ok" else 1
         if args.command in {"scaffold", "scaffold-batch"}:
             emit(scaffold(args.bundle, args.content, "publication-plan.md" if args.command == "scaffold" else "batch-publication-plan.md"))
             return 0
         if args.command == "finalize":
+            root = artifact_root(Path(args.artifact_root))
             result = finalize(args.artifact_root)
             if profile == "release-review":
                 if not args.report:
@@ -530,15 +567,21 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 if (report["verdict"] == "ready") != report["readiness"]:
                     raise WorkflowError("release review verdict and readiness disagree")
                 result["report_valid"] = True
-            emit(result)
+            report_path, report_digest = write_preview(root, "finalize", result)
+            emit({"status": result["status"], "summary": {"tldr": "Проверена актуальность read-only плана.", "scope": [str(target.get("url", "local"))], "risks": result.get("changed", []), "checks": ["target identity", "current collection"]}, "artifact_path": str(report_path), "digest": report_digest, "result": result, "external_mutations": False})
             return 0 if result["status"] in {"ok", "not_applicable"} else 2
         if args.command == "prepare-local":
             bundle = local_bundle(args.repo_root, profile, args.ref)
-            emit({"status": "ok", "bundle": str(Path(str(bundle["artifact_root"])) / "local-bundle.json"), "head_sha": bundle["head_sha"], "external_mutations": False})
+            bundle_path_value = Path(str(bundle["artifact_root"])) / "local-bundle.json"
+            artifact_path, artifact_digest = write_preview(Path(str(bundle["artifact_root"])), "local-bundle", bundle)
+            emit({"status": "ok", "summary": {"tldr": "Собраны read-only local WIP evidence.", "scope": [str(bundle["repo_root"])], "risks": [], "checks": ["exact Git diff"]}, "bundle": str(bundle_path_value), "artifact_path": str(artifact_path), "digest": artifact_digest, "head_sha": bundle["head_sha"], "external_mutations": False})
             return 0
         if args.command == "finalize-local":
             result = finalize_local(args.bundle)
-            emit(result)
+            bundle = read_json(Path(args.bundle), "local bundle")
+            root = artifact_root(Path(str(bundle["artifact_root"])))
+            report_path, report_digest = write_preview(root, "local-finalize", result)
+            emit({"status": result["status"], "summary": {"tldr": "Проверена актуальность local WIP evidence.", "scope": [str(bundle["repo_root"])], "risks": [] if result["status"] == "ok" else ["local diff changed"], "checks": ["head SHA", "diff digest"]}, "artifact_path": str(report_path), "digest": report_digest, "result": result, "external_mutations": False})
             return 0 if result["status"] == "ok" else 2
         if args.command == "assess-mode":
             if args.mode in {"normal", "deep"} and not args.critic_available:

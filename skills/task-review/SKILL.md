@@ -13,10 +13,11 @@ metadata:
 
 # Проверка оформления GitLab
 
-Прочитай `references/gitlab-workflow.md`. Принимай один конкретный MR либо один
+Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`.
+Принимай один конкретный MR либо один
 или несколько конкретных Issue URL. Не анализируй код, архитектуру, безопасность
 или полный исходный diff; для MR достаточно служебных данных, изменённых файлов и
-статуса pipeline. Неспецифичный target требует явного подтверждения границы до API.
+статуса pipeline. Неспецифичный target требует Question о границе до API.
 
 Запусти `scripts/review_task.py prepare --url <URL>` для каждого явного target в
 одном пакете. Сохрани ошибку отдельного item в сводке и продолжи остальные.

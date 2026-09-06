@@ -13,7 +13,8 @@ metadata:
 
 # Подготовка обычного MR
 
-Прочитай `references/gitlab-workflow.md`. Принимай только один конкретный MR URL;
+Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`.
+Принимай только один конкретный MR URL;
 не создавай batch. Runner собирает metadata, changed files, pipeline для точного
 head SHA и полный пагинированный список меток.
 

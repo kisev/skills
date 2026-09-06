@@ -236,6 +236,50 @@
     {
       "source": "references/python_runtime/lsp.py",
       "destination": "lsp-report/scripts/portable_runtime/lsp.py"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "project-spec/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "docs-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "doit/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-workflow/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "task-triage/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "task-review/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "task-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "mr-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "code-review/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "release-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "release-review/references/interaction-contract.md"
     }
   ]
 }

@@ -13,7 +13,8 @@ metadata:
 
 # Глубокое ревью
 
-Прочитай `references/gitlab-workflow.md`. Для GitLab принимай только один точный
+Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`.
+Для GitLab принимай только один точный
 MR URL. Несколько URL, URL проекта, списка или фильтр отклоняй до lookup,
 collection или создания artifacts. Для local WIP используй только текущий
 существующий Git checkout и `prepare-local`; не клонируй проект и не изменяй его.

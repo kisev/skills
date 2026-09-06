@@ -131,7 +131,7 @@ WORKFLOW_CONTRACTS = {
     ),
     "docs-prepare": (
         "один пользовательский документ diataxis",
-        "покажи путь и черновик либо diff",
+        "content-addressed preview artifact",
     ),
     "docs-review": (
         "не изменяй репозиторий, документы, внешние системы",
@@ -153,6 +153,7 @@ WORKFLOW_CONTRACTS = {
     "doit": (
         "не выполняй push",
         "требуют отдельного подтверждения",
+        "content-addressed preview artifact",
         "не требуй конкретный host",
     ),
     "walkthrough": (
@@ -416,6 +417,38 @@ class PortableSkillValidationTests(unittest.TestCase):
                     self.assertTrue((skill / relative).is_file())
                     if relative.startswith("references/"):
                         self.assertIn(relative, text)
+
+    def test_interaction_contract_is_materialized_for_affected_skills(self) -> None:
+        names = (
+            "project-spec", "docs-prepare", "doit", "team-workflow", "task-triage",
+            "task-review", "task-prepare", "mr-prepare", "code-review",
+            "release-prepare", "release-review",
+        )
+        source = ROOT / "shared/references/interaction-contract.md"
+        source_text = source.read_text(encoding="utf-8")
+        for requirement in (
+            "resolve -> prepare -> present -> confirm ->\napply -> report",
+            "**Question** задавай только до `prepare`",
+            "**Confirmation** запрашивай только после `prepare`",
+            "Read-only collection, review и подготовка ручного плана\nне требуют Confirmation",
+            "TLDR, scope, risks, checks",
+            "content-addressed write-once artifact",
+            "apply-команду с digest",
+            "отклоняет отсутствующий,\nизменённый, stale, просроченный или уже использованный plan",
+        ):
+            with self.subTest(requirement=requirement):
+                self.assertIn(requirement, source_text)
+        for name in names:
+            skill = ROOT / "skills" / name
+            destination = skill / "references/interaction-contract.md"
+            with self.subTest(skill=name):
+                self.assertEqual(destination.read_bytes(), source.read_bytes())
+                self.assertIn("references/interaction-contract.md", (skill / "SKILL.md").read_text(encoding="utf-8"))
+        for name in ("project-spec", "docs-prepare", "doit"):
+            text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+            with self.subTest(skill=name, behavior="compact-preview"):
+                self.assertIn("TLDR", text)
+                self.assertIn("не печатай", text)
 
     def test_project_spec_has_complete_nineteen_file_contract(self) -> None:
         self.assertEqual(len(SPEC_TEMPLATE_READMES), 19)
