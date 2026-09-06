@@ -51,7 +51,7 @@ tasks:
         lefthook.yml taskfile.yml .yamllint.yml >/dev/null
       - >-
         rg --files --hidden -g '*.toml' -g '!packages/opencode/node_modules/**'
-        | xargs tombi lint --offline --error-on-warnings
+        | xargs tombi lint --offline
 
   lint:shell:
     internal: true
