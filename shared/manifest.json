@@ -2,6 +2,54 @@
   "version": 1,
   "files": [
     {
+      "source": "references/work-item-contract.md",
+      "destination": "askme/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "askme/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "askme/scripts/work_item.py"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "goal/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "goal/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "goal/scripts/work_item.py"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "task-prepare/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "task-prepare/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-prepare/scripts/work_item.py"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "task-review/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "task-review/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-review/scripts/work_item.py"
+    },
+    {
       "source": "references/question-guidelines.md",
       "destination": "askme/references/question-guidelines.md"
     },

@@ -41,6 +41,14 @@ Skills не наследуют runtime state, providers, глобальные к
 инструментов конкретного host. Интерактивность выражена нейтрально: штатный
 механизм host, а при его отсутствии - вопрос в чате.
 
+Четыре workflow `askme`, `task-prepare`, `task-review` и `goal` используют общий
+versioned `work-item/v1`: problem/outcome, criteria/evidence, scope/non-goals,
+dependencies/actions/assumptions, safety, risks/questions и stop conditions.
+Machine validator проверяет форму, ссылки, границы, DAG и стабильность report;
+feasibility и смысловые противоречия приходят отдельным structured semantic
+assessment. Optional premortem выполняется один раз независимым агентом либо
+возвращает `skipped` без блокировки.
+
 Каталог `skills/` не содержит commands, agents или plugins. Контекстная логика
 находится в `SKILL.md`; runner-ы при необходимости лежат в собственном каталоге
 skill. Их общий минимальный stdlib-код хранится в `shared/references/` и

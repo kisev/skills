@@ -13,7 +13,11 @@ metadata:
 
 # Подготовка GitLab-задач
 
-Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`.
+Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
+`references/work-item-contract.md`. Сначала нормализуй work item и выполни
+`scripts/work_item.py validate`. Publication artifact разрешён только при
+verdict `ready`; `needs_clarification` и `blocked` возвращаются без подготовки
+публикационного результата. GitLab mutations остаются запрещены.
 Выбери ровно один режим: `update` для
 одной существующей задачи, `create` для одной новой задачи или `batch` для явного
 набора новых задач. Не переключай режим по догадке.
@@ -22,6 +26,10 @@ metadata:
 границы, критерии приёмки и открытые вопросы. Задай только отсутствующие вопросы
 через механизм host или в чате. Это resolve, а не Confirmation: private read-only
 evidence и план можно готовить без подтверждения.
+
+Normalized item обязан также содержать dependencies, external actions, assumptions,
+safety/operational constraints, risks и stop conditions. Семантическую feasibility
+проверяет агент и возвращает тот же structured report, что и machine validator.
 
 В `update` используй конкретный Issue URL. В `batch` сначала уточни каждую новую
 задачу, её границы, критерии и DAG зависимостей вопросами только при нехватке

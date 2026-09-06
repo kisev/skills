@@ -107,6 +107,10 @@ lock-файла при этом считается drift. Для generated drift
 | `overview`        | Read-only сводка durable OpenCode state.                                  |
 | `lsp-report`      | Применимость LSP OpenCode без запуска и установки.                        |
 
+`askme`, `task-prepare`, `task-review` и `goal` используют общий materialized
+контракт `work-item/v1`. Он не создаёт зависимость установленного skill от
+`shared/`; validator и schema входят в каждую portable-копию.
+
 Подробная классификация режимов и границ записана в
 [migration inventory](docs/migration-inventory.md).
 

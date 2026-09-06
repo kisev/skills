@@ -12,6 +12,13 @@
 зависимость установленного skill. `scripts/sync_shared.py` создаёт точные копии
 по manifest, а эти копии хранятся в Git под соответствующими skills.
 
+Для `askme`, `task-prepare`, `task-review` и `goal` canonical
+`shared/references/work-item-contract.schema.json`, описание контракта и
+stdlib-only `work_item.py` materialize-ятся в каждый skill. Установленный skill
+использует только свою копию. Validator отдельно возвращает machine findings и
+structured semantic assessment, затем детерминированно вычисляет verdict
+`ready`, `needs_clarification` или `blocked`.
+
 В корне репозитория нет пользовательского CLI. Отдельный npm package предоставляет
 CLI `skills-opencode` только для OpenCode integration. Maintainer scripts могут
 использовать только Python stdlib; Python runners, если они нужны skill, находятся
@@ -59,3 +66,5 @@ Stateful runtime records используют те же private 0600 atomic writ
 - Подготовленные файлы заменяются атомарно; при ошибке замены выполняется
   откат.
 - `--check` работает только на чтение и сообщает о drift ненулевым exit status.
+- Проверка work item сортирует findings по стабильному ключу и связывает report с
+  digest item/evidence, поэтому неизменный повторный check даёт тот же verdict.

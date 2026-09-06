@@ -11,6 +11,12 @@ metadata:
 
 # Goal
 
+Прочитай `references/work-item-contract.md`. Перед `start` goal должен иметь
+валидный normalized work item (`work-item/v1`), а completion должен быть связан с
+каждым acceptance criterion и его evidence. Проверка machine rules выполняется
+через `scripts/work_item.py validate`; feasibility и смысловые противоречия
+передаются как structured semantic assessment. Invalid item не запускается.
+
 Runner хранит только user-owned state в XDG state directory OpenCode. Он требует
 явный session ID либо `OPENCODE_SESSION_ID`, не меняет permissions и не запускает
 loop. Loop доступен только через явно включённый package plugin.
@@ -28,3 +34,12 @@ binding. Plugin учитывает turn/token limits, сохраняет audit r
 цель только в `paused`, `complete` или `blocked` по наблюдаемому событию.
 Удаление всегда двухфазное: preview выдаёт одноразовый digest, apply повторно
 проверяет digest, expiry и revision.
+
+Старое persisted state читается совместимо: прежние поля, receipts и revisions
+сохраняются, а отсутствующий work item восстанавливается через versioned legacy
+adapter при чтении. GitLab artifacts не являются частью goal state и не удаляются.
+
+Для сложной цели или явного запроса один независимый premortem проход выполняется
+до старта. Он может вернуть не более трёх причин провала; основной агент отдельно
+принимает или отклоняет каждую. При отсутствии независимого агента результат
+`skipped`, self-review не имитируется и запуск не блокируется.
