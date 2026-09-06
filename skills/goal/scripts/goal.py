@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -23,6 +24,7 @@ bootstrap()
 from portable_runtime.capabilities import emit_capabilities
 from portable_runtime.contract import ContractArgumentParser, report_error
 from portable_runtime.state import StateError, atomic_write_json, read_json, revision, skill_state_root
+from work_item import CONTRACT_VERSION, validate
 
 SCHEMA_VERSION = 1
 TERMINAL = {"complete", "blocked"}
@@ -70,11 +72,51 @@ def goal(goal_id: str) -> tuple[Path, dict[str, Any]]:
     item = read_json(path, root())
     if item.get("schema_version") != SCHEMA_VERSION or item.get("goal_id") != goal_id:
         raise GoalError("goal has unsupported schema", "unsupported_schema")
+    if not isinstance(item.get("work_item"), dict):
+        item["work_item"] = legacy_work_item(item)
     return path, item
 
 
 def write(path: Path, value: dict[str, Any]) -> None:
     atomic_write_json(path, root(), value)
+
+
+def legacy_work_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Adapt pre-contract goal records without discarding their original fields."""
+    objective = str(item.get("objective", "")).strip() or "Complete the declared goal"
+    criteria = str(item.get("completion_criteria", "")).strip() or "The declared goal outcome is observable."
+    boundaries = str(item.get("boundaries", "")).strip() or "The declared goal boundaries"
+    return {
+        "contract_version": CONTRACT_VERSION,
+        "item_id": str(item.get("goal_id", "legacy-goal")),
+        "problem": objective,
+        "outcome": objective,
+        "acceptance_criteria": [{"id": "completion", "statement": criteria, "evidence": ["goal audit receipt"], "dependencies": []}],
+        "scope": {"in_scope": [boundaries], "non_goals": ["Anything outside the declared boundaries"]},
+        "dependencies": [],
+        "external_actions": [],
+        "assumptions": ["The session can observe the completion evidence"],
+        "safety": {"constraints": [str(item.get("constraints", "")).strip() or "Respect the declared goal constraints"], "operational_constraints": ["Respect session binding and revision checks"]},
+        "risks": [],
+        "unresolved_questions": [],
+        "stop_conditions": ["A declared limit or safety constraint is reached"],
+    }
+
+
+def normalized_work_item(args: argparse.Namespace) -> dict[str, Any]:
+    if args.work_item:
+        try:
+            value = json.loads(Path(args.work_item).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as error:
+            raise GoalError(f"work item cannot be read: {error}", "invalid_work_item") from error
+        if not isinstance(value, dict):
+            raise GoalError("work item must be a JSON object", "invalid_work_item")
+    else:
+        value = legacy_work_item({"goal_id": "new-goal", "objective": args.objective, "completion_criteria": args.completion_criteria, "constraints": args.constraints, "boundaries": args.boundaries})
+    report = validate(value, {"status": "passed", "findings": []})
+    if report["verdict"] != "ready":
+        raise GoalError("work item is not ready", "invalid_work_item")
+    return value
 
 
 def add_receipt(item: dict[str, Any], status: str, note: str) -> None:
@@ -89,10 +131,12 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
     if any(item.get("session_id") == bound and item.get("status") not in TERMINAL for _, item in goals()):
         raise GoalError("an active goal is already bound to this session", "session_bound")
     objective = args.objective.strip()
-    if not objective or len(objective) > 16_000:
+    if objective and len(objective) > 16_000:
         raise GoalError("objective must be between 1 and 16000 characters", "invalid_objective")
     project = Path(os.environ.get("OPENCODE_PROJECT_ROOT") or os.getcwd()).expanduser().resolve()
     identifier = uuid.uuid4().hex
+    work_item = normalized_work_item(args)
+    objective = objective or str(work_item["problem"])
     item: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "goal_id": identifier,
@@ -104,6 +148,8 @@ def prepare(args: argparse.Namespace) -> dict[str, Any]:
         "completion_criteria": args.completion_criteria.strip(),
         "constraints": args.constraints.strip(),
         "boundaries": args.boundaries.strip(),
+        "work_item": work_item,
+        "completion_evidence": [],
         "limits": {"turn_cap": args.turn_cap, "token_budget": args.token_budget},
         "usage": {"turns": 0, "tokens": 0},
         "created_at": now(),
@@ -125,6 +171,10 @@ def transition(args: argparse.Namespace, target: str) -> dict[str, Any]:
         raise GoalError(f"only a {expected} goal can transition to {target}", "invalid_transition")
     if target == "running" and item.get("session_id") != session(args.session):
         raise GoalError("session does not match goal binding", "session_mismatch")
+    if target == "running":
+        report = validate(item["work_item"], {"status": "passed", "findings": []})
+        if report["verdict"] != "ready":
+            raise GoalError("goal work item is not ready", "invalid_work_item")
     add_receipt(item, target, "user transition")
     write(path, item)
     return item
@@ -169,12 +219,13 @@ def parser() -> argparse.ArgumentParser:
     commands = result.add_subparsers(dest="command", required=True)
     item = commands.add_parser("prepare")
     item.add_argument("--session")
-    item.add_argument("--objective", required=True)
+    item.add_argument("--objective", default="")
     item.add_argument("--completion-criteria", default="")
     item.add_argument("--constraints", default="")
     item.add_argument("--boundaries", default="")
     item.add_argument("--turn-cap", type=int, default=20)
     item.add_argument("--token-budget", type=int, default=0)
+    item.add_argument("--work-item", help="path to a normalized work-item JSON document")
     item.set_defaults(handler=prepare)
     item = commands.add_parser("list")
     item.add_argument("--project")

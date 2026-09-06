@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import { listState, readState, stateRoot, writeState } from "../runtime/state.js";
 
-type Goal = { schema_version: 1; goal_id: string; session_id: string; status: "running" | "paused" | "complete" | "blocked"; revision: number; limits: { turn_cap: number; token_budget: number }; usage: { turns: number; tokens: number }; receipts: Array<Record<string, unknown>>; updated_at: string };
+type WorkItem = { contract_version: "work-item/v1"; acceptance_criteria: Array<{ id: string }> };
+type Goal = { schema_version: 1; goal_id: string; session_id: string; status: "running" | "paused" | "complete" | "blocked"; revision: number; limits: { turn_cap: number; token_budget: number }; usage: { turns: number; tokens: number }; receipts: Array<Record<string, unknown>>; updated_at: string; work_item?: WorkItem; completion_evidence?: Array<{ criterion_id: string; evidence: string }> };
 type Client = { session: { messages: (input: { path: { id: string } }) => Promise<unknown>; prompt: (input: { path: { id: string }; body: Record<string, unknown> }) => Promise<unknown> } };
 export type GoalLoopOptions = { enabled?: boolean; quietWindowMs?: number; now?: () => number; audit?: (goal: Readonly<Goal>) => Promise<"continue" | "complete" | "blocked"> };
 
@@ -15,6 +16,14 @@ function tokens(messages: unknown): number {
   const last = [...entries].reverse().find((entry) => ((entry as { info?: { role?: string } })?.info?.role === "assistant")) as { info?: { tokens?: { total?: number; output?: number } } } | undefined;
   const value = last?.info?.tokens?.total ?? last?.info?.tokens?.output;
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+function validWorkItem(goal: Goal): boolean {
+  return goal.work_item?.contract_version === "work-item/v1" && Array.isArray(goal.work_item.acceptance_criteria) && goal.work_item.acceptance_criteria.length > 0;
+}
+function hasCompletionEvidence(goal: Goal): boolean {
+  const criteria = goal.work_item?.acceptance_criteria ?? [];
+  const evidence = goal.completion_evidence ?? [];
+  return criteria.every((criterion) => evidence.some((item) => item.criterion_id === criterion.id && item.evidence.trim().length > 0));
 }
 
 export async function goalLoop({ client }: { client: Client }, options: GoalLoopOptions = {}) {
@@ -31,6 +40,7 @@ export async function goalLoop({ client }: { client: Client }, options: GoalLoop
   const settle = async (session: string, status: Goal["status"], note: string) => {
     const item = await lookup(session);
     if (!item || item.state.status !== "running") return;
+    if (!validWorkItem(item.state)) return settle(session, "blocked", "invalid work item");
     item.state.status = status;
     item.state.revision += 1;
     item.state.updated_at = new Date().toISOString();
@@ -52,7 +62,8 @@ export async function goalLoop({ client }: { client: Client }, options: GoalLoop
       if (item.state.usage.turns >= item.state.limits.turn_cap) return settle(session, "blocked", "turn cap reached");
       if (item.state.limits.token_budget > 0 && item.state.usage.tokens >= item.state.limits.token_budget) return settle(session, "blocked", "token budget reached");
       const verdict = await (options.audit?.(item.state) ?? Promise.resolve("continue"));
-      if (verdict === "complete" || verdict === "blocked") return settle(session, verdict, "audit verdict");
+       if (verdict === "complete" && !hasCompletionEvidence(item.state)) return settle(session, "blocked", "completion evidence is incomplete");
+       if (verdict === "complete" || verdict === "blocked") return settle(session, verdict, "audit verdict");
       await client.session.prompt({ path: { id: session }, body: { parts: [{ type: "text", text: "Continue the current goal within its declared constraints and boundaries." }] } });
     } catch (error) {
       await settle(session, "blocked", String(error));
