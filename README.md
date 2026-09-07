@@ -100,7 +100,7 @@ lock-файла при этом считается drift. Для generated drift
 | `team-workflow`   | Одно явное действие командного цикла по явному context.                   |
 | `walkthrough`     | Read-only карта чтения current diff, range или diff-file.                 |
 | `attempt`         | Чтение и безопасная отмена Background Attempts OpenCode.                  |
-| `goal`            | Проверяемая цель, привязанная к session OpenCode.                         |
+| `goal`            | Read-only формулировка проверяемой цели в `work-item/v1`.                 |
 | `schedule`        | Явные disabled-by-default definitions для scheduler OpenCode.             |
 | `multi-run`       | Изолированные attempts и подтверждённый fusion.                           |
 | `usage`           | Read-only ledger токенов и стоимости OpenCode.                            |
@@ -195,9 +195,10 @@ OpenCode plugins небезопасными для включения:
   сценариями.
 - Runtime state и `doctor` требуют дополнительного hardening.
 
-Wrappers `background-attempts`, `schedule`, `goal-loop` и `autonomy-policy`
-выключены по умолчанию. Включение является явным выбором владельца
-конфигурации; Goal Mode loop и auto-continuation не входят в этап 6.
+Wrappers `background-attempts`, `schedule` и `autonomy-policy` выключены по
+умолчанию. `goal` не является wrapper-ом и не создаёт state. OpenChamber Goal
+Mode как внешний способ выполнения цели не меняется; lifecycle этого проекта и
+auto-continuation удалены.
 
 ## Обновление и удаление
 

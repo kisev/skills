@@ -154,9 +154,9 @@ Uninstall удаляет только files из ownership manifest, если и
 ## Runtime options
 
 Package экспортирует independent plugin factories `background-attempts`,
-`goal-loop`, `schedule`, `autonomy-policy`, `rules-injector`, `rtk`, `zed-bell`
-и `zed-clickable-paths`. Stateful plugins Background Attempts, Goal Loop,
-Scheduler и Autonomy Policy отключены по умолчанию. Zed integrations также
+`schedule`, `autonomy-policy`, `rules-injector`, `rtk`, `zed-bell` и
+`zed-clickable-paths`. Stateful plugins Background Attempts, Scheduler и
+Autonomy Policy отключены по умолчанию. Zed integrations также
 optional. Включайте subsystem только в собственном user-owned plugin wrapper:
 
 Background Attempts создают workspace только через единый managed worktree
@@ -166,12 +166,6 @@ fingerprint; release перепроверяет регистрацию, fingerpr
 five-field cron, не воспроизводит missed slots и пишет receipts `started`,
 `completed`, `failed` или `overrun`. Multi-run runner хранит только group и
 terminal manifest state, а execution направляет через явный package bridge.
-
-```js
-import goalLoop from "@kisev/skills-opencode/plugins/goal-loop";
-
-export default (input) => goalLoop(input, { enabled: true });
-```
 
 `rules-injector` fail-soft применяет ограниченный budget и пропускает native
 project/global rules. `rtk` fail-open сжимает большой bash output и добавляет

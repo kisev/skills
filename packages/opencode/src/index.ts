@@ -2,7 +2,6 @@ import { tool, type Plugin } from "@opencode-ai/plugin";
 
 import { CATEGORIES, type AvailableAgent, type Category, RoutingGate, type RoutingInput } from "./routing.js";
 import backgroundAttempts, { type BackgroundAttemptsOptions } from "./plugins/background-attempts.js";
-import goalLoop, { type GoalLoopOptions } from "./plugins/goal-loop.js";
 import scheduler, { type SchedulerOptions } from "./plugins/schedule.js";
 import autonomyPolicy, { type AutonomyPolicyOptions } from "./plugins/autonomy-policy.js";
 import rulesInjector, { type RulesInjectorOptions } from "./plugins/rules-injector.js";
@@ -50,14 +49,13 @@ export type {
   DeploymentRecord,
   FixedAgentRole,
 } from "./agent-profiles.js";
-export { backgroundAttempts, goalLoop, scheduler, autonomyPolicy, rulesInjector, rtk, zedBell, zedClickablePaths };
+export { backgroundAttempts, scheduler, autonomyPolicy, rulesInjector, rtk, zedBell, zedClickablePaths };
 export { worktreePlan, worktreeCreate, worktreeStatus, worktreeList, worktreeRelease, worktreeRecover } from "./runtime/worktree.js";
 export type { WorktreeRecord, WorktreeStatus } from "./runtime/worktree.js";
 export { createMultiRunPackageBridge } from "./multi-run-bridge.js";
 
 export type OpenCodeOptions = {
   backgroundAttempts?: BackgroundAttemptsOptions;
-  goalLoop?: GoalLoopOptions;
   scheduler?: SchedulerOptions;
   autonomyPolicy?: AutonomyPolicyOptions;
   rulesInjector?: RulesInjectorOptions;
@@ -68,7 +66,7 @@ export type OpenCodeOptions = {
 
 const CATALOG = {
   skills: ["attempt", "goal", "schedule", "multi-run", "usage", "overview", "lsp-report"],
-  plugins: ["background-attempts", "goal-loop", "schedule", "autonomy-policy", "rules-injector", "rtk", "zed-bell", "zed-clickable-paths"],
+  plugins: ["background-attempts", "schedule", "autonomy-policy", "rules-injector", "rtk", "zed-bell", "zed-clickable-paths"],
   replacements: ["capabilities", "route", "doctor", "agent_profiles"],
   version: "1.1.1",
 } as const;

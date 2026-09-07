@@ -103,8 +103,8 @@ def confirmation_path(root: Path, identifier: str) -> Path:
 
 
 def validate(item: dict[str, Any]) -> dict[str, Any]:
-    required = {"id", "name", "schedule", "agent", "model", "run_as_goal", "token_budget", "max_runtime", "prompt"}
-    if item.get("schema_version") != SCHEMA_VERSION or not required <= item.keys():
+    required = {"id", "name", "schedule", "agent", "model", "token_budget", "max_runtime", "prompt"}
+    if item.get("schema_version") != SCHEMA_VERSION or not required <= item.keys() or set(item) - required - {"schema_version", "enabled"}:
         raise ScheduleError("definition has unsupported schema", "unsupported_schema")
     if not isinstance(item["id"], str) or not ID.fullmatch(item["id"]):
         raise ScheduleError("definition id is invalid", "invalid_definition")
@@ -112,7 +112,7 @@ def validate(item: dict[str, Any]) -> dict[str, Any]:
         raise ScheduleError("definition text fields are invalid", "invalid_definition")
     if not isinstance(item["schedule"], str) or not EVERY.fullmatch(item["schedule"].strip()) and not _valid_cron(item["schedule"]):
         raise ScheduleError("definition schedule is invalid", "invalid_definition")
-    if type(item["run_as_goal"]) is not bool or type(item["token_budget"]) is not int or item["token_budget"] < 0 or type(item["max_runtime"]) is not int or item["max_runtime"] <= 0:
+    if type(item["token_budget"]) is not int or item["token_budget"] < 0 or type(item["max_runtime"]) is not int or item["max_runtime"] <= 0:
         raise ScheduleError("definition limits are invalid", "invalid_definition")
     return {**item, "enabled": item.get("enabled") is True}
 
@@ -208,7 +208,7 @@ def change(args: argparse.Namespace) -> dict[str, Any]:
         raise ScheduleError("invalid id", "invalid_definition")
     target = definition_path(root, args.id)
     if args.command == "add":
-        definition = validate({"schema_version": SCHEMA_VERSION, "id": args.id, "name": args.name, "schedule": args.schedule, "agent": args.agent, "model": args.model, "run_as_goal": args.run_as_goal, "token_budget": args.token_budget, "max_runtime": args.max_runtime, "prompt": args.prompt, "enabled": False})
+        definition = validate({"schema_version": SCHEMA_VERSION, "id": args.id, "name": args.name, "schedule": args.schedule, "agent": args.agent, "model": args.model, "token_budget": args.token_budget, "max_runtime": args.max_runtime, "prompt": args.prompt, "enabled": False})
         payload = {"operation": "add", "target": str(target), "definition": definition}
         if not args.confirmation_id:
             if target.exists() or any(item["id"] == args.id for item in definitions(root)[0]):
@@ -250,7 +250,6 @@ def parser() -> argparse.ArgumentParser:
     item.add_argument("--agent", required=True)
     item.add_argument("--model", required=True)
     item.add_argument("--prompt", required=True)
-    item.add_argument("--run-as-goal", action="store_true")
     item.add_argument("--token-budget", type=int, default=0)
     item.add_argument("--max-runtime", type=int, default=3600)
     item.add_argument("--confirmation-id")

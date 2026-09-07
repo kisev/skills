@@ -14,7 +14,8 @@ metadata:
 python3 -I -S -B scripts/overview.py [--project PATH] [--all] [--format json|text|both]
 ```
 
-Runner читает только documented file-backed state goal, schedule, attempts и
-multi-run. `--all` использует лишь явный `projects.json`, не сканирует диск.
+Runner читает только documented file-backed state schedule, attempts и multi-run.
+Historical goal state намеренно не считается active runtime и не включается в
+текущую сводку. `--all` использует лишь явный `projects.json`, не сканирует диск.
 Повреждённые, отсутствующие и unsupported records обозначаются на уровне
 компонента; runner не запускает sessions, plugins, сеть или recovery.

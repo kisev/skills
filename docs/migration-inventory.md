@@ -30,7 +30,7 @@
 | `team-workflow` | read/write с confirmation | Одно явное действие командного цикла по explicit context. |
 | `walkthrough` | read-only runner | Карта чтения current diff, Git range или diff-file. |
 | `attempt` | package tool | Чтение и подтверждённая отмена bounded Background Attempts. |
-| `goal` | write с session binding | Проверяемые goals с limits, audit и terminal state. |
+| `goal` | read-only portable skill | Формулировка проверяемой цели в canonical `work-item/v1`. |
 | `schedule` | write с confirmation | Явные definitions, disabled по умолчанию, без replay пропущенных slots. |
 | `multi-run` | write с confirmation | 2-5 isolated attempts, compare terminal manifests и fusion. |
 | `usage` | read-only runner | Ledger observed tokens/cost с честным unknown. |
@@ -46,8 +46,8 @@ versioned `work-item/v1`: problem/outcome, criteria/evidence, scope/non-goals,
 dependencies/actions/assumptions, safety, risks/questions и stop conditions.
 Machine validator проверяет форму, ссылки, границы, DAG и стабильность report;
 feasibility и смысловые противоречия приходят отдельным structured semantic
-assessment. Optional premortem выполняется один раз независимым агентом либо
-возвращает `skipped` без блокировки.
+assessment. `goal` не создаёт state и не запускает lifecycle. Optional premortem
+выполняется один раз независимым агентом либо возвращает `skipped` без блокировки.
 
 Каталог `skills/` не содержит commands, agents или plugins. Контекстная логика
 находится в `SKILL.md`; runner-ы при необходимости лежат в собственном каталоге

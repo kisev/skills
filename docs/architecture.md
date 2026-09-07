@@ -12,7 +12,7 @@
 зависимость установленного skill. `scripts/sync_shared.py` создаёт точные копии
 по manifest, а эти копии хранятся в Git под соответствующими skills.
 
-Для `askme`, `task-prepare`, `task-review` и `goal` canonical
+Для `askme`, `task-prepare`, `task-review` и read-only `goal` canonical
 `shared/references/work-item-contract.schema.json`, описание контракта и
 stdlib-only `work_item.py` materialize-ятся в каждый skill. Установленный skill
 использует только свою копию. Validator отдельно возвращает machine findings и
@@ -40,10 +40,10 @@ state, timers, sessions или mutations.
 
 ## OpenCode runtime
 
-Семь specialized skills устанавливаются как обычные self-contained Agent Skills.
+Шесть specialized skills с Python runner устанавливаются как обычные self-contained Agent Skills; `goal` является read-only prompt-only adapter.
 Их Python runner materialize-ит общий stdlib runtime внутрь skill и использует
 только XDG/OpenCode user-owned config/state. Package runtime не ссылается на
-checkout и экспортирует восемь независимых plugin factories. `capabilities`,
+checkout и экспортирует семь независимых plugin factories. `capabilities`,
 `route` и `doctor` являются package tools для catalog/routing/health. Routing
 receipt одноразово связывает выбранного agent с canonical task text, exact
 requirements, execution-card digest/revision, matrix revision и TTL; переходы

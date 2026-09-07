@@ -44,15 +44,13 @@ def read_component(name: str, root: Path, matcher: str, project: str, selector: 
 
 def build(root: Path) -> dict[str, Any]:
     project = str(root.resolve())
-    goal = read_component("goals", skill_state_root("goal"), "*.json", project, lambda value, scope: {key: value.get(key) for key in ("goal_id", "session_id", "status", "revision", "updated_at", "objective")} if value.get("project_root") in {"", scope} else None)
     attempt = read_component("attempts", skill_state_root("attempt") / "attempts", "*.json", project, lambda value, scope: {key: value.get(key) for key in ("attempt_id", "parent_session_id", "child_session_id", "status", "revision", "workspace_id")} if value.get("project") == scope else None)
     multi = read_component("groups", skill_state_root("multi-run"), "*.json", project, lambda value, scope: {"multi_run_id": value.get("multi_run_id"), "status": value.get("status"), "attempts": len(value.get("runs", [])) if isinstance(value.get("runs"), list) else None} if value.get("project_root") == scope else None)
     schedule_root = skill_state_root("schedule") / hashlib.sha256(project.encode()).hexdigest() / "definitions"
     schedule = read_component("definitions", schedule_root, "*.json", project, lambda value, _scope: {key: value.get(key) for key in ("id", "name", "schedule", "enabled")})
     lsp = detect(root)
-    goals = goal["data"]["goals"]
     counts = {status: sum(item.get("status") == status for item in attempt["data"]["attempts"]) for status in ("queued", "running", "waiting", "completed", "failed", "cancelled", "orphaned")}
-    return {"root": project, "status": "partial" if any(item["status"] == "partial" for item in (goal, attempt, multi, schedule)) else "ok", "components": {"goal": goal, "attempts": attempt, "multi_run": multi, "schedule": schedule, "lsp": {"status": lsp["status"], "data": lsp}}, "signals": {"active_goals": sum(item.get("status") == "running" for item in goals), "paused_goals": sum(item.get("status") == "paused" for item in goals), "attempts": counts, "lsp_unavailable": [item["name"] for item in lsp.get("servers", []) if item.get("applicable") and not item.get("active")]}}
+    return {"root": project, "status": "partial" if any(item["status"] == "partial" for item in (attempt, multi, schedule)) else "ok", "components": {"attempts": attempt, "multi_run": multi, "schedule": schedule, "lsp": {"status": lsp["status"], "data": lsp}}, "signals": {"attempts": counts, "lsp_unavailable": [item["name"] for item in lsp.get("servers", []) if item.get("applicable") and not item.get("active")]}}
 
 
 def projects(args: argparse.Namespace) -> list[Path]:
@@ -88,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as error:
         report_error("invalid_arguments", str(error))
         return 2
-    text = "\n".join(f"{item['root']}: {item['signals'].get('active_goals', 0)} active goals" if item["status"] != "error" else f"{item['root']}: unavailable" for item in values)
+    text = "\n".join(f"{item['root']}: {item['status']}" if item["status"] != "error" else f"{item['root']}: unavailable" for item in values)
     output = {"schema_version": 1, "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "projects": values, "text": text}
     if args.format in {"json", "both"}:
         print(json.dumps(output, ensure_ascii=False, sort_keys=True))

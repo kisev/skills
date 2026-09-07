@@ -16,10 +16,8 @@
 
 ### Изменено
 
-- `goal` не запускает invalid work item и связывает completion с acceptance
-  criteria и evidence.
-- Legacy persisted goal state читается совместимо без потери старых полей,
-  receipts и revisions.
+- `goal` стал read-only portable формирователем `work-item/v1`; lifecycle и
+  auto-continuation удалены. Historical state оставлен для будущей классификации.
 
 ## [1.1.1] - 2026-09-06
 

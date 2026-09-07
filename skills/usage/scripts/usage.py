@@ -17,7 +17,7 @@ if str(scripts) not in sys.path:
 
 from portable_runtime.capabilities import emit_capabilities
 from portable_runtime.contract import ContractArgumentParser, report_error
-from portable_runtime.state import StateError, read_json, skill_state_root
+from portable_runtime.state import skill_state_root
 
 
 def instant(value: str | None) -> datetime | None:
@@ -31,27 +31,6 @@ def instant(value: str | None) -> datetime | None:
 
 def component(name: str, paths: list[str], errors: list[dict[str, str]]) -> dict[str, Any]:
     return {"name": name, "status": "partial" if errors else "ok", "source_paths": paths, "errors": errors}
-
-
-def goals(project: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    root = skill_state_root("goal")
-    items: list[dict[str, Any]] = []
-    errors: list[dict[str, str]] = []
-    paths: list[str] = []
-    if not root.is_dir() or root.is_symlink():
-        return items, component("goal", [str(root)], errors)
-    for path in sorted(root.glob("*.json")):
-        paths.append(str(path))
-        try:
-            value = read_json(path, root)
-            if value.get("schema_version") != 1 or not isinstance(value.get("session_id"), str):
-                raise StateError("unsupported goal schema or session identity")
-            if project and value.get("project_root") not in {"", project}:
-                continue
-            items.append({"kind": "goal", "id": value.get("goal_id"), "label": value.get("objective", "goal"), "session_id": value["session_id"], "period_start": value.get("created_at", ""), "period_end": value.get("updated_at", ""), "state_tokens": value.get("usage", {}).get("tokens") if isinstance(value.get("usage"), dict) else None})
-        except StateError as error:
-            errors.append({"path": str(path), "error": str(error)})
-    return items, component("goal", paths, errors)
 
 
 def scheduled(project: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -116,18 +95,15 @@ def report(args: argparse.Namespace) -> dict[str, Any]:
     since = instant(args.since)
     if args.since and since is None:
         raise ValueError("since must be ISO8601")
-    work, goal_component = goals(project)
     runs, schedule_component = scheduled(project)
-    work.extend(runs)
+    work = runs
     observed, message_component = messages({str(item["session_id"]) for item in work}, since)
     for item in work:
         usage = observed.get(str(item["session_id"]), {"turns": 0, "tokens": 0, "cost": 0.0, "cost_observations": 0})
         item["usage"] = {"turns": usage["turns"], "tokens": usage["tokens"]}
         item["cost"] = usage["cost"] if usage["turns"] == usage["cost_observations"] else None
         item["cost_status"] = "known" if item["cost"] is not None else "unknown"
-        if item["kind"] == "goal" and isinstance(item.get("state_tokens"), int):
-            item["reconciliation"] = {"state_tokens": item["state_tokens"], "ledger_tokens": usage["tokens"], "delta": usage["tokens"] - item["state_tokens"], "status": "match" if usage["tokens"] == item["state_tokens"] else "mismatch"}
-    return {"schema_version": 1, "project": project, "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "components": [goal_component, schedule_component, message_component], "work_items": sorted(work, key=lambda item: (str(item["kind"]), str(item["id"]))) }
+    return {"schema_version": 1, "project": project, "generated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"), "components": [schedule_component, message_component], "work_items": sorted(work, key=lambda item: (str(item["kind"]), str(item["id"]))) }
 
 
 def parser() -> argparse.ArgumentParser:
