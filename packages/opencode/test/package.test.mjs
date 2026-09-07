@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-import plugin, { COMMAND_REGISTRY, ExecutionCardLifecycle, RoutingGate, renderCommand, resolveRouting, validateExecutionCard } from "../dist/index.js";
+import plugin, { COMMAND_REGISTRY, ExecutionCardLifecycle, RoutingGate, renderCommand, resolveRouting, validateExecutionCard, worktreeCreate, worktreeRecover, worktreeRelease, worktreeStatus } from "../dist/index.js";
 import backgroundAttempts from "../dist/plugins/background-attempts.js";
 import goalLoop from "../dist/plugins/goal-loop.js";
 import scheduler from "../dist/plugins/schedule.js";
@@ -430,11 +430,16 @@ test("background attempts enforce parent concurrency and stale cancellation", as
     process.env.XDG_STATE_HOME = join(directory, "state");
     const project = join(directory, "project");
     await mkdir(project);
+    execFileSync("git", ["init", "-q", project]);
+    await writeFile(join(project, "README.md"), "test\n");
+    execFileSync("git", ["-C", project, "add", "README.md"]);
+    execFileSync("git", ["-C", project, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "initial"]);
     const client = { session: { create: async () => ({ id: `child-${Math.random()}` }), prompt: async () => undefined, abort: async () => true } };
     const hooks = await backgroundAttempts({ client, directory: project }, { enabled: true });
-    const decision = { agent: "worker", decision_digest: "decision" };
+    const decision = resolveRouting({ category: "implementation", task: "one", requirements: [], agents: [capable("worker", ["read", "write", "verify"], ["read", "edit", "bash"])] });
     const first = JSON.parse(await hooks.tool.background_attempts.execute({ action: "start", task: "one", category: "implementation", decision }, { sessionID: "parent" }));
-    const second = JSON.parse(await hooks.tool.background_attempts.execute({ action: "start", task: "two", category: "implementation", decision }, { sessionID: "parent" }));
+    const secondDecision = resolveRouting({ category: "implementation", task: "two", requirements: [], agents: [capable("worker", ["read", "write", "verify"], ["read", "edit", "bash"])] });
+    const second = JSON.parse(await hooks.tool.background_attempts.execute({ action: "start", task: "two", category: "implementation", decision: secondDecision }, { sessionID: "parent" }));
     const firstStatus = JSON.parse(await hooks.tool.background_attempts.execute({ action: "status", attempt_id: first.attempt_id }, { sessionID: "parent" }));
     const secondStatus = JSON.parse(await hooks.tool.background_attempts.execute({ action: "status", attempt_id: second.attempt_id }, { sessionID: "parent" }));
     assert.equal(firstStatus.status, "running");
@@ -469,6 +474,34 @@ test("scheduler seeds slots and does not replay missed intervals", async () => {
     assert.equal(starts, 1);
     await hooks.event({ event: { type: "session.created" } });
     assert.equal(starts, 1);
+  } finally {
+    if (originalState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = originalState;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("managed worktree lifecycle rejects unknown and dirty paths without deleting state", async () => {
+  const directory = temporary();
+  const originalState = process.env.XDG_STATE_HOME;
+  try {
+    process.env.XDG_STATE_HOME = join(directory, "state");
+    const project = join(directory, "project");
+    await mkdir(project);
+    execFileSync("git", ["init", "-q", project]);
+    await writeFile(join(project, "README.md"), "test\n");
+    execFileSync("git", ["-C", project, "add", "README.md"]);
+    execFileSync("git", ["-C", project, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "initial"]);
+    const unknown = join(directory, "unknown");
+    await mkdir(unknown);
+    await assert.rejects(worktreeCreate({ project, workspace_id: "unknown", path: unknown }), /unknown/);
+    const first = await worktreeCreate({ project, workspace_id: "managed" });
+    const repeated = await worktreeCreate({ project, workspace_id: "managed" });
+    assert.equal(repeated.path, first.path);
+    await writeFile(join(first.path, "changed.txt"), "dirty\n");
+    assert.equal((await worktreeStatus(project, "managed")).status, "blocked");
+    assert.equal((await worktreeRelease(project, "managed")).status, "blocked");
+    assert.equal((await worktreeRecover(project)).blocked, 1);
   } finally {
     if (originalState === undefined) delete process.env.XDG_STATE_HOME;
     else process.env.XDG_STATE_HOME = originalState;

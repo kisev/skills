@@ -49,6 +49,19 @@ function digest(value: unknown): string {
   return createHash("sha256").update(stable(value), "utf8").digest("hex");
 }
 
+export function validateRoutingReceipt(value: unknown, context?: { task?: string; category?: string }): RoutingDecision {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("routing receipt is not an object");
+  const decision = value as RoutingDecision;
+  if (decision.schema_version !== 1 || decision.status !== "selected" || !decision.agent || !CATEGORIES.includes(decision.category)) throw new Error("routing receipt is not selected");
+  if (!decision.matrix_revision || !decision.decision_digest || !/^[a-f0-9]{64}$/.test(decision.decision_digest)) throw new Error("routing receipt is incomplete");
+  const { decision_digest: _digest, ...base } = decision;
+  if (digest(base) !== decision.decision_digest) throw new Error("routing receipt digest is forged or stale");
+  if (decision.matrix_revision !== digest(MATRIX)) throw new Error("routing receipt matrix is stale");
+  if (context?.category !== undefined && decision.category !== context.category) throw new Error("routing receipt category does not match");
+  if (context?.task !== undefined && decision.task_digest !== digest(context.task)) throw new Error("routing receipt task does not match");
+  return decision;
+}
+
 function missing(required: readonly string[], actual: string[] | undefined): boolean {
   const values = new Set(actual ?? []);
   return required.some((item) => !values.has(item));

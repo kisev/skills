@@ -76,6 +76,11 @@
   "peerDependencies": {
     "@opencode-ai/plugin": "^1.18.29"
   },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@opencode-ai/plugin": "1.18.29",
     "@types/node": "22.15.30",

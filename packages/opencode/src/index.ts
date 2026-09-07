@@ -18,7 +18,7 @@ import {
 } from "./agent-profiles.js";
 
 export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
-export { CATEGORIES, resolveRouting, RoutingGate, ExecutionCardLifecycle, validateExecutionCard } from "./routing.js";
+export { CATEGORIES, resolveRouting, RoutingGate, ExecutionCardLifecycle, validateExecutionCard, validateRoutingReceipt } from "./routing.js";
 export type { ExecutionCard, ExecutionCardStatus } from "./routing.js";
 export {
   AgentProfileError,
@@ -51,6 +51,9 @@ export type {
   FixedAgentRole,
 } from "./agent-profiles.js";
 export { backgroundAttempts, goalLoop, scheduler, autonomyPolicy, rulesInjector, rtk, zedBell, zedClickablePaths };
+export { worktreePlan, worktreeCreate, worktreeStatus, worktreeList, worktreeRelease, worktreeRecover } from "./runtime/worktree.js";
+export type { WorktreeRecord, WorktreeStatus } from "./runtime/worktree.js";
+export { createMultiRunPackageBridge } from "./multi-run-bridge.js";
 
 export type OpenCodeOptions = {
   backgroundAttempts?: BackgroundAttemptsOptions;
