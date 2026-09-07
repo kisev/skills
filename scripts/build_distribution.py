@@ -105,6 +105,22 @@ def build(output: Path, check: bool) -> int:
         well_known.mkdir(parents=True)
         (well_known / "index.json").write_bytes(canonical(index))
         (well_known / "lock.json").write_bytes(canonical(lock))
+        agent_skills = staged / ".well-known" / "agent-skills"
+        agent_skills.mkdir(parents=True)
+        agent_index = {
+            "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+            "skills": [
+                {
+                    "name": entry["name"],
+                    "description": f"Kisev portable skill {entry['name']}.",
+                    "type": "archive",
+                    "url": f"../../{entry['archive']}",
+                    "digest": f"sha256:{entry['sha256']}",
+                }
+                for entry in entries
+            ],
+        }
+        (agent_skills / "index.json").write_bytes(canonical(agent_index))
         (staged / "package.json").write_bytes(canonical({**manifest, "private": False}))
         if check:
             if not output.is_dir():

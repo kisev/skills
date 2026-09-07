@@ -1,21 +1,25 @@
 from __future__ import annotations
 
+import gzip
 import hashlib
 import http.server
 import io
 import json
-import subprocess
+import os
+import shutil
 import tarfile
 import threading
 import urllib.request
 from functools import partial
 from pathlib import Path
+from subprocess import run
 
 from scripts import build_distribution
 
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".build" / "packages" / "skills"
+PINNED_SKILLS = ["npx", "--yes", "skills@1.5.23"]
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -23,113 +27,116 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         return
 
 
-def test_distribution_has_well_known_index_root_skill_archives_and_digest_lock() -> None:
+def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
     assert build_distribution.build(OUTPUT, False) == 0
+    index = json.loads((OUTPUT / ".well-known/agent-skills/index.json").read_text(encoding="utf-8"))
+    lock = json.loads((OUTPUT / "skills-lock.json").read_text(encoding="utf-8"))
+    assert index["$schema"] == "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
+    assert index["skills"]
+    for entry in index["skills"]:
+        archive = OUTPUT / entry["url"].removeprefix("../../")
+        assert entry["digest"] == f"sha256:{hashlib.sha256(archive.read_bytes()).hexdigest()}"
+        assert lock["archives"][entry["name"]] == entry["digest"].removeprefix("sha256:")
+        with tarfile.open(archive, mode="r:gz") as document:
+            assert "SKILL.md" in document.getnames()
+
+
+def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -> None:
+    assert build_distribution.build(OUTPUT, False) == 0
+    fixture = tmp_path / "fixture"
+    shutil.copytree(OUTPUT, fixture)
     server = http.server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), partial(QuietHandler, directory=str(OUTPUT))
+        ("127.0.0.1", 0), partial(QuietHandler, directory=str(fixture))
     )
     thread = threading.Thread(target=server.serve_forever)
     thread.start()
     try:
-        base = f"http://127.0.0.1:{server.server_port}"
-        index = json.loads(urllib.request.urlopen(f"{base}/.well-known/skills/index.json").read())
-        lock = json.loads(urllib.request.urlopen(f"{base}/.well-known/skills/lock.json").read())
-        assert index["schema"] == "@kisev/skills/index/v1"
-        assert index["source_revision"] == lock["source_revision"]
-        assert index["skills"]
-        for skill in index["skills"]:
-            archive = urllib.request.urlopen(f"{base}/{skill['archive']}").read()
-            assert (
-                hashlib.sha256(archive).hexdigest()
-                == lock["archives"][skill["name"]]
-                == skill["sha256"]
-            )
-            with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as document:
-                assert "SKILL.md" in document.getnames()
-    finally:
-        server.shutdown()
-        thread.join()
-        build_distribution.build(OUTPUT, False)
-        build_distribution.build(OUTPUT, False)
-
-
-def test_local_http_fixture_installs_and_updates_with_pinned_skills_for_both_agents(
-    tmp_path: Path,
-) -> None:
-    assert build_distribution.build(OUTPUT, False) == 0
-    server = http.server.ThreadingHTTPServer(
-        ("127.0.0.1", 0), partial(QuietHandler, directory=str(OUTPUT))
-    )
-    thread = threading.Thread(target=server.serve_forever)
-    thread.start()
-    skills_command = ["npx", "--yes", "skills@1.5.23"]
-    assert subprocess.check_output([*skills_command, "--version"], text=True).strip() == "1.5.23"
-    try:
-        index = f"http://127.0.0.1:{server.server_port}/.well-known/skills/index.json"
+        source = f"http://127.0.0.1:{server.server_port}"
+        assert (
+            run(
+                [*PINNED_SKILLS, "--version"], capture_output=True, text=True, check=True
+            ).stdout.strip()
+            == "1.5.23"
+        )
         for agent in ("opencode", "codex"):
-            home = tmp_path / agent
-            command = [
-                "python3",
-                "scripts/install_distribution.py",
-                "--index-url",
-                index,
-                "--skill",
-                "code-review",
-                "--agent",
-                agent,
-                "--skills-command",
-                json.dumps(skills_command),
-                "--home",
-                str(home),
-            ]
-            first = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
-            update_archive(OUTPUT, "code-review", tmp_path / f"archive-{agent}")
-            second = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
-            assert first.returncode == second.returncode == 0, first.stderr + second.stderr
-            assert json.loads(first.stdout)["status"] == "added"
-            assert json.loads(second.stdout)["status"] == "updated"
-            assert (home / ".agents" / "skills" / "code-review" / "SKILL.md").is_file()
-            assert (home / ".agents" / "skills" / "code-review" / "update-marker.txt").is_file()
-            assert (
-                stat_mode(home / ".local" / "state" / "kisev-skills" / "distribution-lock.json")
-                == 0o600
+            home, state = tmp_path / agent / "home", tmp_path / agent / "state"
+            environment = {
+                **os.environ,
+                "HOME": str(home),
+                "XDG_CONFIG_HOME": str(home / ".config"),
+                "XDG_STATE_HOME": str(state),
+            }
+            added = run(
+                [
+                    *PINNED_SKILLS,
+                    "add",
+                    source,
+                    "--skill",
+                    "code-review",
+                    "--agent",
+                    agent,
+                    "--global",
+                    "--copy",
+                    "--yes",
+                ],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
             )
+            assert added.returncode == 0, added.stderr
+            lock_path = state / "skills" / ".skill-lock.json"
+            before = json.loads(lock_path.read_text(encoding="utf-8"))["skills"]["code-review"]
+            assert before["sourceType"] == "well-known"
+            assert before["sourceBaseUrl"] == source
+            update_archive(fixture, "code-review")
+            served = json.loads(
+                urllib.request.urlopen(f"{source}/.well-known/agent-skills/index.json").read()
+            )
+            expected = next(item for item in served["skills"] if item["name"] == "code-review")[
+                "digest"
+            ]
+            assert expected != before["wellKnownDigest"]
+            updated = run(
+                [*PINNED_SKILLS, "update", "--global", "--yes"],
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert updated.returncode == 0, updated.stderr
+            after = json.loads(lock_path.read_text(encoding="utf-8"))["skills"]["code-review"]
+            assert after["wellKnownDigest"] != before["wellKnownDigest"], updated.stdout
+            assert (home / ".agents/skills/code-review/update-marker.txt").is_file()
     finally:
         server.shutdown()
         thread.join()
         build_distribution.build(OUTPUT, False)
 
 
-def stat_mode(path: Path) -> int:
-    return path.stat().st_mode & 0o777
-
-
-def update_archive(distribution: Path, skill: str, workspace: Path) -> None:
+def update_archive(distribution: Path, skill: str) -> None:
     archive = distribution / "archives" / f"{skill}.tar.gz"
-    workspace.mkdir()
+    previous_digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    files: dict[str, bytes] = {}
     with tarfile.open(archive, mode="r:gz") as document:
-        document.extractall(workspace, filter="data")
-    (workspace / "update-marker.txt").write_text("updated\n", encoding="utf-8")
-    with tarfile.open(archive, mode="w:gz") as document:
-        for source in sorted(workspace.rglob("*")):
-            if source.is_file():
-                document.add(source, arcname=source.relative_to(workspace))
+        for member in document.getmembers():
+            if member.isfile():
+                extracted = document.extractfile(member)
+                assert extracted is not None
+                files[member.name] = extracted.read()
+    files["update-marker.txt"] = f"updated:{previous_digest}\n".encode()
+    payload = io.BytesIO()
+    with gzip.GzipFile(fileobj=payload, mode="wb", mtime=0) as compressed:
+        with tarfile.open(fileobj=compressed, mode="w") as document:
+            for name, content in sorted(files.items()):
+                info = tarfile.TarInfo(name)
+                info.size, info.mode, info.mtime = len(content), 0o644, 0
+                document.addfile(info, io.BytesIO(content))
+    archive.write_bytes(payload.getvalue())
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    for path in (
-        distribution / "index.json",
-        distribution / ".well-known" / "skills" / "index.json",
-    ):
-        index = json.loads(path.read_text(encoding="utf-8"))
-        next(item for item in index["skills"] if item["name"] == skill)["sha256"] = digest
-        path.write_text(
-            json.dumps(index, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
-        )
-    for path in (
-        distribution / "skills-lock.json",
-        distribution / ".well-known" / "skills" / "lock.json",
-    ):
-        lock = json.loads(path.read_text(encoding="utf-8"))
-        lock["archives"][skill] = digest
-        path.write_text(
-            json.dumps(lock, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
-        )
+    index_path = distribution / ".well-known/agent-skills/index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    next(item for item in index["skills"] if item["name"] == skill)["digest"] = f"sha256:{digest}"
+    index_path.write_text(
+        json.dumps(index, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+    )
