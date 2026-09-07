@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "plugin.background-attempts.enabled-boundary",
+  "revision": 1,
+  "kind": "deterministic",
+  "surface": "plugin",
+  "host": "opencode",
+  "input": {
+    "prompt": "Plugin remains disabled until explicit enablement.",
+    "fixture": { "selected": ["plugin:background-attempts"] }
+  },
+  "expected": { "selected": ["plugin:background-attempts"], "not_selected": ["plugin:schedule"] },
+  "invariants": [
+    {
+      "id": "plugin-source",
+      "path": "packages/opencode/src/plugins/background-attempts.ts",
+      "contains": "enabled"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "80e0a5b10b96503c8d74f8786ace3e57fb1e38d65189e7658f2e54977cac80ac"
+}

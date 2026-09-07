@@ -1,0 +1,19 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "plugin.background-attempts.disabled-mutation-boundary",
+  "revision": 1,
+  "kind": "near-miss",
+  "surface": "plugin",
+  "host": "opencode",
+  "input": {
+    "prompt": "Inspect plugin without explicit enablement.",
+    "fixture": { "selected": [] }
+  },
+  "expected": { "selected": [], "not_selected": ["plugin:background-attempts"] },
+  "invariants": [
+    { "id": "plugin-opt-in", "path": "README.md", "contains": "выключены по умолчанию" }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "bb4eef12be31bfcd36dedf05065f3e95ba27f650da6efc08f1df24cb934c20f1"
+}

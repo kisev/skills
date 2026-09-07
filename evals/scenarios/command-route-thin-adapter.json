@@ -1,0 +1,20 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "command.route.thin-adapter",
+  "revision": 1,
+  "kind": "deterministic",
+  "surface": "command",
+  "host": "opencode",
+  "input": { "prompt": "/route inspect assets", "fixture": { "selected": ["command:route"] } },
+  "expected": { "selected": ["command:route"], "not_selected": ["plugin:background-attempts"] },
+  "invariants": [
+    {
+      "id": "route-command",
+      "path": "packages/opencode/assets/commands/route.md",
+      "contains": "route"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "04eeafeec0b0c480ce36795d7c6cb95ab5ca7ce6e462205dbaf8f62f2763819e"
+}

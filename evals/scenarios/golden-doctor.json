@@ -1,0 +1,24 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "golden.doctor.read-only-redaction",
+  "revision": 1,
+  "kind": "golden",
+  "surface": "command",
+  "host": "opencode",
+  "input": {
+    "prompt": "/doctor --scope project --json",
+    "fixture": { "selected": ["command:doctor"] }
+  },
+  "expected": { "selected": ["command:doctor"], "not_selected": ["plugin:background-attempts"] },
+  "invariants": [
+    {
+      "id": "doctor-command",
+      "path": "packages/opencode/assets/commands/doctor.md",
+      "contains": "read-only"
+    },
+    { "id": "doctor-redaction", "path": "packages/opencode/src/doctor.ts", "contains": "redact" }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1500, "max_cost": 1 },
+  "digest": "cbc00fe90daa5094045ab2bdceb2ebc5ecfe623e26dca341f6aa0bdbcdc9632c"
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kisev.dev/schemas/eval-scenario/v1",
+  "title": "Behavioral evaluation scenario v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "id",
+    "revision",
+    "kind",
+    "surface",
+    "host",
+    "input",
+    "expected",
+    "invariants",
+    "sandbox",
+    "budgets",
+    "digest"
+  ],
+  "properties": {
+    "schema": { "const": "eval-scenario/v1" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]{2,80}$" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "kind": { "enum": ["deterministic", "trigger", "near-miss", "golden"] },
+    "surface": { "enum": ["skill", "command", "agent", "plugin"] },
+    "host": { "enum": ["opencode", "codex", "any"] },
+    "input": { "type": "object" },
+    "expected": { "type": "object" },
+    "invariants": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "object", "required": ["id", "path"] }
+    },
+    "sandbox": {
+      "type": "object",
+      "required": ["network"],
+      "properties": { "network": { "const": false } }
+    },
+    "budgets": { "type": "object", "required": ["timeout_seconds", "max_tokens", "max_cost"] },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}

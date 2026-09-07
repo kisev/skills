@@ -1,0 +1,16 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "skill.goal.near-miss",
+  "revision": 1,
+  "kind": "near-miss",
+  "surface": "skill",
+  "host": "any",
+  "input": { "prompt": "Explain a goal without invoking a skill.", "fixture": { "selected": [] } },
+  "expected": { "selected": [], "not_selected": ["skill:goal"] },
+  "invariants": [
+    { "id": "goal-read-only", "path": "skills/goal/SKILL.md", "contains": "строго read-only" }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "2b9317343f73b892b47c27aed548f6954a7f34ea9bee487aff9825d769020d6c"
+}

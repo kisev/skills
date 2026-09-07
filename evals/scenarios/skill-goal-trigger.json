@@ -1,0 +1,19 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "skill.goal.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Formulate a bounded, read-only goal.",
+    "fixture": { "selected": ["skill:goal"] }
+  },
+  "expected": { "selected": ["skill:goal"], "not_selected": ["command:doctor"] },
+  "invariants": [
+    { "id": "goal-contract", "path": "skills/goal/SKILL.md", "contains": "work-item/v1" }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "7f81f8a3adaac5450a3a46ec1a0f458b4993c60440cf3201c59dc3eb66c52c28"
+}
