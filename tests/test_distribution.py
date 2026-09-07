@@ -49,6 +49,8 @@ def test_distribution_has_well_known_index_root_skill_archives_and_digest_lock()
     finally:
         server.shutdown()
         thread.join()
+        build_distribution.build(OUTPUT, False)
+        build_distribution.build(OUTPUT, False)
 
 
 def test_local_http_fixture_installs_and_updates_with_pinned_skills_for_both_agents(
@@ -60,8 +62,8 @@ def test_local_http_fixture_installs_and_updates_with_pinned_skills_for_both_age
     )
     thread = threading.Thread(target=server.serve_forever)
     thread.start()
-    binary = subprocess.check_output(["mise", "which", "skills"], cwd=ROOT, text=True).strip()
-    assert subprocess.check_output([binary, "--version"], text=True).strip() == "1.5.23"
+    skills_command = ["npx", "--yes", "skills@1.5.23"]
+    assert subprocess.check_output([*skills_command, "--version"], text=True).strip() == "1.5.23"
     try:
         index = f"http://127.0.0.1:{server.server_port}/.well-known/skills/index.json"
         for agent in ("opencode", "codex"):
@@ -75,17 +77,19 @@ def test_local_http_fixture_installs_and_updates_with_pinned_skills_for_both_age
                 "code-review",
                 "--agent",
                 agent,
-                "--skills-binary",
-                binary,
+                "--skills-command",
+                json.dumps(skills_command),
                 "--home",
                 str(home),
             ]
             first = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+            update_archive(OUTPUT, "code-review", tmp_path / f"archive-{agent}")
             second = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
             assert first.returncode == second.returncode == 0, first.stderr + second.stderr
             assert json.loads(first.stdout)["status"] == "added"
             assert json.loads(second.stdout)["status"] == "updated"
             assert (home / ".agents" / "skills" / "code-review" / "SKILL.md").is_file()
+            assert (home / ".agents" / "skills" / "code-review" / "update-marker.txt").is_file()
             assert (
                 stat_mode(home / ".local" / "state" / "kisev-skills" / "distribution-lock.json")
                 == 0o600
@@ -93,7 +97,39 @@ def test_local_http_fixture_installs_and_updates_with_pinned_skills_for_both_age
     finally:
         server.shutdown()
         thread.join()
+        build_distribution.build(OUTPUT, False)
 
 
 def stat_mode(path: Path) -> int:
     return path.stat().st_mode & 0o777
+
+
+def update_archive(distribution: Path, skill: str, workspace: Path) -> None:
+    archive = distribution / "archives" / f"{skill}.tar.gz"
+    workspace.mkdir()
+    with tarfile.open(archive, mode="r:gz") as document:
+        document.extractall(workspace, filter="data")
+    (workspace / "update-marker.txt").write_text("updated\n", encoding="utf-8")
+    with tarfile.open(archive, mode="w:gz") as document:
+        for source in sorted(workspace.rglob("*")):
+            if source.is_file():
+                document.add(source, arcname=source.relative_to(workspace))
+    digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+    for path in (
+        distribution / "index.json",
+        distribution / ".well-known" / "skills" / "index.json",
+    ):
+        index = json.loads(path.read_text(encoding="utf-8"))
+        next(item for item in index["skills"] if item["name"] == skill)["sha256"] = digest
+        path.write_text(
+            json.dumps(index, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+        )
+    for path in (
+        distribution / "skills-lock.json",
+        distribution / ".well-known" / "skills" / "lock.json",
+    ):
+        lock = json.loads(path.read_text(encoding="utf-8"))
+        lock["archives"][skill] = digest
+        path.write_text(
+            json.dumps(lock, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8"
+        )

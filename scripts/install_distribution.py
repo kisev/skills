@@ -60,7 +60,9 @@ def lock_path(home: Path) -> Path:
     return home / ".local" / "state" / "kisev-skills" / "distribution-lock.json"
 
 
-def install(index_url: str, skill: str, agent: str, binary: str, home: Path) -> dict[str, object]:
+def install(
+    index_url: str, skill: str, agent: str, command: list[str], home: Path
+) -> dict[str, object]:
     index = read_json(index_url)
     lock = read_json(urllib.parse.urljoin(index_url, "lock.json"))
     entries = index.get("skills")
@@ -104,7 +106,7 @@ def install(index_url: str, skill: str, agent: str, binary: str, home: Path) -> 
         extract(archive, directory)
         completed = subprocess.run(
             [
-                binary,
+                *command,
                 "add",
                 str(directory),
                 "--skill",
@@ -152,14 +154,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-url", required=True)
     parser.add_argument("--skill", required=True)
     parser.add_argument("--agent", choices=("opencode", "codex"), required=True)
-    parser.add_argument("--skills-binary", required=True)
+    parser.add_argument(
+        "--skills-command",
+        required=True,
+        help='JSON command prefix, for example ["npx","--yes","skills@1.5.23"]',
+    )
     parser.add_argument("--home", type=Path, required=True)
     try:
         args = parser.parse_args(argv)
+        command = json.loads(args.skills_command)
+        if (
+            not isinstance(command, list)
+            or not command
+            or not all(isinstance(item, str) and item for item in command)
+        ):
+            raise InstallError("skills command must be a nonempty JSON string array")
         print(
             json.dumps(
-                install(args.index_url, args.skill, args.agent, args.skills_binary, args.home),
-                sort_keys=True,
+                install(args.index_url, args.skill, args.agent, command, args.home), sort_keys=True
             )
         )
         return 0
