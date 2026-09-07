@@ -12,9 +12,10 @@ import {
   validateVariant,
   type AgentProfileRequest,
 } from "./agent-profiles.js";
-import { renderInventory, renderPlan, shellCommand, terminalSafe } from "./cli-output.js";
+import { renderInventory, renderPlan, renderReconcile, shellCommand, terminalSafe } from "./cli-output.js";
 import { apply, InstallerError, preview, type Action } from "./installer.js";
 import { LifecycleError, type Scope } from "./lifecycle.js";
+import { applyReconcile, previewReconcile } from "./reconcile.js";
 import { promptText, selectOption } from "./terminal-wizard.js";
 
 type Options = { scope?: Scope; dryRun: boolean; json: boolean; confirm?: string; provider?: string; model?: string; variant?: string | null; name?: string };
@@ -221,6 +222,22 @@ function profileConfirmationArguments(request: AgentProfileRequest, scope: Scope
 
 async function run(arguments_: string[]): Promise<void> {
   const [domain, operation, ...rest] = arguments_;
+  if (domain === "reconcile") {
+    if (operation) rest.unshift(operation);
+    const options = parseOptions(rest);
+    if (options.name || options.provider || options.model || options.variant !== undefined) throw new InstallerError("invalid_input", "reconcile accepts only scope and confirmation options");
+    requireConfirmationMode(options);
+    if (options.dryRun) {
+      const plan = await previewReconcile(options.scope!);
+      if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: false, plan }, null, 2)}\n`);
+      else process.stdout.write(renderReconcile(plan, { applied: false, confirmationCommand: shellCommand(["reconcile", "--scope", options.scope!, "--confirm", plan.digest]) }));
+    } else {
+      const applied = await applyReconcile(options.scope!, options.confirm!);
+      if (options.json) process.stdout.write(`${JSON.stringify(applied, null, 2)}\n`);
+      else process.stdout.write(renderReconcile(applied.plan, { applied: true }));
+    }
+    return;
+  }
   if (domain === "install" || domain === "uninstall") {
     if (operation?.startsWith("--") || operation === undefined) rest.unshift(...(operation ? [operation] : []));
     else throw new InstallerError("invalid_input", `Unexpected argument: ${operation}`);

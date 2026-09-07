@@ -64,6 +64,24 @@ npm exec -- skills-opencode install --scope global --dry-run --json
 npm exec -- skills-opencode agent list --scope global --json
 ```
 
+## Reconcile retired assets
+
+`reconcile` проверяет только public portable skills, package commands, plugins,
+agents и installation metadata выбранного scope. XDG runtime state не читается и
+не изменяется. Preview сохраняет private receipt с TTL и печатает digest:
+
+```shell
+npm exec -- skills-opencode reconcile --scope project --dry-run
+npm exec -- skills-opencode reconcile --scope project --confirm <digest>
+npm exec -- skills-opencode reconcile --scope global --dry-run --json
+```
+
+Удаляются только retired files с доказанным inventory ownership и exact
+SHA-256. Modified-managed, user-owned, unknown, symlink, unsafe-path и
+ambiguous-source entries остаются conflicts. Другие scopes, sources и lock
+entries сохраняются byte-for-byte. Journaled transaction обеспечивает rollback,
+recovery и повторный no-op reconcile.
+
 Добавьте plugin в `opencode.json` вручную:
 
 ```json
@@ -164,8 +182,7 @@ owner. Records используют private current-only state, marker и reposi
 fingerprint; release перепроверяет регистрацию, fingerprint и чистый status и
 возвращает `blocked` без удаления при расхождении. Scheduler принимает строгий
 five-field cron, не воспроизводит missed slots и пишет receipts `started`,
-`completed`, `failed` или `overrun`. Multi-run runner хранит только group и
-terminal manifest state, а execution направляет через явный package bridge.
+`completed`, `failed` или `overrun`.
 
 `rules-injector` fail-soft применяет ограниченный budget и пропускает native
 project/global rules. `rtk` fail-open сжимает большой bash output и добавляет

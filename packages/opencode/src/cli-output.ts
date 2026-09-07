@@ -1,5 +1,6 @@
 import type { AgentInventory, AgentProfilePlan } from "./agent-profiles.js";
 import type { Plan as InstallerPlan } from "./installer.js";
+import type { ReconcilePlan } from "./reconcile.js";
 
 type DisplayPlan = InstallerPlan | AgentProfilePlan;
 type DisplayOperation = DisplayPlan["operations"][number];
@@ -167,4 +168,44 @@ export function shellCommand(arguments_: readonly string[]): string {
       /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replaceAll("'", `'"'"'`)}'`,
     )
     .join(" ");
+}
+
+export function renderReconcile(
+  plan: ReconcilePlan,
+  options: { applied: boolean; confirmationCommand?: string },
+): string {
+  const lines = [
+    `Reconcile (${plan.scope})`,
+    `Target: ${terminalSafe(plan.root)}`,
+    "",
+    options.applied ? "Applied retired assets:" : "Planned retired assets:",
+    `  current: ${plan.current.length}`,
+    `  retired: ${plan.retired.length}`,
+    `  renamed: ${plan.renamed.length}`,
+    `  modified-managed: ${plan.modified_managed.length}`,
+    `  user-owned: ${plan.user_owned.length}`,
+    `  unknown: ${plan.unknown.length}`,
+    `  conflicts: ${plan.conflicts.length}`,
+    `  diagnostic-state-only: ${plan.diagnostic_state_only.length}`,
+  ];
+  if (plan.retired.length)
+    lines.push(
+      "",
+      "Retired:",
+      ...plan.retired.slice(0, 20).map((entry) => `  ${terminalSafe(entry.path)}`),
+    );
+  if (plan.conflicts.length)
+    lines.push(
+      "",
+      "Conflicts:",
+      ...plan.conflicts
+        .slice(0, 20)
+        .map((entry) => `  ${terminalSafe(entry.path)} (${terminalSafe(entry.reason)})`),
+    );
+  if (!options.applied) {
+    lines.push("", `Digest: ${plan.digest}`);
+    if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
+    if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
+  }
+  return `${lines.join("\n")}\n`;
 }

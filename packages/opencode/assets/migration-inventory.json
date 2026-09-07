@@ -1,0 +1,228 @@
+{
+  "schema_version": 1,
+  "inventory_version": "1.0.0",
+  "source": {
+    "repository": "https://github.com/kisev/skills",
+    "branch": "main",
+    "current_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+    "tags": ["v1.0.0", "v1.1.0", "v1.1.1", "v1.2.0"],
+    "canonical_manifest": "packages/opencode/package.json",
+    "canonical_manifest_sha256": "97b796a0b752c19e903c74be8649ebfd9c2324be7ff39bd7eb58a6d0e98b51df"
+  },
+  "active_portable_skills": [
+    "agents-md",
+    "askme",
+    "ast-grep",
+    "attempt",
+    "code-review",
+    "commit-msg",
+    "docs-prepare",
+    "docs-review",
+    "doit",
+    "goal",
+    "humanize",
+    "lsp-report",
+    "mattermost",
+    "mr-prepare",
+    "overview",
+    "project-spec",
+    "release-prepare",
+    "release-review",
+    "rtk",
+    "schedule",
+    "skill-improver",
+    "stopit",
+    "summary",
+    "task-prepare",
+    "task-review",
+    "task-triage",
+    "team-workflow",
+    "usage",
+    "walkthrough"
+  ],
+  "npm_releases": [
+    {
+      "package": "@kisev/skills-opencode",
+      "version": "1.0.0",
+      "tarball_sha256": "dd54e6e6ed6d0e23a7f2576809a939bbd47944a5a590a282a3d0832d9f5e299c",
+      "integrity": "sha512-4/GzDI//ZPP+gBkov/CO82hwJVN5sdRoyNghioqP0UBGYCQdbX4kJ7pl7jkmjnJlDZQbIwY8NSvxFmkR2G2rFQ=="
+    },
+    {
+      "package": "@kisev/skills-opencode",
+      "version": "1.1.0",
+      "tarball_sha256": "23472afa0ea4f83bd5f5fbcbfee742a4a3d13c08eda616a85e401decd7a2733e",
+      "integrity": "sha512-Q1a3Ud4RRGI+x0eBOrynk2Ys/m5CbbWHiscQ4RMHJjIDmQSpfznuFhsN7Bge5l/qeUBkCtw8qjLvvA9IVrYhLA=="
+    },
+    {
+      "package": "@kisev/skills-opencode",
+      "version": "1.1.1",
+      "tarball_sha256": "b31613eadaec44a92ce4bfd62afaad03da7ded393d58a96fc1cdce237dda501d",
+      "integrity": "sha512-JHW/KIo5R5MFwjyP7SIiR+hbvvveMF+xDzxL45Tfr1ISLbP7TtPyDx7nZcea8RHF+BGj3idKt5B5R8MRSV3vQQ=="
+    },
+    {
+      "package": "@kisev/skills-opencode",
+      "version": "1.2.0",
+      "tarball_sha256": "62e2f6a5b33d39bcd7b3b18b3067b267b0c663011355c21d212f7e17c591034f",
+      "integrity": "sha512-YUwvc1cjXb4B/q/zBcvOBRgzkKfIKQX37Is2tEzFdS7kUiM2BJrUBpzOXkvqgMMzYZrfWQcHp0nu4HxHc+zpvQ=="
+    }
+  ],
+  "records": [
+    {
+      "id": "portable-skill:multi-run",
+      "kind": "portable-skill",
+      "historical_path": "skills/multi-run",
+      "installed_path": "skills/multi-run",
+      "introduced": { "ref": "cdb022dcb6a75414437b5fc1651cb8326f262e4e", "version": "v1.0.0" },
+      "retired": { "ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "files": {
+        "SKILL.md": "f78c15633a9b2d61ad6c45b40ff45baa343d103301d2e5ed22f32817769f9585",
+        "scripts/multi_run.py": "b529c0429ff12c890fac958c8e9a41803c1cf5dcff9b3eebc7ec74009f12bb78",
+        "scripts/portable_runtime/__init__.py": "b7fea841ba15ecbbd785e44aff7568c69b88be1d3af6c79ebe8ce2f70de6f4b7",
+        "scripts/portable_runtime/capabilities.py": "f2567c26efe623a65729298ae07fd56fc1c8e9fa60489c5dc5e658906cbbf8a7",
+        "scripts/portable_runtime/contract.py": "ab73a95d667e282526a53098a5c90cebcc3b874dabf4e66b96b10906db7ff72a",
+        "scripts/portable_runtime/state.py": "ed4b526244e906e8e17bb440b86dd6f6f63f33490cd9f082f530844b9b504680"
+      },
+      "ownership_evidence": [
+        {
+          "type": "source_identity",
+          "repository": "https://github.com/kisev/skills",
+          "refs": ["v1.0.0", "v1.1.0", "v1.1.1", "v1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+          "sha256": "f78c15633a9b2d61ad6c45b40ff45baa343d103301d2e5ed22f32817769f9585"
+        }
+      ]
+    },
+    {
+      "id": "package-command:multi-run-cancel",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/multi-run-cancel.md",
+      "installed_path": "commands/multi-run-cancel.md",
+      "introduced": { "ref": "cdb022dcb6a75414437b5fc1651cb8326f262e4e", "version": "v1.0.0" },
+      "retired": { "ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "sha256": "f64a9e849ec4d7d11f61204d58cfd00b275fba79b4117802c53bbc2cab6094d4",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+        }
+      ]
+    },
+    {
+      "id": "package-command:multi-run-compare",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/multi-run-compare.md",
+      "installed_path": "commands/multi-run-compare.md",
+      "introduced": { "ref": "cdb022dcb6a75414437b5fc1651cb8326f262e4e", "version": "v1.0.0" },
+      "retired": { "ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "sha256": "e72131f94dfc2e4b8f071d063efb4ce800634969b00258e77b1a84d41ff74490",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+        }
+      ]
+    },
+    {
+      "id": "package-command:multi-run-fusion",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/multi-run-fusion.md",
+      "installed_path": "commands/multi-run-fusion.md",
+      "introduced": { "ref": "cdb022dcb6a75414437b5fc1651cb8326f262e4e", "version": "v1.0.0" },
+      "retired": { "ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "sha256": "5ca23f636800c6234396c97ad40ced456d522b1b94ad22761bf3fb75a1abaed0",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+        }
+      ]
+    },
+    {
+      "id": "package-command:multi-run-start",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/multi-run-start.md",
+      "installed_path": "commands/multi-run-start.md",
+      "introduced": { "ref": "cdb022dcb6a75414437b5fc1651cb8326f262e4e", "version": "v1.0.0" },
+      "retired": { "ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "sha256": "f578ca117e1193f15a919b7eb1f7b48215af5d002bb0209f970bc287378e9925",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+        }
+      ]
+    },
+    {
+      "id": "package-command:multi-run-status",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/multi-run-status.md",
+      "installed_path": "commands/multi-run-status.md",
+      "introduced": { "ref": "cdb022dcb6a75414437b5fc1651cb8326f262e4e", "version": "v1.0.0" },
+      "retired": { "ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "sha256": "dabe6530845097a7b0e43c24016ba380396074bb433de4c61370799ea81af977",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+        }
+      ]
+    },
+    {
+      "id": "installation-metadata:generic-manifest-entry",
+      "kind": "installation-metadata",
+      "historical_path": ".skills-opencode-manifest.json:files[commands/multi-run-*.md]",
+      "installed_path": ".skills-opencode-manifest.json",
+      "introduced": { "ref": "f8e2ea44b02b55a9a014a6a81ac419fc2aeda414", "version": "v1.0.0" },
+      "retired": { "ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "manifest": ".skills-opencode-manifest.json"
+        }
+      ]
+    }
+  ]
+}

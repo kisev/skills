@@ -15,6 +15,7 @@ import {
   type AgentProfileAction,
   type AgentProfileRequest,
 } from "./agent-profiles.js";
+import { applyReconcile, previewReconcile } from "./reconcile.js";
 
 export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
 export { CATEGORIES, resolveRouting, RoutingGate, ExecutionCardLifecycle, validateExecutionCard, validateRoutingReceipt } from "./routing.js";
@@ -50,10 +51,10 @@ export type {
   FixedAgentRole,
 } from "./agent-profiles.js";
 export { backgroundAttempts, scheduler, autonomyPolicy, rulesInjector, rtk, zedBell, zedClickablePaths };
+export { applyReconcile, previewReconcile } from "./reconcile.js";
+export type { ReconcileItem, ReconcilePlan, ReconcileResult, ReconcileStatus } from "./reconcile.js";
 export { worktreePlan, worktreeCreate, worktreeStatus, worktreeList, worktreeRelease, worktreeRecover } from "./runtime/worktree.js";
 export type { WorktreeRecord, WorktreeStatus } from "./runtime/worktree.js";
-export { createMultiRunPackageBridge } from "./multi-run-bridge.js";
-
 export type OpenCodeOptions = {
   backgroundAttempts?: BackgroundAttemptsOptions;
   scheduler?: SchedulerOptions;
@@ -65,9 +66,9 @@ export type OpenCodeOptions = {
 };
 
 const CATALOG = {
-  skills: ["attempt", "goal", "schedule", "multi-run", "usage", "overview", "lsp-report"],
+  skills: ["attempt", "goal", "schedule", "usage", "overview", "lsp-report"],
   plugins: ["background-attempts", "schedule", "autonomy-policy", "rules-injector", "rtk", "zed-bell", "zed-clickable-paths"],
-  replacements: ["capabilities", "route", "doctor", "agent_profiles"],
+  replacements: ["capabilities", "route", "doctor", "agent_profiles", "reconcile"],
   version: "1.1.1",
 } as const;
 
@@ -131,8 +132,22 @@ const plugin = (async (input: { directory?: string }) => {
       return JSON.stringify(await applyAgentProfileChange(request, args.scope, args.confirmation_digest, cwd));
     },
   });
+  const reconcile = tool({
+    description: "Preview or apply scope-isolated removal of retired public assets without touching unknown sources or runtime state.",
+    args: {
+      phase: tool.schema.enum(["preview", "apply"]),
+      scope: tool.schema.enum(["global", "project"]),
+      confirmation_digest: tool.schema.string().optional(),
+    },
+    async execute(args: { phase: "preview" | "apply"; scope: "global" | "project"; confirmation_digest?: string }) {
+      const cwd = input.directory ?? process.cwd();
+      if (args.phase === "preview") return JSON.stringify({ status: "ok", applied: false, plan: await previewReconcile(args.scope, cwd) });
+      if (!args.confirmation_digest) throw new Error("reconcile apply requires confirmation_digest");
+      return JSON.stringify(await applyReconcile(args.scope, args.confirmation_digest, cwd));
+    },
+  });
   return {
-    tool: { route, capabilities, doctor, agent_profiles: agentProfiles },
+    tool: { route, capabilities, doctor, agent_profiles: agentProfiles, reconcile },
     "tool.execute.before": async (input: { tool: string; sessionID: string }, output: { args: unknown }) => {
       if (input.tool !== "task") return;
       const args = output.args && typeof output.args === "object" ? output.args as Record<string, unknown> : {};

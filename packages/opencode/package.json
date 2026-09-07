@@ -59,7 +59,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "format": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --write src test package.json tsconfig.json README.md",
     "format:check": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --check src test package.json tsconfig.json README.md",
     "lint": "oxlint src test",

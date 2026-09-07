@@ -1,7 +1,7 @@
 export type CommandRegistration = {
   name: string;
   skill?: string;
-  packageTool?: "capabilities" | "route" | "doctor" | "agent_profiles";
+  packageTool?: "capabilities" | "route" | "doctor" | "agent_profiles" | "reconcile";
   packageAction?: "list" | "model_set" | "critic_add" | "critic_remove";
   description: string;
   mode?: string;
@@ -50,16 +50,12 @@ export const COMMAND_REGISTRY: readonly CommandRegistration[] = [
   { name: "schedule-list", skill: "schedule", mode: "list", description: "Показать discovered scheduled task definitions." },
   { name: "schedule-remove", skill: "schedule", mode: "remove", description: "Подтверждённо удалить scheduled task definition." },
   { name: "schedule-status", skill: "schedule", mode: "status", description: "Показать definition validity и scheduler receipts." },
-  { name: "multi-run-cancel", skill: "multi-run", mode: "cancel", description: "Подтверждённо отменить один или несколько isolated runs." },
-  { name: "multi-run-compare", skill: "multi-run", mode: "compare", description: "Сравнить только terminal manifests группы attempts." },
-  { name: "multi-run-fusion", skill: "multi-run", mode: "fusion", description: "Подготовить и подтвердить новую fusion attempt." },
-  { name: "multi-run-start", skill: "multi-run", mode: "start", description: "Подготовить 2-5 изолированных attempts одной задачи." },
-  { name: "multi-run-status", skill: "multi-run", mode: "status", description: "Показать состояние группы isolated attempts." },
   { name: "overview", skill: "overview", description: "Построить read-only сводку durable OpenCode state." },
   { name: "lsp-report", skill: "lsp-report", description: "Показать read-only применимость LSP OpenCode." },
   { name: "capabilities", packageTool: "capabilities", description: "Показать catalog package OpenCode integration." },
   { name: "route", packageTool: "route", description: "Подобрать capability route и при необходимости выдать receipt." },
   { name: "doctor", packageTool: "doctor", description: "Показать read-only health package OpenCode integration." },
+  { name: "reconcile", packageTool: "reconcile", description: "Показать или применить безопасную миграцию retired public assets." },
   { name: "agent-list", packageTool: "agent_profiles", packageAction: "list", description: "Показать inventory управляемых и пользовательских OpenCode agents." },
   { name: "agent-model-set", packageTool: "agent_profiles", packageAction: "model_set", description: "Подготовить или применить настройку model и variant одного agent." },
   { name: "critic-add", packageTool: "agent_profiles", packageAction: "critic_add", description: "Подготовить или применить добавление дополнительного critic." },

@@ -44,14 +44,12 @@ PORTABLE_SKILLS = (
     "attempt",
     "goal",
     "schedule",
-    "multi-run",
     "usage",
     "overview",
     "lsp-report",
 )
 FORBIDDEN_PORTABLE_MARKERS = (
     "../..",
-    "bedrock.",
     "catalog.yml",
     "~/.config/opencode",
     "~/.local/state/opencode",
@@ -201,7 +199,6 @@ RUNNERS = {
     "mattermost": "scripts/mattermost.py",
     "team-workflow": "scripts/team_workflow.py",
     "schedule": "scripts/schedule.py",
-    "multi-run": "scripts/multi_run.py",
     "usage": "scripts/usage.py",
     "overview": "scripts/overview.py",
     "lsp-report": "scripts/lsp_report.py",
@@ -533,7 +530,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             if entry["source"].startswith("references/python_runtime/")
         ]
         destinations = {entry["destination"] for entry in runtime_entries}
-        for name in ("schedule", "multi-run", "usage", "overview", "lsp-report"):
+        for name in ("schedule", "usage", "overview", "lsp-report"):
             with self.subTest(skill=name):
                 self.assertIn(f"{name}/scripts/portable_runtime/capabilities.py", destinations)
                 self.assertIn(f"{name}/scripts/portable_runtime/contract.py", destinations)
@@ -544,7 +541,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
-        opencode_skills = {"attempt", "schedule", "multi-run", "usage", "overview", "lsp-report"}
+        opencode_skills = {"attempt", "schedule", "usage", "overview", "lsp-report"}
         for path in (ROOT / "skills").rglob("*"):
             if (
                 path.is_file()
@@ -889,7 +886,7 @@ class PortableRunnerTests(unittest.TestCase):
             (target / "SKILL.md").write_text(
                 (target / "SKILL.md")
                 .read_text(encoding="utf-8")
-                .replace("license: MIT", "bedrock.entrypoint: path:scripts/missing.py"),
+                .replace("license: MIT", "custom.entrypoint: path:scripts/missing.py"),
                 encoding="utf-8",
             )
             rejected = self.run_runner("skill-improver", "check", "--path", str(target))
@@ -1033,18 +1030,6 @@ class OpenCodePortableRuntimeTests(unittest.TestCase):
             self.assertFalse(json.loads(applied.stdout)["definition"]["enabled"])
             repeat = self.run_skill("schedule", "add", "--project", str(project), "--id", "morning", "--name", "Morning", "--schedule", "every: 1h", "--agent", "worker", "--model", "model", "--prompt", "inspect", "--confirmation-id", token, environment=environment)
             self.assertEqual(repeat.returncode, 2)
-
-    def test_multi_run_without_adapters_escalates_without_state(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            project = Path(temporary) / "project"
-            project.mkdir()
-            task = project / "task.md"
-            task.write_text("inspect", encoding="utf-8")
-            state = Path(temporary) / "state"
-            result = self.run_skill("multi-run", "preview", "--task-file", str(task), "--project", str(project), "--start-ref", "HEAD", "--count", "2", environment={"HOME": temporary, "XDG_STATE_HOME": str(state), "AGENT_SKILLS_ROUTE_API": ""})
-            self.assertEqual(result.returncode, 3, result.stderr)
-            self.assertEqual(json.loads(result.stdout)["status"], "escalate")
-            self.assertFalse(state.exists())
 
     def test_read_only_reports_do_not_create_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
