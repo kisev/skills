@@ -44,7 +44,12 @@ state, timers, sessions или mutations.
 Их Python runner materialize-ит общий stdlib runtime внутрь skill и использует
 только XDG/OpenCode user-owned config/state. Package runtime не ссылается на
 checkout и экспортирует семь независимых plugin factories. `capabilities`,
-`route` и `doctor` являются package tools для catalog/routing/health. Routing
+`route` и `doctor` являются package tools для catalog/routing/health. Doctor
+использует общий versioned read-only facts API direct CLI и package tool: он не
+вызывает plugin factories, lifecycle recovery, receipts, journals или LSP
+servers. Host-only resolved config и `lsp.status` при наличии SDK добавляются как
+allowlisted facts, иначе получают `unavailable/incomplete`. `/doctor` остаётся
+thin adapter, отдельного portable skill `doctor` нет. Routing
 receipt одноразово связывает выбранного agent с canonical task text, exact
 requirements, execution-card digest/revision, matrix revision и TTL; переходы
 отклоняют stale, replay, изменённый task/card и просроченный receipt.
@@ -68,3 +73,7 @@ Stateful runtime records используют те же private 0600 atomic writ
 - `--check` работает только на чтение и сообщает о drift ненулевым exit status.
 - Проверка work item сортирует findings по стабильному ключу и связывает report с
   digest item/evidence, поэтому неизменный повторный check даёт тот же verdict.
+- LSP applicability использует один machine-readable catalog, materialized в
+  `lsp-report` вместе с stdlib-only runtime и поставляемый package asset. Portable
+  report не имеет npm runtime dependency; package doctor дополняет только host
+  config/status facts.

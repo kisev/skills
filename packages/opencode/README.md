@@ -64,6 +64,25 @@ npm exec -- skills-opencode install --scope global --dry-run --json
 npm exec -- skills-opencode agent list --scope global --json
 ```
 
+## Read-only doctor
+
+`doctor` is a read-only installer health report. It never creates lifecycle
+state, consumes receipts, recovers journals, starts plugins or starts LSP
+servers. `project` and `global` are isolated scopes; unavailable OpenCode host
+facts are reported as incomplete rather than inferred.
+
+```shell
+npm exec -- skills-opencode doctor --scope project
+npm exec -- skills-opencode doctor --scope global --json
+```
+
+The JSON report is versioned and contains stable check IDs, package/catalog and
+installed-manifest versions, ownership/drift/collision classifications, stage-8
+inventory findings, lifecycle/runtime state summaries, redacted config
+projections and LSP facts. Secrets, raw config, environment values, receipts
+and credentials are never serialized. Exit code `0` is clean, `1` reports
+findings, and `2` means invalid input or an incomplete probe failure.
+
 ## Reconcile retired assets
 
 `reconcile` проверяет только public portable skills, package commands, plugins,
@@ -196,7 +215,8 @@ router. Команды - тонкие adapters: передают `$ARGUMENTS` к
 в native Skill tool, а target validation, confirmation, batch/review rules и
 формат результата остаются ответственностью skill или runner.
 `capabilities`, `route` и `doctor` - package tools/commands для catalog, routing и
-health. Tool `agent_profiles` и четыре slash-команды `agent-list`,
+health. Tool `doctor` and direct CLI share one read-only facts API; `/doctor` is
+only a thin adapter. Tool `agent_profiles` и четыре slash-команды `agent-list`,
 `agent-model-set`, `critic-add`, `critic-remove` - optional thin UX над теми же
 plan/apply contracts. Отдельного skill `agent-profiles` нет.
 

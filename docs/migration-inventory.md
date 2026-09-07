@@ -34,7 +34,7 @@
 | `schedule` | write с confirmation | Явные definitions, disabled по умолчанию, без replay пропущенных slots. |
 | `usage` | read-only runner | Ledger observed tokens/cost с честным unknown. |
 | `overview` | read-only runner | Partial-tolerant сводка file-backed OpenCode state. |
-| `lsp-report` | read-only runner | Применимые LSP без запуска servers и установки tools. |
+| `lsp-report` | read-only runner | Применимые LSP без запуска servers и установки tools; использует canonical materialized catalog. |
 
 Skills не наследуют runtime state, providers, глобальные конфигурации или имена
 инструментов конкретного host. Интерактивность выражена нейтрально: штатный
