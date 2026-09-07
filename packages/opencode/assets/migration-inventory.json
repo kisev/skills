@@ -213,6 +213,167 @@
       ]
     },
     {
+      "id": "package-command:goal-list",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/goal-list.md",
+      "installed_path": "commands/goal-list.md",
+      "introduced": { "ref": "bf91116b2a48936c18d78164baf8de8862cb872f", "version": "v1.0.0" },
+      "retired": { "ref": "9179b78997413ad99fa7973699f7dfe84d59dc69", "version": "v1.2.0" },
+      "replacement": "commands/goal.md",
+      "scopes": ["project", "global"],
+      "sha256": "3f3bee96f7fe4c527c58389116fa7ff5b8d9e8007768e1711032f81a68a0d8b9",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "v1.2.0",
+          "sha256": "3f3bee96f7fe4c527c58389116fa7ff5b8d9e8007768e1711032f81a68a0d8b9"
+        }
+      ]
+    },
+    {
+      "id": "package-command:goal-pause",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/goal-pause.md",
+      "installed_path": "commands/goal-pause.md",
+      "introduced": { "ref": "bf91116b2a48936c18d78164baf8de8862cb872f", "version": "v1.0.0" },
+      "retired": { "ref": "9179b78997413ad99fa7973699f7dfe84d59dc69", "version": "v1.2.0" },
+      "replacement": "commands/goal.md",
+      "scopes": ["project", "global"],
+      "sha256": "53087aca89f419a6fecf414f2b578370613ce7ffb33a3ff9a9d4930acdb0a292",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "v1.2.0",
+          "sha256": "53087aca89f419a6fecf414f2b578370613ce7ffb33a3ff9a9d4930acdb0a292"
+        }
+      ]
+    },
+    {
+      "id": "package-command:goal-prepare",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/goal-prepare.md",
+      "installed_path": "commands/goal-prepare.md",
+      "introduced": { "ref": "bf91116b2a48936c18d78164baf8de8862cb872f", "version": "v1.0.0" },
+      "retired": { "ref": "9179b78997413ad99fa7973699f7dfe84d59dc69", "version": "v1.2.0" },
+      "replacement": "commands/goal.md",
+      "scopes": ["project", "global"],
+      "sha256": "e69b8a9408514945e9cd90bf62543ad58267974ce94065eae08c9885c89d958d",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "v1.2.0",
+          "sha256": "e69b8a9408514945e9cd90bf62543ad58267974ce94065eae08c9885c89d958d"
+        }
+      ]
+    },
+    {
+      "id": "package-command:goal-remove",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/goal-remove.md",
+      "installed_path": "commands/goal-remove.md",
+      "introduced": { "ref": "bf91116b2a48936c18d78164baf8de8862cb872f", "version": "v1.0.0" },
+      "retired": { "ref": "9179b78997413ad99fa7973699f7dfe84d59dc69", "version": "v1.2.0" },
+      "replacement": "commands/goal.md",
+      "scopes": ["project", "global"],
+      "sha256": "9656c8781690c2f10f8f222c455bd06c33e962a1a1bbd42ef3bcb9d020d49f05",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "v1.2.0",
+          "sha256": "9656c8781690c2f10f8f222c455bd06c33e962a1a1bbd42ef3bcb9d020d49f05"
+        }
+      ]
+    },
+    {
+      "id": "package-command:goal-show",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/goal-show.md",
+      "installed_path": "commands/goal-show.md",
+      "introduced": { "ref": "bf91116b2a48936c18d78164baf8de8862cb872f", "version": "v1.0.0" },
+      "retired": { "ref": "9179b78997413ad99fa7973699f7dfe84d59dc69", "version": "v1.2.0" },
+      "replacement": "commands/goal.md",
+      "scopes": ["project", "global"],
+      "sha256": "82825f42f382c526c26a1578d26809a6313527d352de8a5476e643dfcee8ea65",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "v1.2.0",
+          "sha256": "82825f42f382c526c26a1578d26809a6313527d352de8a5476e643dfcee8ea65"
+        }
+      ]
+    },
+    {
+      "id": "package-command:goal-start",
+      "kind": "package-command",
+      "historical_path": "packages/opencode/assets/commands/goal-start.md",
+      "installed_path": "commands/goal-start.md",
+      "introduced": { "ref": "bf91116b2a48936c18d78164baf8de8862cb872f", "version": "v1.0.0" },
+      "retired": { "ref": "9179b78997413ad99fa7973699f7dfe84d59dc69", "version": "v1.2.0" },
+      "replacement": "commands/goal.md",
+      "scopes": ["project", "global"],
+      "sha256": "01fcb5372d30e223411048ce1be8c4ee5027597e5581ac775eb112a6699b87a1",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "v1.2.0",
+          "sha256": "01fcb5372d30e223411048ce1be8c4ee5027597e5581ac775eb112a6699b87a1"
+        }
+      ]
+    },
+    {
+      "id": "package-plugin:goal-loop",
+      "kind": "package-plugin",
+      "historical_path": "packages/opencode/assets/plugins/goal-loop.js",
+      "installed_path": "plugins/goal-loop.js",
+      "introduced": { "ref": "f2aaa3dbf182a73d8084548aadba1ac432dd3a6f", "version": "v1.0.0" },
+      "retired": { "ref": "9179b78997413ad99fa7973699f7dfe84d59dc69", "version": "v1.2.0" },
+      "replacement": null,
+      "scopes": ["project", "global"],
+      "sha256": "66fc5d87f3313aed65f42244494ceefee6a701c429afe12ae81b4f576fc0b3bd",
+      "ownership_evidence": [
+        {
+          "type": "manifest_identity",
+          "package": "@kisev/skills-opencode",
+          "versions": ["1.0.0", "1.1.0", "1.1.1", "1.2.0"]
+        },
+        {
+          "type": "exact_released_sha256",
+          "source_ref": "v1.2.0",
+          "sha256": "66fc5d87f3313aed65f42244494ceefee6a701c429afe12ae81b4f576fc0b3bd"
+        }
+      ]
+    },
+    {
       "id": "installation-metadata:generic-manifest-entry",
       "kind": "installation-metadata",
       "historical_path": ".skills-opencode-manifest.json:files[commands/multi-run-*.md]",
