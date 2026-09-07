@@ -238,6 +238,10 @@
       "destination": "overview/scripts/portable_runtime/lsp.py"
     },
     {
+      "source": "references/lsp-catalog.json",
+      "destination": "overview/scripts/portable_runtime/lsp-catalog.json"
+    },
+    {
       "source": "references/python_runtime/__init__.py",
       "destination": "lsp-report/scripts/portable_runtime/__init__.py"
     },
@@ -252,6 +256,10 @@
     {
       "source": "references/python_runtime/lsp.py",
       "destination": "lsp-report/scripts/portable_runtime/lsp.py"
+    },
+    {
+      "source": "references/lsp-catalog.json",
+      "destination": "lsp-report/scripts/portable_runtime/lsp-catalog.json"
     },
     {
       "source": "references/interaction-contract.md",

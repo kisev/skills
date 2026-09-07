@@ -2,23 +2,28 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
 from typing import Any
 
 
-SERVERS = (
-    ("python", {".py", ".pyi"}, "basedpyright", "external-command"),
-    ("typescript", {".ts", ".tsx", ".js", ".jsx"}, "typescript-language-server", "external-command"),
-    ("yaml", {".yaml", ".yml"}, "yaml-language-server", "external-command"),
-    ("shell", {".sh", ".bash", ".zsh"}, "bash-language-server", "external-command"),
+with (Path(__file__).with_name("lsp-catalog.json")).open(encoding="utf-8") as _catalog_file:
+    _catalog = json.load(_catalog_file)
+
+SERVERS = tuple(
+    (item["name"], set(item["extensions"]), item["executable"], item["requirement_class"])
+    for item in _catalog["servers"]
 )
 
 
 def detect(project: Path) -> dict[str, Any]:
-    root = project.expanduser().resolve()
-    if not root.is_dir() or root.is_symlink():
+    candidate = project.expanduser()
+    if candidate.is_symlink():
+        return {"status": "error", "error": "project must not be a symlink"}
+    root = candidate.resolve()
+    if not root.is_dir():
         return {"status": "error", "error": "project must be an existing non-symlink directory"}
     suffixes: set[str] = set()
     try:
@@ -45,6 +50,9 @@ def detect(project: Path) -> dict[str, Any]:
             "name": name,
             "applicable": applicable,
             "active": active,
+            "configured": applicable,
+            "binary_available": available,
+            "runtime_status": "unavailable",
             "requirement_class": requirement,
             "missing": [] if available else [executable],
             "reason": reason,
@@ -52,6 +60,7 @@ def detect(project: Path) -> dict[str, Any]:
         })
     return {
         "schema_version": 1,
+        "catalog_version": _catalog["catalog_version"],
         "status": "ok",
         "project": str(root),
         "download_disabled": disabled,
