@@ -32,7 +32,6 @@
 | `attempt` | package tool | Чтение и подтверждённая отмена bounded Background Attempts. |
 | `goal` | read-only portable skill | Формулировка проверяемой цели в canonical `work-item/v1`. |
 | `schedule` | write с confirmation | Явные definitions, disabled по умолчанию, без replay пропущенных slots. |
-| `multi-run` | write с confirmation | 2-5 isolated attempts, compare terminal manifests и fusion. |
 | `usage` | read-only runner | Ledger observed tokens/cost с честным unknown. |
 | `overview` | read-only runner | Partial-tolerant сводка file-backed OpenCode state. |
 | `lsp-report` | read-only runner | Применимые LSP без запуска servers и установки tools. |
@@ -58,3 +57,9 @@ installer, но не поставляет копии skills и не меняет
 `npx skills`. Agent profiles управляются package domain и прямым CLI, а не
 отдельным skill; четыре slash-команды и tool `agent_profiles` только адаптируют
 этот интерфейс. Stateful plugins выключены по умолчанию.
+
+Machine-readable история public surfaces находится в
+`packages/opencode/assets/migration-inventory.json`. Она содержит только
+переносимые skills, package assets и installation metadata, доступные через
+public GitHub tags или npm releases. Retired entries удаляются только после
+проверки exact SHA-256 и scope-bound confirmation.

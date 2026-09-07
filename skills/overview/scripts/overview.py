@@ -45,12 +45,11 @@ def read_component(name: str, root: Path, matcher: str, project: str, selector: 
 def build(root: Path) -> dict[str, Any]:
     project = str(root.resolve())
     attempt = read_component("attempts", skill_state_root("attempt") / "attempts", "*.json", project, lambda value, scope: {key: value.get(key) for key in ("attempt_id", "parent_session_id", "child_session_id", "status", "revision", "workspace_id")} if value.get("project") == scope else None)
-    multi = read_component("groups", skill_state_root("multi-run"), "*.json", project, lambda value, scope: {"multi_run_id": value.get("multi_run_id"), "status": value.get("status"), "attempts": len(value.get("runs", [])) if isinstance(value.get("runs"), list) else None} if value.get("project_root") == scope else None)
     schedule_root = skill_state_root("schedule") / hashlib.sha256(project.encode()).hexdigest() / "definitions"
     schedule = read_component("definitions", schedule_root, "*.json", project, lambda value, _scope: {key: value.get(key) for key in ("id", "name", "schedule", "enabled")})
     lsp = detect(root)
     counts = {status: sum(item.get("status") == status for item in attempt["data"]["attempts"]) for status in ("queued", "running", "waiting", "completed", "failed", "cancelled", "orphaned")}
-    return {"root": project, "status": "partial" if any(item["status"] == "partial" for item in (attempt, multi, schedule)) else "ok", "components": {"attempts": attempt, "multi_run": multi, "schedule": schedule, "lsp": {"status": lsp["status"], "data": lsp}}, "signals": {"attempts": counts, "lsp_unavailable": [item["name"] for item in lsp.get("servers", []) if item.get("applicable") and not item.get("active")]}}
+    return {"root": project, "status": "partial" if any(item["status"] == "partial" for item in (attempt, schedule)) else "ok", "components": {"attempts": attempt, "schedule": schedule, "lsp": {"status": lsp["status"], "data": lsp}}, "signals": {"attempts": counts, "lsp_unavailable": [item["name"] for item in lsp.get("servers", []) if item.get("applicable") and not item.get("active")]}}
 
 
 def projects(args: argparse.Namespace) -> list[Path]:

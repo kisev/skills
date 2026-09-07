@@ -102,7 +102,6 @@ lock-файла при этом считается drift. Для generated drift
 | `attempt`         | Чтение и безопасная отмена Background Attempts OpenCode.                  |
 | `goal`            | Read-only формулировка проверяемой цели в `work-item/v1`.                 |
 | `schedule`        | Явные disabled-by-default definitions для scheduler OpenCode.             |
-| `multi-run`       | Изолированные attempts и подтверждённый fusion.                           |
 | `usage`           | Read-only ledger токенов и стоимости OpenCode.                            |
 | `overview`        | Read-only сводка durable OpenCode state.                                  |
 | `lsp-report`      | Применимость LSP OpenCode без запуска и установки.                        |

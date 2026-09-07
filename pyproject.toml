@@ -45,7 +45,6 @@ exclude = [
   "skills/ast-grep/scripts/ast_grep.py",
   "skills/lsp-report/scripts/lsp_report.py",
   "skills/mattermost/scripts/mattermost.py",
-  "skills/multi-run/scripts/multi_run.py",
   "skills/overview/scripts/overview.py",
   "skills/schedule/scripts/schedule.py",
   "skills/skill-improver/scripts/skill_improver.py",
