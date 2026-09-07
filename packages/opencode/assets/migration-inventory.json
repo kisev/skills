@@ -4,10 +4,10 @@
   "source": {
     "repository": "https://github.com/kisev/skills",
     "branch": "main",
-    "current_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+    "current_ref": "0c2296970fc465c2eaa95d2af1fcab25c8c9b6ff",
     "tags": ["v1.0.0", "v1.1.0", "v1.1.1", "v1.2.0"],
     "canonical_manifest": "packages/opencode/package.json",
-    "canonical_manifest_sha256": "97b796a0b752c19e903c74be8649ebfd9c2324be7ff39bd7eb58a6d0e98b51df"
+    "canonical_manifest_sha256": "b209da108148a564259b30f0c6a5a28049dbfbc6eedfbe07fba0adda1887e0b2"
   },
   "active_portable_skills": [
     "agents-md",
@@ -115,7 +115,8 @@
         },
         {
           "type": "exact_released_sha256",
-          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+          "sha256": "f64a9e849ec4d7d11f61204d58cfd00b275fba79b4117802c53bbc2cab6094d4"
         }
       ]
     },
@@ -137,7 +138,8 @@
         },
         {
           "type": "exact_released_sha256",
-          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+          "sha256": "e72131f94dfc2e4b8f071d063efb4ce800634969b00258e77b1a84d41ff74490"
         }
       ]
     },
@@ -159,7 +161,8 @@
         },
         {
           "type": "exact_released_sha256",
-          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+          "sha256": "5ca23f636800c6234396c97ad40ced456d522b1b94ad22761bf3fb75a1abaed0"
         }
       ]
     },
@@ -181,7 +184,8 @@
         },
         {
           "type": "exact_released_sha256",
-          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+          "sha256": "f578ca117e1193f15a919b7eb1f7b48215af5d002bb0209f970bc287378e9925"
         }
       ]
     },
@@ -203,7 +207,8 @@
         },
         {
           "type": "exact_released_sha256",
-          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a"
+          "source_ref": "ab896b55c2339f4c1a920a0277c427ad8fc0677a",
+          "sha256": "dabe6530845097a7b0e43c24016ba380396074bb433de4c61370799ea81af977"
         }
       ]
     },

@@ -701,6 +701,25 @@ test("reconcile removes only exact retired assets and preserves unrelated source
     const repeat = await previewReconcile("project", project, home);
     assert.equal(repeat.retired.length, 0);
     assert.equal(repeat.operations.length, 0);
+
+    const globalRoot = join(home, ".config", "opencode");
+    await mkdir(join(globalRoot, "commands"), { recursive: true });
+    await writeFile(join(globalRoot, "commands", "multi-run-start.md"), retired);
+    await writeFile(
+      join(globalRoot, ".skills-opencode-manifest.json"),
+      JSON.stringify({
+        schema_version: 1,
+        package: "@kisev/skills-opencode",
+        version: "1.2.0",
+        files: { "commands/multi-run-start.md": { sha256: createHash("sha256").update(retired).digest("hex") } },
+      }),
+    );
+    const globalPlan = await previewReconcile("global", project, home);
+    assert.equal(globalPlan.scope, "global");
+    assert.equal(globalPlan.retired.length, 1);
+    await applyReconcile("global", globalPlan.digest, project, home);
+    await assert.rejects(lstat(join(globalRoot, "commands", "multi-run-start.md")), { code: "ENOENT" });
+    assert.equal(await readFile(join(project, ".agents", ".skill-lock.json"), "utf8"), "keep-byte-for-byte\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -752,6 +771,9 @@ test("reconcile CLI returns stable JSON and a ready confirmation command", () =>
     const human = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--dry-run"], { cwd: project, env, encoding: "utf8" });
     assert.equal(human.status, 0);
     assert.match(human.stdout, /npm exec -- skills-opencode reconcile --scope project --confirm [a-f0-9]{64}/);
+    const invalid = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--dry-run", "--confirm", "0".repeat(64), "--json"], { cwd: project, env, encoding: "utf8" });
+    assert.equal(invalid.status, 2);
+    assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
