@@ -52,9 +52,9 @@ try {
   const config = run(binary, ["debug", "config"], { cwd: project, env: opencodeEnvironment });
   assert.match(config, /@kisev\/skills-opencode/);
   const manifest = JSON.parse(await readFile(join(home, ".config", "opencode", ".skills-opencode-manifest.json"), "utf8"));
-  assert.equal(Object.keys(manifest.files).length, 69);
+  assert.equal(Object.keys(manifest.files).length, 63);
   assert.equal(Object.keys(manifest.files).some((path) => path.startsWith("agents/")), false);
-  assert.equal(Object.keys(manifest.files).filter((path) => path.startsWith("plugins/")).length, 8);
+  assert.equal(Object.keys(manifest.files).filter((path) => path.startsWith("plugins/")).length, 7);
   const semantic = JSON.parse(await readFile(join(home, ".config", "opencode", ".skills-opencode", "agent-profiles.manifest.json"), "utf8"));
   assert.deepEqual(semantic.critic_pool, ["critic", "critic-smoke"]);
   process.stdout.write("Packed OpenCode installer smoke test passed\n");

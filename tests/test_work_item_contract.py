@@ -195,37 +195,3 @@ def test_recheck_is_stable_and_all_premortem_outcomes_are_structured(tmp_path: P
         )
         assert result.returncode == (0 if status != "invalid" else 2)
         assert json.loads(result.stdout)["status"] == status
-
-
-def test_goal_reads_legacy_state_without_dropping_fields(tmp_path: Path) -> None:
-    state = tmp_path / "state/opencode/skills/goal"
-    state.mkdir(parents=True)
-    record = {
-        "schema_version": 1,
-        "goal_id": "legacy",
-        "session_id": "session",
-        "project_root": str(tmp_path),
-        "status": "paused",
-        "revision": 0,
-        "objective": "preserve me",
-        "completion_criteria": "old criteria",
-        "constraints": "old constraints",
-        "boundaries": "old boundaries",
-        "limits": {"turn_cap": 2, "token_budget": 0},
-        "usage": {"turns": 0, "tokens": 0},
-        "created_at": "2026-01-01T00:00:00Z",
-        "updated_at": "2026-01-01T00:00:00Z",
-        "receipts": [],
-    }
-    (state / "legacy.json").write_text(json.dumps(record), encoding="utf-8")
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "skills/goal/scripts/goal.py"), "show", "--goal-id", "legacy"],
-        env={**dict(), "HOME": str(tmp_path), "XDG_STATE_HOME": str(tmp_path / "state")},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0
-    shown = json.loads(result.stdout)
-    assert shown["objective"] == "preserve me"
-    assert shown["work_item"]["contract_version"] == "work-item/v1"

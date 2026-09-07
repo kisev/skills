@@ -10,7 +10,6 @@ import { pathToFileURL } from "node:url";
 
 import plugin, { COMMAND_REGISTRY, ExecutionCardLifecycle, RoutingGate, renderCommand, resolveRouting, validateExecutionCard, worktreeCreate, worktreeRecover, worktreeRelease, worktreeStatus } from "../dist/index.js";
 import backgroundAttempts from "../dist/plugins/background-attempts.js";
-import goalLoop from "../dist/plugins/goal-loop.js";
 import scheduler from "../dist/plugins/schedule.js";
 import autonomyPolicy from "../dist/plugins/autonomy-policy.js";
 import zedBell from "../dist/plugins/zed-bell.js";
@@ -33,9 +32,9 @@ async function install(scope, cwd, home) {
   return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
 }
 
-test("registry generates exactly sixty-one thin command assets", () => {
-  assert.equal(COMMAND_REGISTRY.length, 61);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 61);
+test("registry generates exactly fifty-six thin command assets", () => {
+  assert.equal(COMMAND_REGISTRY.length, 56);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 56);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
   for (const entry of COMMAND_REGISTRY) {
     if (entry.skill) assert.ok(skills.has(entry.skill), entry.skill);
@@ -48,6 +47,8 @@ test("registry generates exactly sixty-one thin command assets", () => {
     assert.equal(readFileSync(join(PACKAGE, "assets", "commands", `${entry.name}.md`), "utf8"), rendered);
   }
   for (const expected of ["attempt", "goal", "schedule", "multi-run", "overview", "lsp-report"]) assert.ok(COMMAND_REGISTRY.some((entry) => entry.skill === expected));
+  assert.deepEqual(COMMAND_REGISTRY.filter((entry) => entry.skill === "goal").map((entry) => entry.name), ["goal"]);
+  for (const forbidden of ["goal-list", "goal-pause", "goal-prepare", "goal-remove", "goal-show", "goal-start"]) assert.ok(!COMMAND_REGISTRY.some((entry) => entry.name === forbidden));
   for (const forbidden of ["agent-profiles", "bedrock"]) assert.ok(!COMMAND_REGISTRY.some((entry) => entry.skill === forbidden));
   assert.deepEqual(COMMAND_REGISTRY.filter((entry) => entry.packageTool).map((entry) => entry.name).sort(), ["agent-list", "agent-model-set", "capabilities", "critic-add", "critic-remove", "doctor", "route"]);
 });
@@ -102,13 +103,13 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second, first);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 78);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 72);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 61);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "plugins")).length, 8);
-    for (const name of ["background-attempts", "schedule", "goal-loop", "autonomy-policy"]) {
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 56);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "plugins")).length, 7);
+    for (const name of ["background-attempts", "schedule", "autonomy-policy"]) {
       const installed = await readFile(join(home, ".config", "opencode", "plugins", `${name}.js`), "utf8");
       const packaged = await readFile(join(PACKAGE, "assets", "plugins", `${name}.js`), "utf8");
       assert.equal(installed, packaged);
@@ -170,7 +171,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", repeat.digest, project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 78);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 72);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -278,6 +279,49 @@ test("upgrade removes only an unchanged stale managed asset", async () => {
   }
 });
 
+test("upgrade retires unchanged goal lifecycle assets and preserves modified ones as conflicts", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    await install("project", project, home);
+    const root = join(project, ".opencode");
+    const manifestPath = join(root, ".skills-opencode-manifest.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    const retired = {
+      "commands/goal-start.md": "legacy command\n",
+      "plugins/goal-loop.js": "legacy plugin\n",
+    };
+    for (const [relativePath, content] of Object.entries(retired)) {
+      const target = join(root, relativePath);
+      await mkdir(resolve(target, ".."), { recursive: true });
+      await writeFile(target, content);
+      manifest.files[relativePath] = { sha256: createHash("sha256").update(content).digest("hex") };
+    }
+    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+    const removal = await preview("install", "project", project, home);
+    for (const relativePath of Object.keys(retired)) assert.equal(removal.operations.find((item) => item.path === relativePath)?.operation, "remove");
+    await apply("install", "project", removal.digest, project, home);
+    for (const relativePath of Object.keys(retired)) await assert.rejects(lstat(join(root, relativePath)), { code: "ENOENT" });
+
+    const modifiedPath = "commands/goal-prepare.md";
+    const original = "legacy managed command\n";
+    const modified = "user modified command\n";
+    const target = join(root, modifiedPath);
+    await writeFile(target, modified);
+    const current = JSON.parse(await readFile(manifestPath, "utf8"));
+    current.files[modifiedPath] = { sha256: createHash("sha256").update(original).digest("hex") };
+    await writeFile(manifestPath, `${JSON.stringify(current)}\n`);
+    const conflict = await preview("install", "project", project, home);
+    assert.deepEqual(conflict.operations.find((item) => item.path === modifiedPath), { path: modifiedPath, operation: "conflict", reason: "managed_file_changed", sha256: createHash("sha256").update(modified).digest("hex") });
+    await assert.rejects(apply("install", "project", conflict.digest, project, home), (error) => error instanceof InstallerError && error.code === "conflict");
+    assert.equal(await readFile(target, "utf8"), modified);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("uninstall removes only unchanged managed files and preserves user drift", async () => {
   const directory = temporary();
   try {
@@ -288,7 +332,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     const changed = join(project, ".opencode", "commands", "askme.md");
     await writeFile(changed, "user change\n");
     const plan = await preview("uninstall", "project", project, home);
-    assert.ok(plan.operations.filter((item) => item.operation === "remove").length >= 70);
+    assert.ok(plan.operations.filter((item) => item.operation === "remove").length >= 60);
     assert.deepEqual(plan.operations.find((item) => item.path === "commands/askme.md").operation, "conflict");
     await apply("uninstall", "project", plan.digest, project, home);
     assert.equal(await readFile(changed, "utf8"), "user change\n");
@@ -412,13 +456,64 @@ test("stateful and Zed plugins are opt-in and create no disabled runtime", async
   const directory = temporary();
   try {
     assert.deepEqual(await backgroundAttempts({}), {});
-    assert.deepEqual(await goalLoop({}), {});
     assert.deepEqual(await scheduler({}), {});
     assert.deepEqual(await autonomyPolicy({}), {});
     assert.deepEqual(await zedBell(), {});
     assert.deepEqual(await zedClickablePaths(), {});
     assert.equal(readdirSync(directory).length, 0);
   } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("autonomy policy enforces classifications, always-ask, session limits, hourly windows, and fail-closed config", async () => {
+  const directory = temporary();
+  const originalState = process.env.XDG_STATE_HOME;
+  try {
+    process.env.XDG_STATE_HOME = join(directory, "state");
+    const project = join(directory, "project");
+    await mkdir(join(project, ".opencode"), { recursive: true });
+    const policy = {
+      schema_version: 1,
+      max_mutations_per_session: 1,
+      max_mutations_per_hour: 1,
+      on_exhausted: "ask_pause",
+      classifications: [
+        { tool: "read", operation: "inspect", class: "read" },
+        { tool: "edit", operation: "write", class: "mutate" },
+        { tool: "edit", operation: "delete", class: "mutate" },
+      ],
+      always_ask: [{ tool: "edit", operation: "delete", class: "mutate" }],
+    };
+    await writeFile(join(project, ".opencode", "autonomy-policy.json"), JSON.stringify(policy));
+    let now = 0;
+    const hooks = await autonomyPolicy({ directory: project }, { enabled: true, now: () => now });
+    const inspect = hooks["permission.ask"];
+    const read = { status: "allow" };
+    await inspect({ permission: "read", tool: "read", sessionID: "s", metadata: { operation: "inspect" } }, read);
+    assert.equal(read.status, "allow");
+    const write = { status: "allow" };
+    await inspect({ permission: "edit", tool: "edit", sessionID: "s", metadata: { operation: "write" } }, write);
+    assert.equal(write.status, "allow");
+    const limited = { status: "allow" };
+    await inspect({ permission: "edit", tool: "edit", sessionID: "s", metadata: { operation: "write" } }, limited);
+    assert.equal(limited.status, "ask");
+    const alwaysAsk = { status: "allow" };
+    await inspect({ permission: "edit", tool: "edit", sessionID: "other", metadata: { operation: "delete" } }, alwaysAsk);
+    assert.equal(alwaysAsk.status, "ask");
+    now = 3_600_001;
+    const nextHour = { status: "allow" };
+    await inspect({ permission: "edit", tool: "edit", sessionID: "new", metadata: { operation: "write" } }, nextHour);
+    assert.equal(nextHour.status, "allow");
+
+    await writeFile(join(project, ".opencode", "autonomy-policy.json"), JSON.stringify({ schema_version: 1 }));
+    const invalid = await autonomyPolicy({ directory: project }, { enabled: true });
+    const failClosed = { status: "allow" };
+    await invalid["permission.ask"]({ permission: "edit", tool: "edit", sessionID: "invalid", metadata: { operation: "write" } }, failClosed);
+    assert.equal(failClosed.status, "ask");
+  } finally {
+    if (originalState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = originalState;
     rmSync(directory, { recursive: true, force: true });
   }
 });
@@ -464,7 +559,7 @@ test("scheduler seeds slots and does not replay missed intervals", async () => {
     const digest = createHash("sha256").update(resolve(project)).digest("hex");
     const definitions = join(process.env.XDG_STATE_HOME, "opencode", "skills", "schedule", digest, "definitions");
     await mkdir(definitions, { recursive: true });
-    await writeFile(join(definitions, "hourly.json"), JSON.stringify({ schema_version: 1, id: "hourly", name: "Hourly", schedule: "every: 1h", agent: "worker", model: "model", run_as_goal: false, token_budget: 0, max_runtime: 60, prompt: "inspect", enabled: true }));
+    await writeFile(join(definitions, "hourly.json"), JSON.stringify({ schema_version: 1, id: "hourly", name: "Hourly", schedule: "every: 1h", agent: "worker", model: "model", token_budget: 0, max_runtime: 60, prompt: "inspect", enabled: true }));
     let current = 0;
     let starts = 0;
     const hooks = await scheduler({ client: { session: { create: async () => { starts += 1; return { id: "scheduled" }; }, prompt: async () => undefined } }, directory: project }, { enabled: true, clock: () => current });

@@ -156,6 +156,14 @@ WORKFLOW_CONTRACTS = {
         "content-addressed preview artifact",
         "не требуй конкретный host",
     ),
+    "goal": (
+        "строго read-only",
+        "work-item/v1",
+        "не создавай",
+        "не изменяй файлы",
+        "не имитируй self-review",
+        "не более 3000 символов",
+    ),
     "walkthrough": (
         "не является ревью",
         "coverage.complete=false",
@@ -192,7 +200,6 @@ RUNNERS = {
     "release-review": "scripts/review_release.py",
     "mattermost": "scripts/mattermost.py",
     "team-workflow": "scripts/team_workflow.py",
-    "goal": "scripts/goal.py",
     "schedule": "scripts/schedule.py",
     "multi-run": "scripts/multi_run.py",
     "usage": "scripts/usage.py",
@@ -501,7 +508,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             if entry["source"].startswith("references/python_runtime/")
         ]
         destinations = {entry["destination"] for entry in runtime_entries}
-        for name in ("goal", "schedule", "multi-run", "usage", "overview", "lsp-report"):
+        for name in ("schedule", "multi-run", "usage", "overview", "lsp-report"):
             with self.subTest(skill=name):
                 self.assertIn(f"{name}/scripts/portable_runtime/capabilities.py", destinations)
                 self.assertIn(f"{name}/scripts/portable_runtime/contract.py", destinations)
@@ -512,7 +519,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
-        opencode_skills = {"attempt", "goal", "schedule", "multi-run", "usage", "overview", "lsp-report"}
+        opencode_skills = {"attempt", "schedule", "multi-run", "usage", "overview", "lsp-report"}
         for path in (ROOT / "skills").rglob("*"):
             if (
                 path.is_file()
@@ -987,22 +994,6 @@ class OpenCodePortableRuntimeTests(unittest.TestCase):
             check=False,
         )
 
-    def test_goal_session_binding_revision_and_pause_transition(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            state = Path(temporary) / "state"
-            environment = {"HOME": temporary, "XDG_STATE_HOME": str(state)}
-            prepared = self.run_skill("goal", "prepare", "--session", "session-1", "--objective", "finish", environment=environment)
-            self.assertEqual(prepared.returncode, 0, prepared.stderr)
-            goal = json.loads(prepared.stdout)
-            stale = self.run_skill("goal", "start", "--goal-id", goal["goal_id"], "--revision", "1", "--session", "session-1", environment=environment)
-            self.assertEqual(stale.returncode, 2)
-            self.assertEqual(json.loads(stale.stdout)["error"]["code"], "stale_revision")
-            started = self.run_skill("goal", "start", "--goal-id", goal["goal_id"], "--revision", "0", "--session", "session-1", environment=environment)
-            self.assertEqual(started.returncode, 0, started.stderr)
-            paused = self.run_skill("goal", "pause", "--goal-id", goal["goal_id"], "--revision", "1", environment=environment)
-            self.assertEqual(paused.returncode, 0, paused.stderr)
-            self.assertEqual(json.loads(paused.stdout)["status"], "paused")
-
     def test_schedule_is_disabled_by_default_and_confirmation_is_single_use(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "project"
@@ -1040,7 +1031,25 @@ class OpenCodePortableRuntimeTests(unittest.TestCase):
                 result = self.run_skill(skill, *arguments, environment=environment)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 json.loads(result.stdout)
+                if skill in {"usage", "overview"}:
+                    self.assertNotIn("goal", result.stdout)
+                    self.assertNotIn("active_goals", result.stdout)
             self.assertFalse(state.exists())
+
+    def test_historical_goal_state_is_not_current_overview_or_usage_data(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "project"
+            project.mkdir()
+            state = Path(temporary) / "state/opencode/skills/goal"
+            state.mkdir(parents=True)
+            (state / "historical.json").write_text(json.dumps({"schema_version": 1, "goal_id": "historical", "status": "running", "project_root": str(project)}), encoding="utf-8")
+            environment = {"HOME": temporary, "XDG_STATE_HOME": str(Path(temporary) / "state"), "XDG_CONFIG_HOME": str(Path(temporary) / "config")}
+            for skill, arguments in (("usage", ("--project", str(project), "--format", "json")), ("overview", ("--project", str(project), "--format", "json"))):
+                result = self.run_skill(skill, *arguments, environment=environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("historical", result.stdout)
+                self.assertNotIn("active_goals", result.stdout)
+            self.assertTrue(state.joinpath("historical.json").is_file())
 
 
 if __name__ == "__main__":
