@@ -92,24 +92,42 @@ tasks:
       - SKILLS_BINARY="$(mise which skills)" uv run --locked pytest
 
   generate:
-    desc: Materialize all generated files
+    desc: Build untracked portable and package artifacts
     cmds:
-      - uv run --locked python scripts/sync_shared.py
+      - task: build:skills
+      - task: build:distribution
       - task: package:generate
 
   generate:check:
     desc: Check generated files for drift without writing them
     cmds:
       - task: generate:shared:check
+      - task: generate:distribution:check
       - task: package:generate:check
 
   generate:shared:check:
     internal: true
     cmds:
-      - uv run --locked python scripts/sync_shared.py --check
+      - uv run --locked python scripts/build_skills.py --check
+
+  build:skills:
+    internal: true
+    cmds:
+      - uv run --locked python scripts/build_skills.py
+
+  build:distribution:
+    internal: true
+    cmds:
+      - uv run --locked python scripts/build_distribution.py
+
+  generate:distribution:check:
+    internal: true
+    cmds:
+      - uv run --locked python scripts/build_distribution.py --check
 
   skills:validate:
     desc: Validate Agent Skills with complementary validators
+    deps: [build:skills]
     cmds:
       - uv run --locked python scripts/check_agnix.py
       - for:
@@ -118,10 +136,11 @@ tasks:
       - uv run --locked pytest tests/test_skill_contracts.py
     vars:
       SKILLS:
-        sh: fd --type f --glob 'SKILL.md' skills --exec dirname | sort
+        sh: fd --type f --glob 'SKILL.md' .build/skills --exec dirname | sort
 
   package:check:
     desc: Verify the complete OpenCode package lifecycle and tarball
+    deps: [build:skills]
     dir: packages/opencode
     cmds:
       - npm ci

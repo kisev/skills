@@ -51,7 +51,6 @@
     "skills-opencode": "./dist/cli.js"
   },
   "files": [
-    "assets",
     "dist",
     "README.md"
   ],
@@ -59,12 +58,12 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node dist/generate-assets.js",
     "format": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --write src test package.json tsconfig.json README.md",
     "format:check": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --check src test package.json tsconfig.json README.md",
     "lint": "oxlint src test",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "generate-assets": "npm run build && node dist/generate-assets.js",
+    "generate-assets": "npm run build",
     "generate-assets:check": "npm run build && node dist/generate-assets.js --check",
     "test": "npm run build && node --test test/agent-profiles.test.mjs && node --test test/doctor.test.mjs && node --test test/package.test.mjs",
     "smoke": "npm run build && node test/smoke.mjs"

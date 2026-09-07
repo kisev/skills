@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+BUILT_SKILLS = ROOT / ".build" / "skills"
 SKILLS = ("askme", "goal", "task-prepare", "task-review")
 
 
@@ -40,7 +41,7 @@ def item() -> dict[str, object]:
 def run(
     skill: str, payload: dict[str, object], tmp_path: Path, *arguments: str
 ) -> subprocess.CompletedProcess[str]:
-    path = ROOT / "skills" / skill / "scripts/work_item.py"
+    path = BUILT_SKILLS / skill / "scripts/work_item.py"
     input_path = tmp_path / f"work-item-{skill}.json"
     input_path.write_text(json.dumps(payload), encoding="utf-8")
     try:
@@ -75,7 +76,7 @@ def test_machine_and_semantic_reports_and_exit_codes(tmp_path: Path) -> None:
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "skills/goal/scripts/work_item.py"),
+            str(BUILT_SKILLS / "goal/scripts/work_item.py"),
             "validate",
             "--input",
             str(tmp_path / "item.json"),
@@ -109,7 +110,7 @@ def test_boundaries_cycles_and_unreachable_conditions_are_machine_findings(tmp_p
     result = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "skills/goal/scripts/work_item.py"),
+            str(BUILT_SKILLS / "goal/scripts/work_item.py"),
             "validate",
             "--input",
             str(source),
@@ -133,7 +134,7 @@ def test_recheck_is_stable_and_all_premortem_outcomes_are_structured(tmp_path: P
     semantic.write_text(json.dumps({"status": "passed", "findings": []}), encoding="utf-8")
     command = [
         sys.executable,
-        str(ROOT / "skills/task-review/scripts/work_item.py"),
+        str(BUILT_SKILLS / "task-review/scripts/work_item.py"),
         "validate",
         "--input",
         str(source),
@@ -184,7 +185,7 @@ def test_recheck_is_stable_and_all_premortem_outcomes_are_structured(tmp_path: P
         result = subprocess.run(
             [
                 sys.executable,
-                str(ROOT / "skills/askme/scripts/work_item.py"),
+                str(BUILT_SKILLS / "askme/scripts/work_item.py"),
                 "premortem",
                 "--input",
                 str(path),

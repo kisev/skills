@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,7 +10,7 @@ const rootIndex = arguments_.indexOf("--root");
 if (rootIndex !== -1 && !arguments_[rootIndex + 1]) throw new Error("--root requires a path");
 const commandsRoot =
   rootIndex === -1
-    ? resolve(packageRoot, "assets", "commands")
+    ? resolve(packageRoot, "dist", "assets", "commands")
     : resolve(arguments_[rootIndex + 1] ?? "");
 const check = arguments_.includes("--check");
 const expectedNames = new Set(COMMAND_REGISTRY.map((command) => `${command.name}.md`));
@@ -33,5 +33,35 @@ for (const command of COMMAND_REGISTRY) {
     if (actual !== expected) throw new Error(`generated asset drift: ${command.name}.md`);
   } else {
     await writeFile(destination, expected, "utf8");
+  }
+}
+
+if (rootIndex === -1) {
+  const catalog = resolve(packageRoot, "..", "..", "shared", "references", "lsp-catalog.json");
+  const destination = resolve(packageRoot, "dist", "assets", "lsp-catalog.json");
+  if (check) {
+    if (
+      (await readFile(destination).catch(() => Buffer.alloc(0))).compare(
+        await readFile(catalog),
+      ) !== 0
+    )
+      throw new Error("generated asset drift: lsp-catalog.json");
+  } else {
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(catalog, destination);
+    await cp(
+      resolve(packageRoot, "assets", "agents"),
+      resolve(packageRoot, "dist", "assets", "agents"),
+      { recursive: true },
+    );
+    await cp(
+      resolve(packageRoot, "assets", "plugins"),
+      resolve(packageRoot, "dist", "assets", "plugins"),
+      { recursive: true },
+    );
+    await copyFile(
+      resolve(packageRoot, "assets", "migration-inventory.json"),
+      resolve(packageRoot, "dist", "assets", "migration-inventory.json"),
+    );
   }
 }

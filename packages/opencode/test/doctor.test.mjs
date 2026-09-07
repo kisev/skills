@@ -226,7 +226,7 @@ test("portable lsp-report and package doctor use the same catalog facts", async 
         "-I",
         "-S",
         "-B",
-        join(ROOT, "skills/lsp-report/scripts/lsp_report.py"),
+        join(ROOT, ".build/skills/lsp-report/scripts/lsp_report.py"),
         "--project",
         item.project,
         "--format",
@@ -261,15 +261,15 @@ test("portable lsp-report and package doctor use the same catalog facts", async 
   }
 });
 
-test("package and materialized portable catalogs are byte-identical to shared catalog", () => {
+test("built package and built portable catalogs are byte-identical to shared catalog", () => {
   const canonical = readFileSync(join(ROOT, "shared/references/lsp-catalog.json"));
-  assert.deepEqual(readFileSync(join(PACKAGE, "assets/lsp-catalog.json")), canonical);
+  assert.deepEqual(readFileSync(join(PACKAGE, "dist/assets/lsp-catalog.json")), canonical);
   assert.deepEqual(
-    readFileSync(join(ROOT, "skills/lsp-report/scripts/portable_runtime/lsp-catalog.json")),
+    readFileSync(join(ROOT, ".build/skills/lsp-report/scripts/portable_runtime/lsp-catalog.json")),
     canonical,
   );
   assert.deepEqual(
-    readFileSync(join(ROOT, "skills/overview/scripts/portable_runtime/lsp-catalog.json")),
+    readFileSync(join(ROOT, ".build/skills/overview/scripts/portable_runtime/lsp-catalog.json")),
     canonical,
   );
 });

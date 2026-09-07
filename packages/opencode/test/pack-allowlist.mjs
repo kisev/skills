@@ -12,12 +12,8 @@ const allowed = ["README.md", "package.json"];
 
 assert.ok(files.includes("README.md"));
 assert.ok(files.includes("package.json"));
-assert.ok(files.some((path) => path.startsWith("assets/")));
 assert.ok(files.some((path) => path.startsWith("dist/")));
 for (const path of files) {
-  assert.ok(
-    allowed.includes(path) || path.startsWith("assets/") || path.startsWith("dist/"),
-    `unexpected packed file: ${path}`,
-  );
+  assert.ok(allowed.includes(path) || path.startsWith("dist/"), `unexpected packed file: ${path}`);
 }
 process.stdout.write(`npm pack allowlist passed for ${files.length} files\n`);

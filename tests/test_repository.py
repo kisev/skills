@@ -13,10 +13,9 @@ from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 from unittest.mock import patch
 
-from scripts import sync_shared
-
 ROOT = Path(__file__).resolve().parents[1]
-SKILLS_BINARY = os.environ.get("SKILLS_BINARY", "skills")
+BUILT_SKILLS = ROOT / ".build" / "skills"
+SKILLS_BINARY = subprocess.check_output(["mise", "which", "skills"], cwd=ROOT, text=True).strip()
 PORTABLE_SKILLS = (
     "agents-md",
     "askme",
@@ -205,133 +204,6 @@ RUNNERS = {
 }
 
 
-class SyncSharedTests(unittest.TestCase):
-    def make_fixture(self) -> tuple[Path, Path, Path]:
-        root = Path(tempfile.mkdtemp())
-        shared = root / "shared"
-        skills = root / "skills"
-        (shared / "references").mkdir(parents=True)
-        (skills / "demo").mkdir(parents=True)
-        (shared / "references/source.md").write_text("source\n", encoding="utf-8")
-        (shared / "manifest.json").write_text(
-            json.dumps(
-                {
-                    "version": 1,
-                    "files": [
-                        {
-                            "source": "references/source.md",
-                            "destination": "demo/references/result.md",
-                        }
-                    ],
-                }
-            ),
-            encoding="utf-8",
-        )
-        return root, shared, skills
-
-    def run_fixture(self, root: Path, shared: Path, skills: Path, check: bool) -> int:
-        with (
-            patch.object(sync_shared, "ROOT", root),
-            patch.object(sync_shared, "SHARED", shared),
-            patch.object(sync_shared, "SHARED_REFERENCES", shared / "references"),
-            patch.object(sync_shared, "SKILLS", skills),
-            patch.object(sync_shared, "MANIFEST", shared / "manifest.json"),
-        ):
-            return sync_shared.main(["--check"] if check else [])
-
-    def test_materializes_exact_copy_and_check_is_read_only(self) -> None:
-        root, shared, skills = self.make_fixture()
-        self.assertEqual(self.run_fixture(root, shared, skills, False), 0)
-        destination = skills / "demo/references/result.md"
-        self.assertEqual(
-            destination.read_bytes(), (shared / "references/source.md").read_bytes()
-        )
-        before = destination.stat().st_mtime_ns
-        self.assertEqual(self.run_fixture(root, shared, skills, True), 0)
-        self.assertEqual(destination.stat().st_mtime_ns, before)
-
-    def test_check_detects_content_and_missing_file_drift(self) -> None:
-        root, shared, skills = self.make_fixture()
-        self.assertEqual(self.run_fixture(root, shared, skills, False), 0)
-        destination = skills / "demo/references/result.md"
-        destination.write_text("drift\n", encoding="utf-8")
-        self.assertNotEqual(self.run_fixture(root, shared, skills, True), 0)
-        destination.unlink()
-        self.assertNotEqual(self.run_fixture(root, shared, skills, True), 0)
-
-    def test_rejects_traversal_before_writing(self) -> None:
-        root, shared, skills = self.make_fixture()
-        manifest = json.loads((shared / "manifest.json").read_text(encoding="utf-8"))
-        manifest["files"][0]["destination"] = "../outside.md"
-        (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
-        self.assertFalse((root / "outside.md").exists())
-        manifest["files"][0]["destination"] = "demo/references/result.md"
-        manifest["files"][0]["source"] = "../outside.md"
-        (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
-        self.assertFalse((skills / "demo/references/result.md").exists())
-
-    def test_rejects_source_and_destination_symlinks_before_writing(self) -> None:
-        root, shared, skills = self.make_fixture()
-        (shared / "references/alias.md").symlink_to(shared / "references/source.md")
-        manifest = json.loads((shared / "manifest.json").read_text(encoding="utf-8"))
-        manifest["files"][0]["source"] = "references/alias.md"
-        (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
-        (shared / "references/alias.md").unlink()
-        (skills / "demo/references").mkdir()
-        (skills / "demo/references/alias").symlink_to(shared / "references/source.md")
-        manifest["files"][0]["source"] = "references/source.md"
-        manifest["files"][0]["destination"] = "demo/references/alias/result.md"
-        (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
-
-    def test_rolls_back_all_destinations_after_replacement_failure(self) -> None:
-        root, shared, skills = self.make_fixture()
-        first_source = shared / "references/source.md"
-        second_source = shared / "references/second.md"
-        second_source.write_text("second before\n", encoding="utf-8")
-        manifest = {
-            "version": 1,
-            "files": [
-                {
-                    "source": "references/source.md",
-                    "destination": "demo/references/first.md",
-                },
-                {
-                    "source": "references/second.md",
-                    "destination": "demo/references/second.md",
-                },
-            ],
-        }
-        (shared / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-        self.assertEqual(self.run_fixture(root, shared, skills, False), 0)
-        first_destination = skills / "demo/references/first.md"
-        second_destination = skills / "demo/references/second.md"
-        first_before = first_destination.read_bytes()
-        second_before = second_destination.read_bytes()
-        first_source.write_text("first after\n", encoding="utf-8")
-        second_source.write_text("second after\n", encoding="utf-8")
-        replace = os.replace
-
-        def fail_second_replacement(source: Path, destination: Path) -> None:
-            if (
-                Path(source).name == "1"
-                and Path(destination) == second_destination
-                and Path(source).parent.name.startswith("sync-shared-")
-            ):
-                raise OSError("simulated replacement failure")
-            replace(source, destination)
-
-        with patch.object(
-            os, "replace", side_effect=fail_second_replacement
-        ):
-            self.assertEqual(self.run_fixture(root, shared, skills, False), 2)
-        self.assertEqual(first_destination.read_bytes(), first_before)
-        self.assertEqual(second_destination.read_bytes(), second_before)
-
-
 class PortableSkillValidationTests(unittest.TestCase):
     def test_all_portable_skills_have_required_frontmatter(self) -> None:
         for name in PORTABLE_SKILLS:
@@ -414,7 +286,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             ),
         }
         for name, paths in resources.items():
-            skill = ROOT / "skills" / name
+            skill = BUILT_SKILLS / name
             text = (skill / "SKILL.md").read_text(encoding="utf-8")
             for relative in paths:
                 with self.subTest(skill=name, resource=relative):
@@ -443,13 +315,13 @@ class PortableSkillValidationTests(unittest.TestCase):
             with self.subTest(requirement=requirement):
                 self.assertIn(requirement, source_text)
         for name in names:
-            skill = ROOT / "skills" / name
+            skill = BUILT_SKILLS / name
             destination = skill / "references/interaction-contract.md"
             with self.subTest(skill=name):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
                 self.assertIn("references/interaction-contract.md", (skill / "SKILL.md").read_text(encoding="utf-8"))
         for name in ("project-spec", "docs-prepare", "doit"):
-            text = (ROOT / "skills" / name / "SKILL.md").read_text(encoding="utf-8")
+            text = (BUILT_SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
             with self.subTest(skill=name, behavior="compact-preview"):
                 self.assertIn("TLDR", text)
                 self.assertIn("не печатай", text)
@@ -491,12 +363,12 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertNotIn("../../", text)
         self.assertNotIn("Каталог", text)
         self.assertEqual(
-            (ROOT / "skills/askme/references/question-guidelines.md").read_bytes(),
+            (BUILT_SKILLS / "askme/references/question-guidelines.md").read_bytes(),
             (ROOT / "shared/references/question-guidelines.md").read_bytes(),
         )
 
     def test_goal_is_prompt_only_and_preserves_materialized_contract(self) -> None:
-        skill = ROOT / "skills/goal"
+        skill = BUILT_SKILLS / "goal"
         text = (skill / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("work-item/v1", text)
         self.assertIn("3000", text)
@@ -536,13 +408,13 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn(f"{name}/scripts/portable_runtime/contract.py", destinations)
         for entry in runtime_entries:
             source = ROOT / "shared" / entry["source"]
-            destination = ROOT / "skills" / entry["destination"]
+            destination = BUILT_SKILLS / entry["destination"]
             with self.subTest(destination=destination):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
         opencode_skills = {"attempt", "schedule", "usage", "overview", "lsp-report"}
-        for path in (ROOT / "skills").rglob("*"):
+        for path in BUILT_SKILLS.rglob("*"):
             if (
                 path.is_file()
                 and "__pycache__" not in path.parts
@@ -550,7 +422,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             ):
                 text = path.read_text(encoding="utf-8").lower()
                 markers: tuple[str, ...] = FORBIDDEN_PORTABLE_MARKERS
-                if path.relative_to(ROOT / "skills").parts[0] in opencode_skills:
+                if path.relative_to(BUILT_SKILLS).parts[0] in opencode_skills:
                     markers = tuple(marker for marker in markers if marker not in {"~/.config/opencode", "~/.local/state/opencode"})
                 for marker in markers:
                     self.assertNotIn(marker, text, f"{marker} in {path}")
@@ -566,7 +438,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             "release-review",
         )
         for name in names:
-            root = ROOT / "skills" / name
+            root = BUILT_SKILLS / name
             with self.subTest(skill=name):
                 self.assertTrue((root / "references/gitlab-workflow.md").is_file())
                 self.assertTrue((root / "scripts/portable_runtime/contract.py").is_file())
@@ -574,11 +446,19 @@ class PortableSkillValidationTests(unittest.TestCase):
                     (root / "scripts/portable_runtime/contract.py").read_bytes(),
                     (ROOT / "shared/references/portable_gitlab/contract.py").read_bytes(),
                 )
+                self.assertEqual(
+                    (root / "references/portable-gitlab-contracts-v2.md").read_bytes(),
+                    (ROOT / "shared/references/portable_gitlab/contracts-v2.md").read_bytes(),
+                )
+                self.assertEqual(
+                    (root / "references/portable-gitlab-contracts-v2.schema.json").read_bytes(),
+                    (ROOT / "shared/references/portable_gitlab/artifact-contracts-v2.schema.json").read_bytes(),
+                )
 
     def test_pinned_cli_lists_all_portable_skills(self) -> None:
         result = subprocess.run(
-            [SKILLS_BINARY, "add", ".", "--list"],
-            cwd=ROOT,
+            [SKILLS_BINARY, "add", str(BUILT_SKILLS), "--list"],
+            cwd=tempfile.gettempdir(),
             capture_output=True,
             text=True,
             check=False,
@@ -606,7 +486,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             [
                 SKILLS_BINARY,
                 "add",
-                str(checkout),
+                str(checkout / ".build/skills"),
                 "--skill",
                 name,
                 "--agent",
@@ -615,7 +495,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 "--global",
                 "--yes",
             ],
-            cwd=checkout,
+            cwd=home,
             env=environment,
             capture_output=True,
             text=True,
@@ -626,7 +506,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertTrue((installed / "SKILL.md").is_file())
         shutil.rmtree(checkout / "shared")
         shutil.rmtree(checkout)
-        source = ROOT / "skills" / name
+        source = BUILT_SKILLS / name
         for path in source.rglob("*"):
             if path.is_file() and "__pycache__" not in path.parts:
                 relative = path.relative_to(source)
@@ -668,7 +548,7 @@ class PortableRunnerTests(unittest.TestCase):
                 "-I",
                 "-S",
                 "-B",
-                str(ROOT / "skills" / name / RUNNERS[name]),
+                    str(BUILT_SKILLS / name / RUNNERS[name]),
                 *arguments,
             ],
             cwd=tempfile.gettempdir(),
@@ -844,7 +724,7 @@ class PortableRunnerTests(unittest.TestCase):
             )
 
     def test_ast_atomic_replacement_rolls_back_after_failure(self) -> None:
-        script = ROOT / "skills/ast-grep/scripts/ast_grep.py"
+        script = BUILT_SKILLS / "ast-grep/scripts/ast_grep.py"
         specification = spec_from_file_location("portable_ast_grep", script)
         if specification is None or specification.loader is None:
             self.fail("cannot load portable ast-grep module")
@@ -1008,7 +888,7 @@ class OpenCodePortableRuntimeTests(unittest.TestCase):
     def run_skill(self, skill: str, *arguments: str, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
         runner = RUNNERS[skill]
         return subprocess.run(
-            [sys.executable, "-I", "-S", "-B", str(ROOT / "skills" / skill / runner), *arguments],
+            [sys.executable, "-I", "-S", "-B", str(BUILT_SKILLS / skill / runner), *arguments],
             cwd=tempfile.gettempdir(),
             env={**os.environ, **environment, "PYTHONPATH": "/invalid"},
             capture_output=True,

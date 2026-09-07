@@ -34,7 +34,7 @@ export type { Scope } from "./lifecycle.js";
 const PACKAGE_NAME = "@kisev/skills-opencode";
 const MANIFEST_NAME = ".skills-opencode-manifest.json";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const assetsRoot = resolve(packageRoot, "assets");
+const assetsRoot = resolve(packageRoot, "dist", "assets");
 
 export type Action = "install" | "uninstall";
 export type Operation = "create" | "update" | "remove" | "unchanged" | "missing" | "conflict";

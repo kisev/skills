@@ -31,24 +31,24 @@ task check
 
 Публичный Task API разделяет проверки следующим образом:
 
-| Задача                       | Назначение                                                  |
-| ---------------------------- | ----------------------------------------------------------- |
-| `tools`                      | Показать активные закреплённые инструменты.                 |
-| `format`, `format:check`     | Изменить canonical formatting или проверить его без записи. |
-| `lint`, `typecheck`, `test`  | Запустить языковые проверки и тесты.                        |
-| `generate`, `generate:check` | Создать materialized assets или проверить drift без записи. |
-| `skills:validate`            | Запустить agnix, pinned skills-ref и internal contracts.    |
-| `package:check`              | Выполнить полный lifecycle OpenCode package.                |
-| `eval:check`                 | Проверить schemas/corpus и hostless offline eval suite.     |
-| `security`                   | Проверить историю Git через gitleaks.                       |
-| `check`                      | Запустить полный локальный и CI quality gate.               |
-| `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.               |
+| Задача                       | Назначение                                                    |
+| ---------------------------- | ------------------------------------------------------------- |
+| `tools`                      | Показать активные закреплённые инструменты.                   |
+| `format`, `format:check`     | Изменить canonical formatting или проверить его без записи.   |
+| `lint`, `typecheck`, `test`  | Запустить языковые проверки и тесты.                          |
+| `generate`, `generate:check` | Собрать ignored artifacts или проверить их воспроизводимость. |
+| `skills:validate`            | Запустить agnix, pinned skills-ref и internal contracts.      |
+| `package:check`              | Выполнить полный lifecycle OpenCode package.                  |
+| `eval:check`                 | Проверить schemas/corpus и hostless offline eval suite.       |
+| `security`                   | Проверить историю Git через gitleaks.                         |
+| `check`                      | Запустить полный локальный и CI quality gate.                 |
+| `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.                 |
 
-Только `format` и `generate` меняют tracked checkout. Если меняются shared
-references, сначала измените canonical-файл в `shared/references/`, затем
-запустите `task generate` и включите materialized copies в то же изменение.
-Команды из `packages/opencode/assets/commands/` также генерируются: их источником
-служит `packages/opencode/src/registry.ts`.
+Только `format` меняет tracked checkout. Если меняются shared references,
+сначала измените canonical-файл в `shared/references/`, затем запустите
+`task generate`; portable copies создаются только в ignored build artifact.
+Команды OpenCode и copied LSP catalog создаются только в `packages/opencode/dist/assets/`
+перед pack; их источники - `packages/opencode/src/registry.ts` и `shared/references/`.
 
 `package:check` сам выполняет `npm ci`, Prettier, oxlint, tsc, Node tests,
 generated-assets drift, smoke через закреплённый OpenCode и npm pack allowlist.
@@ -76,7 +76,7 @@ lifecycle один раз (без отдельного дублирующего 
 - Если `uv run --locked` сообщает drift, не обновляйте зависимости неявно.
   Осознанно измените pin в `pyproject.toml`, затем выполните `uv lock`.
 - Если `generate:check` сообщает drift, исправьте canonical source и выполните
-  `task generate`. Не форматируйте generated/materialized copy напрямую.
+  `task generate`. Не редактируйте build artifact напрямую.
 - Agnix errors блокируют проверку. Существующие warnings печатаются полностью и
   хранятся в точном `.agnix-warnings.json`; новый warning также блокирует gate,
   пока его причина не устранена или baseline не изменён осознанно.

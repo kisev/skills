@@ -48,7 +48,7 @@ test("registry generates exactly fifty-two thin command assets", () => {
     assert.match(rendered, /\$ARGUMENTS/);
     if (entry.skill) assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
     assert.doesNotMatch(rendered, /python|runner|curl|fetch\(/i);
-    assert.equal(readFileSync(join(PACKAGE, "assets", "commands", `${entry.name}.md`), "utf8"), rendered);
+    assert.equal(readFileSync(join(PACKAGE, "dist", "assets", "commands", `${entry.name}.md`), "utf8"), rendered);
   }
   for (const expected of ["attempt", "goal", "schedule", "overview", "lsp-report"]) assert.ok(COMMAND_REGISTRY.some((entry) => entry.skill === expected));
   assert.deepEqual(COMMAND_REGISTRY.filter((entry) => entry.skill === "goal").map((entry) => entry.name), ["goal"]);
@@ -75,22 +75,22 @@ test("generated asset drift rejects obsolete files", async () => {
 });
 
 test("agent assets contain six contract-bound profiles without model selection", () => {
-  const agents = readdirSync(join(PACKAGE, "assets", "agents")).filter((name) => name.endsWith(".md")).sort();
+  const agents = readdirSync(join(PACKAGE, "dist", "assets", "agents")).filter((name) => name.endsWith(".md")).sort();
   assert.deepEqual(agents, ["architect.md", "critic.md", "manager.md", "mapper.md", "review.md", "worker.md"]);
   for (const name of agents) {
-    const content = readFileSync(join(PACKAGE, "assets", "agents", name), "utf8");
+    const content = readFileSync(join(PACKAGE, "dist", "assets", "agents", name), "utf8");
     const frontmatter = content.slice(0, content.indexOf("---", 4));
     assert.doesNotMatch(frontmatter, /^(model|provider):/m);
     assert.doesNotMatch(content, /~\/\.config\/opencode/i);
     assert.match(frontmatter, /permission:/);
   }
-  assert.match(readFileSync(join(PACKAGE, "assets", "agents", "mapper.md"), "utf8"), /mapper_report/);
-  assert.match(readFileSync(join(PACKAGE, "assets", "agents", "architect.md"), "utf8"), /execution_card/);
-  assert.match(readFileSync(join(PACKAGE, "assets", "agents", "worker.md"), "utf8"), /worker_report/);
-  assert.match(readFileSync(join(PACKAGE, "assets", "agents", "critic.md"), "utf8"), /critic_report/);
-  const manager = readFileSync(join(PACKAGE, "assets", "agents", "manager.md"), "utf8");
-  const critic = readFileSync(join(PACKAGE, "assets", "agents", "critic.md"), "utf8");
-  const review = readFileSync(join(PACKAGE, "assets", "agents", "review.md"), "utf8");
+  assert.match(readFileSync(join(PACKAGE, "dist", "assets", "agents", "mapper.md"), "utf8"), /mapper_report/);
+  assert.match(readFileSync(join(PACKAGE, "dist", "assets", "agents", "architect.md"), "utf8"), /execution_card/);
+  assert.match(readFileSync(join(PACKAGE, "dist", "assets", "agents", "worker.md"), "utf8"), /worker_report/);
+  assert.match(readFileSync(join(PACKAGE, "dist", "assets", "agents", "critic.md"), "utf8"), /critic_report/);
+  const manager = readFileSync(join(PACKAGE, "dist", "assets", "agents", "manager.md"), "utf8");
+  const critic = readFileSync(join(PACKAGE, "dist", "assets", "agents", "critic.md"), "utf8");
+  const review = readFileSync(join(PACKAGE, "dist", "assets", "agents", "review.md"), "utf8");
   assert.match(manager, /fresh Markdown preview and fresh approval/);
   assert.match(manager, /never ask worker to diagnose or fix critic findings/);
   assert.match(critic, /Do not edit files,[\s\S]*direct worker remediation/);
@@ -115,7 +115,7 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     assert.equal(readdirSync(join(home, ".config", "opencode", "plugins")).length, 7);
     for (const name of ["background-attempts", "schedule", "autonomy-policy"]) {
       const installed = await readFile(join(home, ".config", "opencode", "plugins", `${name}.js`), "utf8");
-      const packaged = await readFile(join(PACKAGE, "assets", "plugins", `${name}.js`), "utf8");
+      const packaged = await readFile(join(PACKAGE, "dist", "assets", "plugins", `${name}.js`), "utf8");
       assert.equal(installed, packaged);
       assert.match(installed, /plugin\(input, \{ enabled: false \}\)/);
       assert.doesNotMatch(installed, /enabled: true/);
@@ -627,7 +627,7 @@ test("published package metadata and tarball expose only the OpenCode integratio
   assert.equal(packageJson.repository.directory, "packages/opencode");
   assert.equal(packageJson.homepage, "https://github.com/kisev/skills#readme");
   assert.equal(packageJson.bugs.url, "https://github.com/kisev/skills/issues");
-  assert.deepEqual(packageJson.files, ["assets", "dist", "README.md"]);
+  assert.deepEqual(packageJson.files, ["dist", "README.md"]);
   assert.equal(packageJson.engines.node, ">=22");
   assert.equal(packageJson.exports["."].import, "./dist/index.js");
   assert.equal(packageJson.bin["skills-opencode"], "./dist/cli.js");
@@ -650,7 +650,6 @@ test("published package metadata and tarball expose only the OpenCode integratio
     const filenames = execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" }).trim().split("\n");
     assert.ok(filenames.includes("package/package.json"));
     assert.ok(filenames.includes("package/README.md"));
-    assert.ok(filenames.some((name) => name.startsWith("package/assets/")));
     assert.ok(filenames.some((name) => name.startsWith("package/dist/")));
     for (const forbidden of ["package/test/", "package/tests/", "package/node_modules/", "package/skills/"]) {
       assert.equal(filenames.some((name) => name.startsWith(forbidden)), false, forbidden);

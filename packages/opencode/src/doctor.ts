@@ -17,7 +17,7 @@ const run = promisify(execFile);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageName = "@kisev/skills-opencode";
 const lspCatalog = JSON.parse(
-  readFileSync(resolve(packageRoot, "assets", "lsp-catalog.json"), "utf8"),
+  readFileSync(resolve(packageRoot, "dist", "assets", "lsp-catalog.json"), "utf8"),
 ) as {
   schema_version: 1;
   catalog_version: string;

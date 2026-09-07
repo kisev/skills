@@ -26,7 +26,7 @@ const PACKAGE_NAME = "@kisev/skills-opencode";
 const GENERIC_MANIFEST = ".skills-opencode-manifest.json";
 const SEMANTIC_MANIFEST = ".skills-opencode/agent-profiles.manifest.json";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const assetsRoot = resolve(packageRoot, "assets");
+const assetsRoot = resolve(packageRoot, "dist", "assets");
 const inventoryPath = resolve(assetsRoot, "migration-inventory.json");
 
 type InventoryRecord = {

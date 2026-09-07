@@ -153,7 +153,7 @@ def run(files: Sequence[str], *, dry_run: bool = False) -> int:
         runner.call("skills:agnix", ["uv", "run", "--locked", "python", "scripts/check_agnix.py"])
         runner.call(
             "skills:materialize",
-            ["uv", "run", "--locked", "python", "scripts/sync_shared.py", "--check"],
+            ["uv", "run", "--locked", "python", "scripts/build_skills.py", "--check"],
         )
         runner.call(
             "skills:tests",

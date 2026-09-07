@@ -9,8 +9,8 @@
 Переносимые skills находятся в `skills/<name>/` и являются законченными
 единицами установки. Во время работы skill может использовать только файлы под
 собственным корнем. `shared/` - входные данные сопровождающего, а не runtime-
-зависимость установленного skill. `scripts/sync_shared.py` создаёт точные копии
-по manifest, а эти копии хранятся в Git под соответствующими skills.
+зависимость установленного skill. `scripts/build_skills.py` создаёт точные копии
+по manifest только в ignored `.build/skills`; source tree не содержит copies.
 
 Для `askme`, `task-prepare`, `task-review` и read-only `goal` canonical
 `shared/references/work-item-contract.schema.json`, описание контракта и
@@ -24,6 +24,13 @@ CLI `skills-opencode` только для OpenCode integration. Maintainer scrip
 использовать только Python stdlib; Python runners, если они нужны skill, находятся
 внутри этого skill.
 
+`packages/skills/package.json` описывает непубликуемый build-only package
+`@kisev/skills`. `scripts/build_distribution.py` собирает `.build/packages/skills`:
+well-known index, lock с SHA-256 каждого archive, source revision и один archive
+на skill с root `SKILL.md`. Это boundary будущего unpkg distribution; в source
+tree не появляются archive, runtime copies, generated commands или copied LSP
+catalog.
+
 ## Интеграция с host
 
 Переносимые skills описывают задачу и не требуют конкретного host. Host может
@@ -31,7 +38,9 @@ CLI `skills-opencode` только для OpenCode integration. Maintainer scrip
 задаёт вопрос в чате. OpenCode-only adapters, agents, commands, plugins и
 capability router относятся к необязательному package `packages/opencode/` и не
 нужны для установки или работы portable skill. Package не содержит копий skills.
-Его явный installer materialize-ит assets после dry-run и matching digest;
+OpenCode commands, LSP catalog и authored agent/plugin assets materialize-ятся в
+`packages/opencode/dist/assets/` перед `npm pack`. Его явный installer применяет
+эти build assets после dry-run и matching digest;
 upgrade/uninstall сохраняют user drift через ownership manifests. Canonical agent
 assets содержат prompts/permissions, отдельная profile configuration -
 models/variants и additional critics, а semantic manifest - rendered hashes и
@@ -60,20 +69,18 @@ Stateful runtime records используют те же private 0600 atomic writ
 при повторной загрузке незавершённые background attempts переходят в
 `orphaned`, а недопустимые status transitions отклоняются.
 
-## Инварианты materialization
+## Инварианты build
 
-- JSON manifest - единственное отображение общих исходников в пути skills,
+- JSON manifest - единственное отображение общих исходников в пути build skills,
   включая minimal Python runtime для автономных runner-ов.
 - Пути относительные, нормализованные и ограничены соответственно каталогами
-  `shared/references/` и `skills/`.
+  `shared/references/` и isolated build output.
 - Symlinks в исходных и конечных путях отклоняются.
-- Нормализация и чтение всех исходников выполняются до записи.
-- Подготовленные файлы заменяются атомарно; при ошибке замены выполняется
-  откат.
-- `--check` работает только на чтение и сообщает о drift ненулевым exit status.
+- Source tree не меняется; build output заменяется только после полной подготовки.
+- `--check` сравнивает существующий artifact с clean staging и сообщает о drift.
 - Проверка work item сортирует findings по стабильному ключу и связывает report с
   digest item/evidence, поэтому неизменный повторный check даёт тот же verdict.
-- LSP applicability использует один machine-readable catalog, materialized в
-  `lsp-report` вместе с stdlib-only runtime и поставляемый package asset. Portable
-  report не имеет npm runtime dependency; package doctor дополняет только host
+- LSP applicability использует один machine-readable catalog, добавляемый в built
+  `lsp-report` вместе со stdlib-only runtime и в package staging. Portable report
+  не имеет npm runtime dependency; package doctor дополняет только host
   config/status facts.

@@ -148,7 +148,7 @@ const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_./-]*$
 const VARIANT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 const execFileAsync = promisify(execFile);
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const assetsRoot = resolve(packageRoot, "assets", "agents");
+const assetsRoot = resolve(packageRoot, "dist", "assets", "agents");
 
 const V1_AGENT_SHA256: Readonly<Record<FixedAgentRole, string>> = {
   architect: "3894c4ea5719d8945809157f1611fe5d1ea0ef2461a6092d94c18948baca1bee",

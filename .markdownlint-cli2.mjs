@@ -9,11 +9,5 @@ export default {
     MD041: false,
     MD060: false,
   },
-  globs: [
-    "**/*.md",
-    "!packages/opencode/assets/commands/**",
-    "!**/node_modules/**",
-    "!RESEARCH*.md",
-    "!TODO*.md",
-  ],
+  globs: ["**/*.md", "!**/node_modules/**", "!RESEARCH*.md", "!TODO*.md"],
 };

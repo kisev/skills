@@ -983,7 +983,7 @@ test("CLI human plan never truncates conflicts", async () => {
   const context = await roots();
   const executable = join(PACKAGE, "dist", "cli.js");
   try {
-    const commands = readdirSync(join(PACKAGE, "assets", "commands")).slice(0, 25);
+    const commands = readdirSync(join(PACKAGE, "dist", "assets", "commands")).slice(0, 25);
     await mkdir(join(context.root, "commands"), { recursive: true });
     await Promise.all(
       commands.map((name) =>

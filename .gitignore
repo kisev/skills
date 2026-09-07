@@ -8,3 +8,4 @@ __pycache__/
 /RESEARCH*.md
 /TODO*.md
 /evals/live/
+/.build/

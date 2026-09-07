@@ -13,12 +13,12 @@
   "invariants": [
     {
       "id": "doctor-command",
-      "path": "packages/opencode/assets/commands/doctor.md",
-      "contains": "read-only"
+      "path": "packages/opencode/src/registry.ts",
+      "contains": "name: \"doctor\""
     },
     { "id": "doctor-redaction", "path": "packages/opencode/src/doctor.ts", "contains": "redact" }
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 1500, "max_cost": 1 },
-  "digest": "cbc00fe90daa5094045ab2bdceb2ebc5ecfe623e26dca341f6aa0bdbcdc9632c"
+  "digest": "cb6fd9ac715c4742def53eed94373f7f18234d1ac2ed41a866efd40687748fcc"
 }

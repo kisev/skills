@@ -56,10 +56,10 @@ runners по-прежнему используют только standard library
 task check
 ```
 
-Доступные задачи показывает `task --list`. Только `task format` и
-`task generate` изменяют tracked-файлы. `task format` работает с canonical
-sources, после чего вызывает generation. `task generate:check` проверяет shared
-materialization и OpenCode command assets без записи.
+Доступные задачи показывает `task --list`. Только `task format` изменяет
+tracked-файлы. `task generate` создаёт ignored `.build/skills`, build-only
+`@kisev/skills` archive/index и package staging. `task generate:check` проверяет
+воспроизводимость artifacts без записи в source tree.
 
 Установить Git hooks можно командой `lefthook install`. `pre-commit` вызывает
 `task pre-commit`, который выбирает non-mutating проверки по staged paths:
@@ -71,7 +71,7 @@ docs-only правка не запускает package lifecycle. `pre-push` в�
 `mise current`. При ошибке `uv.lock` используйте `uv sync --locked`: изменение
 lock-файла при этом считается drift. Для generated drift меняйте источник в
 `shared/references/` или `packages/opencode/src/registry.ts` и запускайте
-`task generate`, а не редактируйте materialized-файл вручную. Полная структура
+`task generate`, а не редактируйте build artifact вручную. Полная структура
 проверок описана в [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Behavioral evals
@@ -131,6 +131,16 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 `askme`, `task-prepare`, `task-review` и `goal` используют общий materialized
 контракт `work-item/v1`. Он не создаёт зависимость установленного skill от
 `shared/`; validator и schema входят в каждую portable-копию.
+
+## Build Distribution
+
+`main` содержит только authored source. `task generate` создаёт ignored
+`.build/skills` и build-only package `@kisev/skills`: well-known index,
+`skills-lock.json` с SHA-256 и отдельный self-contained `.tar.gz` для каждого
+skill. В каждом archive `SKILL.md` находится в корне. Index фиксирует source
+revision; будущая публикация будет доступна по
+`https://unpkg.com/@kisev/skills@<version>/`. Текущий released source остаётся
+tag `v1.2.0`; build не создаёт tag, npm release или GitHub Release.
 
 Подробная классификация режимов и границ записана в
 [migration inventory](docs/migration-inventory.md).
@@ -203,6 +213,12 @@ TTL. Применить plan можно только командой с `--conf
 - OpenCode assets являются опциональными: portable skills продолжают работать без
   npm package, commands, agents и plugins.
 
+GitLab skills используют один canonical private collection по identity GitLab
+object, а не по имени вызывающего skill. Установленные copies содержат byte-identical
+runtime, artifact schema и workflow contract. Collection ограничен GET-only
+allowlist, exact SHA и completeness; publication остается только локальным
+Markdown-планом с `external_mutations=false`.
+
 ## Ограничения runtime
 
 Следующие ограничения делают stateful
@@ -212,8 +228,7 @@ OpenCode plugins небезопасными для включения:
   plugin остаётся opt-in.
 - Cron scheduler использует строгий evaluator и machine-readable receipts;
   definitions и plugin остаются disabled-by-default.
-- GitLab/code-review и Mattermost имеют неполный parity с заявленными
-  сценариями.
+- Mattermost имеет неполный parity с заявленными сценариями.
 - Runtime state и `doctor` требуют дополнительного hardening.
 
 Wrappers `background-attempts`, `schedule` и `autonomy-policy` выключены по
@@ -276,7 +291,7 @@ Uninstaller удаляет только неизменённые managed files. 
 ## Для сопровождающих
 
 ```shell
-python3 scripts/sync_shared.py --check
+python3 scripts/build_skills.py --check
 python3 -m unittest discover -s tests -v
 for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; done
 npx --yes skills add . --list
