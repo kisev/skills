@@ -133,6 +133,12 @@ tasks:
       - npm run smoke
       - node test/pack-allowlist.mjs
 
+  eval:check:
+    desc: Validate behavioral eval schemas and run the hostless deterministic suite
+    cmds:
+      - uv run --locked python scripts/eval_runner.py --validate
+      - uv run --locked python scripts/eval_runner.py --offline
+
   security:
     desc: Scan the repository for committed secrets
     cmds:
@@ -148,6 +154,7 @@ tasks:
       - task: test:python
       - task: generate:shared:check
       - task: skills:validate
+      - task: eval:check
       - task: package:check
       - task: security
 

@@ -39,6 +39,7 @@ task check
 | `generate`, `generate:check` | Создать materialized assets или проверить drift без записи. |
 | `skills:validate`            | Запустить agnix, pinned skills-ref и internal contracts.    |
 | `package:check`              | Выполнить полный lifecycle OpenCode package.                |
+| `eval:check`                 | Проверить schemas/corpus и hostless offline eval suite.     |
 | `security`                   | Проверить историю Git через gitleaks.                       |
 | `check`                      | Запустить полный локальный и CI quality gate.               |
 | `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.               |
@@ -90,6 +91,9 @@ lifecycle один раз (без отдельного дублирующего 
   не для деталей реализации.
 - Не включайте в изменения credentials, tokens, внутренние endpoints, локальные
   paths, cache или build artifacts.
+- Live eval запускайте только явно с точными `--host`, `--model`, timeout,
+  token/cost limits и output path. Не добавляйте model defaults или live output
+  в Git; обычный CI выполняет исключительно offline suite.
 - Описывайте в pull request цель, security impact, выполненные проверки и
   осознанно не запущенные проверки.
 - Используйте английский для кода, комментариев и commit messages; пользовательские

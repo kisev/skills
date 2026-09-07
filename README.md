@@ -74,6 +74,26 @@ lock-файла при этом считается drift. Для generated drift
 `task generate`, а не редактируйте materialized-файл вручную. Полная структура
 проверок описана в [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Behavioral evals
+
+Canonical corpus находится в [`evals/`](evals/): versioned JSON Schemas,
+неизменяемые scenario ID/revision и SHA-256 digest. `task eval:check` проверяет
+schemas и corpus, затем запускает только offline deterministic suite. Он не
+требует OpenCode, Codex, сети, credentials или пользовательской конфигурации.
+
+Live-проверка не имеет default model и запускается только в доверенном контуре с
+точными host, model и limits:
+
+```shell
+uv run --locked python scripts/eval_runner.py --trusted-live \
+  --host opencode --model provider/exact-model --timeout 60 \
+  --max-tokens 3000 --max-cost 2 --output evals/live/result.json
+```
+
+`evals/live/` игнорируется Git. Workflow `Trusted live evaluations` доступен
+только через ручной `workflow_dispatch`, использует protected environment и не
+выполняется для pull request или fork.
+
 ## Каталог skills
 
 | Skill             | Назначение                                                                |

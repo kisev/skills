@@ -7,3 +7,4 @@ __pycache__/
 *.tgz
 /RESEARCH*.md
 /TODO*.md
+/evals/live/

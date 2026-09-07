@@ -1,0 +1,50 @@
+name: Trusted live evaluations
+
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: Exact host executable (opencode or codex)
+        required: true
+        type: choice
+        options: [opencode, codex]
+      model:
+        description: Exact model identifier
+        required: true
+        type: string
+      timeout:
+        description: Wall-clock limit in seconds
+        required: true
+        type: string
+      max_tokens:
+        description: Maximum tokens
+        required: true
+        type: string
+      max_cost:
+        description: Maximum cost
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: trusted-live-evals
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+      - name: Run explicitly trusted live suite
+        run: >-
+          uv run --locked python scripts/eval_runner.py --trusted-live
+          --host '${{ inputs.host }}' --model '${{ inputs.model }}'
+          --timeout '${{ inputs.timeout }}' --max-tokens '${{ inputs.max_tokens }}'
+          --max-cost '${{ inputs.max_cost }}' --output evals/live/result.json
+      - name: Upload private evaluation artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trusted-live-evals
+          path: evals/live
+          if-no-files-found: error
