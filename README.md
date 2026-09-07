@@ -61,8 +61,10 @@ task check
 sources, после чего вызывает generation. `task generate:check` проверяет shared
 materialization и OpenCode command assets без записи.
 
-Установить Git hooks можно командой `lefthook install`. `pre-commit` запускает
-быстрый non-mutating набор через `task pre-commit`, а `pre-push` запускает полный
+Установить Git hooks можно командой `lefthook install`. `pre-commit` вызывает
+`task pre-commit`, который выбирает non-mutating проверки по staged paths:
+Markdown/data, Python/skills и OpenCode package проверяются независимо, а
+docs-only правка не запускает package lifecycle. `pre-push` вызывает полный
 `task check`. Hooks не форматируют файлы и не добавляют их в index.
 
 Если проверка не видит нужный executable, запустите `mise install`, затем

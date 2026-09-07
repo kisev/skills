@@ -61,8 +61,12 @@ generated-assets drift, smoke через закреплённый OpenCode и np
 lefthook install
 ```
 
-`pre-commit` вызывает быстрый non-mutating `task pre-commit`. `pre-push` вызывает
-полный `task check`. Hooks не применяют fixes и не выполняют `git add`.
+`pre-commit` вызывает `task pre-commit`: он выбирает быстрые non-mutating проверки
+по staged paths - docs/data, Python/skills и package затрагиваются только при
+изменении соответствующей области, а docs-only правка не запускает package
+lifecycle. `pre-push` вызывает полный `task check`. Полный gate выполняет package
+lifecycle один раз (без отдельного дублирующего package typecheck/test/generate до
+`package:check`). Hooks не применяют fixes и не выполняют `git add`.
 
 ## Диагностика
 

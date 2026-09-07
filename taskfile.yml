@@ -26,19 +26,29 @@ tasks:
   format:check:
     desc: Check formatting without changing tracked files
     cmds:
+      - task: format:repository:check
+      - task: package:format:check
+
+  format:repository:check:
+    internal: true
+    cmds:
       - uv run --locked ruff format --check scripts shared/references tests skills
       - prettier --check .
       - tombi format --offline --check mise.toml pyproject.toml tombi.toml
-      - task: package:format:check
 
   lint:
     desc: Run source, document, data, workflow, and shell linters
+    cmds:
+      - task: lint:repository
+      - oxlint packages/opencode/src packages/opencode/test
+
+  lint:repository:
+    internal: true
     cmds:
       - uv run --locked ruff check scripts shared/references tests skills
       - markdownlint-cli2
       - uv run --locked yamllint .github lefthook.yml taskfile.yml .yamllint.yml
       - actionlint
-      - oxlint packages/opencode/src packages/opencode/test
       - task: lint:data
       - task: lint:shell
 
@@ -62,14 +72,24 @@ tasks:
   typecheck:
     desc: Run strict Python and TypeScript type checks
     cmds:
-      - uv run --locked mypy
+      - task: typecheck:python
       - task: package:typecheck
+
+  typecheck:python:
+    internal: true
+    cmds:
+      - uv run --locked mypy
 
   test:
     desc: Run Python and Node contract tests
     cmds:
-      - SKILLS_BINARY="$(mise which skills)" uv run --locked pytest
+      - task: test:python
       - task: package:test
+
+  test:python:
+    internal: true
+    cmds:
+      - SKILLS_BINARY="$(mise which skills)" uv run --locked pytest
 
   generate:
     desc: Materialize all generated files
@@ -80,8 +100,13 @@ tasks:
   generate:check:
     desc: Check generated files for drift without writing them
     cmds:
-      - uv run --locked python scripts/sync_shared.py --check
+      - task: generate:shared:check
       - task: package:generate:check
+
+  generate:shared:check:
+    internal: true
+    cmds:
+      - uv run --locked python scripts/sync_shared.py --check
 
   skills:validate:
     desc: Validate Agent Skills with complementary validators
@@ -117,21 +142,19 @@ tasks:
   check:
     desc: Run the complete local and CI quality gate
     cmds:
-      - task: format:check
-      - task: lint
-      - task: typecheck
-      - task: test
-      - task: generate:check
+      - task: format:repository:check
+      - task: lint:repository
+      - task: typecheck:python
+      - task: test:python
+      - task: generate:shared:check
       - task: skills:validate
       - task: package:check
       - task: security
 
   pre-commit:
-    desc: Run fast non-mutating commit checks
+    desc: Run path-scoped non-mutating checks for staged files
     cmds:
-      - task: format:check
-      - task: lint
-      - task: generate:check
+      - uv run --locked python scripts/precommit.py
 
   pre-push:
     desc: Run the complete quality gate before push
