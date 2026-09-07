@@ -4,6 +4,23 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [1.2.0] - 2026-09-07
+
+### Добавлено
+
+- Единый versioned `work-item/v1` contract для `askme`, `task-prepare`,
+  `task-review` и `goal` с canonical schema, materialized validator и
+  deterministic structured reports.
+- Optional independent premortem для сложных work items с явными решениями
+  основного агента.
+
+### Изменено
+
+- `goal` не запускает invalid work item и связывает completion с acceptance
+  criteria и evidence.
+- Legacy persisted goal state читается совместимо без потери старых полей,
+  receipts и revisions.
+
 ## [1.1.1] - 2026-09-06
 
 ### Изменено
