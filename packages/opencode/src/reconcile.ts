@@ -363,7 +363,7 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
         groups,
         item(
           relativePath(root, target),
-          "retired",
+          record.replacement ? "renamed" : "retired",
           "exact historical SHA-256 proves retired public ownership",
           value.content,
           record.replacement,
@@ -380,7 +380,7 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
         groups,
         item(
           relativePath(root, target),
-          "retired",
+          record.replacement ? "renamed" : "retired",
           "stale exact ownership record without an asset",
           undefined,
           record.replacement,
