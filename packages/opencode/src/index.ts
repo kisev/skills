@@ -1,4 +1,4 @@
-import { tool, type Plugin } from "@opencode-ai/plugin";
+import { tool, type Plugin, type PluginInput } from "@opencode-ai/plugin";
 
 import { CATEGORIES, type AvailableAgent, type Category, RoutingGate, type RoutingInput } from "./routing.js";
 import backgroundAttempts, { type BackgroundAttemptsOptions } from "./plugins/background-attempts.js";
@@ -16,6 +16,8 @@ import {
   type AgentProfileRequest,
 } from "./agent-profiles.js";
 import { applyReconcile, previewReconcile } from "./reconcile.js";
+import { collectDoctorFacts, type DoctorHost } from "./doctor.js";
+import { CATALOG } from "./catalog.js";
 
 export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
 export { CATEGORIES, resolveRouting, RoutingGate, ExecutionCardLifecycle, validateExecutionCard, validateRoutingReceipt } from "./routing.js";
@@ -52,7 +54,10 @@ export type {
 } from "./agent-profiles.js";
 export { backgroundAttempts, scheduler, autonomyPolicy, rulesInjector, rtk, zedBell, zedClickablePaths };
 export { applyReconcile, previewReconcile } from "./reconcile.js";
+export { inspectReconcile } from "./reconcile.js";
 export type { ReconcileItem, ReconcilePlan, ReconcileResult, ReconcileStatus } from "./reconcile.js";
+export { collectDoctorFacts, doctorExitCode } from "./doctor.js";
+export type { DoctorReport, DoctorHost, DoctorCheck, DoctorCheckStatus } from "./doctor.js";
 export { worktreePlan, worktreeCreate, worktreeStatus, worktreeList, worktreeRelease, worktreeRecover } from "./runtime/worktree.js";
 export type { WorktreeRecord, WorktreeStatus } from "./runtime/worktree.js";
 export type OpenCodeOptions = {
@@ -65,14 +70,9 @@ export type OpenCodeOptions = {
   zedClickablePaths?: ZedClickablePathsOptions;
 };
 
-const CATALOG = {
-  skills: ["attempt", "goal", "schedule", "usage", "overview", "lsp-report"],
-  plugins: ["background-attempts", "schedule", "autonomy-policy", "rules-injector", "rtk", "zed-bell", "zed-clickable-paths"],
-  replacements: ["capabilities", "route", "doctor", "agent_profiles", "reconcile"],
-  version: "1.1.1",
-} as const;
+export { CATALOG } from "./catalog.js";
 
-const plugin = (async (input: { directory?: string }) => {
+const plugin = (async (input: PluginInput) => {
   const gate = new RoutingGate();
   const route = tool({
     description: "Resolve a capability category and dispatch one eligible agent through a one-use Task receipt gate.",
@@ -102,9 +102,15 @@ const plugin = (async (input: { directory?: string }) => {
   });
   const doctor = tool({
     description: "Read package health and opt-in defaults without installing or repairing anything.",
-    args: {},
-    async execute() {
-      return JSON.stringify({ schema_version: 1, status: "ok", package: "@kisev/skills-opencode", opencode: ">=1.18.29", state: "not-inspected", mutations: false, defaults: { backgroundAttempts: false, goalLoop: false, scheduler: false, autonomyPolicy: false, zedBell: false, zedClickablePaths: false } });
+    args: { scope: tool.schema.enum(["global", "project"]).default("project") },
+    async execute(args: { scope: "global" | "project" }, context: { directory: string }) {
+      const host: DoctorHost | undefined = input.client
+        ? {
+            config: async () => (await input.client.config.get({ query: { directory: context.directory } })).data,
+            lsp: async () => (await input.client.lsp.status({ query: { directory: context.directory } })).data,
+          }
+        : undefined;
+      return JSON.stringify(await collectDoctorFacts(args.scope ?? "project", context.directory, undefined, host));
     },
   });
   const agentProfiles = tool({

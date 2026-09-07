@@ -8,6 +8,8 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
+for (const variable of ["GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete process.env[variable];
+
 import plugin, { COMMAND_REGISTRY, ExecutionCardLifecycle, RoutingGate, renderCommand, resolveRouting, validateExecutionCard, worktreeCreate, worktreeRecover, worktreeRelease, worktreeStatus } from "../dist/index.js";
 import backgroundAttempts from "../dist/plugins/background-attempts.js";
 import scheduler from "../dist/plugins/schedule.js";

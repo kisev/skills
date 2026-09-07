@@ -66,7 +66,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate-assets": "npm run build && node dist/generate-assets.js",
     "generate-assets:check": "npm run build && node dist/generate-assets.js --check",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "test": "npm run build && node --test test/agent-profiles.test.mjs && node --test test/doctor.test.mjs && node --test test/package.test.mjs",
     "smoke": "npm run build && node test/smoke.mjs"
   },
   "peerDependencies": {

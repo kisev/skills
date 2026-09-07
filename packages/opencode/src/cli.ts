@@ -12,7 +12,8 @@ import {
   validateVariant,
   type AgentProfileRequest,
 } from "./agent-profiles.js";
-import { renderInventory, renderPlan, renderReconcile, shellCommand, terminalSafe } from "./cli-output.js";
+import { renderDoctor, renderInventory, renderPlan, renderReconcile, shellCommand, terminalSafe } from "./cli-output.js";
+import { collectDoctorFacts, doctorExitCode } from "./doctor.js";
 import { apply, InstallerError, preview, type Action } from "./installer.js";
 import { LifecycleError, type Scope } from "./lifecycle.js";
 import { applyReconcile, previewReconcile } from "./reconcile.js";
@@ -222,6 +223,16 @@ function profileConfirmationArguments(request: AgentProfileRequest, scope: Scope
 
 async function run(arguments_: string[]): Promise<void> {
   const [domain, operation, ...rest] = arguments_;
+  if (domain === "doctor") {
+    if (operation) rest.unshift(operation);
+    const options = parseOptions(rest);
+    if (options.dryRun || options.confirm || options.name || options.provider || options.model || options.variant !== undefined) throw new InstallerError("invalid_input", "doctor accepts only --scope and --json");
+    const report = await collectDoctorFacts(options.scope!);
+    if (options.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    else process.stdout.write(renderDoctor(report));
+    process.exitCode = doctorExitCode(report);
+    return;
+  }
   if (domain === "reconcile") {
     if (operation) rest.unshift(operation);
     const options = parseOptions(rest);

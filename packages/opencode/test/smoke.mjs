@@ -37,6 +37,10 @@ try {
   assert.equal(dryRun.applied, false);
   assert.equal(dryRun.plan.requires_restart, false);
   assert.equal(cli(["install", "--scope", "global", "--confirm", dryRun.plan.digest]).requires_restart, false);
+  const doctor = spawnSync(executable, ["doctor", "--scope", "global", "--json"], { cwd: project, env: environment, encoding: "utf8" });
+  assert.ok([1, 2].includes(doctor.status));
+  assert.equal(JSON.parse(doctor.stdout).mutations, false);
+  assert.equal(JSON.parse(doctor.stdout).scope, "global");
   const modelPlan = cli(["agent", "model-set", "manager", "--scope", "global", "--model", "opencode/gpt-5-nano", "--variant", "high", "--dry-run"]);
   assert.equal(cli(["agent", "model-set", "manager", "--scope", "global", "--model", "opencode/gpt-5-nano", "--variant", "high", "--confirm", modelPlan.plan.digest]).requires_restart, true);
   const criticPlan = cli(["critic", "add", "smoke", "--scope", "global", "--model", "opencode/gpt-5-nano", "--dry-run"]);

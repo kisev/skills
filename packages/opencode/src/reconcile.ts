@@ -784,6 +784,15 @@ export async function previewReconcile(
   }
 }
 
+/** Build the ownership classification without receipts, locks, or recovery. */
+export async function inspectReconcile(
+  scope: Scope,
+  cwd = process.cwd(),
+  home = homedir(),
+): Promise<ReconcilePlan> {
+  return (await build(scope, cwd, home)).plan;
+}
+
 export async function applyReconcile(
   scope: Scope,
   confirmationDigest: string,

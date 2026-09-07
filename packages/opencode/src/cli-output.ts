@@ -1,6 +1,7 @@
 import type { AgentInventory, AgentProfilePlan } from "./agent-profiles.js";
 import type { Plan as InstallerPlan } from "./installer.js";
 import type { ReconcilePlan } from "./reconcile.js";
+import type { DoctorReport } from "./doctor.js";
 
 type DisplayPlan = InstallerPlan | AgentProfilePlan;
 type DisplayOperation = DisplayPlan["operations"][number];
@@ -207,5 +208,27 @@ export function renderReconcile(
     if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
     if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
   }
+  return `${lines.join("\n")}\n`;
+}
+
+export function renderDoctor(report: DoctorReport): string {
+  const actionable = report.checks.filter(
+    (item) => item.status === "fail" || item.status === "warn",
+  );
+  const next = actionable.flatMap((item) => item.remediation ?? []).slice(0, 8);
+  const lines = [
+    `Doctor TLDR: ${report.status} (${report.scope})`,
+    `Package: ${report.versions.package ?? "unavailable"}  Catalog: ${report.versions.catalog}  OpenCode: ${report.versions.opencode ?? "unavailable"}`,
+    `Checks: pass ${report.counts.pass}, warn ${report.counts.warn}, fail ${report.counts.fail}, incomplete ${report.counts.incomplete}`,
+    "Mutations: no",
+  ];
+  if (actionable.length)
+    lines.push(
+      "",
+      "Actionable findings:",
+      ...actionable.map((item) => `  ${terminalSafe(item.id)}: ${terminalSafe(item.summary)}`),
+    );
+  if (next.length)
+    lines.push("", "Next commands:", ...next.map((item) => `  ${terminalSafe(item)}`));
   return `${lines.join("\n")}\n`;
 }
