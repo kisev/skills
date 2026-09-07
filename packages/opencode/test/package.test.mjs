@@ -754,6 +754,83 @@ test("reconcile preserves modified, user-owned, unknown, and symlink assets", as
   }
 });
 
+test("reconcile classifies exact replacement assets as renamed", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    const root = join(project, ".opencode");
+    const historical = execFileSync(
+      "git",
+      ["show", "v1.2.0:packages/opencode/assets/commands/goal-start.md"],
+      { cwd: REPOSITORY },
+    );
+    await mkdir(join(root, "commands"), { recursive: true });
+    await mkdir(home);
+    await writeFile(join(root, "commands", "goal-start.md"), historical);
+    await writeFile(
+      join(root, ".skills-opencode-manifest.json"),
+      JSON.stringify({
+        schema_version: 1,
+        package: "@kisev/skills-opencode",
+        version: "1.2.0",
+        files: { "commands/goal-start.md": { sha256: createHash("sha256").update(historical).digest("hex") } },
+      }),
+    );
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(plan.retired.length, 0);
+    assert.deepEqual(
+      plan.renamed.map((entry) => [entry.path, entry.replacement]),
+      [[".opencode/commands/goal-start.md", "commands/goal.md"]],
+    );
+    await applyReconcile("project", plan.digest, project, home);
+    await assert.rejects(lstat(join(root, "commands", "goal-start.md")), { code: "ENOENT" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile leaves historical goal and multi-run state byte-for-byte unchanged", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    const root = join(project, ".opencode");
+    const state = join(home, ".local", "state", "opencode", "skills");
+    const historical = execFileSync(
+      "git",
+      ["show", "v1.2.0:packages/opencode/assets/commands/goal-start.md"],
+      { cwd: REPOSITORY },
+    );
+    const stateFiles = new Map([
+      [join(state, "goal", "historical.json"), Buffer.from('{"status":"historical-goal"}\n')],
+      [join(state, "multi-run", "historical.json"), Buffer.from('{"status":"historical-group"}\n')],
+    ]);
+    await mkdir(join(root, "commands"), { recursive: true });
+    await mkdir(home);
+    for (const [path, content] of stateFiles) {
+      await mkdir(resolve(path, ".."), { recursive: true });
+      await writeFile(path, content);
+    }
+    await writeFile(join(root, "commands", "goal-start.md"), historical);
+    await writeFile(
+      join(root, ".skills-opencode-manifest.json"),
+      JSON.stringify({
+        schema_version: 1,
+        package: "@kisev/skills-opencode",
+        version: "1.2.0",
+        files: { "commands/goal-start.md": { sha256: createHash("sha256").update(historical).digest("hex") } },
+      }),
+    );
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(plan.diagnostic_state_only.length, 2);
+    await applyReconcile("project", plan.digest, project, home);
+    for (const [path, content] of stateFiles) assert.deepEqual(await readFile(path), content);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("reconcile CLI returns stable JSON and a ready confirmation command", () => {
   const directory = temporary();
   try {
