@@ -54,7 +54,7 @@ export const COMMAND_REGISTRY: readonly CommandRegistration[] = [
   { name: "lsp-report", skill: "lsp-report", description: "Показать read-only применимость LSP OpenCode." },
   { name: "capabilities", packageTool: "capabilities", description: "Показать catalog package OpenCode integration." },
   { name: "route", packageTool: "route", description: "Подобрать capability route и при необходимости выдать receipt." },
-  { name: "doctor", packageTool: "doctor", description: "Показать read-only health package OpenCode integration." },
+  { name: "doctor", packageTool: "doctor", description: "Показать read-only health package OpenCode integration для project или global scope." },
   { name: "reconcile", packageTool: "reconcile", description: "Показать или применить безопасную миграцию retired public assets." },
   { name: "agent-list", packageTool: "agent_profiles", packageAction: "list", description: "Показать inventory управляемых и пользовательских OpenCode agents." },
   { name: "agent-model-set", packageTool: "agent_profiles", packageAction: "model_set", description: "Подготовить или применить настройку model и variant одного agent." },

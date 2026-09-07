@@ -215,7 +215,13 @@ export function renderDoctor(report: DoctorReport): string {
   const actionable = report.checks.filter(
     (item) => item.status === "fail" || item.status === "warn",
   );
-  const next = actionable.flatMap((item) => item.remediation ?? []).slice(0, 8);
+  const next = new Set(actionable.flatMap((item) => item.remediation ?? []));
+  if (report.conflicts.length) {
+    next.add(`npm exec -- skills-opencode reconcile --scope ${report.scope} --dry-run`);
+  }
+  if (actionable.some((item) => item.id.startsWith("assets."))) {
+    next.add(`npm exec -- skills-opencode install --scope ${report.scope} --dry-run`);
+  }
   const lines = [
     `Doctor TLDR: ${report.status} (${report.scope})`,
     `Package: ${report.versions.package ?? "unavailable"}  Catalog: ${report.versions.catalog}  OpenCode: ${report.versions.opencode ?? "unavailable"}`,
@@ -228,7 +234,16 @@ export function renderDoctor(report: DoctorReport): string {
       "Actionable findings:",
       ...actionable.map((item) => `  ${terminalSafe(item.id)}: ${terminalSafe(item.summary)}`),
     );
-  if (next.length)
-    lines.push("", "Next commands:", ...next.map((item) => `  ${terminalSafe(item)}`));
+  if (report.conflicts.length)
+    lines.push(
+      "",
+      "Conflicts:",
+      ...report.conflicts.map(
+        (item) =>
+          `  ${terminalSafe(String(item.path ?? "unknown"))} (${terminalSafe(String(item.reason ?? "conflict"))})`,
+      ),
+    );
+  if (next.size)
+    lines.push("", "Next commands:", ...[...next].map((item) => `  ${terminalSafe(item)}`));
   return `${lines.join("\n")}\n`;
 }

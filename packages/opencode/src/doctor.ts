@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
-import { readFile, readdir, lstat } from "node:fs/promises";
+import { constants as fsConstants } from "node:fs";
+import { readFile, readdir, lstat, stat } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -146,15 +147,43 @@ function packageVersion(): string | null {
 
 function manifestVersion(raw: Buffer | undefined): string | null {
   const value = raw && json(raw);
+  const files = value?.files;
+  const validFiles =
+    files &&
+    typeof files === "object" &&
+    !Array.isArray(files) &&
+    Object.entries(files).every(
+      ([path, record]) =>
+        path.length > 0 &&
+        !path.startsWith("/") &&
+        !path.includes("\\") &&
+        !path.split("/").some((part) => part === "" || part === "." || part === "..") &&
+        record &&
+        typeof record === "object" &&
+        /^[a-f0-9]{64}$/.test(String((record as JsonObject).sha256 ?? "")),
+    );
   return value &&
     value.schema_version === 1 &&
     value.package === packageName &&
     typeof value.version === "string" &&
-    value.files &&
-    typeof value.files === "object" &&
-    !Array.isArray(value.files)
+    validFiles
     ? value.version
     : null;
+}
+
+function agentManifestValid(raw: Buffer | undefined): boolean {
+  const value = raw && json(raw);
+  return Boolean(
+    value &&
+    value.schema_version === 1 &&
+    value.package === packageName &&
+    typeof value.package_version === "string" &&
+    (value.scope === "global" || value.scope === "project") &&
+    Array.isArray(value.critic_pool) &&
+    value.profiles &&
+    typeof value.profiles === "object" &&
+    !Array.isArray(value.profiles),
+  );
 }
 
 function redactedConfig(value: unknown): {
@@ -255,6 +284,44 @@ async function filesInState(root: string): Promise<{ count: number; incomplete: 
   };
 }
 
+function diagnosticStateRoot(name: string, home: string): string {
+  return home === homedir()
+    ? stateRoot(name, home)
+    : join(home, ".local", "state", "opencode", "skills", name);
+}
+
+async function lifecycleArtifacts(root: string): Promise<{
+  count: number;
+  locks: number;
+  receipts: number;
+  journals: number;
+  incomplete: boolean;
+}> {
+  const result = await directoryEntries(root);
+  const files = result.files.map((name) => name.toLowerCase());
+  return {
+    count: files.filter((name) => name.endsWith(".json") || name.endsWith(".jsonl")).length,
+    locks: files.filter((name) => name.includes("lock")).length,
+    receipts: files.filter((name) => name.includes("receipt")).length,
+    journals: files.filter((name) => name.includes("journal")).length,
+    incomplete: result.incomplete,
+  };
+}
+
+async function executableAvailable(name: string): Promise<boolean> {
+  const pathValue = process.env.PATH ?? "";
+  for (const directory of pathValue.split(delimiter)) {
+    if (!directory) continue;
+    try {
+      const info = await stat(join(directory, name));
+      if (info.isFile() && (info.mode & fsConstants.X_OK) !== 0) return true;
+    } catch {
+      // A missing or inaccessible PATH entry is equivalent to an unavailable binary.
+    }
+  }
+  return false;
+}
+
 async function lspFacts(
   project: string,
   host: DoctorHost | undefined,
@@ -285,12 +352,7 @@ async function lspFacts(
   const servers = await Promise.all(
     lspCatalog.servers.map(async (server) => {
       let available = false;
-      try {
-        await run("which", [server.executable], { timeout: 1000 });
-        available = true;
-      } catch {
-        available = false;
-      }
+      available = await executableAvailable(server.executable);
       const applicable = server.extensions.some((extension) => suffixes.has(extension));
       return {
         name: server.name,
@@ -345,6 +407,7 @@ function reconcileProjection(plan: ReconcilePlan): {
   conflicts: Array<Record<string, unknown>>;
 } {
   const groups = [
+    "current",
     "renamed",
     "retired",
     "modified_managed",
@@ -525,17 +588,21 @@ export async function collectDoctorFacts(
   const profileManifest = await regular(
     join(deployment, ".skills-opencode", "agent-profiles.manifest.json"),
   );
+  const profileManifestIsValid = agentManifestValid(profileManifest.raw);
   checks.push(
     check(
       "agents.manifest",
       profileManifest.status === "present"
-        ? "pass"
+        ? profileManifestIsValid
+          ? "pass"
+          : "warn"
         : profileManifest.status === "missing"
           ? "incomplete"
           : "warn",
       "Agent profile manifest is classified",
       {
         present: profileManifest.status === "present",
+        valid: profileManifestIsValid,
         path: ".skills-opencode/agent-profiles.manifest.json",
       },
       ["Run the installer preview for this scope."],
@@ -564,7 +631,7 @@ export async function collectDoctorFacts(
   );
 
   const stateRoots = ["attempt", "schedule", "worktree", "goal", "multi-run"].map(
-    (name) => [name, stateRoot(name, homeRoot)] as const,
+    (name) => [name, diagnosticStateRoot(name, homeRoot)] as const,
   );
   for (const [name, root] of stateRoots) {
     const value = await filesInState(root);
@@ -581,13 +648,19 @@ export async function collectDoctorFacts(
       ),
     );
   }
-  const lifecycleFiles = await filesInState(lifecycle);
+  const lifecycleFiles = await lifecycleArtifacts(lifecycle);
   checks.push(
     check(
       "lifecycle.artifacts",
       lifecycleFiles.incomplete ? "incomplete" : "pass",
       "Lifecycle locks, receipts, and journals are inspected without mutation",
-      { records: lifecycleFiles.count, recovery: false },
+      {
+        records: lifecycleFiles.count,
+        locks: lifecycleFiles.locks,
+        receipts: lifecycleFiles.receipts,
+        journals: lifecycleFiles.journals,
+        recovery: false,
+      },
       lifecycleFiles.incomplete
         ? ["Resolve inaccessible lifecycle state before applying a mutation."]
         : undefined,
@@ -623,7 +696,11 @@ export async function collectDoctorFacts(
   const lsp = await lspFacts(project, host, partial);
   const counts = { pass: 0, warn: 0, fail: 0, incomplete: 0 };
   for (const item of checks) counts[item.status] += 1;
-  const status = counts.fail ? "problems" : counts.incomplete ? "incomplete" : "clean";
+  const status = counts.fail
+    ? "problems"
+    : counts.incomplete || partial.length > 0 || unavailable.length > 0
+      ? "incomplete"
+      : "clean";
   return {
     schema_version: 1,
     status,

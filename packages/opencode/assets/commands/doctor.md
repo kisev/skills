@@ -1,5 +1,5 @@
 ---
-description: Показать read-only health package OpenCode integration.
+description: Показать read-only health package OpenCode integration для project или global scope.
 ---
 
 # /doctor

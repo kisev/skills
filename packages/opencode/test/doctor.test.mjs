@@ -1,11 +1,20 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
 import plugin, { collectDoctorFacts, doctorExitCode } from "../dist/index.js";
+import { renderDoctor } from "../dist/cli-output.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
 const ROOT = resolve(PACKAGE, "../..");
@@ -93,7 +102,36 @@ test("doctor never serializes config secrets and classifies collisions as proble
     assert.equal(report.mutations, false);
     assert.ok(report.checks.some((check) => check.status === "fail"));
     assert.equal(report.status, "problems");
+    assert.equal(renderDoctor(report).includes("doctor-secret"), false);
   } finally {
+    rmSync(item.root, { recursive: true, force: true });
+  }
+});
+
+test("doctor reports disabled LSP and inaccessible symlink inputs without reading through them", async () => {
+  const item = fixture();
+  const previous = process.env.OPENCODE_DISABLE_LSP_DOWNLOAD;
+  try {
+    writeFileSync(join(item.project, "sample.py"), "print('ok')\n");
+    mkdirSync(join(item.root, "outside"));
+    writeFileSync(
+      join(item.root, "outside", "opencode.json"),
+      JSON.stringify({ token: "outside-secret" }),
+    );
+    const link = join(item.project, ".opencode");
+    symlinkSync(join(item.root, "outside"), link);
+    process.env.OPENCODE_DISABLE_LSP_DOWNLOAD = "true";
+    const report = await collectDoctorFacts("project", item.project, item.home);
+    assert.ok(report.partial.includes("config.local"));
+    assert.equal(
+      report.lsp.servers.find((server) => server.name === "python").reason,
+      "download-disabled",
+    );
+    assert.equal(JSON.stringify(report).includes("outside-secret"), false);
+    assert.equal(report.status, "problems");
+  } finally {
+    if (previous === undefined) delete process.env.OPENCODE_DISABLE_LSP_DOWNLOAD;
+    else process.env.OPENCODE_DISABLE_LSP_DOWNLOAD = previous;
     rmSync(item.root, { recursive: true, force: true });
   }
 });
