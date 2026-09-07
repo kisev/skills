@@ -91,7 +91,11 @@ def build(output: Path, check: bool) -> int:
                 )
                 return 0
             for source in staged.rglob("*"):
-                if source.is_file() and not source.is_symlink():
+                if (
+                    source.is_file()
+                    and not source.is_symlink()
+                    and "__pycache__" not in source.parts
+                ):
                     relative = source.relative_to(staged)
                     target = output / relative
                     if (
@@ -104,6 +108,7 @@ def build(output: Path, check: bool) -> int:
                 if (
                     target.is_file()
                     and not target.is_symlink()
+                    and "__pycache__" not in target.parts
                     and not (staged / target.relative_to(output)).is_file()
                 ):
                     raise BuildError(f"unexpected build artifact: {target.relative_to(output)}")
