@@ -80,6 +80,22 @@ test("doctor distinguishes invalid input with exit code two", () => {
   }
 });
 
+test("doctor classifies malformed durable state as incomplete without recovery", async () => {
+  const item = fixture();
+  try {
+    const state = join(item.home, ".local", "state", "opencode", "skills", "attempt", "attempts");
+    mkdirSync(state, { recursive: true });
+    writeFileSync(join(state, "malformed.json"), "{not-json\n");
+    const report = await collectDoctorFacts("project", item.project, item.home);
+    const attempt = report.checks.find((check) => check.id === "state.attempt");
+    assert.equal(attempt.status, "incomplete");
+    assert.equal(attempt.evidence.malformed, 1);
+    assert.equal(readFileSync(join(state, "malformed.json"), "utf8"), "{not-json\n");
+  } finally {
+    rmSync(item.root, { recursive: true, force: true });
+  }
+});
+
 test("doctor never serializes config secrets and classifies collisions as problems", async () => {
   const item = fixture();
   try {

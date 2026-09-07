@@ -276,11 +276,38 @@ async function expectedAssets(group: "commands" | "plugins" | "agents"): Promise
   }
 }
 
-async function filesInState(root: string): Promise<{ count: number; incomplete: boolean }> {
+async function filesInState(root: string): Promise<{
+  count: number;
+  malformed: number;
+  incomplete: boolean;
+}> {
   const result = await directoryEntries(root);
+  let malformed = 0;
+  let incomplete = result.incomplete;
+  for (const name of result.files.filter(
+    (value) => value.endsWith(".json") || value.endsWith(".jsonl"),
+  )) {
+    const value = await regular(join(root, name));
+    if (value.status === "incomplete") {
+      incomplete = true;
+      continue;
+    }
+    if (value.status !== "present") continue;
+    const lines = name.endsWith(".jsonl")
+      ? value.raw!.toString("utf8").split(/\r?\n/).filter(Boolean)
+      : [value.raw!.toString("utf8")];
+    for (const line of lines) {
+      try {
+        JSON.parse(line);
+      } catch {
+        malformed += 1;
+      }
+    }
+  }
   return {
     count: result.files.filter((name) => name.endsWith(".json") || name.endsWith(".jsonl")).length,
-    incomplete: result.incomplete,
+    malformed,
+    incomplete,
   };
 }
 
@@ -295,16 +322,19 @@ async function lifecycleArtifacts(root: string): Promise<{
   locks: number;
   receipts: number;
   journals: number;
+  malformed: number;
   incomplete: boolean;
 }> {
-  const result = await directoryEntries(root);
-  const files = result.files.map((name) => name.toLowerCase());
+  const result = await filesInState(root);
+  const entries = await directoryEntries(root);
+  const files = entries.files.map((name) => name.toLowerCase());
   return {
-    count: files.filter((name) => name.endsWith(".json") || name.endsWith(".jsonl")).length,
+    count: result.count,
     locks: files.filter((name) => name.includes("lock")).length,
     receipts: files.filter((name) => name.includes("receipt")).length,
     journals: files.filter((name) => name.includes("journal")).length,
-    incomplete: result.incomplete,
+    malformed: result.malformed,
+    incomplete: result.incomplete || entries.incomplete,
   };
 }
 
@@ -636,13 +666,18 @@ export async function collectDoctorFacts(
   for (const [name, root] of stateRoots) {
     const value = await filesInState(root);
     if (value.incomplete) partial.push(`state.${name}`);
+    if (value.malformed) partial.push(`state.${name}.malformed`);
     checks.push(
       check(
         `state.${name}`,
-        value.incomplete ? "incomplete" : "pass",
+        value.incomplete || value.malformed ? "incomplete" : "pass",
         `${name} state is inspected without recovery`,
-        { records: value.count, diagnostic_state_only: name === "goal" || name === "multi-run" },
-        value.incomplete
+        {
+          records: value.count,
+          malformed: value.malformed,
+          diagnostic_state_only: name === "goal" || name === "multi-run",
+        },
+        value.incomplete || value.malformed
           ? ["Repair permissions or malformed state manually; doctor never recovers it."]
           : undefined,
       ),
@@ -652,13 +687,14 @@ export async function collectDoctorFacts(
   checks.push(
     check(
       "lifecycle.artifacts",
-      lifecycleFiles.incomplete ? "incomplete" : "pass",
+      lifecycleFiles.incomplete || lifecycleFiles.malformed ? "incomplete" : "pass",
       "Lifecycle locks, receipts, and journals are inspected without mutation",
       {
         records: lifecycleFiles.count,
         locks: lifecycleFiles.locks,
         receipts: lifecycleFiles.receipts,
         journals: lifecycleFiles.journals,
+        malformed: lifecycleFiles.malformed,
         recovery: false,
       },
       lifecycleFiles.incomplete
