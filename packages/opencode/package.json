@@ -22,10 +22,6 @@
       "types": "./dist/plugins/background-attempts.d.ts",
       "import": "./dist/plugins/background-attempts.js"
     },
-    "./plugins/goal-loop": {
-      "types": "./dist/plugins/goal-loop.d.ts",
-      "import": "./dist/plugins/goal-loop.js"
-    },
     "./plugins/schedule": {
       "types": "./dist/plugins/schedule.d.ts",
       "import": "./dist/plugins/schedule.js"

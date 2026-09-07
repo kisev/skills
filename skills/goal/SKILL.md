@@ -1,8 +1,8 @@
 ---
 name: goal
-description: Управлять проверяемой целью, привязанной к OpenCode session, когда нужен ограниченный и аудируемый автономный цикл.
+description: Сформировать проверяемую read-only цель в portable формате work-item/v1.
 license: MIT
-compatibility: Requires OpenCode 1.18.29+ and @kisev/skills-opencode; Python 3.12+ stdlib-only runner.
+compatibility: Requires an Agent Skills host with native Question support; no runtime or state is required.
 allowed-tools: native Question
 metadata:
   author: "Kirill Sevriugin"
@@ -11,35 +11,48 @@ metadata:
 
 # Goal
 
-Прочитай `references/work-item-contract.md`. Перед `start` goal должен иметь
-валидный normalized work item (`work-item/v1`), а completion должен быть связан с
-каждым acceptance criterion и его evidence. Проверка machine rules выполняется
-через `scripts/work_item.py validate`; feasibility и смысловые противоречия
-передаются как structured semantic assessment. Invalid item не запускается.
+Прочитай `references/work-item-contract.md` и сформируй цель, которую можно
+скопировать в другую систему. Этот skill строго read-only: не создавай и не изменяй файлы,
+XDG state, repository, session, receipts или внешние системы.
+OpenChamber Goal Mode как внешний способ выполнения цели не является частью этого
+skill.
 
-Runner хранит только user-owned state в XDG state directory OpenCode. Он требует
-явный session ID либо `OPENCODE_SESSION_ID`, не меняет permissions и не запускает
-loop. Loop доступен только через явно включённый package plugin.
+## Исследование
 
-```text
-python3 -I -S -B scripts/goal.py prepare --session ID --objective TEXT
-python3 -I -S -B scripts/goal.py list [--project PATH]
-python3 -I -S -B scripts/goal.py show --goal-id ID
-python3 -I -S -B scripts/goal.py start|pause --goal-id ID --revision N [--session ID]
-python3 -I -S -B scripts/goal.py remove --goal-id ID --revision N --dry-run
-```
+Сначала исследуй доступные факты: запрос пользователя, открытые файлы, состояние
+репозитория, доступные проверки и явно названные ограничения. Не выдавай
+предположение за факт; неизвестное внеси в `unresolved_questions` или blocker.
+Задавай через native Question только вопросы, ответы на которые меняют problem,
+outcome, scope, acceptance criteria, dependency, safety или stop condition.
+Если фактов достаточно, вопросов не задавай.
 
-`prepare` создаёт paused goal. `start` и `pause` проверяют revision и session
-binding. Plugin учитывает turn/token limits, сохраняет audit receipts и переводит
-цель только в `paused`, `complete` или `blocked` по наблюдаемому событию.
-Удаление всегда двухфазное: preview выдаёт одноразовый digest, apply повторно
-проверяет digest, expiry и revision.
+Для сложной задачи или явного запроса выполни один optional independent premortem
+до итоговой формулировки: максимум три риска с probability, impact и
+предлагаемой правкой формулировки. Premortem-agent не редактирует item; решение
+по каждому риску принимает основной агент. Если независимый агент недоступен,
+статус premortem равен `skipped`; при независимом проходе статус равен
+`completed`. Не имитируй self-review.
 
-Старое persisted state читается совместимо: прежние поля, receipts и revisions
-сохраняются, а отсутствующий work item восстанавливается через versioned legacy
-adapter при чтении. GitLab artifacts не являются частью goal state и не удаляются.
+## Output contract
 
-Для сложной цели или явного запроса один независимый premortem проход выполняется
-до старта. Он может вернуть не более трёх причин провала; основной агент отдельно
-принимает или отклоняет каждую. При отсутствии независимого агента результат
-`skipped`, self-review не имитируется и запуск не блокируется.
+Выводи один готовый для копирования компактный JSON-объект именно
+`work-item/v1`, без дополнительных полей, markdown-обёртки и служебного текста.
+Он обязан содержать `contract_version`, `item_id`, `problem`, `outcome`,
+`acceptance_criteria`, `scope.in_scope`, `scope.non_goals`, `dependencies`,
+`external_actions`, `assumptions`, `safety.constraints`,
+`safety.operational_constraints`, `risks`, `unresolved_questions` и
+`stop_conditions`. Каждый criterion содержит проверяемые `statement`, минимум
+один конкретный `evidence` и ссылки `dependencies`; dependencies образуют DAG.
+В `acceptance_criteria` явно включи проверку результата и формат отчёта: краткий
+status (`completed`/`blocked`), факты/evidence по каждому criterion, checks,
+unresolved items и следующий безопасный шаг. Не включай acceptance criterion,
+который нельзя проверить.
+
+Готовый item имеет не более 3000 символов, verdict `ready` и пустой
+`unresolved_questions` для blocking-вопросов. Если обязательный факт неизвестен,
+верни тот же полный `work-item/v1` item с `unresolved_questions` и stop condition,
+делающими blocker явным; не заполняй неизвестное выдуманными данными. Повторный
+вызов с теми же фактами и вводом должен дать байт-в-байт тот же JSON: стабильный
+`item_id`, порядок массивов и compact JSON обязательны. Machine rules можно
+проверить через materialized `scripts/work_item.py validate`, но это не разрешает
+писать state и не превращает semantic assessment в машинную эвристику.

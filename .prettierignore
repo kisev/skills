@@ -14,7 +14,6 @@ packages/opencode/src/index.ts
 packages/opencode/src/installer.ts
 packages/opencode/src/plugins/autonomy-policy.ts
 packages/opencode/src/plugins/background-attempts.ts
-packages/opencode/src/plugins/goal-loop.ts
 packages/opencode/src/plugins/rtk.ts
 packages/opencode/src/plugins/rules-injector.ts
 packages/opencode/src/plugins/schedule.ts

@@ -43,7 +43,6 @@ exclude = [
   "shared/references/python_runtime/lsp.py",
   "skills/*/scripts/portable_runtime",
   "skills/ast-grep/scripts/ast_grep.py",
-  "skills/goal/scripts/goal.py",
   "skills/lsp-report/scripts/lsp_report.py",
   "skills/mattermost/scripts/mattermost.py",
   "skills/multi-run/scripts/multi_run.py",

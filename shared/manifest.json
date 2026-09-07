@@ -187,22 +187,6 @@
     },
     {
       "source": "references/python_runtime/__init__.py",
-      "destination": "goal/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "goal/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "goal/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/state.py",
-      "destination": "goal/scripts/portable_runtime/state.py"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
       "destination": "schedule/scripts/portable_runtime/__init__.py"
     },
     {
