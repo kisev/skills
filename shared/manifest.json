@@ -186,6 +186,62 @@
       "destination": "release-review/references/gitlab-workflow.md"
     },
     {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "task-triage/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "task-review/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "task-prepare/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "code-review/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "release-prepare/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "release-review/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "task-triage/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "task-review/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "task-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "code-review/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "release-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "release-review/references/portable-gitlab-contracts-v2.md"
+    },
+    {
       "source": "references/python_runtime/__init__.py",
       "destination": "schedule/scripts/portable_runtime/__init__.py"
     },

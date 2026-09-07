@@ -1,0 +1,31 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.code-review-routing",
+  "revision": 1,
+  "kind": "deterministic",
+  "surface": "command",
+  "host": "opencode",
+  "input": {
+    "prompt": "Route /mr-review to remote MR and /code-review to local WIP.",
+    "fixture": { "selected": ["command:mr-review", "command:code-review", "skill:code-review"] }
+  },
+  "expected": {
+    "selected": ["command:mr-review", "command:code-review", "skill:code-review"],
+    "not_selected": ["skill:task-review"]
+  },
+  "invariants": [
+    {
+      "id": "mr-route",
+      "path": "packages/opencode/src/registry.ts",
+      "contains": "mode: \"merge-request\""
+    },
+    {
+      "id": "local-route",
+      "path": "packages/opencode/src/registry.ts",
+      "contains": "mode: \"local-wip\""
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "7daecd8e804899866fd83c00ee9e932d5c3ff023f18b9f776eb09e30fa93488e"
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.release-prepare.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Подготовь release inventory и SemVer rationale.",
+    "fixture": { "selected": ["skill:release-prepare"] }
+  },
+  "expected": { "selected": ["skill:release-prepare"], "not_selected": ["skill:release-review"] },
+  "invariants": [
+    {
+      "id": "release-range",
+      "path": "skills/release-prepare/SKILL.md",
+      "contains": "exact base/start/head SHA"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "c4326bf8a7fc9558938eef64e65d6a95cc57faaf8c036cceee9d5d15501efeae"
+}

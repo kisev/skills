@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.code-review.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Проверь local WIP implementation changes.",
+    "fixture": { "selected": ["skill:code-review"] }
+  },
+  "expected": { "selected": ["skill:code-review"], "not_selected": ["skill:task-review"] },
+  "invariants": [
+    {
+      "id": "critic-contract",
+      "path": "skills/code-review/SKILL.md",
+      "contains": "independent critic receipt"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "4ffe844f0536823bcb7175cdf63ce507f1bb9274b1f779b9cdaaf9d0d5633906"
+}

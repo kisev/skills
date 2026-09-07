@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kisev.dev/schemas/portable-gitlab-artifacts/v2",
+  "title": "Portable GitLab private artifact envelope v2",
+  "type": "object",
+  "required": ["schema", "schema_version", "kind", "created_at", "payload"],
+  "properties": {
+    "schema": {
+      "type": "string",
+      "pattern": "^portable-gitlab/(evidence_snapshot|publication_plan|analysis_report|critic_receipt|review_decision|release_readiness|finalize_report|local_wip_snapshot)/v2$"
+    },
+    "schema_version": { "const": 2 },
+    "kind": {
+      "enum": [
+        "evidence_snapshot",
+        "publication_plan",
+        "analysis_report",
+        "critic_receipt",
+        "review_decision",
+        "release_readiness",
+        "finalize_report",
+        "local_wip_snapshot"
+      ]
+    },
+    "created_at": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" }
+  },
+  "additionalProperties": false
+}

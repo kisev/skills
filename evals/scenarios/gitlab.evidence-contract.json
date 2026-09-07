@@ -1,0 +1,38 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.evidence-contract",
+  "revision": 1,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Validate exact SHA, completeness, critic and stale finalize contracts.",
+    "fixture": { "selected": [] }
+  },
+  "expected": { "selected": [], "not_selected": ["command:publish"] },
+  "invariants": [
+    {
+      "id": "exact-sha",
+      "path": "shared/references/portable_gitlab/contract.py",
+      "contains": "exact diff refs are unavailable"
+    },
+    {
+      "id": "completeness",
+      "path": "shared/references/portable_gitlab/contract.py",
+      "contains": "retrieval_complete"
+    },
+    {
+      "id": "critic",
+      "path": "shared/references/portable_gitlab/contract.py",
+      "contains": "normal and deep review require an independent critic receipt"
+    },
+    {
+      "id": "stale",
+      "path": "shared/references/portable_gitlab/contract.py",
+      "contains": "\"stale\""
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "740627d2b37bcfabd7c274e8871537ea12b42afc8b4f0c63a086292e24543678"
+}

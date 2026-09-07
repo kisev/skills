@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.task-review.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Проверь metadata GitLab Issue.",
+    "fixture": { "selected": ["skill:task-review"] }
+  },
+  "expected": { "selected": ["skill:task-review"], "not_selected": ["skill:code-review"] },
+  "invariants": [
+    {
+      "id": "metadata-verdict",
+      "path": "skills/task-review/SKILL.md",
+      "contains": "ровно один verdict"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "113c3b8983aaafa66762243c5e3141ad9f618623480efe6c779420374b59c797"
+}

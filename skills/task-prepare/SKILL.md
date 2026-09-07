@@ -13,7 +13,8 @@ metadata:
 
 # Подготовка GitLab-задач
 
-Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
+Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md`,
+`references/portable-gitlab-contracts-v2.md` и
 `references/work-item-contract.md`. Сначала нормализуй work item и выполни
 `scripts/work_item.py validate`. Publication artifact разрешён только при
 verdict `ready`; `needs_clarification` и `blocked` возвращаются без подготовки
@@ -35,6 +36,6 @@ safety/operational constraints, risks и stop conditions. Семантическ
 задачу, её границы, критерии и DAG зависимостей вопросами только при нехватке
 решений. Ошибка одного package item не отменяет другие items.
 
-Runner готовит локальный bundle и Markdown-план; проверь все метки по полной
+Runner готовит immutable evidence envelope и локальный Markdown-план; проверь все метки по полной
 пагинации. Не назначай исполнителя по умолчанию. Зависимости batch остаются
 ручным планом до появления реальных IID. Не создавай и не обновляй GitLab-задачи.

@@ -13,7 +13,8 @@ metadata:
 
 # Подготовка обычного MR
 
-Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`.
+Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
+`references/portable-gitlab-contracts-v2.md`.
 Принимай только один конкретный MR URL;
 не создавай batch. Runner собирает metadata, changed files, pipeline для точного
 head SHA и полный пагинированный список меток.
@@ -25,6 +26,6 @@ head SHA и полный пагинированный список меток.
 
 Подготовь один Markdown-план с title, description, изменением меток и ownership.
 Перед ручной публикацией выполни
-`scripts/prepare_mr.py finalize --artifact-root <path>`: изменившийся SHA, объект
-или метки блокируют план. Не создавай, не
+`scripts/prepare_mr.py finalize --artifact-root <path>`: изменившийся base/start/head SHA,
+объект, метки, discussions, diff, pipeline или completeness блокируют план. Не создавай, не
 обновляй, не approve, не merge и не push MR.

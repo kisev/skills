@@ -1,0 +1,19 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.mr-prepare.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Подготовь title и description обычного MR.",
+    "fixture": { "selected": ["skill:mr-prepare"] }
+  },
+  "expected": { "selected": ["skill:mr-prepare"], "not_selected": ["skill:release-prepare"] },
+  "invariants": [
+    { "id": "exact-mr", "path": "skills/mr-prepare/SKILL.md", "contains": "один конкретный MR URL" }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "14ebd597d5acfc672ed70e92a406d96345bbeb11f8fdb2959b3b2ae5a6ea69ab"
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.task-prepare.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Подготовь план публикации GitLab Issue.",
+    "fixture": { "selected": ["skill:task-prepare"] }
+  },
+  "expected": { "selected": ["skill:task-prepare"], "not_selected": ["skill:mr-prepare"] },
+  "invariants": [
+    {
+      "id": "no-mutation",
+      "path": "skills/task-prepare/SKILL.md",
+      "contains": "GitLab mutations остаются запрещены"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "8c5daa87a0270e7214e52574947b8c474e2d06fae17604537e77800fd8ff0841"
+}

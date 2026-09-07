@@ -16,6 +16,7 @@ from contextlib import redirect_stdout
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BUILT_SKILLS = ROOT / ".build" / "skills"
 GITLAB_RUNNERS = {
     "task-triage": "scripts/triage_task.py",
     "task-review": "scripts/review_task.py",
@@ -49,7 +50,7 @@ class PortableWorkflowTests(unittest.TestCase):
                 "-I",
                 "-S",
                 "-B",
-                str(ROOT / "skills" / skill / GITLAB_RUNNERS[skill]),
+                str(BUILT_SKILLS / skill / GITLAB_RUNNERS[skill]),
                 *arguments,
             ],
             cwd=cwd or Path(tempfile.gettempdir()),
@@ -86,7 +87,7 @@ class PortableWorkflowTests(unittest.TestCase):
 
     def test_pagination_deduplicates_and_preserves_partial_failure(self) -> None:
         module = load_module(
-            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py",
+            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
             "portable_gitlab_contract",
         )
         pages = [list(range(100)), [99, 100]]
@@ -103,7 +104,7 @@ class PortableWorkflowTests(unittest.TestCase):
 
     def test_collection_calls_only_get_and_batch_failure_is_isolated(self) -> None:
         module = load_module(
-            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_get"
+            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_get"
         )
         calls: list[tuple[str, str]] = []
         target = {
@@ -133,7 +134,7 @@ class PortableWorkflowTests(unittest.TestCase):
 
     def test_gitlab_read_only_prepare_returns_compact_artifact_without_confirmation(self) -> None:
         module = load_module(
-            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py",
+            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
             "portable_gitlab_preview",
         )
 
@@ -170,7 +171,7 @@ class PortableWorkflowTests(unittest.TestCase):
 
     def test_glab_boundary_forces_get_without_shell_or_credentials(self) -> None:
         module = load_module(
-            ROOT / "skills/task-triage/scripts/portable_runtime/contract.py",
+            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
             "portable_gitlab_boundary",
         )
         completed = SimpleNamespace(returncode=0, stdout="{}", stderr="token=hidden")
@@ -220,6 +221,162 @@ class PortableWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(finalized.returncode, 2)
             self.assertEqual(json.loads(finalized.stdout)["status"], "stale")
+
+    def test_local_wip_keeps_staged_unstaged_and_untracked_without_following_symlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            for arguments in (
+                ("init", "-q"),
+                ("config", "user.email", "test@example.invalid"),
+                ("config", "user.name", "Test"),
+            ):
+                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+            tracked = repository / "tracked.txt"
+            tracked.write_text("base\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "tracked.txt"], cwd=repository, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "commit", "-qm", "base"], cwd=repository, check=True, capture_output=True
+            )
+            tracked.write_text("staged\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "tracked.txt"], cwd=repository, check=True, capture_output=True
+            )
+            tracked.write_text("unstaged\n", encoding="utf-8")
+            (repository / "note.txt").write_text("untracked\n", encoding="utf-8")
+            (repository / "linked.txt").symlink_to(repository / "note.txt")
+            environment = {"XDG_STATE_HOME": str(repository / "state")}
+            prepared = self.run_runner(
+                "code-review",
+                "prepare-local",
+                "--repo-root",
+                str(repository),
+                cwd=repository,
+                env=environment,
+            )
+            self.assertEqual(prepared.returncode, 2, prepared.stderr)
+            payload = json.loads(prepared.stdout)
+            self.assertEqual(payload["status"], "incomplete")
+            module = load_module(
+                BUILT_SKILLS / "code-review/scripts/portable_runtime/contract.py",
+                "portable_local_sections",
+            )
+            _, bundle = module.artifact_payload(Path(payload["bundle"]), "local_wip_snapshot")
+            sections = bundle["sections"]
+            self.assertIn("staged", sections["staged"]["diff"])
+            self.assertIn("unstaged", sections["unstaged"]["diff"])
+            linked = next(
+                item for item in sections["untracked"]["items"] if item["path"] == "linked.txt"
+            )
+            self.assertEqual(linked["reason"], "symlink")
+
+    def test_collection_identity_is_shared_and_issue_discussions_are_required(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_identity"
+        )
+        target = {
+            "url": "https://gitlab.example/group/project/-/issues/7",
+            "hostname": "gitlab.example",
+            "project_path": "group/project",
+            "kind": "issues",
+            "iid": 7,
+        }
+        calls: list[str] = []
+
+        def fake(_hostname: str, endpoint: str) -> object:
+            calls.append(endpoint)
+            if endpoint.startswith("projects/group%2Fproject"):
+                return {"id": 19}
+            if endpoint == "projects/19/issues/7":
+                return {"iid": 7, "labels": [], "updated_at": "2026-01-01T00:00:00Z"}
+            if endpoint.startswith("projects/19/issues/7/discussions"):
+                raise module.WorkflowError("page unavailable")
+            return []
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(os.environ, {"XDG_STATE_HOME": temporary}),
+            patch.object(module, "glab_json", side_effect=fake),
+        ):
+            first = module.collect(target, "task-triage")
+            second = module.collect(target, "task-review")
+        self.assertEqual(first["artifact_root"], second["artifact_root"])
+        self.assertFalse(first["retrieval_complete"])
+        self.assertIn("projects/19/issues/7/discussions?per_page=100&page=1", calls)
+
+    def test_mr_requires_exact_refs_and_head_filtered_pipelines(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_sha"
+        )
+        target = {
+            "url": "https://gitlab.example/group/project/-/merge_requests/7",
+            "hostname": "gitlab.example",
+            "project_path": "group/project",
+            "kind": "merge_requests",
+            "iid": 7,
+        }
+        calls: list[str] = []
+
+        def fake(_hostname: str, endpoint: str) -> object:
+            calls.append(endpoint)
+            if endpoint.startswith("projects/group%2Fproject"):
+                return {"id": 19}
+            if endpoint == "projects/19/merge_requests/7":
+                return {
+                    "iid": 7,
+                    "labels": [],
+                    "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+                }
+            if endpoint == "projects/19/merge_requests/7/changes":
+                return {
+                    "changes": [],
+                    "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+                }
+            if endpoint.startswith("projects/19/merge_requests/7/commits"):
+                return [{"id": "c"}]
+            return []
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(os.environ, {"XDG_STATE_HOME": temporary}),
+            patch.object(module, "glab_json", side_effect=fake),
+        ):
+            bundle = module.collect(target, "code-review")
+        self.assertTrue(bundle["retrieval_complete"])
+        self.assertIn("projects/19/pipelines?sha=c&per_page=100&page=1", calls)
+        self.assertIn("projects/19/merge_requests/7/commits?per_page=100&page=1", calls)
+
+    def test_review_decision_requires_independent_critic_and_all_responses(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_critic"
+        )
+        receipt = {
+            "schema": "portable-gitlab/critic-receipt/v2",
+            "evidence_digest": "evidence",
+            "run_id": "critic-run",
+            "session_id": "critic-session",
+            "findings": [{"id": "critic-1"}],
+        }
+        report: dict[str, Any] = {
+            "schema": "portable-gitlab/review-decision/v2",
+            "evidence_digest": "evidence",
+            "verdict": "not_ready",
+            "run_id": "primary-run",
+            "session_id": "primary-session",
+            "findings": [{"id": "primary-1"}],
+            "unresolved_threads": [{"id": "thread-1"}],
+            "responses": [
+                {"id": "primary-1", "decision": "reject", "reason": "not applicable"},
+                {"id": "critic-1", "decision": "accept", "reason": "confirmed"},
+                {"id": "thread-1", "decision": "accept", "reason": "needs resolution"},
+            ],
+        }
+        module.validate_critic(receipt, "evidence")
+        module.validate_decision(report, "evidence", receipt, "deep")
+        report["responses"].pop()
+        with self.assertRaises(module.WorkflowError):
+            module.validate_decision(report, "evidence", receipt, "deep")
 
 
 class MattermostAndTeamTests(unittest.TestCase):

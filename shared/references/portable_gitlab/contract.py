@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Portable, read-only collection and local publication-plan helpers."""
+"""Canonical, GET-only GitLab evidence and local publication-plan contract."""
 
 from __future__ import annotations
 
@@ -14,25 +14,43 @@ import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 from urllib.parse import quote as urlquote
 from urllib.parse import urlsplit
 
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 1_000
+ARTIFACT_VERSION = 2
 URL_RE = re.compile(
     r"^https://(?P<host>[^/?#]+)/(?P<project>.+?)/-/(?P<kind>issues|merge_requests)/(?P<iid>[1-9][0-9]*)/?$"
 )
 SECRET_RE = re.compile(r"(?i)(token|password|secret|private[_-]?token)\s*[=:]\s*[^\s,]+")
+PROFILES = {
+    "task-triage": {"issues"},
+    "task-review": {"issues", "merge_requests"},
+    "task-prepare": {"issues"},
+    "mr-prepare": {"merge_requests"},
+    "code-review": {"merge_requests", "local"},
+    "release-prepare": {"merge_requests"},
+    "release-review": {"merge_requests"},
+}
+ARTIFACT_KINDS = {
+    "evidence_snapshot",
+    "publication_plan",
+    "analysis_report",
+    "critic_receipt",
+    "review_decision",
+    "release_readiness",
+    "finalize_report",
+    "local_wip_snapshot",
+}
 
 
 class WorkflowError(ValueError):
-    """An expected input, collection, or safety error."""
+    """Expected contract or collection failure."""
 
 
 class ContractArgumentParser(argparse.ArgumentParser):
-    """Report invalid CLI input through the runner JSON contract."""
-
     def error(self, message: str) -> NoReturn:
         raise WorkflowError(message)
 
@@ -47,21 +65,35 @@ def emit(value: object) -> None:
 
 def error(code: str, message: str, exit_code: int = 2) -> int:
     print(redact(message), file=sys.stderr)
-    emit({"status": "error", "error": {"code": code, "message": redact(message), "retryable": False}})
+    emit(
+        {"status": "error", "error": {"code": code, "message": redact(message), "retryable": False}}
+    )
     return exit_code
+
+
+def canonical(value: object) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        + b"\n"
+    )
+
+
+def digest(value: object) -> str:
+    return hashlib.sha256(canonical(value)).hexdigest()
 
 
 def capabilities(profile: str) -> int:
     emit(
         {
             "schema_version": 1,
-            "payload_version": "1.0.0",
+            "payload_version": "2.0.0",
             "mutation": "local-write",
             "dry_run": True,
-            "state_protocol": "local-artifacts",
+            "state_protocol": "private-content-addressed-artifacts",
             "external_tools": {"glab": shutil.which("glab") is not None},
             "destructive_flags": [],
             "profile": profile,
+            "external_mutations": False,
         }
     )
     return 0
@@ -69,11 +101,17 @@ def capabilities(profile: str) -> int:
 
 def parse_target(value: str, expected: set[str]) -> dict[str, object]:
     parsed = urlsplit(value)
-    if parsed.scheme != "https" or parsed.query or parsed.fragment or parsed.username or parsed.password:
-        raise WorkflowError("target must be a concrete HTTPS GitLab object URL")
     match = URL_RE.fullmatch(value)
-    if match is None or match.group("kind") not in expected:
-        raise WorkflowError("target must be one concrete GitLab issue or merge request URL")
+    if (
+        parsed.scheme != "https"
+        or parsed.query
+        or parsed.fragment
+        or parsed.username
+        or parsed.password
+        or match is None
+        or match.group("kind") not in expected
+    ):
+        raise WorkflowError("target must be one exact HTTPS GitLab issue or merge request URL")
     project = match.group("project")
     if not project or any(part in {"", ".", ".."} for part in project.split("/")):
         raise WorkflowError("target project path is unsafe")
@@ -120,22 +158,32 @@ def private_directory(path: Path) -> Path:
 
 
 def state_directory(profile: str, target: dict[str, object]) -> Path:
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", profile):
+    """Collection ownership is target identity, never the calling profile."""
+    if profile not in PROFILES:
         raise WorkflowError("workflow profile is unsafe")
     home = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
-    identity = f"{target.get('hostname', 'local')}:{target.get('project_path', 'local')}:{target.get('kind', 'local')}:{target.get('iid', 'local')}"
-    return private_directory(home / "agent-skills" / profile / hashlib.sha256(identity.encode()).hexdigest()[:20])
+    identity = f"{target.get('hostname', 'local')}:{target.get('project_id', target.get('project_path', 'local'))}:{target.get('kind', 'local')}:{target.get('iid', 'local')}"
+    return private_directory(
+        home / "agent-skills" / "gitlab" / hashlib.sha256(identity.encode()).hexdigest()[:32]
+    )
 
 
 def artifact_root(path: Path) -> Path:
     home = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
-    base = private_directory(home / "agent-skills")
+    state_base = private_directory(home / "agent-skills")
+    base = private_directory(state_base / "gitlab")
     candidate = private_directory(path)
     try:
         relative = candidate.relative_to(base)
     except ValueError as exc:
-        raise WorkflowError("artifact root is outside private workflow state") from exc
-    if len(relative.parts) != 2 or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", relative.parts[0]):
+        try:
+            legacy = candidate.relative_to(state_base)
+        except ValueError:
+            raise WorkflowError("artifact root is outside canonical GitLab collection state") from exc
+        if len(legacy.parts) == 2 and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", legacy.parts[0]) and re.fullmatch(r"[a-f0-9]{20}", legacy.parts[1]):
+            return candidate
+        raise WorkflowError("artifact root is outside canonical GitLab collection state") from exc
+    if len(relative.parts) != 1 or not re.fullmatch(r"[a-f0-9]{32}", relative.name):
         raise WorkflowError("artifact root is unsafe")
     return candidate
 
@@ -152,43 +200,9 @@ def regular_file(path: Path, label: str) -> Path:
     return path.resolve()
 
 
-def write_json(path: Path, value: object) -> None:
-    target = path.resolve()
-    if target.parent != path.parent.resolve():
-        raise WorkflowError("artifact path escapes its directory")
-    temporary = target.with_name(f".{target.name}.tmp")
-    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    temporary.chmod(0o600)
-    os.replace(temporary, target)
-
-
-def sha256_file(path: Path) -> str:
-    return hashlib.sha256(regular_file(path, "artifact").read_bytes()).hexdigest()
-
-
-def write_preview(root: Path, name: str, value: object) -> tuple[Path, str]:
-    """Write immutable content-addressed evidence without exposing it in stdout."""
-    content = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True).encode() + b"\n"
-    digest = hashlib.sha256(content).hexdigest()
-    path = root / "previews" / f"{name}-{digest}.json"
-    private_directory(path.parent)
-    try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    except FileExistsError:
-        if regular_file(path, "preview artifact").read_bytes() != content:
-            raise WorkflowError("preview artifact digest conflicts with existing content")
-        return path, digest
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(content)
-        handle.flush()
-        os.fsync(handle.fileno())
-    return path, digest
-
-
 def read_json(path: Path, label: str) -> dict[str, Any]:
-    source = regular_file(path, label)
     try:
-        value = json.loads(source.read_text(encoding="utf-8"))
+        value = json.loads(regular_file(path, label).read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise WorkflowError(f"{label} must contain a JSON object") from exc
     if not isinstance(value, dict):
@@ -196,7 +210,73 @@ def read_json(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
+def write_json(path: Path, value: object) -> None:
+    """Only mutable state pointers use this helper; artifacts use write_artifact."""
+    target = path.resolve()
+    if target.parent != path.parent.resolve():
+        raise WorkflowError("state path escapes its directory")
+    temporary = target.with_name(f".{target.name}.tmp")
+    temporary.write_bytes(canonical(value))
+    temporary.chmod(0o600)
+    os.replace(temporary, target)
+
+
+def write_artifact(root: Path, kind: str, payload: dict[str, Any]) -> tuple[Path, str]:
+    if kind not in ARTIFACT_KINDS:
+        raise WorkflowError("unknown artifact kind")
+    envelope = {
+        "schema": f"portable-gitlab/{kind}/v2",
+        "schema_version": ARTIFACT_VERSION,
+        "kind": kind,
+        "created_at": datetime.now(UTC).isoformat(),
+        "payload": payload,
+    }
+    # Timestamps are state metadata; the address covers the complete immutable document.
+    content = canonical(envelope)
+    content_digest = hashlib.sha256(content).hexdigest()
+    directory = private_directory(root / "artifacts" / kind)
+    path = directory / f"{content_digest}.json"
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        if regular_file(path, "artifact").read_bytes() != content:
+            raise WorkflowError("content-addressed artifact conflict")
+        return path, content_digest
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return path, content_digest
+
+
+def artifact_payload(path: Path, kind: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    value = read_json(path, "artifact")
+    if (
+        value.get("schema") == f"portable-gitlab/{kind}/v2"
+        and value.get("kind") == kind
+        and value.get("schema_version") == ARTIFACT_VERSION
+        and isinstance(value.get("payload"), dict)
+    ):
+        return value, value["payload"]
+    # v1 snapshots are readable/finalizable but never rewritten or migrated.
+    if value.get("schema_version") == 1 and kind == "evidence_snapshot":
+        return value, value
+    raise WorkflowError("artifact schema is invalid")
+
+
+def allowed_endpoint(endpoint: str) -> bool:
+    # These are the complete collection endpoints. Query values are generated, never caller input.
+    return bool(
+        re.fullmatch(
+            r"projects/(?:[^/?]+|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits))?|[0-9]+/(?:labels|pipelines)(?:\?[^#]+)?)",
+            endpoint,
+        )
+    )
+
+
 def glab_json(hostname: str, endpoint: str) -> object:
+    if not re.fullmatch(r"[a-z0-9.-]+", hostname) or not allowed_endpoint(endpoint):
+        raise WorkflowError("GitLab endpoint is outside the collection allowlist")
     glab = shutil.which("glab")
     if glab is None:
         raise WorkflowError("glab is unavailable; install and authenticate it outside this skill")
@@ -211,7 +291,9 @@ def glab_json(hostname: str, endpoint: str) -> object:
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise WorkflowError("GitLab GET could not be completed") from exc
     if completed.returncode:
-        raise WorkflowError(f"GitLab GET failed: {completed.stderr.strip() or completed.returncode}")
+        raise WorkflowError(
+            f"GitLab GET failed: {completed.stderr.strip() or completed.returncode}"
+        )
     if len(completed.stdout.encode()) > MAX_BYTES:
         raise WorkflowError("GitLab response exceeds the size limit")
     try:
@@ -235,7 +317,7 @@ def paginated(hostname: str, endpoint: str) -> dict[str, object]:
         if not isinstance(value, list):
             errors.append("GitLab pagination response is not an array")
             break
-        page_digest = hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+        page_digest = digest(value)
         if page_digest in page_digests:
             errors.append("GitLab pagination repeated a page")
             break
@@ -246,174 +328,397 @@ def paginated(hostname: str, endpoint: str) -> dict[str, object]:
                 seen.add(key)
                 items.append(item)
         if len(value) < 100:
-            return {"items": items, "complete": not errors, "errors": errors, "pages": page}
+            return {
+                "items": items,
+                "complete": True,
+                "errors": [],
+                "pages": page,
+                "truncated": False,
+            }
     if not errors:
         errors.append("pagination protective limit reached")
-    return {"items": items, "complete": False, "errors": errors, "pages": MAX_PAGES}
+    return {
+        "items": items,
+        "complete": False,
+        "errors": errors,
+        "pages": MAX_PAGES if not errors else page,
+        "truncated": True,
+    }
+
+
+def component(
+    items: list[object] | None = None,
+    *,
+    complete: bool = True,
+    errors: list[str] | None = None,
+    pages: int = 0,
+    truncated: bool = False,
+) -> dict[str, object]:
+    return {
+        "items": items or [],
+        "complete": complete,
+        "errors": errors or [],
+        "pages": pages,
+        "truncated": truncated,
+    }
 
 
 def collect(target: dict[str, object], profile: str, *, persist: bool = True) -> dict[str, object]:
-    hostname = str(target["hostname"])
-    project_path = str(target["project_path"])
+    if profile not in PROFILES:
+        raise WorkflowError("workflow profile is unsafe")
+    iid_value = target.get("iid")
+    if not isinstance(iid_value, int):
+        raise WorkflowError("GitLab target IID is invalid")
+    hostname, project_path, kind, iid = (
+        str(target["hostname"]),
+        str(target["project_path"]),
+        str(target["kind"]),
+        iid_value,
+    )
     project = glab_json(hostname, f"projects/{urlquote(project_path, safe='')}")
     if not isinstance(project, dict) or not isinstance(project.get("id"), int):
         raise WorkflowError("GitLab project identity is incomplete")
     project_id = project["id"]
-    kind = str(target["kind"])
-    iid_value = target["iid"]
-    if not isinstance(iid_value, int):
-        raise WorkflowError("GitLab target iid is invalid")
-    iid = iid_value
+    identity = {**target, "project_id": project_id}
+    root = state_directory(profile, identity)
     labels = paginated(hostname, f"projects/{project_id}/labels")
     if kind == "new_issue":
-        root = state_directory(profile, target)
         bundle: dict[str, object] = {
-            "schema_version": 1,
+            "schema_version": ARTIFACT_VERSION,
             "profile": profile,
-            "target": target,
+            "target": identity,
             "project": {"id": project_id, "path": project_path, "hostname": hostname},
             "object": {},
             "labels": labels,
-            "changed_files": {"items": [], "complete": True, "errors": [], "pages": 0},
-            "pipelines": {"items": [], "complete": True, "errors": [], "pages": 0},
+            "changed_files": component(),
+            "commits": component(),
+            "pipelines": component(),
+            "discussions": component(),
             "head_sha": None,
+            "base_sha": None,
+            "start_sha": None,
             "artifact_root": str(root),
             "prepared_at": datetime.now(UTC).isoformat(),
-            "retrieval_complete": bool(labels["complete"]),
+            "components_complete": {
+                "project": True,
+                "labels": bool(labels["complete"]),
+                "object": True,
+                "changed_files": True,
+                "commits": True,
+                "pipelines": True,
+                "discussions": True,
+            },
         }
-        if persist:
-            write_json(root / "bundle.json", bundle)
-            artifact_path, artifact_digest = write_preview(root, "bundle", bundle)
-            bundle["preview_artifact_path"] = str(artifact_path)
-            bundle["preview_digest"] = artifact_digest
-        return bundle
-    object_value = glab_json(hostname, f"projects/{project_id}/{kind}/{iid}")
-    if not isinstance(object_value, dict):
-        raise WorkflowError("GitLab target response is incomplete")
-    changed: dict[str, object] = {"items": [], "complete": True, "errors": [], "pages": 0}
-    pipelines: dict[str, object] = {"items": [], "complete": True, "errors": [], "pages": 0}
-    discussions: dict[str, object] = {"items": [], "complete": True, "errors": [], "pages": 0}
-    refs = object_value.get("diff_refs")
-    head_sha = refs.get("head_sha") if isinstance(refs, dict) else None
-    if kind == "merge_requests":
-        changes_value = glab_json(hostname, f"projects/{project_id}/merge_requests/{iid}/changes")
-        if isinstance(changes_value, dict) and isinstance(changes_value.get("changes"), list):
-            changed = {"items": changes_value["changes"], "complete": True, "errors": [], "pages": 1}
-        else:
-            changed = {"items": [], "complete": False, "errors": ["GitLab changed-files response is incomplete"], "pages": 1}
-        if isinstance(head_sha, str) and head_sha:
-            pipelines = paginated(hostname, f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}")
-        discussions = paginated(hostname, f"projects/{project_id}/merge_requests/{iid}/discussions")
-    root = state_directory(profile, target)
-    bundle = {
-        "schema_version": 1,
-        "profile": profile,
-        "target": target,
-        "project": {"id": project_id, "path": project_path, "hostname": hostname},
-        "object": object_value,
-        "labels": labels,
-        "changed_files": changed,
-        "pipelines": pipelines,
-        "discussions": discussions,
-        "head_sha": head_sha,
-        "artifact_root": str(root),
-        "prepared_at": datetime.now(UTC).isoformat(),
-        "retrieval_complete": bool(labels["complete"]) and bool(changed["complete"]) and bool(pipelines["complete"]) and bool(discussions["complete"]),
-    }
+    else:
+        object_value = glab_json(hostname, f"projects/{project_id}/{kind}/{iid}")
+        if not isinstance(object_value, dict) or object_value.get("iid") not in {None, iid}:
+            raise WorkflowError("GitLab target response is incomplete")
+        discussions = paginated(hostname, f"projects/{project_id}/{kind}/{iid}/discussions")
+        refs: dict[str, Any] = (
+            cast(dict[str, Any], object_value["diff_refs"])
+            if isinstance(object_value.get("diff_refs"), dict)
+            else {}
+        )
+        head_sha, base_sha, start_sha = (
+            refs.get("head_sha"),
+            refs.get("base_sha"),
+            refs.get("start_sha"),
+        )
+        changed, commits, pipelines = component(), component(), component()
+        if kind == "merge_requests":
+            try:
+                changes_value = glab_json(
+                    hostname, f"projects/{project_id}/merge_requests/{iid}/changes"
+                )
+                overflow = isinstance(changes_value, dict) and (
+                    changes_value.get("overflow") is True
+                    or changes_value.get("changes_count") == "1000+"
+                )
+                if (
+                    isinstance(changes_value, dict)
+                    and isinstance(changes_value.get("changes"), list)
+                    and not overflow
+                    and changes_value.get("diff_refs") == refs
+                ):
+                    changed = component(cast(list[object], changes_value["changes"]), pages=1)
+                else:
+                    changed = component(
+                        complete=False,
+                        errors=[
+                            "GitLab changed-files response is incomplete, stale, or overflowed"
+                        ],
+                        pages=1,
+                        truncated=True,
+                    )
+            except WorkflowError as exc:
+                changed = component(complete=False, errors=[str(exc)], truncated=True)
+            if not all(
+                isinstance(value, str) and value for value in (base_sha, start_sha, head_sha)
+            ):
+                changed = component(
+                    cast(list[object], changed["items"]),
+                    complete=False,
+                    errors=[*cast(list[str], changed["errors"]), "exact diff refs are unavailable"],
+                    pages=cast(int, changed["pages"]),
+                    truncated=True,
+                )
+            if isinstance(head_sha, str) and head_sha:
+                commits = paginated(hostname, f"projects/{project_id}/merge_requests/{iid}/commits")
+                if not any(
+                    isinstance(commit, dict) and commit.get("id") == head_sha
+                    for commit in cast(list[object], commits["items"])
+                ):
+                    commits = component(
+                        cast(list[object], commits["items"]),
+                        complete=False,
+                        errors=[
+                            *cast(list[str], commits["errors"]),
+                            "commits do not bind exact head SHA",
+                        ],
+                        pages=cast(int, commits["pages"]),
+                        truncated=True,
+                    )
+                pipelines = paginated(
+                    hostname, f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}"
+                )
+            else:
+                pipelines = component(
+                    complete=False, errors=["exact head SHA is unavailable"], truncated=True
+                )
+                commits = component(
+                    complete=False, errors=["exact head SHA is unavailable"], truncated=True
+                )
+        bundle = {
+            "schema_version": ARTIFACT_VERSION,
+            "profile": profile,
+            "target": identity,
+            "project": {"id": project_id, "path": project_path, "hostname": hostname},
+            "object": object_value,
+            "labels": labels,
+            "changed_files": changed,
+            "commits": commits,
+            "pipelines": pipelines,
+            "discussions": discussions,
+            "head_sha": head_sha,
+            "base_sha": base_sha,
+            "start_sha": start_sha,
+            "artifact_root": str(root),
+            "prepared_at": datetime.now(UTC).isoformat(),
+            "components_complete": {
+                "project": True,
+                "labels": bool(labels["complete"]),
+                "object": True,
+                "changed_files": bool(changed["complete"]),
+                "commits": bool(commits["complete"]),
+                "pipelines": bool(pipelines["complete"]),
+                "discussions": bool(discussions["complete"]),
+            },
+        }
+    components_complete = cast(dict[str, bool], bundle["components_complete"])
+    bundle["retrieval_complete"] = all(components_complete.values())
     if persist:
-        write_json(root / "bundle.json", bundle)
-        artifact_path, artifact_digest = write_preview(root, "bundle", bundle)
-        bundle["preview_artifact_path"] = str(artifact_path)
-        bundle["preview_digest"] = artifact_digest
+        artifact_path, artifact_digest = write_artifact(root, "evidence_snapshot", bundle)
+        write_json(
+            root / "current.json",
+            {"evidence_path": str(artifact_path), "evidence_digest": artifact_digest},
+        )
+        bundle["preview_artifact_path"], bundle["preview_digest"] = (
+            str(artifact_path),
+            artifact_digest,
+        )
     return bundle
 
 
-def bundle_path(bundle: dict[str, Any]) -> Path:
-    root_value = bundle.get("artifact_root")
-    if not isinstance(root_value, str):
-        raise WorkflowError("bundle has no artifact root")
-    target = bundle.get("target")
-    profile = bundle.get("profile")
-    if not isinstance(target, dict) or not isinstance(profile, str):
-        raise WorkflowError("bundle identity is incomplete")
-    root = artifact_root(Path(root_value))
-    if root != state_directory(profile, target):
-        raise WorkflowError("bundle artifact root does not match its identity")
-    return root
+def evidence_from_root(root: Path) -> tuple[Path, dict[str, Any]]:
+    try:
+        pointer = read_json(root / "current.json", "collection state")
+        path = pointer.get("evidence_path")
+        if not isinstance(path, str):
+            raise WorkflowError("collection state has no evidence snapshot")
+        source = Path(path)
+        if source.parent.parent.parent != root:
+            raise WorkflowError("evidence snapshot escapes collection root")
+        _, payload = artifact_payload(source, "evidence_snapshot")
+        return source, payload
+    except WorkflowError:
+        # Legacy v1 state had one immutable bundle.json instead of a current pointer.
+        source = root / "bundle.json"
+        _, payload = artifact_payload(source, "evidence_snapshot")
+        return source, payload
 
 
-def plan_text(bundle: dict[str, Any], content: dict[str, Any]) -> str:
-    target = bundle["target"]
-    object_value = bundle["object"]
-    if not isinstance(target, dict) or not isinstance(object_value, dict):
-        raise WorkflowError("bundle is incomplete")
-    title = content.get("title")
-    description = content.get("description")
-    def value(item: object) -> str:
-        return str(item.get("value", "")) if isinstance(item, dict) else str(item or "")
-    return "\n".join(
-        [
-            "# Проверенный план публикации",
-            "",
-            f"- Target: {target['url']}",
-            f"- Проверенный SHA: {bundle.get('head_sha') or 'не применимо'}",
-            f"- Полнота collection: {'полная' if bundle.get('retrieval_complete') else 'частичная'}",
-            "- Этот skill не выполняет команды ниже.",
-            "",
-            "## Предлагаемые тексты",
-            "",
-            f"### Заголовок\n\n{value(title) or 'Без изменений.'}",
-            f"\n### Описание\n\n{value(description) or 'Без изменений.'}",
-            "",
-            "## Ручная публикация",
-            "",
-            "Перед ручной публикацией повторно запусти `finalize`: изменённые SHA, метки или объект блокируют этот план.",
-        ]
-    ) + "\n"
+def publication_markdown(bundle: dict[str, Any], content: dict[str, Any]) -> str:
+    target = bundle.get("target", {})
+    return (
+        "\n".join(
+            [
+                "# Проверенный план публикации",
+                "",
+                f"- Target: {target.get('url', 'local')}",
+                f"- Base SHA: {bundle.get('base_sha') or 'не применимо'}",
+                f"- Start SHA: {bundle.get('start_sha') or 'не применимо'}",
+                f"- Head SHA: {bundle.get('head_sha') or 'не применимо'}",
+                f"- Полнота collection: {'полная' if bundle.get('retrieval_complete') else 'частичная'}",
+                "- `external_mutations=false`: план не выполняет и не предлагает автоматические publish/resolve/approve/merge операции.",
+                "",
+                "## Предлагаемые тексты",
+                "",
+                f"### Заголовок\n\n{content.get('title', '') or 'Без изменений.'}",
+                f"\n### Описание\n\n{content.get('description', '') or 'Без изменений.'}",
+                "",
+                "Перед ручной публикацией выполни `finalize`; stale или incomplete evidence блокируют ready.",
+            ]
+        )
+        + "\n"
+    )
 
 
 def scaffold(bundle_file: str, content_file: str, plan_name: str) -> dict[str, object]:
-    bundle = read_json(Path(bundle_file), "bundle")
-    root = bundle_path(bundle)
-    bundle_path_value = Path(bundle_file).resolve()
-    if bundle_path_value != root / "bundle.json" and bundle_path_value.parent != root / "previews":
-        raise WorkflowError("bundle must be a canonical or content-addressed artifact")
+    source = Path(bundle_file)
+    _, bundle = artifact_payload(source, "evidence_snapshot")
+    root = artifact_root(Path(str(bundle["artifact_root"])))
     content = read_json(Path(content_file), "content")
-    text = plan_text(bundle, content)
-    plan_digest = hashlib.sha256(text.encode()).hexdigest()
-    plan = root / "previews" / f"{Path(plan_name).stem}-{plan_digest}.md"
-    private_directory(plan.parent)
-    if not plan.exists():
-        plan.write_text(text, encoding="utf-8")
-        plan.chmod(0o600)
-    elif regular_file(plan, "publication plan").read_text(encoding="utf-8") != text:
-        raise WorkflowError("publication plan digest conflicts with existing content")
-    write_json(root / "scaffold.json", {"bundle_sha256": sha256_file(bundle_path_value), "plan": str(plan), "plan_sha256": plan_digest})
-    return {"status": "ok", "summary": {"tldr": "Подготовлен read-only план ручной публикации.", "scope": [str(bundle.get("target", {}).get("url", "local"))], "risks": [] if bundle.get("retrieval_complete") else ["collection incomplete"], "checks": ["bundle identity", "content-addressed artifact"]}, "artifact_path": str(plan), "digest": plan_digest, "external_mutations": False}
+    markdown = publication_markdown(bundle, content)
+    payload = {
+        "profile": bundle.get("profile"),
+        "target": bundle.get("target"),
+        "evidence_digest": hashlib.sha256(
+            regular_file(source, "evidence snapshot").read_bytes()
+        ).hexdigest(),
+        "complete": bundle.get("retrieval_complete"),
+        "markdown": markdown,
+        "plan_name": Path(plan_name).name,
+    }
+    path, plan_digest = write_artifact(root, "publication_plan", payload)
+    return {
+        "status": "ok" if bundle.get("retrieval_complete") else "incomplete",
+        "summary": {
+            "tldr": "Подготовлен локальный Markdown-план ручной публикации.",
+            "scope": [str(bundle.get("target", {}).get("url", "local"))],
+            "risks": [] if bundle.get("retrieval_complete") else ["collection incomplete"],
+            "checks": ["schema-valid evidence", "content-addressed publication plan"],
+        },
+        "artifact_path": str(path),
+        "digest": plan_digest,
+        "external_mutations": False,
+    }
+
+
+def fingerprint(bundle: dict[str, Any]) -> dict[str, object]:
+    return {
+        "target": bundle.get("target"),
+        "head_sha": bundle.get("head_sha"),
+        "base_sha": bundle.get("base_sha"),
+        "start_sha": bundle.get("start_sha"),
+        "object": bundle.get("object"),
+        "labels": bundle.get("labels"),
+        "discussions": bundle.get("discussions"),
+        "changed_files": bundle.get("changed_files"),
+        "commits": bundle.get("commits"),
+        "pipelines": bundle.get("pipelines"),
+        "retrieval_complete": bundle.get("retrieval_complete"),
+    }
 
 
 def finalize(root_value: str) -> dict[str, object]:
     root = artifact_root(Path(root_value))
-    bundle = read_json(root / "bundle.json", "bundle")
-    target = bundle.get("target")
+    source, baseline = evidence_from_root(root)
+    target = baseline.get("target")
     if not isinstance(target, dict):
-        raise WorkflowError("bundle target is missing")
+        raise WorkflowError("evidence target is missing")
     if target.get("kind") == "new_issue":
-        result: dict[str, object] = {"status": "not_applicable", "changed": [], "head_sha": None, "retrieval_complete": bundle.get("retrieval_complete")}
-        write_json(root / "finalize.json", result)
-        return result
-    current = collect(target, str(bundle.get("profile", "gitlab-workflow")), persist=False)
-    baseline_object = bundle.get("object")
-    current_object = current.get("object")
-    if not isinstance(baseline_object, dict) or not isinstance(current_object, dict):
-        raise WorkflowError("bundle object is missing")
-    fields = ("updated_at", "labels", "diff_refs")
-    changed = [field for field in fields if baseline_object.get(field) != current_object.get(field)]
-    if not current.get("retrieval_complete"):
-        changed.append("collection")
-    result = {"status": "stale" if changed else "ok", "changed": changed, "head_sha": current.get("head_sha"), "retrieval_complete": current.get("retrieval_complete")}
-    write_json(root / "finalize.json", result)
-    return result
+        return {
+            "status": "not_applicable",
+            "changed": [],
+            "complete": baseline.get("retrieval_complete"),
+            "evidence_digest": hashlib.sha256(source.read_bytes()).hexdigest(),
+        }
+    current = collect(target, str(baseline.get("profile", "task-triage")), persist=False)
+    before, after = fingerprint(baseline), fingerprint(current)
+    changed = [name for name in before if before[name] != after[name]]
+    return {
+        "status": "ok" if not changed and bool(current.get("retrieval_complete")) else "stale",
+        "changed": changed,
+        "head_sha": current.get("head_sha"),
+        "complete": current.get("retrieval_complete"),
+        "evidence_digest": hashlib.sha256(source.read_bytes()).hexdigest(),
+    }
+
+
+def git_read(root: Path, *args: str, text: bool = True) -> str | bytes:
+    git = shutil.which("git")
+    if git is None:
+        raise WorkflowError("git is unavailable")
+    completed = subprocess.run(
+        [git, "-C", str(root), *args], check=False, capture_output=True, text=text
+    )
+    if completed.returncode:
+        raise WorkflowError("local Git input can no longer be read")
+    return cast(str | bytes, completed.stdout)
+
+
+def local_section(root: Path, name: str, args: tuple[str, ...]) -> dict[str, object]:
+    value = git_read(root, *args)
+    assert isinstance(value, str)
+    return {
+        "name": name,
+        "diff": value,
+        "sha256": hashlib.sha256(value.encode()).hexdigest(),
+        "complete": True,
+        "errors": [],
+    }
+
+
+def local_untracked(root: Path) -> dict[str, object]:
+    raw = git_read(root, "ls-files", "--others", "--exclude-standard", "-z", text=False)
+    assert isinstance(raw, bytes)
+    items, errors = [], []
+    for encoded in raw.split(b"\0"):
+        if not encoded:
+            continue
+        relative = os.fsdecode(encoded)
+        candidate = root / relative
+        try:
+            meta = candidate.lstat()
+        except OSError:
+            items.append({"path": relative, "complete": False, "reason": "unreadable"})
+            errors.append(relative)
+            continue
+        if stat.S_ISLNK(meta.st_mode):
+            items.append({"path": relative, "complete": False, "reason": "symlink"})
+            errors.append(relative)
+            continue
+        if not stat.S_ISREG(meta.st_mode):
+            items.append({"path": relative, "complete": False, "reason": "non_regular"})
+            errors.append(relative)
+            continue
+        if meta.st_size > MAX_BYTES:
+            items.append(
+                {"path": relative, "size": meta.st_size, "complete": False, "reason": "oversized"}
+            )
+            errors.append(relative)
+            continue
+        try:
+            data = candidate.read_bytes()
+        except OSError:
+            items.append({"path": relative, "complete": False, "reason": "unreadable"})
+            errors.append(relative)
+            continue
+        if b"\0" in data:
+            items.append(
+                {"path": relative, "size": len(data), "complete": False, "reason": "binary"}
+            )
+            errors.append(relative)
+            continue
+        items.append(
+            {
+                "path": relative,
+                "size": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "complete": True,
+            }
+        )
+    return {"items": items, "complete": not errors, "errors": errors}
 
 
 def local_bundle(repo_root: str, profile: str, ref: str | None) -> dict[str, object]:
@@ -423,55 +728,146 @@ def local_bundle(repo_root: str, profile: str, ref: str | None) -> dict[str, obj
     root = raw_root.resolve()
     if not (root / ".git").exists():
         raise WorkflowError("repo root must be a real Git checkout")
-    git = shutil.which("git")
-    if git is None:
-        raise WorkflowError("git is unavailable")
-    def run(*args: str) -> str:
-        completed = subprocess.run([git, "-C", str(root), *args], check=False, capture_output=True, text=True)
-        if completed.returncode:
-            raise WorkflowError(f"git read failed: {completed.stderr.strip()}")
-        return completed.stdout
-    head = run("rev-parse", "HEAD").strip()
-    base = run("merge-base", ref or "HEAD", "HEAD").strip() if ref else head
-    diff = run("diff", "--find-renames", base, head, "--") if ref else run("diff", "--find-renames", "HEAD", "--")
-    artifact = state_directory(profile, {"hostname": "local", "project_path": str(root), "kind": "local", "iid": 1})
-    bundle = {"schema_version": 1, "profile": profile, "repo_root": str(root), "base_sha": base, "head_sha": head, "diff_sha256": hashlib.sha256(diff.encode()).hexdigest(), "diff": diff, "artifact_root": str(artifact), "working_tree": ref is None, "retrieval_complete": True}
-    write_json(artifact / "local-bundle.json", bundle)
+    head = str(git_read(root, "rev-parse", "HEAD")).strip()
+    base = str(git_read(root, "merge-base", ref or "HEAD", "HEAD")).strip() if ref else head
+    staged = local_section(root, "staged", ("diff", "--cached", "--binary", "--find-renames", "--"))
+    unstaged = local_section(root, "unstaged", ("diff", "--binary", "--find-renames", "--"))
+    untracked = local_untracked(root)
+    committed = (
+        local_section(root, "committed", ("diff", "--binary", "--find-renames", base, head, "--"))
+        if ref
+        else local_section(
+            root, "committed", ("diff", "--binary", "--find-renames", "HEAD", "HEAD", "--")
+        )
+    )
+    identity = {"hostname": "local", "project_path": str(root), "kind": "local", "iid": 1}
+    artifact = state_directory(profile, identity)
+    bundle: dict[str, object] = {
+        "schema_version": ARTIFACT_VERSION,
+        "profile": profile,
+        "repo_root": str(root),
+        "base_sha": base,
+        "head_sha": head,
+        "sections": {
+            "committed": committed,
+            "staged": staged,
+            "unstaged": unstaged,
+            "untracked": untracked,
+        },
+        "artifact_root": str(artifact),
+    }
+    sections = cast(dict[str, dict[str, object]], bundle["sections"])
+    bundle["retrieval_complete"] = all(
+        bool(section.get("complete")) for section in sections.values()
+    )
     return bundle
 
 
 def finalize_local(bundle_file: str) -> dict[str, object]:
-    bundle = read_json(Path(bundle_file), "local bundle")
-    root_value = bundle.get("repo_root")
-    base = bundle.get("base_sha")
-    head = bundle.get("head_sha")
-    digest = bundle.get("diff_sha256")
-    if not all(isinstance(value, str) and value for value in (root_value, base, head, digest)):
-        raise WorkflowError("local bundle identity is incomplete")
-    assert isinstance(root_value, str)
-    assert isinstance(base, str)
-    assert isinstance(head, str)
-    assert isinstance(digest, str)
-    root = Path(root_value)
-    if root.is_symlink() or not (root / ".git").exists():
-        raise WorkflowError("local bundle repository is unsafe")
-    git = shutil.which("git")
-    if git is None:
-        raise WorkflowError("git is unavailable")
-    def run(*arguments: str) -> str:
-        completed = subprocess.run([git, "-C", str(root), *arguments], check=False, capture_output=True, text=True)
-        if completed.returncode:
-            raise WorkflowError("local Git input can no longer be read")
-        return completed.stdout
-    current_head = run("rev-parse", "HEAD").strip()
-    current_diff = run("diff", "--find-renames", "HEAD", "--") if bundle.get("working_tree") is True else run("diff", "--find-renames", base, current_head, "--")
-    current_digest = hashlib.sha256(current_diff.encode()).hexdigest()
-    result: dict[str, object] = {"status": "ok" if current_head == head and current_digest == digest else "stale", "head_sha": current_head, "diff_sha256": current_digest}
-    return result
+    _, baseline = artifact_payload(Path(bundle_file), "local_wip_snapshot")
+    root = baseline.get("repo_root")
+    if not isinstance(root, str):
+        raise WorkflowError("local evidence identity is incomplete")
+    current = local_bundle(root, str(baseline.get("profile", "code-review")), None)
+    changed = [
+        key
+        for key in ("head_sha", "sections", "retrieval_complete")
+        if baseline.get(key) != current.get(key)
+    ]
+    return {
+        "status": "ok" if not changed and bool(current.get("retrieval_complete")) else "stale",
+        "changed": changed,
+        "head_sha": current.get("head_sha"),
+        "complete": current.get("retrieval_complete"),
+    }
+
+
+def validate_critic(receipt: dict[str, Any], evidence_digest: str) -> None:
+    required = {"schema", "evidence_digest", "run_id", "session_id", "findings"}
+    if (
+        receipt.get("schema") != "portable-gitlab/critic-receipt/v2"
+        or not required.issubset(receipt)
+        or receipt.get("evidence_digest") != evidence_digest
+        or not isinstance(receipt.get("findings"), list)
+    ):
+        raise WorkflowError("critic receipt is schema-invalid or does not bind evidence")
+    if not all(
+        isinstance(receipt.get(key), str) and receipt[key] for key in ("run_id", "session_id")
+    ):
+        raise WorkflowError("critic receipt lacks independent run identity")
+
+
+def validate_decision(
+    report: dict[str, Any], evidence_digest: str, receipt: dict[str, Any] | None, mode: str
+) -> None:
+    if (
+        report.get("schema") != "portable-gitlab/review-decision/v2"
+        or report.get("evidence_digest") != evidence_digest
+        or report.get("verdict") not in {"ready", "not_ready", "blocked"}
+        or not isinstance(report.get("responses"), list)
+        or not isinstance(report.get("unresolved_threads"), list)
+    ):
+        raise WorkflowError("review decision is schema-invalid")
+    response_ids = {
+        item.get("id")
+        for item in report["responses"]
+        if isinstance(item, dict)
+        and item.get("decision") in {"accept", "reject"}
+        and isinstance(item.get("reason"), str)
+        and item["reason"]
+    }
+    required = {item.get("id") for item in report.get("findings", []) if isinstance(item, dict)}
+    if receipt is not None:
+        required |= {item.get("id") for item in receipt["findings"] if isinstance(item, dict)}
+    required |= {item.get("id") for item in report["unresolved_threads"] if isinstance(item, dict)}
+    if None in required or not required.issubset(response_ids):
+        raise WorkflowError(
+            "review decision does not account for every finding and unresolved thread"
+        )
+    if mode in {"normal", "deep"} and receipt is None:
+        raise WorkflowError("normal and deep review require an independent critic receipt")
+    if mode == "fast" and report.get("low_risk") is not True and receipt is None:
+        raise WorkflowError("fast review without critic requires confirmed low-risk scope")
+
+
+def validate_release_readiness(
+    report: dict[str, Any], bundle: dict[str, Any], evidence_digest: str
+) -> None:
+    required = {"semver", "compatibility", "migration", "rollback", "ci"}
+    gates = report.get("gates")
+    if (
+        report.get("schema") != "portable-gitlab/release-readiness/v2"
+        or report.get("evidence_digest") != evidence_digest
+        or report.get("verdict") not in {"ready", "not_ready", "blocked"}
+        or not isinstance(report.get("readiness"), bool)
+        or not isinstance(gates, dict)
+        or set(gates) != required
+    ):
+        raise WorkflowError("release readiness report is schema-invalid")
+    identity = {
+        "base_sha": bundle.get("base_sha"),
+        "start_sha": bundle.get("start_sha"),
+        "head_sha": bundle.get("head_sha"),
+    }
+    for gate in gates.values():
+        if (
+            not isinstance(gate, dict)
+            or gate.get("status") not in {"passed", "failed", "blocked", "not_applicable"}
+            or not isinstance(gate.get("evidence"), list)
+            or not gate["evidence"]
+            or gate.get("range") != identity
+        ):
+            raise WorkflowError("release readiness gate does not bind exact range and evidence")
+    if (report["verdict"] == "ready") != report["readiness"] or not bundle.get(
+        "retrieval_complete"
+    ):
+        raise WorkflowError("incomplete evidence or readiness disagreement prohibits release ready")
 
 
 def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
-    parser = ContractArgumentParser(description="Portable read-only GitLab workflow helper")
+    parser = ContractArgumentParser(
+        description="Canonical portable GET-only GitLab workflow helper"
+    )
     parser.add_argument("--capabilities", action="store_true")
     subparsers = parser.add_subparsers(dest="command", parser_class=ContractArgumentParser)
     prepare = subparsers.add_parser("prepare")
@@ -494,6 +890,17 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     mode = subparsers.add_parser("assess-mode")
     mode.add_argument("--mode", choices=("fast", "normal", "deep"), required=True)
     mode.add_argument("--critic-available", action="store_true")
+    decision = subparsers.add_parser("finalize-review")
+    decision.add_argument("--evidence", required=True)
+    decision.add_argument("--report", required=True)
+    decision.add_argument("--mode", choices=("fast", "normal", "deep"), required=True)
+    decision.add_argument("--critic-receipt")
+    record = subparsers.add_parser("record-artifact")
+    record.add_argument(
+        "--kind", choices=("analysis_report", "critic_receipt", "release_readiness"), required=True
+    )
+    record.add_argument("--evidence", required=True)
+    record.add_argument("--input", required=True)
     try:
         args = parser.parse_args(argv)
     except WorkflowError as exc:
@@ -506,88 +913,252 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 raise WorkflowError("provide exact --url target or --project-url, but not both")
             if args.project_url and profile != "task-prepare":
                 raise WorkflowError("project creation mode is only available for task preparation")
-            targets = [parse_target(value, expected) for value in args.url] if args.url else [parse_project(args.project_url)]
-            results: list[dict[str, object]] = []
+            targets = (
+                [parse_target(value, expected) for value in args.url]
+                if args.url
+                else [parse_project(args.project_url)]
+            )
+            results = []
             for target in targets:
                 try:
                     bundle = collect(target, profile)
-                    results.append({"target": target["url"], "status": "ok", "summary": {"tldr": "Собраны read-only evidence GitLab.", "scope": [target["url"]], "risks": [] if bundle["retrieval_complete"] else ["collection incomplete"], "checks": ["exact target", "GET-only collection", "pagination"]}, "artifact_path": bundle.get("preview_artifact_path"), "digest": bundle.get("preview_digest"), "artifact_root": bundle["artifact_root"], "head_sha": bundle["head_sha"], "complete": bundle["retrieval_complete"]})
+                    results.append(
+                        {
+                            "target": target["url"],
+                            "status": "ok",
+                            "artifact_path": bundle.get("preview_artifact_path"),
+                            "digest": bundle.get("preview_digest"),
+                            "artifact_root": bundle["artifact_root"],
+                            "head_sha": bundle["head_sha"],
+                            "base_sha": bundle.get("base_sha"),
+                            "start_sha": bundle.get("start_sha"),
+                            "complete": bundle["retrieval_complete"],
+                            "components_complete": bundle["components_complete"],
+                        }
+                    )
                 except WorkflowError as exc:
                     print(redact(str(exc)), file=sys.stderr)
-                    results.append({"target": target["url"], "status": "error", "error": redact(str(exc))})
+                    results.append(
+                        {"target": target["url"], "status": "error", "error": redact(str(exc))}
+                    )
             status = "ok" if all(item["status"] == "ok" for item in results) else "partial"
-            emit({"status": status, "summary": {"tldr": "Завершена read-only подготовка GitLab evidence.", "scope": [item["target"] for item in results], "risks": ["one or more targets failed"] if status != "ok" else [], "checks": ["exact targets", "GET-only collection"]}, "items": results, "external_mutations": False})
+            emit(
+                {
+                    "status": status,
+                    "summary": {
+                        "tldr": "Завершена GET-only подготовка GitLab evidence.",
+                        "scope": [item["target"] for item in results],
+                        "risks": ["one or more targets failed"] if status != "ok" else [],
+                        "checks": [
+                            "exact target identity",
+                            "endpoint allowlist",
+                            "pagination completeness",
+                            "exact SHA",
+                        ],
+                    },
+                    "items": results,
+                    "external_mutations": False,
+                }
+            )
             return 0 if status == "ok" else 1
         if args.command in {"scaffold", "scaffold-batch"}:
-            emit(scaffold(args.bundle, args.content, "publication-plan.md" if args.command == "scaffold" else "batch-publication-plan.md"))
+            emit(
+                scaffold(
+                    args.bundle,
+                    args.content,
+                    "publication-plan.md"
+                    if args.command == "scaffold"
+                    else "batch-publication-plan.md",
+                )
+            )
             return 0
         if args.command == "finalize":
-            root = artifact_root(Path(args.artifact_root))
             result = finalize(args.artifact_root)
+            root = artifact_root(Path(args.artifact_root))
             if profile == "release-review":
                 if not args.report:
                     raise WorkflowError("release review finalize requires --report")
-                report = read_json(Path(args.report), "release review report")
-                gates = report.get("gates")
-                required = {"semver", "compatibility", "migration", "rollback", "ci"}
-                if (
-                    report.get("status") != "completed"
-                    or report.get("verdict") not in {"ready", "not_ready", "blocked"}
-                    or not isinstance(report.get("readiness"), bool)
-                    or not isinstance(gates, dict)
-                    or set(gates) != required
-                ):
-                    raise WorkflowError("release review report has incomplete gates")
-                for gate in gates.values():
-                    if not isinstance(gate, dict) or gate.get("status") not in {"passed", "failed", "blocked", "not_applicable"} or gate.get("verified") is not True or not gate.get("evidence") or not isinstance(gate.get("inputs"), dict):
-                        raise WorkflowError("release review gate is incomplete")
-                object_value = bundle.get("object")
-                project = bundle.get("project")
-                refs = object_value.get("diff_refs") if isinstance(object_value, dict) else None
-                if not isinstance(object_value, dict) or not isinstance(project, dict) or not isinstance(refs, dict):
-                    raise WorkflowError("release review bundle identity is incomplete")
-                target_value = bundle.get("target")
-                expected_inputs = {
-                    "hostname": project.get("hostname"),
-                    "project_id": project.get("id"),
-                    "iid": target_value.get("iid") if isinstance(target_value, dict) else None,
-                    "target_branch": object_value.get("target_branch"),
-                    "base_sha": refs.get("base_sha"),
-                    "start_sha": refs.get("start_sha"),
-                    "head_sha": bundle.get("head_sha"),
+                evidence_path, bundle = evidence_from_root(root)
+                validate_release_readiness(
+                    read_json(Path(args.report), "release readiness report"),
+                    bundle,
+                    hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+                )
+                result["release_readiness_valid"] = True
+            path, artifact_digest = write_artifact(root, "finalize_report", result)
+            emit(
+                {
+                    "status": result["status"],
+                    "summary": {
+                        "tldr": "Повторно проверена актуальность evidence.",
+                        "scope": [],
+                        "risks": result.get("changed", []),
+                        "checks": [
+                            "exact identity",
+                            "SHA",
+                            "labels",
+                            "discussions",
+                            "diff",
+                            "pipelines",
+                            "completeness",
+                        ],
+                    },
+                    "artifact_path": str(path),
+                    "digest": artifact_digest,
+                    "result": result,
+                    "external_mutations": False,
                 }
-                for gate_name, gate in gates.items():
-                    assert isinstance(gate, dict)
-                    inputs = gate["inputs"]
-                    assert isinstance(inputs, dict)
-                    if any(inputs.get(key) != value for key, value in expected_inputs.items()):
-                        raise WorkflowError("release review gate does not bind the exact target identity")
-                    if gate_name == "ci" and (inputs.get("pipeline_sha") != bundle.get("head_sha") or not isinstance(inputs.get("pipeline_status"), str) or not inputs["pipeline_status"]):
-                        raise WorkflowError("release review CI gate does not bind the exact head pipeline")
-                if (report["verdict"] == "ready") != report["readiness"]:
-                    raise WorkflowError("release review verdict and readiness disagree")
-                result["report_valid"] = True
-            report_path, report_digest = write_preview(root, "finalize", result)
-            emit({"status": result["status"], "summary": {"tldr": "Проверена актуальность read-only плана.", "scope": [str(target.get("url", "local"))], "risks": result.get("changed", []), "checks": ["target identity", "current collection"]}, "artifact_path": str(report_path), "digest": report_digest, "result": result, "external_mutations": False})
+            )
             return 0 if result["status"] in {"ok", "not_applicable"} else 2
         if args.command == "prepare-local":
+            if profile != "code-review":
+                raise WorkflowError("local WIP collection is only available for code review")
             bundle = local_bundle(args.repo_root, profile, args.ref)
-            bundle_path_value = Path(str(bundle["artifact_root"])) / "local-bundle.json"
-            artifact_path, artifact_digest = write_preview(Path(str(bundle["artifact_root"])), "local-bundle", bundle)
-            emit({"status": "ok", "summary": {"tldr": "Собраны read-only local WIP evidence.", "scope": [str(bundle["repo_root"])], "risks": [], "checks": ["exact Git diff"]}, "bundle": str(bundle_path_value), "artifact_path": str(artifact_path), "digest": artifact_digest, "head_sha": bundle["head_sha"], "external_mutations": False})
-            return 0
+            root = artifact_root(Path(str(bundle["artifact_root"])))
+            path, artifact_digest = write_artifact(root, "local_wip_snapshot", bundle)
+            write_json(
+                root / "current-local.json",
+                {"evidence_path": str(path), "evidence_digest": artifact_digest},
+            )
+            emit(
+                {
+                    "status": "ok" if bundle["retrieval_complete"] else "incomplete",
+                    "summary": {
+                        "tldr": "Собраны local WIP evidence: staged, unstaged и untracked.",
+                        "scope": [str(bundle["repo_root"])],
+                        "risks": []
+                        if bundle["retrieval_complete"]
+                        else ["local evidence incomplete"],
+                        "checks": [
+                            "HEAD",
+                            "staged",
+                            "unstaged",
+                            "non-ignored untracked",
+                            "symlink/binary/size",
+                        ],
+                    },
+                    "bundle": str(path),
+                    "artifact_path": str(path),
+                    "digest": artifact_digest,
+                    "head_sha": bundle["head_sha"],
+                    "complete": bundle["retrieval_complete"],
+                    "external_mutations": False,
+                }
+            )
+            return 0 if bundle["retrieval_complete"] else 2
         if args.command == "finalize-local":
             result = finalize_local(args.bundle)
-            bundle = read_json(Path(args.bundle), "local bundle")
+            _, bundle = artifact_payload(Path(args.bundle), "local_wip_snapshot")
             root = artifact_root(Path(str(bundle["artifact_root"])))
-            report_path, report_digest = write_preview(root, "local-finalize", result)
-            emit({"status": result["status"], "summary": {"tldr": "Проверена актуальность local WIP evidence.", "scope": [str(bundle["repo_root"])], "risks": [] if result["status"] == "ok" else ["local diff changed"], "checks": ["head SHA", "diff digest"]}, "artifact_path": str(report_path), "digest": report_digest, "result": result, "external_mutations": False})
+            path, artifact_digest = write_artifact(root, "finalize_report", result)
+            emit(
+                {
+                    "status": result["status"],
+                    "summary": {
+                        "tldr": "Проверена актуальность local WIP evidence.",
+                        "scope": [str(bundle["repo_root"])],
+                        "risks": result.get("changed", []),
+                        "checks": ["HEAD", "all WIP sections"],
+                    },
+                    "artifact_path": str(path),
+                    "digest": artifact_digest,
+                    "result": result,
+                    "external_mutations": False,
+                }
+            )
             return 0 if result["status"] == "ok" else 2
         if args.command == "assess-mode":
             if args.mode in {"normal", "deep"} and not args.critic_available:
-                emit({"status": "unsupported", "reason": "independent critic host capability is required", "details": {"mode": args.mode}})
+                emit(
+                    {
+                        "status": "unsupported",
+                        "reason": "independent critic receipt is required",
+                        "details": {"mode": args.mode},
+                    }
+                )
                 return 4
-            emit({"status": "ok", "mode": args.mode, "independent_critic_required": args.mode in {"normal", "deep"}})
+            emit(
+                {
+                    "status": "ok",
+                    "mode": args.mode,
+                    "independent_critic_required": args.mode in {"normal", "deep"},
+                }
+            )
+            return 0
+        if args.command == "record-artifact":
+            evidence_doc, evidence = artifact_payload(Path(args.evidence), "evidence_snapshot")
+            evidence_digest = hashlib.sha256(canonical(evidence_doc)).hexdigest()
+            value = read_json(Path(args.input), "artifact input")
+            if args.kind == "critic_receipt":
+                validate_critic(value, evidence_digest)
+            elif args.kind == "release_readiness":
+                validate_release_readiness(value, evidence, evidence_digest)
+            elif (
+                value.get("schema") != "portable-gitlab/analysis-report/v2"
+                or value.get("evidence_digest") != evidence_digest
+            ):
+                raise WorkflowError("analysis report is schema-invalid or does not bind evidence")
+            root = artifact_root(Path(str(evidence["artifact_root"])))
+            path, artifact_digest = write_artifact(root, args.kind, value)
+            emit(
+                {
+                    "status": "ok",
+                    "summary": {
+                        "tldr": "Сохранён private schema-valid artifact.",
+                        "scope": [],
+                        "risks": [],
+                        "checks": ["schema", "evidence digest", "content address"],
+                    },
+                    "artifact_path": str(path),
+                    "digest": artifact_digest,
+                    "external_mutations": False,
+                }
+            )
+            return 0
+        if args.command == "finalize-review":
+            evidence_doc, evidence = artifact_payload(Path(args.evidence), "evidence_snapshot")
+            evidence_digest = hashlib.sha256(canonical(evidence_doc)).hexdigest()
+            report = read_json(Path(args.report), "review decision")
+            receipt = (
+                read_json(Path(args.critic_receipt), "critic receipt")
+                if args.critic_receipt
+                else None
+            )
+            if receipt is not None and receipt.get("schema") == "portable-gitlab/critic_receipt/v2":
+                _, receipt = artifact_payload(Path(args.critic_receipt), "critic_receipt")
+            if receipt is not None:
+                validate_critic(receipt, evidence_digest)
+                if receipt["run_id"] == report.get("run_id") or receipt["session_id"] == report.get(
+                    "session_id"
+                ):
+                    raise WorkflowError("critic receipt is not independent of the primary review")
+            validate_decision(report, evidence_digest, receipt, args.mode)
+            if not evidence.get("retrieval_complete") or (
+                report.get("verdict") == "ready" and report.get("blocking_findings")
+            ):
+                raise WorkflowError(
+                    "incomplete evidence or unresolved blocking findings prohibit ready"
+                )
+            root = artifact_root(Path(str(evidence["artifact_root"])))
+            path, result_digest = write_artifact(root, "review_decision", report)
+            emit(
+                {
+                    "status": "ok",
+                    "summary": {
+                        "tldr": "Проверено review decision без внешних мутаций.",
+                        "scope": [str(evidence.get("target", {}).get("url", "local"))],
+                        "risks": [],
+                        "checks": [
+                            "evidence binding",
+                            "independent critic",
+                            "all findings and threads covered",
+                        ],
+                    },
+                    "artifact_path": str(path),
+                    "digest": result_digest,
+                    "external_mutations": False,
+                }
+            )
             return 0
         return error("invalid_command", "a supported subcommand is required")
     except WorkflowError as exc:

@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.release-review.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Проверь readiness release MR.",
+    "fixture": { "selected": ["skill:release-review"] }
+  },
+  "expected": { "selected": ["skill:release-review"], "not_selected": ["skill:code-review"] },
+  "invariants": [
+    {
+      "id": "release-gates",
+      "path": "skills/release-review/SKILL.md",
+      "contains": "`semver`, `compatibility`, `migration`, `rollback`, `ci`"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "dbe7b7fe43019d5a0e3290b99479aeff58f1aaa1f61e194e45acf46ac67c3337"
+}

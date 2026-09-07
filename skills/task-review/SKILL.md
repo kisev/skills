@@ -13,7 +13,8 @@ metadata:
 
 # Проверка оформления GitLab
 
-Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
+Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md`,
+`references/portable-gitlab-contracts-v2.md` и
 `references/work-item-contract.md`. Review начинается с validator report для
 normalized item; machine и semantic findings не смешиваются. Всегда возвращай
 ровно один verdict: `ready`, `needs_clarification` или `blocked`, findings с

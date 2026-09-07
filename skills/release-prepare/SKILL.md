@@ -13,10 +13,11 @@ metadata:
 
 # Подготовка релизного MR
 
-Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`.
+Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
+`references/portable-gitlab-contracts-v2.md`.
 Принимай один точный MR URL. Зафиксируй
-предыдущий тег или явно выбранную предыдущую границу, точный диапазон коммитов и
-head SHA. Не называй inventory полным при ошибке pagination, неполном диапазоне
+предыдущий тег или явно выбранную предыдущую границу, exact base/start/head SHA и
+точный диапазон коммитов. Не называй inventory полным при ошибке pagination, неполном диапазоне
 или недоступном MR.
 
 Проверь состав релиза, прямые коммиты, связанные задачи, pipeline точного SHA,

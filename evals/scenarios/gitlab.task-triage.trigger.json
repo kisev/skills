@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "gitlab.task-triage.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Проанализируй GitLab Issue без verdict.",
+    "fixture": { "selected": ["skill:task-triage"] }
+  },
+  "expected": { "selected": ["skill:task-triage"], "not_selected": ["skill:task-review"] },
+  "invariants": [
+    {
+      "id": "triage-no-verdict",
+      "path": "skills/task-triage/SKILL.md",
+      "contains": "не выноси accept/reject verdict"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "7721360b1759f247244dfaf5ef60062045ecd77959c420e6fa865d1818b6b8fa"
+}

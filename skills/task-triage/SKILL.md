@@ -13,15 +13,18 @@ metadata:
 
 # Содержательный разбор GitLab-задач
 
-Прочитай `references/interaction-contract.md` и `references/gitlab-workflow.md`
+Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
+`references/portable-gitlab-contracts-v2.md`
 перед collection. Работай только с
 конкретными Issue URL. Для списка, фильтра или URL проекта сначала задай Question
 о границе штатным механизмом host, а при его отсутствии вопросом в чате. Не
 начинай listing до уточнения.
 
 Запусти `scripts/triage_task.py prepare --url <URL>`; несколько `--url` образуют
-один пакет. Ошибка одного item не блокирует остальные. Runner сохраняет только
-локальные read-only evidence и никогда не выполняет внешнюю мутацию.
+один пакет. Ошибка одного item не блокирует остальные. Runner всегда собирает
+Issue discussions/notes с pagination; отсутствие ответов complete только после
+завершающей страницы. Он сохраняет только private immutable read-only evidence и
+никогда не выполняет внешнюю мутацию.
 
 По каждому полному или частичному bundle отдели **Факты**, **Предположения**,
 **Ограничения** и **Рекомендации**. Обязательно раскрой Problem, Value / consumer,
