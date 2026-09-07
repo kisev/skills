@@ -498,6 +498,31 @@ class PortableSkillValidationTests(unittest.TestCase):
             (ROOT / "shared/references/question-guidelines.md").read_bytes(),
         )
 
+    def test_goal_is_prompt_only_and_preserves_materialized_contract(self) -> None:
+        skill = ROOT / "skills/goal"
+        text = (skill / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("work-item/v1", text)
+        self.assertIn("3000", text)
+        self.assertFalse((skill / "scripts/goal.py").exists())
+        self.assertFalse((skill / "scripts/portable_runtime").exists())
+        self.assertEqual(
+            (skill / "scripts/work_item.py").read_bytes(),
+            (ROOT / "shared/references/work_item.py").read_bytes(),
+        )
+
+    def test_goal_output_contract_declares_bounded_deterministic_outcomes(self) -> None:
+        text = (ROOT / "skills/goal/SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "не более 3000 символов",
+            "байт-в-байт тот же JSON",
+            "статус premortem равен `skipped`",
+            "при независимом проходе статус равен\n`completed`",
+            "verdict `ready`",
+            "blocker явным",
+        ):
+            with self.subTest(phrase=phrase):
+                self.assertIn(phrase, text)
+
     def test_python_runtime_is_exactly_materialized_for_each_runner(self) -> None:
         manifest = json.loads(
             (ROOT / "shared/manifest.json").read_text(encoding="utf-8")
