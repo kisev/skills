@@ -11,9 +11,10 @@ metadata:
 # Multi-run
 
 Runner владеет только group records, receipts и terminal manifests в user-owned
-XDG state. Execution, sessions, worktrees и routing остаются package tools. Без
-явно настроенных `AGENT_SKILLS_ROUTE_API` и `AGENT_SKILLS_ATTEMPTS_API` mutation
-не происходит: runner возвращает `escalate`.
+XDG state. Execution, sessions, worktrees и routing остаются package tools.
+Mutation выполняется только через явный package bridge (`--package-bridge`),
+который принимает JSON stdin; произвольные shell environment adapters не
+поддерживаются.
 
 ```text
 multi_run.py preview --task-file FILE --project PATH --start-ref REF --count 2..5

@@ -16,7 +16,7 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 Для воспроизводимой установки актуального релиза используйте GitHub tag:
 
 ```shell
-npx --yes skills add https://github.com/kisev/skills/tree/v1.1.1 \
+npx --yes skills add https://github.com/kisev/skills/tree/v1.2.0 \
   --agent opencode --skill '*' --copy --yes
 ```
 
@@ -121,7 +121,7 @@ Portable skills и OpenCode integration устанавливаются неза�
 установите integration:
 
 ```shell
-npm install @kisev/skills-opencode@1.1.1
+npm install @kisev/skills-opencode@1.2.0
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -187,16 +187,17 @@ TTL. Применить plan можно только командой с `--conf
 Следующие ограничения делают stateful
 OpenCode plugins небезопасными для включения:
 
-- Background Attempts пока не гарантируют managed worktree и terminal
-  reconciliation.
-- Cron scheduler требует исправления перед эксплуатацией.
+- Background Attempts владеют managed worktree и terminal reconciliation;
+  plugin остаётся opt-in.
+- Cron scheduler использует строгий evaluator и machine-readable receipts;
+  definitions и plugin остаются disabled-by-default.
 - GitLab/code-review и Mattermost имеют неполный parity с заявленными
   сценариями.
 - Runtime state и `doctor` требуют дополнительного hardening.
 
-До исправляющего релиза wrappers `background-attempts`, `schedule`, `goal-loop`
-и `autonomy-policy` должны оставаться выключенными. Не включайте их через
-user-owned wrappers, даже если package позволяет явно передать `enabled: true`.
+Wrappers `background-attempts`, `schedule`, `goal-loop` и `autonomy-policy`
+выключены по умолчанию. Включение является явным выбором владельца
+конфигурации; Goal Mode loop и auto-continuation не входят в этап 6.
 
 ## Обновление и удаление
 
@@ -210,7 +211,7 @@ npx --yes skills update --yes
 подтвердите новый digest:
 
 ```shell
-npm install @kisev/skills-opencode@1.1.1
+npm install @kisev/skills-opencode@1.2.0
 npm exec -- skills-opencode install --scope global --dry-run
 npm exec -- skills-opencode install --scope global --confirm <digest>
 ```

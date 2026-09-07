@@ -26,6 +26,8 @@ from portable_runtime.state import StateError, atomic_write_json, read_json, rev
 ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 EVERY = re.compile(r"^every:\s*\d+\s*[smhd]$", re.I)
 CRON = re.compile(r"^cron:\s*(?:\S+\s+){4}\S+$", re.I)
+CRON_RANGES = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))
+CRON_NAMES = ({}, {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}, {"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6})
 SCHEMA_VERSION = 1
 
 
@@ -33,6 +35,48 @@ class ScheduleError(ValueError):
     def __init__(self, message: str, code: str = "schedule_error") -> None:
         super().__init__(message)
         self.code = code
+
+
+def cron_field(value: str, index: int) -> set[int]:
+    minimum, maximum = CRON_RANGES[index]
+    names = CRON_NAMES[index]
+    result: set[int] = set()
+    for item in value.lower().split(","):
+        pieces = item.split("/")
+        if len(pieces) > 2:
+            raise ScheduleError("cron contains multiple steps", "invalid_definition")
+        raw, step_text = pieces[0], pieces[1] if len(pieces) == 2 else "1"
+        try:
+            step = int(step_text)
+        except ValueError as error:
+            raise ScheduleError("cron step is invalid", "invalid_definition") from error
+        if step < 1:
+            raise ScheduleError("cron step is invalid", "invalid_definition")
+        if raw == "*":
+            start, end = minimum, maximum
+        elif "-" in raw:
+            bounds = raw.split("-")
+            if len(bounds) != 2:
+                raise ScheduleError("cron range is invalid", "invalid_definition")
+            start = names.get(bounds[0], bounds[0])
+            end = names.get(bounds[1], bounds[1])
+        else:
+            start = end = names.get(raw, raw)
+        if not isinstance(start, int) or not isinstance(end, int) or not minimum <= start <= end <= maximum:
+            raise ScheduleError("cron range is invalid", "invalid_definition")
+        result.update(range(start, end + 1, step))
+    if not result:
+        raise ScheduleError("cron field is empty", "invalid_definition")
+    return result
+
+
+def parse_cron(value: str) -> tuple[set[int], ...]:
+    if not CRON.fullmatch(value.strip()):
+        raise ScheduleError("definition schedule is invalid", "invalid_definition")
+    fields = value.strip().split(None, 1)[1].split()
+    if len(fields) != 5:
+        raise ScheduleError("cron must contain five fields", "invalid_definition")
+    return tuple(cron_field(field, index) for index, field in enumerate(fields))
 
 
 def now() -> str:
@@ -66,11 +110,19 @@ def validate(item: dict[str, Any]) -> dict[str, Any]:
         raise ScheduleError("definition id is invalid", "invalid_definition")
     if not all(isinstance(item[key], str) and item[key].strip() for key in ("name", "agent", "model", "prompt")):
         raise ScheduleError("definition text fields are invalid", "invalid_definition")
-    if not isinstance(item["schedule"], str) or not (EVERY.fullmatch(item["schedule"].strip()) or CRON.fullmatch(item["schedule"].strip())):
+    if not isinstance(item["schedule"], str) or not EVERY.fullmatch(item["schedule"].strip()) and not _valid_cron(item["schedule"]):
         raise ScheduleError("definition schedule is invalid", "invalid_definition")
     if type(item["run_as_goal"]) is not bool or type(item["token_budget"]) is not int or item["token_budget"] < 0 or type(item["max_runtime"]) is not int or item["max_runtime"] <= 0:
         raise ScheduleError("definition limits are invalid", "invalid_definition")
     return {**item, "enabled": item.get("enabled") is True}
+
+
+def _valid_cron(value: str) -> bool:
+    try:
+        parse_cron(value)
+    except ScheduleError:
+        return False
+    return True
 
 
 def managed(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -220,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         args = cli.parse_args(argv)
         print(json.dumps(args.handler(args), ensure_ascii=False, sort_keys=True))
         return 0
-    except (ScheduleError, StateError, OSError) as error:
+    except (ScheduleError, StateError, OSError, ValueError, TypeError) as error:
         report_error(getattr(error, "code", "state_error"), str(error))
         return 2
 

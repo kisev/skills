@@ -159,6 +159,14 @@ Package экспортирует independent plugin factories `background-attemp
 Scheduler и Autonomy Policy отключены по умолчанию. Zed integrations также
 optional. Включайте subsystem только в собственном user-owned plugin wrapper:
 
+Background Attempts создают workspace только через единый managed worktree
+owner. Records используют private current-only state, marker и repository
+fingerprint; release перепроверяет регистрацию, fingerprint и чистый status и
+возвращает `blocked` без удаления при расхождении. Scheduler принимает строгий
+five-field cron, не воспроизводит missed slots и пишет receipts `started`,
+`completed`, `failed` или `overrun`. Multi-run runner хранит только group и
+terminal manifest state, а execution направляет через явный package bridge.
+
 ```js
 import goalLoop from "@kisev/skills-opencode/plugins/goal-loop";
 

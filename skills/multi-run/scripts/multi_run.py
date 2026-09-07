@@ -7,8 +7,6 @@ import argparse
 import base64
 import hashlib
 import json
-import os
-import shlex
 import subprocess
 import sys
 import time
@@ -26,7 +24,7 @@ from portable_runtime.contract import ContractArgumentParser, emit_escalation, r
 from portable_runtime.state import StateError, atomic_write_json, read_json, revision, skill_state_root
 
 SCHEMA_VERSION = 1
-TERMINAL = {"complete", "failed", "cancelled", "blocked", "incomplete", "incomparable"}
+TERMINAL = {"completed", "failed", "cancelled", "blocked", "incomplete", "incomparable"}
 FORBIDDEN = {"transcript", "transcripts", "outputs", "reasoning", "diff"}
 
 
@@ -44,19 +42,18 @@ def root() -> Path:
     return skill_state_root("multi-run")
 
 
-def invoke(variable: str, payload: dict[str, Any]) -> dict[str, Any] | None:
-    command = os.environ.get(variable)
+def invoke(command: str | None, payload: dict[str, Any]) -> dict[str, Any] | None:
     if not command:
         return None
     try:
-        result = subprocess.run(shlex.split(command), input=json.dumps(payload), text=True, capture_output=True, timeout=120, check=False)
+        result = subprocess.run([command], input=json.dumps(payload), text=True, capture_output=True, timeout=120, check=False)
         if result.returncode:
-            raise MultiRunError(result.stderr.strip() or f"{variable} failed", "adapter_failed")
+            raise MultiRunError(result.stderr.strip() or "package bridge failed", "adapter_failed")
         value = json.loads(result.stdout)
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as error:
         raise MultiRunError(str(error), "adapter_failed") from error
     if not isinstance(value, dict):
-        raise MultiRunError(f"{variable} returned non-object JSON", "adapter_invalid")
+        raise MultiRunError("package bridge returned non-object JSON", "adapter_invalid")
     return value
 
 
@@ -126,9 +123,9 @@ def preview(args: argparse.Namespace) -> dict[str, Any]:
     task = read_file(args.task_file, "task file")
     if not task:
         raise MultiRunError("task file must not be empty", "invalid_input")
-    routing = invoke("AGENT_SKILLS_ROUTE_API", {"operation": "multi_run_preview", "category": args.category, "count": args.count, "profiles": [value for value in args.profiles.split(",") if value]})
+    routing = invoke(args.package_bridge, {"operation": "route", "request": {"operation": "multi_run_preview", "category": args.category, "count": args.count, "profiles": [value for value in args.profiles.split(",") if value]}})
     if routing is None:
-        emit_escalation("router_unavailable", {"variable": "AGENT_SKILLS_ROUTE_API"})
+        emit_escalation("package_bridge_unavailable", {"bridge": "routing"})
     decisions = routing.get("decisions")
     if not isinstance(decisions, list) or len(decisions) < args.count:
         raise MultiRunError("router cannot provide enough independent decisions", "adapter_invalid")
@@ -141,12 +138,12 @@ def apply(args: argparse.Namespace) -> dict[str, Any]:
     if record.get("consumed"):
         return {"status": "already_started", "multi_run_id": record.get("multi_run_id")}
     payload = record["payload"]
-    adapter = invoke("AGENT_SKILLS_ATTEMPTS_API", {"operation": "create_group", "idempotency_key": record["payload_digest"], "task": payload, "routing": payload["routing"]})
+    adapter = invoke(args.package_bridge, {"operation": "attempts", "request": {"operation": "create_group", "idempotency_key": record["payload_digest"], "task": payload, "routing": payload["routing"]}})
     if adapter is None:
-        emit_escalation("attempts_api_unavailable", {"variable": "AGENT_SKILLS_ATTEMPTS_API"})
+        emit_escalation("package_bridge_unavailable", {"bridge": "attempts"})
     runs = check_runs(payload, adapter.get("runs"))
     identifier = "mr-" + hashlib.sha256(f"{record['confirmation_id']}:{record['payload_digest']}".encode()).hexdigest()[:32]
-    state = {"schema_version": SCHEMA_VERSION, "multi_run_id": identifier, "project_root": payload["project_root"], "task": {"sha256": payload["task_sha256"], "payload_b64": payload["task_b64"]}, "start_ref": payload["start_ref"], "count": payload["count"], "routing": payload["routing"], "runs": runs, "status": "queued", "created_at": now(), "updated_at": now()}
+    state = {"schema_version": SCHEMA_VERSION, "multi_run_id": identifier, "project_root": payload["project_root"], "task": {"sha256": payload["task_sha256"], "payload_b64": payload["task_b64"]}, "start_ref": payload["start_ref"], "count": payload["count"], "category": payload["category"], "routing": payload["routing"], "runs": runs, "status": "queued", "created_at": now(), "updated_at": now()}
     write(state_path(identifier), state)
     record["consumed"] = True
     record["multi_run_id"] = identifier
@@ -163,9 +160,9 @@ def load(identifier: str) -> dict[str, Any]:
 
 def status(args: argparse.Namespace) -> dict[str, Any]:
     state = load(args.multi_run_id)
-    adapter = invoke("AGENT_SKILLS_ATTEMPTS_API", {"operation": "status", "multi_run_id": args.multi_run_id})
+    adapter = invoke(args.package_bridge, {"operation": "attempts", "request": {"operation": "status", "multi_run_id": args.multi_run_id, "runs": state["runs"]}})
     if adapter is None:
-        return {"status": "partial", "multi_run_id": args.multi_run_id, "runs": state["runs"], "reason": "attempts adapter unavailable"}
+        return {"status": "partial", "multi_run_id": args.multi_run_id, "runs": state["runs"], "reason": "package bridge unavailable"}
     runs = adapter.get("runs")
     if not isinstance(runs, list):
         raise MultiRunError("attempt adapter returned invalid status", "adapter_invalid")
@@ -208,9 +205,9 @@ def fusion_apply(args: argparse.Namespace) -> dict[str, Any]:
     current = {item.get("run_id"): item for item in state.get("runs", []) if isinstance(item, dict)}
     if [current.get(identifier, {}).get("manifest", {}).get("content_sha256") for identifier in payload["source_run_ids"]] != payload["source_digests"]:
         raise MultiRunError("source manifests changed after preview", "source_digest_mismatch")
-    adapter = invoke("AGENT_SKILLS_ATTEMPTS_API", {"operation": "create_fusion", "idempotency_key": record["payload_digest"], "source": payload})
+    adapter = invoke(args.package_bridge, {"operation": "attempts", "request": {"operation": "create_fusion", "idempotency_key": record["payload_digest"], "source": {**payload, "task": state["task"], "routing": state["routing"], "category": state["category"]}}})
     if adapter is None:
-        emit_escalation("attempts_api_unavailable", {"variable": "AGENT_SKILLS_ATTEMPTS_API"})
+        emit_escalation("package_bridge_unavailable", {"bridge": "attempts"})
     run = adapter.get("run", adapter)
     checked = check_runs({"count": 1}, [run])[0]
     checked.update({"kind": "fusion", "source_run_ids": payload["source_run_ids"], "source_digests": payload["source_digests"]})
@@ -227,7 +224,7 @@ def cancel_preview(args: argparse.Namespace) -> dict[str, Any]:
     targets = [item for item in state.get("runs", []) if isinstance(item, dict) and item.get("status") not in TERMINAL and (not args.run_id or item.get("run_id") == args.run_id)]
     if args.run_id and not targets:
         raise MultiRunError("run is terminal or missing", "run_not_cancellable")
-    payload = {"multi_run_id": args.multi_run_id, "run_id": args.run_id, "state_revision": revision(state), "affected_run_ids": [item.get("run_id") for item in targets]}
+    payload = {"multi_run_id": args.multi_run_id, "run_id": args.run_id, "state_revision": revision(state), "affected_runs": [{"run_id": item.get("run_id"), "attempt_id": item.get("attempt_id"), "revision": item.get("revision"), "expected_status": item.get("status")} for item in targets]}
     return {"status": "preview", "confirmation_request": issue("multi-run-cancel", payload)}
 
 
@@ -240,10 +237,10 @@ def cancel_apply(args: argparse.Namespace) -> dict[str, Any]:
     if revision(state) != payload["state_revision"]:
         raise MultiRunError("cancel preview is stale", "stale_revision")
     results = []
-    for run_id in payload["affected_run_ids"]:
-        response = invoke("AGENT_SKILLS_ATTEMPTS_API", {"operation": "cancel", "multi_run_id": payload["multi_run_id"], "run_id": run_id})
+    for target in payload["affected_runs"]:
+        response = invoke(args.package_bridge, {"operation": "attempts", "request": {"operation": "cancel", "multi_run_id": payload["multi_run_id"], "run_id": target["run_id"], "attempt_id": target["attempt_id"], "expected_revision": target["revision"], "expected_status": target["expected_status"]}})
         if response is None:
-            emit_escalation("attempts_api_unavailable", {"variable": "AGENT_SKILLS_ATTEMPTS_API"})
+            emit_escalation("package_bridge_unavailable", {"bridge": "attempts"})
         results.append(response)
     record["consumed"] = True
     write(confirmation_path(args.confirmation_id), record)
@@ -255,6 +252,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--capabilities", action="store_true", help=argparse.SUPPRESS)
     commands = result.add_subparsers(dest="command", required=True)
     item = commands.add_parser("preview")
+    item.add_argument("--package-bridge")
     item.add_argument("--task-file", required=True)
     item.add_argument("--constraints-file")
     item.add_argument("--project", required=True)
@@ -264,27 +262,33 @@ def parser() -> argparse.ArgumentParser:
     item.add_argument("--profiles", default="")
     item.set_defaults(handler=preview)
     item = commands.add_parser("apply")
+    item.add_argument("--package-bridge")
     item.add_argument("--confirmation-id", required=True)
     item.add_argument("--confirmation-digest", required=True)
     item.set_defaults(handler=apply)
     for name, handler in (("status", status), ("compare", compare)):
         item = commands.add_parser(name)
         item.add_argument("--multi-run-id", required=True)
+        item.add_argument("--package-bridge")
         item.set_defaults(handler=handler)
     item = commands.add_parser("fusion-preview")
+    item.add_argument("--package-bridge")
     item.add_argument("--multi-run-id", required=True)
     item.add_argument("--source-run-ids", required=True)
     item.add_argument("--strengths", required=True)
     item.set_defaults(handler=fusion_preview)
     item = commands.add_parser("fusion-apply")
+    item.add_argument("--package-bridge")
     item.add_argument("--confirmation-id", required=True)
     item.add_argument("--confirmation-digest", required=True)
     item.set_defaults(handler=fusion_apply)
     item = commands.add_parser("cancel-preview")
+    item.add_argument("--package-bridge")
     item.add_argument("--multi-run-id", required=True)
     item.add_argument("--run-id")
     item.set_defaults(handler=cancel_preview)
     item = commands.add_parser("cancel-apply")
+    item.add_argument("--package-bridge")
     item.add_argument("--confirmation-id", required=True)
     item.add_argument("--confirmation-digest", required=True)
     item.set_defaults(handler=cancel_apply)
