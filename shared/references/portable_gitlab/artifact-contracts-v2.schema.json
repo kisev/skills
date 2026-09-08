@@ -87,6 +87,7 @@
               "required": [
                 "schema_version",
                 "profile",
+                "external_mutations",
                 "target",
                 "project",
                 "object",
@@ -107,6 +108,7 @@
               "properties": {
                 "schema_version": { "const": 2 },
                 "profile": { "type": "string", "minLength": 1 },
+                "external_mutations": { "const": false },
                 "target": { "type": "object" },
                 "project": { "type": "object" },
                 "object": { "type": "object" },
@@ -161,6 +163,7 @@
               "required": [
                 "schema_version",
                 "profile",
+                "external_mutations",
                 "repo_root",
                 "base_sha",
                 "head_sha",
@@ -173,6 +176,7 @@
               "properties": {
                 "schema_version": { "const": 2 },
                 "profile": { "type": "string", "minLength": 1 },
+                "external_mutations": { "const": false },
                 "repo_root": { "type": "string", "minLength": 1 },
                 "base_sha": { "$ref": "#/$defs/sha" },
                 "head_sha": { "$ref": "#/$defs/sha" },
@@ -180,7 +184,13 @@
                 "sections": {
                   "type": "object",
                   "required": ["committed", "staged", "unstaged", "untracked"],
-                  "additionalProperties": false
+                  "additionalProperties": false,
+                  "properties": {
+                    "committed": { "type": "object" },
+                    "staged": { "type": "object" },
+                    "unstaged": { "type": "object" },
+                    "untracked": { "type": "object" }
+                  }
                 },
                 "artifact_root": { "type": "string", "minLength": 1 },
                 "retrieval_complete": { "type": "boolean" }
@@ -202,6 +212,7 @@
               "required": [
                 "profile",
                 "target",
+                "external_mutations",
                 "evidence_digest",
                 "complete",
                 "markdown",
@@ -209,8 +220,13 @@
               ],
               "additionalProperties": false,
               "properties": {
+                "profile": { "type": "string", "minLength": 1 },
+                "target": { "type": "object" },
+                "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
-                "complete": { "type": "boolean" }
+                "complete": { "type": "boolean" },
+                "markdown": { "type": "string" },
+                "plan_name": { "type": "string", "minLength": 1 }
               }
             }
           }
@@ -222,17 +238,25 @@
         { "$ref": "#/$defs/envelope" },
         {
           "properties": {
-            "schema": { "const": "portable-gitlab/analysis-report/v2" },
+            "schema": { "const": "portable-gitlab/analysis_report/v2" },
             "kind": { "const": "analysis_report" },
             "payload": {
               "type": "object",
-              "required": ["schema", "evidence_digest", "run_id", "session_id", "findings"],
+              "required": [
+                "schema",
+                "evidence_digest",
+                "run_id",
+                "session_id",
+                "findings",
+                "external_mutations"
+              ],
               "additionalProperties": false,
               "properties": {
                 "schema": { "const": "portable-gitlab/analysis-report/v2" },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },
+                "external_mutations": { "const": false },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
               }
             }
@@ -249,13 +273,21 @@
             "kind": { "const": "critic_receipt" },
             "payload": {
               "type": "object",
-              "required": ["schema", "evidence_digest", "run_id", "session_id", "findings"],
+              "required": [
+                "schema",
+                "evidence_digest",
+                "run_id",
+                "session_id",
+                "findings",
+                "external_mutations"
+              ],
               "additionalProperties": false,
               "properties": {
                 "schema": { "const": "portable-gitlab/critic-receipt/v2" },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },
+                "external_mutations": { "const": false },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
               }
             }
@@ -276,6 +308,8 @@
                 "schema",
                 "evidence_digest",
                 "finalize_digest",
+                "mode",
+                "external_mutations",
                 "run_id",
                 "session_id",
                 "verdict",
@@ -288,6 +322,8 @@
                 "schema": { "const": "portable-gitlab/review-decision/v2" },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "finalize_digest": { "$ref": "#/$defs/digest" },
+                "mode": { "enum": ["fast", "normal", "deep"] },
+                "external_mutations": { "const": false },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
@@ -311,13 +347,21 @@
             "kind": { "const": "release_readiness" },
             "payload": {
               "type": "object",
-              "required": ["schema", "evidence_digest", "verdict", "readiness", "gates"],
+              "required": [
+                "schema",
+                "evidence_digest",
+                "verdict",
+                "readiness",
+                "gates",
+                "external_mutations"
+              ],
               "additionalProperties": false,
               "properties": {
                 "schema": { "const": "portable-gitlab/release-readiness/v2" },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
                 "readiness": { "type": "boolean" },
+                "external_mutations": { "const": false },
                 "gates": {
                   "type": "object",
                   "required": ["semver", "compatibility", "migration", "rollback", "ci"],
@@ -351,7 +395,8 @@
                 "complete",
                 "evidence_digest",
                 "evidence_kind",
-                "evidence_fingerprint_digest"
+                "evidence_fingerprint_digest",
+                "external_mutations"
               ],
               "additionalProperties": false,
               "properties": {
@@ -361,6 +406,7 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "evidence_kind": { "enum": ["evidence_snapshot", "local_wip_snapshot"] },
                 "evidence_fingerprint_digest": { "$ref": "#/$defs/digest" },
+                "external_mutations": { "const": false },
                 "head_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
                 "release_readiness_digest": { "$ref": "#/$defs/digest" },
                 "release_readiness_valid": { "const": true }

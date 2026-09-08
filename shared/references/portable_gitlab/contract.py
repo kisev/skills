@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 1_000
 ARTIFACT_VERSION = 2
+ARTIFACT_SCHEMA_NAME = "artifact-contracts-v2.schema.json"
 URL_RE = re.compile(
     r"^https://(?P<host>[^/?#]+)/(?P<project>.+?)/-/(?P<kind>issues|merge_requests)/(?P<iid>[1-9][0-9]*)/?$"
 )
@@ -319,8 +320,108 @@ def findings_are_valid(value: object) -> bool:
     )
 
 
+def artifact_schema() -> dict[str, Any]:
+    """Load the only canonical schema from source or its materialized skill copy."""
+    candidates = (
+        Path(__file__).with_name(ARTIFACT_SCHEMA_NAME),
+        Path(__file__).parents[2] / "references" / "portable-gitlab-contracts-v2.schema.json",
+    )
+    for path in candidates:
+        if path.is_file() and not path.is_symlink():
+            schema = read_json(path, "artifact schema")
+            if schema.get("$id") == "https://kisev.dev/schemas/portable-gitlab-artifacts/v2":
+                return schema
+    raise WorkflowError("canonical artifact schema is unavailable")
+
+
+def schema_valid(schema: dict[str, Any], value: object, root: dict[str, Any]) -> bool:
+    """Validate the JSON Schema features used by the canonical artifact contract."""
+    reference = schema.get("$ref")
+    if isinstance(reference, str):
+        prefix = "#/$defs/"
+        if not reference.startswith(prefix):
+            return False
+        definition = root.get("$defs", {}).get(reference.removeprefix(prefix))
+        return isinstance(definition, dict) and schema_valid(definition, value, root)
+    if "allOf" in schema and not all(
+        isinstance(item, dict) and schema_valid(item, value, root) for item in schema["allOf"]
+    ):
+        return False
+    if (
+        "oneOf" in schema
+        and sum(
+            isinstance(item, dict) and schema_valid(item, value, root) for item in schema["oneOf"]
+        )
+        != 1
+    ):
+        return False
+    if "anyOf" in schema and not any(
+        isinstance(item, dict) and schema_valid(item, value, root) for item in schema["anyOf"]
+    ):
+        return False
+    if "const" in schema and value != schema["const"]:
+        return False
+    if "enum" in schema and value not in schema["enum"]:
+        return False
+    expected_type = schema.get("type")
+    if expected_type == "object" and not isinstance(value, dict):
+        return False
+    if expected_type == "array" and not isinstance(value, list):
+        return False
+    if expected_type == "string" and not isinstance(value, str):
+        return False
+    if expected_type == "boolean" and not isinstance(value, bool):
+        return False
+    if expected_type == "integer" and (not isinstance(value, int) or isinstance(value, bool)):
+        return False
+    if isinstance(value, str):
+        pattern = schema.get("pattern")
+        if isinstance(pattern, str) and re.fullmatch(pattern, value) is None:
+            return False
+        if isinstance(schema.get("minLength"), int) and len(value) < schema["minLength"]:
+            return False
+        if schema.get("format") == "date-time":
+            try:
+                datetime.fromisoformat(value)
+            except ValueError:
+                return False
+    if isinstance(value, int) and not isinstance(value, bool):
+        if isinstance(schema.get("minimum"), int) and value < schema["minimum"]:
+            return False
+    if isinstance(value, list):
+        if isinstance(schema.get("minItems"), int) and len(value) < schema["minItems"]:
+            return False
+        item_schema = schema.get("items")
+        if isinstance(item_schema, dict) and not all(
+            schema_valid(item_schema, item, root) for item in value
+        ):
+            return False
+    if isinstance(value, dict):
+        required = schema.get("required", [])
+        if not isinstance(required, list) or not all(
+            isinstance(key, str) and key in value for key in required
+        ):
+            return False
+        properties = schema.get("properties", {})
+        if not isinstance(properties, dict):
+            return False
+        if schema.get("additionalProperties") is False and not set(value).issubset(properties):
+            return False
+        if not all(
+            not isinstance(properties.get(key), dict)
+            or schema_valid(cast(dict[str, Any], properties[key]), item, root)
+            for key, item in value.items()
+            if key in properties
+        ):
+            return False
+    return True
+
+
 def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
     """Enforce the canonical v2 schema without a runtime-only dependency."""
+    schema = artifact_schema()
+    if not schema_valid(schema, value, schema):
+        raise WorkflowError("artifact does not satisfy the canonical schema")
     envelope = exact_keys(
         value, {"schema", "schema_version", "kind", "created_at", "payload"}, "artifact"
     )
@@ -343,6 +444,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             {
                 "schema_version",
                 "profile",
+                "external_mutations",
                 "target",
                 "project",
                 "object",
@@ -372,6 +474,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         }
         if (
             payload["schema_version"] != ARTIFACT_VERSION
+            or payload["external_mutations"] is not False
             or not all(isinstance(payload[key], dict) for key in ("target", "project", "object"))
             or not all(
                 component_is_valid(payload[key])
@@ -395,6 +498,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             {
                 "schema_version",
                 "profile",
+                "external_mutations",
                 "repo_root",
                 "base_sha",
                 "head_sha",
@@ -407,6 +511,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         )
         if (
             payload["schema_version"] != ARTIFACT_VERSION
+            or payload["external_mutations"] is not False
             or not nonempty_string(payload["profile"])
             or not nonempty_string(payload["repo_root"])
             or not is_sha(payload["base_sha"])
@@ -421,15 +526,34 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
     elif kind == "publication_plan":
         exact_keys(
             payload,
-            {"profile", "target", "evidence_digest", "complete", "markdown", "plan_name"},
+            {
+                "profile",
+                "target",
+                "evidence_digest",
+                "complete",
+                "markdown",
+                "plan_name",
+                "external_mutations",
+            },
             "publication plan payload",
         )
-        if not is_digest(payload["evidence_digest"]) or not isinstance(payload["complete"], bool):
+        if (
+            not is_digest(payload["evidence_digest"])
+            or not isinstance(payload["complete"], bool)
+            or payload["external_mutations"] is not False
+        ):
             raise WorkflowError("publication plan payload is schema-invalid")
     elif kind in {"analysis_report", "critic_receipt"}:
         exact_keys(
             payload,
-            {"schema", "evidence_digest", "run_id", "session_id", "findings"},
+            {
+                "schema",
+                "evidence_digest",
+                "run_id",
+                "session_id",
+                "findings",
+                "external_mutations",
+            },
             f"{kind} payload",
         )
         expected = "analysis-report" if kind == "analysis_report" else "critic-receipt"
@@ -438,6 +562,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
             or not findings_are_valid(payload["findings"])
+            or payload["external_mutations"] is not False
         ):
             raise WorkflowError(f"{kind} payload is schema-invalid")
     elif kind == "review_decision":
@@ -445,6 +570,8 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "schema",
             "evidence_digest",
             "finalize_digest",
+            "mode",
+            "external_mutations",
             "verdict",
             "run_id",
             "session_id",
@@ -453,7 +580,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "responses",
         }
         if not required.issubset(payload) or not set(payload).issubset(
-            required | {"low_risk", "blocking_findings"}
+            required | {"low_risk", "blocking_findings", "external_mutations"}
         ):
             raise WorkflowError("review decision payload has unknown or missing fields")
         responses = payload["responses"]
@@ -461,6 +588,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             payload["schema"] != "portable-gitlab/review-decision/v2"
             or not is_digest(payload["evidence_digest"])
             or not is_digest(payload["finalize_digest"])
+            or payload["mode"] not in {"fast", "normal", "deep"}
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
             or not findings_are_valid(payload["findings"])
@@ -479,12 +607,20 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 "blocking_findings" in payload
                 and not isinstance(payload["blocking_findings"], bool)
             )
+            or ("external_mutations" in payload and payload["external_mutations"] is not False)
         ):
             raise WorkflowError("review decision payload is schema-invalid")
     elif kind == "release_readiness":
         exact_keys(
             payload,
-            {"schema", "evidence_digest", "verdict", "readiness", "gates"},
+            {
+                "schema",
+                "evidence_digest",
+                "verdict",
+                "readiness",
+                "gates",
+                "external_mutations",
+            },
             "release readiness payload",
         )
         gates = payload["gates"]
@@ -493,6 +629,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not isinstance(payload["readiness"], bool)
+            or payload["external_mutations"] is not False
             or not isinstance(gates, dict)
             or set(gates) != {"semver", "compatibility", "migration", "rollback", "ci"}
             or not all(
@@ -517,6 +654,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "evidence_digest",
             "evidence_kind",
             "evidence_fingerprint_digest",
+            "external_mutations",
             "release_readiness_digest",
             "release_readiness_valid",
         }
@@ -530,6 +668,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 "evidence_digest",
                 "evidence_kind",
                 "evidence_fingerprint_digest",
+                "external_mutations",
             }.issubset(payload)
         ):
             raise WorkflowError("finalize report payload has unknown or missing fields")
@@ -542,6 +681,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or payload["evidence_kind"] not in {"evidence_snapshot", "local_wip_snapshot"}
             or not is_digest(payload["evidence_fingerprint_digest"])
+            or payload["external_mutations"] is not False
             or (
                 "release_readiness_digest" in payload
                 and not is_digest(payload["release_readiness_digest"])
@@ -678,6 +818,7 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
         bundle: dict[str, object] = {
             "schema_version": ARTIFACT_VERSION,
             "profile": profile,
+            "external_mutations": False,
             "target": identity,
             "project": {"id": project_id, "path": project_path, "hostname": hostname},
             "object": {},
@@ -783,6 +924,7 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
         bundle = {
             "schema_version": ARTIFACT_VERSION,
             "profile": profile,
+            "external_mutations": False,
             "target": identity,
             "project": {"id": project_id, "path": project_path, "hostname": hostname},
             "object": object_value,
@@ -873,6 +1015,7 @@ def scaffold(bundle_file: str, content_file: str, plan_name: str) -> dict[str, o
     markdown = publication_markdown(bundle, content)
     payload = {
         "profile": bundle.get("profile"),
+        "external_mutations": False,
         "target": bundle.get("target"),
         "evidence_digest": hashlib.sha256(
             regular_file(source, "evidence snapshot").read_bytes()
@@ -1037,6 +1180,7 @@ def local_bundle(repo_root: str, profile: str, ref: str | None) -> dict[str, obj
     bundle: dict[str, object] = {
         "schema_version": ARTIFACT_VERSION,
         "profile": profile,
+        "external_mutations": False,
         "repo_root": str(root),
         "base_sha": base,
         "head_sha": head,
@@ -1079,12 +1223,20 @@ def finalize_local(bundle_file: str) -> dict[str, object]:
 
 
 def validate_critic(receipt: dict[str, Any], evidence_digest: str) -> None:
-    required = {"schema", "evidence_digest", "run_id", "session_id", "findings"}
+    required = {
+        "schema",
+        "evidence_digest",
+        "run_id",
+        "session_id",
+        "findings",
+        "external_mutations",
+    }
     if (
         receipt.get("schema") != "portable-gitlab/critic-receipt/v2"
-        or not required.issubset(receipt)
+        or set(receipt) != required
         or receipt.get("evidence_digest") != evidence_digest
         or not findings_are_valid(receipt.get("findings"))
+        or receipt.get("external_mutations") is not False
     ):
         raise WorkflowError("critic receipt is schema-invalid or does not bind evidence")
     if not all(
@@ -1100,6 +1252,8 @@ def validate_decision(
         report.get("schema") != "portable-gitlab/review-decision/v2"
         or report.get("evidence_digest") != evidence_digest
         or not is_digest(report.get("finalize_digest"))
+        or report.get("mode") != mode
+        or report.get("external_mutations") is not False
         or report.get("verdict") not in {"ready", "not_ready", "blocked"}
         or not isinstance(report.get("responses"), list)
         or not isinstance(report.get("unresolved_threads"), list)
@@ -1136,9 +1290,19 @@ def validate_release_readiness(
     gates = report.get("gates")
     if (
         report.get("schema") != "portable-gitlab/release-readiness/v2"
+        or set(report)
+        != {
+            "schema",
+            "evidence_digest",
+            "verdict",
+            "readiness",
+            "gates",
+            "external_mutations",
+        }
         or report.get("evidence_digest") != evidence_digest
         or report.get("verdict") not in {"ready", "not_ready", "blocked"}
         or not isinstance(report.get("readiness"), bool)
+        or report.get("external_mutations") is not False
         or not isinstance(gates, dict)
         or set(gates) != required
     ):
@@ -1170,6 +1334,7 @@ def finalize_payload(
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         **result,
+        "external_mutations": False,
         "evidence_digest": hashlib.sha256(source.read_bytes()).hexdigest(),
         "evidence_kind": kind,
         "evidence_fingerprint_digest": digest(

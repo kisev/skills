@@ -255,6 +255,75 @@ print(json.dumps(value))
             self.assertEqual(finalized.returncode, 2)
             self.assertEqual(json.loads(finalized.stdout)["status"], "stale")
 
+    def test_local_finalize_detects_each_committed_and_wip_section(self) -> None:
+        for section in ("committed", "staged", "unstaged", "untracked"):
+            with self.subTest(section=section), tempfile.TemporaryDirectory() as temporary:
+                repository = Path(temporary)
+                for git_arguments in (
+                    ("init", "-q"),
+                    ("config", "user.email", "test@example.invalid"),
+                    ("config", "user.name", "Test"),
+                ):
+                    subprocess.run(
+                        ["git", *git_arguments], cwd=repository, check=True, capture_output=True
+                    )
+                source = repository / "sample.txt"
+                source.write_text("base\n", encoding="utf-8")
+                subprocess.run(["git", "add", "."], cwd=repository, check=True, capture_output=True)
+                subprocess.run(
+                    ["git", "commit", "-qm", "base"],
+                    cwd=repository,
+                    check=True,
+                    capture_output=True,
+                )
+                if section == "committed":
+                    source.write_text("first\n", encoding="utf-8")
+                    subprocess.run(
+                        ["git", "commit", "-am", "first"],
+                        cwd=repository,
+                        check=True,
+                        capture_output=True,
+                    )
+                environment = {"XDG_STATE_HOME": str(repository / "state")}
+                arguments: list[str] = ["prepare-local", "--repo-root", str(repository)]
+                if section == "committed":
+                    arguments.extend(("--ref", "HEAD~1"))
+                prepared = self.run_runner(
+                    "code-review", *arguments, cwd=repository, env=environment
+                )
+                self.assertEqual(prepared.returncode, 0, prepared.stderr)
+                bundle = json.loads(prepared.stdout)["bundle"]
+                if section == "committed":
+                    source.write_text("second\n", encoding="utf-8")
+                    subprocess.run(
+                        ["git", "commit", "-am", "second"],
+                        cwd=repository,
+                        check=True,
+                        capture_output=True,
+                    )
+                elif section == "staged":
+                    source.write_text("staged\n", encoding="utf-8")
+                    subprocess.run(
+                        ["git", "add", "sample.txt"],
+                        cwd=repository,
+                        check=True,
+                        capture_output=True,
+                    )
+                elif section == "unstaged":
+                    source.write_text("unstaged\n", encoding="utf-8")
+                else:
+                    (repository / "untracked.txt").write_text("untracked\n", encoding="utf-8")
+                finalized = self.run_runner(
+                    "code-review",
+                    "finalize-local",
+                    "--bundle",
+                    bundle,
+                    cwd=repository,
+                    env=environment,
+                )
+                self.assertEqual(finalized.returncode, 2)
+                self.assertEqual(json.loads(finalized.stdout)["status"], "stale")
+
     def test_local_wip_keeps_staged_unstaged_and_untracked_without_following_symlinks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
@@ -327,6 +396,30 @@ print(json.dumps(value))
                 item for item in sections["untracked"]["items"] if item["path"] == "oversized.txt"
             )
             self.assertEqual(too_large["reason"], "oversized")
+
+    def test_local_wip_marks_unreadable_untracked_evidence_incomplete(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "code-review/scripts/portable_runtime/contract.py",
+            "portable_local_unreadable",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            subprocess.run(["git", "init", "-q"], cwd=repository, check=True, capture_output=True)
+            unavailable = repository / "unreadable.txt"
+            unavailable.write_text("unreadable\n", encoding="utf-8")
+            original = Path.read_bytes
+
+            def read_bytes(path: Path) -> bytes:
+                if path == unavailable:
+                    raise OSError("permission denied")
+                return original(path)
+
+            with patch.object(Path, "read_bytes", read_bytes):
+                result = module.local_untracked(repository)
+        self.assertFalse(result["complete"])
+        self.assertEqual(
+            result["items"], [{"path": "unreadable.txt", "complete": False, "reason": "unreadable"}]
+        )
 
     def test_collection_identity_is_shared_and_issue_discussions_are_required(self) -> None:
         module = load_module(
@@ -410,6 +503,7 @@ print(json.dumps(value))
         )
         receipt = {
             "schema": "portable-gitlab/critic-receipt/v2",
+            "external_mutations": False,
             "evidence_digest": "evidence",
             "run_id": "critic-run",
             "session_id": "critic-session",
@@ -417,6 +511,8 @@ print(json.dumps(value))
         }
         report: dict[str, Any] = {
             "schema": "portable-gitlab/review-decision/v2",
+            "mode": "deep",
+            "external_mutations": False,
             "evidence_digest": "evidence",
             "finalize_digest": "a" * 64,
             "verdict": "not_ready",
@@ -431,6 +527,13 @@ print(json.dumps(value))
             ],
         }
         module.validate_critic(receipt, "evidence")
+        with self.assertRaises(module.WorkflowError):
+            module.validate_critic({**receipt, "evidence_digest": "other"}, "evidence")
+        with self.assertRaises(module.WorkflowError):
+            module.validate_critic(
+                {key: value for key, value in receipt.items() if key != "external_mutations"},
+                "evidence",
+            )
         module.validate_decision(report, "evidence", receipt, "deep")
         report["responses"].pop()
         with self.assertRaises(module.WorkflowError):
@@ -442,6 +545,8 @@ print(json.dumps(value))
         )
         report: dict[str, Any] = {
             "schema": "portable-gitlab/review-decision/v2",
+            "mode": "fast",
+            "external_mutations": False,
             "evidence_digest": "evidence",
             "finalize_digest": "a" * 64,
             "verdict": "not_ready",
@@ -498,6 +603,7 @@ print(json.dumps(value))
                 json.dumps(
                     {
                         "schema": "portable-gitlab/critic-receipt/v2",
+                        "external_mutations": False,
                         "evidence_digest": evidence_digest,
                         "run_id": "critic-run",
                         "session_id": "critic-session",
@@ -511,6 +617,8 @@ print(json.dumps(value))
                 json.dumps(
                     {
                         "schema": "portable-gitlab/review-decision/v2",
+                        "mode": "deep",
+                        "external_mutations": False,
                         "evidence_digest": evidence_digest,
                         "finalize_digest": finalize_digest,
                         "verdict": "ready",
@@ -540,6 +648,40 @@ print(json.dumps(value))
             )
             self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
             self.assertFalse(json.loads(reviewed.stdout)["external_mutations"])
+            duplicate = json.loads(receipt.read_text(encoding="utf-8"))
+            duplicate["run_id"] = "primary-run"
+            receipt.write_text(json.dumps(duplicate), encoding="utf-8")
+            self.assertEqual(
+                self.run_runner(
+                    "code-review",
+                    "finalize-review",
+                    "--evidence",
+                    evidence,
+                    "--report",
+                    str(decision),
+                    "--critic-receipt",
+                    str(receipt),
+                    "--finalize-report",
+                    finalize_report,
+                    "--mode",
+                    "deep",
+                    env=environment,
+                ).returncode,
+                2,
+            )
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "schema": "portable-gitlab/critic-receipt/v2",
+                        "external_mutations": False,
+                        "evidence_digest": evidence_digest,
+                        "run_id": "critic-run",
+                        "session_id": "critic-session",
+                        "findings": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
             state.write_text("changed", encoding="utf-8")
             newer = self.run_runner("code-review", "prepare", "--url", target, env=environment)
             self.assertEqual(newer.returncode, 0, newer.stderr)
@@ -591,6 +733,7 @@ print(json.dumps(value))
                 json.dumps(
                     {
                         "schema": "portable-gitlab/release-readiness/v2",
+                        "external_mutations": False,
                         "evidence_digest": evidence_digest,
                         "verdict": "ready",
                         "readiness": True,
@@ -690,6 +833,7 @@ print(json.dumps(value))
                 json.dumps(
                     {
                         "schema": "portable-gitlab/analysis-report/v2",
+                        "external_mutations": False,
                         "evidence_digest": evidence_digest,
                         "run_id": "analysis-run",
                         "session_id": "analysis-session",

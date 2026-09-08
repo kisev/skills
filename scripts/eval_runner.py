@@ -394,6 +394,7 @@ print(json.dumps(value))
                         json.dumps(
                             {
                                 "schema": "portable-gitlab/critic-receipt/v2",
+                                "external_mutations": False,
                                 "evidence_digest": evidence_digest,
                                 "run_id": "critic",
                                 "session_id": "critic-session",
@@ -406,6 +407,8 @@ print(json.dumps(value))
                         json.dumps(
                             {
                                 "schema": "portable-gitlab/review-decision/v2",
+                                "mode": "deep",
+                                "external_mutations": False,
                                 "evidence_digest": evidence_digest,
                                 "finalize_digest": final_digest,
                                 "verdict": "ready",

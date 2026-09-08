@@ -11,7 +11,8 @@ Collection identity одинакова для всех профилей: `hostna
 допустимую операцию, но не создаёт отдельного owner или collection.
 
 Canonical schema проверяет envelope и payload каждого kind, запрещает неизвестные
-поля и несовместимые пары kind/payload. `evidence_snapshot` фиксирует exact
+поля и несовместимые пары kind/payload. Каждый payload фиксирует
+`external_mutations=false`. `evidence_snapshot` фиксирует exact
 `base_sha`, `start_sha`, `head_sha` для MR и completeness каждого компонента.
 `local_wip_snapshot` хранит ref и committed, staged, unstaged, untracked sections.
 `publication_plan` связывается с digest evidence и содержит Markdown только для
@@ -19,7 +20,7 @@ Canonical schema проверяет envelope и payload каждого kind, з�
 evidence и содержат `run_id`, `session_id` и findings.
 
 `finalize_report` содержит exact digest и fingerprint evidence. `review_decision`
-связывается с digest этого свежего report и содержит disposition для всех
+связывается с digest этого свежего report, фиксирует review mode и содержит disposition для всех
 primary/critic findings и unresolved threads: `accept` или `reject` и непустую
 причину. Старый finalize artifact не обходит повторную GET-only freshness check.
 `release_readiness` связывает range/SHA, SemVer, compatibility, migration,
