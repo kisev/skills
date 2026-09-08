@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "mattermost.mutation-near-miss",
+  "revision": 1,
+  "kind": "near-miss",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Отправь, отредактируй и удали сообщение Mattermost.",
+    "fixture": { "selected": [] }
+  },
+  "expected": { "selected": [], "not_selected": ["skill:mattermost"] },
+  "invariants": [
+    {
+      "id": "mutations-forbidden",
+      "path": "skills/mattermost/SKILL.md",
+      "contains": "Не создавай, не изменяй и не\nудаляй сообщения, каналы, участников или реакции."
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "4c75975ef7813cdfc5f90352d3088251b1df077891d699f4c4a90573998109a6"
+}

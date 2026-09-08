@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "mattermost.cache-contract",
+  "revision": 1,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Validate Mattermost cache user isolation, TTL and revalidation offline.",
+    "fixture": { "selected": ["skill:mattermost"] }
+  },
+  "expected": { "selected": ["skill:mattermost"], "not_selected": [] },
+  "invariants": [
+    {
+      "id": "identity-ttl-cache",
+      "path": "skills/mattermost/scripts/mattermost.py",
+      "contains": "CACHE_TTL_SECONDS = 300"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "4dfe81b7f6775b3e29030d9ec6067cd39539336cf014ebc0a05df5408821b6b2"
+}

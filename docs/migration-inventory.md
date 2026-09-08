@@ -26,7 +26,7 @@
 | `code-review` | read-only и local plan | Глубокое ревью GitLab MR или local WIP. |
 | `release-prepare` | local plan | Подготовка release MR, inventory и плана публикации. |
 | `release-review` | read-only | Проверка готовности release MR. |
-| `mattermost` | read-only с private cache | Ограниченное чтение Mattermost и состава канала. |
+| `mattermost` | read-only с private кэшем по identity | Строго ограниченное чтение Mattermost, треда и состава канала. |
 | `team-workflow` | read/write с confirmation | Одно явное действие командного цикла по explicit context. |
 | `walkthrough` | read-only runner | Карта чтения current diff, Git range или diff-file. |
 | `attempt` | package tool | Чтение и подтверждённая отмена bounded Background Attempts. |

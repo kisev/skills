@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "mattermost.read.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Прочитай этот Mattermost post, thread или канал по точной ссылке.",
+    "fixture": { "selected": ["skill:mattermost"] }
+  },
+  "expected": { "selected": ["skill:mattermost"], "not_selected": [] },
+  "invariants": [
+    {
+      "id": "read-only-scope",
+      "path": "skills/mattermost/SKILL.md",
+      "contains": "Все remote API\nвызовы - только GET"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "1699c5d66aa4b96fbbd022849d07f58e1bdcf7aa3eec2f254b04cd1b843400ac"
+}

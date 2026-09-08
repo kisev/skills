@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "mattermost.permalink-contract",
+  "revision": 1,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Validate Mattermost permalink parsing offline.",
+    "fixture": { "selected": ["skill:mattermost"] }
+  },
+  "expected": { "selected": ["skill:mattermost"], "not_selected": [] },
+  "invariants": [
+    {
+      "id": "strict-permalink-parser",
+      "path": "skills/mattermost/scripts/mattermost.py",
+      "contains": "if route == \"pl\":"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "5fe9d8eda7f25e3d6709bd28cdcba71a9e6c44a5a2110185f4a3f5962a76b998"
+}

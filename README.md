@@ -118,7 +118,7 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 | `code-review`     | Глубокое ревью GitLab MR или локального WIP.                              |
 | `release-prepare` | Подготовка релизного MR, inventory и плана публикации.                    |
 | `release-review`  | Read-only проверка готовности релизного MR.                               |
-| `mattermost`      | Ограниченное read-only чтение Mattermost по ссылке.                       |
+| `mattermost`      | Строго ограниченное чтение Mattermost с кэшем по identity.                |
 | `team-workflow`   | Одно явное действие командного цикла по явному context.                   |
 | `walkthrough`     | Read-only карта чтения current diff, range или diff-file.                 |
 | `attempt`         | Чтение и безопасная отмена Background Attempts OpenCode.                  |

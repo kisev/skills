@@ -1,0 +1,23 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "mattermost.partial-contract",
+  "revision": 1,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Validate Mattermost repeated-page and partial thread/member results offline.",
+    "fixture": { "selected": ["skill:mattermost"] }
+  },
+  "expected": { "selected": ["skill:mattermost"], "not_selected": [] },
+  "invariants": [
+    {
+      "id": "partial-evidence",
+      "path": "skills/mattermost/scripts/mattermost.py",
+      "contains": "repeated_member_page"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "8e2872ddf89db99cc0f45320cd17ac59e1948a8e6d9fd1cf841116dc10b0f452"
+}
