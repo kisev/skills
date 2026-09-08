@@ -22,15 +22,20 @@ object kind и IID. Вызывающий profile ограничивает опе
 truncation/overflow или неизвестная полнота означает `complete=false`; отсутствие
 ответов в discussions не считается complete, пока не получена завершающая page.
 
-Local WIP snapshot фиксирует HEAD и отдельные staged, unstaged, non-ignored
-untracked sections. Не разыменовывай symlink; binary, unreadable и oversized files
-должны остаться incomplete evidence. Любое изменение HEAD либо любой из этих
-sections после prepare делает local finalize `stale`.
+Local WIP snapshot с `--ref` фиксирует merge-base-to-HEAD committed range и
+отдельные staged, unstaged, non-ignored untracked sections. Не разыменовывай
+symlink; binary, unreadable и oversized files должны остаться incomplete evidence.
+Любое изменение HEAD либо любой из этих sections после prepare делает local
+finalize `stale`.
 
-Новые artifacts immutable, private, content-addressed и schema-valid. Finalize
-повторяет required collection/snapshot и возвращает `stale` при изменении object,
-SHA, labels, discussions, diff, pipelines или completeness. Incomplete evidence
-не может иметь ready result. Старый v1 artifact можно read/finalize, но нельзя
+Новые artifacts immutable, private, content-addressed и schema-valid: canonical
+schema проверяет каждый payload и запрещает unknown fields. Finalize повторяет
+required collection/snapshot и возвращает `stale` при изменении object, SHA,
+labels, discussions, diff, commits, pipelines или completeness. Final review
+принимает только bound fresh finalize report и снова выполняет freshness check;
+отдельный старый finalize его не обходит. Release `ready` требует complete
+evidence, exact range/head SHA и закрытых SemVer, compatibility, migration,
+rollback и CI gates. Старый v1 artifact можно read/finalize, но нельзя
 автоматически мигрировать или перезаписывать.
 
 Publication artifact содержит machine-readable envelope и локальный Markdown. Он

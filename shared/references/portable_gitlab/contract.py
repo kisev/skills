@@ -179,8 +179,14 @@ def artifact_root(path: Path) -> Path:
         try:
             legacy = candidate.relative_to(state_base)
         except ValueError:
-            raise WorkflowError("artifact root is outside canonical GitLab collection state") from exc
-        if len(legacy.parts) == 2 and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", legacy.parts[0]) and re.fullmatch(r"[a-f0-9]{20}", legacy.parts[1]):
+            raise WorkflowError(
+                "artifact root is outside canonical GitLab collection state"
+            ) from exc
+        if (
+            len(legacy.parts) == 2
+            and re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", legacy.parts[0])
+            and re.fullmatch(r"[a-f0-9]{20}", legacy.parts[1])
+        ):
             return candidate
         raise WorkflowError("artifact root is outside canonical GitLab collection state") from exc
     if len(relative.parts) != 1 or not re.fullmatch(r"[a-f0-9]{32}", relative.name):
@@ -231,6 +237,7 @@ def write_artifact(root: Path, kind: str, payload: dict[str, Any]) -> tuple[Path
         "created_at": datetime.now(UTC).isoformat(),
         "payload": payload,
     }
+    validate_v2_artifact(envelope, kind)
     # Timestamps are state metadata; the address covers the complete immutable document.
     content = canonical(envelope)
     content_digest = hashlib.sha256(content).hexdigest()
@@ -257,6 +264,7 @@ def artifact_payload(path: Path, kind: str) -> tuple[dict[str, Any], dict[str, A
         and value.get("schema_version") == ARTIFACT_VERSION
         and isinstance(value.get("payload"), dict)
     ):
+        validate_v2_artifact(value, kind)
         return value, value["payload"]
     # v1 snapshots are readable/finalizable but never rewritten or migrated.
     if value.get("schema_version") == 1 and kind == "evidence_snapshot":
@@ -264,11 +272,295 @@ def artifact_payload(path: Path, kind: str) -> tuple[dict[str, Any], dict[str, A
     raise WorkflowError("artifact schema is invalid")
 
 
+def exact_keys(value: object, required: set[str], label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != required:
+        raise WorkflowError(f"{label} has unknown or missing fields")
+    return value
+
+
+def nonempty_string(value: object) -> bool:
+    return isinstance(value, str) and bool(value)
+
+
+def is_digest(value: object) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[a-f0-9]{64}", value) is not None
+
+
+def is_sha(value: object, *, nullable: bool = False) -> bool:
+    return (nullable and value is None) or (
+        isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{1,128}", value) is not None
+    )
+
+
+def component_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "items",
+        "complete",
+        "errors",
+        "pages",
+        "truncated",
+    }:
+        return False
+    return (
+        isinstance(value["items"], list)
+        and isinstance(value["complete"], bool)
+        and isinstance(value["errors"], list)
+        and all(isinstance(item, str) for item in value["errors"])
+        and isinstance(value["pages"], int)
+        and value["pages"] >= 0
+        and isinstance(value["truncated"], bool)
+    )
+
+
+def findings_are_valid(value: object) -> bool:
+    return isinstance(value, list) and all(
+        isinstance(item, dict) and set(item) == {"id"} and nonempty_string(item.get("id"))
+        for item in value
+    )
+
+
+def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
+    """Enforce the canonical v2 schema without a runtime-only dependency."""
+    envelope = exact_keys(
+        value, {"schema", "schema_version", "kind", "created_at", "payload"}, "artifact"
+    )
+    if (
+        envelope["schema"] != f"portable-gitlab/{kind}/v2"
+        or envelope["schema_version"] != ARTIFACT_VERSION
+        or envelope["kind"] != kind
+        or not nonempty_string(envelope["created_at"])
+        or not isinstance(envelope["payload"], dict)
+    ):
+        raise WorkflowError("artifact schema is invalid")
+    try:
+        datetime.fromisoformat(cast(str, envelope["created_at"]))
+    except ValueError as exc:
+        raise WorkflowError("artifact timestamp is schema-invalid") from exc
+    payload = cast(dict[str, Any], envelope["payload"])
+    if kind == "evidence_snapshot":
+        exact_keys(
+            payload,
+            {
+                "schema_version",
+                "profile",
+                "target",
+                "project",
+                "object",
+                "labels",
+                "changed_files",
+                "commits",
+                "pipelines",
+                "discussions",
+                "head_sha",
+                "base_sha",
+                "start_sha",
+                "artifact_root",
+                "prepared_at",
+                "components_complete",
+                "retrieval_complete",
+            },
+            "evidence payload",
+        )
+        required_components = {
+            "project",
+            "labels",
+            "object",
+            "changed_files",
+            "commits",
+            "pipelines",
+            "discussions",
+        }
+        if (
+            payload["schema_version"] != ARTIFACT_VERSION
+            or not all(isinstance(payload[key], dict) for key in ("target", "project", "object"))
+            or not all(
+                component_is_valid(payload[key])
+                for key in ("labels", "changed_files", "commits", "pipelines", "discussions")
+            )
+            or not all(
+                is_sha(payload[key], nullable=True) for key in ("head_sha", "base_sha", "start_sha")
+            )
+            or not nonempty_string(payload["profile"])
+            or not nonempty_string(payload["artifact_root"])
+            or not nonempty_string(payload["prepared_at"])
+            or not isinstance(payload["components_complete"], dict)
+            or set(payload["components_complete"]) != required_components
+            or not all(isinstance(item, bool) for item in payload["components_complete"].values())
+            or not isinstance(payload["retrieval_complete"], bool)
+        ):
+            raise WorkflowError("evidence payload is schema-invalid")
+    elif kind == "local_wip_snapshot":
+        exact_keys(
+            payload,
+            {
+                "schema_version",
+                "profile",
+                "repo_root",
+                "base_sha",
+                "head_sha",
+                "ref",
+                "sections",
+                "artifact_root",
+                "retrieval_complete",
+            },
+            "local WIP payload",
+        )
+        if (
+            payload["schema_version"] != ARTIFACT_VERSION
+            or not nonempty_string(payload["profile"])
+            or not nonempty_string(payload["repo_root"])
+            or not is_sha(payload["base_sha"])
+            or not is_sha(payload["head_sha"])
+            or (payload["ref"] is not None and not nonempty_string(payload["ref"]))
+            or not isinstance(payload["sections"], dict)
+            or set(payload["sections"]) != {"committed", "staged", "unstaged", "untracked"}
+            or not nonempty_string(payload["artifact_root"])
+            or not isinstance(payload["retrieval_complete"], bool)
+        ):
+            raise WorkflowError("local WIP payload is schema-invalid")
+    elif kind == "publication_plan":
+        exact_keys(
+            payload,
+            {"profile", "target", "evidence_digest", "complete", "markdown", "plan_name"},
+            "publication plan payload",
+        )
+        if not is_digest(payload["evidence_digest"]) or not isinstance(payload["complete"], bool):
+            raise WorkflowError("publication plan payload is schema-invalid")
+    elif kind in {"analysis_report", "critic_receipt"}:
+        exact_keys(
+            payload,
+            {"schema", "evidence_digest", "run_id", "session_id", "findings"},
+            f"{kind} payload",
+        )
+        expected = "analysis-report" if kind == "analysis_report" else "critic-receipt"
+        if (
+            payload["schema"] != f"portable-gitlab/{expected}/v2"
+            or not is_digest(payload["evidence_digest"])
+            or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
+            or not findings_are_valid(payload["findings"])
+        ):
+            raise WorkflowError(f"{kind} payload is schema-invalid")
+    elif kind == "review_decision":
+        required = {
+            "schema",
+            "evidence_digest",
+            "finalize_digest",
+            "verdict",
+            "run_id",
+            "session_id",
+            "findings",
+            "unresolved_threads",
+            "responses",
+        }
+        if not required.issubset(payload) or not set(payload).issubset(
+            required | {"low_risk", "blocking_findings"}
+        ):
+            raise WorkflowError("review decision payload has unknown or missing fields")
+        responses = payload["responses"]
+        if (
+            payload["schema"] != "portable-gitlab/review-decision/v2"
+            or not is_digest(payload["evidence_digest"])
+            or not is_digest(payload["finalize_digest"])
+            or payload["verdict"] not in {"ready", "not_ready", "blocked"}
+            or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
+            or not findings_are_valid(payload["findings"])
+            or not findings_are_valid(payload["unresolved_threads"])
+            or not isinstance(responses, list)
+            or not all(
+                isinstance(item, dict)
+                and set(item) == {"id", "decision", "reason"}
+                and nonempty_string(item.get("id"))
+                and item.get("decision") in {"accept", "reject"}
+                and nonempty_string(item.get("reason"))
+                for item in responses
+            )
+            or ("low_risk" in payload and not isinstance(payload["low_risk"], bool))
+            or (
+                "blocking_findings" in payload
+                and not isinstance(payload["blocking_findings"], bool)
+            )
+        ):
+            raise WorkflowError("review decision payload is schema-invalid")
+    elif kind == "release_readiness":
+        exact_keys(
+            payload,
+            {"schema", "evidence_digest", "verdict", "readiness", "gates"},
+            "release readiness payload",
+        )
+        gates = payload["gates"]
+        if (
+            payload["schema"] != "portable-gitlab/release-readiness/v2"
+            or not is_digest(payload["evidence_digest"])
+            or payload["verdict"] not in {"ready", "not_ready", "blocked"}
+            or not isinstance(payload["readiness"], bool)
+            or not isinstance(gates, dict)
+            or set(gates) != {"semver", "compatibility", "migration", "rollback", "ci"}
+            or not all(
+                isinstance(gate, dict)
+                and set(gate) == {"status", "evidence", "range"}
+                and gate["status"] in {"passed", "failed", "blocked", "not_applicable"}
+                and isinstance(gate["evidence"], list)
+                and bool(gate["evidence"])
+                and isinstance(gate["range"], dict)
+                and set(gate["range"]) == {"base_sha", "start_sha", "head_sha"}
+                and all(is_sha(gate["range"][key], nullable=True) for key in gate["range"])
+                for gate in gates.values()
+            )
+        ):
+            raise WorkflowError("release readiness payload is schema-invalid")
+    elif kind == "finalize_report":
+        allowed = {
+            "status",
+            "changed",
+            "head_sha",
+            "complete",
+            "evidence_digest",
+            "evidence_kind",
+            "evidence_fingerprint_digest",
+            "release_readiness_digest",
+            "release_readiness_valid",
+        }
+        if (
+            not isinstance(payload, dict)
+            or not set(payload).issubset(allowed)
+            or not {
+                "status",
+                "changed",
+                "complete",
+                "evidence_digest",
+                "evidence_kind",
+                "evidence_fingerprint_digest",
+            }.issubset(payload)
+        ):
+            raise WorkflowError("finalize report payload has unknown or missing fields")
+        if (
+            payload["status"] not in {"ok", "stale", "not_applicable"}
+            or not isinstance(payload["changed"], list)
+            or not all(isinstance(item, str) for item in payload["changed"])
+            or ("head_sha" in payload and not is_sha(payload["head_sha"], nullable=True))
+            or not isinstance(payload["complete"], bool)
+            or not is_digest(payload["evidence_digest"])
+            or payload["evidence_kind"] not in {"evidence_snapshot", "local_wip_snapshot"}
+            or not is_digest(payload["evidence_fingerprint_digest"])
+            or (
+                "release_readiness_digest" in payload
+                and not is_digest(payload["release_readiness_digest"])
+            )
+            or (
+                "release_readiness_valid" in payload
+                and payload["release_readiness_valid"] is not True
+            )
+        ):
+            raise WorkflowError("finalize report payload is schema-invalid")
+    else:
+        raise WorkflowError("unknown artifact kind")
+
+
 def allowed_endpoint(endpoint: str) -> bool:
     # These are the complete collection endpoints. Query values are generated, never caller input.
     return bool(
         re.fullmatch(
-            r"projects/(?:[^/?]+|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits))?|[0-9]+/(?:labels|pipelines)(?:\?[^#]+)?)",
+            r"projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits))?(?:\?[^#]+)?)",
             endpoint,
         )
     )
@@ -748,6 +1040,7 @@ def local_bundle(repo_root: str, profile: str, ref: str | None) -> dict[str, obj
         "repo_root": str(root),
         "base_sha": base,
         "head_sha": head,
+        "ref": ref,
         "sections": {
             "committed": committed,
             "staged": staged,
@@ -768,7 +1061,10 @@ def finalize_local(bundle_file: str) -> dict[str, object]:
     root = baseline.get("repo_root")
     if not isinstance(root, str):
         raise WorkflowError("local evidence identity is incomplete")
-    current = local_bundle(root, str(baseline.get("profile", "code-review")), None)
+    ref = baseline.get("ref")
+    if ref is not None and not isinstance(ref, str):
+        raise WorkflowError("local evidence ref is invalid")
+    current = local_bundle(root, str(baseline.get("profile", "code-review")), ref)
     changed = [
         key
         for key in ("head_sha", "sections", "retrieval_complete")
@@ -788,7 +1084,7 @@ def validate_critic(receipt: dict[str, Any], evidence_digest: str) -> None:
         receipt.get("schema") != "portable-gitlab/critic-receipt/v2"
         or not required.issubset(receipt)
         or receipt.get("evidence_digest") != evidence_digest
-        or not isinstance(receipt.get("findings"), list)
+        or not findings_are_valid(receipt.get("findings"))
     ):
         raise WorkflowError("critic receipt is schema-invalid or does not bind evidence")
     if not all(
@@ -803,6 +1099,7 @@ def validate_decision(
     if (
         report.get("schema") != "portable-gitlab/review-decision/v2"
         or report.get("evidence_digest") != evidence_digest
+        or not is_digest(report.get("finalize_digest"))
         or report.get("verdict") not in {"ready", "not_ready", "blocked"}
         or not isinstance(report.get("responses"), list)
         or not isinstance(report.get("unresolved_threads"), list)
@@ -828,6 +1125,8 @@ def validate_decision(
         raise WorkflowError("normal and deep review require an independent critic receipt")
     if mode == "fast" and report.get("low_risk") is not True and receipt is None:
         raise WorkflowError("fast review without critic requires confirmed low-risk scope")
+    if report.get("verdict") == "ready" and report.get("blocking_findings") is True:
+        raise WorkflowError("blocking findings prohibit ready")
 
 
 def validate_release_readiness(
@@ -862,6 +1161,42 @@ def validate_release_readiness(
         "retrieval_complete"
     ):
         raise WorkflowError("incomplete evidence or readiness disagreement prohibits release ready")
+    if report["readiness"] and any(gate["status"] != "passed" for gate in gates.values()):
+        raise WorkflowError("an unclosed release gate prohibits ready")
+
+
+def finalize_payload(
+    result: dict[str, object], source: Path, evidence: dict[str, Any], kind: str
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        **result,
+        "evidence_digest": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "evidence_kind": kind,
+        "evidence_fingerprint_digest": digest(
+            fingerprint(evidence) if kind == "evidence_snapshot" else evidence
+        ),
+    }
+    return payload
+
+
+def validate_finalize_report(
+    path: Path, evidence_path: Path, evidence: dict[str, Any]
+) -> tuple[dict[str, Any], str]:
+    document, report = artifact_payload(path, "finalize_report")
+    report_digest = hashlib.sha256(regular_file(path, "finalize report").read_bytes()).hexdigest()
+    evidence_digest = hashlib.sha256(
+        regular_file(evidence_path, "evidence snapshot").read_bytes()
+    ).hexdigest()
+    if (
+        report.get("status") != "ok"
+        or report.get("complete") is not True
+        or report.get("evidence_kind") != "evidence_snapshot"
+        or report.get("evidence_digest") != evidence_digest
+        or report.get("evidence_fingerprint_digest") != digest(fingerprint(evidence))
+        or document.get("kind") != "finalize_report"
+    ):
+        raise WorkflowError("finalize report is stale, incomplete, or does not bind exact evidence")
+    return report, report_digest
 
 
 def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
@@ -895,6 +1230,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     decision.add_argument("--report", required=True)
     decision.add_argument("--mode", choices=("fast", "normal", "deep"), required=True)
     decision.add_argument("--critic-receipt")
+    decision.add_argument("--finalize-report", required=True)
     record = subparsers.add_parser("record-artifact")
     record.add_argument(
         "--kind", choices=("analysis_report", "critic_receipt", "release_readiness"), required=True
@@ -975,16 +1311,23 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         if args.command == "finalize":
             result = finalize(args.artifact_root)
             root = artifact_root(Path(args.artifact_root))
+            evidence_path, bundle = evidence_from_root(root)
+            result = finalize_payload(result, evidence_path, bundle, "evidence_snapshot")
             if profile == "release-review":
                 if not args.report:
                     raise WorkflowError("release review finalize requires --report")
-                evidence_path, bundle = evidence_from_root(root)
+                readiness_document, readiness = artifact_payload(
+                    Path(args.report), "release_readiness"
+                )
                 validate_release_readiness(
-                    read_json(Path(args.report), "release readiness report"),
+                    readiness,
                     bundle,
                     hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
                 )
                 result["release_readiness_valid"] = True
+                result["release_readiness_digest"] = hashlib.sha256(
+                    canonical(readiness_document)
+                ).hexdigest()
             path, artifact_digest = write_artifact(root, "finalize_report", result)
             emit(
                 {
@@ -1050,6 +1393,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             result = finalize_local(args.bundle)
             _, bundle = artifact_payload(Path(args.bundle), "local_wip_snapshot")
             root = artifact_root(Path(str(bundle["artifact_root"])))
+            result = finalize_payload(result, Path(args.bundle), bundle, "local_wip_snapshot")
             path, artifact_digest = write_artifact(root, "finalize_report", result)
             emit(
                 {
@@ -1118,6 +1462,21 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         if args.command == "finalize-review":
             evidence_doc, evidence = artifact_payload(Path(args.evidence), "evidence_snapshot")
             evidence_digest = hashlib.sha256(canonical(evidence_doc)).hexdigest()
+            root = artifact_root(Path(str(evidence["artifact_root"])))
+            # Compare the explicitly supplied immutable snapshot, not current.json.
+            review_target = evidence.get("target")
+            if not isinstance(review_target, dict):
+                raise WorkflowError("review evidence target is missing")
+            current = collect(
+                review_target, str(evidence.get("profile", "code-review")), persist=False
+            )
+            if not current.get("retrieval_complete") or fingerprint(evidence) != fingerprint(
+                current
+            ):
+                raise WorkflowError("evidence is stale or incomplete at final review")
+            _, finalize_digest = validate_finalize_report(
+                Path(args.finalize_report), Path(args.evidence), evidence
+            )
             report = read_json(Path(args.report), "review decision")
             receipt = (
                 read_json(Path(args.critic_receipt), "critic receipt")
@@ -1133,13 +1492,14 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 ):
                     raise WorkflowError("critic receipt is not independent of the primary review")
             validate_decision(report, evidence_digest, receipt, args.mode)
+            if report["finalize_digest"] != finalize_digest:
+                raise WorkflowError("review decision does not bind exact finalize report")
             if not evidence.get("retrieval_complete") or (
                 report.get("verdict") == "ready" and report.get("blocking_findings")
             ):
                 raise WorkflowError(
                     "incomplete evidence or unresolved blocking findings prohibit ready"
                 )
-            root = artifact_root(Path(str(evidence["artifact_root"])))
             path, result_digest = write_artifact(root, "review_decision", report)
             emit(
                 {

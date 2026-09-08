@@ -10,14 +10,21 @@ Collection identity одинакова для всех профилей: `hostna
 `project_id`, object kind и IID. Profile записывается как producer и ограничивает
 допустимую операцию, но не создаёт отдельного owner или collection.
 
-`evidence_snapshot` фиксирует exact `base_sha`, `start_sha`, `head_sha` для MR и
-completeness каждого компонента. `publication_plan` связывается с digest evidence
-и содержит Markdown только для ручной публикации. `critic_receipt` связывается с
-digest evidence и содержит независимые `run_id` и `session_id`.
+Canonical schema проверяет envelope и payload каждого kind, запрещает неизвестные
+поля и несовместимые пары kind/payload. `evidence_snapshot` фиксирует exact
+`base_sha`, `start_sha`, `head_sha` для MR и completeness каждого компонента.
+`local_wip_snapshot` хранит ref и committed, staged, unstaged, untracked sections.
+`publication_plan` связывается с digest evidence и содержит Markdown только для
+ручной публикации. `analysis_report` и `critic_receipt` связываются с digest
+evidence и содержат `run_id`, `session_id` и findings.
 
-`review_decision` содержит responses для всех primary/critic findings и
-unresolved threads: `accept` или `reject` и непустую причину. `release_readiness`
-связывает range/SHA, SemVer, compatibility, migration, rollback и CI gates.
+`finalize_report` содержит exact digest и fingerprint evidence. `review_decision`
+связывается с digest этого свежего report и содержит disposition для всех
+primary/critic findings и unresolved threads: `accept` или `reject` и непустую
+причину. Старый finalize artifact не обходит повторную GET-only freshness check.
+`release_readiness` связывает range/SHA, SemVer, compatibility, migration,
+rollback и CI gates; `ready` допустим только при complete evidence и всех закрытых
+gates.
 
 v1 artifacts допустимо читать и использовать только для finalize совместимого
 старого workflow. Их нельзя автоматически мигрировать, перезаписывать или
