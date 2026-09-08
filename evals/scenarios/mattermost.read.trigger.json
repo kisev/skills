@@ -7,17 +7,32 @@
   "host": "any",
   "input": {
     "prompt": "Прочитай этот Mattermost post, thread или канал по точной ссылке.",
-    "fixture": { "selected": ["skill:mattermost"] }
+    "fixture": {
+      "selected": ["skill:mattermost"]
+    }
   },
-  "expected": { "selected": ["skill:mattermost"], "not_selected": [] },
+  "expected": {
+    "selected": ["skill:mattermost"],
+    "not_selected": []
+  },
   "invariants": [
     {
       "id": "read-only-scope",
-      "path": "skills/mattermost/SKILL.md",
-      "contains": "Все remote API\nвызовы - только GET"
+      "path": "skills/mattermost/references/workflow.md",
+      "contains": "All remote API calls are GET only."
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "1699c5d66aa4b96fbbd022849d07f58e1bdcf7aa3eec2f254b04cd1b843400ac"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 3000,
+    "max_cost": 1
+  },
+  "digest": "d120826b963699d366c5f00c1bac4b350eb937cec1ccf70b841813ee533a2bc7",
+  "locale": "ru",
+  "pair_id": "mattermost.read.trigger"
 }

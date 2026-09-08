@@ -138,6 +138,13 @@ tasks:
       SKILLS:
         sh: fd --type f --glob 'SKILL.md' .build/skills --exec dirname | sort
 
+  locale:check:
+    desc: Validate translated public documentation and materialized references
+    cmds:
+      - uv run --locked python scripts/check_locales.py
+      - uv run --locked python scripts/build_skills.py --check
+      - uv run --locked python scripts/check_locales.py --built .build/skills
+
   package:check:
     desc: Verify the complete OpenCode package lifecycle and tarball
     deps: [build:skills]
@@ -171,6 +178,7 @@ tasks:
       - task: lint:repository
       - task: typecheck:python
       - task: test:python
+      - task: locale:check
       - task: generate:shared:check
       - task: skills:validate
       - task: eval:check

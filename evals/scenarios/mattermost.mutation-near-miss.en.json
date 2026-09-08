@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "mattermost.mutation-near-miss",
+  "id": "mattermost.mutation-near-miss.en",
   "revision": 1,
   "kind": "near-miss",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Отправь, отредактируй и удали сообщение Mattermost.",
+    "prompt": "Send, edit, and delete a Mattermost message.",
     "fixture": {
       "selected": []
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "1ad2fa88853089f446380cf313887274ed5813f8c5c3699b78bfd9d2fd64eec0",
-  "locale": "ru",
+  "digest": "7df5f214830ff26df43c62de513706a8d84ca24f0c78ba93b7bb119584adc6f2",
+  "locale": "en",
   "pair_id": "mattermost.mutation-near-miss"
 }

@@ -25,6 +25,7 @@ PUBLIC_TASKS = {
     "test",
     "generate",
     "generate:check",
+    "locale:check",
     "skills:validate",
     "package:check",
     "security",

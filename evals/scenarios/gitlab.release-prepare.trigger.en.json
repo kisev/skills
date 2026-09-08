@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "gitlab.release-prepare.trigger",
+  "id": "gitlab.release-prepare.trigger.en",
   "revision": 1,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Подготовь release inventory и SemVer rationale.",
+    "prompt": "Prepare the release inventory and SemVer rationale.",
     "fixture": {
       "selected": ["skill:release-prepare"]
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "c30a67b1977c6c02946a7eda7f768fecd5dd848a6fe6dc7ab7ba07143598a9df",
-  "locale": "ru",
+  "digest": "6d16afa4ce7c520120b1f18415f4e6e07a4b60baf289ad6c5613b6533f289eec",
+  "locale": "en",
   "pair_id": "gitlab.release-prepare.trigger"
 }

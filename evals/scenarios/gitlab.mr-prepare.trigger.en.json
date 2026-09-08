@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "gitlab.mr-prepare.trigger",
+  "id": "gitlab.mr-prepare.trigger.en",
   "revision": 1,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Подготовь title и description обычного MR.",
+    "prompt": "Prepare the title and description for a regular MR.",
     "fixture": {
       "selected": ["skill:mr-prepare"]
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "31822a1849e154c282d29a6f670b36834cc708e059642fecf1fd42df8c8f0810",
-  "locale": "ru",
+  "digest": "777b96911b29a24d7628673eb66021092d41edf999e94cfcb4f7275909a13248",
+  "locale": "en",
   "pair_id": "gitlab.mr-prepare.trigger"
 }

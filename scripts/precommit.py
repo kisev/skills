@@ -149,6 +149,8 @@ def run(files: Sequence[str], *, dry_run: bool = False) -> int:
     )
     if groups["python_tests"]:
         runner.batch("python:tests", ["uv", "run", "--locked", "pytest"], groups["python_tests"])
+    if groups["skills"] or groups["docs"]:
+        runner.call("locales", ["uv", "run", "--locked", "python", "scripts/check_locales.py"])
     if groups["skills"]:
         runner.call("skills:agnix", ["uv", "run", "--locked", "python", "scripts/check_agnix.py"])
         runner.call(

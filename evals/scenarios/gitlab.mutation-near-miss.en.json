@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "gitlab.mutation-near-miss",
+  "id": "gitlab.mutation-near-miss.en",
   "revision": 1,
   "kind": "near-miss",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Resolve discussion, approve and merge this MR now.",
+    "prompt": "Resolve the discussion, approve, and merge this MR now.",
     "fixture": {
       "selected": []
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "97971783f69c63b31e41c598823d8f9e3d19cb67c5f15e34d2184c256cfb678d",
-  "locale": "ru",
+  "digest": "53ebde64e2cf45bbfa7e8af78be3040230089d21899b9d4ce3acac8975413908",
+  "locale": "en",
   "pair_id": "gitlab.mutation-near-miss"
 }

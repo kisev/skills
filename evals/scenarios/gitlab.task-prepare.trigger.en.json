@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "gitlab.task-prepare.trigger",
+  "id": "gitlab.task-prepare.trigger.en",
   "revision": 1,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Подготовь план публикации GitLab Issue.",
+    "prompt": "Prepare a publication plan for a GitLab issue.",
     "fixture": {
       "selected": ["skill:task-prepare"]
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "b670cbe5784b1f7dae4839ff3b0da990761dd18a563c224e7af403b0bf04f0ab",
-  "locale": "ru",
+  "digest": "0d63ab65407bd23f0a89f6276015187f27be693dd23c3914469ac5c31831c772",
+  "locale": "en",
   "pair_id": "gitlab.task-prepare.trigger"
 }

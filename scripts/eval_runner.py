@@ -127,6 +127,8 @@ def validate_scenario(scenario: dict[str, Any], filename: str) -> list[str]:
         "schema",
         "id",
         "revision",
+        "locale",
+        "pair_id",
         "kind",
         "surface",
         "host",
@@ -148,6 +150,20 @@ def validate_scenario(scenario: dict[str, Any], filename: str) -> list[str]:
         raise EvalError("malformed_scenario", f"{filename}: immutable id is invalid")
     if not isinstance(scenario["revision"], int) or scenario["revision"] < 1:
         raise EvalError("malformed_scenario", f"{filename}: revision must be a positive integer")
+    locale = scenario["locale"]
+    pair_id = scenario["pair_id"]
+    if locale not in {"ru", "en", "neutral"}:
+        raise EvalError("malformed_scenario", f"{filename}: locale is invalid")
+    if scenario["kind"] == "deterministic":
+        if locale != "neutral" or pair_id is not None:
+            raise EvalError(
+                "malformed_scenario",
+                f"{filename}: deterministic scenarios are neutral and unpaired",
+            )
+    elif locale not in {"ru", "en"} or not isinstance(pair_id, str) or not pair_id:
+        raise EvalError(
+            "malformed_scenario", f"{filename}: user-facing scenarios require locale and pair_id"
+        )
     if scenario["kind"] not in {"deterministic", "trigger", "near-miss", "golden"}:
         raise EvalError("malformed_scenario", f"{filename}: kind is invalid")
     if scenario["surface"] not in {"skill", "command", "agent", "plugin"}:
@@ -188,6 +204,7 @@ def discover(corpus: Path) -> list[dict[str, Any]]:
     scenarios: list[dict[str, Any]] = []
     ids: set[str] = set()
     revisions: set[tuple[str, int]] = set()
+    pairs: dict[str, list[dict[str, Any]]] = {}
     for path in sorted(corpus.glob("*.json")):
         scenario = load_json(path)
         validate_scenario(scenario, path.name)
@@ -199,8 +216,19 @@ def discover(corpus: Path) -> list[dict[str, Any]]:
         ids.add(scenario["id"])
         revisions.add(key)
         scenarios.append(scenario)
+        if scenario.get("locale") in {"ru", "en"}:
+            pairs.setdefault(scenario["pair_id"], []).append(scenario)
     if not scenarios:
         raise EvalError("missing_corpus", "scenario corpus is empty")
+    for pair_id, items in pairs.items():
+        if len(items) != 2 or {item["locale"] for item in items} != {"ru", "en"}:
+            raise EvalError("unpaired_scenario", f"pair {pair_id}: ru/en scenarios are required")
+        first, second = items
+        for pair_field in ("kind", "surface", "host", "expected", "sandbox", "budgets"):
+            if first[pair_field] != second[pair_field]:
+                raise EvalError("scenario_pair_drift", f"pair {pair_id}: {pair_field} differs")
+        if first["invariants"] != second["invariants"]:
+            raise EvalError("scenario_pair_drift", f"pair {pair_id}: invariants differ")
     return scenarios
 
 
@@ -722,6 +750,8 @@ def result_for(scenario: dict[str, Any], args: argparse.Namespace, root: Path) -
         "run_id": str(uuid.uuid4()),
         "scenario_id": scenario["id"],
         "scenario_revision": scenario["revision"],
+        "locale": scenario.get("locale", "neutral"),
+        "pair_id": scenario.get("pair_id"),
         "scenario_digest": scenario["digest"],
         "host": args.host if not args.offline else "offline",
         "host_version": observation.get("host_version", "unavailable"),

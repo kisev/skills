@@ -44,7 +44,7 @@ test("registry generates exactly fifty-two thin command assets", () => {
     if (entry.skill) assert.ok(skills.has(entry.skill), entry.skill);
     const rendered = renderCommand(entry);
     assert.match(rendered, entry.packageTool ? /package tool/ : /native Skill tool/);
-    assert.match(rendered, /недоверенный ввод/);
+    assert.match(rendered, /untrusted input/);
     assert.match(rendered, /\$ARGUMENTS/);
     if (entry.skill) assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
     assert.doesNotMatch(rendered, /python|runner|curl|fetch\(/i);

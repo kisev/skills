@@ -5,8 +5,16 @@
   "kind": "deterministic",
   "surface": "command",
   "host": "opencode",
-  "input": { "prompt": "/route inspect assets", "fixture": { "selected": ["command:route"] } },
-  "expected": { "selected": ["command:route"], "not_selected": ["plugin:background-attempts"] },
+  "input": {
+    "prompt": "/route inspect assets",
+    "fixture": {
+      "selected": ["command:route"]
+    }
+  },
+  "expected": {
+    "selected": ["command:route"],
+    "not_selected": ["plugin:background-attempts"]
+  },
   "invariants": [
     {
       "id": "route-command",
@@ -14,7 +22,17 @@
       "contains": "name: \"route\""
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "7628ec0a7d6bd4036f1a12c204f43228b8b9670f9d0c2c7fb42352cd9a7abe8e"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 1000,
+    "max_cost": 1
+  },
+  "digest": "e29c87907debf2761ec20ca0f49d239def0f64b242d7b0b1047145a83257959a",
+  "locale": "neutral",
+  "pair_id": null
 }

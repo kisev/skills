@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "gitlab.task-triage.trigger",
+  "id": "gitlab.task-triage.trigger.en",
   "revision": 1,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Проанализируй GitLab Issue без verdict.",
+    "prompt": "Analyze the GitLab issue without a verdict.",
     "fixture": {
       "selected": ["skill:task-triage"]
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "950480468673695013454f371850b6e70b1066bc78d048b66272593b34207c2d",
-  "locale": "ru",
+  "digest": "00759dbd7f2b6fa576912ae429e6f90e8c7b9d6b20d5fc78500a2e2e5e42cda8",
+  "locale": "en",
   "pair_id": "gitlab.task-triage.trigger"
 }

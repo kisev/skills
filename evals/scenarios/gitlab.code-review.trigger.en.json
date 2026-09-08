@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "gitlab.code-review.trigger",
+  "id": "gitlab.code-review.trigger.en",
   "revision": 1,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Проверь local WIP implementation changes.",
+    "prompt": "Review the local WIP implementation changes.",
     "fixture": {
       "selected": ["skill:code-review"]
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "a212f76e68f6917bca9feab89317e25932d65d57fad6fe68aa3d2b1f480b2308",
-  "locale": "ru",
+  "digest": "3ba9cc3aa59d80b8af9089b5cbdba488496d7a4a3c84b2f5f7755f02f1a93695",
+  "locale": "en",
   "pair_id": "gitlab.code-review.trigger"
 }

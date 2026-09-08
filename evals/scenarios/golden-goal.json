@@ -6,15 +6,38 @@
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "/goal prepare a verifiable read-only objective",
-    "fixture": { "selected": ["skill:goal"] }
+    "prompt": "/goal подготовь проверяемую read-only цель",
+    "fixture": {
+      "selected": ["skill:goal"]
+    }
   },
-  "expected": { "selected": ["skill:goal"], "not_selected": ["command:doctor"] },
+  "expected": {
+    "selected": ["skill:goal"],
+    "not_selected": ["command:doctor"]
+  },
   "invariants": [
-    { "id": "goal-budget", "path": "skills/goal/SKILL.md", "contains": "не более 3000 символов" },
-    { "id": "goal-work-item", "path": "skills/goal/SKILL.md", "contains": "work-item/v1" }
+    {
+      "id": "goal-budget",
+      "path": "skills/goal/references/workflow.md",
+      "contains": "at most 3000 characters"
+    },
+    {
+      "id": "goal-work-item",
+      "path": "skills/goal/references/workflow.md",
+      "contains": "work-item/v1"
+    }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "d8451fbc94346e0d0932af0ca79a4168e1d8e8e8201ff0212ee26c5c2427865f"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 3000,
+    "max_cost": 1
+  },
+  "digest": "f0fa3605809d7789dd0a221995b52e0c816f5d252581210122f67219e3fa2d70",
+  "locale": "ru",
+  "pair_id": "golden.goal.work-item"
 }

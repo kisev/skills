@@ -8,9 +8,10 @@ const packed = JSON.parse(
   }),
 )[0];
 const files = packed.files.map(({ path }) => path).sort();
-const allowed = ["README.md", "package.json"];
+const allowed = ["README.md", "README.ru.md", "package.json"];
 
 assert.ok(files.includes("README.md"));
+assert.ok(files.includes("README.ru.md"));
 assert.ok(files.includes("package.json"));
 assert.ok(files.some((path) => path.startsWith("dist/")));
 for (const path of files) {

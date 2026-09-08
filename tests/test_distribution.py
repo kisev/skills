@@ -39,6 +39,10 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
         assert lock["archives"][entry["name"]] == entry["digest"].removeprefix("sha256:")
         with tarfile.open(archive, mode="r:gz") as document:
             assert "SKILL.md" in document.getnames()
+            names = set(document.getnames())
+            assert not any(part in {"ru", "en"} for name in names for part in name.split("/"))
+            if entry["name"] == "project-spec":
+                assert not any(name.startswith("templates/ru/") for name in names)
             if entry["name"] == "mattermost":
                 assert "scripts/mattermost.py" in document.getnames()
 

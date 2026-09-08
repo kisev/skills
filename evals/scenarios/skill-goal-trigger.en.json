@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "skill.goal.trigger",
+  "id": "skill.goal.trigger.en",
   "revision": 1,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Сформулируй ограниченную read-only цель.",
+    "prompt": "Formulate a bounded, read-only goal.",
     "fixture": {
       "selected": ["skill:goal"]
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "4f9e6ca36f1137032343606b6eb5c4d33062066edab68e081a1aeb5e1568c959",
-  "locale": "ru",
+  "digest": "774cc5b8cf6050c305477cbb6618417ddc92353d41158525ce319257fdf90a0e",
+  "locale": "en",
   "pair_id": "skill.goal.trigger"
 }

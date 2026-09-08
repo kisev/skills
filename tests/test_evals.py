@@ -123,6 +123,43 @@ def test_validation_rejects_duplicate_drift_and_sandbox_escape() -> None:
         assert payload(escaped)["error"]["classification"] == "sandbox_escape"
 
 
+def test_validation_rejects_missing_locale_metadata_and_pair_drift() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        corpus = Path(temporary)
+        source = json.loads(
+            (ROOT / "evals/scenarios/skill-goal-trigger.json").read_text(encoding="utf-8")
+        )
+        source.pop("locale")
+        source["digest"] = scenario_digest(source)
+        (corpus / "missing-locale.json").write_text(json.dumps(source), encoding="utf-8")
+        missing = run_eval("--corpus", str(corpus), "--validate")
+        assert missing.returncode == 2
+        assert payload(missing)["error"]["classification"] == "malformed_scenario"
+
+        ru = json.loads(
+            (ROOT / "evals/scenarios/skill-goal-trigger.json").read_text(encoding="utf-8")
+        )
+        en = json.loads(
+            (ROOT / "evals/scenarios/skill-goal-trigger.en.json").read_text(encoding="utf-8")
+        )
+        en["budgets"]["max_tokens"] = 1
+        en["digest"] = scenario_digest(en)
+        (corpus / "ru.json").write_text(json.dumps(ru), encoding="utf-8")
+        (corpus / "en.json").write_text(json.dumps(en), encoding="utf-8")
+        (corpus / "missing-locale.json").unlink()
+        drift = run_eval("--corpus", str(corpus), "--validate")
+        assert drift.returncode == 2
+        assert payload(drift)["error"]["classification"] == "scenario_pair_drift"
+
+        en["budgets"]["max_tokens"] = ru["budgets"]["max_tokens"]
+        en["invariants"][0]["contains"] = "different invariant content"
+        en["digest"] = scenario_digest(en)
+        (corpus / "en.json").write_text(json.dumps(en), encoding="utf-8")
+        mismatch = run_eval("--corpus", str(corpus), "--validate")
+        assert mismatch.returncode == 2
+        assert payload(mismatch)["error"]["classification"] == "scenario_pair_drift"
+
+
 def test_live_requires_exact_explicit_limits() -> None:
     result = run_eval("--trusted-live", "--host", "opencode", "--model", "test/model")
     assert result.returncode == 2
@@ -133,7 +170,8 @@ def test_list_selectors_and_capability_detection_are_machine_readable() -> None:
     listed = run_eval("--list", "--kind", "golden", "--surface", "skill")
     assert listed.returncode == 0
     assert payload(listed)["scenarios"] == [
-        {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"}
+        {"id": "golden.goal.work-item.en", "kind": "golden", "surface": "skill"},
+        {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"},
     ]
     capabilities = run_eval("--capabilities")
     assert capabilities.returncode == 0

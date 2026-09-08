@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "skill.goal.near-miss",
+  "id": "skill.goal.near-miss.en",
   "revision": 1,
   "kind": "near-miss",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Объясни цель, не вызывая навык.",
+    "prompt": "Explain a goal without invoking a skill.",
     "fixture": {
       "selected": []
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "e118e63e78f141e91de5dc5e8e025561970031cb130edd135d4a1baaf67ce74a",
-  "locale": "ru",
+  "digest": "e9ec5fa22f757017ce64f200d7aee200cb1d2f50e15fc88fa4ebe9619515580b",
+  "locale": "en",
   "pair_id": "skill.goal.near-miss"
 }

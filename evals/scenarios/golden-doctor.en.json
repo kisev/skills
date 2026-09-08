@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "golden.doctor.read-only-redaction",
+  "id": "golden.doctor.read-only-redaction.en",
   "revision": 1,
   "kind": "golden",
   "surface": "command",
   "host": "opencode",
   "input": {
-    "prompt": "/doctor --scope project --json Проверь только проект и верни JSON.",
+    "prompt": "/doctor --scope project --json Check only the project and return JSON.",
     "fixture": {
       "selected": ["command:doctor"]
     }
@@ -37,7 +37,7 @@
     "max_tokens": 1500,
     "max_cost": 1
   },
-  "digest": "0879840f9f8aa17a61d5fdbb6d1021a1c4fb6ffd526ecdefaaa9f8c69c71f03c",
-  "locale": "ru",
+  "digest": "abd8136e568f71d5ef192f503f156b27f48ea9d034192775d1926dc717580afd",
+  "locale": "en",
   "pair_id": "golden.doctor.read-only-redaction"
 }

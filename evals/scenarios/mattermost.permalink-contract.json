@@ -7,9 +7,14 @@
   "host": "any",
   "input": {
     "prompt": "Validate Mattermost permalink parsing offline.",
-    "fixture": { "selected": ["skill:mattermost"] }
+    "fixture": {
+      "selected": ["skill:mattermost"]
+    }
   },
-  "expected": { "selected": ["skill:mattermost"], "not_selected": [] },
+  "expected": {
+    "selected": ["skill:mattermost"],
+    "not_selected": []
+  },
   "invariants": [
     {
       "id": "strict-permalink-parser",
@@ -17,7 +22,17 @@
       "contains": "if route == \"pl\":"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "5fe9d8eda7f25e3d6709bd28cdcba71a9e6c44a5a2110185f4a3f5962a76b998"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 1000,
+    "max_cost": 1
+  },
+  "digest": "b23a8abf4e1ae85c2129241d0d5bef0482a35a4e928b025b63a9c0a8c13e2269",
+  "locale": "neutral",
+  "pair_id": null
 }

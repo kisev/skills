@@ -53,133 +53,126 @@ FORBIDDEN_PORTABLE_MARKERS = (
     "~/.config/opencode",
     "~/.local/state/opencode",
 )
-PROJECT_REFERENCES = (
-    "references/requirements.md",
-    "references/architecture.md",
-    "references/interviewing.md",
-    "references/onboarding.md",
-    "references/consolidation.md",
-    "references/adr.md",
-    "references/auditing.md",
+PROJECT_REFERENCES = tuple(
+    f"references/{name}.md"
+    for name in ("requirements", "architecture", "interviewing", "onboarding", "consolidation", "adr", "auditing")
 )
-SPEC_TEMPLATE_READMES = (
-    "templates/specs/README.md",
-    "templates/specs/requirements/README.md",
-    "templates/specs/requirements/functional/README.md",
-    "templates/specs/requirements/interfaces/README.md",
-    "templates/specs/requirements/quality/README.md",
-    "templates/specs/requirements/constraints/README.md",
-    "templates/specs/architecture/README.md",
-    "templates/specs/architecture/01-introduction-and-goals/README.md",
-    "templates/specs/architecture/02-architecture-constraints/README.md",
-    "templates/specs/architecture/03-context-and-scope/README.md",
-    "templates/specs/architecture/04-solution-strategy/README.md",
-    "templates/specs/architecture/05-building-block-view/README.md",
-    "templates/specs/architecture/06-runtime-view/README.md",
-    "templates/specs/architecture/07-deployment-view/README.md",
-    "templates/specs/architecture/08-crosscutting-concepts/README.md",
-    "templates/specs/architecture/09-architecture-decisions/README.md",
-    "templates/specs/architecture/10-quality-requirements/README.md",
-    "templates/specs/architecture/11-risks-and-technical-debt/README.md",
-    "templates/specs/architecture/12-glossary/README.md",
+SPEC_TEMPLATE_READMES = tuple(
+    f"templates/{path}"
+    for path in (
+        "specs/README.md", "specs/requirements/README.md", "specs/requirements/functional/README.md",
+        "specs/requirements/interfaces/README.md", "specs/requirements/quality/README.md",
+        "specs/requirements/constraints/README.md", "specs/architecture/README.md",
+        "specs/architecture/01-introduction-and-goals/README.md",
+        "specs/architecture/02-architecture-constraints/README.md",
+        "specs/architecture/03-context-and-scope/README.md",
+        "specs/architecture/04-solution-strategy/README.md",
+        "specs/architecture/05-building-block-view/README.md",
+        "specs/architecture/06-runtime-view/README.md",
+        "specs/architecture/07-deployment-view/README.md",
+        "specs/architecture/08-crosscutting-concepts/README.md",
+        "specs/architecture/09-architecture-decisions/README.md",
+        "specs/architecture/10-quality-requirements/README.md",
+        "specs/architecture/11-risks-and-technical-debt/README.md",
+        "specs/architecture/12-glossary/README.md",
+    )
 )
 PROJECT_REFERENCE_CONTRACTS = {
-    "references/requirements.md": "существующие id не перенумеровывай",
-    "references/architecture.md": "дополнительные markdown-файлы разрешены только",
+    "references/requirements.md": "do not renumber or reuse existing ids",
+    "references/architecture.md": "additional markdown files are allowed only",
     "references/interviewing.md": "readiness check",
     "references/onboarding.md": "`known`",
     "references/consolidation.md": "consolidation: required",
-    "references/adr.md": "не переписывай старый adr",
+    "references/adr.md": "do not rewrite an old adr",
     "references/auditing.md": "`implementation_ahead`",
 }
 PROJECT_TEMPLATE_SECTIONS = (
-    "## назначение",
-    "## сюда относится",
-    "## сюда не относится",
-    "## правила декомпозиции",
-    "## ожидаемая структура",
-    "## шаблон содержания",
+    "## purpose",
+    "## included",
+    "## excluded",
+    "## decomposition rules",
+    "## expected structure",
+    "## content template",
 )
 ADR_TEMPLATE_SECTIONS = (
-    "## контекст и постановка проблемы",
-    "## драйверы решения",
-    "## рассмотренные варианты",
-    "## итоговое решение",
-    "## последствия",
-    "## связи",
+    "## context and problem statement",
+    "## decision drivers",
+    "## considered options",
+    "## outcome",
+    "## consequences",
+    "## links",
 )
 WORKFLOW_CONTRACTS = {
     "humanize": (
-        "точные цитаты, код, вывод команд",
-        "не подменяй роль автора ролью ревьюера",
+        "exact quotations, code, command output",
+        "do not replace the author's role with the reviewer's role",
     ),
     "summary": (
-        "не добавляй фактов, которых нет в исходных данных",
-        "строго различай текущую ситуацию, предложение, принятое решение",
+        "do\nnot add facts absent from the source data",
+        "strictly distinguish the current situation, a proposal, an accepted decision",
     ),
     "commit-msg": (
         "git diff --cached",
-        "выведи ровно одну строку",
-        "не выполняй `git add`, `git commit`",
+        "exactly one line",
+        "do not run `git add`, `git commit`",
     ),
     "agents-md": (
-        "до 20 однострочных пунктов",
-        "покажи точный diff и получи явное подтверждение",
+        "at most 20 one-line bullets",
+        "show the exact diff and obtain explicit confirmation",
     ),
     "docs-prepare": (
-        "один пользовательский документ diataxis",
+        "create or improve one document",
         "content-addressed preview artifact",
     ),
     "docs-review": (
-        "не изменяй репозиторий, документы, внешние системы",
-        "сообщай только подтверждённые замечания",
+        "do not modify the repository, documents, external systems",
+        "report only confirmed findings",
     ),
     "project-spec": (
-        "пользователь должен явно передать один режим",
+        "user must explicitly provide one mode",
         "`spec-init`",
         "`spec-onboard`",
         "`spec-update`",
         "`spec-audit`",
-        "все 19 обязательных `readme.md`",
-        "этот режим полностью read-only",
+        "all 19 required `readme.md`",
+        "this mode is completely read-only",
     ),
     "stopit": (
-        "во временной директории ос, не в репозитории",
-        "покажи полный черновик и временный путь",
+        "operating system temporary directory, not in the",
+        "show the complete draft and temporary path",
     ),
     "doit": (
-        "не выполняй push",
-        "требуют отдельного подтверждения",
+        "never push",
+        "require separate confirmation",
         "content-addressed preview artifact",
-        "не требуй конкретный host",
+        "do not require a particular host",
     ),
     "goal": (
-        "строго read-only",
+        "strictly read-only",
         "work-item/v1",
-        "не создавай",
-        "не изменяй файлы",
-        "не имитируй self-review",
-        "не более 3000 символов",
+        "do not create or modify files",
+        "do not simulate self-review",
+        "at most 3000 characters",
     ),
     "walkthrough": (
-        "не является ревью",
+        "is not a review",
         "coverage.complete=false",
-        "это карта чтения, а не оценка качества",
+        "reading map, not an\nevaluation of change quality",
     ),
     "ast-grep": (
-        "сначала всегда создай preview",
+        "always create a preview first",
         "--apply --confirm <digest>",
-        "не выполняй автоустановку",
+        "must not trigger installation",
     ),
     "skill-improver": (
-        "ровно один существующий каталог",
+        "exactly one existing directory",
         "<skill-improvement-complete>",
-        "не commands, plugins, agents",
+        "not commands, plugins, agents, or tools",
     ),
     "rtk": (
-        "внешний cli, не устанавливаемый этим skill",
-        "исходную команду напрямую",
-        "не включай hook",
+        "external cli and is not installed by this skill",
+        "original command directly",
+        "do not add a hook",
     ),
 }
 CYRILLIC = re.compile(r"[А-Яа-яЁё]")
@@ -243,31 +236,10 @@ class PortableSkillValidationTests(unittest.TestCase):
                     ['  author: "Kirill Sevriugin"', '  version: "1.1.1"'],
                 )
 
-    def test_public_skill_and_repository_texts_are_russian(self) -> None:
-        paths = [
-            ROOT / "README.md",
-            *(ROOT / "docs").rglob("*.md"),
-            *(ROOT / "skills").rglob("*.md"),
-        ]
-        for path in paths:
-            with self.subTest(path=path):
-                self.assertRegex(path.read_text(encoding="utf-8"), CYRILLIC)
-        for name in PORTABLE_SKILLS:
-            lines = (
-                (ROOT / "skills" / name / "SKILL.md")
-                .read_text(encoding="utf-8")
-                .splitlines()
-            )
-            frontmatter_end = lines.index("---", 1)
-            with self.subTest(skill=name, section="description"):
-                self.assertRegex("\n".join(lines[1:frontmatter_end]), CYRILLIC)
-            with self.subTest(skill=name, section="body"):
-                self.assertRegex("\n".join(lines[frontmatter_end + 1 :]), CYRILLIC)
-
     def test_portable_workflows_preserve_source_contracts(self) -> None:
         for name, contracts in WORKFLOW_CONTRACTS.items():
             text = (
-                (ROOT / "skills" / name / "SKILL.md")
+                (ROOT / "skills" / name / "references/workflow.md")
                 .read_text(encoding="utf-8")
                 .lower()
             )
@@ -287,12 +259,15 @@ class PortableSkillValidationTests(unittest.TestCase):
         }
         for name, paths in resources.items():
             skill = BUILT_SKILLS / name
-            text = (skill / "SKILL.md").read_text(encoding="utf-8")
             for relative in paths:
                 with self.subTest(skill=name, resource=relative):
                     self.assertTrue((skill / relative).is_file())
                     if relative.startswith("references/"):
-                        self.assertIn(relative, text)
+                        workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
+                        self.assertIn(relative, workflow)
+            if name == "project-spec":
+                workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
+                self.assertIn("references/requirements.md", workflow)
 
     def test_interaction_contract_is_materialized_for_affected_skills(self) -> None:
         names = (
@@ -304,34 +279,54 @@ class PortableSkillValidationTests(unittest.TestCase):
         source_text = source.read_text(encoding="utf-8")
         for requirement in (
             "resolve -> prepare -> present -> confirm ->\napply -> report",
-            "**Question** задавай только до `prepare`",
-            "**Confirmation** запрашивай только после `prepare`",
-            "Read-only collection, review и подготовка ручного плана\nне требуют Confirmation",
+            "Ask a **Question** only before `prepare`",
+            "Request **Confirmation** only after `prepare`",
+            "Read-only collection,\nreview, and manual-plan preparation do not change external state",
             "TLDR, scope, risks, checks",
-            "content-addressed write-once artifact",
-            "apply-команду с digest",
-            "отклоняет отсутствующий,\nизменённый, stale, просроченный или уже использованный plan",
+            "write-once artifact",
+            "apply command with its digest",
+            "rejects a missing, changed, stale, expired, or used plan",
         ):
             with self.subTest(requirement=requirement):
                 self.assertIn(requirement, source_text)
         for name in names:
             skill = BUILT_SKILLS / name
-            destination = skill / "references/interaction-contract.md"
             with self.subTest(skill=name):
-                self.assertEqual(destination.read_bytes(), source.read_bytes())
-                self.assertIn("references/interaction-contract.md", (skill / "SKILL.md").read_text(encoding="utf-8"))
+                self.assertEqual((skill / "references/interaction-contract.md").read_bytes(), source.read_bytes())
+                text = (skill / "SKILL.md").read_text(encoding="utf-8")
+                self.assertIn("references/workflow.md", text)
+                self.assertIn("references/language-policy.md", text)
         for name in ("project-spec", "docs-prepare", "doit"):
-            text = (BUILT_SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            text = (BUILT_SKILLS / name / "references/workflow.md").read_text(encoding="utf-8")
             with self.subTest(skill=name, behavior="compact-preview"):
                 self.assertIn("TLDR", text)
-                self.assertIn("не печатай", text)
+                self.assertIn("do not print", text.lower())
+
+    def test_language_policy_is_materialized_only_in_build_artifacts(self) -> None:
+        source = ROOT / "shared/references/language-policy.md"
+        for name in PORTABLE_SKILLS:
+            with self.subTest(skill=name):
+                self.assertFalse((ROOT / "skills" / name / "references/language-policy.md").exists())
+                self.assertEqual(
+                    (BUILT_SKILLS / name / "references/language-policy.md").read_bytes(),
+                    source.read_bytes(),
+                )
 
     def test_project_spec_has_complete_nineteen_file_contract(self) -> None:
         self.assertEqual(len(SPEC_TEMPLATE_READMES), 19)
         skill = ROOT / "skills/project-spec"
         self.assertTrue((skill / "templates/adr.md").is_file())
+        self.assertTrue((skill / "templates/ru/adr.md").is_file())
         for relative in SPEC_TEMPLATE_READMES:
             self.assertTrue((skill / relative).is_file(), relative)
+            self.assertTrue((skill / "templates/ru" / relative.removeprefix("templates/")).is_file())
+
+    def test_project_spec_build_excludes_russian_locale_artifacts(self) -> None:
+        skill = BUILT_SKILLS / "project-spec"
+        self.assertFalse((skill / "references/ru").exists())
+        self.assertFalse((skill / "references/en").exists())
+        self.assertFalse((skill / "templates/ru").exists())
+        self.assertFalse((skill / "templates/en").exists())
 
     def test_project_spec_resources_preserve_semantic_guidance(self) -> None:
         skill = ROOT / "skills/project-spec"
@@ -353,15 +348,16 @@ class PortableSkillValidationTests(unittest.TestCase):
     def test_askme_remains_compatible_with_portable_contract(self) -> None:
         skill = ROOT / "skills/askme/SKILL.md"
         text = skill.read_text(encoding="utf-8")
-        self.assertIn("references/question-guidelines.md", text)
-        self.assertIn("Если у host нет такого инструмента, задай вопросы в чате.", text)
-        self.assertIn("Если фактов достаточно", text)
-        self.assertIn("`task-prepare`", text)
-        self.assertIn("Не меняй репозиторий, внешние системы, документы", text)
-        self.assertIn("Не запускай отдельный workflow без нового запроса", text)
+        self.assertIn("references/workflow.md", text)
+        workflow = (ROOT / "skills/askme/references/workflow.md").read_text(encoding="utf-8")
+        self.assertIn("If the host has no such tool, ask the questions in chat.", workflow)
+        self.assertIn("If facts are sufficient", workflow)
+        self.assertIn("`task-prepare`", workflow)
+        self.assertIn("Do not change the repository, external systems, documents", workflow)
+        self.assertIn("Do not start another workflow without a new user request", workflow)
         self.assertNotIn("native OpenCode", text)
         self.assertNotIn("../../", text)
-        self.assertNotIn("Каталог", text)
+        self.assertNotIn("references/ru/", text)
         self.assertEqual(
             (BUILT_SKILLS / "askme/references/question-guidelines.md").read_bytes(),
             (ROOT / "shared/references/question-guidelines.md").read_bytes(),
@@ -369,9 +365,9 @@ class PortableSkillValidationTests(unittest.TestCase):
 
     def test_goal_is_prompt_only_and_preserves_materialized_contract(self) -> None:
         skill = BUILT_SKILLS / "goal"
-        text = (skill / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("work-item/v1", text)
-        self.assertIn("3000", text)
+        workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
+        self.assertIn("work-item/v1", workflow)
+        self.assertIn("3000", workflow)
         self.assertFalse((skill / "scripts/goal.py").exists())
         self.assertFalse((skill / "scripts/portable_runtime").exists())
         self.assertEqual(
@@ -380,14 +376,14 @@ class PortableSkillValidationTests(unittest.TestCase):
         )
 
     def test_goal_output_contract_declares_bounded_deterministic_outcomes(self) -> None:
-        text = (ROOT / "skills/goal/SKILL.md").read_text(encoding="utf-8")
+        text = (ROOT / "skills/goal/references/workflow.md").read_text(encoding="utf-8")
         for phrase in (
-            "не более 3000 символов",
-            "байт-в-байт тот же JSON",
-            "статус premortem равен `skipped`",
-            "при независимом проходе статус равен\n`completed`",
+            "at most 3000 characters",
+            "byte-for-byte identical JSON",
+            "premortem status is `skipped`",
+            "it is `completed`",
             "verdict `ready`",
-            "blocker явным",
+            "blocker explicit",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)
@@ -481,6 +477,8 @@ class PortableSkillValidationTests(unittest.TestCase):
             **os.environ,
             "HOME": str(home),
             "XDG_CONFIG_HOME": str(home / ".config"),
+            # `mise` must trust a configuration copied into the isolated checkout.
+            "MISE_TRUSTED_CONFIG_PATHS": str(checkout),
         }
         result = subprocess.run(
             [

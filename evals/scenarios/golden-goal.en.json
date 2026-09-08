@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "skill.goal.trigger",
+  "id": "golden.goal.work-item.en",
   "revision": 1,
-  "kind": "trigger",
+  "kind": "golden",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Сформулируй ограниченную read-only цель.",
+    "prompt": "/goal prepare a verifiable read-only objective",
     "fixture": {
       "selected": ["skill:goal"]
     }
@@ -17,7 +17,12 @@
   },
   "invariants": [
     {
-      "id": "goal-contract",
+      "id": "goal-budget",
+      "path": "skills/goal/references/workflow.md",
+      "contains": "at most 3000 characters"
+    },
+    {
+      "id": "goal-work-item",
       "path": "skills/goal/references/workflow.md",
       "contains": "work-item/v1"
     }
@@ -32,7 +37,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "4f9e6ca36f1137032343606b6eb5c4d33062066edab68e081a1aeb5e1568c959",
-  "locale": "ru",
-  "pair_id": "skill.goal.trigger"
+  "digest": "0346a65bbc790f7c8264ee7c75b5937603358a77cbd9387238b613aaf6038221",
+  "locale": "en",
+  "pair_id": "golden.goal.work-item"
 }

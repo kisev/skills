@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "plugin.background-attempts.disabled-mutation-boundary",
+  "id": "plugin.background-attempts.disabled-mutation-boundary.en",
   "revision": 1,
   "kind": "near-miss",
   "surface": "plugin",
   "host": "opencode",
   "input": {
-    "prompt": "Проверь плагин без явного включения.",
+    "prompt": "Inspect the plugin without explicit enablement.",
     "fixture": {
       "selected": []
     }
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "7e0791bf30bab57125abb307969b3b0caf0b952a3e1b5dd4a161d6e7a5c01222",
-  "locale": "ru",
+  "digest": "9af6d9d04b246820aef38ec5dea1c382f8166093e31310375eaad1d4c41a0f15",
+  "locale": "en",
   "pair_id": "plugin.background-attempts.disabled-mutation-boundary"
 }

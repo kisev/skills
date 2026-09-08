@@ -7,9 +7,14 @@
   "host": "opencode",
   "input": {
     "prompt": "Plugin remains disabled until explicit enablement.",
-    "fixture": { "selected": ["plugin:background-attempts"] }
+    "fixture": {
+      "selected": ["plugin:background-attempts"]
+    }
   },
-  "expected": { "selected": ["plugin:background-attempts"], "not_selected": ["plugin:schedule"] },
+  "expected": {
+    "selected": ["plugin:background-attempts"],
+    "not_selected": ["plugin:schedule"]
+  },
   "invariants": [
     {
       "id": "plugin-source",
@@ -17,7 +22,17 @@
       "contains": "enabled"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "80e0a5b10b96503c8d74f8786ace3e57fb1e38d65189e7658f2e54977cac80ac"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 1000,
+    "max_cost": 1
+  },
+  "digest": "c247c6a1f6213f37988fe9216878fe12052ea9ed160ef628cabce46df1e1cec8",
+  "locale": "neutral",
+  "pair_id": null
 }

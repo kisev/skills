@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "mattermost.cache-contract",
+  "id": "mattermost.read.trigger.en",
   "revision": 1,
-  "kind": "deterministic",
+  "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Validate Mattermost cache user isolation, TTL and revalidation offline.",
+    "prompt": "Read this Mattermost post, thread, or channel using its exact link.",
     "fixture": {
       "selected": ["skill:mattermost"]
     }
@@ -17,9 +17,9 @@
   },
   "invariants": [
     {
-      "id": "identity-ttl-cache",
-      "path": "skills/mattermost/scripts/mattermost.py",
-      "contains": "CACHE_TTL_SECONDS = 300"
+      "id": "read-only-scope",
+      "path": "skills/mattermost/references/workflow.md",
+      "contains": "All remote API calls are GET only."
     }
   ],
   "sandbox": {
@@ -29,10 +29,10 @@
   },
   "budgets": {
     "timeout_seconds": 20,
-    "max_tokens": 1000,
+    "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "6b4476a361385f34a17318f1a67145fb367e15a773c9f1ec7496dd10f0aa1aae",
-  "locale": "neutral",
-  "pair_id": null
+  "digest": "9e8fc1c8f2dfe82bf143a5b764d25b254d9cd3d04ef95b70aadda61f2a6057f9",
+  "locale": "en",
+  "pair_id": "mattermost.read.trigger"
 }

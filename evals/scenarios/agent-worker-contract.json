@@ -7,9 +7,14 @@
   "host": "opencode",
   "input": {
     "prompt": "Implement one scoped change with checks.",
-    "fixture": { "selected": ["agent:worker"] }
+    "fixture": {
+      "selected": ["agent:worker"]
+    }
   },
-  "expected": { "selected": ["agent:worker"], "not_selected": ["agent:critic"] },
+  "expected": {
+    "selected": ["agent:worker"],
+    "not_selected": ["agent:critic"]
+  },
   "invariants": [
     {
       "id": "worker-asset",
@@ -17,7 +22,17 @@
       "contains": "Worker"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 1500, "max_cost": 1 },
-  "digest": "0ac0e385c9147215c0c839220967e448bcd34506bd61f3213f8a5cfaf5630e18"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 1500,
+    "max_cost": 1
+  },
+  "digest": "1202da09a83bf9abb2eb833eceb872beea527e67b7d1869aebd9040d4e2cc7ab",
+  "locale": "neutral",
+  "pair_id": null
 }

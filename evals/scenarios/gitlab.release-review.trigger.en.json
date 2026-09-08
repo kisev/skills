@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "gitlab.release-review.trigger",
+  "id": "gitlab.release-review.trigger.en",
   "revision": 1,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Проверь readiness release MR.",
+    "prompt": "Check the release MR readiness.",
     "fixture": {
       "selected": ["skill:release-review"]
     }
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "e70a6123ee03fc705bff72ee743a0fe4f43afdedfa6eb941b58b211a5d64f2ca",
-  "locale": "ru",
+  "digest": "3d0ab15bf0612c6ad0c452524c3081bf61292306f0a94fb19234604a1191b8b3",
+  "locale": "en",
   "pair_id": "gitlab.release-review.trigger"
 }
