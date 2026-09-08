@@ -39,6 +39,8 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
         assert lock["archives"][entry["name"]] == entry["digest"].removeprefix("sha256:")
         with tarfile.open(archive, mode="r:gz") as document:
             assert "SKILL.md" in document.getnames()
+            if entry["name"] == "mattermost":
+                assert "scripts/mattermost.py" in document.getnames()
 
 
 def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -> None:
@@ -72,7 +74,7 @@ def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -
                     "add",
                     source,
                     "--skill",
-                    "code-review",
+                    "mattermost",
                     "--agent",
                     agent,
                     "--global",
@@ -86,10 +88,10 @@ def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -
             )
             assert added.returncode == 0, added.stderr
             lock_path = state / "skills" / ".skill-lock.json"
-            before = json.loads(lock_path.read_text(encoding="utf-8"))["skills"]["code-review"]
+            before = json.loads(lock_path.read_text(encoding="utf-8"))["skills"]["mattermost"]
             assert before["sourceType"] == "well-known"
             assert before["sourceBaseUrl"] == source
-            update_archive(fixture, "code-review")
+            update_archive(fixture, "mattermost")
             served = json.loads(
                 urllib.request.urlopen(f"{source}/.well-known/agent-skills/index.json").read()
             )
@@ -105,9 +107,9 @@ def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -
                 check=False,
             )
             assert updated.returncode == 0, updated.stderr
-            after = json.loads(lock_path.read_text(encoding="utf-8"))["skills"]["code-review"]
+            after = json.loads(lock_path.read_text(encoding="utf-8"))["skills"]["mattermost"]
             assert after["wellKnownDigest"] != before["wellKnownDigest"], updated.stdout
-            assert (home / ".agents/skills/code-review/update-marker.txt").is_file()
+            assert (home / ".agents/skills/mattermost/update-marker.txt").is_file()
     finally:
         server.shutdown()
         thread.join()

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from urllib.request import Request
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -916,6 +917,17 @@ print(json.dumps(value))
 
 
 class MattermostAndTeamTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        from scripts import build_skills
+
+        assert build_skills.build(BUILT_SKILLS, False) == 0
+
+    def mattermost_module(self, name: str) -> ModuleType:
+        return load_module(
+            BUILT_SKILLS / "mattermost/scripts/mattermost.py", f"portable_mattermost_{name}"
+        )
+
     def run_script(
         self,
         skill: str,
@@ -930,7 +942,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 "-I",
                 "-S",
                 "-B",
-                str(ROOT / "skills" / skill / "scripts" / runner),
+                str(BUILT_SKILLS / skill / "scripts" / runner),
                 *arguments,
             ],
             cwd=cwd or Path(tempfile.gettempdir()),
@@ -941,9 +953,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         )
 
     def test_mattermost_origin_binding_and_missing_auth_do_not_leak_secret(self) -> None:
-        module = load_module(
-            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost"
-        )
+        module = self.mattermost_module("origin")
         with tempfile.TemporaryDirectory() as temporary:
             with patch.dict(os.environ, {"XDG_CONFIG_HOME": temporary}):
                 first = module.origin_token_file("https://chat.example/team/channels/main")
@@ -957,63 +967,373 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(result.returncode, 3)
         self.assertNotIn("private-value", result.stdout + result.stderr)
 
-    def test_mattermost_pagination_keeps_partial_posts(self) -> None:
-        module = load_module(
-            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_pages"
+        invalid = self.run_script(
+            "mattermost", "mattermost.py", "read", "http://chat.example/team/pl/post-1"
         )
+        self.assertEqual(invalid.returncode, 2)
+        payload = json.loads(invalid.stdout)
+        self.assertEqual(payload["status"], "error")
+        self.assertFalse(payload["complete"])
+        self.assertFalse(payload["external_mutations"])
+        self.assertEqual(payload["errors"][0]["code"], "invalid_input")
+
+    def test_mattermost_normalizes_explicit_url_forms_and_rejects_near_misses(self) -> None:
+        module = self.mattermost_module("urls")
+        expected = {
+            "origin": "https://chat.example",
+            "kind": "post",
+            "team": "team",
+            "channel": None,
+            "post_id": "post-1",
+        }
+        self.assertEqual(module.classify_url("https://chat.example/team/pl/post-1"), expected)
+        self.assertEqual(
+            module.classify_url("https://chat.example/team/channels/general?post=post-1")[
+                "post_id"
+            ],
+            "post-1",
+        )
+        self.assertEqual(
+            module.classify_url("https://chat.example/team/messages/direct-chat")["kind"], "chat"
+        )
+        self.assertEqual(
+            module.classify_url("https://chat.example/team/group/group-chat")["kind"], "chat"
+        )
+        for value in (
+            "http://chat.example/team/pl/post-1",
+            "https://chat.example/team/pl/post-1/extra",
+            "https://chat.example/team/channels/general?post=one&post=two",
+            "https://chat.example/team/unknown/general",
+            "https://user@chat.example/team/pl/post-1",
+        ):
+            with self.subTest(value=value):
+                with self.assertRaises(module.MattermostError):
+                    module.classify_url(value)
+
+    def test_mattermost_pagination_deduplicates_and_marks_repeated_pages_partial(self) -> None:
+        module = self.mattermost_module("pages")
         posts = {str(index): {"id": str(index), "create_at": index} for index in range(200)}
 
         class FakeClient:
             def get(self, path: str) -> object:
-                if path == "/teams/name/team":
-                    return {"id": "team-id"}
-                if path == "/teams/team-id/channels/name/channel":
-                    return {"id": "channel-id"}
                 if path == "/channels/channel-id/posts?page=0&per_page=200":
                     return {"posts": posts}
-                raise module.MattermostError("temporary response failure")
+                if path == "/channels/channel-id/posts?page=1&per_page=200":
+                    return {"posts": posts}
+                raise AssertionError(path)
 
-        result, complete, warnings = module.read_channel(
+        result, complete, pages, errors, warnings = module.read_channel(
             FakeClient(),
-            {"team": "team", "channel": "channel"},
-            None,
-            None,
+            {"id": "channel-id"},
+            {"since": None, "until": None},
         )
         self.assertFalse(complete)
         self.assertEqual(len(result), 200)
-        self.assertTrue(warnings)
+        self.assertEqual(pages, 2)
+        self.assertEqual(errors[0]["code"], "repeated_page")
+        self.assertEqual(warnings, [])
 
-    def test_mattermost_authorization_failure_is_not_partial_success(self) -> None:
-        module = load_module(
-            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_auth"
+    def test_mattermost_partial_thread_and_members_preserve_safe_evidence(self) -> None:
+        module = self.mattermost_module("partial")
+        post = {"id": "reply", "root_id": "root", "create_at": 1}
+
+        class ThreadClient:
+            def get(self, path: str) -> object:
+                raise module.MattermostError("thread unavailable")
+
+        posts, complete, errors, warnings = module.read_post(ThreadClient(), post)
+        self.assertFalse(complete)
+        self.assertEqual(posts, [post])
+        self.assertEqual(errors[0]["code"], "thread_unavailable")
+        self.assertEqual(warnings[0]["code"], "thread_unavailable")
+        summary = module.result_base(scope="post")
+        summary.update({"posts": posts, "complete": False, "errors": errors})
+        self.assertEqual(module.finalize_result(summary)["counts"]["posts"], 1)
+
+        calls: list[str] = []
+
+        class MembersClient:
+            def get(self, path: str) -> Any:
+                calls.append(path)
+                responses = {
+                    "/users/me": {"id": "viewer"},
+                    "/teams/name/team": {"id": "team-id"},
+                    "/teams/team-id/channels/name/channel": {"id": "channel-id", "name": "channel"},
+                    "/channels/channel-id/members?page=0&per_page=200": [
+                        {"user_id": "one"},
+                        {"user_id": "two"},
+                    ],
+                    "/users/one": {"username": "alice"},
+                }
+                if path == "/users/two":
+                    raise module.MattermostError("profile forbidden")
+                return responses[path]
+
+        with patch.object(module, "read_token", return_value="private-value"):
+            with patch.object(module, "Client", return_value=MembersClient()):
+                result = module.collect_members("https://chat.example/team/channels/channel")
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual(result["members"][0]["username"], "alice")
+        self.assertEqual(result["unresolved_ids"], ["two"])
+        self.assertTrue(
+            all(
+                "channel-id" in path or path.startswith("/teams/") or path.startswith("/users/")
+                for path in calls
+            )
         )
 
-        class FakeClient:
-            def get(self, path: str) -> object:
-                if path == "/teams/name/team":
-                    return {"id": "team-id"}
-                if path == "/teams/team-id/channels/name/channel":
-                    return {"id": "channel-id"}
-                raise module.AuthorizationRequired("session expired")
+    def test_mattermost_cache_is_identity_bound_expiring_and_revalidated(self) -> None:
+        module = self.mattermost_module("cache")
+        target = module.classify_url("https://chat.example/team/pl/post-1")
+        period = None
+        result = module.result_base(
+            scope="post", target=module.normalized_target(target), period=period
+        )
+        result.update(
+            {"status": "ok", "complete": True, "posts": [{"id": "post-1", "create_at": 1}]}
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            environment = {"XDG_CACHE_HOME": temporary}
+            with patch.dict(os.environ, environment, clear=False):
+                key = module.cache_key("https://chat.example", "user-one", target, period)
+                module.cache_write(
+                    key,
+                    origin="https://chat.example",
+                    user_id="user-one",
+                    target=target,
+                    period=period,
+                    value=result,
+                )
+                cached, age = module.cache_read(
+                    key,
+                    origin="https://chat.example",
+                    user_id="user-one",
+                    target=target,
+                    period=period,
+                )
+                self.assertEqual(cached["status"], "ok")
+                self.assertIsNotNone(age)
+                self.assertIsNone(
+                    module.cache_read(
+                        key,
+                        origin="https://chat.example",
+                        user_id="user-two",
+                        target=target,
+                        period=period,
+                    )[0]
+                )
+                with module.cache_connection() as database:
+                    database.execute(
+                        "UPDATE snapshots_v2 SET fetched = ?",
+                        (module.now() - module.CACHE_TTL_SECONDS - 1,),
+                    )
+                self.assertIsNone(
+                    module.cache_read(
+                        key,
+                        origin="https://chat.example",
+                        user_id="user-one",
+                        target=target,
+                        period=period,
+                    )[0]
+                )
+                with module.cache_connection() as database:
+                    database.execute(
+                        "CREATE TABLE snapshots (key TEXT PRIMARY KEY, fetched TEXT NOT NULL, payload TEXT NOT NULL)"
+                    )
+                    database.execute(
+                        "INSERT INTO snapshots VALUES (?, ?, ?)",
+                        (key, "legacy", json.dumps(result)),
+                    )
+                self.assertIsNone(
+                    module.cache_read(
+                        key,
+                        origin="https://chat.example",
+                        user_id="user-two",
+                        target=target,
+                        period=period,
+                    )[0]
+                )
 
-        with self.assertRaises(module.AuthorizationRequired):
-            module.read_channel(
-                FakeClient(),
-                {"team": "team", "channel": "channel"},
-                None,
-                None,
+        calls: list[str] = []
+
+        class CachedClient:
+            def get(self, path: str) -> Any:
+                calls.append(path)
+                if path == "/users/me":
+                    return {"id": "viewer"}
+                if path == "/posts/post-1":
+                    return {"id": "post-1", "create_at": 1}
+                raise AssertionError(path)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary}, clear=False):
+                key = module.cache_key("https://chat.example", "viewer", target, None)
+                module.cache_write(
+                    key,
+                    origin="https://chat.example",
+                    user_id="viewer",
+                    target=target,
+                    period=None,
+                    value=result,
+                )
+                with patch.object(module, "read_token", return_value="private-value"):
+                    with patch.object(module, "Client", return_value=CachedClient()):
+                        cached = module.read_one(
+                            "https://chat.example/team/pl/post-1", None, None, True, True
+                        )
+        self.assertTrue(cached["cache_hit"])
+        self.assertTrue(cached["access_revalidated"])
+        self.assertEqual(calls, ["/users/me", "/posts/post-1"])
+
+    def test_mattermost_cache_flags_and_result_exit_contract(self) -> None:
+        module = self.mattermost_module("flags")
+        complete = module.result_base(scope="post")
+        complete.update(
+            {
+                "status": "partial",
+                "complete": False,
+                "posts": [{"id": "post-1", "create_at": 1}],
+                "errors": [module.error_item("thread_unavailable", "unavailable")],
+            }
+        )
+        for flag, expected in (("--refresh", (False, True)), ("--no-cache", (False, False))):
+            with self.subTest(flag=flag):
+                output = io.StringIO()
+                with patch.object(module, "read_one", return_value=complete) as read_one:
+                    with redirect_stdout(output):
+                        code = module.main(["read", "https://chat.example/team/pl/post-1", flag])
+                self.assertEqual(code, 1)
+                self.assertEqual(read_one.call_args.args[-2:], expected)
+                observed = json.loads(output.getvalue())
+                self.assertEqual(observed["status"], "partial")
+                self.assertFalse(observed["complete"])
+                self.assertFalse(observed["external_mutations"])
+                self.assertIn("pages", observed)
+                self.assertIn("unresolved_ids", observed)
+
+    def test_mattermost_client_uses_only_get_requests(self) -> None:
+        module = self.mattermost_module("get_only")
+        seen: list[Request] = []
+
+        class Response:
+            def read(self, _: int) -> bytes:
+                return b'{"id":"viewer"}'
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *arguments: object) -> None:
+                return None
+
+        def urlopen(request: Request, *, timeout: int) -> Response:
+            seen.append(request)
+            self.assertEqual(timeout, 30)
+            return Response()
+
+        with patch.object(module.urllib.request, "urlopen", side_effect=urlopen):
+            self.assertEqual(
+                module.Client("https://chat.example", "private-value").get("/users/me"),
+                {"id": "viewer"},
             )
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0].get_method(), "GET")
+        self.assertEqual(seen[0].full_url, "https://chat.example/api/v4/users/me")
+
+    def test_mattermost_auth_and_cache_confirmation_are_one_use_and_redact_secret(self) -> None:
+        module = self.mattermost_module("confirm")
+        secret = "private-value"
+        with tempfile.TemporaryDirectory() as temporary:
+            environment = {
+                "XDG_CONFIG_HOME": str(Path(temporary) / "config"),
+                "XDG_CACHE_HOME": str(Path(temporary) / "cache"),
+            }
+            with patch.dict(os.environ, environment, clear=False):
+                preview = module.prepare_receipt("auth", origin="https://chat.example")
+                digest = preview["digest"]
+                with patch.object(
+                    sys,
+                    "stdin",
+                    io.StringIO(
+                        json.dumps(
+                            [{"name": "MMAUTHTOKEN", "domain": "chat.example", "value": secret}]
+                        )
+                    ),
+                ):
+                    self.assertEqual(
+                        module.main(["auth", "apply", "https://chat.example", "--confirm", digest]),
+                        0,
+                    )
+                with patch.object(
+                    sys,
+                    "stdin",
+                    io.StringIO(
+                        json.dumps(
+                            [{"name": "MMAUTHTOKEN", "domain": "chat.example", "value": secret}]
+                        )
+                    ),
+                ):
+                    self.assertEqual(
+                        module.main(["auth", "apply", "https://chat.example", "--confirm", digest]),
+                        2,
+                    )
+                before = module.origin_token_file("https://chat.example").read_text(
+                    encoding="utf-8"
+                )
+                tampered = module.prepare_receipt("auth", origin="https://chat.example")
+                receipt = module.receipt_path(tampered["digest"])
+                payload = json.loads(receipt.read_text(encoding="utf-8"))
+                payload["expires_at"] = "invalid"
+                receipt.write_text(json.dumps(payload), encoding="utf-8")
+                with patch.object(
+                    sys,
+                    "stdin",
+                    io.StringIO(
+                        json.dumps(
+                            [
+                                {
+                                    "name": "MMAUTHTOKEN",
+                                    "domain": "chat.example",
+                                    "value": "other-value",
+                                }
+                            ]
+                        )
+                    ),
+                ):
+                    self.assertEqual(
+                        module.main(
+                            [
+                                "auth",
+                                "apply",
+                                "https://chat.example",
+                                "--confirm",
+                                tampered["digest"],
+                            ]
+                        ),
+                        2,
+                    )
+                self.assertEqual(
+                    module.origin_token_file("https://chat.example").read_text(encoding="utf-8"),
+                    before,
+                )
+                cache_preview = module.prepare_receipt("cache-clear", path=module.cache_path())
+                self.assertEqual(
+                    module.main(["cache", "clear", "--confirm", cache_preview["digest"]]), 0
+                )
+                receipt_text = "".join(
+                    path.read_text(encoding="utf-8")
+                    for path in module.receipt_root().glob("*.json")
+                )
+                self.assertNotIn(secret, receipt_text)
 
     def test_mattermost_members_stays_within_one_channel(self) -> None:
-        module = load_module(
-            ROOT / "skills/mattermost/scripts/mattermost.py", "portable_mattermost_members"
-        )
+        module = self.mattermost_module("members")
         calls: list[str] = []
 
         class FakeClient:
             def get(self, path: str) -> Any:
                 calls.append(path)
                 responses = {
+                    "/users/me": {"id": "viewer"},
                     "/teams/name/team": {"id": "team-id"},
                     "/teams/team-id/channels/name/channel": {"id": "channel-id", "name": "channel"},
                     "/channels/channel-id/members?page=0&per_page=200": [{"user_id": "one"}],
@@ -1028,7 +1348,10 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(result["members"][0]["username"], "alice")
         self.assertTrue(
             all(
-                "channel-id" in path or path.startswith("/teams/") or path.startswith("/users/one")
+                "channel-id" in path
+                or path.startswith("/teams/")
+                or path.startswith("/users/one")
+                or path == "/users/me"
                 for path in calls
             )
         )
