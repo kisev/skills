@@ -1,13 +1,18 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 1,
+  "revision": 2,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
   "input": {
     "prompt": "Validate exact SHA, completeness, critic and stale finalize contracts.",
-    "fixture": { "selected": [] }
+    "fixture": { "selected": [] },
+    "offline_runner": {
+      "skill": "code-review",
+      "script": "scripts/review_mr.py",
+      "target": "https://gitlab.example/group/project/-/merge_requests/7"
+    }
   },
   "expected": { "selected": [], "not_selected": ["command:publish"] },
   "invariants": [
@@ -34,5 +39,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "740627d2b37bcfabd7c274e8871537ea12b42afc8b4f0c63a086292e24543678"
+  "digest": "ddfc6e7a3855cb21b443b2e4941e3dd55483fba5cc10be938183fb2c6eaef455"
 }

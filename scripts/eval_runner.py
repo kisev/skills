@@ -283,11 +283,216 @@ def expected_assertions(
     return result
 
 
-def offline_observation(scenario: dict[str, Any]) -> dict[str, Any]:
-    # Offline evaluation only resolves corpus-declared observable selections; it never starts a host.
+def offline_observation(scenario: dict[str, Any], root: Path) -> dict[str, Any]:
+    """Run explicitly declared portable runner checks without a host or network."""
     fixture = scenario["input"].get("fixture", {})
     selected = fixture.get("selected", []) if isinstance(fixture, dict) else []
-    return {"selected": selected, "usage": {"telemetry": "not-applicable"}}
+    runner = scenario["input"].get("offline_runner")
+    if not isinstance(runner, dict):
+        return {"selected": selected, "usage": {"telemetry": "not-applicable"}}
+    skill, script, target = runner.get("skill"), runner.get("script"), runner.get("target")
+    if not all(isinstance(value, str) and value for value in (skill, script, target)):
+        raise EvalError("malformed_scenario", "offline_runner requires skill, script, and target")
+    assert isinstance(skill, str) and isinstance(script, str) and isinstance(target, str)
+    executable = root / ".build" / "skills" / skill / script
+    if not executable.is_file():
+        raise EvalError("missing_runner", "offline_runner is not materialized")
+    with tempfile.TemporaryDirectory(prefix="skills-gitlab-eval-") as temporary:
+        sandbox = Path(temporary)
+        log = sandbox / "glab.jsonl"
+        state = sandbox / "state"
+        state.write_text("fresh", encoding="utf-8")
+        glab = sandbox / "glab"
+        glab.write_text(
+            """#!%s
+import json
+import os
+import sys
+from pathlib import Path
+endpoint = sys.argv[-1]
+Path(os.environ["FAKE_GLAB_LOG"]).open("a", encoding="utf-8").write(json.dumps(sys.argv[1:]) + "\\n")
+changed = Path(os.environ["FAKE_GLAB_STATE"]).read_text(encoding="utf-8") == "changed"
+if endpoint.startswith("projects/group%%2Fproject"):
+    value = {"id": 19}
+elif endpoint == "projects/19/merge_requests/7":
+    value = {"iid": 7, "updated_at": "changed" if changed else "fresh", "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+elif endpoint == "projects/19/merge_requests/7/changes":
+    value = {"changes": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+elif endpoint.startswith("projects/19/merge_requests/7/commits"):
+    value = [{"id": "c"}]
+else:
+    value = []
+print(json.dumps(value))
+"""
+            % sys.executable,
+            encoding="utf-8",
+        )
+        glab.chmod(0o755)
+        environment = isolated_environment(sandbox)
+        environment.update(
+            {
+                "PATH": f"{sandbox}:{environment['PATH']}",
+                "FAKE_GLAB_LOG": str(log),
+                "FAKE_GLAB_STATE": str(state),
+            }
+        )
+        process = subprocess.run(
+            [sys.executable, "-I", "-S", "-B", str(executable), "prepare", "--url", target],
+            cwd=sandbox,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        try:
+            output = json.loads(process.stdout)
+        except json.JSONDecodeError:
+            output = {}
+        items = output.get("items", []) if isinstance(output, dict) else []
+        review_status = "failed"
+        stale_status = "failed"
+        if process.returncode == 0 and items and isinstance(items[0], dict):
+            evidence = items[0].get("artifact_path")
+            artifact_root = items[0].get("artifact_root")
+            if isinstance(evidence, str) and isinstance(artifact_root, str):
+                finalized = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-S",
+                        "-B",
+                        str(executable),
+                        "finalize",
+                        "--artifact-root",
+                        artifact_root,
+                    ],
+                    cwd=sandbox,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                try:
+                    final_output = json.loads(finalized.stdout)
+                except json.JSONDecodeError:
+                    final_output = {}
+                final_path = (
+                    final_output.get("artifact_path") if isinstance(final_output, dict) else None
+                )
+                final_digest = (
+                    final_output.get("digest") if isinstance(final_output, dict) else None
+                )
+                if (
+                    finalized.returncode == 0
+                    and isinstance(final_path, str)
+                    and isinstance(final_digest, str)
+                ):
+                    evidence_digest = hashlib.sha256(Path(evidence).read_bytes()).hexdigest()
+                    receipt = sandbox / "receipt.json"
+                    decision = sandbox / "decision.json"
+                    receipt.write_text(
+                        json.dumps(
+                            {
+                                "schema": "portable-gitlab/critic-receipt/v2",
+                                "evidence_digest": evidence_digest,
+                                "run_id": "critic",
+                                "session_id": "critic-session",
+                                "findings": [],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    decision.write_text(
+                        json.dumps(
+                            {
+                                "schema": "portable-gitlab/review-decision/v2",
+                                "evidence_digest": evidence_digest,
+                                "finalize_digest": final_digest,
+                                "verdict": "ready",
+                                "run_id": "primary",
+                                "session_id": "primary-session",
+                                "findings": [],
+                                "unresolved_threads": [],
+                                "responses": [],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    review_command = [
+                        sys.executable,
+                        "-I",
+                        "-S",
+                        "-B",
+                        str(executable),
+                        "finalize-review",
+                        "--evidence",
+                        evidence,
+                        "--report",
+                        str(decision),
+                        "--critic-receipt",
+                        str(receipt),
+                        "--finalize-report",
+                        final_path,
+                        "--mode",
+                        "deep",
+                    ]
+                    review_status = (
+                        "passed"
+                        if subprocess.run(
+                            review_command,
+                            cwd=sandbox,
+                            env=environment,
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        ).returncode
+                        == 0
+                        else "failed"
+                    )
+                    state.write_text("changed", encoding="utf-8")
+                    stale_status = (
+                        "passed"
+                        if subprocess.run(
+                            review_command,
+                            cwd=sandbox,
+                            env=environment,
+                            capture_output=True,
+                            text=True,
+                            check=False,
+                        ).returncode
+                        == 2
+                        else "failed"
+                    )
+        calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+        assertions = [
+            {"id": "runner:json", "status": "passed" if isinstance(output, dict) else "failed"},
+            {"id": "runner:exit", "status": "passed" if process.returncode == 0 else "failed"},
+            {
+                "id": "runner:exact-sha",
+                "status": "passed" if items and items[0].get("head_sha") == "c" else "failed",
+            },
+            {
+                "id": "runner:complete",
+                "status": "passed" if items and items[0].get("complete") is True else "failed",
+            },
+            {
+                "id": "runner:get-only",
+                "status": "passed"
+                if calls and all("GET" in call and "api" in call for call in calls)
+                else "failed",
+            },
+            {
+                "id": "runner:external-mutations",
+                "status": "passed" if output.get("external_mutations") is False else "failed",
+            },
+            {"id": "runner:critic-final-decision", "status": review_status},
+            {"id": "runner:stale-finalize", "status": stale_status},
+        ]
+    return {
+        "selected": selected,
+        "usage": {"telemetry": "not-applicable"},
+        "runner_assertions": assertions,
+    }
 
 
 def isolated_environment(sandbox: Path) -> dict[str, str]:
@@ -480,7 +685,7 @@ def budget_assertions(
 def result_for(scenario: dict[str, Any], args: argparse.Namespace, root: Path) -> dict[str, Any]:
     started_at = time.time()
     if args.offline:
-        observation = offline_observation(scenario)
+        observation = offline_observation(scenario, root)
         run_status = "passed"
         error: dict[str, Any] = {"classification": None}
         evidence: list[dict[str, str]] = []
@@ -489,6 +694,7 @@ def result_for(scenario: dict[str, Any], args: argparse.Namespace, root: Path) -
     assertions = assertions_for_invariants(scenario, root) + expected_assertions(
         scenario, observation
     )
+    assertions.extend(observation.get("runner_assertions", []))
     effective_budgets = dict(scenario["budgets"])
     if not args.offline:
         assert args.max_tokens is not None and args.max_cost is not None

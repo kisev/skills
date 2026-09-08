@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import importlib.util
+import hashlib
 import json
 import os
 import subprocess
@@ -59,6 +60,38 @@ class PortableWorkflowTests(unittest.TestCase):
             text=True,
             check=False,
         )
+
+    def fake_glab(self, directory: Path) -> tuple[Path, Path]:
+        state = directory / "fake-glab-state"
+        state.write_text("fresh", encoding="utf-8")
+        executable = directory / "glab"
+        executable.write_text(
+            """#!%s
+import json
+import os
+import sys
+from pathlib import Path
+
+endpoint = sys.argv[-1]
+Path(os.environ["FAKE_GLAB_LOG"]).open("a", encoding="utf-8").write(json.dumps(sys.argv[1:]) + "\\n")
+changed = Path(os.environ["FAKE_GLAB_STATE"]).read_text(encoding="utf-8") == "changed"
+if endpoint.startswith("projects/group%%2Fproject"):
+    value = {"id": 19}
+elif endpoint == "projects/19/merge_requests/7":
+    value = {"iid": 7, "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+elif endpoint == "projects/19/merge_requests/7/changes":
+    value = {"changes": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+elif endpoint.startswith("projects/19/merge_requests/7/commits"):
+    value = [{"id": "c"}]
+else:
+    value = []
+print(json.dumps(value))
+"""
+            % sys.executable,
+            encoding="utf-8",
+        )
+        executable.chmod(0o755)
+        return executable, state
 
     def test_gitlab_runners_support_foreign_cwd_help_and_capabilities(self) -> None:
         for skill in GITLAB_RUNNERS:
@@ -239,6 +272,16 @@ class PortableWorkflowTests(unittest.TestCase):
             subprocess.run(
                 ["git", "commit", "-qm", "base"], cwd=repository, check=True, capture_output=True
             )
+            tracked.write_text("committed\n", encoding="utf-8")
+            subprocess.run(
+                ["git", "add", "tracked.txt"], cwd=repository, check=True, capture_output=True
+            )
+            subprocess.run(
+                ["git", "commit", "-qm", "committed"],
+                cwd=repository,
+                check=True,
+                capture_output=True,
+            )
             tracked.write_text("staged\n", encoding="utf-8")
             subprocess.run(
                 ["git", "add", "tracked.txt"], cwd=repository, check=True, capture_output=True
@@ -246,12 +289,17 @@ class PortableWorkflowTests(unittest.TestCase):
             tracked.write_text("unstaged\n", encoding="utf-8")
             (repository / "note.txt").write_text("untracked\n", encoding="utf-8")
             (repository / "linked.txt").symlink_to(repository / "note.txt")
+            (repository / "binary.bin").write_bytes(b"\0binary")
+            oversized = repository / "oversized.txt"
+            oversized.write_bytes(b"x" * (8 * 1024 * 1024 + 1))
             environment = {"XDG_STATE_HOME": str(repository / "state")}
             prepared = self.run_runner(
                 "code-review",
                 "prepare-local",
                 "--repo-root",
                 str(repository),
+                "--ref",
+                "HEAD~1",
                 cwd=repository,
                 env=environment,
             )
@@ -266,10 +314,19 @@ class PortableWorkflowTests(unittest.TestCase):
             sections = bundle["sections"]
             self.assertIn("staged", sections["staged"]["diff"])
             self.assertIn("unstaged", sections["unstaged"]["diff"])
+            self.assertIn("committed", sections["committed"]["diff"])
             linked = next(
                 item for item in sections["untracked"]["items"] if item["path"] == "linked.txt"
             )
             self.assertEqual(linked["reason"], "symlink")
+            binary = next(
+                item for item in sections["untracked"]["items"] if item["path"] == "binary.bin"
+            )
+            self.assertEqual(binary["reason"], "binary")
+            too_large = next(
+                item for item in sections["untracked"]["items"] if item["path"] == "oversized.txt"
+            )
+            self.assertEqual(too_large["reason"], "oversized")
 
     def test_collection_identity_is_shared_and_issue_discussions_are_required(self) -> None:
         module = load_module(
@@ -361,6 +418,7 @@ class PortableWorkflowTests(unittest.TestCase):
         report: dict[str, Any] = {
             "schema": "portable-gitlab/review-decision/v2",
             "evidence_digest": "evidence",
+            "finalize_digest": "a" * 64,
             "verdict": "not_ready",
             "run_id": "primary-run",
             "session_id": "primary-session",
@@ -377,6 +435,340 @@ class PortableWorkflowTests(unittest.TestCase):
         report["responses"].pop()
         with self.assertRaises(module.WorkflowError):
             module.validate_decision(report, "evidence", receipt, "deep")
+
+    def test_review_modes_require_independent_receipts_and_dispositions(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_modes"
+        )
+        report: dict[str, Any] = {
+            "schema": "portable-gitlab/review-decision/v2",
+            "evidence_digest": "evidence",
+            "finalize_digest": "a" * 64,
+            "verdict": "not_ready",
+            "run_id": "primary-run",
+            "session_id": "primary-session",
+            "findings": [{"id": "finding"}],
+            "unresolved_threads": [{"id": "thread"}],
+            "responses": [
+                {"id": "finding", "decision": "accept", "reason": "confirmed"},
+                {"id": "thread", "decision": "reject", "reason": "deferred"},
+            ],
+        }
+        for mode in ("normal", "deep"):
+            with self.subTest(mode=mode):
+                with self.assertRaises(module.WorkflowError):
+                    module.validate_decision(report, "evidence", None, mode)
+        with self.assertRaises(module.WorkflowError):
+            module.validate_decision(report, "evidence", None, "fast")
+        report["low_risk"] = True
+        module.validate_decision(report, "evidence", None, "fast")
+        report["verdict"] = "ready"
+        report["blocking_findings"] = True
+        with self.assertRaises(module.WorkflowError):
+            module.validate_decision(report, "evidence", None, "fast")
+
+    def test_runner_final_review_requires_bound_current_finalize_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _glab, state = self.fake_glab(root)
+            log = root / "glab.log"
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(state),
+                "FAKE_GLAB_LOG": str(log),
+            }
+            target = "https://gitlab.example/group/project/-/merge_requests/7"
+            prepared = self.run_runner("code-review", "prepare", "--url", target, env=environment)
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
+            self.assertTrue(
+                json.loads(prepared.stdout)["items"][0]["complete"], Path(evidence).read_text()
+            )
+            evidence_digest = hashlib.sha256(Path(evidence).read_bytes()).hexdigest()
+            artifact_root = json.loads(prepared.stdout)["items"][0]["artifact_root"]
+            finalized = self.run_runner(
+                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(finalized.returncode, 0, finalized.stdout + finalized.stderr)
+            finalize_digest = json.loads(finalized.stdout)["digest"]
+            finalize_report = json.loads(finalized.stdout)["artifact_path"]
+            receipt = root / "receipt.json"
+            receipt.write_text(
+                json.dumps(
+                    {
+                        "schema": "portable-gitlab/critic-receipt/v2",
+                        "evidence_digest": evidence_digest,
+                        "run_id": "critic-run",
+                        "session_id": "critic-session",
+                        "findings": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            decision = root / "decision.json"
+            decision.write_text(
+                json.dumps(
+                    {
+                        "schema": "portable-gitlab/review-decision/v2",
+                        "evidence_digest": evidence_digest,
+                        "finalize_digest": finalize_digest,
+                        "verdict": "ready",
+                        "run_id": "primary-run",
+                        "session_id": "primary-session",
+                        "findings": [],
+                        "unresolved_threads": [],
+                        "responses": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            reviewed = self.run_runner(
+                "code-review",
+                "finalize-review",
+                "--evidence",
+                evidence,
+                "--report",
+                str(decision),
+                "--critic-receipt",
+                str(receipt),
+                "--finalize-report",
+                finalize_report,
+                "--mode",
+                "deep",
+                env=environment,
+            )
+            self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
+            self.assertFalse(json.loads(reviewed.stdout)["external_mutations"])
+            state.write_text("changed", encoding="utf-8")
+            newer = self.run_runner("code-review", "prepare", "--url", target, env=environment)
+            self.assertEqual(newer.returncode, 0, newer.stderr)
+            stale = self.run_runner(
+                "code-review",
+                "finalize-review",
+                "--evidence",
+                evidence,
+                "--report",
+                str(decision),
+                "--critic-receipt",
+                str(receipt),
+                "--finalize-report",
+                finalize_report,
+                "--mode",
+                "deep",
+                env=environment,
+            )
+            self.assertEqual(stale.returncode, 2)
+            calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+            self.assertTrue(calls)
+            self.assertTrue(all("GET" in call and "api" in call for call in calls))
+
+    def test_release_ready_requires_all_bound_gates_and_fresh_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _glab, state = self.fake_glab(root)
+            log = root / "glab.log"
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(state),
+                "FAKE_GLAB_LOG": str(log),
+            }
+            prepared = self.run_runner(
+                "release-review",
+                "prepare",
+                "--url",
+                "https://gitlab.example/group/project/-/merge_requests/7",
+                env=environment,
+            )
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            item = json.loads(prepared.stdout)["items"][0]
+            evidence = Path(str(item["artifact_path"]))
+            evidence_digest = hashlib.sha256(evidence.read_bytes()).hexdigest()
+            identity = {"base_sha": "a", "start_sha": "b", "head_sha": "c"}
+            readiness = root / "readiness.json"
+            readiness.write_text(
+                json.dumps(
+                    {
+                        "schema": "portable-gitlab/release-readiness/v2",
+                        "evidence_digest": evidence_digest,
+                        "verdict": "ready",
+                        "readiness": True,
+                        "gates": {
+                            name: {"status": "passed", "evidence": [name], "range": identity}
+                            for name in ("semver", "compatibility", "migration", "rollback", "ci")
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            recorded = self.run_runner(
+                "release-review",
+                "record-artifact",
+                "--kind",
+                "release_readiness",
+                "--evidence",
+                str(evidence),
+                "--input",
+                str(readiness),
+                env=environment,
+            )
+            self.assertEqual(recorded.returncode, 0, recorded.stderr)
+            result = self.run_runner(
+                "release-review",
+                "finalize",
+                "--artifact-root",
+                str(item["artifact_root"]),
+                "--report",
+                json.loads(recorded.stdout)["artifact_path"],
+                env=environment,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            state.write_text("changed", encoding="utf-8")
+            stale = self.run_runner(
+                "release-review",
+                "finalize",
+                "--artifact-root",
+                str(item["artifact_root"]),
+                "--report",
+                json.loads(recorded.stdout)["artifact_path"],
+                env=environment,
+            )
+            self.assertEqual(stale.returncode, 2)
+            blocked = json.loads(readiness.read_text(encoding="utf-8"))
+            blocked["gates"]["ci"]["status"] = "not_applicable"
+            module = load_module(
+                ROOT / "shared/references/portable_gitlab/contract.py", "canonical_release_gates"
+            )
+            with self.assertRaises(module.WorkflowError):
+                module.validate_release_readiness(
+                    blocked,
+                    {
+                        "base_sha": "a",
+                        "start_sha": "b",
+                        "head_sha": "c",
+                        "retrieval_complete": True,
+                    },
+                    evidence_digest,
+                )
+
+    def test_runner_scaffold_record_rejections_and_v1_finalize_contracts(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _glab, _state = self.fake_glab(root)
+            log = root / "glab.log"
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(root / "fake-glab-state"),
+                "FAKE_GLAB_LOG": str(log),
+            }
+            target = "https://gitlab.example/group/project/-/merge_requests/7"
+            prepared = self.run_runner("code-review", "prepare", "--url", target, env=environment)
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            item = json.loads(prepared.stdout)["items"][0]
+            content = root / "content.json"
+            content.write_text('{"title":"Title","description":"Body"}', encoding="utf-8")
+            for command in ("scaffold", "scaffold-batch"):
+                with self.subTest(command=command):
+                    result = self.run_runner(
+                        "code-review",
+                        command,
+                        "--bundle",
+                        str(item["artifact_path"]),
+                        "--content",
+                        str(content),
+                        env=environment,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertFalse(json.loads(result.stdout)["external_mutations"])
+            analysis = root / "analysis.json"
+            evidence_digest = hashlib.sha256(
+                Path(str(item["artifact_path"])).read_bytes()
+            ).hexdigest()
+            analysis.write_text(
+                json.dumps(
+                    {
+                        "schema": "portable-gitlab/analysis-report/v2",
+                        "evidence_digest": evidence_digest,
+                        "run_id": "analysis-run",
+                        "session_id": "analysis-session",
+                        "findings": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            recorded = self.run_runner(
+                "code-review",
+                "record-artifact",
+                "--kind",
+                "analysis_report",
+                "--evidence",
+                str(item["artifact_path"]),
+                "--input",
+                str(analysis),
+                env=environment,
+            )
+            self.assertEqual(recorded.returncode, 0, recorded.stderr)
+            self.assertEqual(
+                self.run_runner(
+                    "code-review",
+                    "record-artifact",
+                    "--kind",
+                    "review_decision",
+                    "--evidence",
+                    str(item["artifact_path"]),
+                    "--input",
+                    str(analysis),
+                    env=environment,
+                ).returncode,
+                2,
+            )
+            self.assertEqual(
+                self.run_runner(
+                    "task-triage", "prepare", "--url", target, env=environment
+                ).returncode,
+                2,
+            )
+            self.assertEqual(
+                self.run_runner(
+                    "code-review",
+                    "prepare",
+                    "--project-url",
+                    "https://gitlab.example/group/project",
+                    env=environment,
+                ).returncode,
+                2,
+            )
+            legacy = Path(str(item["artifact_root"])) / "bundle.json"
+            legacy.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "profile": "code-review",
+                        "target": {
+                            "url": target,
+                            "hostname": "gitlab.example",
+                            "project_path": "group/project",
+                            "project_id": 19,
+                            "kind": "merge_requests",
+                            "iid": 7,
+                        },
+                        "retrieval_complete": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (Path(str(item["artifact_root"])) / "current.json").unlink()
+            legacy_final = self.run_runner(
+                "code-review",
+                "finalize",
+                "--artifact-root",
+                str(item["artifact_root"]),
+                env=environment,
+            )
+            self.assertEqual(legacy_final.returncode, 2)
+            self.assertEqual(json.loads(legacy.read_text(encoding="utf-8"))["schema_version"], 1)
 
 
 class MattermostAndTeamTests(unittest.TestCase):
