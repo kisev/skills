@@ -1,35 +1,25 @@
-# 07. Развёртывание
+# 07 Deployment View
 
-## Назначение
+## Purpose
 
-Опиши, где и в каком окружении выполняется система.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- runtime environments и deployment units;
-- infrastructure, networking и storage;
-- относящиеся к системе аспекты CI/CD;
-- операционные границы и topology.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- полная CI configuration;
-- локальные development steps;
-- runtime-последовательность внутри системы.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним `README.md`; отдельную directory hierarchy для deployment не
-создавай.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-07-deployment-view/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Опиши nodes, artifacts, network/storage и deployment flow. Если отдельная модель
-развёртывания неприменима, кратко объясни способ распространения и запуска.
+Replace this guidance with verified project-specific content.

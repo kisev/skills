@@ -1,34 +1,29 @@
-# Требования к качеству
+# Quality requirements
 
-## Назначение
+## Purpose
 
-Зафиксируй измеримые или проверяемые атрибуты качества системы.
+Record measurable or verifiable system quality attributes.
 
-## Сюда относится
+## Included
 
-- цели performance, reliability, security и maintainability;
-- условия, нагрузка, метрики и допустимые thresholds;
-- критерии проверки целей качества.
+- Performance, reliability, security, and maintainability goals.
+- Conditions, load, metrics, allowed thresholds, and verification criteria.
 
-## Сюда не относится
+## Excluded
 
-- общие пожелания без способа проверки;
-- архитектурные механизмы, обеспечивающие качество;
-- backlog улучшений.
+- General wishes without a way to verify them, architectural mechanisms, and improvement backlog.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-В v1 все требования к качеству находятся только в этом `README.md`.
-Автоматическое дробление запрещено.
+In v1, keep all quality requirements in this `README.md`. Automatic splitting is prohibited.
 
-## Ожидаемая структура
+## Expected Structure
 
 ```text
 quality/
 └── README.md
 ```
 
-## Шаблон содержания
+## Content Template
 
-Используй стабильные `REQ-Q-NNN` и указывай context, metric, target и проверку.
-ISO/IEC 25010 применяй только как checklist, не заявляй compliance.
+Use stable `REQ-Q-NNN` and state context, metric, target, and verification. Use ISO/IEC 25010 only as a checklist; do not claim compliance.

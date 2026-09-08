@@ -1,28 +1,23 @@
-# Требования к интерфейсам
+# Interface requirements
 
-## Назначение
+## Purpose
 
-Опиши внешние поверхности взаимодействия системы и их нормативную семантику.
+Describe the system's external interaction surfaces and their normative semantics.
 
-## Сюда относится
+## Included
 
-- публичные CLI, API, configuration и event contracts;
-- гарантии совместимости, validation и errors;
-- ссылки на формальные схемы и declarations.
+- Public CLI, API, configuration, and event contracts.
+- Compatibility guarantees, validation, errors, and references to formal schemas and declarations.
 
-## Сюда не относится
+## Excluded
 
-- внутренние интерфейсы модулей;
-- потенциальные интерфейсы на будущее;
-- полное копирование OpenAPI, JSON Schema или CLI declarations.
+- Internal module interfaces, future potential interfaces, or complete copies of OpenAPI, JSON Schema, or CLI declarations.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Этот README содержит обзор и индекс. Дополнительный файл разрешён только для
-реально существующей внешней поверхности: один интерфейс - один файл, например
-`cli.md` или `http-api.md`.
+This README is the overview and index. An additional file is allowed only for a real external surface: one interface per file, for example `cli.md` or `http-api.md`.
 
-## Ожидаемая структура
+## Expected Structure
 
 ```text
 interfaces/
@@ -30,8 +25,6 @@ interfaces/
 └── <existing-interface>.md
 ```
 
-## Шаблон содержания
+## Content Template
 
-Перечисли интерфейсы и связанные `REQ-I-*`. Для каждого дополнительного файла
-укажи источник истины, семантику, ошибки, совместимость и инварианты. Если внешних
-интерфейсов нет, объясни это вместо создания файлов.
+List interfaces and related `REQ-I-*`. Each additional file states its source of truth, semantics, errors, compatibility, and invariants. If there are no external interfaces, explain that instead of creating files.

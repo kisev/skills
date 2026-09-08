@@ -1,41 +1,22 @@
-# Консолидация канонической спецификации
+# Canonical specification consolidation
 
-Консолидация - обязательная часть каждого `spec-update`, а не отдельный
-периодический проект. Её цель - сохранить `specs/` компактной моделью текущей
-системы, которую человек способен прочитать и удержать в голове. Git хранит
-историю; canonical documents не являются журналом изменений.
+Consolidation is a mandatory part of every `spec-update`, not a separate periodic project. Its purpose is to keep `specs/` a compact model of the current system that a person can read and hold in mind. Git retains history; canonical documents are not a change log.
 
 ## Scope
 
-Обычный `spec-update` проверяет затронутые documents, requirements, ADR и
-viewpoints, на которые влияет запрос. Не расширяй scope без необходимости.
+An ordinary `spec-update` checks affected documents, requirements, ADRs, and viewpoints impacted by the request. Do not expand scope unnecessarily.
 
-Явный запрос человека на консолидацию specification требует штатного вопроса:
-согласуй ограниченную область либо полный `specs/`. Полную specification не
-исследуй и не переписывай по умолчанию.
+An explicit request to consolidate the specification requires a native question: agree on a limited area or all `specs/`. Do not investigate or rewrite the full specification by default.
 
-## Анализ
+## Analysis
 
-До preview проверь, не требует ли затронутая область одного из изменений:
+Before preview, check whether the affected area requires combining two normative formulations of one contract into one canonical point and replacing a duplicate with a reference; removing a withdrawn requirement, temporary implementation plan, or behavior no longer in the agreed target state; removing details that do not affect an observable contract or architectural invariant while retaining necessary causality and references; repairing a link to a removed path, stale `REQ-*`/`ADR-*`, or withdrawn interface; or replacing a changed architectural decision with a new ADR with explicit supersession rather than rewriting an accepted ADR.
 
-- объединить две нормативные формулировки одного contract в одну canonical точку и
-  заменить повтор ссылкой;
-- удалить отменённое requirement, временный implementation plan или описание
-  поведения, которого больше нет в согласованном target state;
-- убрать детали, не влияющие на observable contract или architectural invariant,
-  если они мешают пониманию; сохранить необходимую причинность и ссылку;
-- исправить ссылку на удалённый path, устаревший `REQ-*`/`ADR-*` или отменённый
-  interface;
-- заменить изменённое архитектурное решение новым ADR с явной supersession, а не
-  переписывать accepted ADR так, будто прежнего решения не существовало.
+Do not remove current non-scope, confirmed risk, compatibility boundary, or necessary explanation merely for brevity. Do not create an archive, version, changelog, plan, delta, or other durable workflow artifact inside `specs/`.
 
-Не удаляй current non-scope, подтверждённый risk, границу совместимости или
-необходимое explanation только ради краткости. Не создавай archive, version,
-changelog, plan, delta или иной постоянный workflow artifact внутри `specs/`.
+## Preview and confirmation
 
-## Preview и подтверждение
-
-До показа diff явно добавь результат:
+Before showing the diff, explicitly add either:
 
 ```text
 Consolidation: required
@@ -44,7 +25,7 @@ Changes: remove superseded apply wording; retain ADR-0001 as history;
 add one canonical reference.
 ```
 
-Либо:
+or:
 
 ```text
 Consolidation: not required
@@ -52,13 +33,8 @@ Scope: requirements/interfaces/cli.md
 Reason: the requested contract is new and has no duplicate or superseded wording.
 ```
 
-При `required` preview обязан содержать и предметное изменение, и обоснованные
-simplification edits. При `not required` preview не должен придумывать чистку. В
-обоих случаях сначала получи подтверждение точного diff.
+For `required`, the preview must contain both the substantive change and justified simplification edits. For `not required`, do not invent cleanup. In both cases, obtain confirmation of the exact diff first.
 
-## Завершение
+## Completion
 
-После изменения в проверенной области нет конкурирующих canonical documents для
-одного interface или constraint, отменённой нормы, дублирующей формулировки и битой
-ссылки. Если evidence недостаточно, задай вопрос; не удаляй текст на основании
-предположения.
+After change in the checked area, no competing canonical documents exist for one interface or constraint, no withdrawn norm or duplicate formulation remains, and no link is broken. If evidence is insufficient, ask; do not remove text based on an assumption.

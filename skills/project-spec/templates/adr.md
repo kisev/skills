@@ -1,35 +1,35 @@
-# ADR-NNNN: <Краткое решение>
+# ADR-NNNN: [Short decision]
 
-- Статус: proposed
-- Дата: YYYY-MM-DD
+- Status: proposed
+- Date: YYYY-MM-DD
 
-## Контекст и постановка проблемы
+## Context and problem statement
 
-<Опиши контекст, проблему и границу решения.>
+[Describe the context, problem, and decision boundary.]
 
-## Драйверы решения
+## Decision drivers
 
-- <Драйвер решения.>
+- [Decision driver.]
 
-## Рассмотренные варианты
+## Considered options
 
-- <Рассмотренная альтернатива.>
-- <Рассмотренная альтернатива.>
+- [Considered alternative.]
+- [Considered alternative.]
 
-## Итоговое решение
+## Outcome
 
-<Зафиксируй выбранный вариант и основное обоснование.>
+[Record the selected option and primary rationale.]
 
-## Последствия
+## Consequences
 
-### Положительные
+### Positive
 
-- <Положительное последствие.>
+- [Positive consequence.]
 
-### Отрицательные
+### Negative
 
-- <Отрицательное последствие или trade-off.>
+- [Negative consequence or trade-off.]
 
-## Связи
+## Links
 
-- <REQ-* или связанный ADR.>
+- [REQ-* or related ADR.]

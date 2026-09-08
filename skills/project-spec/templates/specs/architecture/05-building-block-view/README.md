@@ -1,37 +1,25 @@
-# 05. Представление building blocks
+# 05 Building Block View
 
-## Назначение
+## Purpose
 
-Опиши статическую архитектурную декомпозицию системы.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- subsystems, services, components, modules и layers;
-- responsibilities и dependencies;
-- основные внутренние и внешние interfaces;
-- диаграммы Container/Component, если они полезны.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- feature backlog;
-- runtime-последовательности;
-- история решений и декомпозиция задач.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-README содержит overview и индекс. Дополнительный файл разрешён только для
-реального building block с самостоятельной архитектурной ответственностью. Не
-создавай blocks по features и не дроби файл только из-за размера.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-05-building-block-view/
-├── README.md
-└── <real-building-block>.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Для каждого block укажи responsibility, boundary, dependencies и interfaces.
-Дополнительные файлы перечисли в README; при простой системе оставь всё здесь.
+Replace this guidance with verified project-specific content.

@@ -1,110 +1,79 @@
-# Вклад в Agent Skills
+# Contributing to Agent Skills
 
-## Область изменений
+[Русский](CONTRIBUTING.ru.md)
 
-Каждый каталог в `skills/` должен оставаться переносимой и самодостаточной
-единицей. Не добавляйте зависимости на checkout, пользовательский home, конкретный
-provider, credentials или конфигурацию отдельной команды. OpenCode-specific
-agents, commands и plugins находятся только в `packages/opencode/`.
+## Change Scope
 
-Согласуйте существенное изменение поведения, совместимости или security boundary
-до реализации. Новому runner-у нужен наблюдаемый контракт: JSON в stdout,
-диагностика в stderr, определённые exit codes, `--help`, `--capabilities` и
-подтверждённая двухфазная запись, если он меняет файлы.
+Keep every `skills/` directory portable and self-contained. Do not add a
+dependency on a checkout, user home, a particular provider, credentials, or one
+team's configuration. OpenCode-specific agents, commands, and plugins belong
+only in `packages/opencode/`.
 
-## Локальная проверка
+Agree on a material behavior, compatibility, or security-boundary change before
+implementing it. A new runner needs an observable contract: JSON on stdout,
+diagnostics on stderr, defined exit codes, `--help`, `--capabilities`, and a
+confirmed two-phase write when it changes files.
 
-Установите закреплённые runtimes и standalone tools из корня репозитория:
+## Local Validation
+
+Install pinned runtimes and standalone tools from the repository root:
 
 ```shell
 mise install
 task --list
 ```
 
-`taskfile.yml` является единственным task graph. Локальная разработка, Lefthook
-и GitHub Actions вызывают его публичные задачи, а не дублируют команды tools.
-Перед отправкой любого изменения выполните единый quality gate:
+`taskfile.yml` is the only task graph. Local development, Lefthook, and GitHub
+Actions invoke its public tasks rather than duplicating tool commands. Run the
+single quality gate before submitting any change:
 
 ```shell
 task check
 ```
 
-Публичный Task API разделяет проверки следующим образом:
+Only `format` changes the tracked checkout. When shared references change, edit
+the canonical file under `shared/references/` first, then run `task generate`;
+portable copies are created only in ignored build artifacts. OpenCode commands
+and the copied LSP catalog are generated only into
+`packages/opencode/dist/assets/` before packing; their sources are
+`packages/opencode/src/registry.ts` and `shared/references/`.
 
-| Задача                       | Назначение                                                    |
-| ---------------------------- | ------------------------------------------------------------- |
-| `tools`                      | Показать активные закреплённые инструменты.                   |
-| `format`, `format:check`     | Изменить canonical formatting или проверить его без записи.   |
-| `lint`, `typecheck`, `test`  | Запустить языковые проверки и тесты.                          |
-| `generate`, `generate:check` | Собрать ignored artifacts или проверить их воспроизводимость. |
-| `skills:validate`            | Запустить agnix, pinned skills-ref и internal contracts.      |
-| `package:check`              | Выполнить полный lifecycle OpenCode package.                  |
-| `eval:check`                 | Проверить schemas/corpus и hostless offline eval suite.       |
-| `security`                   | Проверить историю Git через gitleaks.                         |
-| `check`                      | Запустить полный локальный и CI quality gate.                 |
-| `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.                 |
+`package:check` itself runs `npm ci`, Prettier, oxlint, tsc, Node tests,
+generated-assets drift, smoke through pinned OpenCode, and the npm-pack
+allowlist. An ordinary check does not need separate npm commands.
 
-Только `format` меняет tracked checkout. Если меняются shared references,
-сначала измените canonical-файл в `shared/references/`, затем запустите
-`task generate`; portable copies создаются только в ignored build artifact.
-Команды OpenCode и copied LSP catalog создаются только в `packages/opencode/dist/assets/`
-перед pack; их источники - `packages/opencode/src/registry.ts` и `shared/references/`.
+If an executable is missing, run `mise current` after installation. If
+`uv run --locked` reports drift, deliberately change the pin in `pyproject.toml`
+and then run `uv lock`; do not update dependencies implicitly. To reproduce a
+package failure, run `task package:check` from the repository root.
 
-`package:check` сам выполняет `npm ci`, Prettier, oxlint, tsc, Node tests,
-generated-assets drift, smoke через закреплённый OpenCode и npm pack allowlist.
-Запускать отдельные npm-команды для обычной проверки не требуется.
+## Git Hooks
 
-## Git hooks
-
-Установите hooks после bootstrap:
+Install hooks after bootstrap:
 
 ```shell
 lefthook install
 ```
 
-`pre-commit` вызывает `task pre-commit`: он выбирает быстрые non-mutating проверки
-по staged paths - docs/data, Python/skills и package затрагиваются только при
-изменении соответствующей области, а docs-only правка не запускает package
-lifecycle. `pre-push` вызывает полный `task check`. Полный gate выполняет package
-lifecycle один раз (без отдельного дублирующего package typecheck/test/generate до
-`package:check`). Hooks не применяют fixes и не выполняют `git add`.
+`pre-commit` invokes `task pre-commit` and selects fast non-mutating checks by
+staged paths. `pre-push` invokes full `task check`. Hooks do not apply fixes or
+run `git add`.
 
-## Диагностика
+Use English for canonical source, code, comments, commands, and commit messages.
+Preserve machine tokens exactly and add focused tests for public contracts or
+meaningful regression risks.
 
-- Если executable не найден, выполните `mise install` и проверьте версии через
-  `mise current`.
-- Если `uv run --locked` сообщает drift, не обновляйте зависимости неявно.
-  Осознанно измените pin в `pyproject.toml`, затем выполните `uv lock`.
-- Если `generate:check` сообщает drift, исправьте canonical source и выполните
-  `task generate`. Не редактируйте build artifact напрямую.
-- Agnix errors блокируют проверку. Существующие warnings печатаются полностью и
-  хранятся в точном `.agnix-warnings.json`; новый warning также блокирует gate,
-  пока его причина не устранена или baseline не изменён осознанно.
-- Для воспроизведения package failure запустите `task package:check` из корня,
-  чтобы сохранить те же версии и порядок шагов, что в CI.
+Run live evaluations only explicitly with exact `--host`, `--model`, timeout,
+token/cost limits, and output path. Do not add model defaults or live output to
+Git; ordinary CI runs only the offline suite. Describe the purpose, security
+impact, checks run, and deliberately omitted checks in a pull request.
 
-## Качество и review
+## Releases
 
-- Сохраняйте frontmatter и ограничения формата agentskills.io для каждого
-  `SKILL.md`.
-- Добавляйте тест для публичного контракта или существенного риска регрессии, а
-  не для деталей реализации.
-- Не включайте в изменения credentials, tokens, внутренние endpoints, локальные
-  paths, cache или build artifacts.
-- Live eval запускайте только явно с точными `--host`, `--model`, timeout,
-  token/cost limits и output path. Не добавляйте model defaults или live output
-  в Git; обычный CI выполняет исключительно offline suite.
-- Описывайте в pull request цель, security impact, выполненные проверки и
-  осознанно не запущенные проверки.
-- Используйте английский для кода, комментариев и commit messages; пользовательские
-  документы следуют языку существующего раздела.
-
-## Выпуски
-
-Версии portable skills фиксируются в их metadata. Версия
-`@kisev/skills-opencode`, tag и GitHub Release должны относиться к одному commit.
-Не изменяйте опубликованную версию: исправление выпускается новой patch-версией.
-Публикация npm package запускается только push tag из
-`.github/workflows/publish.yml`: workflow сверяет tag с версией package и
-использует npm trusted publishing через OIDC. v1.0.0 - одноразовый
-интерактивный bootstrap до создания package relationship.
+Portable-skill versions are fixed in their metadata. The
+`@kisev/skills-opencode` version, tag, and GitHub Release must refer to one
+commit. Do not change a published version: release a new patch version instead.
+The npm package is published only by a tag push through
+`.github/workflows/publish.yml`; the workflow checks the tag against the package
+version and uses npm trusted publishing through OIDC. v1.0.0 is a one-time
+interactive bootstrap before the package relationship exists.

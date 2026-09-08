@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from scripts.build_skills import DEFAULT_OUTPUT as BUILT_SKILLS  # noqa: E402
 from scripts.build_skills import build as build_skills  # noqa: E402
+from scripts.check_locales import validate as validate_locales  # noqa: E402
 
 PACKAGE = ROOT / "packages" / "skills"
 DEFAULT_OUTPUT = ROOT / ".build" / "packages" / "skills"
@@ -61,6 +62,7 @@ def archive(skill: Path) -> bytes:
 
 def build(output: Path, check: bool) -> int:
     build_skills(BUILT_SKILLS, False)
+    validate_locales(built=BUILT_SKILLS)
     manifest = json.loads((PACKAGE / "package.json").read_text(encoding="utf-8"))
     version = manifest.get("version")
     if not isinstance(version, str):
@@ -112,7 +114,7 @@ def build(output: Path, check: bool) -> int:
             "skills": [
                 {
                     "name": entry["name"],
-                    "description": f"Kisev portable skill {entry['name']}.",
+                    "description": f"Kisev portable skill {entry['name']}; Russian discovery terms are in its metadata.",
                     "type": "archive",
                     "url": f"../../{entry['archive']}",
                     "digest": f"sha256:{entry['sha256']}",

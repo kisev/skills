@@ -1,44 +1,41 @@
-# Функциональные требования
+# Functional requirements
 
-## Назначение
+## Purpose
 
-Зафиксируй нормативное наблюдаемое поведение системы и условия его проверки.
+Record normative observable system behavior and conditions for its verification.
 
-## Сюда относится
+## Included
 
-- пользовательское и системное поведение;
-- реакции на события и ошибки;
-- инварианты и поддерживаемые переходы lifecycle.
+- User and system behavior.
+- Reactions to events and errors.
+- Invariants and supported lifecycle transitions.
 
-## Сюда не относится
+## Excluded
 
-- синтаксис интерфейса, если он описан формальной схемой;
-- цели качества и ограничения платформы;
-- дизайн компонентов и детали реализации.
+- Interface syntax covered by a formal schema.
+- Quality goals, platform constraints, component design, and implementation detail.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-В v1 все функциональные требования находятся только в этом `README.md`.
-Автоматически не дроби их по features, domains, use cases или components.
+In v1, keep all functional requirements in this `README.md`. Do not automatically split them by features, domains, use cases, or components.
 
-## Ожидаемая структура
+## Expected Structure
 
 ```text
 functional/
 └── README.md
 ```
 
-## Шаблон содержания
+## Content Template
 
-Для каждого требования используй стабильный `REQ-F-NNN`, ясную нормативную
-формулировку, необязательное обоснование и проверку, если она нетривиальна.
+For each requirement, use a stable `REQ-F-NNN`, a clear normative statement, optional rationale, and verification when nontrivial.
 
 ```markdown
-### REQ-F-001 - Повтор запроса
+### REQ-F-001 - Retry a request
 
-Когда внешний сервис отвечает 503, клиент должен выполнить не более трёх попыток.
+When an external service returns 503, the client shall make no more than three attempts.
 
-#### Проверка
+#### Verification
 
-- Четвёртый запрос не выполняется.
+- A fourth request is not made.
 ```

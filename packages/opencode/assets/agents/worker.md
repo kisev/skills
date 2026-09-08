@@ -1,5 +1,5 @@
 ---
-description: Implements scoped changes and runs the relevant verification.
+description: Implements scoped changes and runs the relevant verification. Russian triggers: исполнитель, реализация.
 mode: subagent
 hidden: true
 steps: 12

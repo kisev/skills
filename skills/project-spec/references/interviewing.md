@@ -1,48 +1,25 @@
-# Адаптивное интервью
+# Adaptive interview
 
-Интервью закрывает смысловые пробелы, а не воспроизводит фиксированную анкету.
+The interview closes semantic gaps rather than reproducing a fixed questionnaire.
 
-## Процесс
+## Process
 
-1. Собери известные факты и решения.
-2. Найди assumptions, gaps и contradictions.
-3. Задай от одного до пяти наиболее важных связанных вопросов через штатный
-   интерактивный механизм host; при его отсутствии задай вопросы в чате.
-4. Проанализируй ответы и повторяй, пока целевое состояние не станет однозначным.
-5. Перед preview выполни readiness check в контексте; не создавай checklist или
-   другой repository artifact.
+1. Collect known facts and decisions.
+2. Identify assumptions, gaps, and contradictions.
+3. Ask one to five of the most important related questions through the host's native interactive mechanism; if unavailable, ask in chat.
+4. Analyze answers and repeat until the target state is unambiguous.
+5. Before preview, perform a readiness check in context; do not create a checklist or other repository artifact.
 
-Не спрашивай то, что надёжно следует из evidence или предыдущих ответов. Особое
-внимание уделяй edge cases, failure behavior, compatibility, unsupported behavior,
-invariants, security boundaries и lifecycle/state transitions.
+Do not ask what follows reliably from evidence or previous answers. Focus especially on edge cases, failure behavior, compatibility, unsupported behavior, invariants, security boundaries, and lifecycle/state transitions.
 
 ## Readiness check
 
-Интервью готово к preview, когда одновременно выполняются условия:
+The interview is ready for preview only when: material contradictions are resolved or explicitly retained as `UNKNOWN` by the user; critical unknowns about behavior, architecture, compatibility, security, and quality are absent or explicitly accepted as specification boundaries; scope and explicit non-scope are defined; main behaviors, failure behavior, invariants, and unsupported behavior are unambiguous; external interfaces and compatibility guarantees are defined or explicitly inapplicable; verification of nontrivial normative requirements is understood; architecture, runtime, and deployment are described enough for a consistent target state; and terminology has no material unresolved interpretations.
 
-- значимые contradictions разрешены или явно оставлены как `UNKNOWN` человеком;
-- critical unknowns по behavior, architecture, compatibility, security и quality
-  отсутствуют либо человек явно принял их как границу specification;
-- scope и explicit non-scope определены;
-- основные behaviours, failure behavior, invariants и unsupported behavior
-  сформулированы однозначно;
-- external interfaces и compatibility guarantees определены либо явно
-  неприменимы;
-- verification для нетривиальных нормативных требований понятна;
-- architecture, runtime и deployment описаны настолько, насколько это нужно для
-  согласованного целевого состояния;
-- terminology не содержит значимых неразрешённых трактовок.
+If any condition is not met, continue the adaptive interview. Do not use the readiness check as a fixed user questionnaire or show a service checklist instead of substantive questions.
 
-Если хотя бы один пункт не выполнен, продолжи адаптивное интервью. Не используй
-readiness check как фиксированную анкету для пользователя и не показывай служебный
-checklist вместо содержательных вопросов.
+## Greenfield interview areas
 
-## Области greenfield-интервью
+Cover applicable areas: problem, goal, users, stakeholders, scope, explicit non-scope, key behavior, external interfaces, constraints, compatibility, quality attributes, security, architecture, integrations, runtime, deployment, verification, risks, and terminology.
 
-Покрой применимые области: проблема, цель, пользователи, заинтересованные стороны,
-scope, explicit non-scope, ключевое поведение, external interfaces, constraints,
-compatibility, quality attributes, security, architecture, integrations, runtime,
-deployment, verification, risks и terminology.
-
-Для неприменимой области зафиксируй краткую причину в соответствующем canonical
-document. Не придумывай содержание только для заполнения раздела.
+For an inapplicable area, record a brief reason in the corresponding canonical document. Do not invent content merely to fill a section.

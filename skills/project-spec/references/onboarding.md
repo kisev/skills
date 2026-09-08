@@ -1,31 +1,17 @@
-# Подключение существующего проекта
+# Existing-project onboarding
 
-Перед вопросами исследуй доступные repository evidence: инструкции, README и
-документацию, ADR/RFC, исходный код, тесты, схемы, configuration, CLI/API,
-dependencies, CI, deployment и integrations. Используй дополнительные исследования
-только при необходимости; результаты держи в контексте, не в repository.
+Before questions, investigate available repository evidence: instructions, README and documentation, ADR/RFC, source code, tests, schemas, configuration, CLI/API, dependencies, CI, deployment, and integrations. Use additional research only when needed; retain results in context, not the repository.
 
-## Классификация evidence
+## Evidence classification
 
-- Классифицируй каждый отдельный claim, а не source file, subsystem или проект
-  целиком. Один и тот же evidence может подтверждать implementation fact, но не
-  intent человека или compatibility guarantee.
-- `KNOWN`: конкретный claim однозначно подтверждён. Не спрашивай пользователя.
-- `AMBIGUOUS`: evidence допускает несколько трактовок. Покажи варианты и спроси
-  пользователя.
-- `UNKNOWN`: repository не позволяет определить intent. Спроси пользователя.
-- `CONFLICT`: sources противоречат друг другу. Покажи точные paths и различия,
-  затем спроси, что считать нормативным.
+- Classify every individual claim, not a source file, subsystem, or whole project. The same evidence can confirm an implementation fact but not human intent or a compatibility guarantee.
+- `KNOWN`: a concrete claim is unambiguously confirmed. Do not ask the user.
+- `AMBIGUOUS`: evidence permits several interpretations. Show the options and ask the user.
+- `UNKNOWN`: the repository cannot establish intent. Ask the user.
+- `CONFLICT`: sources disagree. Show exact paths and differences, then ask what is normative.
 
-Например, tests и source могут сделать claim "CLI принимает `--timeout`" `KNOWN`,
-но claim "`--timeout` - поддерживаемый публичный контракт" остаётся `UNKNOWN`, если
-это не подтверждено contract evidence или человеком.
+For example, tests and source can make the claim "the CLI accepts `--timeout`" `KNOWN`, while "`--timeout` is a supported public contract" remains `UNKNOWN` unless confirmed by contract evidence or a person.
 
-Не реконструируй historical features, milestones, phases или первоначальный
-roadmap. Описывай текущее устройство и договорённости, которые человек выбирает как
-нормативные. Всегда различай "код сейчас так делает" и "это поддерживаемый
-контракт".
+Do not reconstruct historical features, milestones, phases, or the original roadmap. Describe the current design and agreements the user selects as normative. Always distinguish "the code currently does this" from "this is a supported contract".
 
-Результат onboarding - только полный canonical `specs/` и ADR, если они
-действительно нужны. Не создавай `research/`, `analysis/`, `planning/`, `mapping/`,
-`state/` или отчёт об исследовании.
+Onboarding produces only complete canonical `specs/` and ADRs when genuinely needed. Do not create `research/`, `analysis/`, `planning/`, `mapping/`, `state/`, or a research report.

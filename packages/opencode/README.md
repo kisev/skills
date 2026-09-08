@@ -1,93 +1,64 @@
-# Интеграция OpenCode
+# OpenCode Integration
 
-`@kisev/skills-opencode` - npm package с capability router, OpenCode runtime,
-управлением agent profiles и opt-in installer для agents, commands и plugins. Он
-не включает portable skills и не меняет конфигурацию при import, plugin load или
-npm lifecycle. Package требует Node.js 22+ и OpenCode 1.18.29+.
+[Русский](README.ru.md)
 
-## Установка skills
+`@kisev/skills-opencode` is the optional npm integration. It does not include
+portable skills or mutate configuration on import.
+Managed files use exact SHA-256 ownership checks.
 
-Сначала установите нужные portable skills через `npx skills` из публичного
-репозитория:
+## Install Skills
+
+Install portable skills first:
 
 ```shell
 npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
 
-Для одного skill укажите `--skill <name>`. Для воспроизводимой установки можно
-передать URL GitHub tag, например
-`https://github.com/kisev/skills/tree/v1.1.1`. Package никогда не устанавливает
-и не обновляет skills. Если команда не нашла skill, она сообщает точную команду
-`npx skills add` для его установки.
+Use `--skill <name>` for one skill. `npx skills` accepts a reproducible tag URL,
+for example `https://github.com/kisev/skills/tree/v1.1.1`; the package never
+installs or updates skills and reports the exact `npx skills add` command when a
+skill is missing.
 
-## Установка integration
-
-Установите npm package там, где OpenCode сможет разрешить plugin:
+## Install Integration
 
 ```shell
 npm install @kisev/skills-opencode@1.1.1
 ```
 
-Сначала покажите план installer. По умолчанию CLI выводит короткую сводку:
-счётчики по группам, только изменяемые paths, conflicts, restart flag, digest и
-готовую confirm-команду. Эта команда не меняет deployment:
+Preview before any write:
 
 ```shell
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
-Проверьте сводку и примените только показанный digest:
+Apply the shown digest only:
 
 ```shell
 npm exec -- skills-opencode install --scope global --confirm <digest>
 ```
 
-`global` устанавливает assets в `~/.config/opencode/agents`,
-`~/.config/opencode/commands` и `~/.config/opencode/plugins`. Для текущего
-repository используйте `project`:
+Use `--json` for automation.
+The machine-readable plan includes `requires_restart`; a preview uses `--dry-run`
+and an apply uses `--confirm <digest>` with identical arguments.
 
-```shell
-npm exec -- skills-opencode install --scope project --dry-run
-npm exec -- skills-opencode install --scope project --confirm <digest>
-```
+`global` manages `.config/opencode/agents`, `.config/opencode/commands`, and
+`.config/opencode/plugins`. Project scope manages `.opencode/agents`,
+`.opencode/commands`, and `.opencode/plugins`. Profile configuration is kept in
+`.config/opencode/.skills-opencode/agent-profiles.json` globally or under
+`.opencode/.skills-opencode` for a project.
 
-Project assets находятся в `.opencode/agents`, `.opencode/commands` и
-`.opencode/plugins` текущего working directory. Scope обязателен. Installer не изменяет `opencode.json`, не
-перезаписывает неизвестные или изменённые files и сохраняет ownership manifests
-только после confirmed apply.
+## Read-only Doctor
 
-Для automation добавьте `--json`. Этот режим сохраняет полный стабильный
-machine-readable plan, включая `operations` и `requires_restart`:
-
-```shell
-npm exec -- skills-opencode install --scope global --dry-run --json
-npm exec -- skills-opencode agent list --scope global --json
-```
-
-## Read-only doctor
-
-`doctor` is a read-only installer health report. It never creates lifecycle
-state, consumes receipts, recovers journals, starts plugins or starts LSP
-servers. `project` and `global` are isolated scopes; unavailable OpenCode host
-facts are reported as incomplete rather than inferred.
+`doctor` reports facts without writing:
 
 ```shell
 npm exec -- skills-opencode doctor --scope project
 npm exec -- skills-opencode doctor --scope global --json
 ```
 
-The JSON report is versioned and contains stable check IDs, package/catalog and
-installed-manifest versions, ownership/drift/collision classifications, stage-8
-inventory findings, lifecycle/runtime state summaries, redacted config
-projections and LSP facts. Secrets, raw config, environment values, receipts
-and credentials are never serialized. Exit code `0` is clean, `1` reports
-findings, and `2` means invalid input or an incomplete probe failure.
+## Reconcile Retired Assets
 
-## Reconcile retired assets
-
-`reconcile` проверяет только public portable skills, package commands, plugins,
-agents и installation metadata выбранного scope. XDG runtime state не читается и
-не изменяется. Preview сохраняет private receipt с TTL и печатает digest:
+`reconcile` previews retirement and preserves conflicts:
 
 ```shell
 npm exec -- skills-opencode reconcile --scope project --dry-run
@@ -95,13 +66,7 @@ npm exec -- skills-opencode reconcile --scope project --confirm <digest>
 npm exec -- skills-opencode reconcile --scope global --dry-run --json
 ```
 
-Удаляются только retired files с доказанным inventory ownership и exact
-SHA-256. Modified-managed, user-owned, unknown, symlink, unsafe-path и
-ambiguous-source entries остаются conflicts. Другие scopes, sources и lock
-entries сохраняются byte-for-byte. Journaled transaction обеспечивает rollback,
-recovery и повторный no-op reconcile.
-
-Добавьте plugin в `opencode.json` вручную:
+Add the plugin manually:
 
 ```json
 {
@@ -110,15 +75,9 @@ recovery и повторный no-op reconcile.
 }
 ```
 
-Полностью перезапустите OpenCode после install, upgrade или uninstall: registry
-agents и commands строится до plugin hooks.
+## Manage Agents
 
-## Управление agents
-
-Рекомендуемый интерфейс - прямой terminal CLI: он не вызывает LLM и не расходует
-токены. Fixed roles `manager`, `architect`, `mapper`, `worker`, `review` и
-стандартный `critic` всегда сохраняют имена и canonical prompts/permissions.
-Меняются только `model` и `variant`:
+The direct CLI manages models without LLM calls:
 
 ```shell
 npm exec -- skills-opencode agent list --scope global
@@ -128,17 +87,10 @@ npm exec -- skills-opencode agent model-set worker --scope global \
 npm exec -- skills-opencode agent reconcile --scope global --dry-run
 ```
 
-`agent configure` предлагает настоящий terminal wizard: стрелками выбираются
-agent из inventory, затем provider, только его models и, если metadata выбранной
-модели публикует variants, variant. Текущие model/variant и target показываются
-перед выбором; доступны `keep`, `change`, `clear variant`, `back` и `cancel`.
-Wizard не вызывает LLM, OpenCode Question или refresh catalog. Если catalog
-недоступен, он завершается без записи и печатает инструкцию для exact
-`--model <provider/model>` с optional `--variant`. Для модели без variants
-дополнительный selector не показывается.
-
-Additional critic имеет имя `critic-<safe-suffix>`. Стандартный `critic` и fixed
-roles нельзя удалить или переименовать:
+When the catalog is unavailable, use exact `--model <provider/model>` and an
+optional `--variant`; `provider/model` identifies the selected model. The
+optional `agent_profiles` tool and slash commands adapt the same direct-CLI
+plan/apply contract.
 
 ```shell
 npm exec -- skills-opencode critic add security --scope global \
@@ -146,79 +98,34 @@ npm exec -- skills-opencode critic add security --scope global \
 npm exec -- skills-opencode critic remove security --scope global --dry-run
 ```
 
-Для любой mutation используйте готовую confirm-команду из preview либо замените
-`--dry-run` на `--confirm <digest>` и повторите те же аргументы. Человекочитаемый
-plan не печатает полный JSON и сворачивает длинные группы paths. Digest связан с
-одноразовым private receipt, действует 10 минут и повторно не применяется. Для
-machine-readable result добавьте `--json`; поле `requires_restart` сообщает о
-необходимости полностью перезапустить OpenCode.
-
-В global scope profile configuration хранится в
-`~/.config/opencode/.skills-opencode/agent-profiles.json`, а semantic deployment
-manifest - рядом в `agent-profiles.manifest.json`. Для project scope те же файлы
-находятся под `.opencode/.skills-opencode/`. Configuration хранит выбранные
-model/variant и additional critics; package update её не сбрасывает. Manifest
-хранит package version, exact critic pool и hashes canonical configuration и
-rendered files.
-
-Inventory различает `package-owned`, `managed`, `user-owned`, `drift` и exact-name
-`collision`. User-owned и неизвестные agents не изменяются. Collision блокирует
-apply; drift исправляется только явным `agent reconcile`. Все mutations проходят
-под lifecycle lock, повторно проверяют inventory, используют journaled
-all-or-rollback transaction и выполняют final validation. После прерывания
-следующая mutation безопасно восстанавливает before-images и требует свежий plan.
-
-## Upgrade и uninstall
-
-После обновления npm package снова выполните dry-run и подтвердите новый digest.
-Installer обновляет только files с совпадающим managed SHA-256.
-
-При первом upgrade с `1.0.0` installer передаёт ownership шести fixed agents из
-generic manifest в profile domain только при точном совпадении package/version,
-manifest records и SHA-256 каждого файла. Любое отличие остаётся конфликтом.
-Commands и plugins продолжают принадлежать generic installer. Uninstall удаляет
-неизменённые deployments, но сохраняет profile configuration для последующей
-установки.
+## Upgrade and Uninstall
 
 ```shell
 npm exec -- skills-opencode uninstall --scope global --dry-run
 npm exec -- skills-opencode uninstall --scope global --confirm <digest>
 ```
 
-Uninstall удаляет только files из ownership manifest, если их SHA-256 не
-изменился. Изменённые пользователем files остаются как `conflict`.
+The full JSON install preview is:
 
-## Runtime options
+```shell
+npm exec -- skills-opencode install --scope global --dry-run --json
+```
 
-Package экспортирует independent plugin factories `background-attempts`,
-`schedule`, `autonomy-policy`, `rules-injector`, `rtk`, `zed-bell` и
-`zed-clickable-paths`. Stateful plugins Background Attempts, Scheduler и
-Autonomy Policy отключены по умолчанию. Zed integrations также
-optional. Включайте subsystem только в собственном user-owned plugin wrapper:
+## Runtime Options
 
-Background Attempts создают workspace только через единый managed worktree
-owner. Records используют private current-only state, marker и repository
-fingerprint; release перепроверяет регистрацию, fingerprint и чистый status и
-возвращает `blocked` без удаления при расхождении. Scheduler принимает строгий
-five-field cron, не воспроизводит missed slots и пишет receipts `started`,
-`completed`, `failed` или `overrun`.
+Plugins are independent and stateful ones are opt-in.
 
-`rules-injector` fail-soft применяет ограниченный budget и пропускает native
-project/global rules. `rtk` fail-open сжимает большой bash output и добавляет
-подсказку для edit error, но не содержит ownership guard.
+```shell
+npm exec -- skills-opencode agent list --scope global --json
+```
 
-## Границы
+## Boundaries
 
-Portable skills в корне `skills/` универсальны и устанавливаются только через
-`npx skills`. Этот package поставляет только OpenCode-specific assets и runtime
-router. Команды - тонкие adapters: передают `$ARGUMENTS` как недоверенный ввод
-в native Skill tool, а target validation, confirmation, batch/review rules и
-формат результата остаются ответственностью skill или runner.
-`capabilities`, `route` и `doctor` - package tools/commands для catalog, routing и
-health. Tool `doctor` and direct CLI share one read-only facts API; `/doctor` is
-only a thin adapter. Tool `agent_profiles` и четыре slash-команды `agent-list`,
-`agent-model-set`, `critic-add`, `critic-remove` - optional thin UX над теми же
-plan/apply contracts. Отдельного skill `agent-profiles` нет.
+Portable skills and package assets install independently.
 
-Package распространяется по лицензии MIT. Полные инструкции по portable skills,
-upgrade и security boundaries находятся в корневом README репозитория.
+```shell
+npm exec -- skills-opencode install --scope project --dry-run
+npm exec -- skills-opencode install --scope project --confirm <digest>
+```
+
+The package is MIT-licensed; the repository root README has full instructions.

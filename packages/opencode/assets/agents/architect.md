@@ -1,5 +1,5 @@
 ---
-description: Analyzes architecture choices, compatibility, and operational risk.
+description: Analyzes architecture choices, compatibility, and operational risk. Russian triggers: архитектор, архитектурное решение.
 mode: subagent
 hidden: true
 steps: 16

@@ -1,28 +1,22 @@
-# Архитектура
+# Architecture
 
-## Назначение
+## Purpose
 
-Объясни, что architecture описывает устройство и механизмы, обеспечивающие
-requirements, по taxonomy arc42.
+Explain that architecture describes the design and mechanisms that provide requirements, using arc42 taxonomy.
 
-## Сюда относится
+## Included
 
-- индекс всех 12 viewpoints;
-- короткая навигация по architecture;
-- связь с нормативными требованиями.
+- An index of all 12 viewpoints, short architecture navigation, and connection to normative requirements.
 
-## Сюда не относится
+## Excluded
 
-- дублирование дочерних разделов;
-- feature roadmap и implementation plan;
-- заявление формального соответствия arc42 или C4.
+- Duplication of child sections, feature roadmap, implementation plan, or a claim of formal arc42 or C4 compliance.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Сохраняй ровно 12 обязательных numbered directories. Дополнительные файлы
-разрешены только по правилам соответствующего viewpoint.
+Keep exactly 12 required numbered directories. Additional files are allowed only under the rules for their viewpoint.
 
-## Ожидаемая структура
+## Expected Structure
 
 ```text
 architecture/
@@ -32,7 +26,6 @@ architecture/
 └── 12-glossary/README.md
 ```
 
-## Шаблон содержания
+## Content Template
 
-Дай короткий индекс со ссылкой и одним предложением о назначении каждого
-viewpoint. Удали эти инструкции из созданного документа.
+Provide a short linked index with one sentence on the purpose of every viewpoint. Remove these instructions from the created document.

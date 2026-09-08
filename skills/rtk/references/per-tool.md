@@ -1,46 +1,19 @@
-# Границы RTK по категориям
+# RTK Boundaries by Category
 
-Читайте только раздел, относящийся к текущей операции. RTK подходит для широкого
-первого обзора; исходная команда нужна для точного результата и важных решений.
+Read only the section relevant to the operation. RTK is suitable for a broad first pass; use the original command for exact results and important decisions.
 
-## Сборка, тесты и линтеры
+## Build, Tests, and Linters
 
-Для полного многословного запуска обычно подходят `rtk cargo build`, `rtk pytest
-tests/`, `rtk tsc`, `rtk ruff check .` и аналогичные обёртки. После найденной
-ошибки запустите узкий исходный тест или команду линтера: так сохраняются traceback,
-порядок, code frame, предупреждения и точная диагностика.
+`rtk cargo build`, `rtk pytest tests/`, `rtk tsc`, `rtk ruff check .`, and similar wrappers are usually suitable for a complete verbose run. After finding an error, run the focused original test or linter command to preserve traceback, order, code frame, warnings, and exact diagnostics. Do not use compressed output as evidence of complete coverage, absence of warnings, or exact test-runner behavior.
 
-Не используйте сжатый вывод как доказательство полного покрытия, отсутствия
-предупреждений или точного поведения test runner.
+## Git and Hosting
 
-## Git и хостинги
+`rtk git status`, `rtk git log`, and broad `rtk git diff` suit an initial summary. For review, patch preparation, whitespace, rename, file-mode, exact-line checks, or an approval decision, use direct `git diff`, `git show`, and other original commands. For hosting CLIs, RTK can summarize lists and statuses; obtain direct fields or API responses when pagination, JSON, comments, object existence, merge, release, or security matters.
 
-`rtk git status`, `rtk git log` и широкий `rtk git diff` подходят для первичной
-сводки. Для review, подготовки patch, проверки пробелов, rename, режима файла,
-точных строк или решения об approve используйте прямые `git diff`, `git show` и
-остальные исходные команды.
+## Logs and Data
 
-Для CLI хостинга RTK годится для обзора списков и статусов. Получайте прямые поля
-или API-ответы, когда важны pagination, JSON, комментарии, существование объекта,
-merge, release или безопасность.
+RTK is useful for repetitive logs and large lists. During incident investigation, switch to a narrow direct fragment when timestamps, event order, frequency, stack traces, or absence of an event matter. Do not pipe transformed RTK output to a JSON parser, redirect, or another command expecting the complete format. For JSON, manifests, databases, and APIs, use direct machine-readable output when exact values, `null`, order, duplicates, hashes, sizes, or a specific field matter.
 
-## Логи и данные
+## Infrastructure and Writes
 
-RTK полезен для повторяющихся логов и крупных списков. При расследовании ошибки
-перейдите к узкому прямому фрагменту, если важны timestamp, порядок событий,
-частота, stack trace или отсутствие события.
-
-Не передавайте преобразованный вывод RTK в pipe, JSON parser, redirect или другую
-команду, ожидающую полный формат. Для JSON, manifests, базы данных и API используйте
-прямой машиночитаемый вывод, когда имеют значение точные значения, null, порядок,
-дубликаты, hashes, размеры или конкретное поле.
-
-## Инфраструктура и запись
-
-RTK может помочь обзору списков ресурсов и логов контейнеров. Не используйте его
-как единственное доказательство перед deployment, rollout, migration, удалением,
-сменой permissions или другой разрушительной операцией. До записи проверьте цель,
-область, аргументы и фактический результат прямой командой.
-
-Не добавляйте RTK автоматически в shell-цепочки. Его сжатый человекочитаемый вывод
-должен быть конечным результатом, а не входом следующего шага.
+RTK can summarize resource lists and container logs. Do not use it as the sole evidence before deployment, rollout, migration, deletion, permission changes, or another destructive operation. Before writing, verify target, scope, arguments, and actual result with a direct command. Do not automatically add RTK to shell chains: its compressed human-readable output is a final result, never input to the next step.

@@ -1,34 +1,25 @@
-# 10. Обеспечение качества
+# 10 Quality Requirements
 
-## Назначение
+## Purpose
 
-Объясни, какие architecture decisions и mechanisms обеспечивают quality goals.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- ссылки на `REQ-Q-*`;
-- architecture tactics и trade-offs;
-- evidence paths для механизмов, связанных с качеством.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- дублирование нормативных thresholds;
-- общий список характеристик ISO/IEC 25010;
-- неподтверждённые claims о качестве.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним `README.md`; нормативный источник истины находится в
-`requirements/quality/README.md`.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-10-quality-requirements/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Свяжи каждый critical `REQ-Q-*` с конкретным mechanism, decision и trade-off. Если
-requirement ещё не обеспечен architecture, обозначь risk без выдуманного решения.
+Replace this guidance with verified project-specific content.

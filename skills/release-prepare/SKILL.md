@@ -1,30 +1,13 @@
 ---
 name: release-prepare
 description: >-
-  Подготовить релизный GitLab MR, inventory, SemVer-обоснование, Mattermost-анонс
-  и проверенный Markdown-план публикации без выполнения команд. Использовать для
-  релизной ветки или MR, а не для обычного изменения.
+  Prepare a release GitLab merge request and publication plan. Russian discovery terms: подготовить релиз.
 license: MIT
-compatibility: Requires Python 3.12+, git, and an authenticated glab CLI for collection.
 metadata:
   author: "Kirill Sevriugin"
   version: "1.1.1"
 ---
 
-# Подготовка релизного MR
+# release-prepare
 
-Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
-`references/portable-gitlab-contracts-v2.md`.
-Принимай один точный MR URL. Зафиксируй
-предыдущий тег или явно выбранную предыдущую границу, exact base/start/head SHA и
-точный диапазон коммитов. Не называй inventory полным при ошибке pagination, неполном диапазоне
-или недоступном MR.
-
-Проверь состав релиза, прямые коммиты, связанные задачи, pipeline точного SHA,
-совместимость, миграции, конфигурацию и значения по умолчанию. SemVer выбирай по
-наблюдаемым контрактам; не утверждай обратную совместимость без evidence.
-
-Подготовь русские title, описание и анонс, а также английский prompt иллюстрации
-без текста и логотипов. Mattermost-канал не выбирай и сообщение не отправляй:
-анонс остаётся отдельным явным действием пользователя. Сформируй один Markdown
-план и перед ручной публикацией перепроверь актуальность через `finalize`.
+Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

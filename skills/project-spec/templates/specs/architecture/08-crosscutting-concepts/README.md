@@ -1,36 +1,25 @@
-# 08. Сквозные концепции
+# 08 Crosscutting Concepts
 
-## Назначение
+## Purpose
 
-Опиши общие principles и mechanisms, действующие в нескольких building blocks.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- error handling, logging и configuration;
-- security, authentication и observability;
-- persistence, concurrency и dependency management;
-- другие подтверждённые cross-cutting rules.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- локальная деталь реализации одного component;
-- список возможных concepts на будущее;
-- нормативные цели качества без описания mechanism.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-README содержит overview и индекс. Один дополнительный файл соответствует одному
-реальному principle или mechanism, который затрагивает несколько blocks.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-08-crosscutting-concepts/
-├── README.md
-└── <crosscutting-concept>.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Для каждого concept укажи scope, rules, participating blocks, failure behavior и
-связанные requirements/ADR. Не создавай файл, если mechanism локален.
+Replace this guidance with verified project-specific content.

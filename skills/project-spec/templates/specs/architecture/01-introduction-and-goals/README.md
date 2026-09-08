@@ -1,35 +1,25 @@
-# 01. Введение и цели
+# 01 Introduction And Goals
 
-## Назначение
+## Purpose
 
-Опиши назначение системы, основные цели и ожидания заинтересованных сторон.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- проблема и назначение;
-- пользователи и заинтересованные стороны;
-- бизнес- и инженерные цели;
-- краткий обзор наиболее важных requirements.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- полная копия requirements;
-- структура компонентов и детали технологий;
-- roadmap и история проекта.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним `README.md`; дополнительные файлы автоматически не
-создаются.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-01-introduction-and-goals/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Кратко опиши назначение, цели, заинтересованные стороны, обзор scope и ссылки на
-ключевые `REQ-*`. Для отсутствующей стороны или цели не создавай фиктивную запись.
+Replace this guidance with verified project-specific content.

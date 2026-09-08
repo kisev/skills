@@ -1,36 +1,25 @@
-# 06. Выполнение во времени
+# 06 Runtime View
 
-## Назначение
+## Purpose
 
-Опиши значимые end-to-end runtime scenarios системы.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- последовательности interactions;
-- data/control flow;
-- errors, recovery и asynchronous behavior;
-- переходы lifecycle, важные для понимания системы.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- каждый function call;
-- статический каталог компонентов;
-- малозначимые happy-path примеры.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-README содержит overview и индекс. Один дополнительный файл соответствует одному
-важному end-to-end scenario. Не дроби по отдельным функциям.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-06-runtime-view/
-├── README.md
-└── <significant-scenario>.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Для каждого scenario укажи trigger, participants, основной flow, failures и
-recovery. При необходимости используй Mermaid `sequenceDiagram` или `stateDiagram`.
+Replace this guidance with verified project-specific content.

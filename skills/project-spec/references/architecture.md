@@ -1,52 +1,33 @@
-# Профиль архитектуры
+# Architecture profile
 
-Используй arc42 как taxonomy, но не заявляй формальное соответствие arc42, C4 или
-ISO. Все 12 разделов существуют сразу.
+Use arc42 as taxonomy, but do not claim formal compliance with arc42, C4, or ISO. All 12 sections exist from the start.
 
-## Разделы
+## Sections
 
-1. `01-introduction-and-goals` - назначение, заинтересованные стороны, цели и
-   обзор требований.
-2. `02-architecture-constraints` - архитектурные последствия `REQ-C-*`, а не
-   второй нормативный список ограничений.
-3. `03-context-and-scope` - граница, пользователи, соседние системы, внешние
-   зависимости и взаимодействия.
-4. `04-solution-strategy` - ключевые технологии, декомпозиция, patterns и способы
-   достижения критичных целей качества.
-5. `05-building-block-view` - статическая структура, responsibilities,
-   dependencies и interfaces.
-6. `06-runtime-view` - значимые end-to-end scenarios, data/control flow, errors,
-   recovery и asynchronous behavior.
-7. `07-deployment-view` - runtime environment, deployment units, infrastructure,
-   network, storage и относящийся CI/CD.
-8. `08-crosscutting-concepts` - общие mechanisms: errors, logging, configuration,
-   security, observability, persistence, concurrency и другие.
-9. `09-architecture-decisions` - индекс ADR и сами ADR.
-10. `10-quality-requirements` - как architecture обеспечивает `REQ-Q-*`, а не
-    дублирование нормативных требований к качеству.
-11. `11-risks-and-technical-debt` - известные risks, debt, хрупкие области и
-    дорогие изменения, но не backlog.
-12. `12-glossary` - неоднозначные и специфичные для проекта terms, но не словарь
-    общеизвестных технологий.
+1. `01-introduction-and-goals` - purpose, stakeholders, goals, and requirement overview.
+2. `02-architecture-constraints` - architectural consequences of `REQ-C-*`, not a second normative constraint list.
+3. `03-context-and-scope` - boundary, users, neighboring systems, external dependencies, and interactions.
+4. `04-solution-strategy` - key technologies, decomposition, patterns, and means to meet critical quality goals.
+5. `05-building-block-view` - static structure, responsibilities, dependencies, and interfaces.
+6. `06-runtime-view` - meaningful end-to-end scenarios, data/control flow, errors, recovery, and asynchronous behavior.
+7. `07-deployment-view` - runtime environment, deployment units, infrastructure, network, storage, and relevant CI/CD.
+8. `08-crosscutting-concepts` - shared mechanisms: errors, logging, configuration, security, observability, persistence, concurrency, and others.
+9. `09-architecture-decisions` - ADR index and ADRs themselves.
+10. `10-quality-requirements` - how architecture provides `REQ-Q-*`, not duplication of normative quality requirements.
+11. `11-risks-and-technical-debt` - known risks, debt, fragile areas, and expensive changes, but not a backlog.
+12. `12-glossary` - ambiguous and project-specific terms, but not a dictionary of common technologies.
 
-## Декомпозиция
+## Decomposition
 
-Дополнительные Markdown-файлы разрешены только в четырёх местах:
+Additional Markdown files are allowed only in four places:
 
-- `05-building-block-view`: один файл на реальный subsystem, service, component,
-  module, layer или package с самостоятельной responsibility;
-- `06-runtime-view`: один файл на значимый end-to-end runtime scenario;
-- `08-crosscutting-concepts`: один файл на principle или mechanism, который
-  затрагивает несколько building blocks;
-- `09-architecture-decisions`: один файл на один ADR.
+- `05-building-block-view`: one file per real subsystem, service, component, module, layer, or package with an independent responsibility;
+- `06-runtime-view`: one file per meaningful end-to-end runtime scenario;
+- `08-crosscutting-concepts`: one file per principle or mechanism affecting several building blocks;
+- `09-architecture-decisions`: one file per ADR.
 
-Не дроби architecture по feature и не создавай `part-1.md`, `misc.md`, `other.md`
-или похожие файлы. Корневой `README.md` каждого раздела остаётся главным документом
-и индексом дополнительных файлов.
+Do not split architecture by feature and do not create `part-1.md`, `misc.md`, `other.md`, or similar files. Each section's root `README.md` remains the primary document and index for additional files.
 
-## Диаграммы
+## Diagrams
 
-Используй C4 concepts внутри arc42: System Context в 03, Container/Component в 05,
-Dynamic в 06, Deployment в 07. Не требуй все уровни. Диаграммы храни в Markdown как
-широко поддерживаемые Mermaid `flowchart`, `sequenceDiagram` или `stateDiagram`.
-Не используй experimental C4 notation и не создавай диаграмму, если текст понятнее.
+Use C4 concepts within arc42: System Context in 03, Container/Component in 05, Dynamic in 06, Deployment in 07. Do not require every level. Store diagrams in Markdown as broadly supported Mermaid `flowchart`, `sequenceDiagram`, or `stateDiagram`. Do not use experimental C4 notation or create a diagram when text is clearer.

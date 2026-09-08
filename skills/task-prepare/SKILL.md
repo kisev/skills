@@ -1,41 +1,13 @@
 ---
 name: task-prepare
 description: >-
-  Подготовить русские заголовок, описание и проверенный Markdown-план публикации
-  одной GitLab-задачи или явного пакета новых задач без выполнения публикации.
-  Использовать для issue preparation, а не для MR или релизов.
+  Prepare Russian title, description, and publication plan for GitLab issues. Russian discovery terms: подготовить задачу.
 license: MIT
-compatibility: Requires Python 3.12+ and an authenticated glab CLI for collection.
 metadata:
   author: "Kirill Sevriugin"
   version: "1.1.1"
 ---
 
-# Подготовка GitLab-задач
+# task-prepare
 
-Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md`,
-`references/portable-gitlab-contracts-v2.md` и
-`references/work-item-contract.md`. Сначала нормализуй work item и выполни
-`scripts/work_item.py validate`. Publication artifact разрешён только при
-verdict `ready`; `needs_clarification` и `blocked` возвращаются без подготовки
-публикационного результата. GitLab mutations остаются запрещены.
-Выбери ровно один режим: `update` для
-одной существующей задачи, `create` для одной новой задачи или `batch` для явного
-набора новых задач. Не переключай режим по догадке.
-
-До collection покажи **Предполагаемую задачу**: проблему, ожидаемый результат,
-границы, критерии приёмки и открытые вопросы. Задай только отсутствующие вопросы
-через механизм host или в чате. Это resolve, а не Confirmation: private read-only
-evidence и план можно готовить без подтверждения.
-
-Normalized item обязан также содержать dependencies, external actions, assumptions,
-safety/operational constraints, risks и stop conditions. Семантическую feasibility
-проверяет агент и возвращает тот же structured report, что и machine validator.
-
-В `update` используй конкретный Issue URL. В `batch` сначала уточни каждую новую
-задачу, её границы, критерии и DAG зависимостей вопросами только при нехватке
-решений. Ошибка одного package item не отменяет другие items.
-
-Runner готовит immutable evidence envelope и локальный Markdown-план; проверь все метки по полной
-пагинации. Не назначай исполнителя по умолчанию. Зависимости batch остаются
-ручным планом до появления реальных IID. Не создавай и не обновляй GitLab-задачи.
+Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

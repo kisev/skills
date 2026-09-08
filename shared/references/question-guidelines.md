@@ -1,12 +1,11 @@
-# Рекомендации для интерактивных вопросов
+# Interactive Question Guidelines
 
-При использовании штатного интерактивного инструмента host нельзя одновременно
-показывать свободный ввод и option с тем же смыслом: «другое», «свой вариант»,
-`other`, `custom` и аналогичные варианты.
+When using a host interactive tool, do not offer free text and an option with
+the same meaning, including `other` or `custom`.
 
-Используй ровно один механизм:
+Use exactly one mechanism:
 
-- option `custom`/`other` с запросом деталей после выбора;
-- свободный ввод без такой опции.
+- option `custom`/`other`, then request details after selection;
+- free text without that option.
 
-Не дублируй эти механизмы в одном вопросе.
+Do not duplicate these mechanisms in one question.

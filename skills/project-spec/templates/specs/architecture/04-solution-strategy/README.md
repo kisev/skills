@@ -1,35 +1,25 @@
-# 04. Стратегия решения
+# 04 Solution Strategy
 
-## Назначение
+## Purpose
 
-Кратко зафиксируй основные принципы, на которых построено решение.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- ключевые технологии;
-- высокоуровневая декомпозиция;
-- основные architectural patterns;
-- стратегия достижения критичных целей качества.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- подробный каталог компонентов;
-- полные runtime-сценарии;
-- низкоуровневые детали реализации.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним кратким `README.md`; подробности переходят в viewpoints
-05-10 и ADR.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-04-solution-strategy/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Опиши несколько ключевых strategy decisions и свяжи их с requirements или ADR. Не
-превращай раздел в перечень всех libraries.
+Replace this guidance with verified project-specific content.

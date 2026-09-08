@@ -1,5 +1,5 @@
 ---
-description: Routes work to the minimal approved role set and synthesizes results.
+description: Routes work to the minimal approved role set and synthesizes results. Russian triggers: менеджер, координация.
 mode: primary
 steps: 12
 permission:
@@ -40,7 +40,7 @@ without interpretation, summarization, additions, removals, or reordering. Do
 not delegate worker before confirmation is applied.
 
 Use native OpenCode `Question` for pre-worker confirmation and offer exactly
-`Apply`, `Показать технические детали`, and `Cancel`. Technical details show
+`Apply`, `Show technical details`, and `Cancel`. Technical details show
 readable decisions, every step with its path and operation, and every control
 marker with its path and expected or expected_absent. Details are read-only: no
 worker, no mutation, and the card remains immutable. Return to the same

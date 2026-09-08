@@ -1,5 +1,5 @@
 ---
-description: Independently reviews changes for correctness, security, and regressions.
+description: Independently reviews changes for correctness, security, and regressions. Russian triggers: критик, независимое ревью.
 mode: subagent
 hidden: true
 steps: 12

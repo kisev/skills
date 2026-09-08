@@ -1,28 +1,24 @@
-# Требования
+# Requirements
 
-## Назначение
+## Purpose
 
-Объясни, что раздел содержит нормативные и проверяемые договорённости о поведении,
-интерфейсах, качестве и ограничениях системы.
+Explain that this section contains normative, verifiable agreements for system behavior, interfaces, quality, and constraints.
 
-## Сюда относится
+## Included
 
-- индекс четырёх типов требований;
-- общие правила стабильных ID и трассируемости;
-- ссылки на machine-readable contracts.
+- An index of the four requirement types.
+- Shared stable-ID and traceability rules.
+- References to machine-readable contracts.
 
-## Сюда не относится
+## Excluded
 
-- описание структуры компонентов и runtime-потоков;
-- план реализации и декомпозиция задач;
-- повторение требований из дочерних разделов.
+- Component structure and runtime flows, implementation plans, task decomposition, or repetition of child requirements.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Используй только четыре обязательных каталога типов. Новые верхнеуровневые типы не
-создавай.
+Use only the four required type directories. Do not create new top-level types.
 
-## Ожидаемая структура
+## Expected Structure
 
 ```text
 requirements/
@@ -33,7 +29,6 @@ requirements/
 └── constraints/README.md
 ```
 
-## Шаблон содержания
+## Content Template
 
-Дай короткий индекс разделов и правила ID `REQ-F-*`, `REQ-I-*`, `REQ-Q-*`,
-`REQ-C-*`. Удали эти инструкции из созданного документа.
+Give a short section index and rules for `REQ-F-*`, `REQ-I-*`, `REQ-Q-*`, and `REQ-C-*`. Remove these instructions from the created document.

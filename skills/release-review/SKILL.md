@@ -1,31 +1,13 @@
 ---
 name: release-review
 description: >-
-  Проверить один релизный GitLab MR по полноте изменений, версии, совместимости и
-  готовности к выпуску. Использовать для read-only release review, а не для
-  подготовки, публикации или слияния.
+  Review one release GitLab merge request for release readiness. Russian discovery terms: проверить релиз.
 license: MIT
-compatibility: Requires Python 3.12+ and an authenticated glab CLI for collection.
 metadata:
   author: "Kirill Sevriugin"
   version: "1.1.1"
 ---
 
-# Ревью релизного MR
+# release-review
 
-Прочитай `references/interaction-contract.md`, `references/gitlab-workflow.md` и
-`references/portable-gitlab-contracts-v2.md`.
-Принимай один точный MR URL; без него
-попроси ссылку. Не создавай worktree и не изменяй repository, MR, issue, release,
-pipeline или другую внешнюю систему.
-
-Проверь полноту collection, точный head SHA, версию, changelog, состав релиза,
-несовместимые изменения, миграции, заметки обновления, rollback, release artifacts
-и pipeline точного SHA. Сверяй существенные утверждения с diff, target branch и
-связанными задачами. Сообщай только подтверждённые замечания с evidence,
-последствием и минимальным исправлением.
-
-Итог содержит verdict `ready`, `not_ready` или `blocked`, boolean readiness и gates
-`semver`, `compatibility`, `migration`, `rollback`, `ci`. Каждый gate содержит
-проверенный status, inputs и evidence. При неполном или изменившемся target verdict
-только `blocked`. Не публикуй комментарии, одобрение, метки или статус.
+Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

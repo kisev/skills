@@ -1,88 +1,98 @@
 # Agent Skills
 
-Переносимый набор Agent Skills для инженерной работы с репозиториями,
-документацией, GitLab-процессами и OpenCode. Каждый каталог в `skills/` -
-самодостаточная единица установки: после установки skill не читает checkout и
-не зависит от runtime конкретного host.
+[Русский](README.ru.md)
 
-## Быстрый старт
+Portable Agent Skills for repository engineering, documentation, GitLab work,
+and OpenCode. Each `skills/` directory is independently installable.
 
-Установите весь набор для OpenCode в текущий проект:
+## Quick Start
+
+Install all skills for OpenCode:
 
 ```shell
 npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
 
-Для воспроизводимой установки актуального релиза используйте GitHub tag:
+Use a GitHub tag for a reproducible installation:
 
 ```shell
 npx --yes skills add https://github.com/kisev/skills/tree/v1.2.0 \
   --agent opencode --skill '*' --copy --yes
 ```
 
-Для одного skill замените `--skill '*'` его именем:
+Install one skill by replacing `--skill '*'`:
 
 ```shell
 npx --yes skills add kisev/skills --agent opencode \
   --skill project-spec --copy --yes
 ```
 
-`npx skills` по умолчанию устанавливает в project scope. Добавьте `--global`,
-если skills должны быть доступны всем проектам пользователя. Перед установкой
-можно просмотреть каталог без записи:
+`npx skills` installs to project scope by default; add `--global` when skills
+must be available to every user project.
+
+List without writing:
 
 ```shell
 npx --yes skills add kisev/skills --list
 ```
 
-## Разработка репозитория
+## Repository Development
 
-Локальная обвязка не зависит от других checkout. Установите все закреплённые
-runtimes и CLI из корня репозитория одной командой:
+Install the pinned runtimes and standalone tools from the repository root:
 
 ```shell
 mise install
 ```
 
-`mise.toml` фиксирует Python 3.12, Node.js 22 и standalone-инструменты.
-Python-зависимости проверок находятся в `pyproject.toml` и `uv.lock`; переносимые
-runners по-прежнему используют только standard library. Отдельный npm package в
-`packages/opencode/` сохраняет собственные `package.json` и `package-lock.json`.
-Корневого npm workspace нет.
+`mise.toml` pins Python 3.12, Node.js 22, and standalone tools. Python check
+dependencies are in `pyproject.toml` and `uv.lock`; portable runners still use
+only the standard library. The separate npm package in `packages/opencode/` has
+its own `package.json` and `package-lock.json`; there is no root npm workspace.
 
-Единый локальный и CI quality gate:
+The single local and CI quality gate is:
 
 ```shell
 task check
 ```
 
-Доступные задачи показывает `task --list`. Только `task format` изменяет
-tracked-файлы. `task generate` создаёт ignored `.build/skills`, build-only
-`@kisev/skills` archive/index и package staging. `task generate:check` проверяет
-воспроизводимость artifacts без записи в source tree.
+`task --list` shows available tasks. Only `task format` changes tracked files.
+`task generate` creates ignored `.build/skills`, the build-only
+`@kisev/skills` archive/index, and package staging. `task generate:check` checks
+artifact reproducibility without writing the source tree.
 
-Установить Git hooks можно командой `lefthook install`. `pre-commit` вызывает
-`task pre-commit`, который выбирает non-mutating проверки по staged paths:
-Markdown/data, Python/skills и OpenCode package проверяются независимо, а
-docs-only правка не запускает package lifecycle. `pre-push` вызывает полный
-`task check`. Hooks не форматируют файлы и не добавляют их в index.
+Install Git hooks with:
 
-Если проверка не видит нужный executable, запустите `mise install`, затем
-`mise current`. При ошибке `uv.lock` используйте `uv sync --locked`: изменение
-lock-файла при этом считается drift. Для generated drift меняйте источник в
-`shared/references/` или `packages/opencode/src/registry.ts` и запускайте
-`task generate`, а не редактируйте build artifact вручную. Полная структура
-проверок описана в [CONTRIBUTING.md](CONTRIBUTING.md).
+```shell
+lefthook install
+```
 
-## Behavioral evals
+`pre-commit` invokes `task pre-commit`, selecting non-mutating checks by staged
+paths. Markdown/data, Python/skills, and the OpenCode package are independent;
+complete `task check`. Hooks neither format files nor add them to the index.
 
-Canonical corpus находится в [`evals/`](evals/): versioned JSON Schemas,
-неизменяемые scenario ID/revision и SHA-256 digest. `task eval:check` проверяет
-schemas и corpus, затем запускает только offline deterministic suite. Он не
-требует OpenCode, Codex, сети, credentials или пользовательской конфигурации.
+If a check cannot find an executable, run `mise install`, then `mise current`.
+For an `uv.lock` error use `uv sync --locked`; changing the lock file is drift.
+For generated drift, change the source in `shared/references/` or
+`packages/opencode/src/registry.ts`, then run `task generate`; do not edit a
+build artifact manually. [CONTRIBUTING.md](CONTRIBUTING.md) describes the full
+check structure.
 
-Live-проверка не имеет default model и запускается только в доверенном контуре с
-точными host, model и limits:
+## Behavioral Evals
+
+The canonical corpus is [`evals/`](evals/): versioned JSON Schemas, immutable
+scenario ID/revision, and a SHA-256 digest. Offline validation is:
+
+```shell
+task eval:check
+```
+
+It validates schemas and corpus, then runs only the deterministic offline suite.
+It requires neither OpenCode, Codex, network access, credentials, nor user
+configuration.
+
+The following is a trusted live evaluation, not offline validation. It has no
+default model and runs only in a trusted environment with exact host, model, and
+limits:
 
 ```shell
 uv run --locked python scripts/eval_runner.py --trusted-live \
@@ -90,87 +100,41 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
   --max-tokens 3000 --max-cost 2 --output evals/live/result.json
 ```
 
-`evals/live/` игнорируется Git. Workflow `Trusted live evaluations` доступен
-только через ручной `workflow_dispatch`, использует protected environment и не
-выполняется для pull request или fork.
+`evals/live/` is ignored by Git. The `Trusted live evaluations` workflow is
+available only through manual `workflow_dispatch`, uses a protected environment,
+and does not run for a pull request or fork.
 
-## Каталог skills
+## Skill Catalog
 
-| Skill             | Назначение                                                                |
-| ----------------- | ------------------------------------------------------------------------- |
-| `agents-md`       | Создание и проверка инструкций `AGENTS.md` по фактам репозитория.         |
-| `askme`           | Последовательное интервью для уточнения задачи или решения.               |
-| `ast-grep`        | Структурный поиск и подтверждённый AST rewrite через внешний CLI.         |
-| `commit-msg`      | Одно английское Conventional Commit сообщение по локальным изменениям.    |
-| `doit`            | Выполнение инженерной задачи с preview, проверками и отдельным commit.    |
-| `docs-prepare`    | Подготовка одного пользовательского документа Diataxis.                   |
-| `docs-review`     | Read-only проверка пользовательской документации.                         |
-| `humanize`        | Естественный русский текст без канцелярита.                               |
-| `project-spec`    | Четыре режима работы с canonical `specs/`: init, onboard, update и audit. |
-| `rtk`             | Выборочное применение внешнего RTK для шумного вывода.                    |
-| `skill-improver`  | Цикл проверки и улучшения одного Agent Skill.                             |
-| `stopit`          | Обезличенная передача контекста во временный файл.                        |
-| `summary`         | Точный структурированный итог транскрипции, заметок или исследования.     |
-| `task-triage`     | Read-only содержательный разбор конкретных GitLab-задач.                  |
-| `task-review`     | Проверка оформления и служебных полей GitLab-задач и MR.                  |
-| `task-prepare`    | Подготовка одной задачи или явного пакета задач без публикации.           |
-| `mr-prepare`      | Подготовка обычного GitLab MR по diff, коммитам и CI.                     |
-| `code-review`     | Глубокое ревью GitLab MR или локального WIP.                              |
-| `release-prepare` | Подготовка релизного MR, inventory и плана публикации.                    |
-| `release-review`  | Read-only проверка готовности релизного MR.                               |
-| `mattermost`      | Строго ограниченное чтение Mattermost с кэшем по identity.                |
-| `team-workflow`   | Одно явное действие командного цикла по явному context.                   |
-| `walkthrough`     | Read-only карта чтения current diff, range или diff-file.                 |
-| `attempt`         | Чтение и безопасная отмена Background Attempts OpenCode.                  |
-| `goal`            | Read-only формулировка проверяемой цели в `work-item/v1`.                 |
-| `schedule`        | Явные disabled-by-default definitions для scheduler OpenCode.             |
-| `usage`           | Read-only ledger токенов и стоимости OpenCode.                            |
-| `overview`        | Read-only сводка durable OpenCode state.                                  |
-| `lsp-report`      | Применимость LSP OpenCode без запуска и установки.                        |
-
-`askme`, `task-prepare`, `task-review` и `goal` используют общий materialized
-контракт `work-item/v1`. Он не создаёт зависимость установленного skill от
-`shared/`; validator и schema входят в каждую portable-копию.
+Skills are listed in [migration inventory](docs/migration-inventory.md). Shared
+`work-item/v1` contracts are materialized into each affected portable skill.
+Publication planning remains a local Markdown plan with `external_mutations=false`.
 
 ## Build Distribution
 
-`main` содержит только authored source. `task generate` создаёт ignored
-`.build/skills` и build-only package `@kisev/skills`: well-known index,
-`skills-lock.json` с SHA-256 и отдельный self-contained `.tar.gz` для каждого
-skill. В каждом archive `SKILL.md` находится в корне. Index фиксирует source
-revision; будущая публикация будет доступна по
-`https://unpkg.com/@kisev/skills@<version>/`. Текущий released source остаётся
-tag `v1.2.0`; build не создаёт tag, npm release или GitHub Release.
+`task generate` builds a well-known index, SHA-256 lock, and self-contained
+`.tar.gz` archive per skill. `SKILL.md` is at each archive root.
 
-Подробная классификация режимов и границ записана в
-[migration inventory](docs/migration-inventory.md).
+## OpenCode Integration
 
-## OpenCode integration
-
-Portable skills и OpenCode integration устанавливаются независимо. Сначала
-установите skills, затем в каталоге, из которого OpenCode разрешает npm packages,
-установите integration:
+Install the optional integration separately:
 
 ```shell
 npm install @kisev/skills-opencode@1.2.0
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
-Dry-run выводит короткий план по группам, только изменяемые paths, conflicts,
-restart flag, SHA-256 digest и готовую confirm-команду. Применяйте только digest
-из этого вывода:
+Apply only the preview digest:
 
 ```shell
 npm exec -- skills-opencode install --scope global --confirm <digest>
 ```
 
-Для scripts и полного machine-readable плана добавьте `--json`.
+For scripts and the full machine-readable plan, add `--json`. Use
+`--scope project` for the current repository; the installer then manages files
+only under `.opencode/` and never creates or edits `opencode.json`.
 
-`global` размещает управляемые assets в OpenCode user config. Для текущего
-репозитория используйте `--scope project`; installer добавляет только файлы под
-`.opencode/`. Он не создаёт и не редактирует `opencode.json`.
-
-Подключите plugin вручную в `opencode.json` или `opencode.jsonc`:
+Configure the plugin manually in `opencode.json`:
 
 ```json
 {
@@ -179,13 +143,10 @@ npm exec -- skills-opencode install --scope global --confirm <digest>
 }
 ```
 
-После установки, обновления или удаления integration полностью перезапустите
-OpenCode: agents и commands обнаруживаются до plugin hooks. Полное описание
-installer, plugin factories и ownership-границ есть в
-[README package](packages/opencode/README.md).
+Details are in [README package](packages/opencode/README.md).
 
-Управление моделями fixed agents и additional critics выполняется напрямую через
-CLI без LLM-токенов. Например:
+Manage fixed-agent models and additional critics directly through the CLI without
+LLM tokens:
 
 ```shell
 npm exec -- skills-opencode agent list --scope global
@@ -194,101 +155,55 @@ npm exec -- skills-opencode critic add security --scope global \
   --model anthropic/claude-sonnet-4-6 --dry-run
 ```
 
-Каждая mutation сначала создаёт короткий plan и private одноразовый receipt с
-TTL. Применить plan можно только командой с `--confirm <digest>`. Команды
-`/agent-list`, `/agent-model-set`, `/critic-add` и `/critic-remove` и package tool
-`agent_profiles` остаются опциональными thin adapters; рекомендуемый интерфейс -
-прямой CLI.
+Every mutation first creates a short plan and private one-time receipt with a
+TTL. Apply it only with `--confirm <digest>`. `/agent-list`,
+`/agent-model-set`, `/critic-add`, `/critic-remove`, and the `agent_profiles`
+package tool are optional thin adapters; direct CLI is the recommended interface.
 
-## Совместимость и требования
+## Compatibility and Requirements
 
-- Portable skills устанавливаются через актуальный `npx skills`; целевые hosts
-  должны поддерживать Agent Skills.
-- Раннеры, которые входят в отдельные skills, используют только Python 3.12+
-  standard library. Большинству skills Python не нужен.
-- `ast-grep` и `rtk` требуют заранее установленный одноимённый CLI; skills не
-  выполняют их установку.
-- OpenCode-specific skills и `@kisev/skills-opencode` требуют OpenCode 1.18.29+.
-  npm package требует Node.js 22+.
-- OpenCode assets являются опциональными: portable skills продолжают работать без
-  npm package, commands, agents и plugins.
+- Portable skills require a host that supports Agent Skills.
+- Runners use Python 3.12+ standard library only.
+- The OpenCode package requires Node.js 22+ and OpenCode 1.18.29+.
+- `ast-grep` and `rtk` require their respective CLI to be installed already;
+  skills do not install them.
 
-GitLab skills используют один canonical private collection по identity GitLab
-object, а не по имени вызывающего skill. Установленные copies содержат byte-identical
-runtime, artifact schema и workflow contract. Collection ограничен GET-only
-allowlist, exact SHA и completeness; publication остается только локальным
-Markdown-планом с `external_mutations=false`.
+GitLab skills use one canonical private collection by GitLab-object identity,
+rather than by the calling skill name. Installed copies contain byte-identical
+runtime, artifact schema, and workflow contract. Collection is limited to a
+GET-only allowlist, exact SHA, and completeness; publication stays a local
+Markdown plan with `external_mutations=false`.
 
-## Ограничения runtime
+## Runtime Limits
 
-Следующие ограничения делают stateful
-OpenCode plugins небезопасными для включения:
+Stateful plugins remain opt-in; portable skills work without package assets.
 
-- Background Attempts владеют managed worktree и terminal reconciliation;
-  plugin остаётся opt-in.
-- Cron scheduler использует строгий evaluator и machine-readable receipts;
-  definitions и plugin остаются disabled-by-default.
-- Mattermost имеет неполный parity с заявленными сценариями.
-- Runtime state и `doctor` требуют дополнительного hardening.
-
-Wrappers `background-attempts`, `schedule` и `autonomy-policy` выключены по
-умолчанию. `goal` не является wrapper-ом и не создаёт state. OpenChamber Goal
-Mode как внешний способ выполнения цели не меняется; lifecycle этого проекта и
-auto-continuation удалены.
-
-## Обновление и удаление
-
-Обновите установленные skills стандартной командой `skills`:
+## Update and Removal
 
 ```shell
 npx --yes skills update --yes
 ```
 
-Для OpenCode integration установите требуемую версию, затем повторите dry-run и
-подтвердите новый digest:
-
-```shell
-npm install @kisev/skills-opencode@1.2.0
-npm exec -- skills-opencode install --scope global --dry-run
-npm exec -- skills-opencode install --scope global --confirm <digest>
-```
-
-Удаление одного portable skill выполняется явно по имени:
-
 ```shell
 npx --yes skills remove project-spec --agent opencode --yes
 ```
 
-Удаление OpenCode assets также начинается с dry-run:
+`npx skills remove --all` affects every skill in the selected scope; removing
+skills by name is safer for this set.
+
+## Security and Limits
+
+Skills that write show a preview and require confirmation. Do not provide
+credentials in prompts, argv, or logs. See [SECURITY.md](SECURITY.md).
+`task-triage`, `task-review`, and `task-prepare` are GitLab workflows with their
+own explicitly scoped contracts.
 
 ```shell
 npm exec -- skills-opencode uninstall --scope global --dry-run
 npm exec -- skills-opencode uninstall --scope global --confirm <digest>
 ```
 
-Uninstaller удаляет только неизменённые managed files. Пользовательские изменения
-сохраняются как конфликт и требуют ручного решения.
-
-## Безопасность и ограничения
-
-- Skills с записью сначала показывают preview и требуют явное подтверждение.
-- Installer не имеет lifecycle hooks, не выполняет автоматическую установку skills
-  и не изменяет пользовательскую конфигурацию OpenCode. Он не перезаписывает
-  неизвестные или изменённые файлы.
-- Stateful OpenCode plugins и Zed integrations выключены по умолчанию. Включайте
-  их только в своём user-owned plugin wrapper.
-- Skills не заменяют review, policies, проверку секретов и контроль доступа
-  проекта. Внешние CLI и сервисы остаются отдельными пользовательскими границами.
-- Некоторые skills требуют уже настроенную авторизацию внешнего инструмента. Не
-  передавайте пароли, MFA-коды или tokens в prompt, argv или логи.
-- `npx skills remove --all` затрагивает все skills в выбранном scope; для этого
-  набора безопаснее удалять skills по одному имени.
-
-Сведения о сообщении уязвимостей приведены в [SECURITY.md](SECURITY.md), а правила
-внесения изменений - в [CONTRIBUTING.md](CONTRIBUTING.md). История выпусков - в
-[CHANGELOG.md](CHANGELOG.md).
-
-## Для сопровождающих
+## Maintainers
 
 ```shell
 python3 scripts/build_skills.py --check
@@ -297,4 +212,5 @@ for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; d
 npx --yes skills add . --list
 ```
 
-Репозиторий распространяется по лицензии MIT. См. [LICENSE](LICENSE).
+The repository is MIT-licensed. See [LICENSE](LICENSE).
+Release history is in [CHANGELOG.md](CHANGELOG.md).

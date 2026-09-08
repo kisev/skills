@@ -1,33 +1,25 @@
-# 12. Глоссарий
+# 12 Glossary
 
-## Назначение
+## Purpose
 
-Зафиксируй единое понимание неоднозначных и специфичных для проекта терминов.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- domain terms;
-- названия сущностей с несколькими трактовками;
-- аббревиатуры, важные для requirements и architecture.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- общеизвестные technical terms;
-- API reference;
-- неиспользуемые потенциальные понятия.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним `README.md`; дополнительные glossary-файлы не создаются.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-12-glossary/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Используй алфавитный список или таблицу "Термин - определение". Определяй термин
-через его смысл в проекте, а не через общую словарную формулировку.
+Replace this guidance with verified project-specific content.

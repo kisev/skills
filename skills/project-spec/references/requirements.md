@@ -1,74 +1,57 @@
-# Профиль требований
+# Requirements profile
 
-Используй этот профиль при создании и изменении `specs/requirements/`.
+Use this profile when creating and modifying `specs/requirements/`.
 
-## Качество требований
+## Requirement quality
 
-Не заявляй соответствие ISO/IEC/IEEE 29148. Используй его только как checklist:
-нормативное требование по возможности атомарно, однозначно, необходимо,
-непротиворечиво, проверяемо и трассируемо. Описывай требуемое поведение, а не
-случайную реализацию.
+Do not claim compliance with ISO/IEC/IEEE 29148. Use it only as a checklist: where possible, a normative requirement is atomic, unambiguous, necessary, consistent, verifiable, and traceable. Describe required behavior, not accidental implementation.
 
-Для поведенческих требований применяй EARS-inspired форму, когда она звучит
-естественно:
+For behavioral requirements, use an EARS-inspired form when it sounds natural:
 
 ```text
-Когда <событие>,
-<система> должна <реакция>.
+When <event>,
+<system> shall <response>.
 ```
 
-Не подгоняй под эту форму любой текст.
+Do not force every text into this form.
 
-## Идентификаторы
+## Identifiers
 
-- `REQ-F-NNN` - функциональное требование;
-- `REQ-I-NNN` - требование к интерфейсу;
-- `REQ-Q-NNN` - требование к качеству;
-- `REQ-C-NNN` - ограничение.
+- `REQ-F-NNN` - functional requirement;
+- `REQ-I-NNN` - interface requirement;
+- `REQ-Q-NNN` - quality requirement;
+- `REQ-C-NNN` - constraint.
 
-Существующие ID не перенумеровывай и не переиспользуй. Уточнение сохраняет ID,
-удалённый ID остаётся зарезервированным, а перемещение без изменения смысла не
-меняет ID. Перед назначением нового ID проверь canonical documents и доступную
-историю Git, затем выбери следующий никогда не использованный номер. Если история
-недоступна и безопасный номер нельзя определить, спроси человека.
+Do not renumber or reuse existing IDs. A clarification retains its ID, a removed ID remains reserved, and a move without semantic change does not change its ID. Before assigning a new ID, check canonical documents and available Git history, then choose the next never-used number. If history is unavailable and a safe number cannot be determined, ask the user.
 
-Рекомендуемый формат:
+Recommended format:
 
 ```markdown
-### REQ-F-017 - Получение статусов jobs
+### REQ-F-017 - Retrieve job statuses
 
-Когда pipeline переходит в конечное состояние,
-система проверки CI должна получить статусы всех ожидаемых jobs.
+When a pipeline reaches a terminal state,
+the CI checking system shall retrieve the statuses of all expected jobs.
 
-#### Обоснование
+#### Rationale
 
-Добавляй только когда оно помогает понять требование.
+Add only when it helps understand the requirement.
 
-#### Проверка
+#### Verification
 
-- Опиши наблюдаемые условия успешной и ошибочной проверки.
+- Describe observable conditions for successful and failed verification.
 ```
 
-`Проверка` обязательна, если способ проверки не тривиален.
+`Verification` is required when the verification method is not trivial.
 
-## Декомпозиция
+## Decomposition
 
-- `functional/README.md`: все функциональные требования; автоматическое дробление
-  в v1 запрещено.
-- `interfaces/README.md`: обзор и индекс. Дополнительный файл разрешён только для
-  реально существующей внешней поверхности: CLI, HTTP API, configuration, events
-  или другой подтверждённый interface.
-- `quality/README.md`: все измеримые требования к качеству; автоматическое
-  дробление в v1 запрещено.
-- `constraints/README.md`: все нормативные ограничения; автоматическое дробление
-  в v1 запрещено.
+- `functional/README.md`: all functional requirements; automatic splitting in v1 is prohibited.
+- `interfaces/README.md`: overview and index. An additional file is allowed only for a real external surface: CLI, HTTP API, configuration, events, or another confirmed interface.
+- `quality/README.md`: all measurable quality requirements; automatic splitting in v1 is prohibited.
+- `constraints/README.md`: all normative constraints; automatic splitting in v1 is prohibited.
 
-Один interface-файл описывает одну внешнюю поверхность. Не создавай interfaces на
-будущее. Размер документа сам по себе не является semantic boundary.
+One interface file describes one external surface. Do not create future interfaces. Document size alone is not a semantic boundary.
 
 ## Machine-readable contracts
 
-Не дублируй полностью OpenAPI, JSON Schema, Protobuf, Helm values schema, typed
-models, CLI declarations или package manifests. Сошлись на формальный источник
-истины и дополни его семантикой, гарантиями совместимости, errors и invariants,
-которые схема не выражает.
+Do not completely duplicate OpenAPI, JSON Schema, Protobuf, Helm values schema, typed models, CLI declarations, or package manifests. Reference the formal source of truth and add semantics, compatibility guarantees, errors, and invariants the schema cannot express.

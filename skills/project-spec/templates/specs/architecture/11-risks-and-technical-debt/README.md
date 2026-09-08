@@ -1,36 +1,25 @@
-# 11. Риски и технический долг
+# 11 Risks And Technical Debt
 
-## Назначение
+## Purpose
 
-Зафиксируй известные архитектурные risks, осознанный technical debt и хрупкие места
-текущего целевого состояния.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- риск и его consequence;
-- затронутые blocks или requirements;
-- ограничения текущего решения;
-- потенциально дорогие будущие изменения.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- backlog задач;
-- неподтверждённые общие опасения;
-- история уже устранённых локальных defects.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним `README.md`; отдельные task или risk-register artifacts не
-создаются.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-11-risks-and-technical-debt/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Для каждого пункта укажи evidence, impact, affected area и принятое ограничение или
-mitigation. Если известных risks/debt нет, явно укажи границу проведённой оценки.
+Replace this guidance with verified project-specific content.

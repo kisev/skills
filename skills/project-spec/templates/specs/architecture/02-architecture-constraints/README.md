@@ -1,34 +1,25 @@
-# 02. Архитектурные ограничения
+# 02 Architecture Constraints
 
-## Назначение
+## Purpose
 
-Объясни, как нормативные constraints ограничивают architecture.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- ссылки на применимые `REQ-C-*`;
-- последствия обязательных runtime, platform и infrastructure;
-- влияние ограничений совместимости и policy на пространство решений.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- второй нормативный список ограничений;
-- произвольные предпочтения технологий;
-- risks и decisions без связи с ограничением.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним `README.md`; источник истины для ограничений находится в
-`requirements/constraints/README.md`.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-02-architecture-constraints/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Для каждого значимого `REQ-C-*` укажи архитектурное последствие и ограниченные
-альтернативы. Если ограничения не влияют на architecture, объясни почему.
+Replace this guidance with verified project-specific content.

@@ -1,32 +1,23 @@
-# Контракты private GitLab artifacts v2
+# Private GitLab Artifact Contracts v2
 
-Все новые evidence snapshots, publication plans, analysis reports, critic receipts,
-review decisions, release readiness и finalize reports являются immutable
-content-addressed JSON envelope `portable-gitlab/<kind>/v2`. Они хранятся только в
-private state с правами `0700` для каталогов и `0600` для файлов. SHA-256 stdout
-относится к полному envelope, а не к изменяемому указателю collection state.
+New evidence snapshots, publication plans, analysis reports, critic receipts,
+review decisions, release readiness, and finalize reports are immutable
+content-addressed JSON envelopes `portable-gitlab/<kind>/v2`. Private state uses
+`0700` directories and `0600` files; SHA-256 stdout covers the full envelope.
 
-Collection identity одинакова для всех профилей: `hostname`, resolved GitLab
-`project_id`, object kind и IID. Profile записывается как producer и ограничивает
-допустимую операцию, но не создаёт отдельного owner или collection.
+Collection identity is `hostname`, resolved GitLab `project_id`, object kind, and
+IID. A profile is only a producer and does not create another collection.
 
-Canonical schema проверяет envelope и payload каждого kind, запрещает неизвестные
-поля и несовместимые пары kind/payload. Каждый payload фиксирует
-`external_mutations=false`. `evidence_snapshot` фиксирует exact
-`base_sha`, `start_sha`, `head_sha` для MR и completeness каждого компонента.
-`local_wip_snapshot` хранит ref и committed, staged, unstaged, untracked sections.
-`publication_plan` связывается с digest evidence и содержит Markdown только для
-ручной публикации. `analysis_report` и `critic_receipt` связываются с digest
-evidence и содержат `run_id`, `session_id` и findings.
+The schema validates every kind/payload pair. Every payload records
+`external_mutations=false`. `evidence_snapshot` records `base_sha`, `start_sha`,
+and `head_sha`; `local_wip_snapshot` records ref plus committed, staged, unstaged,
+and untracked sections. `publication_plan`, `analysis_report`, and `critic_receipt`
+bind their evidence digest; the latter records `run_id` and `session_id`.
 
-`finalize_report` содержит exact digest и fingerprint evidence. `review_decision`
-связывается с digest этого свежего report, фиксирует review mode и содержит disposition для всех
-primary/critic findings и unresolved threads: `accept` или `reject` и непустую
-причину. Старый finalize artifact не обходит повторную GET-only freshness check.
-`release_readiness` связывает range/SHA, SemVer, compatibility, migration,
-rollback и CI gates; `ready` допустим только при complete evidence и всех закрытых
-gates.
+`finalize_report` contains exact evidence digest and fingerprint. `review_decision`
+binds a fresh report and gives every finding `accept` or `reject` with a reason.
+`release_readiness` binds range/SHA, SemVer, compatibility, migration, rollback,
+and CI gates; `ready` needs complete evidence and closed gates.
 
-v1 artifacts допустимо читать и использовать только для finalize совместимого
-старого workflow. Их нельзя автоматически мигрировать, перезаписывать или
-использовать как новый v2 artifact.
+v1 artifacts may only be read and used to finalize the compatible old workflow.
+They cannot be migrated, overwritten, or used as new v2 artifacts.

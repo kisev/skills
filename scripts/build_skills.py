@@ -57,6 +57,74 @@ def manifest_entries() -> list[tuple[Path, Path]]:
         except ValueError as error:
             raise BuildError("sources must be inside shared/references") from error
         entries.append((source, destination))
+    policy_skills = manifest.get("language_policy_skills", [])
+    if not isinstance(policy_skills, list) or not all(
+        isinstance(name, str) for name in policy_skills
+    ):
+        raise BuildError("language_policy_skills must be a list of skill names")
+    for name in policy_skills:
+        source = SHARED / "references" / "language-policy.md"
+        destination = Path(name) / "references" / "language-policy.md"
+        if destination in destinations:
+            raise BuildError(f"duplicate destination: {destination}")
+        destinations.add(destination)
+        entries.append((source, destination))
+    # Portable runners retain their canonical shared runtime without exposing the
+    # authored shared tree as an installed dependency.
+    runtime_targets = {
+        "ast-grep": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+        ),
+        "rtk": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+        ),
+        "skill-improver": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+        ),
+        "walkthrough": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+        ),
+        "schedule": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+            "python_runtime/state.py",
+        ),
+        "usage": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+            "python_runtime/state.py",
+        ),
+        "overview": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+            "python_runtime/state.py",
+            "python_runtime/lsp.py",
+        ),
+        "lsp-report": (
+            "python_runtime/__init__.py",
+            "python_runtime/capabilities.py",
+            "python_runtime/contract.py",
+            "python_runtime/lsp.py",
+        ),
+    }
+    for skill, paths in runtime_targets.items():
+        for relative in paths:
+            source = SHARED / "references" / relative
+            destination = Path(skill) / "scripts" / "portable_runtime" / Path(relative).name
+            if destination not in destinations:
+                destinations.add(destination)
+                entries.append((source, destination))
     return entries
 
 
@@ -64,7 +132,10 @@ def copy_source(destination: Path) -> None:
     if destination.exists():
         shutil.rmtree(destination)
     shutil.copytree(
-        SOURCES, destination, symlinks=True, ignore=shutil.ignore_patterns("__pycache__")
+        SOURCES,
+        destination,
+        symlinks=True,
+        ignore=shutil.ignore_patterns("__pycache__", "ru", "en"),
     )
 
 

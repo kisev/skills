@@ -1,38 +1,25 @@
-# Каноническая спецификация
+# Specs
 
-## Назначение
+## Purpose
 
-Кратко объясни, что `specs/` - актуальный источник истины о согласованном целевом
-состоянии проекта, а история хранится в Git.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- назначение спецификации;
-- различие нормативных требований и объясняющей архитектуры;
-- ссылки на основные разделы;
-- правила применения режимов `spec-update` и `spec-audit`.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- дублирование требований и архитектуры;
-- roadmap, backlog, планы реализации и история изменений;
-- отчёты аудита.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Этот файл не дробится и остаётся короткой точкой входа. Детали находятся в
-`requirements/` и `architecture/`.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-specs/
-├── README.md
-├── requirements/
-└── architecture/
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Укажи назначение, смысл целевого состояния, ссылки на оба раздела и короткий
-workflow режимов. Удали эти инструкции из созданного документа.
+Replace this guidance with verified project-specific content.

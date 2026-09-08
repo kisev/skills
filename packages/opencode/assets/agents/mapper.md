@@ -1,5 +1,5 @@
 ---
-description: Maps relevant files, callers, tests, and established repository patterns.
+description: Maps relevant files, callers, tests, and established repository patterns. Russian triggers: исследователь, карта кода.
 mode: subagent
 hidden: true
 steps: 12

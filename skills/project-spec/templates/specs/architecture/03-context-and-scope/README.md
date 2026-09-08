@@ -1,34 +1,25 @@
-# 03. Контекст и границы
+# 03 Context And Scope
 
-## Назначение
+## Purpose
 
-Покажи границу системы и её взаимодействия с людьми и соседними системами.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- пользователи и внешние системы;
-- входящие и исходящие взаимодействия;
-- внешние зависимости и trust boundaries;
-- диаграмма System Context, если она улучшает понимание.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- внутренние компоненты;
-- подробные runtime-последовательности;
-- deployment topology.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Раздел остаётся одним `README.md`. Не создавай отдельный C4 directory.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-03-context-and-scope/
-└── README.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Опиши границу системы, акторов, соседние системы, protocols и направление данных.
-При необходимости добавь Mermaid `flowchart`, но не experimental C4 notation.
+Replace this guidance with verified project-specific content.

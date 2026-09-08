@@ -1,34 +1,28 @@
-# Ограничения
+# Constraints
 
-## Назначение
+## Purpose
 
-Зафиксируй обязательные ограничения, которые сужают допустимые решения.
+Record mandatory constraints that narrow permissible solutions.
 
-## Сюда относится
+## Included
 
-- обязательные runtime, platform и infrastructure;
-- ограничения совместимости и policy;
-- обязательные technologies или операционные границы.
+- Required runtime, platform, and infrastructure; compatibility and policy constraints; required technologies and operational boundaries.
 
-## Сюда не относится
+## Excluded
 
-- предпочтения без нормативной силы;
-- архитектурные последствия ограничений;
-- risks и technical debt.
+- Preferences without normative force, architectural consequences, risks, or technical debt.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-В v1 все ограничения находятся только в этом `README.md`. Автоматическое дробление
-запрещено.
+In v1, keep all constraints in this `README.md`. Automatic splitting is prohibited.
 
-## Ожидаемая структура
+## Expected Structure
 
 ```text
 constraints/
 └── README.md
 ```
 
-## Шаблон содержания
+## Content Template
 
-Используй стабильные `REQ-C-NNN`, основание ограничения и проверку, если она не
-очевидна. Раздел architecture 02 ссылается на эти ID и объясняет последствия.
+Use stable `REQ-C-NNN`, the basis for each constraint, and verification where it is not obvious. Architecture section 02 references these IDs and explains their consequences.

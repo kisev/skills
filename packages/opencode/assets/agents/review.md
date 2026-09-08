@@ -1,5 +1,5 @@
 ---
-description: Performs the primary GitLab merge request review and prepares a publication preview.
+description: Performs the primary GitLab merge request review and prepares a publication preview. Russian triggers: ревью MR, проверка merge request.
 mode: primary
 permission:
   edit: deny

@@ -6,36 +6,12 @@
       "destination": "askme/references/work-item-contract.md"
     },
     {
-      "source": "references/work-item-contract.schema.json",
-      "destination": "askme/references/work-item-contract.schema.json"
-    },
-    {
-      "source": "references/work_item.py",
-      "destination": "askme/scripts/work_item.py"
-    },
-    {
       "source": "references/work-item-contract.md",
       "destination": "goal/references/work-item-contract.md"
     },
     {
-      "source": "references/work-item-contract.schema.json",
-      "destination": "goal/references/work-item-contract.schema.json"
-    },
-    {
-      "source": "references/work_item.py",
-      "destination": "goal/scripts/work_item.py"
-    },
-    {
       "source": "references/work-item-contract.md",
       "destination": "task-prepare/references/work-item-contract.md"
-    },
-    {
-      "source": "references/work-item-contract.schema.json",
-      "destination": "task-prepare/references/work-item-contract.schema.json"
-    },
-    {
-      "source": "references/work_item.py",
-      "destination": "task-prepare/scripts/work_item.py"
     },
     {
       "source": "references/work-item-contract.md",
@@ -43,15 +19,99 @@
     },
     {
       "source": "references/work-item-contract.schema.json",
-      "destination": "task-review/references/work-item-contract.schema.json"
+      "destination": "askme/references/work-item-contract.schema.json"
     },
     {
-      "source": "references/work_item.py",
-      "destination": "task-review/scripts/work_item.py"
+      "source": "references/work-item-contract.schema.json",
+      "destination": "goal/references/work-item-contract.schema.json"
     },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "task-prepare/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "task-review/references/work-item-contract.schema.json"
+    },
+    { "source": "references/work_item.py", "destination": "askme/scripts/work_item.py" },
+    { "source": "references/work_item.py", "destination": "goal/scripts/work_item.py" },
+    { "source": "references/work_item.py", "destination": "task-prepare/scripts/work_item.py" },
+    { "source": "references/work_item.py", "destination": "task-review/scripts/work_item.py" },
     {
       "source": "references/question-guidelines.md",
       "destination": "askme/references/question-guidelines.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "doit/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "project-spec/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "docs-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-workflow/references/interaction-contract.md"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "task-triage/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "task-review/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "task-prepare/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "mr-prepare/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "code-review/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "release-prepare/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/gitlab-workflow.md",
+      "destination": "release-review/references/gitlab-workflow.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "task-triage/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "task-review/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "task-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "code-review/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "release-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "release-review/references/portable-gitlab-contracts-v2.md"
     },
     {
       "source": "references/python_runtime/__init__.py",
@@ -110,20 +170,12 @@
       "destination": "task-triage/scripts/portable_runtime/contract.py"
     },
     {
-      "source": "references/gitlab-workflow.md",
-      "destination": "task-triage/references/gitlab-workflow.md"
-    },
-    {
       "source": "references/portable_gitlab/__init__.py",
       "destination": "task-review/scripts/portable_runtime/__init__.py"
     },
     {
       "source": "references/portable_gitlab/contract.py",
       "destination": "task-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
-      "destination": "task-review/references/gitlab-workflow.md"
     },
     {
       "source": "references/portable_gitlab/__init__.py",
@@ -134,20 +186,12 @@
       "destination": "task-prepare/scripts/portable_runtime/contract.py"
     },
     {
-      "source": "references/gitlab-workflow.md",
-      "destination": "task-prepare/references/gitlab-workflow.md"
-    },
-    {
       "source": "references/portable_gitlab/__init__.py",
       "destination": "mr-prepare/scripts/portable_runtime/__init__.py"
     },
     {
       "source": "references/portable_gitlab/contract.py",
       "destination": "mr-prepare/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
-      "destination": "mr-prepare/references/gitlab-workflow.md"
     },
     {
       "source": "references/portable_gitlab/__init__.py",
@@ -158,10 +202,6 @@
       "destination": "code-review/scripts/portable_runtime/contract.py"
     },
     {
-      "source": "references/gitlab-workflow.md",
-      "destination": "code-review/references/gitlab-workflow.md"
-    },
-    {
       "source": "references/portable_gitlab/__init__.py",
       "destination": "release-prepare/scripts/portable_runtime/__init__.py"
     },
@@ -170,20 +210,12 @@
       "destination": "release-prepare/scripts/portable_runtime/contract.py"
     },
     {
-      "source": "references/gitlab-workflow.md",
-      "destination": "release-prepare/references/gitlab-workflow.md"
-    },
-    {
       "source": "references/portable_gitlab/__init__.py",
       "destination": "release-review/scripts/portable_runtime/__init__.py"
     },
     {
       "source": "references/portable_gitlab/contract.py",
       "destination": "release-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
-      "destination": "release-review/references/gitlab-workflow.md"
     },
     {
       "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
@@ -212,34 +244,6 @@
     {
       "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
       "destination": "release-review/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "task-triage/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "task-review/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "task-prepare/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "code-review/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "release-prepare/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "release-review/references/portable-gitlab-contracts-v2.md"
     },
     {
       "source": "references/python_runtime/__init__.py",
@@ -319,22 +323,6 @@
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "project-spec/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "docs-prepare/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "doit/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "team-workflow/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
       "destination": "task-triage/references/interaction-contract.md"
     },
     {
@@ -361,5 +349,36 @@
       "source": "references/interaction-contract.md",
       "destination": "release-review/references/interaction-contract.md"
     }
+  ],
+  "language_policy_skills": [
+    "agents-md",
+    "askme",
+    "ast-grep",
+    "attempt",
+    "code-review",
+    "commit-msg",
+    "docs-prepare",
+    "docs-review",
+    "doit",
+    "goal",
+    "humanize",
+    "lsp-report",
+    "mattermost",
+    "mr-prepare",
+    "overview",
+    "project-spec",
+    "release-prepare",
+    "release-review",
+    "rtk",
+    "schedule",
+    "skill-improver",
+    "stopit",
+    "summary",
+    "task-prepare",
+    "task-review",
+    "task-triage",
+    "team-workflow",
+    "usage",
+    "walkthrough"
   ]
 }

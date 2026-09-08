@@ -1,35 +1,25 @@
-# 09. Архитектурные решения
+# 09 Architecture Decisions
 
-## Назначение
+## Purpose
 
-Содержи индекс архитектурно значимых решений и их статусы.
+Describe the canonical target state supported by verified evidence.
 
-## Сюда относится
+## Included
 
-- ссылки на ADR;
-- текущий status и краткая тема каждого решения;
-- связи superseding/superseded decisions.
+State the responsibilities, stable identifiers, and relevant interfaces.
 
-## Сюда не относится
+## Excluded
 
-- bugfix и локальный refactoring;
-- task log и история реализации;
-- переписывание старого решения под текущее состояние.
+Do not record implementation plans, temporary research, or duplicate facts.
 
-## Правила декомпозиции
+## Decomposition Rules
 
-Один ADR - один файл `NNNN-short-title.md` по `templates/adr.md`. README остаётся
-индексом; номер не переиспользуется.
+Keep one semantic boundary per document and retain this README as its index.
 
-## Ожидаемая структура
+## Expected Structure
 
-```text
-09-architecture-decisions/
-├── README.md
-└── 0001-short-title.md
-```
+Use concise present-tense statements and link related canonical documents.
 
-## Шаблон содержания
+## Content Template
 
-Создай таблицу или список с номером, title, status и ссылкой. Если значимых решений
-пока нет, явно укажи это и не создавай фиктивный ADR.
+Replace this guidance with verified project-specific content.
