@@ -9,10 +9,15 @@
     { "en": "packages/skills/README.md", "ru": "packages/skills/README.ru.md" }
   ],
   "patterns": [
-    { "en": "skills/project-spec/templates/*.md", "ru": "skills/project-spec/templates/ru/*.md" },
+    {
+      "en": "skills/project-spec/templates/*.md",
+      "ru": "skills/project-spec/templates/ru/*.md",
+      "language_link_exception": "Template pairs are embedded source material and do not publish standalone language navigation."
+    },
     {
       "en": "skills/project-spec/templates/specs/**/*.md",
-      "ru": "skills/project-spec/templates/ru/specs/**/*.md"
+      "ru": "skills/project-spec/templates/ru/specs/**/*.md",
+      "language_link_exception": "Template pairs are embedded source material and do not publish standalone language navigation."
     }
   ],
   "neutral": ["CHANGELOG.md", "LICENSE", "SECURITY.md"]

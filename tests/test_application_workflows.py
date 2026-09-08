@@ -201,7 +201,29 @@ print(json.dumps(value))
         self.assertEqual(payload["status"], "ok")
         self.assertTrue(artifact_exists)
         self.assertEqual(len(str(item["digest"])), 64)
+        self.assertEqual(payload["summary"]["tldr"], "Completed GET-only GitLab evidence preparation.")
         self.assertNotIn("confirmation", payload)
+
+    def test_publication_plan_uses_english_human_prose(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "portable_gitlab_publication_prose"
+        )
+        markdown = module.publication_markdown(
+            {
+                "target": {"url": "https://gitlab.example/group/project/-/issues/7"},
+                "base_sha": None,
+                "start_sha": None,
+                "head_sha": None,
+                "retrieval_complete": False,
+            },
+            {"title": "Title", "description": "Description"},
+        )
+        self.assertIn("# Verified publication plan", markdown)
+        self.assertIn("- Collection completeness: partial", markdown)
+        self.assertIn("## Proposed text", markdown)
+        self.assertIn("### Title\n\nTitle", markdown)
+        self.assertIn("### Description\n\nDescription", markdown)
+        self.assertNotRegex(markdown, r"[А-Яа-яЁё]")
 
     def test_glab_boundary_forces_get_without_shell_or_credentials(self) -> None:
         module = load_module(

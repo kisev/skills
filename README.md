@@ -176,7 +176,17 @@ Markdown plan with `external_mutations=false`.
 
 ## Runtime Limits
 
-Stateful plugins remain opt-in; portable skills work without package assets.
+Stateful OpenCode plugins remain opt-in; portable skills work without package
+assets. Background Attempts own a managed worktree and terminal reconciliation;
+the plugin remains opt-in. The cron scheduler uses a strict evaluator and
+machine-readable receipts, and both its definitions and plugin are disabled by
+default. Mattermost does not yet have complete parity with its claimed scenarios,
+and runtime state and `doctor` require further hardening.
+
+The `background-attempts`, `schedule`, and `autonomy-policy` wrappers are
+disabled by default. `goal` is not a wrapper and creates no state. OpenChamber
+Goal Mode remains an external way to execute a goal; this project has no goal
+lifecycle or auto-continuation.
 
 ## Update and Removal
 

@@ -1,7 +1,7 @@
 ---
 name: task-prepare
 description: >-
-  Prepare Russian title, description, and publication plan for GitLab issues. Russian discovery terms: подготовить задачу.
+  Prepare a title, description, and publication plan for GitLab issues. Russian discovery terms: подготовить задачу.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

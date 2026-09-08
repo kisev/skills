@@ -986,21 +986,21 @@ def publication_markdown(bundle: dict[str, Any], content: dict[str, Any]) -> str
     return (
         "\n".join(
             [
-                "# Проверенный план публикации",
+                "# Verified publication plan",
                 "",
                 f"- Target: {target.get('url', 'local')}",
-                f"- Base SHA: {bundle.get('base_sha') or 'не применимо'}",
-                f"- Start SHA: {bundle.get('start_sha') or 'не применимо'}",
-                f"- Head SHA: {bundle.get('head_sha') or 'не применимо'}",
-                f"- Полнота collection: {'полная' if bundle.get('retrieval_complete') else 'частичная'}",
-                "- `external_mutations=false`: план не выполняет и не предлагает автоматические publish/resolve/approve/merge операции.",
+                f"- Base SHA: {bundle.get('base_sha') or 'not applicable'}",
+                f"- Start SHA: {bundle.get('start_sha') or 'not applicable'}",
+                f"- Head SHA: {bundle.get('head_sha') or 'not applicable'}",
+                f"- Collection completeness: {'complete' if bundle.get('retrieval_complete') else 'partial'}",
+                "- `external_mutations=false`: this plan does not perform or propose automated publish/resolve/approve/merge operations.",
                 "",
-                "## Предлагаемые тексты",
+                "## Proposed text",
                 "",
-                f"### Заголовок\n\n{content.get('title', '') or 'Без изменений.'}",
-                f"\n### Описание\n\n{content.get('description', '') or 'Без изменений.'}",
+                f"### Title\n\n{content.get('title', '') or 'No changes.'}",
+                f"\n### Description\n\n{content.get('description', '') or 'No changes.'}",
                 "",
-                "Перед ручной публикацией выполни `finalize`; stale или incomplete evidence блокируют ready.",
+                "Before manual publication, run `finalize`; stale or incomplete evidence blocks ready.",
             ]
         )
         + "\n"
@@ -1028,7 +1028,7 @@ def scaffold(bundle_file: str, content_file: str, plan_name: str) -> dict[str, o
     return {
         "status": "ok" if bundle.get("retrieval_complete") else "incomplete",
         "summary": {
-            "tldr": "Подготовлен локальный Markdown-план ручной публикации.",
+            "tldr": "Prepared a local Markdown plan for manual publication.",
             "scope": [str(bundle.get("target", {}).get("url", "local"))],
             "risks": [] if bundle.get("retrieval_complete") else ["collection incomplete"],
             "checks": ["schema-valid evidence", "content-addressed publication plan"],
@@ -1447,7 +1447,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 {
                     "status": status,
                     "summary": {
-                        "tldr": "Завершена GET-only подготовка GitLab evidence.",
+                        "tldr": "Completed GET-only GitLab evidence preparation.",
                         "scope": [item["target"] for item in results],
                         "risks": ["one or more targets failed"] if status != "ok" else [],
                         "checks": [
@@ -1498,7 +1498,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 {
                     "status": result["status"],
                     "summary": {
-                        "tldr": "Повторно проверена актуальность evidence.",
+                        "tldr": "Rechecked evidence freshness.",
                         "scope": [],
                         "risks": result.get("changed", []),
                         "checks": [
@@ -1532,7 +1532,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 {
                     "status": "ok" if bundle["retrieval_complete"] else "incomplete",
                     "summary": {
-                        "tldr": "Собраны local WIP evidence: staged, unstaged и untracked.",
+                        "tldr": "Collected local WIP evidence: staged, unstaged, and untracked.",
                         "scope": [str(bundle["repo_root"])],
                         "risks": []
                         if bundle["retrieval_complete"]
@@ -1564,7 +1564,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 {
                     "status": result["status"],
                     "summary": {
-                        "tldr": "Проверена актуальность local WIP evidence.",
+                        "tldr": "Checked local WIP evidence freshness.",
                         "scope": [str(bundle["repo_root"])],
                         "risks": result.get("changed", []),
                         "checks": ["HEAD", "all WIP sections"],
@@ -1613,7 +1613,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 {
                     "status": "ok",
                     "summary": {
-                        "tldr": "Сохранён private schema-valid artifact.",
+                        "tldr": "Saved a private schema-valid artifact.",
                         "scope": [],
                         "risks": [],
                         "checks": ["schema", "evidence digest", "content address"],
@@ -1670,7 +1670,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 {
                     "status": "ok",
                     "summary": {
-                        "tldr": "Проверено review decision без внешних мутаций.",
+                        "tldr": "Verified the review decision without external mutations.",
                         "scope": [str(evidence.get("target", {}).get("url", "local"))],
                         "risks": [],
                         "checks": [

@@ -108,7 +108,7 @@ WORKFLOW_CONTRACTS = {
         "do not replace the author's role with the reviewer's role",
     ),
     "summary": (
-        "do\nnot add facts absent from the source data",
+        "do not add facts absent from the source data",
         "strictly distinguish the current situation, a proposal, an accepted decision",
     ),
     "commit-msg": (
@@ -243,9 +243,10 @@ class PortableSkillValidationTests(unittest.TestCase):
                 .read_text(encoding="utf-8")
                 .lower()
             )
+            normalized = re.sub(r"\s+", " ", text)
             for contract in contracts:
                 with self.subTest(skill=name, contract=contract):
-                    self.assertIn(contract, text)
+                    self.assertIn(re.sub(r"\s+", " ", contract), normalized)
 
     def test_referenced_resources_are_self_contained(self) -> None:
         resources = {

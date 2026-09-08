@@ -1,56 +1,56 @@
-# Правила AGENTS.md
+# AGENTS.md guidelines
 
-Читай этот справочник, когда для обновления `AGENTS.md` нужен эталонный общий
-блок, чеклист сбора фактов или минимальный пример.
+Read this reference when updating `AGENTS.md` requires the standard shared
+section, a fact-gathering checklist, or a minimal example.
 
-## Эталонный общий блок
+## Standard shared section
 
-Копируй блок без изменений, если общий блок отсутствует или его нужно восстановить.
+Copy this section unchanged when the shared section is absent or must be restored.
 
 ```markdown
-## Общие правила
+## General rules
 
-### Язык и стиль
+### Language and style
 
-- Рассуждай и отвечай на русском языке.
-- Комментарии в коде и сообщения коммитов пиши на английском языке.
-- Документацию и тексты для пользователей пиши на языке, принятом в репозитории; если явного стандарта нет, используй русский.
-- Сохраняй стиль, структуру и уровень абстракции, принятые в аналогичных файлах этого репозитория.
-- Будь кратким и критичным: отмечай риски, спорные решения и сильные альтернативы.
-- Если намерение пользователя неясно и ошибка может затронуть релиз, совместимость или безопасность, задай короткий уточняющий вопрос.
+- Reason and respond in the language of the latest user request; use English when it is ambiguous.
+- Write code comments and commit messages in English.
+- Write documentation and user-facing text in the language established by the repository; use English if no standard is explicit.
+- Preserve the style, structure, and abstraction level used by analogous files in this repository.
+- Be concise and critical: identify risks, disputed decisions, and strong alternatives.
+- If user intent is unclear and an error could affect a release, compatibility, or security, ask one short clarifying question.
 
-### Базовые инженерные правила
+### Core engineering rules
 
-- Делай полную реализацию, без заглушек.
-- Перед изменениями изучай 3-5 релевантных файлов: похожие реализации, тесты и документацию.
-- Сначала опирайся на правила и структуру этого репозитория, затем на его документацию.
-- Не дублируй существующие утилиты, шаблоны и блоки логики.
-- При проверке изменений опирайся только на доступные факты.
-- Если данных не хватает, явно помечай вывод как предположение.
-- Не делай замечание без понятного риска, влияния или минимального способа исправления.
-- Учитывай пограничные случаи, безопасность, проверку входов, совместимость и производительность.
-- Удаляй неиспользуемый код и не усложняй решение без необходимости.
-- После изменений явно указывай выполненные и незапущенные проверки.
+- Deliver complete implementations without stubs.
+- Before making changes, examine 3-5 relevant files: analogous implementations, tests, and documentation.
+- Start with this repository's rules and structure, then use its documentation.
+- Do not duplicate existing utilities, templates, or logic blocks.
+- Base change verification only on available facts.
+- If data is insufficient, explicitly label the conclusion as an assumption.
+- Do not make a finding without a clear risk, impact, or minimal remediation.
+- Consider edge cases, security, input validation, compatibility, and performance.
+- Remove unused code and do not complicate the solution unnecessarily.
+- After changes, explicitly state completed and unrun checks.
 
-### Правила актуализации документа
+### Document maintenance rules
 
-- Общий блок должен быть максимально одинаковым между репозиториями; различия выноси в проектный раздел.
-- Не заменяй проектные правила общим шаблоном и не удаляй пользовательские уточнения без причины.
-- Держи `AGENTS.md` компактным.
-- Добавляй только правила, которые реально применимы и проверяемы в этом репозитории.
+- Keep the shared section as consistent as possible across repositories; put differences in the project section.
+- Do not replace project rules with the shared template or remove user-specific clarifications without reason.
+- Keep `AGENTS.md` compact.
+- Add only rules that are genuinely applicable and verifiable in this repository.
 ```
 
-## Чеклист контекста
+## Context checklist
 
-Проверь manifest проекта, task-конфигурацию, CI, форматтеры и линтеры, структуру
-исходного кода и тестов, документацию и реальные команды lint, test, build,
-typecheck и format. Не выдумывай команды: подтверждай их конфигурацией.
+Check the project manifest, task configuration, CI, formatters and linters, source
+and test layout, documentation, and the actual lint, test, build, typecheck, and
+format commands. Do not invent commands: confirm them from configuration.
 
-## Ограничения проектных правил
+## Project-rule constraints
 
-- До 20 пунктов, один пункт - одна строка.
-- Без подразделов внутри проектных правил.
-- Добавляй ключевые пути, реальные команды, CI, переменные окружения, зависимости
-  и ограничения версий runtime/toolchain.
-- Не копируй большие фрагменты документации: сохрани обязательное действие агента
-  и при необходимости короткую ссылку на канонический файл.
+- At most 20 bullets, with one bullet per line.
+- Do not add subsections inside project rules.
+- Include key paths, actual commands, CI, environment variables, dependencies,
+  and runtime/toolchain version constraints.
+- Do not copy large documentation excerpts: retain the agent's required action
+  and, where useful, a short link to the canonical file.

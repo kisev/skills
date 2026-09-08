@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,6 +28,17 @@ DEFAULT_OUTPUT = ROOT / ".build" / "packages" / "skills"
 
 class DistributionError(Exception):
     """An invalid distribution input or output."""
+
+
+DESCRIPTION = re.compile(r"^description:\s*>-?\s*\n\s+(.+)$", re.MULTILINE)
+
+
+def skill_description(skill: Path) -> str:
+    text = (skill / "SKILL.md").read_text(encoding="utf-8")
+    match = DESCRIPTION.search(text)
+    if not match or not match.group(1).strip():
+        raise DistributionError(f"skill frontmatter description is invalid: {skill.name}")
+    return match.group(1).strip()
 
 
 def canonical(value: object) -> bytes:
@@ -114,7 +126,7 @@ def build(output: Path, check: bool) -> int:
             "skills": [
                 {
                     "name": entry["name"],
-                    "description": f"Kisev portable skill {entry['name']}; Russian discovery terms are in its metadata.",
+                    "description": skill_description(BUILT_SKILLS / entry["name"]),
                     "type": "archive",
                     "url": f"../../{entry['archive']}",
                     "digest": f"sha256:{entry['sha256']}",
@@ -135,6 +147,11 @@ def build(output: Path, check: bool) -> int:
                 ):
                     raise DistributionError(
                         f"distribution artifact drift: {source.relative_to(staged)}"
+                    )
+            for target in output.rglob("*"):
+                if target.is_file() and not (staged / target.relative_to(output)).is_file():
+                    raise DistributionError(
+                        f"unexpected distribution artifact: {target.relative_to(output)}"
                     )
             print(f"checked {len(entries)} skill archives")
             return 0

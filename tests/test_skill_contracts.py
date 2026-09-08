@@ -105,3 +105,30 @@ def test_skills_use_english_canonical_workflows_without_locale_references() -> N
         if "/ru/" in path.as_posix():
             continue
         assert not cyrillic.search(path.read_text(encoding="utf-8")), path
+
+
+def test_all_english_canonical_skill_material_is_cyrillic_free() -> None:
+    cyrillic = re.compile(r"[А-Яа-яЁё]")
+    tracked = subprocess.run(
+        ["git", "ls-files", "skills"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    for relative in tracked:
+        path = ROOT / relative
+        if "skills/project-spec/templates/ru/" in relative:
+            continue
+        text = path.read_text(encoding="utf-8")
+        if path.name == "SKILL.md":
+            text = text.split("---", 2)[2]
+        assert not cyrillic.search(text), path
+
+
+def test_preparation_workflows_follow_the_shared_language_policy() -> None:
+    required = re.compile(
+        r"language of the latest user request; use\s+English when that language is ambiguous"
+    )
+    for name in ("mr-prepare", "task-prepare", "release-prepare"):
+        workflow = (ROOT / "skills" / name / "references" / "workflow.md").read_text(
+            encoding="utf-8"
+        )
+        assert "references/language-policy.md" in workflow, name
+        assert required.search(workflow), name

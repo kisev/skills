@@ -291,7 +291,7 @@ def main(argv: list[str] | None = None) -> int:
             valid_name(args.name)
             payload = {"kind": "context", "name": args.name, "content": raw.decode("utf-8")}
             plan_digest, path, expires_at = prepare_plan(payload)
-            emit({"status": "prepared", "summary": {"tldr": "Сохранение явного командного context.", "scope": [args.name], "risks": [], "checks": ["context validation", "safe state path"]}, "artifact_path": str(path), "digest": plan_digest, "expires_at": expires_at, "ttl_seconds": TTL_SECONDS, "apply_command": f"context-save --name {args.name} --input {args.input} --digest {plan_digest}"})
+            emit({"status": "prepared", "summary": {"tldr": "Saving explicit team context.", "scope": [args.name], "risks": [], "checks": ["context validation", "safe state path"]}, "artifact_path": str(path), "digest": plan_digest, "expires_at": expires_at, "ttl_seconds": TTL_SECONDS, "apply_command": f"context-save --name {args.name} --input {args.input} --digest {plan_digest}"})
             return 0
         if args.command == "context-save":
             valid_name(args.name)
@@ -302,7 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             root = private_directory(state_root() / "contexts")
             atomic(root / f"{args.name}.json", raw)
             report_path, report_digest = report(args.digest, {"status": "applied", "name": args.name})
-            emit({"status": "applied", "summary": {"tldr": "Context сохранён.", "scope": [args.name], "risks": [], "checks": ["digest", "expiry", "single_use", "safe_path"]}, "report_path": str(report_path), "report_digest": report_digest})
+            emit({"status": "applied", "summary": {"tldr": "Context saved.", "scope": [args.name], "risks": [], "checks": ["digest", "expiry", "single_use", "safe_path"]}, "report_path": str(report_path), "report_digest": report_digest})
             return 0
         if args.command == "artifact-prepare":
             source = regular(Path(args.input), "artifact input")
@@ -310,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
             target = workspace_target(args.target)
             payload = {"kind": "artifact", "target": args.target, "content": content.decode("utf-8")}
             plan_digest, path, expires_at = prepare_plan(payload)
-            emit({"status": "prepared", "summary": {"tldr": "Запись локального artifact.", "scope": [str(target)], "risks": ["existing file will be replaced"] if target.exists() else [], "checks": ["regular input", "safe workspace path"]}, "artifact_path": str(path), "digest": plan_digest, "expires_at": expires_at, "ttl_seconds": TTL_SECONDS, "apply_command": f"artifact-apply --target {args.target} --input {args.input} --digest {plan_digest}"})
+            emit({"status": "prepared", "summary": {"tldr": "Writing local artifact.", "scope": [str(target)], "risks": ["existing file will be replaced"] if target.exists() else [], "checks": ["regular input", "safe workspace path"]}, "artifact_path": str(path), "digest": plan_digest, "expires_at": expires_at, "ttl_seconds": TTL_SECONDS, "apply_command": f"artifact-apply --target {args.target} --input {args.input} --digest {plan_digest}"})
             return 0
         if args.command == "artifact-apply":
             source = regular(Path(args.input), "artifact input")
@@ -320,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
             target.parent.mkdir(parents=True, exist_ok=True)
             atomic(target, content)
             report_path, report_digest = report(args.digest, {"status": "applied", "target": str(target)})
-            emit({"status": "applied", "summary": {"tldr": "Artifact записан.", "scope": [str(target)], "risks": [], "checks": ["digest", "expiry", "single_use", "safe_path"]}, "report_path": str(report_path), "report_digest": report_digest})
+            emit({"status": "applied", "summary": {"tldr": "Artifact written.", "scope": [str(target)], "risks": [], "checks": ["digest", "expiry", "single_use", "safe_path"]}, "report_path": str(report_path), "report_digest": report_digest})
             return 0
         return fail("invalid_command", "a supported subcommand is required")
     except WorkflowError as exc:

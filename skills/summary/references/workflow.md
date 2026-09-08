@@ -1,8 +1,8 @@
 # Workflow
 
-Produce an accurate structured summary in Russian from the supplied materials. Do
-not add facts absent from the source data or perform new research instead of
-processing them.
+Produce an accurate structured summary in the language of the latest user
+request; use English when that language is ambiguous. Do not add facts absent
+from the source data or perform new research instead of processing them.
 
 ## Boundary and output
 

@@ -34,6 +34,8 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
     assert index["$schema"] == "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
     assert index["skills"]
     for entry in index["skills"]:
+        source = (ROOT / "skills" / entry["name"] / "SKILL.md").read_text(encoding="utf-8")
+        assert entry["description"] in source
         archive = OUTPUT / entry["url"].removeprefix("../../")
         assert entry["digest"] == f"sha256:{hashlib.sha256(archive.read_bytes()).hexdigest()}"
         assert lock["archives"][entry["name"]] == entry["digest"].removeprefix("sha256:")
@@ -45,6 +47,18 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
                 assert not any(name.startswith("templates/ru/") for name in names)
             if entry["name"] == "mattermost":
                 assert "scripts/mattermost.py" in document.getnames()
+
+
+def test_distribution_check_rejects_unexpected_file(tmp_path: Path) -> None:
+    output = tmp_path / "skills"
+    assert build_distribution.build(output, False) == 0
+    (output / "unexpected.txt").write_text("unexpected\n", encoding="utf-8")
+    try:
+        build_distribution.build(output, True)
+    except build_distribution.DistributionError as error:
+        assert "unexpected distribution artifact" in str(error)
+    else:
+        raise AssertionError("expected unexpected artifact rejection")
 
 
 def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -> None:

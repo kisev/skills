@@ -20,7 +20,7 @@ Use `templates/` as content guidance. Do not copy placeholders or operational pr
 
 - The canonical structure contains all 19 required `README.md` files from `templates/specs/`. An empty or inapplicable section briefly explains why.
 - Documents are compact, describe target state in present tense, and do not duplicate one fact in several viewpoints.
-- Document prose is Russian. English is allowed in identifiers, paths, stable `REQ-*` and `ADR-*` IDs, glossary terms, and widely accepted technical terms.
+- Document prose uses the language of the latest user request; use English when that language is ambiguous. Do not translate identifiers, paths, stable `REQ-*` and `ADR-*` IDs, glossary terms, or widely accepted technical terms.
 - Requirements and architecture are organized by knowledge type, not feature, milestone, or issue. The machine-readable contract remains the source of truth for syntax; Markdown records semantics, errors, compatibility, and invariants.
 - Additional files are allowed only at semantic boundaries from the guidance. Create an ADR only for an architecturally significant decision.
 - Do not create roadmap, archive, proposal, delta, tasks, plan, research, analysis, mapping, or other durable process artifacts.

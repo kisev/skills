@@ -19,7 +19,7 @@
     {
       "id": "plugin-opt-in",
       "path": "README.md",
-      "contains": "Stateful plugins remain opt-in"
+      "contains": "Stateful OpenCode plugins remain opt-in"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "7e0791bf30bab57125abb307969b3b0caf0b952a3e1b5dd4a161d6e7a5c01222",
+  "digest": "46cd9cbf14f5309154cb0d11dc2ffc4bf890c447f2deb71d232dd3de0d2601c6",
   "locale": "ru",
   "pair_id": "plugin.background-attempts.disabled-mutation-boundary"
 }

@@ -79,3 +79,32 @@ def test_locale_checker_rejects_language_link_with_wrong_target(tmp_path: Path) 
     )
     with pytest.raises(check_locales.LocaleError, match="reciprocal language link"):
         check_locales.validate(tmp_path)
+
+
+def test_locale_checker_rejects_orphan_russian_suffix_and_abbreviated_sections(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "README.md").write_text(
+        "# English\n\n[Русский](README.ru.md)\n\n## Details\n", encoding="utf-8"
+    )
+    (tmp_path / "README.ru.md").write_text("# Русский\n\n[English](README.md)\n", encoding="utf-8")
+    (tmp_path / "orphan.ru.md").write_text("# Сирота\n", encoding="utf-8")
+    (tmp_path / "shared/locale-manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "pairs": [{"en": "README.md", "ru": "README.ru.md"}],
+                "patterns": [],
+                "neutral": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(check_locales.LocaleError, match="section structure"):
+        check_locales.validate(tmp_path)
+    (tmp_path / "README.ru.md").write_text(
+        "# Русский\n\n[English](README.md)\n\n## Подробнее\n", encoding="utf-8"
+    )
+    with pytest.raises(check_locales.LocaleError, match="orphan Russian"):
+        check_locales.validate(tmp_path)

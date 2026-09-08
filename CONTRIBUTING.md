@@ -47,6 +47,27 @@ If an executable is missing, run `mise current` after installation. If
 and then run `uv lock`; do not update dependencies implicitly. To reproduce a
 package failure, run `task package:check` from the repository root.
 
+## Diagnostics
+
+- If an executable is unavailable, run `mise install` and inspect versions with
+  `mise current`.
+- If `uv run --locked` reports drift, deliberately update the pin in
+  `pyproject.toml`, then run `uv lock`; do not update dependencies implicitly.
+- If `generate:check` reports drift, fix the canonical source and run
+  `task generate`; never edit a build artifact directly.
+- Agnix errors block validation. Existing warnings are printed and recorded in
+  `.agnix-warnings.json`; a new warning also blocks the gate until fixed or its
+  baseline is deliberately updated.
+- Reproduce package failures with `task package:check` at the repository root
+  to retain the CI versions and order.
+
+## Quality and Review
+
+- Preserve frontmatter and agentskills.io format constraints for every `SKILL.md`.
+- Add focused tests for public contracts or meaningful regression risk.
+- Never include credentials, tokens, internal endpoints, local paths, caches, or
+  build artifacts in changes.
+
 ## Git Hooks
 
 Install hooks after bootstrap:
@@ -59,14 +80,13 @@ lefthook install
 staged paths. `pre-push` invokes full `task check`. Hooks do not apply fixes or
 run `git add`.
 
-Use English for canonical source, code, comments, commands, and commit messages.
-Preserve machine tokens exactly and add focused tests for public contracts or
-meaningful regression risks.
+Use English for code, comments, and commit messages; user documentation follows
+the language of its existing section. Preserve machine tokens exactly.
 
 Run live evaluations only explicitly with exact `--host`, `--model`, timeout,
 token/cost limits, and output path. Do not add model defaults or live output to
-Git; ordinary CI runs only the offline suite. Describe the purpose, security
-impact, checks run, and deliberately omitted checks in a pull request.
+Git; ordinary CI runs only the offline suite. Describe purpose, security impact,
+checks run, and deliberately omitted checks in a pull request.
 
 ## Releases
 

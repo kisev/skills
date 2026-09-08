@@ -1,7 +1,7 @@
 ---
 name: mr-prepare
 description: >-
-  Prepare a Russian title, description, and publication plan for a GitLab merge request. Russian discovery terms: подготовить MR.
+  Prepare a title, description, and publication plan for a GitLab merge request. Russian discovery terms: подготовить MR.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
