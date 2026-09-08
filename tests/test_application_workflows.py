@@ -12,9 +12,9 @@ import unittest
 from urllib.request import Request
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import patch
-from contextlib import redirect_stdout
+from contextlib import nullcontext, redirect_stdout
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1033,6 +1033,99 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(errors[0]["code"], "repeated_page")
         self.assertEqual(warnings, [])
 
+    def test_mattermost_pagination_collects_pages_and_marks_error_or_limit_partial(self) -> None:
+        module = self.mattermost_module("pagination_bounds")
+        first = {str(index): {"id": str(index), "create_at": index} for index in range(200)}
+        second = {"last": {"id": "last", "create_at": 201}}
+
+        class CompleteClient:
+            def get(self, path: str) -> object:
+                responses = {
+                    "/users/me": {"id": "viewer"},
+                    "/teams/name/team": {"id": "team-id"},
+                    "/teams/team-id/channels/name/channel": {"id": "channel-id", "name": "channel"},
+                    "/channels/channel-id/posts?page=0&per_page=200": {"posts": first},
+                    "/channels/channel-id/posts?page=1&per_page=200": {"posts": second},
+                }
+                return responses[path]
+
+        posts, complete, pages, errors, warnings = module.read_channel(
+            CompleteClient(), {"id": "channel-id"}, {"since": None, "until": None}
+        )
+        self.assertTrue(complete)
+        self.assertEqual(len(posts), 201)
+        self.assertEqual(pages, 2)
+        self.assertEqual(errors, [])
+        self.assertEqual(warnings, [])
+
+        class ErrorClient:
+            def get(self, path: str) -> object:
+                if path == "/users/me":
+                    return {"id": "viewer"}
+                if path == "/teams/name/team":
+                    return {"id": "team-id"}
+                if path == "/teams/team-id/channels/name/channel":
+                    return {"id": "channel-id", "name": "channel"}
+                if path.endswith("page=0&per_page=200"):
+                    return {"posts": first}
+                raise module.MattermostError("page failed")
+
+        posts, complete, pages, errors, _ = module.read_channel(
+            ErrorClient(), {"id": "channel-id"}, {"since": None, "until": None}
+        )
+        self.assertFalse(complete)
+        self.assertEqual(len(posts), 200)
+        self.assertEqual(pages, 1)
+        self.assertEqual(errors[0]["code"], "page_unavailable")
+
+        with patch.object(module, "MAX_PAGES", 1):
+            posts, complete, pages, errors, _ = module.read_channel(
+                CompleteClient(), {"id": "channel-id"}, {"since": None, "until": None}
+            )
+        self.assertFalse(complete)
+        self.assertEqual(len(posts), 200)
+        self.assertEqual(pages, 1)
+        self.assertEqual(errors[0]["code"], "pagination_limit")
+
+        def read_exit(client: object, *, max_pages: int | None = None) -> dict[str, object]:
+            output = io.StringIO()
+            pages_patch = (
+                patch.object(module, "MAX_PAGES", max_pages)
+                if max_pages is not None
+                else nullcontext()
+            )
+            with pages_patch:
+                with patch.object(module, "read_token", return_value="private-value"):
+                    with patch.object(module, "Client", return_value=client):
+                        with redirect_stdout(output):
+                            self.assertEqual(
+                                module.main(
+                                    [
+                                        "read",
+                                        "https://chat.example/team/channels/channel",
+                                        "--since",
+                                        "1970-01-01T00:00:00+00:00",
+                                        "--no-cache",
+                                    ]
+                                ),
+                                1,
+                            )
+            observed = json.loads(output.getvalue())
+            self.assertIsInstance(observed, dict)
+            return cast(dict[str, object], observed)
+
+        for client, max_pages, error_code in (
+            (ErrorClient(), None, "page_unavailable"),
+            (CompleteClient(), 1, "pagination_limit"),
+        ):
+            with self.subTest(error_code=error_code):
+                observed = read_exit(client, max_pages=max_pages)
+                self.assertEqual(observed["status"], "partial")
+                errors = cast(list[dict[str, object]], observed["errors"])
+                self.assertIsInstance(errors, list)
+                self.assertIsInstance(errors[0], dict)
+                self.assertEqual(errors[0]["code"], error_code)
+
     def test_mattermost_partial_thread_and_members_preserve_safe_evidence(self) -> None:
         module = self.mattermost_module("partial")
         post = {"id": "reply", "root_id": "root", "create_at": 1}
@@ -1214,6 +1307,7 @@ class MattermostAndTeamTests(unittest.TestCase):
     def test_mattermost_client_uses_only_get_requests(self) -> None:
         module = self.mattermost_module("get_only")
         seen: list[Request] = []
+        case = self
 
         class Response:
             def read(self, _: int) -> bytes:
@@ -1225,12 +1319,13 @@ class MattermostAndTeamTests(unittest.TestCase):
             def __exit__(self, *arguments: object) -> None:
                 return None
 
-        def urlopen(request: Request, *, timeout: int) -> Response:
-            seen.append(request)
-            self.assertEqual(timeout, 30)
-            return Response()
+        class Opener:
+            def open(self, request: Request, *, timeout: int) -> Response:
+                seen.append(request)
+                case.assertEqual(timeout, 30)
+                return Response()
 
-        with patch.object(module.urllib.request, "urlopen", side_effect=urlopen):
+        with patch.object(module.urllib.request, "build_opener", return_value=Opener()):
             self.assertEqual(
                 module.Client("https://chat.example", "private-value").get("/users/me"),
                 {"id": "viewer"},
@@ -1238,6 +1333,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(len(seen), 1)
         self.assertEqual(seen[0].get_method(), "GET")
         self.assertEqual(seen[0].full_url, "https://chat.example/api/v4/users/me")
+        self.assertIsNone(module.NoRedirect().redirect_request())
 
     def test_mattermost_auth_and_cache_confirmation_are_one_use_and_redact_secret(self) -> None:
         module = self.mattermost_module("confirm")
@@ -1318,6 +1414,9 @@ class MattermostAndTeamTests(unittest.TestCase):
                 cache_preview = module.prepare_receipt("cache-clear", path=module.cache_path())
                 self.assertEqual(
                     module.main(["cache", "clear", "--confirm", cache_preview["digest"]]), 0
+                )
+                self.assertEqual(
+                    module.main(["cache", "clear", "--confirm", cache_preview["digest"]]), 2
                 )
                 receipt_text = "".join(
                     path.read_text(encoding="utf-8")

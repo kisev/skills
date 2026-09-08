@@ -45,6 +45,13 @@ class ContractArgumentParser(argparse.ArgumentParser):
         raise MattermostError(message)
 
 
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Keep every request at the origin explicitly selected by the caller."""
+
+    def redirect_request(self, *arguments: object, **keywords: object) -> None:
+        return None
+
+
 def emit(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, sort_keys=True))
 
@@ -263,6 +270,7 @@ class Client:
     def __init__(self, origin: str, token: str):
         self.origin = normalized_origin(origin)
         self.token = token
+        self.opener = urllib.request.build_opener(NoRedirect())
 
     def get(self, path: str) -> object:
         if not path.startswith("/") or "://" in path or ".." in path.split("/"):
@@ -273,7 +281,7 @@ class Client:
             method="GET",
         )
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with self.opener.open(request, timeout=30) as response:
                 data = response.read(MAX_RESPONSE + 1)
         except urllib.error.HTTPError as exc:
             if exc.code in {401, 403}:
