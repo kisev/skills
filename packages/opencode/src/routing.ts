@@ -42,6 +42,7 @@ export type RoutingReceipt = {
   destination: Category;
   agent: string;
   card_digest: string | null;
+  card_revision: number | null;
   host_inventory_revision: string;
   expires_at: string;
   nonce: string;
@@ -136,7 +137,7 @@ function digest(value: unknown): string {
 
 export function validateRoutingReceipt(
   value: unknown,
-  context?: { task?: string; category?: string },
+  context?: { task?: string; category?: string; requirements?: string[]; card?: unknown },
 ): RoutingDecision {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("routing receipt is not an object");
@@ -149,12 +150,27 @@ export function validateRoutingReceipt(
       !receipt.agent ||
       !receipt.nonce ||
       !/^[a-f0-9]{64}$/.test(receipt.host_inventory_revision) ||
-      !/^[a-f0-9]{64}$/.test(receipt.receipt_digest)
+      !/^[a-f0-9]{64}$/.test(receipt.receipt_digest) ||
+      !Number.isFinite(Date.parse(receipt.expires_at)) ||
+      (receipt.card_revision !== null &&
+        (!Number.isInteger(receipt.card_revision) || receipt.card_revision < 1))
     )
       throw new Error("routing receipt is malformed");
+    if (Date.parse(receipt.expires_at) < Date.now()) throw new Error("routing receipt has expired");
     const { receipt_digest: _receiptDigest, ...receiptBase } = receipt;
     if (digest(receiptBase) !== receipt.receipt_digest)
       throw new Error("routing receipt integrity is invalid");
+    if (context?.category !== undefined && receipt.destination !== context.category)
+      throw new Error("routing receipt destination does not match");
+    if (context?.task !== undefined && receipt.task_digest !== digest(context.task))
+      throw new Error("routing receipt task does not match");
+    if (
+      context?.requirements !== undefined &&
+      receipt.requirements_digest !== digest(context.requirements)
+    )
+      throw new Error("routing receipt requirements do not match");
+    if (context?.card !== undefined && receipt.card_digest !== digest(context.card))
+      throw new Error("routing receipt card does not match");
     return receipt as unknown as RoutingDecision;
   }
   if (
@@ -585,6 +601,7 @@ export class RoutingGate {
       destination: decision.category,
       agent: decision.agent!,
       card_digest: cardDigest ?? null,
+      card_revision: decision.execution_card_revision ?? null,
       host_inventory_revision: decision.host_inventory_revision,
       expires_at: new Date(now + this.#ttlMs).toISOString(),
       nonce: createHash("sha256")

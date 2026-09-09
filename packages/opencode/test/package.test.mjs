@@ -663,7 +663,12 @@ test("routing receipts bind task requirements card agent revision and expiry", (
   };
   const gate = new RoutingGate();
   const decision = gate.dispatch(input, gate.preview(input));
-  gate.grant("bound", decision, { task: input.task, requirements: input.requirements, card });
+  const receipt = gate.grant("bound", decision, {
+    task: input.task,
+    requirements: input.requirements,
+    card,
+  });
+  assert.equal(receipt.card_revision, 1);
   assert.throws(
     () =>
       gate.consume("bound", "worker", {
