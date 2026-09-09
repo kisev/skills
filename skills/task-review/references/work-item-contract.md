@@ -9,7 +9,10 @@ does not read `shared/`.
 ## Normalized Structure
 
 Required fields are `problem`, a defined `outcome`, verifiable
-`acceptance_criteria`, `evidence`, and `scope` with `in_scope` and `non_goals`.
+`acceptance_criteria` with concrete evidence, and `scope` with `in_scope` and
+`non_goals`. A work item is quality-complete only when every criterion has
+evidence, every dependency is accounted for, and the declared owner and safety
+boundary are explicit.
 Also declare `dependencies`, `external_actions`, `assumptions`, `safety`,
 `risks`, `unresolved_questions`, and `stop_conditions`.
 
@@ -23,7 +26,9 @@ returns JSON and a defined exit code. `machine_findings` validates form and
 links; `semantic_assessment` records independent feasibility/consistency
 findings. Finding order is `severity`, `code`, `path`, `message`; stable input
 produces the same report and digest. Verdicts are `ready`,
-`needs_clarification`, and `blocked`.
+`needs_clarification`, and `blocked`. An item or result must not be called
+complete when required evidence is partial or a blocking dependency is
+unresolved.
 
 ## Workflow Duties
 
@@ -31,6 +36,8 @@ produces the same report and digest. Verdicts are `ready`,
 - `task-prepare` creates no publication artifact before `ready` and makes no GitLab mutation.
 - `task-review` returns evidence-backed findings without reviewing implementation.
 - `goal` does not turn an invalid item into `running` and binds completion evidence.
+- One workflow owns each durable state; these workflows do not create a shared
+  lifecycle behind the caller's back.
 
 ## Optional Premortem
 
