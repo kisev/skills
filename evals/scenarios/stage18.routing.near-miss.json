@@ -1,0 +1,25 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage18.routing.near-miss",
+  "revision": 1,
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "stage18.routing.near-miss",
+  "surface": "agent",
+  "host": "opencode",
+  "input": {
+    "prompt": "Не маршрутизируй, просто объясни разницу между mapper и worker.",
+    "fixture": { "selected": [] }
+  },
+  "expected": { "selected": [], "not_selected": ["agent:mapper", "agent:worker"] },
+  "invariants": [
+    {
+      "id": "four-destinations",
+      "path": "packages/opencode/src/routing.ts",
+      "contains": "CATEGORIES"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "5401e74c2768c247c0c4e6ba4ccad03a39f5d9590b8f183a58da44faedf892fc"
+}

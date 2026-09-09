@@ -1,0 +1,25 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage18.routing.trigger.en",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage18.routing.trigger",
+  "surface": "agent",
+  "host": "opencode",
+  "input": {
+    "prompt": "Route exploration to mapper through the package route tool.",
+    "fixture": { "selected": ["agent:mapper"] }
+  },
+  "expected": { "selected": ["agent:mapper"], "not_selected": ["agent:worker"] },
+  "invariants": [
+    {
+      "id": "host-inventory",
+      "path": "packages/opencode/src/index.ts",
+      "contains": "hostInventory"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "76c43e3bda0b6b1621d142695287468e7f61306fd8aa1047bf53955406fbdcc0"
+}
