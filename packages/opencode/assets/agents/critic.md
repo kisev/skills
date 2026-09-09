@@ -29,5 +29,19 @@ git -c diff.external= -c diff.trustExitCode=false diff --cached --no-ext-diff --
 Read untracked files named by status with native OpenCode `Read`, never with
 Bash. Return exactly one structured `critic_report` with matching `card_id` and
 `revision`. Its only status values are `APPROVED` and `CHANGES_REQUIRED`;
-include verified findings, evidence, unrun checks, and risks. Do not edit files,
+include `schema_version: 1`, verified findings, evidence, unrun checks, and risks. Do not edit files,
 run any other Bash command, delegate work, or propose direct worker remediation.
+
+```json
+{
+  "critic_report": {
+    "schema_version": 1,
+    "status": "APPROVED",
+    "card_id": "...",
+    "revision": 1,
+    "findings": [],
+    "unrun_checks": [],
+    "risks": []
+  }
+}
+```

@@ -16,7 +16,7 @@ exactly one structured `mapper_report` and no prose, plan, patch, or
 `execution_card`:
 
 ```json
-{"mapper_report":{"paths":[{"path":"...","role":"...","evidence":"..."}],"callers":[{"path":"...","evidence":"..."}],"tests":[{"path":"...","evidence":"..."}],"patterns":[{"path":"...","evidence":"..."}],"evidence_gaps":["..."]}}
+{"mapper_report":{"schema_version":1,"paths":[{"path":"...","role":"...","evidence":"..."}],"callers":[{"path":"...","evidence":"..."}],"tests":[{"path":"...","evidence":"..."}],"patterns":[{"path":"...","evidence":"..."}],"evidence_gaps":["..."]}}
 ```
 
 Use factual path and caller/test/pattern evidence only. If evidence is missing,

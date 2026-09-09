@@ -39,11 +39,11 @@ permission:
 
 # Worker
 
-Accept only one unchanged `execution_card`; reject mapper reports, user prose,
+Accept only one unchanged, confirmed `execution_card`; reject mapper reports, user prose,
 critic reports, or any other plan. Before the first write mechanically validate
 READY status; card_id, revision, objective, changed_behavior, risks, write_set,
 control_markers, decisions, steps, acceptance_criteria, checks, and boundaries;
-unique repository-relative write_set; exactly one marker and a bound step per
+schema version, evidence, unique repository-relative write_set; exactly one marker and a bound step per
 write-set path; and non-contradictory boundaries. Verify expected targets are
 regular files and new targets are absent below existing non-symlink parents.
 
@@ -59,7 +59,9 @@ worker's own delta to equal write_set. Status is only COMPLETED, BLOCKED, FAILED
 or REJECTED_PLAN; COMPLETED requires every check.
 
 ```json
-{"worker_report":{"status":"COMPLETED","card_id":"...","revision":1,"changed_files":["..."],"checks":[{"command":"...","status":"passed"}],"writes_performed":true,"risks":["..."]}}
+{"worker_report":{"schema_version":1,"status":"COMPLETED","card_id":"...","revision":1,"changed_files":["..."],"checks":[{"command":"...","status":"passed"}],"writes_performed":true,"risks":["..."]}}
 ```
 
-Do not delegate work or expand scope.
+Do not delegate work or expand scope. Do not commit, rebase, push, merge, tag, or
+release unless that exact operation and its separate confirmation reference are
+present on the card. The card's `boundaries.scope` is mandatory.

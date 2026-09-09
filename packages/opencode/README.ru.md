@@ -209,6 +209,20 @@ five-field cron, не воспроизводит missed slots и пишет rece
 project/global rules. `rtk` fail-open сжимает большой bash output и добавляет
 подсказку для edit error, но не содержит ownership guard.
 
+## Routing этапа 18
+
+`doit` владеет полным lifecycle evidence -> plan -> confirmation -> execution ->
+checks -> report; `manager` только адаптирует его к OpenCode. Tool `route` имеет
+четыре назначения: exploration -> `mapper`, architecture -> `architect`,
+implementation -> `worker`, review -> `review` или один `critic`. Documentation и
+quick остаются у `doit`.
+
+Inventory берётся только из resolved host config. Caller не может подменить agents,
+capabilities, tools, models или availability. Versioned receipts, cards и
+mapper/worker/review/critic reports проверяются на реальных Task dispatch/result
+hooks. Card связывает paths, checks, явные VCS operations и отдельные confirmations
+для execution, publication и history rewrite.
+
 ## Границы
 
 Portable skills в корне `skills/` универсальны и устанавливаются только через

@@ -53,6 +53,22 @@ mutation receipts are private, one-time, TTL-bound, and reject stale or replayed
 inputs. Stateful records use private atomic writes and locks; incomplete
 background attempts become `orphaned` on reload.
 
+### Stage 18 Routing Contracts
+
+`doit` is the sole owner of the evidence -> plan -> confirmation -> execution ->
+checks -> report lifecycle. The OpenCode `manager` is only a thin adapter. The
+package route tool has four destinations: exploration to `mapper`, architecture
+to `architect`, implementation to `worker`, and review to `review` or one
+selected `critic`; documentation and quick work stay in `doit`.
+
+Routing inventory is resolved from host configuration. Route callers cannot inject
+agents, capabilities, tools, models, or availability. Versioned routing receipts
+are one-use, TTL-bound, and bind task, requirements, destination, agent, execution
+card, and host inventory revision. Versioned execution cards and mapper, worker,
+review, and critic reports are checked at the real Task dispatch and result hooks.
+Cards close write and forbidden paths, checks, explicit VCS operations, and
+separate execution, publication, and history-rewrite confirmations.
+
 ## Build Invariants
 
 - The JSON manifest maps machine inputs to build paths.

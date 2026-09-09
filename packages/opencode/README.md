@@ -174,6 +174,20 @@ the managed worktree owner and current-only private state; Scheduler accepts onl
 strict five-field cron and never replays missed slots. Rules injection fails soft
 within a bounded budget and preserves native rules; RTK fails open.
 
+## Stage 18 Routing
+
+`doit` owns the complete evidence -> plan -> confirmation -> execution -> checks
+-> report lifecycle; `manager` only adapts it to OpenCode. The route tool has four
+destinations: exploration to `mapper`, architecture to `architect`, implementation
+to `worker`, and review to `review` or one selected `critic`. Documentation and
+quick work remain in `doit`.
+
+The route inventory comes only from resolved host configuration. Callers cannot
+inject agents, capabilities, tools, models, or availability. Versioned receipts,
+cards, and mapper/worker/review/critic reports are checked at real Task dispatch
+and result hooks. Cards bind paths, checks, explicit VCS operations, and separate
+execution, publication, and history-rewrite confirmations.
+
 ## Boundaries
 
 Portable skills and package assets install independently.

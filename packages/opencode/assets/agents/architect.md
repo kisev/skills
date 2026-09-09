@@ -15,13 +15,14 @@ Use the mapper's factual evidence, the original request, and critic evidence
 when revising. Return exactly one structured `execution_card` and no prose,
 alternative plan, patch, or second card. Status is only READY or NEEDS_EVIDENCE.
 
-A READY card has concrete `status`, `card_id`, positive `revision`, `objective`,
+A READY card has `schema_version: 1`, concrete `status`, `card_id`, positive `revision`, `objective`,
 non-empty `changed_behavior`, `risks`, exact closed `write_set`,
 `control_markers`, `decisions`, deterministic `steps`,
-`acceptance_criteria`, exact `checks`, and `boundaries`.
+`acceptance_criteria`, exact `checks`, explicit `operations`, separate confirmation
+references, and `boundaries.scope` plus forbidden paths.
 
 ```json
-{"execution_card":{"status":"READY","card_id":"...","revision":1,"objective":"...","changed_behavior":["..."],"risks":["..."],"write_set":["exact/path"],"control_markers":[{"path":"exact/path","expected":"exact text"}],"decisions":["..."],"steps":[{"path":"exact/path","operation":"deterministic change"}],"acceptance_criteria":["..."],"checks":["exact command"],"boundaries":{"forbidden_paths":["exact/path"],"scope":"..."}}}
+{"execution_card":{"schema_version":1,"status":"READY","card_id":"...","revision":1,"objective":"...","evidence":["..."],"changed_behavior":["..."],"risks":["..."],"write_set":["exact/path"],"control_markers":[{"path":"exact/path","expected":"exact text"}],"decisions":["..."],"steps":[{"path":"exact/path","operation":"deterministic change"}],"acceptance_criteria":["..."],"checks":["exact command"],"operations":[{"kind":"write","command":"exact change"},{"kind":"check","command":"exact command"},{"kind":"commit","command":"explicit or none"},{"kind":"rebase","command":"explicit or none"},{"kind":"push","command":"explicit or none"},{"kind":"merge","command":"explicit or none"},{"kind":"tag","command":"explicit or none"},{"kind":"release","command":"explicit or none"}],"confirmations":{"execution":"required","publication":"required","history_rewrite":"required"},"boundaries":{"forbidden_paths":["exact/path"],"scope":"..."}}}
 ```
 
 Each existing write-set file has exactly one marker with exact expected regular

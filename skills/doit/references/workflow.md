@@ -11,9 +11,11 @@ Before a requested worktree, show future path, branch, and base ref. Do not carr
 - Read `references/interaction-contract.md` and follow its lifecycle.
 - By default, work in the current worktree and current branch. Create an adjacent isolated worktree only upon the user's explicit request.
 - Before writing, prepare a private content-addressed preview artifact. Show only its TLDR in chat: goal, exact base SHA, scope, checks, risks, path, and SHA-256 digest; do not print the full diff. Obtain Confirmation for the exact mutation.
-- Do not push. `git add` and `git commit` require separate confirmation after the final diff; add only paths from this workflow to the index.
+- `commit`, `rebase`, `push`, `merge`, `tag`, and `release` are allowed only as exact operations in the approved plan; each requires its applicable confirmation. `git add` and `git commit` require separate confirmation after the final diff; add only paths from this workflow to the index.
 - Do not modify unfamiliar or user changes. On a direct conflict, stop and ask how to proceed.
 - Do not require a specific host, its state, question tools, agents, tasks, or separate specification commands. If a question is needed, ask it in chat or through the host's standard mechanism.
+- `doit` is the only coordinator for evidence -> plan -> confirmation -> execution -> checks -> report. OpenCode adapters may route work, but may not implement a second coordinator lifecycle.
+- Documentation and quick requests are handled here; they are not routing destinations. Any VCS operation is permitted only when named exactly in the approved plan, with separate publication and history-rewrite confirmations.
 
 ## Work Order
 

@@ -74,6 +74,23 @@ Stateful runtime records используют те же private 0600 atomic writ
 при повторной загрузке незавершённые background attempts переходят в
 `orphaned`, а недопустимые status transitions отклоняются.
 
+### Routing и контракты этапа 18
+
+`doit` - единственный владелец lifecycle evidence -> plan -> confirmation ->
+execution -> checks -> report. OpenCode `manager` только адаптирует его к Task и
+не создаёт второй lifecycle. Package route имеет четыре назначения:
+exploration -> `mapper`, architecture -> `architect`, implementation -> `worker`,
+review -> `review` или один выбранный `critic`; documentation и quick остаются у
+`doit`.
+
+Inventory routing разрешается только из host config. Caller не может передать
+agents, capabilities, tools, models или availability. Versioned receipt одноразово
+и с TTL связывает task, requirements, destination, agent, execution card и
+revision host inventory. Versioned cards и mapper/worker/review/critic reports
+проверяются на реальных Task dispatch/result hooks. Card фиксирует write и
+forbidden paths, steps, checks, явные VCS operations и отдельные confirmations
+для execution, publication и history rewrite.
+
 ## Инварианты build
 
 - JSON manifest - единственное отображение общих исходников в пути build skills,
