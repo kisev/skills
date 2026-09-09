@@ -48,7 +48,9 @@ task check
 
 Только `format` меняет tracked checkout. Если меняются shared references,
 сначала измените canonical-файл в `shared/references/`, затем запустите
-`task generate`; portable copies создаются только в ignored build artifact.
+`task generate`; portable copies committed в объявленные destinations, а ignored
+build artifacts создаются отдельно. Для отдельной
+materialization-команды используйте `python3 scripts/build_skills.py --generate`.
 Команды OpenCode и copied LSP catalog создаются только в `packages/opencode/dist/assets/`
 перед pack; их источники - `packages/opencode/src/registry.ts` и `shared/references/`.
 

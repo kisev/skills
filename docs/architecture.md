@@ -4,9 +4,12 @@
 
 ## Source of Truth
 
-Portable skills in `skills/<name>/` are self-contained. `shared/` is maintainer
-input, not an installed runtime dependency. `scripts/build_skills.py` writes
-exact copies only to ignored `.build/skills`.
+Portable skills in `skills/<name>/` are self-contained committed Git sources.
+`shared/` is the authored maintainer source for common contracts/runtime, not an
+installed runtime dependency. The declarative `shared/manifest.json` maps exact
+source files to committed generated copies; `scripts/build_skills.py --generate`
+is the only materialization command. Its `--check` mode stages expected bytes in
+a temporary root and never writes the worktree.
 
 The canonical maintainer checkout is `/home/kisev/Projects/Github/kisev/skills`;
 other local copies are neither installation nor change sources. The repository
@@ -19,8 +22,8 @@ and `work_item.py` remain canonical machine inputs. In particular,
 `task-prepare` and `task-review`; its validator can return
 `needs_clarification`. Installed skills never read `shared/`.
 
-`packages/skills/package.json` defines the build-only `@kisev/skills`
-distribution. `scripts/build_distribution.py` produces
+`packages/skills/package.json` defines the private build-only `@kisev/skills`
+distribution. It is not the public installation source. `scripts/build_distribution.py` produces
 `.build/packages/skills` archives with root `SKILL.md`, SHA-256 locks and the
 source revision; this is the boundary before `npm pack`.
 
@@ -53,7 +56,11 @@ background attempts become `orphaned` on reload.
 ## Build Invariants
 
 - The JSON manifest maps machine inputs to build paths.
-- `--check` reports artifact drift without changing source files.
+- `--generate` updates only declared committed generated copies.
+- `--check` reports source and artifact drift without changing tracked or
+  untracked files.
+- Direct installation is supported from a clean Git clone without `.build` or a
+  package build hook.
 - Paths are normalized, relative, and constrained to the shared references and
   isolated output; source and destination symlinks are rejected.
 - Source is unchanged and output is replaced only after complete staging.

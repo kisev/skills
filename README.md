@@ -10,8 +10,12 @@ and OpenCode. Each `skills/` directory is independently installable.
 Install all skills for OpenCode:
 
 ```shell
-npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
+npx --yes skills@1.5.23 add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
+
+The same pinned Git source is the public installation contract for Codex; replace
+`--agent opencode` with `--agent codex`, or replace `'*'` with one skill name.
+The pinned executable is `npx --yes skills@1.5.23`.
 
 Use a GitHub tag for a reproducible installation:
 
@@ -56,9 +60,12 @@ task check
 ```
 
 `task --list` shows available tasks. Only `task format` changes tracked files.
-`task generate` creates ignored `.build/skills`, the build-only
-`@kisev/skills` archive/index, and package staging. `task generate:check` checks
-artifact reproducibility without writing the source tree.
+`task generate` first materializes the declared shared copies into the committed
+`skills/<name>/` directories, then creates ignored `.build/skills`, the private
+build-only `@kisev/skills` archive/index, and package staging. `task generate:check`
+checks source parity and artifact reproducibility without writing
+the worktree. `python3 scripts/build_skills.py --generate` is the explicit source
+materialization command.
 
 Install Git hooks with:
 
@@ -113,7 +120,9 @@ Publication planning remains a local Markdown plan with `external_mutations=fals
 ## Build Distribution
 
 `task generate` builds a well-known index, SHA-256 lock, and self-contained
-`.tar.gz` archive per skill. `SKILL.md` is at each archive root.
+`.tar.gz` archive per skill. `SKILL.md` is at each archive root. The
+`@kisev/skills` package is private and build-only; direct users install from the
+Git source above, not from that package.
 
 ## OpenCode Integration
 
@@ -164,7 +173,8 @@ package tool are optional thin adapters; direct CLI is the recommended interface
 
 - Portable skills require a host that supports Agent Skills.
 - Runners use Python 3.12+ standard library only.
-- The OpenCode package requires Node.js 22+ and OpenCode 1.18.29+.
+- The OpenCode package targets OpenCode `>=1.18.29 <1.19.0` and requires Node.js
+  22+.
 - `ast-grep` and `rtk` require their respective CLI to be installed already;
   skills do not install them.
 

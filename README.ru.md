@@ -12,8 +12,11 @@
 Установите весь набор для OpenCode в текущий проект:
 
 ```shell
-npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
+npx --yes skills@1.5.23 add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
+
+Это публичный direct Git contract. Для Codex замените `--agent opencode` на
+`--agent codex`; для одного skill замените `'*'` его именем.
 
 Для воспроизводимой установки актуального релиза используйте GitHub tag:
 
@@ -136,8 +139,9 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 
 ## Build Distribution
 
-`main` содержит только authored source. `task generate` создаёт ignored
-`.build/skills` и build-only package `@kisev/skills`: well-known index,
+`skills/<name>/` уже содержит committed generated copies и устанавливается без
+сборки. `task generate` проверяет/materialize-ит эти copies, затем создаёт
+ignored `.build/skills` и private build-only package `@kisev/skills`: well-known index,
 `skills-lock.json` с SHA-256 и отдельный self-contained `.tar.gz` для каждого
 skill. В каждом archive `SKILL.md` находится в корне. Index фиксирует source
 revision; будущая публикация будет доступна по
@@ -204,13 +208,13 @@ TTL. Применить plan можно только командой с `--conf
 
 ## Совместимость и требования
 
-- Portable skills устанавливаются через актуальный `npx skills`; целевые hosts
+- Portable skills устанавливаются через pinned `npx --yes skills@1.5.23`; целевые hosts
   должны поддерживать Agent Skills.
 - Раннеры, которые входят в отдельные skills, используют только Python 3.12+
   standard library. Большинству skills Python не нужен.
 - `ast-grep` и `rtk` требуют заранее установленный одноимённый CLI; skills не
   выполняют их установку.
-- OpenCode-specific skills и `@kisev/skills-opencode` требуют OpenCode 1.18.29+.
+- `@kisev/skills-opencode` targets OpenCode `>=1.18.29 <1.19.0`.
   npm package требует Node.js 22+.
 - OpenCode assets являются опциональными: portable skills продолжают работать без
   npm package, commands, agents и plugins.
@@ -294,6 +298,7 @@ Uninstaller удаляет только неизменённые managed files. 
 
 ```shell
 python3 scripts/build_skills.py --check
+python3 scripts/build_skills.py --generate
 python3 -m unittest discover -s tests -v
 for skill in skills/*; do uvx --from skills-ref agentskills validate "$skill"; done
 npx --yes skills add . --list

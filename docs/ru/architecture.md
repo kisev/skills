@@ -9,10 +9,12 @@
 источником изменений или установки.
 
 Переносимые skills находятся в `skills/<name>/` и являются законченными
-единицами установки. Во время работы skill может использовать только файлы под
-собственным корнем. `shared/` - входные данные сопровождающего, а не runtime-
-зависимость установленного skill. `scripts/build_skills.py` создаёт точные копии
-по manifest только в ignored `.build/skills`; source tree не содержит copies.
+единицами установки непосредственно в Git. `shared/` - authored source общих
+контрактов/runtime, а не runtime-зависимость установленного skill.
+Декларативный `shared/manifest.json` задаёт точные generated copies внутри
+`skills/<name>/`; единственная явная materialize-команда -
+`scripts/build_skills.py --generate`. `--check` строит ожидаемые bytes во
+временном root и не меняет worktree.
 
 Для `askme`, `task-prepare`, `task-review` и read-only `goal` canonical
 `shared/references/work-item-contract.schema.json`, описание контракта и
@@ -26,8 +28,9 @@ CLI `skills-opencode` только для OpenCode integration. Maintainer scrip
 использовать только Python stdlib; Python runners, если они нужны skill, находятся
 внутри этого skill.
 
-`packages/skills/package.json` описывает непубликуемый build-only package
-`@kisev/skills`. `scripts/build_distribution.py` собирает `.build/packages/skills`:
+`packages/skills/package.json` описывает private build-only package
+`@kisev/skills`, который не является публичным source для установки.
+`scripts/build_distribution.py` собирает `.build/packages/skills`:
 well-known index, lock с SHA-256 каждого archive, source revision и один archive
 на skill с root `SKILL.md`. Это boundary будущего unpkg distribution; в source
 tree не появляются archive, runtime copies, generated commands или copied LSP
@@ -75,6 +78,10 @@ Stateful runtime records используют те же private 0600 atomic writ
 
 - JSON manifest - единственное отображение общих исходников в пути build skills,
   включая minimal Python runtime для автономных runner-ов.
+- `--generate` обновляет только объявленные committed copies.
+- `--check` проверяет source parity и artifacts без изменения tracked или
+  untracked state.
+- Direct Git installation работает из clean clone без `.build` и build hook.
 - Пути относительные, нормализованные и ограничены соответственно каталогами
   `shared/references/` и isolated build output.
 - Symlinks в исходных и конечных путях отклоняются.

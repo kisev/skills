@@ -33,7 +33,9 @@ task check
 
 Only `format` changes the tracked checkout. When shared references change, edit
 the canonical file under `shared/references/` first, then run `task generate`;
-portable copies are created only in ignored build artifacts. OpenCode commands
+portable copies are committed under their declared `skills/<name>/` destinations.
+Use `python3 scripts/build_skills.py --generate` for that explicit source
+materialization step. OpenCode commands
 and the copied LSP catalog are generated only into
 `packages/opencode/dist/assets/` before packing; their sources are
 `packages/opencode/src/registry.ts` and `shared/references/`.

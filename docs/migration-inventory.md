@@ -52,7 +52,9 @@ through an independent agent or returns `skipped` without blocking.
 
 `skills/` contains no commands, agents, or plugins. Context logic is in
 `SKILL.md`; runners, when needed, live in their owning skill. Their minimal shared
-stdlib is materialized from `shared/references/` into each dependent installation.
+stdlib is authored canonically in `shared/references/` and committed as exact
+generated copies in each dependent `skills/<name>/` source directory. A clean
+Git clone is therefore directly installable.
 The optional `packages/opencode/` package contains OpenCode-specific assets,
 runtime, and opt-in installer but never copied skills or changes to `npx skills`
 installation. Agent profiles are package-domain functionality with direct CLI;

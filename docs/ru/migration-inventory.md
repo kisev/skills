@@ -53,7 +53,8 @@ assessment. `goal` не создаёт state и не запускает lifecycl
 Каталог `skills/` не содержит commands, agents или plugins. Контекстная логика
 находится в `SKILL.md`; runner-ы при необходимости лежат в собственном каталоге
 skill. Их общий минимальный stdlib-код хранится в `shared/references/` и
-детерминированно materialize-ится в каждую зависимую установку. Необязательный
+детерминированно materialize-ится и committed в каждый зависимый source-каталог
+`skills/<name>/`, поэтому clean Git clone устанавливается напрямую. Необязательный
 package `packages/opencode/` содержит OpenCode-specific assets, runtime и opt-in
 installer, но не поставляет копии skills и не меняет их установку через
 `npx skills`. Agent profiles управляются package domain и прямым CLI, а не
