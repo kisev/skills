@@ -18,10 +18,12 @@ import {
 import { applyReconcile, previewReconcile } from "./reconcile.js";
 import { collectDoctorFacts, type DoctorHost } from "./doctor.js";
 import { CATALOG } from "./catalog.js";
+import { digest } from "./lifecycle.js";
 
 export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
 export { CATEGORIES, resolveRouting, RoutingGate, ExecutionCardLifecycle, validateExecutionCard, validateRoutingReceipt } from "./routing.js";
-export type { ExecutionCard, ExecutionCardStatus } from "./routing.js";
+export { validateAgentReport, CONTRACT_SCHEMA_VERSION } from "./contracts.js";
+export type { ExecutionCard, ExecutionCardStatus, RoutingReceipt } from "./routing.js";
 export {
   AgentProfileError,
   FIXED_AGENT_ROLES,
@@ -74,6 +76,33 @@ export { CATALOG } from "./catalog.js";
 
 const plugin = (async (input: PluginInput) => {
   const gate = new RoutingGate();
+  const hostInventory = async (): Promise<{ agents: AvailableAgent[]; revision: string }> => {
+    const raw = input.client?.config
+      ? (await input.client.config.get({ query: { directory: input.directory } })).data
+      : undefined;
+    const config = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    const configured = config.agents && typeof config.agents === "object" && !Array.isArray(config.agents)
+      ? config.agents as Record<string, unknown>
+      : {};
+    const defaults: Record<string, { capabilities: string[]; tools: string[] }> = {
+      mapper: { capabilities: ["read", "search"], tools: ["read", "glob", "grep"] },
+      architect: { capabilities: ["read", "architecture"], tools: ["read", "glob", "grep"] },
+      worker: { capabilities: ["read", "write", "verify"], tools: ["read", "edit", "bash"] },
+      review: { capabilities: ["read", "review"], tools: ["read", "glob", "grep"] },
+      critic: { capabilities: ["read", "review"], tools: ["read", "glob", "grep"] },
+    };
+    const names = new Set([...Object.keys(defaults), ...Object.keys(configured)]);
+    const agents = [...names].sort().map((agent) => {
+      const value = configured[agent];
+      return {
+        agent,
+        available: !(value && typeof value === "object" && (value as Record<string, unknown>).disabled === true),
+        capabilities: defaults[agent]?.capabilities ?? ["read"],
+        tools: defaults[agent]?.tools ?? ["read"],
+      };
+    });
+    return { agents, revision: digest({ config: raw ?? null, agents }) };
+  };
   const route = tool({
     description: "Resolve a capability category and dispatch one eligible agent through a one-use Task receipt gate.",
     args: {
@@ -81,18 +110,18 @@ const plugin = (async (input: PluginInput) => {
       category: tool.schema.enum(CATEGORIES),
       task: tool.schema.string(),
       requirements: tool.schema.array(tool.schema.string()).default([]),
-      agents: tool.schema.array(tool.schema.object({ agent: tool.schema.string(), available: tool.schema.boolean().optional(), capabilities: tool.schema.array(tool.schema.string()).optional(), tools: tool.schema.array(tool.schema.string()).optional() })),
       execution_card: tool.schema.any().optional(),
       override: tool.schema.string().optional(),
       budget: tool.schema.object({ cost_class: tool.schema.string().optional(), latency_class: tool.schema.string().optional() }).optional(),
-      decision: tool.schema.any().optional()
-    },
-    async execute(args: { action: "preview" | "dispatch"; category: Category; task: string; requirements: string[]; agents: AvailableAgent[]; execution_card?: unknown; override?: string; budget?: RoutingInput["budget"]; decision?: unknown }, context: { sessionID: string }) {
-      const input: RoutingInput = { category: args.category, task: args.task, requirements: args.requirements, agents: args.agents, execution_card: args.execution_card, override: args.override, budget: args.budget };
+       decision: tool.schema.any().optional()
+     },
+    async execute(args: { action: "preview" | "dispatch"; category: Category; task: string; requirements: string[]; execution_card?: unknown; override?: string; budget?: RoutingInput["budget"]; decision?: unknown }, context: { sessionID: string }) {
+      const inventory = await hostInventory();
+      const input: RoutingInput = { category: args.category, task: args.task, requirements: args.requirements, agents: inventory.agents, inventory_revision: inventory.revision, execution_card: args.execution_card, override: args.override, budget: args.budget };
       if (args.action === "preview") return JSON.stringify(gate.preview(input));
       const decision = gate.dispatch(input, args.decision);
-      gate.grant(context.sessionID, decision, { task: args.task, requirements: args.requirements, card: args.execution_card });
-      return JSON.stringify({ decision, status: "routed" });
+      const receipt = gate.grant(context.sessionID, decision, { task: args.task, requirements: args.requirements, card: args.execution_card });
+      return JSON.stringify({ decision, receipt, status: "routed" });
     }
   });
   const capabilities = tool({
@@ -154,7 +183,7 @@ const plugin = (async (input: PluginInput) => {
   });
   return {
     tool: { route, capabilities, doctor, agent_profiles: agentProfiles, reconcile },
-    "tool.execute.before": async (input: { tool: string; sessionID: string }, output: { args: unknown }) => {
+      "tool.execute.before": async (input: { tool: string; sessionID: string }, output: { args: unknown }) => {
       if (input.tool !== "task") return;
       const args = output.args && typeof output.args === "object" ? output.args as Record<string, unknown> : {};
       const agent = typeof args.agent === "string" ? args.agent : typeof args.subagent_type === "string" ? args.subagent_type : undefined;
@@ -164,11 +193,20 @@ const plugin = (async (input: PluginInput) => {
       else {
         const task = typeof args.task === "string" ? args.task : "";
         const requirements = Array.isArray(args.requirements) ? args.requirements as string[] : [];
-        gate.consume(input.sessionID, agent, { task, requirements, card: args.execution_card });
-      }
-    }
-  };
-}) satisfies Plugin;
+         gate.consume(input.sessionID, agent, { task, requirements, card: args.execution_card });
+       }
+      },
+      "tool.execute.after": async (input: { tool: string; sessionID: string; args: unknown }, output: { output: string }) => {
+        if (input.tool !== "task") return;
+        const args = input.args && typeof input.args === "object" ? input.args as Record<string, unknown> : {};
+        const agent = typeof args.agent === "string" ? args.agent : typeof args.subagent_type === "string" ? args.subagent_type : undefined;
+        if (!agent) throw new Error("Task result requires an explicit agent");
+        let result: unknown;
+        try { result = JSON.parse(output.output); } catch { throw new Error("Task result must be JSON structured report"); }
+        gate.complete(input.sessionID, agent, result);
+      },
+    };
+  }) satisfies Plugin;
 
 export const server = plugin;
 export default plugin;

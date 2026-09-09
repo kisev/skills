@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kisev/skills/contracts/mapper-report-v1.schema.json",
+  "type": "object",
+  "required": ["mapper_report"],
+  "properties": {
+    "mapper_report": {
+      "type": "object",
+      "required": ["paths", "callers", "tests", "patterns", "evidence_gaps"]
+    }
+  },
+  "additionalProperties": false
+}

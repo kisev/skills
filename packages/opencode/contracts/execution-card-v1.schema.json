@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kisev/skills/contracts/execution-card-v1.schema.json",
+  "title": "Execution card v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "status",
+    "card_id",
+    "revision",
+    "objective",
+    "evidence",
+    "write_set",
+    "steps",
+    "checks",
+    "operations",
+    "confirmations",
+    "boundaries"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "status": { "const": "READY" },
+    "card_id": { "type": "string" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "objective": { "type": "string" },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "write_set": { "type": "array", "items": { "type": "string" } },
+    "steps": { "type": "array" },
+    "checks": { "type": "array", "items": { "type": "string" } },
+    "operations": { "type": "array" },
+    "confirmations": { "type": "object" },
+    "boundaries": { "type": "object", "required": ["scope", "forbidden_paths"] }
+  },
+  "additionalProperties": true
+}

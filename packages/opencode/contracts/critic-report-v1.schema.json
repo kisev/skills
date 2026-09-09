@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kisev/skills/contracts/critic-report-v1.schema.json",
+  "type": "object",
+  "required": ["critic_report"],
+  "properties": {
+    "critic_report": {
+      "type": "object",
+      "required": ["status", "card_id", "revision", "findings", "unrun_checks", "risks"]
+    }
+  },
+  "additionalProperties": false
+}

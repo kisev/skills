@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kisev/skills/contracts/review-report-v1.schema.json",
+  "type": "object",
+  "required": ["review_report"],
+  "properties": {
+    "review_report": {
+      "type": "object",
+      "required": ["status", "target", "findings", "checks", "risks"]
+    }
+  },
+  "additionalProperties": false
+}

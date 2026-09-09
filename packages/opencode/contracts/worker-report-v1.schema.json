@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kisev/skills/contracts/worker-report-v1.schema.json",
+  "type": "object",
+  "required": ["worker_report"],
+  "properties": {
+    "worker_report": {
+      "type": "object",
+      "required": [
+        "status",
+        "card_id",
+        "revision",
+        "changed_files",
+        "checks",
+        "writes_performed",
+        "risks"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

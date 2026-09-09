@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kisev/skills/contracts/routing-receipt-v1.schema.json",
+  "title": "Routing receipt v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "task_digest",
+    "requirements_digest",
+    "destination",
+    "agent",
+    "card_digest",
+    "host_inventory_revision",
+    "expires_at",
+    "nonce",
+    "receipt_digest"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "task_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "requirements_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "destination": { "enum": ["exploration", "architecture", "implementation", "review"] },
+    "agent": { "type": "string", "minLength": 1 },
+    "card_digest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "host_inventory_revision": { "type": "string", "minLength": 1 },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "nonce": { "type": "string", "minLength": 32 },
+    "receipt_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  },
+  "additionalProperties": false
+}
