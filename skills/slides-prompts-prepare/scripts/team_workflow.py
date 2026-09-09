@@ -12,12 +12,18 @@ import stat
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 from uuid import uuid4
 
 MAX_BYTES = 2 * 1024 * 1024
 TTL_SECONDS = 600
-FIXED_ACTION = "slides-prompts"
+FIXED_ACTION = {
+    "team-sprint-start": "planning",
+    "team-sprint-close": "sprint-close",
+    "team-retro": "retro",
+    "team-roadmap": "roadmap",
+    "slides-prompts-prepare": "slides-prompts",
+}.get(Path(__file__).resolve().parents[1].name, "planning")
 FORBIDDEN = frozenset({"credentials", "tokens", "password", "secret", "personal_notes"})
 
 
@@ -28,8 +34,9 @@ class WorkflowError(ValueError):
 class ContractArgumentParser(argparse.ArgumentParser):
     """Return invalid CLI input through the JSON runner contract."""
 
-    def error(self, message: str) -> None:
+    def error(self, message: str) -> NoReturn:
         raise WorkflowError(message)
+
 
 def emit(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, sort_keys=True))
@@ -101,6 +108,7 @@ def assert_safe_context(value: dict[str, Any]) -> None:
         elif isinstance(item, list):
             for child in item:
                 scan(child)
+
     scan(value)
 
 
@@ -118,7 +126,11 @@ def context_missing(value: dict[str, Any]) -> list[str]:
 
 
 def valid_name(value: str) -> str:
-    if not value or len(value) > 63 or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in value):
+    if (
+        not value
+        or len(value) > 63
+        or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789-" for character in value)
+    ):
         raise WorkflowError("context name is invalid")
     return value
 
@@ -169,9 +181,16 @@ def consume(plan_digest: str, payload: dict[str, Any]) -> None:
         raise WorkflowError("preview digest is invalid")
     path = regular(state_root() / "plans" / f"{plan_digest}.json", "prepared plan")
     document, _ = read_json(path, "prepared plan")
-    if document.get("digest") != plan_digest or document.get("payload") != payload or digest(payload) != plan_digest:
+    if (
+        document.get("digest") != plan_digest
+        or document.get("payload") != payload
+        or digest(payload) != plan_digest
+    ):
         raise WorkflowError("prepared plan changed or digest does not match")
-    if not isinstance(document.get("expires_at"), (int, float)) or document["expires_at"] < time.time():
+    if (
+        not isinstance(document.get("expires_at"), (int, float))
+        or document["expires_at"] < time.time()
+    ):
         raise WorkflowError("prepared plan is stale or expired")
     receipt = private_directory(state_root() / "receipts") / f"{plan_digest}.json"
     try:
@@ -185,7 +204,12 @@ def consume(plan_digest: str, payload: dict[str, Any]) -> None:
 
 
 def report(plan_digest: str, result: dict[str, object]) -> tuple[Path, str]:
-    document = {"schema_version": 1, "digest": plan_digest, "result": result, "checks": ["digest", "expiry", "single_use", "safe_path"]}
+    document = {
+        "schema_version": 1,
+        "digest": plan_digest,
+        "result": result,
+        "checks": ["digest", "expiry", "single_use", "safe_path"],
+    }
     report_digest = digest(document)
     path = private_directory(state_root() / "reports") / f"{report_digest}.json"
     write_once(path, canonical_bytes(document))
@@ -218,7 +242,9 @@ def load_context(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str]:
         path = Path(args.context_file or args.chat_input)
         value, raw = read_json(path, "context")
         return validate_context(value), raw, str(path.resolve())
-    path = regular(state_root() / "contexts" / f"{valid_name(args.context_name)}.json", "saved context")
+    path = regular(
+        state_root() / "contexts" / f"{valid_name(args.context_name)}.json", "saved context"
+    )
     value, raw = read_json(path, "saved context")
     return validate_context(value), raw, str(path)
 
@@ -255,18 +281,43 @@ def main(argv: list[str] | None = None) -> int:
     except WorkflowError as exc:
         return fail("invalid_input", str(exc))
     if args.capabilities:
-        emit({"schema_version": 1, "payload_version": "1.0.0", "mutation": "local-write-confirmed", "dry_run": True, "state_protocol": "digest-bound-preview", "external_tools": {}, "destructive_flags": ["context-save", "artifact-apply"]})
+        emit(
+            {
+                "schema_version": 1,
+                "payload_version": "1.0.0",
+                "mutation": "local-write-confirmed",
+                "dry_run": True,
+                "state_protocol": "digest-bound-preview",
+                "external_tools": {},
+                "destructive_flags": ["context-save", "artifact-apply"],
+            }
+        )
         return 0
     try:
         if args.command == "action-check":
             context, _, source = load_context(args)
-            emit({"status": "ok", "action": FIXED_ACTION, "context_source": source, "projects": len(context["projects"]), "external_mutations": False})
+            emit(
+                {
+                    "status": "ok",
+                    "action": FIXED_ACTION,
+                    "context_source": source,
+                    "projects": len(context["projects"]),
+                    "external_mutations": False,
+                }
+            )
             return 0
         if args.command == "context-inspect":
             context, _ = read_json(Path(args.input), "context input")
             assert_safe_context(context)
             missing = context_missing(context)
-            emit({"status": "ok" if not missing else "setup-required", "context": context, "missing": missing, "external_mutations": False})
+            emit(
+                {
+                    "status": "ok" if not missing else "setup-required",
+                    "context": context,
+                    "missing": missing,
+                    "external_mutations": False,
+                }
+            )
             return 0 if not missing else 3
         if args.command == "context-list":
             root = state_root() / "contexts"
@@ -282,15 +333,38 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "context-show":
             name = valid_name(args.name)
             context, _ = read_json(state_root() / "contexts" / f"{name}.json", "saved context")
-            emit({"status": "ok", "name": name, "context": validate_context(context), "external_mutations": False})
+            emit(
+                {
+                    "status": "ok",
+                    "name": name,
+                    "context": validate_context(context),
+                    "external_mutations": False,
+                }
+            )
             return 0
         if args.command == "context-prepare":
             context, raw = read_json(Path(args.input), "context input")
             validate_context(context)
             valid_name(args.name)
+            existing = state_root() / "contexts" / f"{args.name}.json"
             payload = {"kind": "context", "name": args.name, "content": raw.decode("utf-8")}
             plan_digest, path, expires_at = prepare_plan(payload)
-            emit({"status": "prepared", "summary": {"tldr": "Saving explicit team context.", "scope": [args.name], "risks": [], "checks": ["context validation", "safe state path"]}, "artifact_path": str(path), "digest": plan_digest, "expires_at": expires_at, "ttl_seconds": TTL_SECONDS, "apply_command": f"context-save --name {args.name} --input {args.input} --digest {plan_digest}"})
+            emit(
+                {
+                    "status": "prepared",
+                    "summary": {
+                        "tldr": "Saving explicit team context.",
+                        "scope": [args.name],
+                        "risks": ["existing context will be replaced"] if existing.exists() else [],
+                        "checks": ["context validation", "safe state path"],
+                    },
+                    "artifact_path": str(path),
+                    "digest": plan_digest,
+                    "expires_at": expires_at,
+                    "ttl_seconds": TTL_SECONDS,
+                    "apply_command": f"context-save --name {args.name} --input {args.input} --digest {plan_digest}",
+                }
+            )
             return 0
         if args.command == "context-save":
             valid_name(args.name)
@@ -300,26 +374,76 @@ def main(argv: list[str] | None = None) -> int:
             consume(args.digest, payload)
             root = private_directory(state_root() / "contexts")
             atomic(root / f"{args.name}.json", raw)
-            report_path, report_digest = report(args.digest, {"status": "applied", "name": args.name})
-            emit({"status": "applied", "summary": {"tldr": "Context saved.", "scope": [args.name], "risks": [], "checks": ["digest", "expiry", "single_use", "safe_path"]}, "report_path": str(report_path), "report_digest": report_digest})
+            report_path, report_digest = report(
+                args.digest, {"status": "applied", "name": args.name}
+            )
+            emit(
+                {
+                    "status": "applied",
+                    "summary": {
+                        "tldr": "Context saved.",
+                        "scope": [args.name],
+                        "risks": [],
+                        "checks": ["digest", "expiry", "single_use", "safe_path"],
+                    },
+                    "report_path": str(report_path),
+                    "report_digest": report_digest,
+                }
+            )
             return 0
         if args.command == "artifact-prepare":
-            source = regular(Path(args.input), "artifact input")
-            content = source.read_bytes()
+            artifact_source = regular(Path(args.input), "artifact input")
+            content = artifact_source.read_bytes()
             target = workspace_target(args.target)
-            payload = {"kind": "artifact", "target": args.target, "content": content.decode("utf-8")}
+            payload = {
+                "kind": "artifact",
+                "target": args.target,
+                "content": content.decode("utf-8"),
+            }
             plan_digest, path, expires_at = prepare_plan(payload)
-            emit({"status": "prepared", "summary": {"tldr": "Writing local artifact.", "scope": [str(target)], "risks": ["existing file will be replaced"] if target.exists() else [], "checks": ["regular input", "safe workspace path"]}, "artifact_path": str(path), "digest": plan_digest, "expires_at": expires_at, "ttl_seconds": TTL_SECONDS, "apply_command": f"artifact-apply --target {args.target} --input {args.input} --digest {plan_digest}"})
+            emit(
+                {
+                    "status": "prepared",
+                    "summary": {
+                        "tldr": "Writing local artifact.",
+                        "scope": [str(target)],
+                        "risks": ["existing file will be replaced"] if target.exists() else [],
+                        "checks": ["regular input", "safe workspace path"],
+                    },
+                    "artifact_path": str(path),
+                    "digest": plan_digest,
+                    "expires_at": expires_at,
+                    "ttl_seconds": TTL_SECONDS,
+                    "apply_command": f"artifact-apply --target {args.target} --input {args.input} --digest {plan_digest}",
+                }
+            )
             return 0
         if args.command == "artifact-apply":
-            source = regular(Path(args.input), "artifact input")
-            content = source.read_bytes()
+            artifact_source = regular(Path(args.input), "artifact input")
+            content = artifact_source.read_bytes()
             target = workspace_target(args.target)
-            consume(args.digest, {"kind": "artifact", "target": args.target, "content": content.decode("utf-8")})
+            consume(
+                args.digest,
+                {"kind": "artifact", "target": args.target, "content": content.decode("utf-8")},
+            )
             target.parent.mkdir(parents=True, exist_ok=True)
             atomic(target, content)
-            report_path, report_digest = report(args.digest, {"status": "applied", "target": str(target)})
-            emit({"status": "applied", "summary": {"tldr": "Artifact written.", "scope": [str(target)], "risks": [], "checks": ["digest", "expiry", "single_use", "safe_path"]}, "report_path": str(report_path), "report_digest": report_digest})
+            report_path, report_digest = report(
+                args.digest, {"status": "applied", "target": str(target)}
+            )
+            emit(
+                {
+                    "status": "applied",
+                    "summary": {
+                        "tldr": "Artifact written.",
+                        "scope": [str(target)],
+                        "risks": [],
+                        "checks": ["digest", "expiry", "single_use", "safe_path"],
+                    },
+                    "report_path": str(report_path),
+                    "report_digest": report_digest,
+                }
+            )
             return 0
         return fail("invalid_command", "a supported subcommand is required")
     except WorkflowError as exc:
