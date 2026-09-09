@@ -19,12 +19,12 @@
     {
       "id": "goal-budget",
       "path": "skills/goal/references/workflow.md",
-      "contains": "at most 3000 characters"
+      "contains": "at or below 4000 characters"
     },
     {
       "id": "goal-work-item",
       "path": "skills/goal/references/workflow.md",
-      "contains": "work-item/v1"
+      "contains": "structured Markdown rather than JSON"
     }
   ],
   "sandbox": {
@@ -37,7 +37,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "0346a65bbc790f7c8264ee7c75b5937603358a77cbd9387238b613aaf6038221",
+  "digest": "e5ea68540815422488bf072a53606c83304a9ec22818fa8d4e6ffaaf17e20730",
   "locale": "en",
   "pair_id": "golden.goal.work-item"
 }

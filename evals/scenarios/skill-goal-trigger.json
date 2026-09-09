@@ -19,7 +19,7 @@
     {
       "id": "goal-contract",
       "path": "skills/goal/references/workflow.md",
-      "contains": "work-item/v1"
+      "contains": "structured Markdown rather than JSON"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "4f9e6ca36f1137032343606b6eb5c4d33062066edab68e081a1aeb5e1568c959",
+  "digest": "5e90b820bbaf7ef687ebed7445930f23fc0cba113dd36ceb35018dc0cc5ea864",
   "locale": "ru",
   "pair_id": "skill.goal.trigger"
 }

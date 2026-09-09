@@ -1,0 +1,35 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "golden.core-contracts.en",
+  "revision": 1,
+  "kind": "golden",
+  "locale": "en",
+  "pair_id": "golden.core-contracts",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Run the core skill workflow with complete evidence, a bounded plan, and risk-specific confirmations.",
+    "fixture": { "selected": ["skill:doit"] }
+  },
+  "expected": { "selected": ["skill:doit"], "not_selected": ["skill:summary", "skill:stopit"] },
+  "invariants": [
+    {
+      "id": "plan-bound",
+      "path": "skills/doit/references/workflow.md",
+      "contains": "only confirmed plan actions"
+    },
+    {
+      "id": "separate-history",
+      "path": "shared/references/interaction-contract.md",
+      "contains": "history rewrite"
+    },
+    {
+      "id": "state-owner",
+      "path": "shared/references/interaction-contract.md",
+      "contains": "one explicit owner"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "164a821238d17d4b80cc606a536345dce09734819dfac46fca8a808a9c0a0402"
+}

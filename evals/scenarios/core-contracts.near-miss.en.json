@@ -1,0 +1,26 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "skill.core-contracts.near-miss.en",
+  "revision": 1,
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "skill.core-contracts.near-miss",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Just rephrase text without checking contracts or planning changes.",
+    "fixture": { "selected": [] }
+  },
+  "expected": { "selected": [], "not_selected": ["skill:doit", "skill:humanize"] },
+  "invariants": [
+    {
+      "id": "humanize-language",
+      "path": "skills/humanize/references/workflow.md",
+      "contains": "any human language"
+    },
+    { "id": "doit-plan", "path": "skills/doit/references/workflow.md", "contains": "approved plan" }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "699e0c9f56173c79bf3b9a3f94e1b53000dd201e15c4a4a1f31d0f8fd4607e14"
+}

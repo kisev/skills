@@ -81,7 +81,7 @@ ADR_TEMPLATE_SECTIONS = (
 )
 WORKFLOW_CONTRACTS = {
     "humanize": (
-        "exact quotations, code, command output",
+        "exact quotations, code, commands, command output",
         "do not replace the author's role with the reviewer's role",
     ),
     "summary": (
@@ -119,8 +119,8 @@ WORKFLOW_CONTRACTS = {
         "show the complete draft and temporary path",
     ),
     "doit": (
-        "never push",
-        "require separate confirmation",
+        "exact action is included in the approved plan",
+        "separate confirmations",
         "content-addressed preview artifact",
         "do not require a particular host",
     ),
@@ -129,7 +129,7 @@ WORKFLOW_CONTRACTS = {
         "work-item/v1",
         "do not create or modify files",
         "do not simulate self-review",
-        "at most 3000 characters",
+        "at or below 4000 characters",
     ),
     "code-explain": (
         "is not a review",
@@ -260,7 +260,8 @@ class PortableSkillValidationTests(unittest.TestCase):
             "resolve -> prepare -> present -> confirm ->\napply -> report",
             "Ask a **Question** only before `prepare`",
             "Request **Confirmation** only after `prepare`",
-            "Read-only collection,\nreview, and manual-plan preparation do not change external state",
+            "Read-only",
+            "manual-plan preparation do not change external state",
             "TLDR, scope, risks, checks",
             "write-once artifact",
             "apply command with its digest",
@@ -350,7 +351,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         skill = BUILT_SKILLS / "goal"
         workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
         self.assertIn("work-item/v1", workflow)
-        self.assertIn("3000", workflow)
+        self.assertIn("4000", workflow)
         self.assertFalse((skill / "scripts/goal.py").exists())
         self.assertFalse((skill / "scripts/portable_runtime").exists())
         self.assertEqual(
@@ -361,12 +362,12 @@ class PortableSkillValidationTests(unittest.TestCase):
     def test_goal_output_contract_declares_bounded_deterministic_outcomes(self) -> None:
         text = (ROOT / "skills/goal/references/workflow.md").read_text(encoding="utf-8")
         for phrase in (
-            "at most 3000 characters",
-            "byte-for-byte identical JSON",
+            "at or below 4000 characters",
+            "structured Markdown rather than JSON",
             "premortem status is `skipped`",
             "it is `completed`",
-            "verdict `ready`",
-            "blocker explicit",
+            "Do not declare complete",
+            "propose splitting",
         ):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, text)

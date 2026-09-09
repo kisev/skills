@@ -1,0 +1,38 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "skill.core-contracts.trigger.en",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "skill.core-contracts.trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Check shared portable contracts and confirmation boundaries for core skills.",
+    "fixture": { "selected": ["skill:doit", "skill:askme", "skill:docs-prepare"] }
+  },
+  "expected": {
+    "selected": ["skill:doit", "skill:askme", "skill:docs-prepare"],
+    "not_selected": ["skill:summary", "skill:stopit"]
+  },
+  "invariants": [
+    {
+      "id": "shared-evidence",
+      "path": "shared/references/interaction-contract.md",
+      "contains": "Do not declare a result complete"
+    },
+    {
+      "id": "risk-grouping",
+      "path": "shared/references/interaction-contract.md",
+      "contains": "same mutation boundary"
+    },
+    {
+      "id": "docs-scope",
+      "path": "skills/docs-review/references/workflow.md",
+      "contains": "complete user-facing documentation set"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "35b00ed2ccb0e49eaa77e69df844472123d8c2631896adabeadb884ce9784cf7"
+}

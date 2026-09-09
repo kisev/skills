@@ -170,6 +170,8 @@ def test_list_selectors_and_capability_detection_are_machine_readable() -> None:
     listed = run_eval("--list", "--kind", "golden", "--surface", "skill")
     assert listed.returncode == 0
     assert payload(listed)["scenarios"] == [
+        {"id": "golden.core-contracts.en", "kind": "golden", "surface": "skill"},
+        {"id": "golden.core-contracts", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item.en", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"},
     ]

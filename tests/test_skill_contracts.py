@@ -68,7 +68,11 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "only confirmed findings",
             "never publish them",
         ),
-        "doit": ("Never push", "separate confirmation", "Do not require a particular host"),
+        "doit": (
+            "exact action is included in the approved plan",
+            "separate confirmations",
+            "Do not require a particular host",
+        ),
     }
     for name, markers in expected_markers.items():
         workflow = (ROOT / "skills" / name / "references" / "workflow.md").read_text(
@@ -135,3 +139,49 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
         )
         assert "references/language-policy.md" in workflow, name
         assert required.search(workflow), name
+
+
+def test_stage_16_shared_contracts_cover_completeness_ownership_and_risk_boundaries() -> None:
+    interaction = (ROOT / "shared/references/interaction-contract.md").read_text(encoding="utf-8")
+    language = (ROOT / "shared/references/language-policy.md").read_text(encoding="utf-8")
+    questions = (ROOT / "shared/references/question-guidelines.md").read_text(encoding="utf-8")
+    work_item = (ROOT / "shared/references/work-item-contract.md").read_text(encoding="utf-8")
+    for marker in (
+        "Do not declare a result complete",
+        "partial",
+        "blocked",
+        "error",
+        "safe escalation",
+        "same mutation boundary",
+        "External publication",
+        "history rewrite",
+        "destructive cleanup",
+        "one explicit owner",
+    ):
+        assert marker in interaction, marker
+    assert "all response prose" in language
+    assert "independent decisions" in questions
+    assert "quality-complete" in work_item
+
+
+def test_stage_16_core_workflow_boundaries_are_observable() -> None:
+    agents = (ROOT / "skills/agents-md/references/workflow.md").read_text(encoding="utf-8")
+    askme = (ROOT / "skills/askme/references/workflow.md").read_text(encoding="utf-8")
+    commit_msg = (ROOT / "skills/commit-msg/references/workflow.md").read_text(encoding="utf-8")
+    docs_prepare = (ROOT / "skills/docs-prepare/references/workflow.md").read_text(encoding="utf-8")
+    docs_review = (ROOT / "skills/docs-review/references/workflow.md").read_text(encoding="utf-8")
+    doit = (ROOT / "skills/doit/references/workflow.md").read_text(encoding="utf-8")
+    goal = (ROOT / "skills/goal/references/workflow.md").read_text(encoding="utf-8")
+    humanize = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
+    improve = (ROOT / "skills/skill-improve/references/workflow.md").read_text(encoding="utf-8")
+    assert "Create the root file when no applicable file exists" in agents
+    assert "repeat a question answered" in askme
+    assert "commitlint/configuration" in commit_msg
+    assert "complete user-facing documentation set" in docs_prepare
+    assert "canonical specifications" in docs_review
+    assert "exact action is included in the approved plan" in doit
+    assert "structured Markdown rather than JSON" in goal
+    assert "at or below 4000 characters" in goal
+    assert "any human language" in humanize
+    assert "absence of real" in improve
+    assert "Never push" not in doit
