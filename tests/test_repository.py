@@ -303,11 +303,15 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn("TLDR", text)
                 self.assertIn("do not print", text.lower())
 
-    def test_language_policy_is_materialized_only_in_build_artifacts(self) -> None:
+    def test_language_policy_is_materialized_in_each_source_skill(self) -> None:
         source = ROOT / "shared/references/language-policy.md"
         for name in PORTABLE_SKILLS:
             with self.subTest(skill=name):
-                self.assertFalse((ROOT / "skills" / name / "references/language-policy.md").exists())
+                self.assertTrue((ROOT / "skills" / name / "references/language-policy.md").is_file())
+                self.assertEqual(
+                    (ROOT / "skills" / name / "references/language-policy.md").read_bytes(),
+                    source.read_bytes(),
+                )
                 self.assertEqual(
                     (BUILT_SKILLS / name / "references/language-policy.md").read_bytes(),
                     source.read_bytes(),
