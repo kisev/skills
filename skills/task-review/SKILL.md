@@ -1,7 +1,7 @@
 ---
 name: task-review
 description: >-
-  Review GitLab issue or merge-request metadata and service fields. Russian discovery terms: проверить задачу.
+  Review a storage-neutral work item for quality without changing external state. Russian discovery terms: проверить задачу.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

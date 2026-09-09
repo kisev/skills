@@ -18,6 +18,10 @@
       "destination": "task-review/references/work-item-contract.md"
     },
     {
+      "source": "references/work-item-contract.md",
+      "destination": "task-triage/references/work-item-contract.md"
+    },
+    {
       "source": "references/work-item-contract.schema.json",
       "destination": "askme/references/work-item-contract.schema.json"
     },
@@ -37,6 +41,7 @@
     { "source": "references/work_item.py", "destination": "goal/scripts/work_item.py" },
     { "source": "references/work_item.py", "destination": "task-prepare/scripts/work_item.py" },
     { "source": "references/work_item.py", "destination": "task-review/scripts/work_item.py" },
+    { "source": "references/work_item.py", "destination": "task-triage/scripts/work_item.py" },
     {
       "source": "references/question-guidelines.md",
       "destination": "askme/references/question-guidelines.md"
@@ -74,16 +79,48 @@
       "destination": "slides-prompts-prepare/references/interaction-contract.md"
     },
     {
-      "source": "references/gitlab-workflow.md",
-      "destination": "task-triage/references/gitlab-workflow.md"
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-sprint-start/scripts/team_workflow.py"
     },
     {
-      "source": "references/gitlab-workflow.md",
-      "destination": "task-review/references/gitlab-workflow.md"
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-sprint-close/scripts/team_workflow.py"
     },
     {
-      "source": "references/gitlab-workflow.md",
-      "destination": "task-prepare/references/gitlab-workflow.md"
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-retro/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-roadmap/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "slides-prompts-prepare/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/work_item_runtime/__init__.py",
+      "destination": "task-triage/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/work_item_runtime/contract.py",
+      "destination": "task-triage/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/work_item_runtime/__init__.py",
+      "destination": "task-review/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/work_item_runtime/contract.py",
+      "destination": "task-review/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/work_item_runtime/__init__.py",
+      "destination": "task-prepare/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/work_item_runtime/contract.py",
+      "destination": "task-prepare/scripts/portable_runtime/contract.py"
     },
     {
       "source": "references/gitlab-workflow.md",
@@ -100,18 +137,6 @@
     {
       "source": "references/gitlab-workflow.md",
       "destination": "release-review/references/gitlab-workflow.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "task-triage/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "task-review/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "task-prepare/references/portable-gitlab-contracts-v2.md"
     },
     {
       "source": "references/portable_gitlab/contracts-v2.md",
@@ -179,30 +204,6 @@
     },
     {
       "source": "references/portable_gitlab/__init__.py",
-      "destination": "task-triage/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "task-triage/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
-      "destination": "task-review/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "task-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
-      "destination": "task-prepare/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "task-prepare/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
       "destination": "mr-prepare/scripts/portable_runtime/__init__.py"
     },
     {
@@ -232,18 +233,6 @@
     {
       "source": "references/portable_gitlab/contract.py",
       "destination": "release-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "task-triage/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "task-review/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "task-prepare/references/portable-gitlab-contracts-v2.schema.json"
     },
     {
       "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
@@ -282,15 +271,15 @@
       "destination": "lsp-report/scripts/portable_runtime/lsp-catalog.json"
     },
     {
-      "source": "references/interaction-contract.md",
+      "source": "references/work_item_runtime/interaction-contract.md",
       "destination": "task-triage/references/interaction-contract.md"
     },
     {
-      "source": "references/interaction-contract.md",
+      "source": "references/work_item_runtime/interaction-contract.md",
       "destination": "task-review/references/interaction-contract.md"
     },
     {
-      "source": "references/interaction-contract.md",
+      "source": "references/work_item_runtime/interaction-contract.md",
       "destination": "task-prepare/references/interaction-contract.md"
     },
     {

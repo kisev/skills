@@ -33,7 +33,7 @@ unresolved.
 ## Workflow Duties
 
 - `askme` changes only contract fields and returns `normalized_item` or `blocker`.
-- `task-prepare` creates no publication artifact before `ready` and makes no GitLab mutation.
+- `task-prepare` creates no output artifact before explicit confirmation and makes no external mutation.
 - `task-review` returns evidence-backed findings without reviewing implementation.
 - `goal` does not turn an invalid item into `running` and binds completion evidence.
 - One workflow owns each durable state; these workflows do not create a shared

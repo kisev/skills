@@ -6,7 +6,7 @@
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Проанализируй GitLab Issue без verdict.",
+    "prompt": "Разбери work-item без verdict.",
     "fixture": {
       "selected": ["skill:task-triage"]
     }
@@ -19,7 +19,7 @@
     {
       "id": "triage-no-verdict",
       "path": "skills/task-triage/references/workflow.md",
-      "contains": "do not turn them into a gate or issue an accept/reject verdict"
+      "contains": "Mark unknown data as unknown"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "950480468673695013454f371850b6e70b1066bc78d048b66272593b34207c2d",
+  "digest": "0d9e65498f512c0e5151dcd00e09529bdaedf5c412ac8aa4e0cc8bbc36559398",
   "locale": "ru",
   "pair_id": "gitlab.task-triage.trigger"
 }

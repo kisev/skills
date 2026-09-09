@@ -1,1 +1,1 @@
-"""Minimal read-only GitLab helpers materialized into portable skills."""
+"""Storage-neutral work-item workflow runtime."""

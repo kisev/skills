@@ -17,11 +17,34 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILT_SKILLS = ROOT / ".build" / "skills"
 SKILLS_BINARY = subprocess.check_output(["mise", "which", "skills"], cwd=ROOT, text=True).strip()
 PORTABLE_SKILLS = (
-    "agents-md", "askme", "ast-grep", "code-explain", "code-review", "commit-msg",
-    "docs-prepare", "docs-review", "doit", "goal", "humanize", "lsp-report", "mattermost",
-    "mr-prepare", "release-prepare", "release-review", "rtk", "skill-improve",
-    "slides-prompts-prepare", "spec-manage", "stopit", "summary", "task-prepare",
-    "task-review", "task-triage", "team-retro", "team-roadmap", "team-sprint-close",
+    "agents-md",
+    "askme",
+    "ast-grep",
+    "code-explain",
+    "code-review",
+    "commit-msg",
+    "docs-prepare",
+    "docs-review",
+    "doit",
+    "goal",
+    "humanize",
+    "lsp-report",
+    "mattermost",
+    "mr-prepare",
+    "release-prepare",
+    "release-review",
+    "rtk",
+    "skill-improve",
+    "slides-prompts-prepare",
+    "spec-manage",
+    "stopit",
+    "summary",
+    "task-prepare",
+    "task-review",
+    "task-triage",
+    "team-retro",
+    "team-roadmap",
+    "team-sprint-close",
     "team-sprint-start",
 )
 FORBIDDEN_PORTABLE_MARKERS = (
@@ -32,14 +55,26 @@ FORBIDDEN_PORTABLE_MARKERS = (
 )
 PROJECT_REFERENCES = tuple(
     f"references/{name}.md"
-    for name in ("requirements", "architecture", "interviewing", "onboarding", "consolidation", "adr", "auditing")
+    for name in (
+        "requirements",
+        "architecture",
+        "interviewing",
+        "onboarding",
+        "consolidation",
+        "adr",
+        "auditing",
+    )
 )
 SPEC_TEMPLATE_READMES = tuple(
     f"templates/{path}"
     for path in (
-        "specs/README.md", "specs/requirements/README.md", "specs/requirements/functional/README.md",
-        "specs/requirements/interfaces/README.md", "specs/requirements/quality/README.md",
-        "specs/requirements/constraints/README.md", "specs/architecture/README.md",
+        "specs/README.md",
+        "specs/requirements/README.md",
+        "specs/requirements/functional/README.md",
+        "specs/requirements/interfaces/README.md",
+        "specs/requirements/quality/README.md",
+        "specs/requirements/constraints/README.md",
+        "specs/architecture/README.md",
         "specs/architecture/01-introduction-and-goals/README.md",
         "specs/architecture/02-architecture-constraints/README.md",
         "specs/architecture/03-context-and-scope/README.md",
@@ -189,9 +224,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                     for line in lines[1:end]
                     if line and not line.startswith(" ") and ":" in line
                 }
-                self.assertTrue(
-                    {"name", "description", "license", "metadata"}.issubset(fields)
-                )
+                self.assertTrue({"name", "description", "license", "metadata"}.issubset(fields))
                 self.assertTrue(
                     fields.issubset(
                         {
@@ -250,9 +283,14 @@ class PortableSkillValidationTests(unittest.TestCase):
 
     def test_interaction_contract_is_materialized_for_affected_skills(self) -> None:
         names = (
-            "spec-manage", "docs-prepare", "doit", "team-sprint-start", "task-triage",
-            "task-review", "task-prepare", "mr-prepare", "code-review",
-            "release-prepare", "release-review",
+            "spec-manage",
+            "docs-prepare",
+            "doit",
+            "team-sprint-start",
+            "mr-prepare",
+            "code-review",
+            "release-prepare",
+            "release-review",
         )
         source = ROOT / "shared/references/interaction-contract.md"
         source_text = source.read_text(encoding="utf-8")
@@ -272,10 +310,19 @@ class PortableSkillValidationTests(unittest.TestCase):
         for name in names:
             skill = BUILT_SKILLS / name
             with self.subTest(skill=name):
-                self.assertEqual((skill / "references/interaction-contract.md").read_bytes(), source.read_bytes())
+                self.assertEqual(
+                    (skill / "references/interaction-contract.md").read_bytes(), source.read_bytes()
+                )
                 text = (skill / "SKILL.md").read_text(encoding="utf-8")
                 self.assertIn("references/workflow.md", text)
                 self.assertIn("references/language-policy.md", text)
+        generic_source = ROOT / "shared/references/work_item_runtime/interaction-contract.md"
+        for name in ("task-triage", "task-review", "task-prepare"):
+            with self.subTest(skill=name, behavior="generic-interaction"):
+                self.assertEqual(
+                    (BUILT_SKILLS / name / "references/interaction-contract.md").read_bytes(),
+                    generic_source.read_bytes(),
+                )
         for name in ("spec-manage", "docs-prepare", "doit"):
             text = (BUILT_SKILLS / name / "references/workflow.md").read_text(encoding="utf-8")
             with self.subTest(skill=name, behavior="compact-preview"):
@@ -286,7 +333,9 @@ class PortableSkillValidationTests(unittest.TestCase):
         source = ROOT / "shared/references/language-policy.md"
         for name in PORTABLE_SKILLS:
             with self.subTest(skill=name):
-                self.assertTrue((ROOT / "skills" / name / "references/language-policy.md").is_file())
+                self.assertTrue(
+                    (ROOT / "skills" / name / "references/language-policy.md").is_file()
+                )
                 self.assertEqual(
                     (ROOT / "skills" / name / "references/language-policy.md").read_bytes(),
                     source.read_bytes(),
@@ -303,7 +352,9 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertTrue((skill / "templates/ru/adr.md").is_file())
         for relative in SPEC_TEMPLATE_READMES:
             self.assertTrue((skill / relative).is_file(), relative)
-            self.assertTrue((skill / "templates/ru" / relative.removeprefix("templates/")).is_file())
+            self.assertTrue(
+                (skill / "templates/ru" / relative.removeprefix("templates/")).is_file()
+            )
 
     def test_project_spec_build_excludes_russian_locale_artifacts(self) -> None:
         skill = BUILT_SKILLS / "spec-manage"
@@ -316,9 +367,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         skill = ROOT / "skills/spec-manage"
         for relative, contract in PROJECT_REFERENCE_CONTRACTS.items():
             with self.subTest(resource=relative, contract=contract):
-                self.assertIn(
-                    contract, (skill / relative).read_text(encoding="utf-8").lower()
-                )
+                self.assertIn(contract, (skill / relative).read_text(encoding="utf-8").lower())
         for relative in SPEC_TEMPLATE_READMES:
             text = (skill / relative).read_text(encoding="utf-8").lower()
             for section in PROJECT_TEMPLATE_SECTIONS:
@@ -373,9 +422,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn(phrase, text)
 
     def test_python_runtime_is_exactly_materialized_for_each_runner(self) -> None:
-        manifest = json.loads(
-            (ROOT / "shared/manifest.json").read_text(encoding="utf-8")
-        )
+        manifest = json.loads((ROOT / "shared/manifest.json").read_text(encoding="utf-8"))
         runtime_entries = [
             entry
             for entry in manifest["files"]
@@ -395,23 +442,20 @@ class PortableSkillValidationTests(unittest.TestCase):
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
         opencode_skills = {"lsp-report"}
         for path in BUILT_SKILLS.rglob("*"):
-            if (
-                path.is_file()
-                and "__pycache__" not in path.parts
-                and path.suffix in {".md", ".py"}
-            ):
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix in {".md", ".py"}:
                 text = path.read_text(encoding="utf-8").lower()
                 markers: tuple[str, ...] = FORBIDDEN_PORTABLE_MARKERS
                 if path.relative_to(BUILT_SKILLS).parts[0] in opencode_skills:
-                    markers = tuple(marker for marker in markers if marker not in {"~/.config/opencode", "~/.local/state/opencode"})
+                    markers = tuple(
+                        marker
+                        for marker in markers
+                        if marker not in {"~/.config/opencode", "~/.local/state/opencode"}
+                    )
                 for marker in markers:
                     self.assertNotIn(marker, text, f"{marker} in {path}")
 
     def test_gitlab_skills_materialize_their_own_contract_and_runtime(self) -> None:
         names = (
-            "task-triage",
-            "task-review",
-            "task-prepare",
             "mr-prepare",
             "code-review",
             "release-prepare",
@@ -432,8 +476,44 @@ class PortableSkillValidationTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     (root / "references/portable-gitlab-contracts-v2.schema.json").read_bytes(),
-                    (ROOT / "shared/references/portable_gitlab/artifact-contracts-v2.schema.json").read_bytes(),
+                    (
+                        ROOT / "shared/references/portable_gitlab/artifact-contracts-v2.schema.json"
+                    ).read_bytes(),
                 )
+
+    def test_generic_task_skills_are_storage_neutral_and_share_runtime(self) -> None:
+        runtime = (ROOT / "shared/references/work_item_runtime/contract.py").read_bytes()
+        for name, command, marker in (
+            ("task-prepare", "prepare", "verification"),
+            ("task-review", "review", "verdict"),
+            ("task-triage", "triage", "dependencies"),
+        ):
+            with self.subTest(skill=name):
+                root = BUILT_SKILLS / name
+                self.assertEqual(
+                    (root / "scripts/portable_runtime/contract.py").read_bytes(), runtime
+                )
+                self.assertFalse((root / "references/gitlab-workflow.md").exists())
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-S",
+                        "-B",
+                        str(
+                            root
+                            / f"scripts/{'prepare_task.py' if name == 'task-prepare' else 'review_task.py' if name == 'task-review' else 'triage_task.py'}"
+                        ),
+                        command,
+                        "--text",
+                        "Example work item",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(marker, result.stdout)
 
     def test_pinned_cli_lists_all_portable_skills(self) -> None:
         result = subprocess.run(
@@ -530,7 +610,7 @@ class PortableRunnerTests(unittest.TestCase):
                 "-I",
                 "-S",
                 "-B",
-                    str(BUILT_SKILLS / name / RUNNERS[name]),
+                str(BUILT_SKILLS / name / RUNNERS[name]),
                 *arguments,
             ],
             cwd=tempfile.gettempdir(),
@@ -621,9 +701,7 @@ class PortableRunnerTests(unittest.TestCase):
             bin_dir.mkdir()
             self.fake_ast_grep(bin_dir)
             environment = {"PATH": str(bin_dir)}
-            preview = self.run_runner(
-                "ast-grep", *self.ast_arguments(root), env=environment
-            )
+            preview = self.run_runner("ast-grep", *self.ast_arguments(root), env=environment)
             self.assertEqual(preview.returncode, 0, preview.stderr)
             document = json.loads(preview.stdout)
             self.assertFalse(document["applied"])
@@ -631,19 +709,13 @@ class PortableRunnerTests(unittest.TestCase):
             source.write_text("const changed = 1;\n", encoding="utf-8")
             stale = self.run_runner(
                 "ast-grep",
-                *self.ast_arguments(
-                    root, "--apply", "--confirm", document["confirmation"]
-                ),
+                *self.ast_arguments(root, "--apply", "--confirm", document["confirmation"]),
                 env=environment,
             )
             self.assertEqual(stale.returncode, 2)
-            self.assertEqual(
-                json.loads(stale.stdout)["error"]["code"], "digest_mismatch"
-            )
+            self.assertEqual(json.loads(stale.stdout)["error"]["code"], "digest_mismatch")
             self.assertEqual(source.read_text(encoding="utf-8"), "const changed = 1;\n")
-            fresh = self.run_runner(
-                "ast-grep", *self.ast_arguments(root), env=environment
-            )
+            fresh = self.run_runner("ast-grep", *self.ast_arguments(root), env=environment)
             digest = json.loads(fresh.stdout)["confirmation"]
             applied = self.run_runner(
                 "ast-grep",
@@ -687,23 +759,17 @@ class PortableRunnerTests(unittest.TestCase):
             bin_dir.mkdir()
             self.fake_ast_grep(bin_dir)
             environment = {"PATH": str(bin_dir), "FAKE_OUTSIDE": str(outside)}
-            rejected = self.run_runner(
-                "ast-grep", *self.ast_arguments(root), env=environment
-            )
+            rejected = self.run_runner("ast-grep", *self.ast_arguments(root), env=environment)
             self.assertEqual(rejected.returncode, 2)
             self.assertEqual(source.read_text(encoding="utf-8"), "const value = 1;\n")
-            self.assertEqual(
-                outside.read_text(encoding="utf-8"), "const outside = 1;\n"
-            )
+            self.assertEqual(outside.read_text(encoding="utf-8"), "const outside = 1;\n")
             symlink_input = self.run_runner(
                 "ast-grep",
                 *self.ast_arguments(root, str(link)),
                 env={"PATH": str(bin_dir)},
             )
             self.assertEqual(symlink_input.returncode, 2)
-            self.assertEqual(
-                outside.read_text(encoding="utf-8"), "const outside = 1;\n"
-            )
+            self.assertEqual(outside.read_text(encoding="utf-8"), "const outside = 1;\n")
 
     def test_ast_atomic_replacement_rolls_back_after_failure(self) -> None:
         script = BUILT_SKILLS / "ast-grep/scripts/ast_grep.py"
@@ -728,9 +794,7 @@ class PortableRunnerTests(unittest.TestCase):
                 patch.object(module.os, "replace", side_effect=fail_second),
                 self.assertRaises(OSError),
             ):
-                module.atomic_replace(
-                    [(first, b"first after"), (second, b"second after")]
-                )
+                module.atomic_replace([(first, b"first after"), (second, b"second after")])
             self.assertEqual(first.read_text(encoding="utf-8"), "first before")
             self.assertEqual(second.read_text(encoding="utf-8"), "second before")
 
@@ -766,9 +830,7 @@ class PortableRunnerTests(unittest.TestCase):
                 ("config", "user.email", "test@example.invalid"),
                 ("config", "user.name", "Test"),
             ):
-                subprocess.run(
-                    ["git", *arguments], cwd=repository, check=True, capture_output=True
-                )
+                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
             (repository / "api_schema.py").write_text(
                 "def Contract():\n    return 1\n", encoding="utf-8"
             )
@@ -779,9 +841,7 @@ class PortableRunnerTests(unittest.TestCase):
             (repository / "test_service.py").write_text(
                 "def test_run():\n    pass\n", encoding="utf-8"
             )
-            subprocess.run(
-                ["git", "add", "."], cwd=repository, check=True, capture_output=True
-            )
+            subprocess.run(["git", "add", "."], cwd=repository, check=True, capture_output=True)
             subprocess.run(
                 ["git", "commit", "-qm", "base"],
                 cwd=repository,
@@ -797,9 +857,7 @@ class PortableRunnerTests(unittest.TestCase):
             (repository / "api_schema.py").write_text(
                 "def Contract():\n    return 2\n", encoding="utf-8"
             )
-            (repository / "config.yaml").write_text(
-                "permission: admin\n", encoding="utf-8"
-            )
+            (repository / "config.yaml").write_text("permission: admin\n", encoding="utf-8")
             (repository / "notes.txt").write_text("untracked\n", encoding="utf-8")
             current = self.run_runner(
                 "code-explain", "--repo-root", str(repository), "--chunk-size", "1"
@@ -829,9 +887,7 @@ class PortableRunnerTests(unittest.TestCase):
                 partial_payload["coverage"]["files_total"]
                 - partial_payload["coverage"]["files_clustered"],
             )
-            subprocess.run(
-                ["git", "add", "."], cwd=repository, check=True, capture_output=True
-            )
+            subprocess.run(["git", "add", "."], cwd=repository, check=True, capture_output=True)
             subprocess.run(
                 ["git", "commit", "-qm", "change"],
                 cwd=repository,
@@ -861,13 +917,13 @@ class PortableRunnerTests(unittest.TestCase):
                 str(artifact),
             )
             self.assertEqual(from_file.returncode, 0, from_file.stderr)
-            self.assertEqual(
-                json.loads(from_file.stdout)["source"]["diff_file"], str(artifact)
-            )
+            self.assertEqual(json.loads(from_file.stdout)["source"]["diff_file"], str(artifact))
 
 
 class OpenCodePortableRuntimeTests(unittest.TestCase):
-    def run_skill(self, skill: str, *arguments: str, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    def run_skill(
+        self, skill: str, *arguments: str, environment: dict[str, str]
+    ) -> subprocess.CompletedProcess[str]:
         runner = RUNNERS[skill]
         return subprocess.run(
             [sys.executable, "-I", "-S", "-B", str(BUILT_SKILLS / skill / runner), *arguments],
@@ -883,11 +939,23 @@ class OpenCodePortableRuntimeTests(unittest.TestCase):
             project = Path(temporary) / "project"
             project.mkdir()
             state = Path(temporary) / "state"
-            environment = {"HOME": temporary, "XDG_STATE_HOME": str(state), "XDG_CONFIG_HOME": str(Path(temporary) / "config")}
-            for skill, arguments in (("lsp-report", ("--project", str(project), "--format", "json")),):
+            environment = {
+                "HOME": temporary,
+                "XDG_STATE_HOME": str(state),
+                "XDG_CONFIG_HOME": str(Path(temporary) / "config"),
+            }
+            for skill, arguments in (
+                ("lsp-report", ("--project", str(project), "--format", "json")),
+            ):
                 result = self.run_skill(skill, *arguments, environment=environment)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                json.loads(result.stdout)
+                report = json.loads(result.stdout)
+                for server in report["servers"]:
+                    self.assertIn(server["applicability"], {"applicable", "not-applicable"})
+                    self.assertEqual(server["configuration"], "unknown")
+                    self.assertIn(server["binary"], {"available", "missing"})
+                    self.assertEqual(server["runtime"], "inactive")
+                    self.assertEqual(server["runtime_status"], "unknown")
             self.assertFalse(state.exists())
 
 

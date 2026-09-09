@@ -6,7 +6,7 @@
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Подготовь план публикации GitLab Issue.",
+    "prompt": "Подготовь короткую задачу из текста пользователя.",
     "fixture": {
       "selected": ["skill:task-prepare"]
     }
@@ -19,7 +19,7 @@
     {
       "id": "no-mutation",
       "path": "skills/task-prepare/references/workflow.md",
-      "contains": "GitLab mutations remain forbidden."
+      "contains": "external mutation."
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "b670cbe5784b1f7dae4839ff3b0da990761dd18a563c224e7af403b0bf04f0ab",
+  "digest": "389ec5ad815d98a06e80889885500c8f62bffd595df342c7b3e8cf05bb9348a4",
   "locale": "ru",
   "pair_id": "gitlab.task-prepare.trigger"
 }

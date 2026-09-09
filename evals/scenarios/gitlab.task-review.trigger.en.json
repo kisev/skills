@@ -6,7 +6,7 @@
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Review the GitLab issue metadata.",
+    "prompt": "Review the quality of an explicit work item.",
     "fixture": {
       "selected": ["skill:task-review"]
     }
@@ -19,7 +19,7 @@
     {
       "id": "metadata-verdict",
       "path": "skills/task-review/references/workflow.md",
-      "contains": "exactly one verdict"
+      "contains": "quality verdict"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "e8fe0296e0d33a8d150aa330e30be01eba2e852b098de8bf803305c8e5b93c4a",
+  "digest": "50de462f385a19711d60806b31bca26f9eea5e9c5c03e4d234be2397b02dac91",
   "locale": "en",
   "pair_id": "gitlab.task-review.trigger"
 }

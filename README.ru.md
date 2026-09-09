@@ -3,7 +3,7 @@
 [English](README.md) | [Русский](README.ru.md)
 
 Переносимый набор Agent Skills для инженерной работы с репозиториями,
-документацией, GitLab-процессами и OpenCode. Общие контракты языка ответа,
+документацией, work-item-процессами и OpenCode. Общие контракты языка ответа,
 полноты evidence, ошибок, вопросов, подтверждений, владения state и качества
 work-item находятся в canonical `shared/references/` и materialize-ятся в
 portable skills. Каждый каталог в `skills/` - самодостаточная единица
@@ -119,8 +119,8 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 | `skill-improve`     | Цикл проверки и улучшения одного Agent Skill.                             |
 | `stopit`            | Обезличенная передача контекста во временный файл.                        |
 | `summary`           | Точный структурированный итог транскрипции, заметок или исследования.     |
-| `task-triage`       | Read-only содержательный разбор конкретных GitLab-задач.                  |
-| `task-review`       | Проверка оформления и служебных полей GitLab-задач и MR.                  |
+| `task-triage`       | Read-only разбор нейтрального work-item: facts, unknowns, risks.          |
+| `task-review`       | Quality verdict и findings для нейтрального work-item.                    |
 | `task-prepare`      | Подготовка одной задачи или явного пакета задач без публикации.           |
 | `mr-prepare`        | Подготовка обычного GitLab MR по diff, коммитам и CI.                     |
 | `code-review`       | Глубокое ревью GitLab MR или локального WIP.                              |
@@ -128,13 +128,13 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 | `release-review`    | Read-only проверка готовности релизного MR.                               |
 | `mattermost`        | Строго ограниченное чтение Mattermost с кэшем по identity.                |
 | `team-sprint-start` | Одно явное действие командного цикла по явному context.                   |
-| `code-explain`      | Read-only карта чтения current diff, range или diff-file.                 |
+| `code-explain`      | Read-only история и карта связей WIP, range, branch или MR.               |
 | `attempt`           | Чтение и безопасная отмена Background Attempts OpenCode.                  |
 | `goal`              | Read-only structured Markdown-цель до 4000 символов из `work-item/v1`.    |
 | `schedule`          | Явные disabled-by-default definitions для scheduler OpenCode.             |
 | `usage`             | Read-only ledger токенов и стоимости OpenCode.                            |
 | `overview`          | Read-only сводка durable OpenCode state.                                  |
-| `lsp-report`        | Применимость LSP OpenCode без запуска и установки.                        |
+| `lsp-report`        | Независимые host-neutral LSP states: applicability/config/binary/runtime. |
 
 `askme`, `task-prepare`, `task-review` и `goal` используют общий materialized
 контракт `work-item/v1`. Он не создаёт зависимость установленного skill от
@@ -222,11 +222,10 @@ TTL. Применить plan можно только командой с `--conf
 - OpenCode assets являются опциональными: portable skills продолжают работать без
   npm package, commands, agents и plugins.
 
-GitLab skills используют один canonical private collection по identity GitLab
-object, а не по имени вызывающего skill. Установленные copies содержат byte-identical
-runtime, artifact schema и workflow contract. Collection ограничен GET-only
-allowlist, exact SHA и completeness; publication остается только локальным
-Markdown-планом с `external_mutations=false`.
+MR/release и code-review используют canonical private GitLab collection по
+identity объекта. Три task skills storage-neutral: принимают inline text, local
+file или exact HTTPS link, нормализуют untrusted data в `work-item/v1`, отвечают
+в chat и не публикуют результат (`external_mutations=false`).
 
 ## Ограничения runtime
 

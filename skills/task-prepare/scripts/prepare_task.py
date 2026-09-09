@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run portable GitLab issue preparation collection."""
+"""Prepare a storage-neutral work item."""
 
 from __future__ import annotations
 
@@ -12,4 +12,4 @@ from portable_runtime.contract import run
 
 
 if __name__ == "__main__":
-    raise SystemExit(run("task-prepare", {"issues"}))
+    raise SystemExit(run("task-prepare"))

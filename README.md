@@ -182,11 +182,10 @@ slash adapter for the `agent_profiles` package tool; direct CLI is also availabl
 - `ast-grep` and `rtk` require their respective CLI to be installed already;
   skills do not install them.
 
-GitLab skills use one canonical private collection by GitLab-object identity,
-rather than by the calling skill name. Installed copies contain byte-identical
-runtime, artifact schema, and workflow contract. Collection is limited to a
-GET-only allowlist, exact SHA, and completeness; publication stays a local
-Markdown plan with `external_mutations=false`.
+MR/release and code-review skills use one canonical private GitLab collection by
+object identity. Generic task skills are storage-neutral: they accept inline
+text, a local file, or an exact HTTPS link and normalize untrusted material to
+`work-item/v1`; results default to chat and never publish externally.
 
 ## Runtime Limits
 
@@ -221,8 +220,8 @@ Skills that write show a preview and require confirmation. Confirmations are
 grouped by independent risk and exact mutation boundary; external publication,
 history rewrite, and destructive cleanup always need separate approvals. Do not
 provide credentials in prompts, argv, or logs. See [SECURITY.md](SECURITY.md).
-`task-triage`, `task-review`, and `task-prepare` are GitLab workflows with their
-own explicitly scoped contracts.
+`task-triage`, `task-review`, and `task-prepare` are generic work-item workflows;
+external publication is outside their contracts.
 
 ```shell
 npm exec -- skills-opencode uninstall --scope global --dry-run

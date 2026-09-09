@@ -1,7 +1,7 @@
 ---
 name: task-triage
 description: >-
-  Perform a read-only substantive triage of GitLab issues. Russian discovery terms: разобрать задачу.
+  Triage explicit work-item material read-only. Russian discovery terms: разобрать задачу.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
