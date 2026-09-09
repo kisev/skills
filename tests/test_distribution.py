@@ -14,8 +14,6 @@ from functools import partial
 from pathlib import Path
 from subprocess import run
 
-import pytest
-
 from scripts import build_distribution
 
 
@@ -139,12 +137,12 @@ def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -
 def test_direct_git_install_is_self_contained_for_both_hosts(tmp_path: Path) -> None:
     source = tmp_path / "source"
     run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(source)], check=True)
-    if not (source / "skills/ast-grep/scripts/portable_runtime").is_dir():
-        pytest.skip("direct Git fixture requires committed generated copies")
-    skills = sorted(
-        path.name for path in (source / "skills").iterdir() if (path / "SKILL.md").is_file()
+    inventory = json.loads(
+        (source / "packages/opencode/assets/migration-inventory.json").read_text(encoding="utf-8")
     )
+    skills = sorted(inventory["active_portable_skills"])
     assert len(skills) == 29
+    assert not (source / ".build").exists()
 
     for agent in ("opencode", "codex"):
         for scope in ("global", "project"):

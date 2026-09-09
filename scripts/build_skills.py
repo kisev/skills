@@ -30,6 +30,16 @@ def safe_relative(value: object, label: str) -> Path:
     return path
 
 
+def safe_skill_name(value: object) -> str:
+    path = safe_relative(value, "skill name")
+    if len(path.parts) != 1:
+        raise BuildError(f"skill name must be one path component: {value!r}")
+    skill = SOURCES / path
+    if skill.is_symlink() or not (skill / "SKILL.md").is_file():
+        raise BuildError(f"skill does not contain SKILL.md: {value!r}")
+    return path.name
+
+
 def manifest_entries() -> list[tuple[Path, Path]]:
     try:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -63,8 +73,9 @@ def manifest_entries() -> list[tuple[Path, Path]]:
     ):
         raise BuildError("language_policy_skills must be a list of skill names")
     for name in policy_skills:
+        skill_name = safe_skill_name(name)
         source = SHARED / "references" / "language-policy.md"
-        destination = Path(name) / "references" / "language-policy.md"
+        destination = Path(skill_name) / "references" / "language-policy.md"
         if destination in destinations:
             raise BuildError(f"duplicate destination: {destination}")
         destinations.add(destination)
@@ -89,6 +100,7 @@ def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
         raise BuildError(f"materialization root is not a directory: {root}")
     expected: set[Path] = set()
     canonical_bytes = {source.read_bytes() for source, _ in entries}
+    generated_names = {source.name for source, _ in entries}
     for source, relative in entries:
         expected.add(relative)
         target = root / relative
@@ -111,6 +123,10 @@ def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
                 continue
             # The manifest owns only paths whose source lives in shared/references.
             # Authored unique skill files are intentionally outside this check.
+            if "portable_runtime" in relative.parts:
+                raise BuildError(f"undeclared generated copy: {relative}")
+            if path.name in generated_names and path.read_bytes() not in canonical_bytes:
+                raise BuildError(f"undeclared generated copy: {relative}")
             if path.read_bytes() in canonical_bytes and path.name != "SKILL.md":
                 raise BuildError(f"undeclared generated copy: {relative}")
 
