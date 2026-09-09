@@ -1,4 +1,4 @@
-"""Read-only OpenCode 1.18 LSP applicability model."""
+"""Read-only host-neutral LSP applicability and state model."""
 
 from __future__ import annotations
 
@@ -28,6 +28,8 @@ def detect(project: Path) -> dict[str, Any]:
     suffixes: set[str] = set()
     try:
         for path in root.rglob("*"):
+            if any(part in {".git", "node_modules", ".venv", "dist", "build"} for part in path.parts):
+                continue
             if path.is_file() and not path.is_symlink():
                 suffixes.add(path.suffix.lower())
     except OSError as error:
@@ -37,7 +39,7 @@ def detect(project: Path) -> dict[str, Any]:
     for name, extensions, executable, requirement in SERVERS:
         applicable = bool(suffixes & extensions)
         available = shutil.which(executable) is not None
-        active = applicable and available and not disabled
+        active = False
         if not applicable:
             reason = "not-selected"
         elif disabled:
@@ -50,9 +52,13 @@ def detect(project: Path) -> dict[str, Any]:
             "name": name,
             "applicable": applicable,
             "active": active,
-            "configured": applicable,
+            "configured": "unknown",
             "binary_available": available,
-            "runtime_status": "unavailable",
+            "runtime_status": "unknown",
+            "applicability": "applicable" if applicable else "not-applicable",
+            "configuration": "unknown",
+            "binary": "available" if available else "missing",
+            "runtime": "active" if active else "inactive",
             "requirement_class": requirement,
             "missing": [] if available else [executable],
             "reason": reason,

@@ -1,7 +1,7 @@
 ---
 name: rtk
 description: >-
-  Use RTK selectively to inspect verbose command output efficiently. Russian discovery terms: сжатый вывод.
+  Use RTK selectively to inspect verbose command output efficiently, always marking incomplete evidence. Russian discovery terms: сжатый вывод.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

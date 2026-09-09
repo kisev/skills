@@ -1,0 +1,30 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage17.lsp.states",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage17.lsp.states",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Покажи независимые состояния LSP без запуска server.",
+    "fixture": { "selected": ["skill:lsp-report"] }
+  },
+  "expected": { "selected": ["skill:lsp-report"] },
+  "invariants": [
+    {
+      "id": "states",
+      "path": "skills/lsp-report/references/workflow.md",
+      "contains": "configuration"
+    },
+    {
+      "id": "unknown",
+      "path": "shared/references/python_runtime/lsp.py",
+      "contains": "runtime_status"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "9bb9e35301b86e5c2a624c2d35fe0c71bfab46067d2902a76fb48799471614ee"
+}

@@ -1,7 +1,7 @@
 ---
 name: lsp-report
 description: >-
-  Report applicable and inactive built-in OpenCode LSPs without starting servers. Russian discovery terms: отчёт LSP.
+  Report host-neutral LSP applicability, configuration, binary, and runtime states without starting servers. Russian discovery terms: отчёт LSP.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

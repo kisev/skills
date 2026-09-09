@@ -12,6 +12,7 @@ export type RtkOptions = { enabled?: boolean; bin?: string; threshold?: number; 
 
 function filter(command: string): string | undefined {
   if (/[|;$&\n()`]/.test(command)) return undefined;
+  if (/\b(--json|--format(?:=|\s)|diagnos|security|deploy|migrat|delete|remove)\b/i.test(command)) return undefined;
   const values = command.trim().split(/\s+/);
   return FILTERS.find((item) => item.prefix.every((part, index) => values[index] === part))?.filter;
 }
@@ -39,7 +40,8 @@ export async function rtk(options: RtkOptions = {}) {
       const selected = typeof input.args?.command === "string" ? filter(input.args.command) : undefined;
       const compressed = selected ? await run(selected, output.output) : undefined;
       const result = compressed && compressed.length < output.output.length ? compressed : truncate(output.output);
-      output.output = `${result}\n[rtk: compressed ${output.output.length} chars using ${compressed ? `rtk/${selected}` : "head+tail"}]`;
+      const originalSize = output.output.length;
+      output.output = `${result}\n[rtk: compressed method=${compressed ? `rtk/${selected}` : "head+tail"}; sizes=${originalSize}->${result.length}; evidence_complete=false; loss=possible]`;
     } catch { /* RTK is fail-open: preserve original tool output on plugin failure. */ }
   } };
 }

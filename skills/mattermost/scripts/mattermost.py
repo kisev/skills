@@ -11,6 +11,7 @@ import re
 import secrets
 import sqlite3
 import stat
+import subprocess
 import sys
 import time
 import urllib.error
@@ -440,6 +441,48 @@ def valid_posts(value: object) -> tuple[list[dict[str, Any]], bool]:
     return sorted(posts, key=lambda post: (post["create_at"], post["id"])), malformed
 
 
+def safe_post(post: dict[str, Any]) -> dict[str, Any]:
+    """Keep message fields and exact reaction identity, never attachment files."""
+    result = {key: value for key, value in post.items() if key not in {"attachments", "reactions"}}
+    reactions = post.get("reactions", [])
+    if isinstance(reactions, list):
+        result["reactions"] = [
+            {"emoji": item["emoji_name"], "user": item["user_id"]}
+            for item in reactions
+            if isinstance(item, dict)
+            and isinstance(item.get("emoji_name"), str)
+            and isinstance(item.get("user_id"), str)
+        ]
+    return result
+
+
+def read_reactions(
+    client: Client, posts: list[dict[str, Any]]
+) -> tuple[list[dict[str, Any]], bool, list[dict[str, object]]]:
+    result: list[dict[str, Any]] = []
+    errors: list[dict[str, object]] = []
+    complete = True
+    for post in posts:
+        clean = safe_post(post)
+        try:
+            value = client.get(f"/posts/{urllib.parse.quote(identifier(post['id'], 'post ID'), safe='')}/reactions")
+            if not isinstance(value, list):
+                raise MattermostError("Mattermost reaction response is malformed")
+            clean["reactions"] = [
+                {"emoji": item["emoji_name"], "user": item["user_id"]}
+                for item in value
+                if isinstance(item, dict)
+                and isinstance(item.get("emoji_name"), str)
+                and isinstance(item.get("user_id"), str)
+            ]
+        except (MattermostError, AuthorizationRequired):
+            complete = False
+            errors.append(error_item("reactions_unavailable", "Mattermost reactions could not be fully read", retryable=True))
+            clean["reactions"] = []
+        result.append(clean)
+    return result, complete, errors
+
+
 def warning(code: str, message: str) -> dict[str, object]:
     return {"code": code, "message": message}
 
@@ -605,6 +648,10 @@ def read_one(
             key, origin=str(target["origin"]), user_id=user_id, target=target, period=period
         )
         if cached is not None:
+            if isinstance(cached.get("posts"), list):
+                cached["posts"] = [
+                    safe_post(post) for post in cached["posts"] if isinstance(post, dict)
+                ]
             cached["cache_hit"] = True
             cached["cache_age"] = age
             cached["access_revalidated"] = True
@@ -615,6 +662,9 @@ def read_one(
     if target["kind"] == "post":
         assert access_post is not None
         posts, complete, errors, warnings = read_post(client, access_post)
+        posts, reactions_complete, reaction_errors = read_reactions(client, posts)
+        complete = complete and reactions_complete
+        errors.extend(reaction_errors)
         result.update(
             {
                 "posts": posts,
@@ -627,6 +677,9 @@ def read_one(
     else:
         assert access_channel is not None and period is not None
         posts, complete, pages, errors, warnings = read_channel(client, access_channel, period)
+        posts, reactions_complete, reaction_errors = read_reactions(client, posts)
+        complete = complete and reactions_complete
+        errors.extend(reaction_errors)
         result.update(
             {
                 "posts": posts,
@@ -885,6 +938,33 @@ def cookie_token(origin: str) -> str:
     raise MattermostError("browser did not provide an origin-bound session cookie")
 
 
+def agent_browser_token(origin: str) -> str:
+    """Use the explicitly consented host adapter without exposing credentials."""
+    try:
+        opened = subprocess.run(
+            ["agent-browser", "open", origin], capture_output=True, check=False, text=True, timeout=30
+        )
+        if opened.returncode != 0:
+            raise MattermostError("agent-browser could not open the exact origin")
+        cookies = subprocess.run(
+            ["agent-browser", "cookies", "--json"], capture_output=True, check=False, text=True, timeout=30
+        )
+        if cookies.returncode != 0:
+            raise MattermostError("agent-browser could not read browser cookies")
+        values = json.loads(cookies.stdout)
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+        raise MattermostError("agent-browser authentication failed") from exc
+    if not isinstance(values, list):
+        raise MattermostError("agent-browser returned invalid cookie data")
+    hostname = urllib.parse.urlsplit(origin).hostname
+    for cookie in values:
+        if isinstance(cookie, dict) and cookie.get("name") == "MMAUTHTOKEN" and str(cookie.get("domain", "")).lstrip(".").lower() == hostname:
+            token = cookie.get("value")
+            if isinstance(token, str) and token and "\n" not in token and "\r" not in token:
+                return token
+    raise MattermostError("agent-browser did not provide an origin-bound session cookie")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = ContractArgumentParser(description=__doc__)
     parser.add_argument("--capabilities", action="store_true")
@@ -912,6 +992,7 @@ def main(argv: list[str] | None = None) -> int:
     auth_apply = auth_subparsers.add_parser("apply")
     auth_apply.add_argument("url")
     auth_apply.add_argument("--confirm", required=True)
+    auth_apply.add_argument("--browser-consent", action="store_true")
     cache = subparsers.add_parser("cache")
     cache_subparsers = cache.add_subparsers(
         dest="cache_action", required=True, parser_class=ContractArgumentParser
@@ -940,7 +1021,7 @@ def main(argv: list[str] | None = None) -> int:
             if args.auth_action == "preview":
                 emit(prepare_receipt("auth", origin=origin))
                 return 0
-            token = cookie_token(origin)
+            token = agent_browser_token(origin) if args.browser_consent else cookie_token(origin)
             consume_receipt(args.confirm, "auth", origin=origin)
             save_token(origin, token)
             emit({"status": "ok", "origin": origin, "external_mutations": False})
@@ -949,6 +1030,8 @@ def main(argv: list[str] | None = None) -> int:
             path = cache_path()
             if args.cache_action == "status":
                 exists = path.exists() and not path.is_symlink()
+                if exists:
+                    private_file(path)
                 emit(
                     {
                         "status": "ok",
@@ -1022,6 +1105,10 @@ def main(argv: list[str] | None = None) -> int:
                         }
                     )
             complete = all(result["status"] == "ok" for result in results)
+            authentication_required = any(
+                any(error.get("code") == "authentication_required" for error in result_list(result, "errors"))
+                for result in results
+            )
             status = (
                 "ok"
                 if complete
@@ -1042,7 +1129,7 @@ def main(argv: list[str] | None = None) -> int:
                     "external_mutations": False,
                 }
             )
-            return 0 if complete else 1 if status == "partial" else 2
+            return 0 if complete else 1 if status == "partial" else AUTH_REQUIRED if authentication_required else 2
         if args.command == "members":
             result = collect_members(args.url)
             emit(result)

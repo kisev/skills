@@ -1,0 +1,46 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage17.team-actions.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage17.team-actions.trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Выполни одно фиксированное действие team workflow.",
+    "fixture": {
+      "selected": [
+        "skill:team-sprint-start",
+        "skill:team-sprint-close",
+        "skill:team-retro",
+        "skill:team-roadmap",
+        "skill:slides-prompts-prepare"
+      ]
+    }
+  },
+  "expected": {
+    "selected": [
+      "skill:team-sprint-start",
+      "skill:team-sprint-close",
+      "skill:team-retro",
+      "skill:team-roadmap",
+      "skill:slides-prompts-prepare"
+    ]
+  },
+  "invariants": [
+    {
+      "id": "shared-runtime",
+      "path": "shared/manifest.json",
+      "contains": "team_runtime/team_workflow.py"
+    },
+    {
+      "id": "confirmed-context",
+      "path": "skills/team-roadmap/references/workflow.md",
+      "contains": "context-save"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "92b383999b3c40c0781fdd9c8d6b43270fb98f02b5e6483e1796fbbcfefcc083"
+}

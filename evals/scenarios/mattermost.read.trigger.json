@@ -19,7 +19,7 @@
     {
       "id": "read-only-scope",
       "path": "skills/mattermost/references/workflow.md",
-      "contains": "All remote API calls are GET only."
+      "contains": "All API requests are GET-only"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "d120826b963699d366c5f00c1bac4b350eb937cec1ccf70b841813ee533a2bc7",
+  "digest": "451307cb248d5b3003d71e4d6b55db5519fe6ba7ed6dfea68837d51aee3cdeac",
   "locale": "ru",
   "pair_id": "mattermost.read.trigger"
 }

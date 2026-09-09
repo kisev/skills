@@ -1,0 +1,30 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage17.code-explain.history.en",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage17.code-explain.history",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Show history and file evolution without a verdict.",
+    "fixture": { "selected": ["skill:code-explain"] }
+  },
+  "expected": { "selected": ["skill:code-explain"], "not_selected": ["skill:code-review"] },
+  "invariants": [
+    {
+      "id": "history",
+      "path": "skills/code-explain/references/workflow.md",
+      "contains": "chronology"
+    },
+    {
+      "id": "no-verdict",
+      "path": "skills/code-explain/references/workflow.md",
+      "contains": "no findings or verdict"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "fe5f0cdf6eb72c558d274f37ee9319174b2cc3b9fad0ef027d898d7f4a0c6b2b"
+}

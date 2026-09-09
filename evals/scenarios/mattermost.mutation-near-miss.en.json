@@ -19,7 +19,7 @@
     {
       "id": "mutations-forbidden",
       "path": "skills/mattermost/references/workflow.md",
-      "contains": "Do not create, modify, or delete messages, channels, members, or reactions."
+      "contains": "reaction mutation is supported."
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "7df5f214830ff26df43c62de513706a8d84ca24f0c78ba93b7bb119584adc6f2",
+  "digest": "ff9459a4257f74fac05b512e9d707247ed35040880b37208c57feb82aadcf3ef",
   "locale": "en",
   "pair_id": "mattermost.mutation-near-miss"
 }

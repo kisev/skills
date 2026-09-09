@@ -1,0 +1,26 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage17.rtk-evidence.trigger.en",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage17.rtk-evidence.trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Compress noisy RTK output with a loss marker.",
+    "fixture": { "selected": ["skill:rtk"] }
+  },
+  "expected": { "selected": ["skill:rtk"] },
+  "invariants": [
+    {
+      "id": "incomplete",
+      "path": "skills/rtk/references/workflow.md",
+      "contains": "evidence_complete=false"
+    },
+    { "id": "sizes", "path": "packages/opencode/src/plugins/rtk.ts", "contains": "sizes=" }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "e879f8f60e4ba71ec97032724ec1bfc750b407ad1fbf130c1dded9bbae3d3213"
+}

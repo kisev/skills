@@ -2,6 +2,11 @@
 
 RTK is an external CLI and is not installed by this skill. Check availability from the skill directory with `python3 -I -S -B scripts/rtk.py check`. If unavailable, the runner returns JSON `escalate`; do not install the tool automatically.
 
+Every compressed result must include `method`, input/output `sizes`, and the
+literal `evidence_complete=false` plus a loss marker. Head+tail is never full
+evidence. RTK failure remains fail-open, but the same incomplete marker is
+required for fallback output.
+
 Use RTK for an initial overview of large, repetitive, and primarily informational output: full tests, builds, linters, Git summaries, and logs. Its compact output may be filtered, deduplicated, truncated, summarized, or reordered. Its absence of data is not evidence of absence.
 
 Always run the original command directly when full, exact, ordered, or machine-readable output is needed, including code review, diagnostics, security checking, deployment, writing, deletion, migration, and proof of the absence of an object or error.

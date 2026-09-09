@@ -1,0 +1,30 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage17.read-safety.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage17.read-safety.trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Прочитай Mattermost, reactions, без attachments.",
+    "fixture": { "selected": ["skill:mattermost"] }
+  },
+  "expected": { "selected": ["skill:mattermost"] },
+  "invariants": [
+    {
+      "id": "get-only",
+      "path": "skills/mattermost/references/workflow.md",
+      "contains": "GET-only"
+    },
+    {
+      "id": "attachments",
+      "path": "skills/mattermost/references/workflow.md",
+      "contains": "Attachment"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "1f41e526fa730958f451c23a4463ecba1a97895f7187136cefd56f8db9bd78bc"
+}

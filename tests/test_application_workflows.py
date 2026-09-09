@@ -20,9 +20,6 @@ from contextlib import nullcontext, redirect_stdout
 ROOT = Path(__file__).resolve().parents[1]
 BUILT_SKILLS = ROOT / ".build" / "skills"
 GITLAB_RUNNERS = {
-    "task-triage": "scripts/triage_task.py",
-    "task-review": "scripts/review_task.py",
-    "task-prepare": "scripts/prepare_task.py",
     "mr-prepare": "scripts/prepare_mr.py",
     "code-review": "scripts/review_mr.py",
     "release-prepare": "scripts/prepare_release.py",
@@ -119,6 +116,7 @@ print(json.dumps(value))
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(json.loads(result.stdout)["status"], "error")
 
+    @unittest.skip("GitLab task adapter removed in stage 17")
     def test_pagination_deduplicates_and_preserves_partial_failure(self) -> None:
         module = load_module(
             BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
@@ -136,6 +134,7 @@ print(json.dumps(value))
         self.assertFalse(partial["complete"])
         self.assertTrue(partial["errors"])
 
+    @unittest.skip("GitLab task adapter removed in stage 17")
     def test_collection_calls_only_get_and_batch_failure_is_isolated(self) -> None:
         module = load_module(
             BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_get"
@@ -166,6 +165,7 @@ print(json.dumps(value))
         self.assertTrue(calls)
         self.assertTrue(all("projects/" in endpoint for _, endpoint in calls))
 
+    @unittest.skip("GitLab task adapter removed in stage 17")
     def test_gitlab_read_only_prepare_returns_compact_artifact_without_confirmation(self) -> None:
         module = load_module(
             BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
@@ -201,12 +201,15 @@ print(json.dumps(value))
         self.assertEqual(payload["status"], "ok")
         self.assertTrue(artifact_exists)
         self.assertEqual(len(str(item["digest"])), 64)
-        self.assertEqual(payload["summary"]["tldr"], "Completed GET-only GitLab evidence preparation.")
+        self.assertEqual(
+            payload["summary"]["tldr"], "Completed GET-only GitLab evidence preparation."
+        )
         self.assertNotIn("confirmation", payload)
 
     def test_publication_plan_uses_english_human_prose(self) -> None:
         module = load_module(
-            ROOT / "shared/references/portable_gitlab/contract.py", "portable_gitlab_publication_prose"
+            ROOT / "shared/references/portable_gitlab/contract.py",
+            "portable_gitlab_publication_prose",
         )
         markdown = module.publication_markdown(
             {
@@ -225,6 +228,7 @@ print(json.dumps(value))
         self.assertIn("### Description\n\nDescription", markdown)
         self.assertNotRegex(markdown, r"[А-Яа-яЁё]")
 
+    @unittest.skip("GitLab task adapter removed in stage 17")
     def test_glab_boundary_forces_get_without_shell_or_credentials(self) -> None:
         module = load_module(
             BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
@@ -818,6 +822,7 @@ print(json.dumps(value))
                     evidence_digest,
                 )
 
+    @unittest.skip("GitLab task adapter removed in stage 17")
     def test_runner_scaffold_record_rejections_and_v1_finalize_contracts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1062,6 +1067,8 @@ class MattermostAndTeamTests(unittest.TestCase):
 
         class CompleteClient:
             def get(self, path: str) -> object:
+                if path.endswith("/reactions"):
+                    return []
                 responses = {
                     "/users/me": {"id": "viewer"},
                     "/teams/name/team": {"id": "team-id"},
@@ -1477,6 +1484,23 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
         )
 
+    def test_mattermost_safe_post_keeps_reactions_and_drops_attachments(self) -> None:
+        module = self.mattermost_module("safe-post")
+        post = {
+            "id": "post",
+            "message": "untrusted",
+            "attachments": [{"path": "/secret/file"}],
+            "reactions": [{"emoji_name": "+1", "user_id": "viewer"}],
+        }
+        self.assertEqual(
+            module.safe_post(post),
+            {
+                "id": "post",
+                "message": "untrusted",
+                "reactions": [{"emoji": "+1", "user": "viewer"}],
+            },
+        )
+
     def test_team_digest_rejects_stale_tampered_and_expired_plans_then_reports_apply(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -1669,6 +1693,45 @@ class MattermostAndTeamTests(unittest.TestCase):
             self.assertEqual(payload["status"], "setup-required")
             self.assertIn("scope", payload["missing"])
             self.assertFalse(state.exists())
+
+    def test_all_team_skills_use_shared_runtime_and_fixed_action(self) -> None:
+        actions = {
+            "team-sprint-start": "planning",
+            "team-sprint-close": "sprint-close",
+            "team-retro": "retro",
+            "team-roadmap": "roadmap",
+            "slides-prompts-prepare": "slides-prompts",
+        }
+        source = ROOT / "shared/references/team_runtime/team_workflow.py"
+        for skill, action in actions.items():
+            with self.subTest(skill=skill):
+                self.assertEqual(
+                    (BUILT_SKILLS / skill / "scripts/team_workflow.py").read_bytes(),
+                    source.read_bytes(),
+                )
+                result = self.run_script(skill, "team_workflow.py", "--capabilities")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                context = {
+                    "goals": ["goal"],
+                    "scope": ["scope"],
+                    "cadence": "weekly",
+                    "baseline": "baseline",
+                    "projects": ["project"],
+                    "delivery_signals": ["signal"],
+                }
+                with tempfile.TemporaryDirectory() as temporary:
+                    path = Path(temporary) / "context.json"
+                    path.write_text(json.dumps(context), encoding="utf-8")
+                    checked = self.run_script(
+                        skill,
+                        "team_workflow.py",
+                        "action-check",
+                        "--context-file",
+                        str(path),
+                        cwd=Path(temporary),
+                    )
+                self.assertEqual(checked.returncode, 0, checked.stderr)
+                self.assertEqual(json.loads(checked.stdout)["action"], action)
 
     def test_collaboration_runners_report_invalid_syntax_as_json(self) -> None:
         for skill, runner in (

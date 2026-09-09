@@ -1,0 +1,28 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "stage17.generic-task.trigger",
+  "revision": 1,
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage17.generic-task.trigger",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Подготовь задачу из inline text, без GitLab.",
+    "fixture": { "selected": ["skill:task-prepare"] }
+  },
+  "expected": {
+    "selected": ["skill:task-prepare"],
+    "not_selected": ["skill:task-review", "skill:task-triage"]
+  },
+  "invariants": [
+    {
+      "id": "neutral-input",
+      "path": "skills/task-prepare/references/workflow.md",
+      "contains": "inline"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "80ab075f2944fc76eb113bcbd3d0eb5cd8212f1907ebda6b232ad8470f4c447c"
+}

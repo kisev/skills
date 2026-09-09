@@ -1,13 +1,11 @@
-```text
-python3 -I -S -B scripts/lsp_report.py [--project PATH] [--format json|text]
-```
-
-The read-only runner checks project files, availability of external commands, and `OPENCODE_DISABLE_LSP_DOWNLOAD`. It uses materialized `lsp-catalog.json`, does not start LSPs, request diagnostics, or install packages. OpenCode host runtime status is unavailable to the portable runner and is reported as `unavailable`; unselected servers and incomplete data must not be reported as active.
-
 # LSP Report
 
-```text
-python3 -I -S -B scripts/lsp_report.py [--project PATH] [--format json|text]
-```
+The report is host-neutral and read-only. For every catalog entry show four
+independent states: `applicability` (`applicable` or `not-applicable`),
+`configuration` (`enabled`, `disabled`, or `unknown`), `binary` (`available`,
+`missing`, or `unknown`), and `runtime` (`active`, `inactive`, or `unknown`).
+Only confirmed host adapters may provide a non-unknown state. Without a host API
+return `unknown`; never start or install a language server.
 
-The read-only runner checks project files, availability of external commands, and `OPENCODE_DISABLE_LSP_DOWNLOAD`. It uses the materialized `lsp-catalog.json`, does not start an LSP, invoke diagnostics, or install packages. The OpenCode host runtime status is unavailable to the portable runner and is marked `unavailable`; unselected servers and incomplete data are not presented as active.
+Run `python3 -I -S -B scripts/lsp_report.py` with an optional project and JSON or
+text format. Do not request diagnostics or invoke a package manager.

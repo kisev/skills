@@ -1,5 +1,10 @@
 # Workflow
 
+Accept current WIP, an exact Git range, a branch, or an exact HTTPS merge-request
+link. Show chronology and file evolution, then key decisions or pivots and links
+between contracts, logic, tests, and configuration. This is a read-only reading
+map: it creates no findings or verdict, and never mutates the repository.
+
 The skill only reads the checkout and is not a review. Do not change files, issue
 a verdict, or suggest approval. Use a separate review workflow to evaluate quality
 after the walkthrough.

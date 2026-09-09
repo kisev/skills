@@ -8,6 +8,7 @@ import json
 import re
 import subprocess
 import sys
+import urllib.parse
 from pathlib import Path
 
 
@@ -262,6 +263,7 @@ def build(
     diff_file: Path | None,
     chunk_size: int,
     chunk_index: int | None,
+    source_link: str | None = None,
 ) -> dict[str, object]:
     files, added = parse_diff(collect_diff(repo, diff_range, diff_file))
     clusters: dict[tuple[str, str], list[dict[str, object]]] = {}
@@ -286,6 +288,7 @@ def build(
                     "tests": "Cover observable behavior with tests.",
                     "configs": "Wire or configure the change.",
                 }[kind],
+                "next_read": [str(item["path"]) for item in items],
                 "files": items,
                 "read_order": category(str(items[0]["path"]))[0],
             }
@@ -330,6 +333,7 @@ def build(
             "repo_root": str(repo),
             "range": diff_range or "working-tree",
             "diff_file": str(diff_file) if diff_file else None,
+            "external_link": source_link,
         },
         "statistics": {
             "files": len(files),
@@ -363,6 +367,10 @@ def build(
             {"reason": reason, "files": sorted(paths)}
             for reason, paths in sorted(attention.items())
         ],
+        "chronology": [
+            {"path": str(item["path"]), "commits": run_git(repo, "log", "--format=%H %s", "-5", "--", str(item["path"])).splitlines()}
+            for item in files
+        ],
     }
 
 
@@ -373,6 +381,8 @@ def parser() -> ContractArgumentParser:
     source = result.add_mutually_exclusive_group()
     source.add_argument("--range", dest="diff_range")
     source.add_argument("--diff-file", type=Path)
+    source.add_argument("--branch")
+    source.add_argument("--mr-url")
     result.add_argument("--chunk-size", type=int, default=8)
     result.add_argument("--chunk-index", type=int)
     return result
@@ -400,14 +410,22 @@ def main(argv: list[str] | None = None) -> int:
         )
     try:
         repo = repository_root(arguments.repo_root)
+        diff_range = arguments.diff_range
+        if arguments.branch:
+            diff_range = f"HEAD..{arguments.branch}"
+        if arguments.mr_url:
+            parsed = urllib.parse.urlsplit(arguments.mr_url)
+            if parsed.scheme != "https" or not parsed.netloc or parsed.fragment:
+                raise ValueError("merge-request link must be an exact HTTPS URL")
         print(
             json.dumps(
                 build(
                     repo,
-                    arguments.diff_range,
+                    diff_range,
                     arguments.diff_file,
                     arguments.chunk_size,
                     arguments.chunk_index,
+                    arguments.mr_url,
                 ),
                 ensure_ascii=False,
                 sort_keys=True,

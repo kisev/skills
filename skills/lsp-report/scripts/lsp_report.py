@@ -26,10 +26,14 @@ def parser() -> argparse.ArgumentParser:
 
 
 def text(report: dict[str, object]) -> str:
-    rows = [f"{report['project']}: OpenCode 1.18.29+; catalog {report.get('catalog_version', 'unavailable')}"]
+    rows = [f"{report['project']}: catalog {report.get('catalog_version', 'unknown')}"]
     for server in report["servers"]:  # type: ignore[index]
         item = server  # type: ignore[assignment]
-        rows.append(f"{item['name']}: {item['reason']}; install: {item['install']}")
+        rows.append(
+            f"{item['name']}: applicability={item['applicability']}; "
+            f"configuration={item['configuration']}; binary={item['binary']}; "
+            f"runtime={item['runtime']}; reason={item['reason']}"
+        )
     return "\n".join(rows)
 
 
