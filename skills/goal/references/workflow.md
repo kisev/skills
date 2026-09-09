@@ -10,6 +10,20 @@ For a complex task or explicit request, perform one optional independent premort
 
 ## Output Contract
 
-Output one compact, ready-to-copy JSON object exactly `work-item/v1`, with no additional fields, Markdown wrapper, or service text. It must contain `contract_version`, `item_id`, `problem`, `outcome`, `acceptance_criteria`, `scope.in_scope`, `scope.non_goals`, `dependencies`, `external_actions`, `assumptions`, `safety.constraints`, `safety.operational_constraints`, `risks`, `unresolved_questions`, and `stop_conditions`. Every criterion contains a verifiable `statement`, at least one concrete `evidence`, and `dependencies` references; dependencies form a DAG. Explicitly include result verification and report format in `acceptance_criteria`: brief status (`completed`/`blocked`), facts/evidence for every criterion, checks, unresolved items, and the next safe step. Do not include an acceptance criterion that cannot be verified.
+Internally preserve the normalized `work-item/v1` contract and validate it when
+useful, but return structured Markdown rather than JSON. Use only non-empty
+sections such as `## Problem`, `## Outcome`, `## Acceptance criteria`,
+`## Scope`, `## Evidence`, `## Risks`, `## Open questions`, and `## Stop
+conditions`. Keep the result at or below 4000 characters, preserve exact
+technical fragments, and include a brief completion/report contract with status,
+evidence for every criterion, checks, unresolved items, and the next safe step.
+Do not declare complete when required evidence is partial or a blocker remains.
 
-A ready item has at most 3000 characters, verdict `ready`, and empty `unresolved_questions` for blocking questions. If a required fact is unknown, return the same complete `work-item/v1` item with `unresolved_questions` and a stop condition that makes the blocker explicit; do not fill unknowns with invented data. A repeated call with the same facts and input must produce byte-for-byte identical JSON: stable `item_id`, array order, and compact JSON are mandatory. Machine rules may be checked through materialized `scripts/work_item.py validate`, but this does not permit writing state or turn semantic assessment into a machine heuristic.
+A ready result is non-empty, at most 4000 characters, and has no blocking open
+questions. If material conditions do not fit, stop and propose splitting the
+request into several goals rather than truncating or hiding them. If a required
+fact is unknown, show it as an open question and an explicit stop condition; do
+not invent data. Equivalent facts and input must produce stable section and
+item ordering. Machine rules may be checked through materialized
+`scripts/work_item.py validate`, but this does not permit writing state or turn
+semantic assessment into a machine heuristic.

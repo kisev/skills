@@ -3,9 +3,12 @@
 [English](README.md) | [Русский](README.ru.md)
 
 Переносимый набор Agent Skills для инженерной работы с репозиториями,
-документацией, GitLab-процессами и OpenCode. Каждый каталог в `skills/` -
-самодостаточная единица установки: после установки skill не читает checkout и
-не зависит от runtime конкретного host.
+документацией, GitLab-процессами и OpenCode. Общие контракты языка ответа,
+полноты evidence, ошибок, вопросов, подтверждений, владения state и качества
+work-item находятся в canonical `shared/references/` и materialize-ятся в
+portable skills. Каждый каталог в `skills/` - самодостаточная единица
+установки: после установки skill не читает checkout и не зависит от runtime
+конкретного host.
 
 ## Быстрый старт
 
@@ -107,10 +110,10 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 | `askme`             | Последовательное интервью для уточнения задачи или решения.               |
 | `ast-grep`          | Структурный поиск и подтверждённый AST rewrite через внешний CLI.         |
 | `commit-msg`        | Одно английское Conventional Commit сообщение по локальным изменениям.    |
-| `doit`              | Выполнение инженерной задачи с preview, проверками и отдельным commit.    |
+| `doit`              | Выполнение инженерной задачи только по утверждённому plan и write set.    |
 | `docs-prepare`      | Подготовка одного пользовательского документа Diataxis.                   |
 | `docs-review`       | Read-only проверка пользовательской документации.                         |
-| `humanize`          | Естественный русский текст без канцелярита.                               |
+| `humanize`          | Естественный текст на языке запроса с сохранением технических фрагментов. |
 | `spec-manage`       | Четыре режима работы с canonical `specs/`: init, onboard, update и audit. |
 | `rtk`               | Выборочное применение внешнего RTK для шумного вывода.                    |
 | `skill-improve`     | Цикл проверки и улучшения одного Agent Skill.                             |
@@ -127,7 +130,7 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 | `team-sprint-start` | Одно явное действие командного цикла по явному context.                   |
 | `code-explain`      | Read-only карта чтения current diff, range или diff-file.                 |
 | `attempt`           | Чтение и безопасная отмена Background Attempts OpenCode.                  |
-| `goal`              | Read-only формулировка проверяемой цели в `work-item/v1`.                 |
+| `goal`              | Read-only structured Markdown-цель до 4000 символов из `work-item/v1`.    |
 | `schedule`          | Явные disabled-by-default definitions для scheduler OpenCode.             |
 | `usage`             | Read-only ledger токенов и стоимости OpenCode.                            |
 | `overview`          | Read-only сводка durable OpenCode state.                                  |
@@ -277,7 +280,9 @@ Uninstaller удаляет только неизменённые managed files. 
 
 ## Безопасность и ограничения
 
-- Skills с записью сначала показывают preview и требуют явное подтверждение.
+- Skills с записью сначала показывают preview и требуют явное подтверждение по
+  независимым рискам и одинаковой mutation boundary. External publication,
+  history rewrite и destructive cleanup подтверждаются отдельно.
 - Installer не имеет lifecycle hooks, не выполняет автоматическую установку skills
   и не изменяет пользовательскую конфигурацию OpenCode. Он не перезаписывает
   неизвестные или изменённые файлы.

@@ -1,8 +1,8 @@
 # Documentation Review Workflow
 
-The input is a path or scope. Without one, establish the boundary through the host interaction mechanism or chat. If it is in `specs/`, stop and offer `spec-manage` in `spec-audit` mode. Do not change the repository, documents, external systems, or create artifacts; report findings only in chat and never publish them.
+The input is a path or scope. Without one, review the complete user-facing documentation set. An explicit path or section narrows the scope. If it is in `specs/`, stop and offer `spec-manage` in `spec-audit` mode. Do not change the repository, documents, external systems, or create artifacts; report findings only in chat and never publish them.
 
-Identify the target reader and purpose in scope. Check claims, commands, APIs, configuration, and examples against source, configuration, and repository instructions. Check prerequisites, sequence, error consequences, compatibility, stale links, and terminology. Report only confirmed findings, each with severity, exact evidence, consequence, and minimal correction. If none exist, say so briefly and list unverified boundaries.
+Identify the target reader and purpose in scope. Check claims, commands, APIs, configuration, and examples against source, tests, canonical specifications, and repository instructions. Check prerequisites, sequence, error consequences, compatibility, stale links, and terminology. Report only confirmed findings, each with severity, exact evidence, consequence, and minimal correction. If none exist, say so briefly and list unverified boundaries.
 
 ## Boundary
 

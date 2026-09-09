@@ -3,7 +3,10 @@
 [Русский](README.ru.md)
 
 Portable Agent Skills for repository engineering, documentation, GitLab work,
-and OpenCode. Each `skills/` directory is independently installable.
+and OpenCode. Shared response-language, evidence, error, question,
+confirmation, ownership, and work-item contracts are canonical in
+`shared/references/` and materialized into portable skills. Each `skills/`
+directory is independently installable.
 
 ## Quick Start
 
@@ -65,8 +68,9 @@ materialization step change declared generated files; checks do not.
 `skills/<name>/` directories, then creates ignored `.build/skills`, the private
 build-only `@kisev/skills` archive/index, and package staging. `task generate:check`
 checks source parity and artifact reproducibility without writing
-the worktree. `python3 scripts/build_skills.py --generate` is the explicit source
-materialization command.
+the worktree. `python3 scripts/build_skills.py --generate` is the explicit
+committed-copy materialization command; do not edit generated shared references
+by hand.
 
 Install Git hooks with:
 
@@ -213,8 +217,10 @@ skills by name is safer for this set.
 
 ## Security and Limits
 
-Skills that write show a preview and require confirmation. Do not provide
-credentials in prompts, argv, or logs. See [SECURITY.md](SECURITY.md).
+Skills that write show a preview and require confirmation. Confirmations are
+grouped by independent risk and exact mutation boundary; external publication,
+history rewrite, and destructive cleanup always need separate approvals. Do not
+provide credentials in prompts, argv, or logs. See [SECURITY.md](SECURITY.md).
 `task-triage`, `task-review`, and `task-prepare` are GitLab workflows with their
 own explicitly scoped contracts.
 

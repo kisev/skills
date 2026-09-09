@@ -19,15 +19,20 @@ error. `--capabilities` has no side effects.
 
 ## Cycle
 
-1. Run `check` for one target and read the JSON.
+1. Run `check` for one target and read the JSON. The absence of real successful
+   or unsuccessful sessions is allowed and must not block the check.
 2. Before the first write, show the critical and major findings, exact paths, and
    planned diff; obtain confirmation.
 3. Fix the causes of critical and major findings without rewriting the skill for
-   style.
+   style. When real session examples are available, collect only the minimum
+   needed evidence and anonymize prompts, paths, identifiers, credentials, and
+   logs before using them.
 4. Assess every minor finding separately and skip a false positive with a brief
    reason.
 5. Repeat `check` until exit code `0`. After edits, run the available checks for
-   the target skill.
+   the target skill. Add a durable example to the eval corpus only as a separate,
+   explicitly reviewed and verified change; never make the corpus depend on
+   session availability.
 6. Only with a clean result, finish with a separate line
    `<skill-improvement-complete>`. Before it, list deliberately skipped minor
    findings with their reasons.
