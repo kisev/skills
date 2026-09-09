@@ -185,7 +185,7 @@ tasks:
       - task: typecheck:python
       - task: test:python
       - task: locale:check
-      - task: generate:shared:check
+      - task: generate:source:check
       - task: skills:validate
       - task: eval:check
       - task: package:check
