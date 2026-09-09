@@ -43,7 +43,7 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
             assert "SKILL.md" in document.getnames()
             names = set(document.getnames())
             assert not any(part in {"ru", "en"} for name in names for part in name.split("/"))
-            if entry["name"] == "project-spec":
+            if entry["name"] == "spec-manage":
                 assert not any(name.startswith("templates/ru/") for name in names)
             if entry["name"] == "mattermost":
                 assert "scripts/mattermost.py" in document.getnames()
@@ -137,10 +137,9 @@ def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -
 def test_direct_git_install_is_self_contained_for_both_hosts(tmp_path: Path) -> None:
     source = tmp_path / "source"
     run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(source)], check=True)
-    inventory = json.loads(
-        (source / "packages/opencode/assets/migration-inventory.json").read_text(encoding="utf-8")
+    skills = sorted(
+        path.name for path in (source / "skills").iterdir() if (path / "SKILL.md").is_file()
     )
-    skills = sorted(inventory["active_portable_skills"])
     assert len(skills) == 29
     assert not (source / ".build").exists()
 
