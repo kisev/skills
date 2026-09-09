@@ -18,7 +18,7 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 
 Для одного skill укажите `--skill <name>`. Для воспроизводимой установки можно
 передать URL GitHub tag, например
-`https://github.com/kisev/skills/tree/v1.1.1`. Package никогда не устанавливает
+`https://github.com/kisev/skills/tree/v2.0.0`. Package никогда не устанавливает
 и не обновляет skills. Если команда не нашла skill, она сообщает точную команду
 `npx skills add` для его установки.
 
@@ -27,7 +27,7 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 Установите npm package там, где OpenCode сможет разрешить plugin:
 
 ```shell
-npm install @kisev/skills-opencode@1.1.1
+npm install @kisev/skills-opencode@2.0.0
 ```
 
 Сначала покажите план installer. По умолчанию CLI выводит короткую сводку:

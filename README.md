@@ -20,7 +20,7 @@ The pinned executable is `npx --yes skills@1.5.23`.
 Use a GitHub tag for a reproducible installation:
 
 ```shell
-npx --yes skills add https://github.com/kisev/skills/tree/v1.2.0 \
+npx --yes skills add https://github.com/kisev/skills/tree/v2.0.0 \
   --agent opencode --skill '*' --copy --yes
 ```
 
@@ -28,7 +28,7 @@ Install one skill by replacing `--skill '*'`:
 
 ```shell
 npx --yes skills add kisev/skills --agent opencode \
-  --skill project-spec --copy --yes
+  --skill spec-manage --copy --yes
 ```
 
 `npx skills` installs to project scope by default; add `--global` when skills
@@ -130,7 +130,7 @@ Git source above, not from that package.
 Install the optional integration separately:
 
 ```shell
-npm install @kisev/skills-opencode@1.2.0
+npm install @kisev/skills-opencode@2.0.0
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -166,9 +166,8 @@ npm exec -- skills-opencode critic add security --scope global \
 ```
 
 Every mutation first creates a short plan and private one-time receipt with a
-TTL. Apply it only with `--confirm <digest>`. `/agent-list`,
-`/agent-model-set`, `/critic-add`, `/critic-remove`, and the `agent_profiles`
-package tool are optional thin adapters; direct CLI is the recommended interface.
+TTL. Apply it only with `--confirm <digest>`. `/agent-profiles` is the only
+slash adapter for the `agent_profiles` package tool; direct CLI is also available.
 
 ## Compatibility and Requirements
 
@@ -206,7 +205,7 @@ npx --yes skills update --yes
 ```
 
 ```shell
-npx --yes skills remove project-spec --agent opencode --yes
+npx --yes skills remove spec-manage --agent opencode --yes
 ```
 
 `npx skills remove --all` affects every skill in the selected scope; removing

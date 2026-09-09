@@ -48,7 +48,7 @@ type InventoryRecord = {
 };
 
 type Inventory = {
-  schema_version: 1;
+  schema_version: 2;
   inventory_version: string;
   active_portable_skills: string[];
   records: InventoryRecord[];
@@ -57,6 +57,7 @@ type Inventory = {
 export type ReconcileStatus =
   | "current"
   | "retired"
+  | "archive-pending"
   | "renamed"
   | "modified-managed"
   | "user-owned"
@@ -80,6 +81,7 @@ export type ReconcilePlan = {
   inventory_version: string;
   current: ReconcileItem[];
   retired: ReconcileItem[];
+  "archive-pending": ReconcileItem[];
   renamed: ReconcileItem[];
   modified_managed: ReconcileItem[];
   user_owned: ReconcileItem[];
@@ -98,7 +100,7 @@ export class ReconcileError extends LifecycleError {}
 function loadInventory(): Inventory {
   const value = JSON.parse(readFileSync(inventoryPath, "utf8")) as Partial<Inventory>;
   if (
-    value.schema_version !== 1 ||
+    value.schema_version !== 2 ||
     typeof value.inventory_version !== "string" ||
     !Array.isArray(value.active_portable_skills) ||
     !Array.isArray(value.records)
@@ -283,6 +285,7 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
   const groups: Record<ReconcileStatus, ReconcileItem[]> = {
     current: [],
     retired: [],
+    "archive-pending": [],
     renamed: [],
     "modified-managed": [],
     "user-owned": [],
@@ -363,30 +366,25 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
         groups,
         item(
           relativePath(root, target),
-          record.replacement ? "renamed" : "retired",
-          "exact historical SHA-256 proves retired public ownership",
+          "archive-pending",
+          record.replacement
+            ? "exact historical SHA-256 proves renamed ownership; archive lifecycle is pending"
+            : "exact historical SHA-256 proves retired public ownership; archive lifecycle is pending",
           value.content,
           record.replacement,
         ),
       );
-      mutations.push({
-        path: relativePath(root, target),
-        operation: "remove",
-        expected: { sha256: sha256(value.content) },
-      });
-      if (manifestRecord) delete manifestFiles[path];
     } else if (!value && manifestRecord && record.sha256 === manifestRecord.sha256) {
       add(
         groups,
         item(
           relativePath(root, target),
-          record.replacement ? "renamed" : "retired",
-          "stale exact ownership record without an asset",
+          "archive-pending",
+          "stale exact ownership record; archive lifecycle is pending",
           undefined,
           record.replacement,
         ),
       );
-      delete manifestFiles[path];
     } else if (value) {
       add(
         groups,
@@ -653,16 +651,11 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
           groups,
           item(
             target,
-            "retired",
-            "exact historical SHA-256 proves retired portable ownership",
+            "archive-pending",
+            "exact historical SHA-256 proves retired portable ownership; archive lifecycle is pending",
             file.content,
           ),
         );
-        mutations.push({
-          path: target,
-          operation: "remove",
-          expected: { sha256: sha256(file.content!) },
-        });
       }
     } else if (files.length) {
       for (const file of files)
@@ -744,6 +737,9 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     inventory_version: inventory.inventory_version,
     current: groups.current.sort((left, right) => left.path.localeCompare(right.path)),
     retired: groups.retired.sort((left, right) => left.path.localeCompare(right.path)),
+    "archive-pending": groups["archive-pending"].sort((left, right) =>
+      left.path.localeCompare(right.path),
+    ),
     renamed: groups.renamed.sort((left, right) => left.path.localeCompare(right.path)),
     modified_managed: groups["modified-managed"].sort((left, right) =>
       left.path.localeCompare(right.path),
@@ -820,12 +816,21 @@ export async function applyReconcile(
         throw new ReconcileError("stale_plan", "Reconcile inventory changed after preview");
       if (built.plan.conflicts.length || built.plan.modified_managed.length)
         throw new ReconcileError("conflict", "Reconcile contains unsafe ownership conflicts");
+      if (built.plan["archive-pending"].length)
+        throw new ReconcileError(
+          "archive_pending",
+          "Irreversible cleanup is blocked until archive lifecycle stage",
+        );
       await applyTransaction(root, stateRoot, built.mutations, {
         ...options,
         validateFinal: async () => {
           await options.validateFinal?.();
           const final = await build(scope, cwd, home);
-          if (final.plan.retired.length || final.plan.operations.length)
+          if (
+            final.plan.retired.length ||
+            final.plan["archive-pending"].length ||
+            final.plan.operations.length
+          )
             throw new ReconcileError(
               "final_validation_failed",
               "Retired assets remain after reconcile",

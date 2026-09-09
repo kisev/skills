@@ -21,7 +21,7 @@ npx --yes skills@1.5.23 add kisev/skills --agent opencode --skill '*' --copy --y
 Для воспроизводимой установки актуального релиза используйте GitHub tag:
 
 ```shell
-npx --yes skills add https://github.com/kisev/skills/tree/v1.2.0 \
+npx --yes skills add https://github.com/kisev/skills/tree/v2.0.0 \
   --agent opencode --skill '*' --copy --yes
 ```
 
@@ -29,7 +29,7 @@ npx --yes skills add https://github.com/kisev/skills/tree/v1.2.0 \
 
 ```shell
 npx --yes skills add kisev/skills --agent opencode \
-  --skill project-spec --copy --yes
+  --skill spec-manage --copy --yes
 ```
 
 `npx skills` по умолчанию устанавливает в project scope. Добавьте `--global`,
@@ -101,37 +101,37 @@ uv run --locked python scripts/eval_runner.py --trusted-live \
 
 ## Каталог skills
 
-| Skill             | Назначение                                                                |
-| ----------------- | ------------------------------------------------------------------------- |
-| `agents-md`       | Создание и проверка инструкций `AGENTS.md` по фактам репозитория.         |
-| `askme`           | Последовательное интервью для уточнения задачи или решения.               |
-| `ast-grep`        | Структурный поиск и подтверждённый AST rewrite через внешний CLI.         |
-| `commit-msg`      | Одно английское Conventional Commit сообщение по локальным изменениям.    |
-| `doit`            | Выполнение инженерной задачи с preview, проверками и отдельным commit.    |
-| `docs-prepare`    | Подготовка одного пользовательского документа Diataxis.                   |
-| `docs-review`     | Read-only проверка пользовательской документации.                         |
-| `humanize`        | Естественный русский текст без канцелярита.                               |
-| `project-spec`    | Четыре режима работы с canonical `specs/`: init, onboard, update и audit. |
-| `rtk`             | Выборочное применение внешнего RTK для шумного вывода.                    |
-| `skill-improver`  | Цикл проверки и улучшения одного Agent Skill.                             |
-| `stopit`          | Обезличенная передача контекста во временный файл.                        |
-| `summary`         | Точный структурированный итог транскрипции, заметок или исследования.     |
-| `task-triage`     | Read-only содержательный разбор конкретных GitLab-задач.                  |
-| `task-review`     | Проверка оформления и служебных полей GitLab-задач и MR.                  |
-| `task-prepare`    | Подготовка одной задачи или явного пакета задач без публикации.           |
-| `mr-prepare`      | Подготовка обычного GitLab MR по diff, коммитам и CI.                     |
-| `code-review`     | Глубокое ревью GitLab MR или локального WIP.                              |
-| `release-prepare` | Подготовка релизного MR, inventory и плана публикации.                    |
-| `release-review`  | Read-only проверка готовности релизного MR.                               |
-| `mattermost`      | Строго ограниченное чтение Mattermost с кэшем по identity.                |
-| `team-workflow`   | Одно явное действие командного цикла по явному context.                   |
-| `walkthrough`     | Read-only карта чтения current diff, range или diff-file.                 |
-| `attempt`         | Чтение и безопасная отмена Background Attempts OpenCode.                  |
-| `goal`            | Read-only формулировка проверяемой цели в `work-item/v1`.                 |
-| `schedule`        | Явные disabled-by-default definitions для scheduler OpenCode.             |
-| `usage`           | Read-only ledger токенов и стоимости OpenCode.                            |
-| `overview`        | Read-only сводка durable OpenCode state.                                  |
-| `lsp-report`      | Применимость LSP OpenCode без запуска и установки.                        |
+| Skill               | Назначение                                                                |
+| ------------------- | ------------------------------------------------------------------------- |
+| `agents-md`         | Создание и проверка инструкций `AGENTS.md` по фактам репозитория.         |
+| `askme`             | Последовательное интервью для уточнения задачи или решения.               |
+| `ast-grep`          | Структурный поиск и подтверждённый AST rewrite через внешний CLI.         |
+| `commit-msg`        | Одно английское Conventional Commit сообщение по локальным изменениям.    |
+| `doit`              | Выполнение инженерной задачи с preview, проверками и отдельным commit.    |
+| `docs-prepare`      | Подготовка одного пользовательского документа Diataxis.                   |
+| `docs-review`       | Read-only проверка пользовательской документации.                         |
+| `humanize`          | Естественный русский текст без канцелярита.                               |
+| `spec-manage`       | Четыре режима работы с canonical `specs/`: init, onboard, update и audit. |
+| `rtk`               | Выборочное применение внешнего RTK для шумного вывода.                    |
+| `skill-improve`     | Цикл проверки и улучшения одного Agent Skill.                             |
+| `stopit`            | Обезличенная передача контекста во временный файл.                        |
+| `summary`           | Точный структурированный итог транскрипции, заметок или исследования.     |
+| `task-triage`       | Read-only содержательный разбор конкретных GitLab-задач.                  |
+| `task-review`       | Проверка оформления и служебных полей GitLab-задач и MR.                  |
+| `task-prepare`      | Подготовка одной задачи или явного пакета задач без публикации.           |
+| `mr-prepare`        | Подготовка обычного GitLab MR по diff, коммитам и CI.                     |
+| `code-review`       | Глубокое ревью GitLab MR или локального WIP.                              |
+| `release-prepare`   | Подготовка релизного MR, inventory и плана публикации.                    |
+| `release-review`    | Read-only проверка готовности релизного MR.                               |
+| `mattermost`        | Строго ограниченное чтение Mattermost с кэшем по identity.                |
+| `team-sprint-start` | Одно явное действие командного цикла по явному context.                   |
+| `code-explain`      | Read-only карта чтения current diff, range или diff-file.                 |
+| `attempt`           | Чтение и безопасная отмена Background Attempts OpenCode.                  |
+| `goal`              | Read-only формулировка проверяемой цели в `work-item/v1`.                 |
+| `schedule`          | Явные disabled-by-default definitions для scheduler OpenCode.             |
+| `usage`             | Read-only ledger токенов и стоимости OpenCode.                            |
+| `overview`          | Read-only сводка durable OpenCode state.                                  |
+| `lsp-report`        | Применимость LSP OpenCode без запуска и установки.                        |
 
 `askme`, `task-prepare`, `task-review` и `goal` используют общий materialized
 контракт `work-item/v1`. Он не создаёт зависимость установленного skill от
@@ -145,8 +145,8 @@ ignored `.build/skills` и private build-only package `@kisev/skills`: well-know
 `skills-lock.json` с SHA-256 и отдельный self-contained `.tar.gz` для каждого
 skill. В каждом archive `SKILL.md` находится в корне. Index фиксирует source
 revision; будущая публикация будет доступна по
-`https://unpkg.com/@kisev/skills@<version>/`. Текущий released source остаётся
-tag `v1.2.0`; build не создаёт tag, npm release или GitHub Release.
+`https://unpkg.com/@kisev/skills@<version>/`. Этот structural migration не создаёт
+tag, npm release или GitHub Release.
 
 Подробная классификация режимов и границ записана в
 [migration inventory](docs/migration-inventory.md).
@@ -158,7 +158,7 @@ Portable skills и OpenCode integration устанавливаются неза�
 установите integration:
 
 ```shell
-npm install @kisev/skills-opencode@1.2.0
+npm install @kisev/skills-opencode@2.0.0
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -202,9 +202,9 @@ npm exec -- skills-opencode critic add security --scope global \
 
 Каждая mutation сначала создаёт короткий plan и private одноразовый receipt с
 TTL. Применить plan можно только командой с `--confirm <digest>`. Команды
-`/agent-list`, `/agent-model-set`, `/critic-add` и `/critic-remove` и package tool
-`agent_profiles` остаются опциональными thin adapters; рекомендуемый интерфейс -
-прямой CLI.
+`/agent-profiles` является единственным slash adapter для package tool
+`agent_profiles`; action остаётся аргументом package tool. Рекомендуемый интерфейс
+для package-domain операций - прямой CLI.
 
 ## Совместимость и требования
 
@@ -254,7 +254,7 @@ npx --yes skills update --yes
 подтвердите новый digest:
 
 ```shell
-npm install @kisev/skills-opencode@1.2.0
+npm install @kisev/skills-opencode@2.0.0
 npm exec -- skills-opencode install --scope global --dry-run
 npm exec -- skills-opencode install --scope global --confirm <digest>
 ```
@@ -262,7 +262,7 @@ npm exec -- skills-opencode install --scope global --confirm <digest>
 Удаление одного portable skill выполняется явно по имени:
 
 ```shell
-npx --yes skills remove project-spec --agent opencode --yes
+npx --yes skills remove spec-manage --agent opencode --yes
 ```
 
 Удаление OpenCode assets также начинается с dry-run:

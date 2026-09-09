@@ -6,20 +6,20 @@
   "surface": "command",
   "host": "opencode",
   "input": {
-    "prompt": "/route inspect assets",
+    "prompt": "Use package tool route to inspect assets without a slash command.",
     "fixture": {
-      "selected": ["command:route"]
+      "selected": ["package-tool:route"]
     }
   },
   "expected": {
-    "selected": ["command:route"],
+    "selected": ["package-tool:route"],
     "not_selected": ["plugin:background-attempts"]
   },
   "invariants": [
     {
-      "id": "route-command",
+      "id": "route-package-tool",
       "path": "packages/opencode/src/registry.ts",
-      "contains": "name: \"route\""
+      "contains": "packageTool"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "e29c87907debf2761ec20ca0f49d239def0f64b242d7b0b1047145a83257959a",
+  "digest": "27e2602cdfd19737244a8fe59622d535326afcfb22ccf4b4ae7ddfd8c2702721",
   "locale": "neutral",
   "pair_id": null
 }

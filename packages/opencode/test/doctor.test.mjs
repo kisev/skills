@@ -269,7 +269,7 @@ test("built package and built portable catalogs are byte-identical to shared cat
     canonical,
   );
   assert.deepEqual(
-    readFileSync(join(ROOT, ".build/skills/overview/scripts/portable_runtime/lsp-catalog.json")),
+    readFileSync(join(ROOT, ".build/skills/lsp-report/scripts/portable_runtime/lsp-catalog.json")),
     canonical,
   );
 });

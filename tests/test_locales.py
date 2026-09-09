@@ -16,7 +16,7 @@ def test_locale_manifest_validates_english_default_pairs() -> None:
 
 
 def test_project_spec_russian_templates_match_all_default_templates() -> None:
-    templates = ROOT / "skills/project-spec/templates"
+    templates = ROOT / "skills/spec-manage/templates"
     default_templates = [path for path in templates.rglob("*.md") if "/ru/" not in path.as_posix()]
     assert default_templates
     for default in default_templates:

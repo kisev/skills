@@ -900,8 +900,8 @@ test("CLI defaults to a concise human plan and table", async () => {
         `Install @kisev/skills-opencode ${PACKAGE_VERSION} (project)\n`,
       ),
     );
-    assert.match(previewResult.stdout, /^  Commands: create 52$/m);
-    assert.match(previewResult.stdout, /^  Commands\/create: .+ \(\+44 more\)$/m);
+    assert.match(previewResult.stdout, /^  Commands: create 33$/m);
+    assert.match(previewResult.stdout, /^  Commands\/create: .+ \(\+25 more\)$/m);
     assert.match(previewResult.stdout, /^Conflicts: none$/m);
     assert.match(previewResult.stdout, /^Digest: [a-f0-9]{64}$/m);
     assert.match(previewResult.stdout, /^Apply:\n  npm exec -- skills-opencode install /m);

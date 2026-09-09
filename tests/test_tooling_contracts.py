@@ -104,7 +104,7 @@ def test_precommit_skips_package_for_docs_only_change() -> None:
 
 
 def test_precommit_matches_root_level_and_nested_files() -> None:
-    groups = _load_precommit().classify(["top.json", "skills/usage/scripts/usage.py"])
+    groups = _load_precommit().classify(["top.json", "skills/lsp-report/scripts/lsp_report.py"])
     assert groups["data"] == ["top.json"]
-    assert groups["python"] == ["skills/usage/scripts/usage.py"]
-    assert groups["skills"] == ["skills/usage/scripts/usage.py"]
+    assert groups["python"] == ["skills/lsp-report/scripts/lsp_report.py"]
+    assert groups["skills"] == ["skills/lsp-report/scripts/lsp_report.py"]

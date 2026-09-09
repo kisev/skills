@@ -52,10 +52,10 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "rolls back replaced files",
             "must not trigger installation",
         ),
-        "attempt": (
-            "`background_attempts` is the sole owner",
-            "expected_revision",
-            "unconfirmed abort do not delete state",
+        "spec-manage": (
+            "user must explicitly provide one mode",
+            "spec-update",
+            "mode is completely read-only",
         ),
         "commit-msg": ("git diff --cached", "exactly one line", "Do not run `git add`"),
         "docs-prepare": (
@@ -64,7 +64,7 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "never combine workflows",
         ),
         "docs-review": (
-            "project-spec` in `spec-audit` mode",
+            "spec-manage` in `spec-audit` mode",
             "only confirmed findings",
             "never publish them",
         ),
@@ -102,7 +102,7 @@ def test_skills_use_english_canonical_workflows_without_locale_references() -> N
 
     for path in (ROOT / "shared" / "references").rglob("*.md"):
         assert not cyrillic.search(path.read_text(encoding="utf-8")), path
-    for path in (ROOT / "skills" / "project-spec").glob("templates/**/*.md"):
+    for path in (ROOT / "skills" / "spec-manage").glob("templates/**/*.md"):
         if "/ru/" in path.as_posix():
             continue
         assert not cyrillic.search(path.read_text(encoding="utf-8")), path
@@ -115,7 +115,9 @@ def test_all_english_canonical_skill_material_is_cyrillic_free() -> None:
     ).stdout.splitlines()
     for relative in tracked:
         path = ROOT / relative
-        if "skills/project-spec/templates/ru/" in relative:
+        if not path.is_file():
+            continue
+        if "skills/spec-manage/templates/ru/" in relative:
             continue
         text = path.read_text(encoding="utf-8")
         if path.name == "SKILL.md":

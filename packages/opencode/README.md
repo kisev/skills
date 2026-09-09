@@ -19,14 +19,14 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 ```
 
 Use `--skill <name>` for one skill. `npx skills` accepts a reproducible tag URL,
-for example `https://github.com/kisev/skills/tree/v1.1.1`; the package never
+for example `https://github.com/kisev/skills/tree/v2.0.0`; the package never
 installs or updates skills and reports the exact `npx skills add` command when a
 skill is missing.
 
 ## Install Integration
 
 ```shell
-npm install @kisev/skills-opencode@1.1.1
+npm install @kisev/skills-opencode@2.0.0
 ```
 
 Preview before any write:

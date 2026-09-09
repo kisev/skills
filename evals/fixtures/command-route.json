@@ -1,1 +1,1 @@
-{ "selected": ["command:route"], "text": "/route inspect assets" }
+{ "selected": ["package-tool:route"], "text": "route inspect assets" }

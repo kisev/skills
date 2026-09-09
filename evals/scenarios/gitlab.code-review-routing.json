@@ -6,25 +6,25 @@
   "surface": "command",
   "host": "opencode",
   "input": {
-    "prompt": "Route /mr-review to remote MR and /code-review to local WIP.",
+    "prompt": "Use /code-review for either a remote MR or local WIP; the skill distinguishes the target.",
     "fixture": {
-      "selected": ["command:mr-review", "command:code-review", "skill:code-review"]
+      "selected": ["command:code-review", "skill:code-review"]
     }
   },
   "expected": {
-    "selected": ["command:mr-review", "command:code-review", "skill:code-review"],
+    "selected": ["command:code-review", "skill:code-review"],
     "not_selected": ["skill:task-review"]
   },
   "invariants": [
     {
       "id": "mr-route",
-      "path": "packages/opencode/src/registry.ts",
-      "contains": "mode: \"merge-request\""
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "remote-MR"
     },
     {
       "id": "local-route",
-      "path": "packages/opencode/src/registry.ts",
-      "contains": "mode: \"local-wip\""
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "local-WIP"
     }
   ],
   "sandbox": {
@@ -37,7 +37,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "d7a77f63641c5ff710211597ea32805a866c66b7fbee2a2c341a3cccb22a0e90",
+  "digest": "9ffdad6340b5307ceed8c08528c6004c01dd5b6cd8c89a1bf249ee4ff5bae2f5",
   "locale": "neutral",
   "pair_id": null
 }

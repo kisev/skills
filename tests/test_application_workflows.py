@@ -1484,7 +1484,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             source.write_text("first", encoding="utf-8")
             environment = {"XDG_STATE_HOME": str(root / "state")}
             preview = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-prepare",
                 "--target",
@@ -1502,7 +1502,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             self.assertTrue(Path(prepared["artifact_path"]).is_file())
             source.write_text("second", encoding="utf-8")
             stale = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-apply",
                 "--target",
@@ -1517,7 +1517,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             self.assertNotEqual(stale.returncode, 0)
             self.assertIn("digest", json.loads(stale.stdout)["error"]["message"])
             fresh = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-prepare",
                 "--target",
@@ -1533,7 +1533,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             tampered["payload"]["target"] = "other.txt"
             plan.write_text(json.dumps(tampered), encoding="utf-8")
             tampered_apply = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-apply",
                 "--target",
@@ -1547,7 +1547,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
             self.assertNotEqual(tampered_apply.returncode, 0)
             expired = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-prepare",
                 "--target",
@@ -1563,7 +1563,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             expired_document["expires_at"] = 0
             expired_plan.write_text(json.dumps(expired_document), encoding="utf-8")
             expired_apply = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-apply",
                 "--target",
@@ -1577,7 +1577,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
             self.assertNotEqual(expired_apply.returncode, 0)
             valid = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-prepare",
                 "--target",
@@ -1589,7 +1589,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
             valid_digest = json.loads(valid.stdout)["digest"]
             applied = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-apply",
                 "--target",
@@ -1607,7 +1607,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             self.assertTrue(Path(applied_payload["report_path"]).is_file())
             self.assertEqual(
                 self.run_script(
-                    "team-workflow",
+                    "team-sprint-start",
                     "team_workflow.py",
                     "artifact-apply",
                     "--target",
@@ -1622,7 +1622,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 2,
             )
             escaped = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-prepare",
                 "--target",
@@ -1637,7 +1637,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             linked = root / "linked.txt"
             linked.symlink_to(root.parent / "outside.txt")
             symlink = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "artifact-prepare",
                 "--target",
@@ -1656,7 +1656,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             context.write_text('{"goals": ["goal"]}', encoding="utf-8")
             state = root / "state"
             result = self.run_script(
-                "team-workflow",
+                "team-sprint-start",
                 "team_workflow.py",
                 "context-inspect",
                 "--input",
@@ -1673,7 +1673,7 @@ class MattermostAndTeamTests(unittest.TestCase):
     def test_collaboration_runners_report_invalid_syntax_as_json(self) -> None:
         for skill, runner in (
             ("mattermost", "mattermost.py"),
-            ("team-workflow", "team_workflow.py"),
+            ("team-sprint-start", "team_workflow.py"),
         ):
             with self.subTest(skill=skill):
                 result = self.run_script(skill, runner, "unknown-command")

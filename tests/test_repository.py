@@ -17,35 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 BUILT_SKILLS = ROOT / ".build" / "skills"
 SKILLS_BINARY = subprocess.check_output(["mise", "which", "skills"], cwd=ROOT, text=True).strip()
 PORTABLE_SKILLS = (
-    "agents-md",
-    "askme",
-    "ast-grep",
-    "commit-msg",
-    "doit",
-    "docs-prepare",
-    "docs-review",
-    "humanize",
-    "project-spec",
-    "rtk",
-    "skill-improver",
-    "stopit",
-    "summary",
-    "task-prepare",
-    "task-review",
-    "task-triage",
-    "team-workflow",
-    "walkthrough",
-    "mr-prepare",
-    "code-review",
-    "release-prepare",
-    "release-review",
-    "mattermost",
-    "attempt",
-    "goal",
-    "schedule",
-    "usage",
-    "overview",
-    "lsp-report",
+    "agents-md", "askme", "ast-grep", "code-explain", "code-review", "commit-msg",
+    "docs-prepare", "docs-review", "doit", "goal", "humanize", "lsp-report", "mattermost",
+    "mr-prepare", "release-prepare", "release-review", "rtk", "skill-improve",
+    "slides-prompts-prepare", "spec-manage", "stopit", "summary", "task-prepare",
+    "task-review", "task-triage", "team-retro", "team-roadmap", "team-sprint-close",
+    "team-sprint-start",
 )
 FORBIDDEN_PORTABLE_MARKERS = (
     "../..",
@@ -128,7 +105,7 @@ WORKFLOW_CONTRACTS = {
         "do not modify the repository, documents, external systems",
         "report only confirmed findings",
     ),
-    "project-spec": (
+    "spec-manage": (
         "user must explicitly provide one mode",
         "`spec-init`",
         "`spec-onboard`",
@@ -154,7 +131,7 @@ WORKFLOW_CONTRACTS = {
         "do not simulate self-review",
         "at most 3000 characters",
     ),
-    "walkthrough": (
+    "code-explain": (
         "is not a review",
         "coverage.complete=false",
         "reading map, not an\nevaluation of change quality",
@@ -164,7 +141,7 @@ WORKFLOW_CONTRACTS = {
         "--apply --confirm <digest>",
         "must not trigger installation",
     ),
-    "skill-improver": (
+    "skill-improve": (
         "exactly one existing directory",
         "<skill-improvement-complete>",
         "not commands, plugins, agents, or tools",
@@ -179,8 +156,8 @@ CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 RUNNERS = {
     "ast-grep": "scripts/ast_grep.py",
     "rtk": "scripts/rtk.py",
-    "skill-improver": "scripts/skill_improver.py",
-    "walkthrough": "scripts/walkthrough.py",
+    "skill-improve": "scripts/skill_improver.py",
+    "code-explain": "scripts/walkthrough.py",
     "task-triage": "scripts/triage_task.py",
     "task-review": "scripts/review_task.py",
     "task-prepare": "scripts/prepare_task.py",
@@ -189,10 +166,11 @@ RUNNERS = {
     "release-prepare": "scripts/prepare_release.py",
     "release-review": "scripts/review_release.py",
     "mattermost": "scripts/mattermost.py",
-    "team-workflow": "scripts/team_workflow.py",
-    "schedule": "scripts/schedule.py",
-    "usage": "scripts/usage.py",
-    "overview": "scripts/overview.py",
+    "team-sprint-start": "scripts/team_workflow.py",
+    "team-sprint-close": "scripts/team_workflow.py",
+    "team-retro": "scripts/team_workflow.py",
+    "team-roadmap": "scripts/team_workflow.py",
+    "slides-prompts-prepare": "scripts/team_workflow.py",
     "lsp-report": "scripts/lsp_report.py",
 }
 
@@ -229,11 +207,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(lines[1], f"name: {name}")
                 self.assertIn("license: MIT", lines)
                 self.assertIn('  author: "Kirill Sevriugin"', lines)
-                self.assertIn('  version: "1.1.1"', lines)
+                self.assertIn('  version: "2.0.0"', lines)
                 metadata_start = lines.index("metadata:") + 1
                 self.assertEqual(
                     lines[metadata_start:end],
-                    ['  author: "Kirill Sevriugin"', '  version: "1.1.1"'],
+                    ['  author: "Kirill Sevriugin"', '  version: "2.0.0"'],
                 )
 
     def test_portable_workflows_preserve_source_contracts(self) -> None:
@@ -252,7 +230,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         resources = {
             "askme": ("references/question-guidelines.md",),
             "agents-md": ("references/agents-md-guidelines.md",),
-            "project-spec": (
+            "spec-manage": (
                 *PROJECT_REFERENCES,
                 "templates/adr.md",
                 *SPEC_TEMPLATE_READMES,
@@ -266,13 +244,13 @@ class PortableSkillValidationTests(unittest.TestCase):
                     if relative.startswith("references/"):
                         workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
                         self.assertIn(relative, workflow)
-            if name == "project-spec":
+            if name == "spec-manage":
                 workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
                 self.assertIn("references/requirements.md", workflow)
 
     def test_interaction_contract_is_materialized_for_affected_skills(self) -> None:
         names = (
-            "project-spec", "docs-prepare", "doit", "team-workflow", "task-triage",
+            "spec-manage", "docs-prepare", "doit", "team-sprint-start", "task-triage",
             "task-review", "task-prepare", "mr-prepare", "code-review",
             "release-prepare", "release-review",
         )
@@ -297,7 +275,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 text = (skill / "SKILL.md").read_text(encoding="utf-8")
                 self.assertIn("references/workflow.md", text)
                 self.assertIn("references/language-policy.md", text)
-        for name in ("project-spec", "docs-prepare", "doit"):
+        for name in ("spec-manage", "docs-prepare", "doit"):
             text = (BUILT_SKILLS / name / "references/workflow.md").read_text(encoding="utf-8")
             with self.subTest(skill=name, behavior="compact-preview"):
                 self.assertIn("TLDR", text)
@@ -319,7 +297,7 @@ class PortableSkillValidationTests(unittest.TestCase):
 
     def test_project_spec_has_complete_nineteen_file_contract(self) -> None:
         self.assertEqual(len(SPEC_TEMPLATE_READMES), 19)
-        skill = ROOT / "skills/project-spec"
+        skill = ROOT / "skills/spec-manage"
         self.assertTrue((skill / "templates/adr.md").is_file())
         self.assertTrue((skill / "templates/ru/adr.md").is_file())
         for relative in SPEC_TEMPLATE_READMES:
@@ -327,14 +305,14 @@ class PortableSkillValidationTests(unittest.TestCase):
             self.assertTrue((skill / "templates/ru" / relative.removeprefix("templates/")).is_file())
 
     def test_project_spec_build_excludes_russian_locale_artifacts(self) -> None:
-        skill = BUILT_SKILLS / "project-spec"
+        skill = BUILT_SKILLS / "spec-manage"
         self.assertFalse((skill / "references/ru").exists())
         self.assertFalse((skill / "references/en").exists())
         self.assertFalse((skill / "templates/ru").exists())
         self.assertFalse((skill / "templates/en").exists())
 
     def test_project_spec_resources_preserve_semantic_guidance(self) -> None:
-        skill = ROOT / "skills/project-spec"
+        skill = ROOT / "skills/spec-manage"
         for relative, contract in PROJECT_REFERENCE_CONTRACTS.items():
             with self.subTest(resource=relative, contract=contract):
                 self.assertIn(
@@ -403,7 +381,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             if entry["source"].startswith("references/python_runtime/")
         ]
         destinations = {entry["destination"] for entry in runtime_entries}
-        for name in ("schedule", "usage", "overview", "lsp-report"):
+        for name in ("ast-grep", "rtk", "skill-improve", "code-explain", "lsp-report"):
             with self.subTest(skill=name):
                 self.assertIn(f"{name}/scripts/portable_runtime/capabilities.py", destinations)
                 self.assertIn(f"{name}/scripts/portable_runtime/contract.py", destinations)
@@ -414,7 +392,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
-        opencode_skills = {"attempt", "schedule", "usage", "overview", "lsp-report"}
+        opencode_skills = {"lsp-report"}
         for path in BUILT_SKILLS.rglob("*"):
             if (
                 path.is_file()
@@ -763,7 +741,7 @@ class PortableRunnerTests(unittest.TestCase):
                 '---\nname: demo\ndescription: Демонстрационный Agent Skill.\nlicense: MIT\nmetadata:\n  author: "Test"\n  version: "1.0.0"\n---\n\n# Demo\n',
                 encoding="utf-8",
             )
-            valid = self.run_runner("skill-improver", "check", "--path", str(target))
+            valid = self.run_runner("skill-improve", "check", "--path", str(target))
             self.assertEqual(valid.returncode, 0, valid.stderr)
             self.assertEqual(json.loads(valid.stdout)["issues"], [])
             (target / "SKILL.md").write_text(
@@ -772,14 +750,14 @@ class PortableRunnerTests(unittest.TestCase):
                 .replace("license: MIT", "custom.entrypoint: path:scripts/missing.py"),
                 encoding="utf-8",
             )
-            rejected = self.run_runner("skill-improver", "check", "--path", str(target))
+            rejected = self.run_runner("skill-improve", "check", "--path", str(target))
             self.assertEqual(rejected.returncode, 1)
             self.assertIn(
                 "frontmatter-unsupported-field",
                 {issue["rule"] for issue in json.loads(rejected.stdout)["issues"]},
             )
 
-    def test_walkthrough_current_range_diff_file_and_chunk_coverage(self) -> None:
+    def test_code_explain_current_range_diff_file_and_chunk_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
             for arguments in (
@@ -823,7 +801,7 @@ class PortableRunnerTests(unittest.TestCase):
             )
             (repository / "notes.txt").write_text("untracked\n", encoding="utf-8")
             current = self.run_runner(
-                "walkthrough", "--repo-root", str(repository), "--chunk-size", "1"
+                "code-explain", "--repo-root", str(repository), "--chunk-size", "1"
             )
             self.assertEqual(current.returncode, 0, current.stderr)
             payload = json.loads(current.stdout)
@@ -834,7 +812,7 @@ class PortableRunnerTests(unittest.TestCase):
                 payload["coverage"]["files_total"],
             )
             partial = self.run_runner(
-                "walkthrough",
+                "code-explain",
                 "--repo-root",
                 str(repository),
                 "--chunk-size",
@@ -860,7 +838,7 @@ class PortableRunnerTests(unittest.TestCase):
                 capture_output=True,
             )
             ranged = self.run_runner(
-                "walkthrough", "--repo-root", str(repository), "--range", "base..HEAD"
+                "code-explain", "--repo-root", str(repository), "--range", "base..HEAD"
             )
             self.assertEqual(ranged.returncode, 0, ranged.stderr)
             artifact = repository / "review.diff"
@@ -875,7 +853,7 @@ class PortableRunnerTests(unittest.TestCase):
                 encoding="utf-8",
             )
             from_file = self.run_runner(
-                "walkthrough",
+                "code-explain",
                 "--repo-root",
                 str(repository),
                 "--diff-file",
@@ -899,50 +877,17 @@ class OpenCodePortableRuntimeTests(unittest.TestCase):
             check=False,
         )
 
-    def test_schedule_is_disabled_by_default_and_confirmation_is_single_use(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            project = Path(temporary) / "project"
-            project.mkdir()
-            state = Path(temporary) / "state"
-            environment = {"HOME": temporary, "XDG_STATE_HOME": str(state)}
-            preview = self.run_skill("schedule", "add", "--project", str(project), "--id", "morning", "--name", "Morning", "--schedule", "every: 1h", "--agent", "worker", "--model", "model", "--prompt", "inspect", environment=environment)
-            self.assertEqual(preview.returncode, 0, preview.stderr)
-            token = json.loads(preview.stdout)["confirmation_request"]["id"]
-            applied = self.run_skill("schedule", "add", "--project", str(project), "--id", "morning", "--name", "Morning", "--schedule", "every: 1h", "--agent", "worker", "--model", "model", "--prompt", "inspect", "--confirmation-id", token, environment=environment)
-            self.assertEqual(applied.returncode, 0, applied.stderr)
-            self.assertFalse(json.loads(applied.stdout)["definition"]["enabled"])
-            repeat = self.run_skill("schedule", "add", "--project", str(project), "--id", "morning", "--name", "Morning", "--schedule", "every: 1h", "--agent", "worker", "--model", "model", "--prompt", "inspect", "--confirmation-id", token, environment=environment)
-            self.assertEqual(repeat.returncode, 2)
-
     def test_read_only_reports_do_not_create_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             project = Path(temporary) / "project"
             project.mkdir()
             state = Path(temporary) / "state"
             environment = {"HOME": temporary, "XDG_STATE_HOME": str(state), "XDG_CONFIG_HOME": str(Path(temporary) / "config")}
-            for skill, arguments in (("usage", ("--project", str(project), "--format", "json")), ("overview", ("--project", str(project), "--format", "json")), ("lsp-report", ("--project", str(project), "--format", "json"))):
+            for skill, arguments in (("lsp-report", ("--project", str(project), "--format", "json")),):
                 result = self.run_skill(skill, *arguments, environment=environment)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 json.loads(result.stdout)
-                if skill in {"usage", "overview"}:
-                    self.assertNotIn("goal", result.stdout)
-                    self.assertNotIn("active_goals", result.stdout)
             self.assertFalse(state.exists())
-
-    def test_historical_goal_state_is_not_current_overview_or_usage_data(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            project = Path(temporary) / "project"
-            project.mkdir()
-            state = Path(temporary) / "state/opencode/skills/goal"
-            state.mkdir(parents=True)
-            (state / "historical.json").write_text(json.dumps({"schema_version": 1, "goal_id": "historical", "status": "running", "project_root": str(project)}), encoding="utf-8")
-            environment = {"HOME": temporary, "XDG_STATE_HOME": str(Path(temporary) / "state"), "XDG_CONFIG_HOME": str(Path(temporary) / "config")}
-            for skill, arguments in (("usage", ("--project", str(project), "--format", "json")), ("overview", ("--project", str(project), "--format", "json"))):
-                result = self.run_skill(skill, *arguments, environment=environment)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertNotIn("historical", result.stdout)
-                self.assertNotIn("active_goals", result.stdout)
-            self.assertTrue(state.joinpath("historical.json").is_file())
 
 
 if __name__ == "__main__":
