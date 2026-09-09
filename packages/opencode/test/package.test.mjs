@@ -407,14 +407,17 @@ test("upgrade retires unchanged goal lifecycle assets and preserves modified one
     }
     await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
     const removal = await preview("install", "project", project, home);
-    for (const relativePath of Object.keys(retired))
-      assert.equal(
-        removal.operations.find((item) => item.path === relativePath)?.operation,
-        "remove",
-      );
+    assert.equal(
+      removal.operations.find((item) => item.path === "commands/goal-start.md")?.operation,
+      "archive-pending",
+    );
+    assert.equal(
+      removal.operations.find((item) => item.path === "plugins/goal-loop.js")?.operation,
+      "remove",
+    );
     await apply("install", "project", removal.digest, project, home);
-    for (const relativePath of Object.keys(retired))
-      await assert.rejects(lstat(join(root, relativePath)), { code: "ENOENT" });
+    assert.equal(await readFile(join(root, "commands/goal-start.md"), "utf8"), retired["commands/goal-start.md"]);
+    await assert.rejects(lstat(join(root, "plugins/goal-loop.js")), { code: "ENOENT" });
 
     const modifiedPath = "commands/goal-prepare.md";
     const original = "legacy managed command\n";

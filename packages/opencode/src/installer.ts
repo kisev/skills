@@ -37,7 +37,7 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsRoot = resolve(packageRoot, "dist", "assets");
 
 export type Action = "install" | "uninstall";
-export type Operation = "create" | "update" | "remove" | "unchanged" | "missing" | "conflict";
+export type Operation = "create" | "update" | "remove" | "unchanged" | "missing" | "conflict" | "archive-pending";
 export type PlanItem = { path: string; operation: Operation; reason?: string; sha256?: string };
 export type Plan = {
   schema_version: 1;
@@ -59,6 +59,13 @@ type BuiltInstallerPlan = {
   expectedManifest?: Buffer;
   profiles: Awaited<ReturnType<typeof buildAgentProfilePlan>>;
 };
+
+function retiredAssetPaths(): Set<string> {
+  const inventory = JSON.parse(readFileSync(resolve(assetsRoot, "migration-inventory.json"), "utf8")) as {
+    retired_command_hashes?: Record<string, string>;
+  };
+  return new Set(Object.keys(inventory.retired_command_hashes ?? {}));
+}
 
 export class InstallerError extends LifecycleError {}
 
@@ -116,6 +123,7 @@ async function validateGenericDeployment(
   expectedAssets: readonly Asset[],
   plannedOperations: readonly PlanItem[],
   expectedManifest: Buffer | undefined,
+  retiredPaths: ReadonlySet<string>,
 ): Promise<void> {
   const owned = await currentManifest(root);
   if (
@@ -139,7 +147,10 @@ async function validateGenericDeployment(
   const expected = new Map(expectedAssets.map((asset) => [asset.relativePath, asset]));
   if (
     action === "install" &&
-    Object.keys(owned.manifest.files).sort().join(",") !== [...expected.keys()].sort().join(",")
+    Object.keys(owned.manifest.files)
+      .filter((path) => !retiredPaths.has(path))
+      .sort()
+      .join(",") !== [...expected.keys()].sort().join(",")
   ) {
     throw new InstallerError("final_validation_failed", "Generic ownership inventory is incomplete");
   }
@@ -160,12 +171,15 @@ async function validateGenericDeployment(
         `Generic managed file failed final validation: ${relativePath}`,
       );
     const asset = expected.get(relativePath);
-    if (action === "install" && (!asset || asset.sha256 !== record.sha256))
+    if (
+      action === "install" &&
+      ((!asset && !retiredPaths.has(relativePath)) || (asset && asset.sha256 !== record.sha256))
+    )
       throw new InstallerError(
         "final_validation_failed",
         `Generic manifest does not match package asset: ${relativePath}`,
       );
-    if (action === "install" && ((await lstat(target)).mode & 0o777) !== asset!.mode)
+    if (action === "install" && asset && ((await lstat(target)).mode & 0o777) !== asset.mode)
       throw new InstallerError(
         "final_validation_failed",
         `Generic managed file has an unexpected mode: ${relativePath}`,
@@ -180,6 +194,7 @@ function asLegacy(manifest: Manifest | undefined): LegacyInstallerManifest | und
 async function build(action: Action, scope: Scope, cwd = process.cwd(), home = homedir()): Promise<BuiltInstallerPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const [owned, bundled] = await Promise.all([currentManifest(root), assets()]);
+  const retiredPaths = retiredAssetPaths();
   const legacyRecord = owned.manifest && owned.raw && asLegacy(owned.manifest)
     ? { manifest: asLegacy(owned.manifest)!, manifestPath: destination(root, MANIFEST_NAME), manifestSha256: sha256(owned.raw) }
     : undefined;
@@ -213,11 +228,20 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
     const active = new Set(bundled.map((asset) => asset.relativePath));
     for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
       if (active.has(relativePath) || profiles.legacyTransferred.includes(relativePath)) continue;
+      const current = await readRegular(destination(root, relativePath));
+      if (retiredPaths.has(relativePath)) {
+        desiredFiles[relativePath] = record;
+        if (current && sha256(current) !== record.sha256) {
+          operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+        } else {
+          operations.push({ path: relativePath, operation: "archive-pending", reason: "archive lifecycle is pending", sha256: record.sha256 });
+        }
+        continue;
+      }
       if (relativePath.startsWith("agents/")) {
         operations.push({ path: relativePath, operation: "conflict", reason: "v1.0.0_agent_ownership_mismatch" });
         continue;
       }
-      const current = await readRegular(destination(root, relativePath));
       if (!current) operations.push({ path: relativePath, operation: "missing" });
       else if (sha256(current) === record.sha256) {
         operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
@@ -227,7 +251,14 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
   } else {
     for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
       const current = await readRegular(destination(root, relativePath));
-      if (!current) operations.push({ path: relativePath, operation: "missing" });
+      if (retiredPaths.has(relativePath)) {
+        desiredFiles[relativePath] = record;
+        if (current && sha256(current) !== record.sha256) {
+          operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+        } else {
+          operations.push({ path: relativePath, operation: "archive-pending", reason: "archive lifecycle is pending", sha256: record.sha256 });
+        }
+      } else if (!current) operations.push({ path: relativePath, operation: "missing" });
       else if (sha256(current) === record.sha256) {
         operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
         mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
@@ -301,6 +332,7 @@ export async function apply(action: Action, scope: Scope, confirmationDigest: st
             await assets(),
             built.plan.operations,
             built.expectedManifest,
+            retiredAssetPaths(),
           );
           if (action !== "install") return;
           const inventory = await listAgentProfiles(scope, cwd, home);
