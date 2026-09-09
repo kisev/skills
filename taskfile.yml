@@ -92,20 +92,26 @@ tasks:
       - SKILLS_BINARY="$(mise which skills)" uv run --locked pytest
 
   generate:
-    desc: Build untracked portable and package artifacts
+    desc: Materialize source copies and build untracked artifacts
     cmds:
+      - task: generate:source
       - task: build:skills
       - task: build:distribution
       - task: package:generate
 
   generate:check:
-    desc: Check generated files for drift without writing them
+    desc: Check source parity and generated artifacts without writing them
     cmds:
-      - task: generate:shared:check
+      - task: generate:source:check
       - task: generate:distribution:check
       - task: package:generate:check
 
-  generate:shared:check:
+  generate:source:
+    internal: true
+    cmds:
+      - uv run --locked python scripts/build_skills.py --generate
+
+  generate:source:check:
     internal: true
     cmds:
       - uv run --locked python scripts/build_skills.py --check

@@ -14,6 +14,8 @@ from functools import partial
 from pathlib import Path
 from subprocess import run
 
+import pytest
+
 from scripts import build_distribution
 
 
@@ -132,6 +134,73 @@ def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -
         server.shutdown()
         thread.join()
         build_distribution.build(OUTPUT, False)
+
+
+def test_direct_git_install_is_self_contained_for_both_hosts(tmp_path: Path) -> None:
+    source = tmp_path / "source"
+    run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(source)], check=True)
+    if not (source / "skills/ast-grep/scripts/portable_runtime").is_dir():
+        pytest.skip("direct Git fixture requires committed generated copies")
+    skills = sorted(
+        path.name for path in (source / "skills").iterdir() if (path / "SKILL.md").is_file()
+    )
+    assert len(skills) == 29
+
+    for agent in ("opencode", "codex"):
+        for scope in ("global", "project"):
+            home = tmp_path / agent / scope / "home"
+            project = tmp_path / agent / scope / "project"
+            home.mkdir(parents=True)
+            project.mkdir(parents=True)
+            environment = {
+                **os.environ,
+                "HOME": str(home),
+                "XDG_CONFIG_HOME": str(home / ".config"),
+                "XDG_STATE_HOME": str(home / ".state"),
+                "PYTHONPATH": str(tmp_path / "missing-pythonpath"),
+            }
+            command = [
+                *PINNED_SKILLS,
+                "add",
+                str(source),
+                "--skill",
+                "*",
+                "--agent",
+                agent,
+                "--copy",
+                "--yes",
+            ]
+            if scope == "global":
+                command.append("--global")
+            installed = run(
+                command,
+                cwd=project,
+                env=environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert installed.returncode == 0, installed.stderr
+
+            shutil.rmtree(source)
+            root = (
+                home / ".agents" / "skills" if scope == "global" else project / ".agents" / "skills"
+            )
+            for skill in skills:
+                installed_skill = root / skill
+                assert (installed_skill / "SKILL.md").is_file()
+                for runner in installed_skill.glob("scripts/*.py"):
+                    help_result = run(
+                        ["python3", str(runner), "--help"],
+                        cwd=tmp_path,
+                        env=environment,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    assert help_result.returncode == 0, (runner, help_result.stderr)
+            source = tmp_path / f"source-{agent}-{scope}"
+            run(["git", "clone", "--quiet", "--no-hardlinks", str(ROOT), str(source)], check=True)
 
 
 def update_archive(distribution: Path, skill: str) -> None:

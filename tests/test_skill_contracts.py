@@ -26,10 +26,11 @@ def test_built_skill_files_match_canonical_sources() -> None:
     for source, relative_destination in manifest_entries():
         destination = BUILT_SKILLS / relative_destination
         assert destination.read_bytes() == source.read_bytes(), destination
-        assert not (ROOT / "skills" / relative_destination).exists(), destination
+        source_copy = ROOT / "skills" / relative_destination
+        assert source_copy.read_bytes() == source.read_bytes(), source_copy
 
 
-def test_rebuilding_portable_skills_does_not_change_tracked_source() -> None:
+def test_rebuilding_portable_skills_does_not_change_repository_state() -> None:
     before = subprocess.run(
         ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True
     ).stdout

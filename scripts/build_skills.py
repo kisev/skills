@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build self-contained portable skills outside the authored source tree."""
+"""Materialize and verify self-contained portable skills."""
 
 from __future__ import annotations
 
@@ -69,62 +69,6 @@ def manifest_entries() -> list[tuple[Path, Path]]:
             raise BuildError(f"duplicate destination: {destination}")
         destinations.add(destination)
         entries.append((source, destination))
-    # Portable runners retain their canonical shared runtime without exposing the
-    # authored shared tree as an installed dependency.
-    runtime_targets = {
-        "ast-grep": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-        ),
-        "rtk": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-        ),
-        "skill-improver": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-        ),
-        "walkthrough": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-        ),
-        "schedule": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-            "python_runtime/state.py",
-        ),
-        "usage": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-            "python_runtime/state.py",
-        ),
-        "overview": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-            "python_runtime/state.py",
-            "python_runtime/lsp.py",
-        ),
-        "lsp-report": (
-            "python_runtime/__init__.py",
-            "python_runtime/capabilities.py",
-            "python_runtime/contract.py",
-            "python_runtime/lsp.py",
-        ),
-    }
-    for skill, paths in runtime_targets.items():
-        for relative in paths:
-            source = SHARED / "references" / relative
-            destination = Path(skill) / "scripts" / "portable_runtime" / Path(relative).name
-            if destination not in destinations:
-                destinations.add(destination)
-                entries.append((source, destination))
     return entries
 
 
@@ -139,22 +83,66 @@ def copy_source(destination: Path) -> None:
     )
 
 
+def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
+    """Verify committed copies without modifying the authored source tree."""
+    if root.is_symlink() or not root.is_dir():
+        raise BuildError(f"materialization root is not a directory: {root}")
+    expected: set[Path] = set()
+    canonical_bytes = {source.read_bytes() for source, _ in entries}
+    for source, relative in entries:
+        expected.add(relative)
+        target = root / relative
+        if target.is_symlink() or not target.is_file():
+            raise BuildError(f"missing or symbolic generated copy: {relative}")
+        if target.read_bytes() != source.read_bytes():
+            raise BuildError(f"generated copy drift: {relative}")
+        if stat.S_IMODE(target.stat().st_mode) != stat.S_IMODE(source.stat().st_mode):
+            raise BuildError(f"generated copy mode drift: {relative}")
+    for skill in root.iterdir():
+        if not skill.is_dir() or skill.is_symlink():
+            continue
+        for path in skill.rglob("*"):
+            if path.is_symlink():
+                raise BuildError(f"symbolic link in skill source: {path.relative_to(root)}")
+            if not path.is_file():
+                continue
+            relative = path.relative_to(root)
+            if relative in expected:
+                continue
+            # The manifest owns only paths whose source lives in shared/references.
+            # Authored unique skill files are intentionally outside this check.
+            if path.read_bytes() in canonical_bytes and path.name != "SKILL.md":
+                raise BuildError(f"undeclared generated copy: {relative}")
+
+
+def materialize(entries: list[tuple[Path, Path]]) -> int:
+    for source, relative in entries:
+        target = SOURCES / relative
+        if target.is_symlink():
+            raise BuildError(f"generated target is a symbolic link: {relative}")
+        if any(parent.is_symlink() for parent in target.parents if parent != SOURCES):
+            raise BuildError(f"generated target parent is a symbolic link: {relative}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        target.chmod(stat.S_IMODE(source.stat().st_mode))
+    check_materialized(SOURCES, entries)
+    print(f"materialized {len(entries)} shared copies in {SOURCES}")
+    return 0
+
+
 def build(output: Path, check: bool) -> int:
     entries = manifest_entries()
+    check_materialized(SOURCES, entries)
     if output.is_symlink():
         raise BuildError("output must not be a symbolic link")
     stage_parent = output.parent
-    stage_parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="skills-build-", dir=stage_parent) as temporary:
+    if not check:
+        stage_parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="skills-build-", dir=None if check else stage_parent
+    ) as temporary:
         staged = Path(temporary) / "skills"
         copy_source(staged)
-        for source, destination in entries:
-            target = staged / destination
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if target.is_symlink():
-                raise BuildError(f"materialized target is a symbolic link: {destination}")
-            shutil.copyfile(source, target)
-            target.chmod(stat.S_IMODE(source.stat().st_mode))
         if check:
             if not output.is_dir():
                 print(
@@ -173,6 +161,8 @@ def build(output: Path, check: bool) -> int:
                         not target.is_file()
                         or target.is_symlink()
                         or target.read_bytes() != source.read_bytes()
+                        or stat.S_IMODE(target.stat().st_mode)
+                        != stat.S_IMODE(source.stat().st_mode)
                     ):
                         raise BuildError(f"build artifact drift: {relative}")
             for target in output.rglob("*"):
@@ -196,8 +186,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="materialize declared shared copies into skills/",
+    )
     args = parser.parse_args(argv)
     try:
+        if args.generate:
+            return materialize(manifest_entries())
         return build(args.output.resolve(), args.check)
     except BuildError as error:
         parser.error(str(error))
