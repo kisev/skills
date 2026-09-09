@@ -6,7 +6,16 @@
   "properties": {
     "review_report": {
       "type": "object",
-      "required": ["status", "target", "findings", "checks", "risks"]
+      "required": ["schema_version", "status", "target", "findings", "checks", "risks"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "status": { "enum": ["APPROVED", "CHANGES_REQUIRED"] },
+        "target": { "type": "string", "minLength": 1 },
+        "findings": { "type": "array" },
+        "checks": { "type": "array", "items": { "type": "string" } },
+        "risks": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

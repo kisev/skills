@@ -10,8 +10,13 @@
     "revision",
     "objective",
     "evidence",
+    "changed_behavior",
+    "risks",
     "write_set",
+    "control_markers",
+    "decisions",
     "steps",
+    "acceptance_criteria",
     "checks",
     "operations",
     "confirmations",
@@ -24,12 +29,32 @@
     "revision": { "type": "integer", "minimum": 1 },
     "objective": { "type": "string" },
     "evidence": { "type": "array", "items": { "type": "string" } },
+    "changed_behavior": { "type": "array", "items": { "type": "string" } },
+    "risks": { "type": "array", "items": { "type": "string" } },
     "write_set": { "type": "array", "items": { "type": "string" } },
+    "control_markers": { "type": "array" },
+    "decisions": { "type": "array", "items": { "type": "string" } },
     "steps": { "type": "array" },
+    "acceptance_criteria": { "type": "array", "items": { "type": "string" } },
     "checks": { "type": "array", "items": { "type": "string" } },
-    "operations": { "type": "array" },
-    "confirmations": { "type": "object" },
+    "operations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "command"],
+        "properties": {
+          "kind": {
+            "enum": ["write", "check", "commit", "rebase", "push", "merge", "tag", "release"]
+          },
+          "command": { "type": "string", "minLength": 1 },
+          "path": { "type": "string" },
+          "confirmation_ref": { "type": "string", "minLength": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "confirmations": { "type": "object", "required": ["execution"] },
     "boundaries": { "type": "object", "required": ["scope", "forbidden_paths"] }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

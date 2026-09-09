@@ -43,6 +43,73 @@ function capable(agent, capabilities, tools) {
   return { agent, available: true, capabilities, tools };
 }
 
+function hostClient() {
+  const profiles = {
+    mapper: ["read", "glob", "grep"],
+    architect: ["read", "glob", "grep"],
+    worker: ["read", "edit", "bash"],
+    review: ["read", "glob", "grep"],
+    critic: ["read", "glob", "grep"],
+  };
+  return {
+    app: {
+      agents: async () => ({
+        data: Object.entries(profiles).map(([name, tools]) => ({
+          name,
+          mode: name === "worker" ? "subagent" : "primary",
+          builtIn: false,
+          permission: {
+            edit: tools.includes("edit") ? "allow" : "deny",
+            bash: tools.includes("bash") ? { "*": "allow" } : { "*": "deny" },
+          },
+          tools: Object.fromEntries(tools.map((tool) => [tool, true])),
+          options: {},
+        })),
+      }),
+    },
+  };
+}
+
+function executionCard() {
+  const operations = ["write", "check", "commit", "rebase", "push", "merge", "tag", "release"].map(
+    (kind) => ({
+      kind,
+      command: `exact ${kind}`,
+      ...(kind === "write" || kind === "check" ? { path: "src/example.ts" } : {}),
+      ...(kind === "rebase"
+        ? { confirmation_ref: "history" }
+        : kind === "push" || kind === "merge" || kind === "tag" || kind === "release"
+          ? { confirmation_ref: "publication" }
+          : kind === "commit"
+            ? { confirmation_ref: "execution" }
+            : {}),
+    }),
+  );
+  return {
+    schema_version: 1,
+    status: "READY",
+    card_id: "hook-card",
+    revision: 1,
+    objective: "Implement the hook-bound task",
+    evidence: ["Host route and task evidence."],
+    changed_behavior: ["The requested behavior changes."],
+    risks: ["No confirmed risks."],
+    write_set: ["src/example.ts"],
+    control_markers: [{ path: "src/example.ts", expected_absent: true }],
+    decisions: ["Use the existing pattern."],
+    steps: [{ path: "src/example.ts", operation: "apply the change" }],
+    acceptance_criteria: ["The behavior is implemented."],
+    checks: ["check src/example.ts"],
+    operations,
+    confirmations: {
+      execution: "execution",
+      publication: "publication",
+      history_rewrite: "history",
+    },
+    boundaries: { forbidden_paths: ["src/other.ts"], scope: "repository" },
+  };
+}
+
 async function install(scope, cwd, home) {
   const plan = await preview("install", scope, cwd, home);
   return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
@@ -417,7 +484,10 @@ test("upgrade retires unchanged goal lifecycle assets and preserves modified one
       "remove",
     );
     await apply("install", "project", removal.digest, project, home);
-    assert.equal(await readFile(join(root, "commands/goal-start.md"), "utf8"), retired["commands/goal-start.md"]);
+    assert.equal(
+      await readFile(join(root, "commands/goal-start.md"), "utf8"),
+      retired["commands/goal-start.md"],
+    );
     await assert.rejects(lstat(join(root, "plugins/goal-loop.js")), { code: "ENOENT" });
 
     const modifiedPath = "commands/goal-prepare.md";
@@ -480,7 +550,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
 test("runtime plugin has no lifecycle writes and receipt gate is enforced", async () => {
   const directory = temporary();
   try {
-    const hooks = await plugin({});
+    const hooks = await plugin({ client: hostClient(), directory: "/project" });
     assert.ok(hooks.tool.route);
     assert.equal(hooks.config, undefined);
     await assert.rejects(
@@ -496,6 +566,7 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
       task: "Implement one scoped change",
       requirements: [],
       agents: [worker],
+      execution_card: executionCard(),
     };
     const decision = JSON.parse(
       await hooks.tool.route.execute({ action: "preview", ...routeInput }, { sessionID: "bound" }),
@@ -562,8 +633,25 @@ test("routing receipts bind task requirements card agent revision and expiry", (
     steps: [{ path: "src/example.ts", operation: "apply the change" }],
     acceptance_criteria: ["The behavior is implemented."],
     checks: ["npm test"],
-    operations: ["write", "check", "commit", "rebase", "push", "merge", "tag", "release"].map((kind) => ({ kind, command: `exact ${kind}` })),
-    confirmations: { execution: "confirmed", publication: "separate", history_rewrite: "separate" },
+    operations: ["write", "check", "commit", "rebase", "push", "merge", "tag", "release"].map(
+      (kind) => ({
+        kind,
+        command: `exact ${kind}`,
+        ...(kind === "write" || kind === "check" ? { path: "src/example.ts" } : {}),
+        ...(kind === "rebase"
+          ? { confirmation_ref: "history" }
+          : kind === "push" || kind === "merge" || kind === "tag" || kind === "release"
+            ? { confirmation_ref: "publication" }
+            : kind === "commit"
+              ? { confirmation_ref: "execution" }
+              : {}),
+      }),
+    ),
+    confirmations: {
+      execution: "execution",
+      publication: "publication",
+      history_rewrite: "history",
+    },
     boundaries: { forbidden_paths: ["src/other.ts"], scope: "repository" },
   };
   const input = {
@@ -638,7 +726,7 @@ test("routing receipts bind task requirements card agent revision and expiry", (
 });
 
 test("route ignores caller inventory and exposes exactly four host-backed destinations", async () => {
-  const hooks = await plugin({});
+  const hooks = await plugin({ client: hostClient(), directory: "/project" });
   const expected = {
     exploration: "mapper",
     architecture: "architect",
@@ -646,13 +734,20 @@ test("route ignores caller inventory and exposes exactly four host-backed destin
     review: "review",
   };
   for (const [category, agent] of Object.entries(expected)) {
-    const result = JSON.parse(await hooks.tool.route.execute({
-      action: "preview",
-      category,
-      task: `route ${category}`,
-      requirements: [],
-      agents: [{ agent: "attacker", available: true, capabilities: ["write"], tools: ["bash"] }],
-    }, { sessionID: `inventory-${category}` }));
+    const result = JSON.parse(
+      await hooks.tool.route.execute(
+        {
+          action: "preview",
+          category,
+          task: `route ${category}`,
+          requirements: [],
+          agents: [
+            { agent: "attacker", available: true, capabilities: ["write"], tools: ["bash"] },
+          ],
+        },
+        { sessionID: `inventory-${category}` },
+      ),
+    );
     assert.equal(result.agent, agent);
     assert.match(result.host_inventory_revision, /^[a-f0-9]{64}$/);
   }
@@ -660,25 +755,56 @@ test("route ignores caller inventory and exposes exactly four host-backed destin
 });
 
 test("real Task result hook rejects prose and accepts one versioned worker report", async () => {
-  const hooks = await plugin({});
+  const hooks = await plugin({ client: hostClient(), directory: "/project" });
   const route = {
     action: "dispatch",
     category: "implementation",
     task: "hook-bound task",
     requirements: [],
+    execution_card: executionCard(),
   };
-  const routed = JSON.parse(await hooks.tool.route.execute(
-    { ...route, decision: await (async () => {
-      const preview = JSON.parse(await hooks.tool.route.execute({ ...route, action: "preview" }, { sessionID: "hook" }));
-      return preview;
-    })() },
-    { sessionID: "hook" },
-  ));
+  const routed = JSON.parse(
+    await hooks.tool.route.execute(
+      {
+        ...route,
+        decision: await (async () => {
+          const preview = JSON.parse(
+            await hooks.tool.route.execute({ ...route, action: "preview" }, { sessionID: "hook" }),
+          );
+          return preview;
+        })(),
+      },
+      { sessionID: "hook" },
+    ),
+  );
   assert.equal(routed.receipt.destination, "implementation");
-  await hooks["tool.execute.before"]({ tool: "task", sessionID: "hook" }, { args: { agent: "worker" } });
+  await hooks["tool.execute.before"](
+    { tool: "task", sessionID: "hook" },
+    { args: { agent: "worker" } },
+  );
   await assert.rejects(
-    hooks["tool.execute.after"]({ tool: "task", sessionID: "hook", args: { agent: "worker" } }, { output: "finished" }),
+    hooks["tool.execute.after"](
+      { tool: "task", sessionID: "hook", args: { agent: "worker" } },
+      { output: "finished" },
+    ),
     /JSON structured report/,
+  );
+  await hooks["tool.execute.after"](
+    { tool: "task", sessionID: "hook", args: { agent: "worker" } },
+    {
+      output: JSON.stringify({
+        worker_report: {
+          schema_version: 1,
+          status: "COMPLETED",
+          card_id: "hook-card",
+          revision: 1,
+          changed_files: [],
+          checks: [{ command: "check", status: "passed" }],
+          writes_performed: true,
+          risks: [],
+        },
+      }),
+    },
   );
 });
 
@@ -698,11 +824,44 @@ test("execution card validation and lifecycle reject malformed and replay transi
     steps: [{ path: "src/example.ts", operation: "apply the change" }],
     acceptance_criteria: ["The behavior is implemented."],
     checks: ["npm test"],
-    operations: ["write", "check", "commit", "rebase", "push", "merge", "tag", "release"].map((kind) => ({ kind, command: `exact ${kind}` })),
-    confirmations: { execution: "confirmed", publication: "separate", history_rewrite: "separate" },
+    operations: ["write", "check", "commit", "rebase", "push", "merge", "tag", "release"].map(
+      (kind) => ({
+        kind,
+        command: `exact ${kind}`,
+        ...(kind === "write" || kind === "check" ? { path: "src/example.ts" } : {}),
+        ...(kind === "rebase"
+          ? { confirmation_ref: "history" }
+          : kind === "push" || kind === "merge" || kind === "tag" || kind === "release"
+            ? { confirmation_ref: "publication" }
+            : kind === "commit"
+              ? { confirmation_ref: "execution" }
+              : {}),
+      }),
+    ),
+    confirmations: {
+      execution: "execution",
+      publication: "publication",
+      history_rewrite: "history",
+    },
     boundaries: { forbidden_paths: ["src/other.ts"], scope: "repository" },
   };
   assert.equal(validateExecutionCard(card).valid, true);
+  assert.equal(
+    validateExecutionCard({
+      ...card,
+      operations: card.operations.filter(({ kind }) => kind !== "push"),
+    }).failedField,
+    "operations",
+  );
+  assert.equal(
+    validateExecutionCard({
+      ...card,
+      operations: card.operations.map((operation) =>
+        operation.kind === "write" ? { ...operation, path: "src/other.ts" } : operation,
+      ),
+    }).failedField,
+    "operations",
+  );
   assert.equal(validateExecutionCard({ ...card, objective: "" }).failedField, "objective");
   assert.equal(
     validateExecutionCard({ ...card, steps: [{ path: "src/other.ts", operation: "escape" }] })
