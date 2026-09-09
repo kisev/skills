@@ -10,13 +10,13 @@
   ],
   "patterns": [
     {
-      "en": "skills/project-spec/templates/*.md",
-      "ru": "skills/project-spec/templates/ru/*.md",
+      "en": "skills/spec-manage/templates/*.md",
+      "ru": "skills/spec-manage/templates/ru/*.md",
       "language_link_exception": "Template pairs are embedded source material and do not publish standalone language navigation."
     },
     {
-      "en": "skills/project-spec/templates/specs/**/*.md",
-      "ru": "skills/project-spec/templates/ru/specs/**/*.md",
+      "en": "skills/spec-manage/templates/specs/**/*.md",
+      "ru": "skills/spec-manage/templates/ru/specs/**/*.md",
       "language_link_exception": "Template pairs are embedded source material and do not publish standalone language navigation."
     }
   ],

@@ -1,13 +1,13 @@
 ---
-name: goal
+name: team-retro
 description: >-
-  Manage a verifiable goal bound to an OpenCode session. Russian discovery terms: проверяемая цель.
+  Prepare a team retrospective from supplied context. Russian discovery terms: ретро.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
   version: "2.0.0"
 ---
 
-# goal
+# team-retro
 
 Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

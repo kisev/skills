@@ -47,7 +47,7 @@
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "project-spec/references/interaction-contract.md"
+      "destination": "spec-manage/references/interaction-contract.md"
     },
     {
       "source": "references/interaction-contract.md",
@@ -55,7 +55,23 @@
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "team-workflow/references/interaction-contract.md"
+      "destination": "team-sprint-start/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-sprint-close/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-retro/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-roadmap/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "slides-prompts-prepare/references/interaction-contract.md"
     },
     {
       "source": "references/gitlab-workflow.md",
@@ -139,27 +155,27 @@
     },
     {
       "source": "references/python_runtime/__init__.py",
-      "destination": "skill-improver/scripts/portable_runtime/__init__.py"
+      "destination": "skill-improve/scripts/portable_runtime/__init__.py"
     },
     {
       "source": "references/python_runtime/capabilities.py",
-      "destination": "skill-improver/scripts/portable_runtime/capabilities.py"
+      "destination": "skill-improve/scripts/portable_runtime/capabilities.py"
     },
     {
       "source": "references/python_runtime/contract.py",
-      "destination": "skill-improver/scripts/portable_runtime/contract.py"
+      "destination": "skill-improve/scripts/portable_runtime/contract.py"
     },
     {
       "source": "references/python_runtime/__init__.py",
-      "destination": "walkthrough/scripts/portable_runtime/__init__.py"
+      "destination": "code-explain/scripts/portable_runtime/__init__.py"
     },
     {
       "source": "references/python_runtime/capabilities.py",
-      "destination": "walkthrough/scripts/portable_runtime/capabilities.py"
+      "destination": "code-explain/scripts/portable_runtime/capabilities.py"
     },
     {
       "source": "references/python_runtime/contract.py",
-      "destination": "walkthrough/scripts/portable_runtime/contract.py"
+      "destination": "code-explain/scripts/portable_runtime/contract.py"
     },
     {
       "source": "references/portable_gitlab/__init__.py",
@@ -247,62 +263,6 @@
     },
     {
       "source": "references/python_runtime/__init__.py",
-      "destination": "schedule/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "schedule/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "schedule/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/state.py",
-      "destination": "schedule/scripts/portable_runtime/state.py"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
-      "destination": "usage/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "usage/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "usage/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/state.py",
-      "destination": "usage/scripts/portable_runtime/state.py"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
-      "destination": "overview/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "overview/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "overview/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/state.py",
-      "destination": "overview/scripts/portable_runtime/state.py"
-    },
-    {
-      "source": "references/python_runtime/lsp.py",
-      "destination": "overview/scripts/portable_runtime/lsp.py"
-    },
-    {
-      "source": "references/lsp-catalog.json",
-      "destination": "overview/scripts/portable_runtime/lsp-catalog.json"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
       "destination": "lsp-report/scripts/portable_runtime/__init__.py"
     },
     {
@@ -363,10 +323,6 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "attempt/references/language-policy.md"
-    },
-    {
-      "source": "references/language-policy.md",
       "destination": "code-review/references/language-policy.md"
     },
     {
@@ -407,11 +363,7 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "overview/references/language-policy.md"
-    },
-    {
-      "source": "references/language-policy.md",
-      "destination": "project-spec/references/language-policy.md"
+      "destination": "spec-manage/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -427,11 +379,7 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "schedule/references/language-policy.md"
-    },
-    {
-      "source": "references/language-policy.md",
-      "destination": "skill-improver/references/language-policy.md"
+      "destination": "skill-improve/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -455,15 +403,27 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "team-workflow/references/language-policy.md"
+      "destination": "code-explain/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
-      "destination": "usage/references/language-policy.md"
+      "destination": "team-sprint-start/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
-      "destination": "walkthrough/references/language-policy.md"
+      "destination": "team-sprint-close/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-retro/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-roadmap/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "slides-prompts-prepare/references/language-policy.md"
     }
   ]
 }
