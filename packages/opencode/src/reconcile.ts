@@ -42,6 +42,7 @@ type InventoryRecord = {
   introduced: { ref: string; version: string };
   retired: { ref: string; version: string };
   replacement: string | null;
+  replacements?: string[];
   scopes: Scope[];
   sha256?: string;
   files?: Record<string, string>;
@@ -51,6 +52,7 @@ type Inventory = {
   schema_version: 2;
   inventory_version: string;
   active_portable_skills: string[];
+  retired_command_hashes?: Record<string, string>;
   records: InventoryRecord[];
 };
 
@@ -258,7 +260,22 @@ function parseGenericManifest(raw: Buffer): Record<string, { sha256: string }> {
 }
 
 function retiredRecords(inventory: Inventory, scope: Scope): InventoryRecord[] {
-  return inventory.records.filter((record) => record.retired && record.scopes.includes(scope));
+  const commandRecords: InventoryRecord[] = Object.entries(
+    inventory.retired_command_hashes ?? {},
+  ).map(([installed_path, sha256]) => ({
+    id: `package-command:${installed_path}`,
+    kind: "package-command",
+    historical_path: `packages/opencode/assets/${installed_path}`,
+    installed_path,
+    introduced: { ref: "5f09d504758b0e99ad9c0306df796411fbcf0f4a", version: "1.2.0" },
+    retired: { ref: "5f09d504758b0e99ad9c0306df796411fbcf0f4a", version: "2.0.0" },
+    replacement: null,
+    scopes: ["project", "global"],
+    sha256,
+  }));
+  return [...inventory.records, ...commandRecords].filter(
+    (record) => record.retired && record.scopes.includes(scope),
+  );
 }
 
 function diagnostic(scope: Scope, cwd: string, home: string): ReconcileItem[] {
