@@ -27,7 +27,6 @@ def isolated_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
                         "destination": "foo/references/canonical.md",
                     }
                 ],
-                "language_policy_skills": [],
             }
         ),
         encoding="utf-8",
@@ -55,7 +54,7 @@ def test_manifest_rejects_duplicate_missing_symlink_and_escape(
     ]
     for files in cases:
         manifest.write_text(
-            json.dumps({"version": 1, "files": files, "language_policy_skills": []}),
+            json.dumps({"version": 1, "files": files}),
             encoding="utf-8",
         )
         with pytest.raises(build_skills.BuildError):
@@ -69,7 +68,6 @@ def test_manifest_rejects_duplicate_missing_symlink_and_escape(
             {
                 "version": 1,
                 "files": [{"source": "references-link", "destination": "foo/a"}],
-                "language_policy_skills": [],
             }
         ),
         encoding="utf-8",
@@ -78,18 +76,22 @@ def test_manifest_rejects_duplicate_missing_symlink_and_escape(
         build_skills.manifest_entries()
 
 
-def test_policy_skill_names_are_bounded_to_existing_skill_directories(
+def test_generated_destinations_are_bounded_to_existing_skill_directories(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     isolated_manifest(tmp_path, monkeypatch)
     manifest = build_skills.MANIFEST
-    for name in ("../outside", "foo/nested", "missing"):
+    for destination in ("../outside", "foo/../outside", "missing/references/file.md"):
         manifest.write_text(
             json.dumps(
                 {
                     "version": 1,
-                    "files": [],
-                    "language_policy_skills": [name],
+                    "files": [
+                        {
+                            "source": "references/canonical.md",
+                            "destination": destination,
+                        }
+                    ],
                 }
             ),
             encoding="utf-8",

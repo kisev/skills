@@ -31,7 +31,7 @@ single quality gate before submitting any change:
 task check
 ```
 
-Only `format` changes the tracked checkout. When shared references change, edit
+`format` and explicit source generation change the tracked checkout. When shared references change, edit
 the canonical file under `shared/references/` first, then run `task generate`;
 portable copies are committed under their declared `skills/<name>/` destinations.
 Use `python3 scripts/build_skills.py --generate` for that explicit source

@@ -46,7 +46,7 @@ task check
 | `check`                      | Запустить полный локальный и CI quality gate.                 |
 | `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.                 |
 
-Только `format` меняет tracked checkout. Если меняются shared references,
+`format` и явная source generation меняют tracked checkout. Если меняются shared references,
 сначала измените canonical-файл в `shared/references/`, затем запустите
 `task generate`; portable copies committed в объявленные destinations, а ignored
 build artifacts создаются отдельно. Для отдельной

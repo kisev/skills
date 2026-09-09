@@ -59,7 +59,8 @@ The single local and CI quality gate is:
 task check
 ```
 
-`task --list` shows available tasks. Only `task format` changes tracked files.
+`task --list` shows available tasks. `task format` and the explicit source
+materialization step change declared generated files; checks do not.
 `task generate` first materializes the declared shared copies into the committed
 `skills/<name>/` directories, then creates ignored `.build/skills`, the private
 build-only `@kisev/skills` archive/index, and package staging. `task generate:check`

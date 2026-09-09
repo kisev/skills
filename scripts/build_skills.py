@@ -30,16 +30,6 @@ def safe_relative(value: object, label: str) -> Path:
     return path
 
 
-def safe_skill_name(value: object) -> str:
-    path = safe_relative(value, "skill name")
-    if len(path.parts) != 1:
-        raise BuildError(f"skill name must be one path component: {value!r}")
-    skill = SOURCES / path
-    if skill.is_symlink() or not (skill / "SKILL.md").is_file():
-        raise BuildError(f"skill does not contain SKILL.md: {value!r}")
-    return path.name
-
-
 def manifest_entries() -> list[tuple[Path, Path]]:
     try:
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
@@ -57,28 +47,24 @@ def manifest_entries() -> list[tuple[Path, Path]]:
             raise BuildError("manifest entries must be objects")
         source = SHARED / safe_relative(entry.get("source"), "source")
         destination = safe_relative(entry.get("destination"), "destination")
+        if len(destination.parts) < 2:
+            raise BuildError(f"generated destination must be inside a skill: {destination}")
+        skill = SOURCES / destination.parts[0]
+        if skill.is_symlink() or not (skill / "SKILL.md").is_file():
+            raise BuildError(f"generated destination names an unknown skill: {destination}")
         if destination in destinations:
             raise BuildError(f"duplicate destination: {destination}")
         destinations.add(destination)
-        if source.is_symlink() or not source.is_file():
+        if (
+            source.is_symlink()
+            or any(parent.is_symlink() for parent in source.parents if parent != SHARED)
+            or not source.is_file()
+        ):
             raise BuildError(f"source is not a regular file: {source}")
         try:
             source.resolve().relative_to((SHARED / "references").resolve())
         except ValueError as error:
             raise BuildError("sources must be inside shared/references") from error
-        entries.append((source, destination))
-    policy_skills = manifest.get("language_policy_skills", [])
-    if not isinstance(policy_skills, list) or not all(
-        isinstance(name, str) for name in policy_skills
-    ):
-        raise BuildError("language_policy_skills must be a list of skill names")
-    for name in policy_skills:
-        skill_name = safe_skill_name(name)
-        source = SHARED / "references" / "language-policy.md"
-        destination = Path(skill_name) / "references" / "language-policy.md"
-        if destination in destinations:
-            raise BuildError(f"duplicate destination: {destination}")
-        destinations.add(destination)
         entries.append((source, destination))
     return entries
 
