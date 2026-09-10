@@ -18,8 +18,8 @@
   "invariants": [
     {
       "id": "plugin-opt-in",
-      "path": "README.md",
-      "contains": "Stateful OpenCode plugins remain opt-in"
+      "path": "packages/opencode/src/installer.ts",
+      "contains": "plugins: [],"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "63e4f353d75deb404d92b1ea11116060c3df2d88eb3a665ff81fc32c6285639c",
+  "digest": "d4fe9a1f99d7304587d2609527998d76078af41f7006711e66ff4bc3fcb16d9f",
   "locale": "ru",
   "pair_id": "plugin.rules-injector.disabled-mutation-boundary"
 }
