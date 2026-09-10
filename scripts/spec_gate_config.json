@@ -8,7 +8,7 @@
     "packages/opencode/contracts/",
     "packages/opencode/assets/",
     "schemas/",
-    "distribution"
+    "distribution/"
   ],
   "behavioral_paths": [
     "scripts/build_distribution.py",
