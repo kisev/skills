@@ -24,5 +24,7 @@ available; selectable plugins are `rules-injector`, `rtk`, and `zed-bell`.
 
 The specification covers direct Git distribution, the OpenCode package and CLI,
 orchestration, durable state, content-addressed archive behavior, security
-boundaries, tests, evals, and compatibility. It does not define repository
-quality gates beyond the existing `task check` contract.
+boundaries, tests, evals, and compatibility. Repository quality gates are part
+of the supported contract: `task spec:check` is deterministic and mandatory,
+while `spec-manage` full audit remains a separate semantic review with an
+independent critic pass.

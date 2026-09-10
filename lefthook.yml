@@ -5,6 +5,12 @@ pre-commit:
     task:
       run: task pre-commit
 
+commit-msg:
+  commands:
+    spec-impact:
+      run: uv run --locked python scripts/check_specs.py --staged --message-file {1}
+      fail_text: "Behavioral changes require specs/traceability or Spec-Impact trailer"
+
 pre-push:
   commands:
     task:

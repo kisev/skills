@@ -1,7 +1,7 @@
 {
   "schema": "traceability/v1",
   "target": "2.0.0",
-  "source_revision": "f40e15d76257e7fadc127cad2449d5918571f166",
+  "source_revision": "a1e48be947aca9873eb09885599a1139cee6bc25",
   "hash": {
     "algorithm": "sha256",
     "canonical_block": "trimmed Markdown from the REQ heading through the paragraph before the next section heading"
@@ -25,7 +25,7 @@
     "agents": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/package.test.mjs::agent assets contain six contract-bound profiles without model selection",
-      "eval_ids": ["stage20.agent.manager.contract", "agent-worker-contract"]
+      "eval_ids": ["stage20.agent.manager.contract", "agent.worker.structured-contract"]
     },
     "plugins": {
       "kind": "automated",
@@ -40,7 +40,7 @@
     "doctor": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/doctor.test.mjs::doctor JSON is versioned, read-only, partial tolerant, and has stable exit code",
-      "eval_ids": ["golden-doctor.en"]
+      "eval_ids": ["golden.doctor.read-only-redaction.en"]
     },
     "profiles": {
       "kind": "automated",
@@ -60,12 +60,12 @@
     "quality": {
       "kind": "automated",
       "test_selector": "tests/test_evals.py::test_offline_suite_is_hostless_and_has_stable_ordered_assertions",
-      "eval_ids": ["core-contracts.golden.en"]
+      "eval_ids": ["golden.core-contracts.en"]
     },
     "compatibility": {
       "kind": "automated",
       "test_selector": "tests/test_stage20_verification.py::test_stage20_compatibility_inventory_is_explicit_and_hostless",
-      "eval_ids": ["core-contracts.trigger.en"],
+      "eval_ids": ["skill.core-contracts.trigger.en"],
       "contract_path": "evals/contracts/opencode-compatibility.json"
     }
   },
@@ -246,7 +246,7 @@
     "REQ-C-006": {
       "surface": "quality-gate",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "c11a7ae39073e80b2cad5a30e6ad96e9d2f961a781e406b5fa296081dd22de5f",
+      "block_sha256": "4cf01ac05d8d421f4752c6b08c3b52f1c755056926f08c57a8129296dc93f917",
       "evidence_profile": "quality"
     },
     "REQ-F-101": {

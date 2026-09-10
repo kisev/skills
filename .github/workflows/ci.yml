@@ -15,5 +15,10 @@ jobs:
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+      - name: Specification impact gate
+        run: >-
+          task spec:impact
+          BASE=${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD=${{ github.sha }}
       - name: Quality gate
         run: task check

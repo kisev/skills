@@ -26,7 +26,9 @@ The canonical target shall describe the current merged behavior without changing
 skills, commands, agents, plugins, package tools, eval corpus, or distribution
 behavior.
 
-### REQ-C-006 - Existing quality gate compatibility
+### REQ-C-006 - Mandatory specification traceability gate
 
-The repository shall continue to pass the existing `task check` without changing
-repository gates or adding a specification-specific gate.
+After the bootstrap boundary, behavioral commits shall update the corresponding
+canonical `specs/` and traceability evidence or carry the exact
+`Spec-Impact: none - <reason>` trailer. The deterministic `task spec:check` gate
+is mandatory; semantic `spec-manage` audit remains a separate read-only review.

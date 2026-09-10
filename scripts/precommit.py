@@ -135,6 +135,10 @@ def _base_env() -> dict[str, str]:
 def run(files: Sequence[str], *, dry_run: bool = False) -> int:
     groups = classify(files)
     runner = _Runner(dry_run=dry_run, env=_base_env())
+    if any(
+        path.startswith(("skills/", "shared/", "packages/opencode/", "schemas/")) for path in files
+    ):
+        runner.call("spec:check", ["uv", "run", "--locked", "python", "scripts/check_specs.py"])
     runner.batch("docs", ["prettier", "--check"], groups["docs"])
     runner.batch("data", ["jq", "empty"], groups["data"])
     runner.batch(
