@@ -9,7 +9,13 @@ import { fileURLToPath } from "node:url";
 
 import { CATALOG } from "./catalog.js";
 import { listAgentProfiles, type AgentInventory } from "./agent-profiles.js";
-import { assertSafePath, deploymentRoot, lifecycleRoot, type Scope } from "./lifecycle.js";
+import {
+  archiveRoot,
+  assertSafePath,
+  deploymentRoot,
+  lifecycleRoot,
+  type Scope,
+} from "./lifecycle.js";
 import { inspectReconcile, type ReconcilePlan } from "./reconcile.js";
 import { stateRoot } from "./runtime/state.js";
 
@@ -60,6 +66,7 @@ export type DoctorReport = {
   lsp: Record<string, unknown>;
   retired: Record<string, unknown>;
   conflicts: Array<Record<string, unknown>>;
+  archive: { path: string; entries: number; valid: boolean };
 };
 
 type JsonObject = Record<string, unknown>;
@@ -465,6 +472,44 @@ function reconcileProjection(plan: ReconcilePlan): {
   return { retired, conflicts };
 }
 
+async function archiveFacts(
+  scope: Scope,
+  cwd: string,
+  home: string,
+): Promise<DoctorReport["archive"]> {
+  const root = archiveRoot(scope, cwd, home);
+  const rootInfo = await lstat(root).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    return null;
+  });
+  if (
+    rootInfo === null ||
+    (rootInfo &&
+      (!rootInfo.isDirectory() || rootInfo.isSymbolicLink() || (rootInfo.mode & 0o077) !== 0))
+  )
+    return { path: root, entries: 0, valid: false };
+  const value = await regular(join(root, "index.json"));
+  if (value.status === "missing") return { path: root, entries: 0, valid: true };
+  if (value.status !== "present") return { path: root, entries: 0, valid: false };
+  const indexInfo = await lstat(join(root, "index.json")).catch(() => undefined);
+  if (!indexInfo || (indexInfo.mode & 0o777) !== 0o600)
+    return { path: root, entries: 0, valid: false };
+  try {
+    const parsed = JSON.parse(value.raw!.toString("utf8")) as {
+      schema_version?: unknown;
+      entries?: unknown;
+    };
+    return {
+      path: root,
+      entries:
+        parsed.schema_version === 1 && Array.isArray(parsed.entries) ? parsed.entries.length : 0,
+      valid: parsed.schema_version === 1 && Array.isArray(parsed.entries),
+    };
+  } catch {
+    return { path: root, entries: 0, valid: false };
+  }
+}
+
 export async function collectDoctorFacts(
   scope: Scope,
   cwd = process.cwd(),
@@ -647,6 +692,16 @@ export async function collectDoctorFacts(
     partial.push("stage-8-reconcile");
   }
   const projected = reconcile ? reconcileProjection(reconcile) : { retired: {}, conflicts: [] };
+  const archive = await archiveFacts(scope, project, homeRoot);
+  checks.push(
+    check(
+      "archive.index",
+      archive.valid ? "pass" : "incomplete",
+      "Private archive index is inspected without mutation",
+      archive,
+      archive.valid ? undefined : ["Repair or remove the invalid archive index manually."],
+    ),
+  );
   checks.push(
     check(
       "migration.stage-8",
@@ -757,6 +812,7 @@ export async function collectDoctorFacts(
     lsp,
     retired: projected.retired,
     conflicts: projected.conflicts,
+    archive,
   };
 }
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { lstat, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -234,8 +234,25 @@ export async function archiveMutations(
 ): Promise<FileMutation[]> {
   if (!candidates.length) return [];
   const root = archiveRoot(scope, cwd, home);
+  const rootInfo = await lstat(root).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new InstallerError("unsafe_path", "Archive root is inaccessible");
+  });
+  if (rootInfo && (!rootInfo.isDirectory() || rootInfo.isSymbolicLink() || (rootInfo.mode & 0o077) !== 0))
+    throw new InstallerError("unsafe_path", "Archive root must be a private directory");
+  const objectsInfo = await lstat(join(root, "objects")).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new InstallerError("unsafe_path", "Archive object store is inaccessible");
+  });
+  if (objectsInfo && (!objectsInfo.isDirectory() || objectsInfo.isSymbolicLink() || (objectsInfo.mode & 0o077) !== 0))
+    throw new InstallerError("unsafe_path", "Archive object store must be private");
   const indexPath = destination(root, "index.json");
   const existingRaw = await readRegular(indexPath);
+  if (existingRaw) {
+    const indexInfo = await lstat(indexPath);
+    if ((indexInfo.mode & 0o777) !== 0o600)
+      throw new InstallerError("unsafe_path", "Archive index must be private");
+  }
   let entries: Array<Record<string, unknown>> = [];
   if (existingRaw) {
     try {
@@ -436,7 +453,8 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
       }
       if (!current) operations.push({ path: relativePath, operation: "missing" });
       else if (sha256(current) === record.sha256) {
-        operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
+        operations.push({ path: relativePath, operation: "archive-pending", reason: "stale managed asset is archived", sha256: record.sha256 });
+        archiveCandidates.push({ path: relativePath, record, content: current, reason: "stale managed asset", kind: record.kind });
         mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
       } else operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
     }
@@ -455,7 +473,8 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
         }
       } else if (!current) operations.push({ path: relativePath, operation: "missing" });
       else if (sha256(current) === record.sha256) {
-        operations.push({ path: relativePath, operation: "remove", sha256: record.sha256 });
+        operations.push({ path: relativePath, operation: "archive-pending", reason: "stale managed asset is archived", sha256: record.sha256 });
+        archiveCandidates.push({ path: relativePath, record, content: current, reason: "stale managed asset", kind: record.kind });
         mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
       } else {
         operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });

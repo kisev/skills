@@ -106,6 +106,60 @@ test("retired exact-owned plugin is archived once during uninstall", async () =>
   }
 });
 
+test("stale install archival is transactional and recoverable", async () => {
+  const base = mkdtempSync(join(tmpdir(), "skills-opencode-stale-"));
+  const project = join(base, "project");
+  const home = join(base, "home");
+  await Promise.all([
+    mkdir(join(project, ".opencode", "commands"), { recursive: true }),
+    mkdir(home),
+  ]);
+  try {
+    const content = Buffer.from("stale managed command\n");
+    const fileHash = hash(content);
+    await writeFile(join(project, ".opencode", "commands", "old.md"), content);
+    await writeFile(
+      join(project, ".opencode", ".skills-opencode-manifest.json"),
+      `${JSON.stringify({
+        schema_version: 2,
+        package: "@kisev/skills-opencode",
+        package_version: "1.0.0",
+        version: "1.0.0",
+        scope: "project",
+        commands: [],
+        agents: [],
+        plugins: [],
+        core_activation: false,
+        files: { "commands/old.md": { sha256: fileHash, mode: 0o644, kind: "command" } },
+      })}\n`,
+    );
+    const plan = await preview("install", "project", project, home);
+    assert.equal(
+      plan.operations.find((item) => item.path === "commands/old.md").operation,
+      "archive-pending",
+    );
+    await assert.rejects(
+      apply("install", "project", plan.digest, project, home, { afterPublish: () => "fail" }),
+      (error) => error.code === "rolled_back",
+    );
+    assert.deepEqual(await readFile(join(project, ".opencode", "commands", "old.md")), content);
+    await assert.rejects(lstat(join(archiveRoot("project", project, home), "index.json")), {
+      code: "ENOENT",
+    });
+    const fresh = await preview("install", "project", project, home);
+    await apply("install", "project", fresh.digest, project, home);
+    await assert.rejects(lstat(join(project, ".opencode", "commands", "old.md")), {
+      code: "ENOENT",
+    });
+    const index = JSON.parse(
+      await readFile(join(archiveRoot("project", project, home), "index.json"), "utf8"),
+    );
+    assert.equal(index.entries[0].digest, fileHash);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
 test("2.0.0 public surface and CLI contracts exclude retired APIs", () => {
   assert.equal(typeof rootPlugin, "function");
   assert.equal(typeof rulesInjector, "function");
@@ -126,4 +180,35 @@ test("2.0.0 public surface and CLI contracts exclude retired APIs", () => {
   });
   assert.equal(version.status, 0);
   assert.equal(version.stdout.trim(), metadata.version);
+});
+
+test("non-TTY install requires explicit complete selection and creates no receipt", async () => {
+  const base = mkdtempSync(join(tmpdir(), "skills-opencode-cli-"));
+  const project = join(base, "project");
+  const home = join(base, "home");
+  await Promise.all([mkdir(project), mkdir(home)]);
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "install",
+        "--scope",
+        "project",
+        "--commands",
+        "agents-md",
+        "--json",
+      ],
+      {
+        cwd: project,
+        env: { ...process.env, HOME: home, XDG_STATE_HOME: join(home, ".state") },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 2);
+    assert.equal(JSON.parse(result.stdout).error.code, "invalid_input");
+    await assert.rejects(lstat(join(home, ".state")), { code: "ENOENT" });
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
 });

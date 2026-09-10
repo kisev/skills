@@ -419,7 +419,7 @@ test("upgrade removes only an unchanged stale managed asset", async () => {
     const plan = await preview("install", "project", project, home);
     assert.equal(
       plan.operations.find((item) => item.path === "commands/retired.md").operation,
-      "remove",
+      "archive-pending",
     );
     await apply("install", "project", plan.digest, project, home);
     await assert.rejects(lstat(retired), { code: "ENOENT" });
@@ -503,7 +503,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     const changed = join(project, ".opencode", "commands", "askme.md");
     await writeFile(changed, "user change\n");
     const plan = await preview("uninstall", "project", project, home);
-    assert.ok(plan.operations.filter((item) => item.operation === "remove").length >= 32);
+    assert.ok(plan.operations.filter((item) => item.operation === "archive-pending").length >= 32);
     assert.deepEqual(
       plan.operations.find((item) => item.path === "commands/askme.md").operation,
       "conflict",
