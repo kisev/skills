@@ -1,1 +1,1 @@
-{ "case": "bad-revision" }
+{ "case": "bad-revision", "mutation": "revision" }

@@ -251,44 +251,52 @@ def check_sidecars() -> None:
             raise SpecError("contract_sidecar", path.relative_to(ROOT).as_posix())
 
 
-def validate_negative(case: str) -> None:
+def validate_negative(case: str, fixture: dict[str, Any]) -> None:
     trace = read_json(TRACE)
     blocks = requirement_blocks()
     inventory = read_json(INVENTORY)
-    if case == "bad-hash":
+    mutation = fixture.get("mutation")
+    if not isinstance(mutation, str):
+        raise SpecError("negative_fixture_malformed", case)
+    if mutation == "hash":
         trace["requirements"]["REQ-F-001"]["block_sha256"] = "0" * 64
         check_evidence(trace, blocks, inventory)
-    elif case == "bad-revision":
+    elif mutation == "revision":
         trace["source_revision"] = "0" * 40
         check_evidence(trace, blocks, inventory)
-    elif case == "missing-anchor":
+    elif mutation == "anchor":
         trace["requirements"]["REQ-F-001"]["surface"] = "skill:not-a-skill"
         check_evidence(trace, blocks, inventory)
-    elif case == "bad-selector":
+    elif mutation == "selector":
         trace["evidence_profiles"]["inventory"]["test_selector"] = "tests/not-a-test.py::missing"
         check_evidence(trace, blocks, inventory)
-    elif case == "bad-eval":
+    elif mutation == "eval":
         trace["evidence_profiles"]["inventory"]["eval_ids"] = ["not-an-eval"]
         check_evidence(trace, blocks, inventory)
-    elif case == "orphan-evidence":
+    elif mutation == "orphan":
         trace["manual_evidence"]["ME-ORPHAN-001"] = {
             "rationale": "orphan",
             "source": "specs/README.md",
         }
         check_evidence(trace, blocks, inventory)
-    elif case == "stale-evidence":
+    elif mutation == "stale":
         trace["evidence_profiles"]["compatibility"]["contract_path"] = "missing-contract.json"
         check_evidence(trace, blocks, inventory)
-    elif case == "retired-surface":
+    elif mutation == "surface":
         trace["requirements"]["REQ-F-001"]["surface"] = "retired:surface"
         check_evidence(trace, blocks, inventory)
-    elif case == "missing-manual-rationale":
+    elif mutation == "manual-rationale":
         trace["manual_evidence"]["ME-ARCH-001"]["rationale"] = ""
         check_evidence(trace, blocks, inventory)
-    elif case == "contract-sidecar":
-        raise SpecError("contract_sidecar", "tests/fixtures/specs-negative/example.contract.json")
-    elif case == "duplicate-id":
-        duplicate = "### REQ-F-001 - duplicate\n\ntext\n### REQ-F-001 - duplicate\n\ntext"
+    elif mutation == "sidecar":
+        path = fixture.get("path")
+        if not isinstance(path, str) or not path.endswith(".contract.json"):
+            raise SpecError("negative_fixture_malformed", case)
+        raise SpecError("contract_sidecar", path)
+    elif mutation == "duplicate":
+        duplicate = fixture.get("content")
+        if not isinstance(duplicate, str):
+            raise SpecError("negative_fixture_malformed", case)
         if len(re.findall(r"^### REQ-F-001", duplicate, re.MULTILINE)) == 2:
             raise SpecError("duplicate_requirement_id", case)
     else:
@@ -299,7 +307,11 @@ def classify_paths(paths: list[str]) -> bool:
     config = read_json(CONFIG)
     behavioral = tuple(config.get("behavioral_roots", []))
     exact = tuple(config.get("behavioral_paths", []))
-    return any(path.startswith(behavioral) or path in exact for path in paths)
+    return any(
+        any(path == root.rstrip("/") or path.startswith(root) for root in behavioral)
+        or path in exact
+        for path in paths
+    )
 
 
 def commit_has_trailer(commit: str) -> bool:
@@ -420,11 +432,12 @@ def main(argv: list[str] | None = None) -> int:
             "bad-revision": "source_revision",
             "missing-manual-rationale": "manual_evidence",
         }
-        case = read_json(Path(args.negative)).get("case")
+        fixture = read_json(Path(args.negative))
+        case = fixture.get("case")
         if case not in expected:
             fail("negative_fixture_drift", str(case))
         try:
-            validate_negative(case)
+            validate_negative(case, fixture)
         except SpecError as error:
             if error.code != expected[case]:
                 fail("negative_fixture_drift", case)

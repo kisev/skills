@@ -1,1 +1,1 @@
-{ "case": "bad-hash" }
+{ "case": "bad-hash", "mutation": "hash" }

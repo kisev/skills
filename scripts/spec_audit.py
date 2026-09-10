@@ -51,6 +51,48 @@ def findings() -> list[dict[str, str]]:
                     "source": surface,
                 }
             )
+        elif (
+            surface.startswith("agent:")
+            and not (
+                ROOT / "specs/capabilities/agents" / f"{surface.split(':', 1)[1]}.md"
+            ).is_file()
+        ):
+            result.append(
+                {
+                    "status": "SPEC_AHEAD",
+                    "requirement": req_id,
+                    "spec": path.as_posix(),
+                    "source": surface,
+                }
+            )
+        elif (
+            surface.startswith("plugin:")
+            and not (
+                ROOT / "specs/capabilities/plugins" / f"{surface.split(':', 1)[1]}.md"
+            ).is_file()
+        ):
+            result.append(
+                {
+                    "status": "SPEC_AHEAD",
+                    "requirement": req_id,
+                    "spec": path.as_posix(),
+                    "source": surface,
+                }
+            )
+        elif (
+            surface.startswith("tool:")
+            and not (
+                ROOT / "specs/capabilities/package-tools" / f"{surface.split(':', 1)[1]}.md"
+            ).is_file()
+        ):
+            result.append(
+                {
+                    "status": "SPEC_AHEAD",
+                    "requirement": req_id,
+                    "spec": path.as_posix(),
+                    "source": surface,
+                }
+            )
     return result
 
 
@@ -113,7 +155,40 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
         return 2
-    critic_value = json.loads(critic.stdout)
+    try:
+        critic_value = json.loads(critic.stdout)
+    except json.JSONDecodeError:
+        emit(
+            {
+                "schema": "spec-audit/v1",
+                "scope": "full",
+                "status": "UNKNOWN",
+                "critic": {
+                    "independent": True,
+                    "decision": "blocked",
+                    "reason": "malformed_critic",
+                },
+                "read_only": True,
+            }
+        )
+        return 2
+    if critic_value.get("schema") != "spec-audit-critic/v1" or not isinstance(
+        critic_value.get("findings"), list
+    ):
+        emit(
+            {
+                "schema": "spec-audit/v1",
+                "scope": "full",
+                "status": "UNKNOWN",
+                "critic": {
+                    "independent": True,
+                    "decision": "blocked",
+                    "reason": "malformed_critic",
+                },
+                "read_only": True,
+            }
+        )
+        return 2
     critic_findings = critic_value.get("findings", [])
     status = current[0]["status"] if current else "OK"
     emit(
@@ -121,9 +196,9 @@ def main(argv: list[str] | None = None) -> int:
             "schema": "spec-audit/v1",
             "scope": "full",
             "status": status,
-            "quality_findings": [],
+            "quality_findings": [item for item in current if item.get("status") == "CONFLICT"],
             "drift": current,
-            "unchecked_boundaries": [],
+            "unchecked_boundaries": [item for item in current if item.get("status") == "UNKNOWN"],
             "critic": {
                 "independent": True,
                 "initial_conclusions_hidden": True,

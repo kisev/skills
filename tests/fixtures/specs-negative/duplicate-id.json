@@ -1,1 +1,5 @@
-{ "case": "duplicate-id" }
+{
+  "case": "duplicate-id",
+  "mutation": "duplicate",
+  "content": "### REQ-F-001 - duplicate\n\ntext\n### REQ-F-001 - duplicate\n\ntext"
+}

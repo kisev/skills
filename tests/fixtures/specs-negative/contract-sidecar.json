@@ -1,1 +1,5 @@
-{ "case": "contract-sidecar" }
+{
+  "case": "contract-sidecar",
+  "mutation": "sidecar",
+  "path": "tests/fixtures/specs-negative/example.contract.json"
+}
