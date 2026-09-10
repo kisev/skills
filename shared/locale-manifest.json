@@ -5,6 +5,7 @@
     { "en": "CONTRIBUTING.md", "ru": "CONTRIBUTING.ru.md" },
     { "en": "docs/architecture.md", "ru": "docs/ru/architecture.md" },
     { "en": "docs/migration-inventory.md", "ru": "docs/ru/migration-inventory.md" },
+    { "en": "docs/verification.md", "ru": "docs/ru/verification.md" },
     { "en": "packages/opencode/README.md", "ru": "packages/opencode/README.ru.md" },
     { "en": "packages/skills/README.md", "ru": "packages/skills/README.ru.md" }
   ],
