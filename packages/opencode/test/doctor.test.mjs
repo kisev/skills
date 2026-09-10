@@ -13,7 +13,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import plugin, { collectDoctorFacts, doctorExitCode } from "../dist/index.js";
+import plugin from "../dist/index.js";
+import { collectDoctorFacts, doctorExitCode } from "../dist/doctor.js";
 import { renderDoctor } from "../dist/cli-output.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");

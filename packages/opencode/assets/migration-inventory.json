@@ -166,6 +166,19 @@
     "commands/team-sprint-status.md": "408d7f855b0a6743c1f336d223c514a54f2a5f01e115c543576d5ca886984270",
     "commands/walkthrough.md": "30cbf5a2732841515777b9ee757dc6c7ffa0e1168274ed33822ade648974b3ef"
   },
+  "retired_plugin_hashes": {
+    "plugins/background-attempts.js": "352f21f7bdae53502ab998c371e4a53bf61eb2911a8abeb805f637c6c21b5fe3",
+    "plugins/schedule.js": "fbfc3ae48b7902acd88a44ba7aa7b3f4d425795145a89321da8b083badd22397",
+    "plugins/autonomy-policy.js": "d296309c84735201c7f47953df941d264533868c9139de7fdb7fde821a9eef29",
+    "plugins/zed-clickable-paths.js": "ddb3dcff898945eb3422f16083f79a69c1025f4b0830a760937eef5a3db23708"
+  },
+  "known_state_roots": [
+    "~/.local/state/opencode/skills-opencode/attempt",
+    "~/.local/state/opencode/skills-opencode/schedule",
+    "~/.local/state/opencode/skills-opencode/worktree",
+    "~/.local/state/opencode/skills-opencode/goal",
+    "~/.local/state/opencode/skills-opencode/multi-run"
+  ],
   "renamed": {
     "project-spec": "spec-manage",
     "skill-improver": "skill-improve",

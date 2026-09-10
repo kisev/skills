@@ -30,7 +30,10 @@ npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
 npm install @kisev/skills-opencode@2.0.0
 ```
 
-Сначала покажите план installer. По умолчанию CLI выводит короткую сводку:
+Interactive selection доступен только в TTY. В non-TTY install нужно явно передать
+`--commands`, `--agents` и `--plugins`; selectable plugins по умолчанию пусты.
+Wizard показывает skill commands, package commands, fixed agents и
+`rules-injector`, `rtk`, `zed-bell`. Сначала покажите план installer. CLI выводит короткую сводку:
 счётчики по группам, только изменяемые paths, conflicts, restart flag, digest и
 готовую confirm-команду. Эта команда не меняет deployment:
 
@@ -97,11 +100,12 @@ npm exec -- skills-opencode reconcile --scope project --confirm <digest>
 npm exec -- skills-opencode reconcile --scope global --dry-run --json
 ```
 
-Удаляются только retired files с доказанным inventory ownership и exact
-SHA-256. Modified-managed, user-owned, unknown, symlink, unsafe-path и
-ambiguous-source entries остаются conflicts. Другие scopes, sources и lock
-entries сохраняются byte-for-byte. Journaled transaction обеспечивает rollback,
-recovery и повторный no-op reconcile.
+Retired files с доказанным inventory ownership и exact SHA-256 перемещаются в
+private content-addressed XDG archive с index, а не удаляются. Modified-managed,
+user-owned, unknown, symlink, unsafe-path, worktree и ambiguous-source entries
+остаются conflicts без изменения bytes. Journal target и archive обеспечивает
+rollback, recovery и повторный no-op reconcile. Doctor показывает archive и
+conflicts read-only.
 
 Добавьте plugin в `opencode.json` вручную:
 
@@ -192,11 +196,9 @@ Uninstall удаляет только files из ownership manifest, если и
 
 ## Runtime options
 
-Package экспортирует independent plugin factories `background-attempts`,
-`schedule`, `autonomy-policy`, `rules-injector`, `rtk`, `zed-bell` и
-`zed-clickable-paths`. Stateful plugins Background Attempts, Scheduler и
-Autonomy Policy отключены по умолчанию. Zed integrations также
-optional. Включайте subsystem только в собственном user-owned plugin wrapper:
+Package экспортирует core OpenCode plugin и independent plugin factories
+`rules-injector`, `rtk`, `zed-bell`. Retired plugin APIs и internal lifecycle
+implementations public surface не входят:
 
 Background Attempts создают workspace только через единый managed worktree
 owner. Records используют private current-only state, marker и repository

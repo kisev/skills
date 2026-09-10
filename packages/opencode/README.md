@@ -29,6 +29,11 @@ skill is missing.
 npm install @kisev/skills-opencode@2.0.0
 ```
 
+Interactive selection is available only in a TTY. Non-TTY installs require
+explicit `--commands`, `--agents`, and `--plugins` flags; selectable plugins
+default to an empty set. The wizard shows skill commands, package commands,
+fixed agents, and `rules-injector`, `rtk`, `zed-bell`.
+
 Preview before any write:
 
 ```shell
@@ -83,14 +88,12 @@ npm exec -- skills-opencode reconcile --scope global --dry-run --json
 ```
 
 It considers only public portable skills, package commands, plugins, agents, and
-installation metadata for the selected scope; XDG runtime state is neither read
-nor changed. Only retired files with proven inventory ownership and exact SHA-256
-are removed. Modified-managed, user-owned, unknown, symlink, unsafe-path, and
-ambiguous-source entries remain conflicts. Other scopes, sources, and lock entries
-are preserved byte-for-byte. The journaled transaction provides rollback,
-recovery, and repeatable no-op reconciliation. Restart OpenCode fully after
-install, upgrade, or uninstall because agent and command registries are built
-before plugin hooks.
+installation metadata for the selected scope. Retired exact-owned files move to
+a private content-addressed XDG archive with an index, never disappear.
+Modified-managed, user-owned, unknown, symlink, unsafe-path, worktree, and
+ambiguous-source entries remain byte-for-byte conflicts. The journaled target and
+archive transaction provides rollback, recovery, and repeatable no-op operation.
+Doctor reports archive entries and conflicts read-only.
 
 Add the plugin manually:
 
@@ -161,18 +164,16 @@ conflicts and profile configuration is retained for a later installation.
 
 ## Runtime Options
 
-Plugins are independent and stateful ones are opt-in.
+Plugins are independent and selectable ones are opt-in.
 
 ```shell
 npm exec -- skills-opencode agent list --scope global --json
 ```
 
-The package exports independent factories for background attempts, schedule,
-autonomy policy, rules injection, RTK, and Zed integrations. Background Attempts,
-Scheduler, and Autonomy Policy are disabled by default. Background attempts use
-the managed worktree owner and current-only private state; Scheduler accepts only
-strict five-field cron and never replays missed slots. Rules injection fails soft
-within a bounded budget and preserves native rules; RTK fails open.
+The package exports the core OpenCode plugin and independent factories for
+`rules-injector`, `rtk`, and `zed-bell`. Retired plugin APIs and internal lifecycle
+implementations are not public. Rules injection fails soft within a bounded
+budget; RTK fails open.
 
 ## Stage 18 Routing
 

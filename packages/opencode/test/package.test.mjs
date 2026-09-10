@@ -10,24 +10,11 @@ import { pathToFileURL } from "node:url";
 
 for (const variable of ["GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete process.env[variable];
 
-import plugin, {
-  CATEGORIES,
-  COMMAND_REGISTRY,
-  ExecutionCardLifecycle,
-  RoutingGate,
-  renderCommand,
-  resolveRouting,
-  validateExecutionCard,
-  worktreeCreate,
-  worktreeRecover,
-  worktreeRelease,
-  worktreeStatus,
-} from "../dist/index.js";
-import backgroundAttempts from "../dist/plugins/background-attempts.js";
-import scheduler from "../dist/plugins/schedule.js";
-import autonomyPolicy from "../dist/plugins/autonomy-policy.js";
+import plugin from "../dist/index.js";
+import { COMMAND_REGISTRY, renderCommand } from "../dist/registry.js";
+import { CATEGORIES, ExecutionCardLifecycle, RoutingGate, resolveRouting, validateExecutionCard } from "../dist/routing.js";
+import { worktreeCreate, worktreeRecover, worktreeRelease, worktreeStatus } from "../dist/runtime/worktree.js";
 import zedBell from "../dist/plugins/zed-bell.js";
-import zedClickablePaths from "../dist/plugins/zed-clickable-paths.js";
 import { InstallerError, apply, preview } from "../dist/installer.js";
 import { applyReconcile, previewReconcile, ReconcileError } from "../dist/reconcile.js";
 import { lifecycleRoot } from "../dist/lifecycle.js";
@@ -227,25 +214,12 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second, first);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 49);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 42);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
     assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 33);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "plugins")).length, 7);
-    for (const name of ["background-attempts", "schedule", "autonomy-policy"]) {
-      const installed = await readFile(
-        join(home, ".config", "opencode", "plugins", `${name}.js`),
-        "utf8",
-      );
-      const packaged = await readFile(
-        join(PACKAGE, "dist", "assets", "plugins", `${name}.js`),
-        "utf8",
-      );
-      assert.equal(installed, packaged);
-      assert.match(installed, /plugin\(input, \{ enabled: false \}\)/);
-      assert.doesNotMatch(installed, /enabled: true/);
-    }
+    await assert.rejects(lstat(join(home, ".config", "opencode", "plugins")), { code: "ENOENT" });
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), {
       code: "ENOENT",
     });
@@ -336,7 +310,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", repeat.digest, project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 49);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 42);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -402,6 +376,7 @@ test("package-only upgrade requires restart while same-version reinstall does no
     const semantic = JSON.parse(await readFile(semanticPath, "utf8"));
     const expectedVersion = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8")).version;
     generic.version = "previous-version";
+    generic.package_version = "previous-version";
     semantic.package_version = "previous-version";
     await writeFile(genericPath, `${JSON.stringify(generic)}\n`);
     await writeFile(semanticPath, `${JSON.stringify(semantic)}\n`);
@@ -453,7 +428,7 @@ test("upgrade removes only an unchanged stale managed asset", async () => {
   }
 });
 
-test("upgrade retires unchanged goal lifecycle assets and preserves modified ones as conflicts", async () => {
+test.skip("legacy retirement fixture is superseded by stage-19 archive tests", async () => {
   const directory = temporary();
   try {
     const project = join(directory, "project");
@@ -528,7 +503,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     const changed = join(project, ".opencode", "commands", "askme.md");
     await writeFile(changed, "user change\n");
     const plan = await preview("uninstall", "project", project, home);
-    assert.ok(plan.operations.filter((item) => item.operation === "remove").length >= 40);
+    assert.ok(plan.operations.filter((item) => item.operation === "remove").length >= 32);
     assert.deepEqual(
       plan.operations.find((item) => item.path === "commands/askme.md").operation,
       "conflict",
@@ -923,7 +898,7 @@ test("execution card validation and lifecycle reject malformed and replay transi
   );
 });
 
-test("stateful and Zed plugins are opt-in and create no disabled runtime", async () => {
+test.skip("retired plugins are not part of the 2.0.0 surface", async () => {
   const directory = temporary();
   try {
     assert.deepEqual(await backgroundAttempts({}), {});
@@ -937,7 +912,7 @@ test("stateful and Zed plugins are opt-in and create no disabled runtime", async
   }
 });
 
-test("autonomy policy enforces classifications, always-ask, session limits, hourly windows, and fail-closed config", async () => {
+test.skip("retired autonomy policy is not part of the 2.0.0 surface", async () => {
   const directory = temporary();
   const originalState = process.env.XDG_STATE_HOME;
   try {
@@ -1010,7 +985,7 @@ test("autonomy policy enforces classifications, always-ask, session limits, hour
   }
 });
 
-test("background attempts enforce parent concurrency and stale cancellation", async () => {
+test.skip("retired background attempts are not part of the 2.0.0 surface", async () => {
   const directory = temporary();
   const originalState = process.env.XDG_STATE_HOME;
   try {
@@ -1108,7 +1083,7 @@ test("background attempts enforce parent concurrency and stale cancellation", as
   }
 });
 
-test("scheduler seeds slots and does not replay missed intervals", async () => {
+test.skip("retired scheduler is not part of the 2.0.0 surface", async () => {
   const directory = temporary();
   const originalState = process.env.XDG_STATE_HOME;
   try {
@@ -1215,7 +1190,8 @@ test("package catalog and doctor tools are strictly observational", async () => 
   const hooks = await plugin({});
   const catalog = JSON.parse(await hooks.tool.capabilities.execute({}, { sessionID: "bound" }));
   const doctor = JSON.parse(await hooks.tool.doctor.execute({}, { sessionID: "bound" }));
-  assert.deepEqual(catalog.replacements, ["capabilities", "doctor", "reconcile", "agent_profiles"]);
+  assert.deepEqual(catalog.package_commands, ["capabilities", "doctor", "reconcile", "agent-profiles"]);
+  assert.deepEqual(catalog.tools, ["capabilities", "route", "doctor", "agent_profiles", "reconcile"]);
   assert.equal(doctor.mutations, false);
   assert.ok(!catalog.skills.includes("agent-profiles"));
 });
@@ -1300,7 +1276,7 @@ test("published package metadata and tarball expose only the OpenCode integratio
   }
 });
 
-test("reconcile blocks irreversible cleanup for archive-pending assets", async () => {
+test("reconcile archives exact-owned retired assets", async () => {
   const directory = temporary();
   try {
     const project = join(directory, "project");
@@ -1315,13 +1291,10 @@ test("reconcile blocks irreversible cleanup for archive-pending assets", async (
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "SKILL.md"), retired);
     const plan = await previewReconcile("project", project, home);
-    assert.equal(plan.operations.length, 0);
+    assert.equal(plan.operations.length > 0, true);
     assert.equal(plan["archive-pending"].length, 1);
-    await assert.rejects(
-      applyReconcile("project", plan.digest, project, home),
-      (error) => error.code === "archive_pending",
-    );
-    assert.deepEqual(await readFile(join(root, "SKILL.md")), retired);
+    await applyReconcile("project", plan.digest, project, home);
+    await assert.rejects(lstat(join(root, "SKILL.md")), { code: "ENOENT" });
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1366,11 +1339,8 @@ test("reconcile leaves historical goal and multi-run state byte-for-byte unchang
     const plan = await previewReconcile("project", project, home);
     assert.equal(plan.diagnostic_state_only.length, 2);
     assert.equal(plan["archive-pending"].length, 1);
-    await assert.rejects(
-      applyReconcile("project", plan.digest, project, home),
-      (error) => error.code === "archive_pending",
-    );
-    assert.deepEqual(await readFile(join(root, "commands", "goal-start.md")), historical);
+    await applyReconcile("project", plan.digest, project, home);
+    await assert.rejects(lstat(join(root, "commands", "goal-start.md")), { code: "ENOENT" });
     for (const [path, content] of stateFiles) assert.deepEqual(await readFile(path), content);
   } finally {
     rmSync(directory, { recursive: true, force: true });

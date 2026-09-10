@@ -1,6 +1,6 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "plugin.background-attempts.enabled-boundary",
+  "id": "plugin.rules-injector.enabled-boundary",
   "revision": 1,
   "kind": "deterministic",
   "surface": "plugin",
@@ -8,17 +8,17 @@
   "input": {
     "prompt": "Plugin remains disabled until explicit enablement.",
     "fixture": {
-      "selected": ["plugin:background-attempts"]
+      "selected": ["plugin:rules-injector"]
     }
   },
   "expected": {
-    "selected": ["plugin:background-attempts"],
-    "not_selected": ["plugin:schedule"]
+    "selected": ["plugin:rules-injector"],
+    "not_selected": ["plugin:rtk"]
   },
   "invariants": [
     {
       "id": "plugin-source",
-      "path": "packages/opencode/src/plugins/background-attempts.ts",
+      "path": "packages/opencode/src/plugins/rules-injector.ts",
       "contains": "enabled"
     }
   ],
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "c247c6a1f6213f37988fe9216878fe12052ea9ed160ef628cabce46df1e1cec8",
+  "digest": "5c1be49b080254ba2b14e8b8e2ffc16fc167a298aab849f5a0caf8725213cf19",
   "locale": "neutral",
   "pair_id": null
 }

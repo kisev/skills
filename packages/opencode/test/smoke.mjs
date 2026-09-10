@@ -8,6 +8,7 @@ import { join, resolve } from "node:path";
 const packageRoot = resolve(import.meta.dirname, "..");
 const temporary = mkdtempSync(join(tmpdir(), "skills-opencode-smoke-"));
 const binary = process.env.OPENCODE_BINARY ?? "opencode";
+const selection = ["--commands", "agents-md", "--agents", "manager,architect,mapper,worker,review,critic", "--plugins", "none"];
 
 function run(command, arguments_, options = {}) {
   const result = spawnSync(command, arguments_, { encoding: "utf8", ...options });
@@ -27,16 +28,10 @@ try {
   const executable = join(project, "node_modules", ".bin", "skills-opencode");
   const environment = { PATH: process.env.PATH ?? "", HOME: home, XDG_CONFIG_HOME: join(home, ".config"), XDG_STATE_HOME: join(home, ".state") };
   const cli = (arguments_) => JSON.parse(run(executable, [...arguments_, "--json"], { cwd: project, env: environment }));
-  const humanPreview = run("npm", ["exec", "--", "skills-opencode", "install", "--scope", "global", "--dry-run"], { cwd: project, env: environment });
-  const confirmation = humanPreview.split("\n").find((line) => line.startsWith("  npm exec -- skills-opencode install "))?.trim().split(" ");
-  assert.ok(confirmation);
-  const humanApply = run(confirmation[0], confirmation.slice(1), { cwd: project, env: environment });
-  assert.match(humanApply, /Applied changes:/);
-  assert.match(humanApply, /Restart required: yes/);
-  const dryRun = cli(["install", "--scope", "global", "--dry-run"]);
+  const dryRun = cli(["install", "--scope", "global", ...selection, "--dry-run"]);
   assert.equal(dryRun.applied, false);
-  assert.equal(dryRun.plan.requires_restart, false);
-  assert.equal(cli(["install", "--scope", "global", "--confirm", dryRun.plan.digest]).requires_restart, false);
+  assert.equal(dryRun.plan.requires_restart, true);
+  assert.equal(cli(["install", "--scope", "global", ...selection, "--confirm", dryRun.plan.digest]).requires_restart, true);
   const doctor = spawnSync(executable, ["doctor", "--scope", "global", "--json"], { cwd: project, env: environment, encoding: "utf8" });
   assert.ok([1, 2].includes(doctor.status));
   assert.equal(JSON.parse(doctor.stdout).mutations, false);
@@ -56,9 +51,9 @@ try {
   const config = run(binary, ["debug", "config"], { cwd: project, env: opencodeEnvironment });
   assert.match(config, /@kisev\/skills-opencode/);
   const manifest = JSON.parse(await readFile(join(home, ".config", "opencode", ".skills-opencode-manifest.json"), "utf8"));
-  assert.equal(Object.keys(manifest.files).length, 40);
+  assert.equal(Object.keys(manifest.files).length, 1);
   assert.equal(Object.keys(manifest.files).some((path) => path.startsWith("agents/")), false);
-  assert.equal(Object.keys(manifest.files).filter((path) => path.startsWith("plugins/")).length, 7);
+  assert.equal(Object.keys(manifest.files).filter((path) => path.startsWith("plugins/")).length, 0);
   const semantic = JSON.parse(await readFile(join(home, ".config", "opencode", ".skills-opencode", "agent-profiles.manifest.json"), "utf8"));
   assert.deepEqual(semantic.critic_pool, ["critic", "critic-smoke"]);
   process.stdout.write("Packed OpenCode installer smoke test passed\n");

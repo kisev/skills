@@ -893,15 +893,26 @@ test("CLI defaults to a concise human plan and table", async () => {
       encoding: "utf8",
     });
   try {
-    const previewResult = invoke(["install", "--scope", "project", "--dry-run"]);
+    const previewResult = invoke([
+      "install",
+      "--scope",
+      "project",
+      "--commands",
+      "none",
+      "--agents",
+      "manager,architect,mapper,worker,review,critic",
+      "--plugins",
+      "none",
+      "--dry-run",
+    ]);
     assert.equal(previewResult.status, 0, previewResult.stderr);
     assert.ok(
       previewResult.stdout.startsWith(
         `Install @kisev/skills-opencode ${PACKAGE_VERSION} (project)\n`,
       ),
     );
-    assert.match(previewResult.stdout, /^  Commands: create 33$/m);
-    assert.match(previewResult.stdout, /^  Commands\/create: .+ \(\+25 more\)$/m);
+    assert.match(previewResult.stdout, /^  Agents: create 6$/m);
+    assert.match(previewResult.stdout, /^  State: create 3$/m);
     assert.match(previewResult.stdout, /^Conflicts: none$/m);
     assert.match(previewResult.stdout, /^Digest: [a-f0-9]{64}$/m);
     assert.match(previewResult.stdout, /^Apply:\n  npm exec -- skills-opencode install /m);
@@ -910,7 +921,19 @@ test("CLI defaults to a concise human plan and table", async () => {
     const digest = previewResult.stdout.match(/^Digest: ([a-f0-9]{64})$/m)?.[1];
     assert.ok(digest);
 
-    const applied = invoke(["install", "--scope", "project", "--confirm", digest]);
+    const applied = invoke([
+      "install",
+      "--scope",
+      "project",
+      "--commands",
+      "none",
+      "--agents",
+      "manager,architect,mapper,worker,review,critic",
+      "--plugins",
+      "none",
+      "--confirm",
+      digest,
+    ]);
     assert.equal(applied.status, 0, applied.stderr);
     assert.match(applied.stdout, /^Applied changes:$/m);
     assert.match(applied.stdout, /^Restart required: yes$/m);
@@ -957,7 +980,19 @@ test("CLI human plan explains exact-name conflicts", async () => {
     await writeFile(join(context.root, "agents", "manager.md"), "user-owned\n");
     const result = spawnSync(
       process.execPath,
-      [executable, "install", "--scope", "project", "--dry-run"],
+      [
+        executable,
+        "install",
+        "--scope",
+        "project",
+        "--commands",
+        "none",
+        "--agents",
+        "manager,architect,mapper,worker,review,critic",
+        "--plugins",
+        "none",
+        "--dry-run",
+      ],
       {
         cwd: context.project,
         env: {
@@ -992,7 +1027,19 @@ test("CLI human plan never truncates conflicts", async () => {
     );
     const result = spawnSync(
       process.execPath,
-      [executable, "install", "--scope", "project", "--dry-run"],
+      [
+        executable,
+        "install",
+        "--scope",
+        "project",
+        "--commands",
+        commands.map((name) => name.slice(0, -3)).join(","),
+        "--agents",
+        "none",
+        "--plugins",
+        "none",
+        "--dry-run",
+      ],
       {
         cwd: context.project,
         env: {
@@ -1034,9 +1081,32 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
     return JSON.parse(result.stdout);
   };
   try {
-    let plan = run(["install", "--scope", "project", "--dry-run"]).plan;
+    let plan = run([
+      "install",
+      "--scope",
+      "project",
+      "--commands",
+      "none",
+      "--agents",
+      "manager,architect,mapper,worker,review,critic",
+      "--plugins",
+      "none",
+      "--dry-run",
+    ]).plan;
     assert.equal(
-      run(["install", "--scope", "project", "--confirm", plan.digest]).requires_restart,
+      run([
+        "install",
+        "--scope",
+        "project",
+        "--commands",
+        "none",
+        "--agents",
+        "manager,architect,mapper,worker,review,critic",
+        "--plugins",
+        "none",
+        "--confirm",
+        plan.digest,
+      ]).requires_restart,
       true,
     );
     plan = run([
