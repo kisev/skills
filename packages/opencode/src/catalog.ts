@@ -34,5 +34,5 @@ export const CATALOG = {
   agents: ["manager", "architect", "mapper", "worker", "review", "critic"],
   package_commands: ["capabilities", "doctor", "reconcile", "agent-profiles"],
   tools: ["capabilities", "route", "doctor", "agent_profiles", "reconcile"],
-  version: "2.0.0",
+  version: "2.0.1",
 } as const;

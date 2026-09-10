@@ -4,6 +4,21 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.1] - 2026-09-10
+
+### Исправлено
+
+- CI specification-impact gate теперь детерминированно разрешает ranges для pull
+  request, обычного branch push, первого branch push и tag push.
+- Tag push больше не передаёт zero SHA в Git: release commit проверяется как
+  достижимый из `origin/main`, а impact range строится от его первого parent.
+- Некорректные, отсутствующие и недостижимые event SHAs завершают gate fail closed.
+
+### Не изменено
+
+- Это CI-only исправление: runtime, skills, public inventory и behavioral contracts
+  не изменялись. Portable skill metadata остаётся `2.0.0`.
+
 ## [2.0.0] - 2026-09-10
 
 ### Несовместимые изменения

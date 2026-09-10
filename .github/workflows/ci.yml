@@ -15,10 +15,17 @@ jobs:
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+      - name: Resolve specification impact range
+        id: spec-range
+        run: |
+          resolved="$(uv run --locked python scripts/resolve_spec_impact.py)"
+          printf '%s\n' "$resolved"
+          echo "base=$(jq -er '.base' <<<"$resolved")" >> "$GITHUB_OUTPUT"
+          echo "head=$(jq -er '.head' <<<"$resolved")" >> "$GITHUB_OUTPUT"
       - name: Specification impact gate
         run: >-
           task spec:impact
-          BASE=${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD=${{ github.sha }}
+          BASE=${{ steps.spec-range.outputs.base }}
+          HEAD=${{ steps.spec-range.outputs.head }}
       - name: Quality gate
         run: task check
