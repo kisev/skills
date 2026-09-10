@@ -1,7 +1,7 @@
 ---
 name: spec-manage
 description: >-
-  Create, onboard, update, or audit a canonical project specification. Russian discovery terms: спецификация проекта.
+  Create, onboard, update, or audit an English-only canonical project specification. Russian discovery terms: спецификация проекта.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
