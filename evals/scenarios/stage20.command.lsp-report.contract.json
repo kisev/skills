@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "8523a715f50994be773a572ffbc14c20201e1fa27001092ae742541667e781d7",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:lsp-report"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.lsp-report.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:lsp-report"]
+    },
+    "prompt": "Verify command lsp-report contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.lsp-report.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

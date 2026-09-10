@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "74389b5740cae20ae49ddaccf5367e38d9b45954746c037b5763df0934d47650",
+  "expected": {
+    "mutation_boundary": "phase-and-confirmation-bound",
+    "not_selected": [],
+    "selected": ["package-tool:reconcile"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.package-tool.reconcile.contract",
+  "input": {
+    "fixture": {
+      "selected": ["package-tool:reconcile"]
+    },
+    "prompt": "Verify package-tool reconcile contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.package-tool.reconcile.contract.source",
+      "path": "packages/opencode/src/index.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "package-tool"
+}

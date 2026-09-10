@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "460d49c2fe29dcb8b7942e7c6a70f3ef27f3c409d6c116b1585bea770ada1c09",
+  "expected": {
+    "mutation_boundary": "phase-and-confirmation-bound",
+    "not_selected": [],
+    "selected": ["package-tool:doctor"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.package-tool.doctor.contract",
+  "input": {
+    "fixture": {
+      "selected": ["package-tool:doctor"]
+    },
+    "prompt": "Verify package-tool doctor contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.package-tool.doctor.contract.source",
+      "path": "packages/opencode/src/index.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "package-tool"
+}

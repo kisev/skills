@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "4869f9b60086893e8d6ed8c32f31dd6109b0fa448b677407ad2dba33d26de5cb",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:mr-prepare"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.mr-prepare.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:mr-prepare"]
+    },
+    "prompt": "Verify command mr-prepare contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.mr-prepare.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

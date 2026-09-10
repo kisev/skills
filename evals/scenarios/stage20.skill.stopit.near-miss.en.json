@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "d2d73345745b4c3c5dfc40325b9af928749bb9b4b82f4642840ec5fb5dbfdeae",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:stopit"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.stopit.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to stopit; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.stopit.near-miss.source",
+      "path": "skills/stopit/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.stopit.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

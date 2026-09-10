@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "79e7c18c75e82aba5642fce6e22cd65df1a53fa0afa4d486f41c41bd5396f5ac",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:team-sprint-start"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.team-sprint-start.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:team-sprint-start"]
+    },
+    "prompt": "Verify command team-sprint-start contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-sprint-start.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

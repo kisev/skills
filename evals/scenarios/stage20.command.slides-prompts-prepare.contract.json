@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "4db252a16da571ca7f774083acff31fd9f49020792ea349302ef31a95558385d",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:slides-prompts-prepare"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.slides-prompts-prepare.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:slides-prompts-prepare"]
+    },
+    "prompt": "Verify command slides-prompts-prepare contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.slides-prompts-prepare.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

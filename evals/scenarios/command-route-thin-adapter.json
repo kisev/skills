@@ -13,7 +13,7 @@
   },
   "expected": {
     "selected": ["package-tool:route"],
-    "not_selected": ["plugin:background-attempts"]
+    "not_selected": ["plugin:rules-injector"]
   },
   "invariants": [
     {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "27e2602cdfd19737244a8fe59622d535326afcfb22ccf4b4ae7ddfd8c2702721",
+  "digest": "6b8cb5734068156c78d91b1f26509988ef141d7c6bdab85c0e2cb009de057d09",
   "locale": "neutral",
   "pair_id": null
 }

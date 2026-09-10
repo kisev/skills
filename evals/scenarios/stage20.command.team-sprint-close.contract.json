@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "4ca463bafb28bca2a48cdec738063588acd56494b60b827e68c2d2f1c267ab4e",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:team-sprint-close"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.team-sprint-close.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:team-sprint-close"]
+    },
+    "prompt": "Verify command team-sprint-close contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-sprint-close.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

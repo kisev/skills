@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "c81dbfa1fd2c06ba3306fff079b7ed03aaf322eb90c9fda28adfdda18ef270d0",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:task-prepare"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.task-prepare.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:task-prepare"]
+    },
+    "prompt": "Select the task-prepare skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.task-prepare.trigger.source",
+      "path": "skills/task-prepare/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.task-prepare.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "5ca22de191fd0895ff5db9660aa00111b52f8462765d42d5989a56e75cebce5a",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:code-review"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.code-review.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:code-review"]
+    },
+    "prompt": "Select the code-review skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.code-review.trigger.source",
+      "path": "skills/code-review/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.code-review.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

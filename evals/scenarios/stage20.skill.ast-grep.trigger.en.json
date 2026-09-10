@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "850aeaf6f4e7602bda8faadd58cf274b3e5599b99157a8685af0845b12dbaad2",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:ast-grep"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.ast-grep.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:ast-grep"]
+    },
+    "prompt": "Select the ast-grep skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.ast-grep.trigger.source",
+      "path": "skills/ast-grep/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.ast-grep.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "2164ccbf91e727e9be10bb2dd5dbaba5fc400ea98d29a4698da1f36a7e05612e",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:agents-md"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.agents-md.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:agents-md"]
+    },
+    "prompt": "Select the agents-md skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.agents-md.trigger.source",
+      "path": "skills/agents-md/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.agents-md.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

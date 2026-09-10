@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "b022d8d05f7dd2c4296014c6a3f9d4d71a3f15a7235d0919e01a4b031d92a382",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:agents-md"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.agents-md.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to agents-md; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.agents-md.near-miss.source",
+      "path": "skills/agents-md/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.agents-md.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

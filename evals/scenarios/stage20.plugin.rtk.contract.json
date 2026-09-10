@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "3110741b34ebcd1e9258bdd4252e49f2e9eb5ff40ac8d5f0fc9c1238577777cc",
+  "expected": {
+    "mutation_boundary": "enabled-option-only",
+    "not_selected": [],
+    "selected": ["plugin:rtk"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.plugin.rtk.contract",
+  "input": {
+    "fixture": {
+      "selected": ["plugin:rtk"]
+    },
+    "prompt": "Verify plugin rtk contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.plugin.rtk.contract.source",
+      "path": "packages/opencode/src/plugins/rtk.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "plugin"
+}

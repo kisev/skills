@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "97da51f5986f8e2ada59dbab95b1a7b33e3c29fc027325beeb754782f737ae30",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:spec-manage"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.spec-manage.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:spec-manage"]
+    },
+    "prompt": "Select the spec-manage skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.spec-manage.trigger.source",
+      "path": "skills/spec-manage/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.spec-manage.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

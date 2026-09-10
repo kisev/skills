@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "3636f1ff9f84ca82c42c2027c29e7011dfc277ef1c7193f387a328d1b634b834",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:team-sprint-start"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-sprint-start.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-sprint-start"]
+    },
+    "prompt": "Select the team-sprint-start skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-sprint-start.trigger.source",
+      "path": "skills/team-sprint-start/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-sprint-start.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

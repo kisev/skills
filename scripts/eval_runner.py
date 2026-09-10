@@ -23,6 +23,7 @@ SCHEMA_VERSION = 1
 SCENARIO_SCHEMA = "eval-scenario/v1"
 RESULT_SCHEMA = "eval-result/v1"
 ADAPTER_PROTOCOLS = {"opencode": "opencode-cli-json/v1", "codex": "codex-cli-json/v1"}
+PUBLIC_SURFACES = ROOT / "evals" / "contracts" / "public-surfaces.json"
 SENSITIVE_KEY = re.compile(r"(?:token|secret|password|authorization|cookie|api[_-]?key)", re.I)
 CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 ABSOLUTE_PATH = re.compile(r"(?<![\w.-])(?:/[\w.-]+){2,}|[A-Za-z]:\\[^\s\"']+")
@@ -166,7 +167,14 @@ def validate_scenario(scenario: dict[str, Any], filename: str) -> list[str]:
         )
     if scenario["kind"] not in {"deterministic", "trigger", "near-miss", "golden"}:
         raise EvalError("malformed_scenario", f"{filename}: kind is invalid")
-    if scenario["surface"] not in {"skill", "command", "agent", "plugin"}:
+    if scenario["surface"] not in {
+        "skill",
+        "command",
+        "agent",
+        "plugin",
+        "package-tool",
+        "infrastructure",
+    }:
         raise EvalError("malformed_scenario", f"{filename}: surface is invalid")
     if scenario["host"] not in {"opencode", "codex", "any"}:
         raise EvalError("malformed_scenario", f"{filename}: host is invalid")
@@ -230,6 +238,181 @@ def discover(corpus: Path) -> list[dict[str, Any]]:
         if first["invariants"] != second["invariants"]:
             raise EvalError("scenario_pair_drift", f"pair {pair_id}: invariants differ")
     return scenarios
+
+
+def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]]) -> None:
+    """Keep deterministic coverage tied to the public catalog, not a second trace system."""
+    try:
+        inventory = json.loads(
+            (root / "evals" / "contracts" / "public-surfaces.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError) as error:
+        raise EvalError(
+            "stale_package_inventory", f"cannot read public surface inventory: {error}"
+        ) from error
+    if not isinstance(inventory, dict) or inventory.get("version") != 1:
+        raise EvalError("stale_package_inventory", "public surface inventory version is invalid")
+    expected = {
+        "skill": set(inventory.get("skills", [])),
+        "command": set(inventory.get("commands", [])),
+        "agent": set(inventory.get("agents", [])),
+        "plugin": set(inventory.get("plugins", [])),
+        "package-tool": set(inventory.get("package_tools", [])),
+        "infrastructure": set(inventory.get("infrastructure", [])),
+    }
+    if any(
+        not values or any(not isinstance(value, str) for value in values)
+        for values in expected.values()
+    ):
+        raise EvalError(
+            "stale_package_inventory", "public surface inventory contains invalid entries"
+        )
+    covered: dict[str, set[str]] = {surface: set() for surface in expected}
+    for scenario in scenarios:
+        selected = scenario["expected"].get("selected", [])
+        for value in selected:
+            if not isinstance(value, str) or ":" not in value:
+                continue
+            surface, name = value.split(":", 1)
+            if surface in covered:
+                covered[surface].add(name)
+    for surface, names in expected.items():
+        if covered[surface] != names:
+            raise EvalError(
+                "surface_coverage_drift", f"{surface} coverage does not match inventory"
+            )
+    if (
+        len(expected["skill"]) != 29
+        or len(expected["command"]) != 33
+        or len(expected["agent"]) != 6
+        or len(expected["plugin"]) != 3
+        or len(expected["package-tool"]) != 5
+    ):
+        raise EvalError("stale_package_inventory", "public surface counts do not match stage 20")
+    skill_scenarios = [
+        item
+        for item in scenarios
+        if item["surface"] == "skill" and item["kind"] in {"trigger", "near-miss"}
+    ]
+    if len(skill_scenarios) < 116:
+        raise EvalError(
+            "skill_corpus_incomplete", "skill trigger/near-miss corpus is below 116 scenarios"
+        )
+    for name in expected["skill"]:
+        items = [
+            item
+            for item in skill_scenarios
+            if f"skill:{name}" in item["expected"].get("selected", [])
+            or f"skill:{name}" in item["expected"].get("not_selected", [])
+        ]
+        if len(items) < 4:
+            raise EvalError(
+                "skill_corpus_incomplete", f"skill {name} lacks the four bilingual scenarios"
+            )
+
+
+def validate_compatibility_inventory(root: Path = ROOT) -> None:
+    compatibility = root / "evals" / "contracts" / "opencode-compatibility.json"
+    try:
+        value = json.loads(compatibility.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise EvalError(
+            "stale_package_inventory", f"cannot read compatibility inventory: {error}"
+        ) from error
+    if (
+        not isinstance(value, dict)
+        or value.get("schema") != "opencode-compatibility/v1"
+        or value.get("range") != ">=1.18.29 <1.19.0"
+        or value.get("versions") != ["1.18.29", "1.18.30"]
+        or value.get("credentials") is not False
+        or value.get("network") is not False
+    ):
+        raise EvalError("stale_package_inventory", "OpenCode compatibility inventory is stale")
+
+
+def validate_negative_fixtures(root: Path) -> None:
+    fixtures = root / "evals" / "negative"
+    expected_codes = {
+        "duplicate-id": "duplicate_scenario",
+        "bad-digest": "digest_drift",
+        "missing-pair": "unpaired_scenario",
+        "unknown-surface": "unknown_surface",
+        "path-escape": "sandbox_escape",
+        "malformed-invariant": "malformed_scenario",
+        "malformed-result": "malformed_result",
+        "missing-budgets": "malformed_scenario",
+        "secret-leakage": "secret_fixture",
+        "unsupported-host": "unsupported_host",
+        "stale-package-inventory": "stale_package_inventory",
+    }
+    for name, code in expected_codes.items():
+        path = fixtures / f"{name}.json"
+        try:
+            value = load_json(path)
+            if value.get("case") != name:
+                raise EvalError("negative_fixture_drift", f"{name} has the wrong case")
+            if name == "duplicate-id":
+                ids = value.get("ids")
+                if not isinstance(ids, list) or len(ids) != 2 or ids[0] != ids[1]:
+                    raise EvalError("negative_fixture_not_rejected", name)
+                raise EvalError("duplicate_scenario", name)
+            if name == "bad-digest":
+                validate_scenario(value, path.name)
+            elif name == "missing-pair":
+                locales = value.get("locales")
+                if not isinstance(locales, list) or set(locales) == {"ru", "en"}:
+                    raise EvalError("negative_fixture_not_rejected", name)
+                raise EvalError("unpaired_scenario", name)
+            elif name == "secret-leakage":
+                if not contains_secret(value):
+                    raise EvalError("negative_fixture_not_rejected", name)
+                raise EvalError("secret_fixture", name)
+            elif name == "path-escape":
+                safe_relative(value.get("path", "../escape"))
+            elif name == "unknown-surface":
+                if value.get("surface") not in {
+                    "skill",
+                    "command",
+                    "agent",
+                    "plugin",
+                    "package-tool",
+                    "infrastructure",
+                }:
+                    raise EvalError("unknown_surface", name)
+            elif name == "unsupported-host":
+                if value.get("host") not in {"opencode", "codex", "any"}:
+                    raise EvalError("unsupported_host", name)
+            elif name == "malformed-invariant":
+                if isinstance(value.get("invariants"), list) and all(
+                    isinstance(item, dict) for item in value["invariants"]
+                ):
+                    raise EvalError("negative_fixture_not_rejected", name)
+                raise EvalError("malformed_scenario", name)
+            elif name == "missing-budgets":
+                budgets = value.get("budgets")
+                if isinstance(budgets, dict) and all(
+                    key in budgets for key in ("timeout_seconds", "max_tokens", "max_cost")
+                ):
+                    raise EvalError("negative_fixture_not_rejected", name)
+                raise EvalError("malformed_scenario", name)
+            elif name == "malformed-result":
+                result = value.get("result")
+                if not isinstance(result, dict) or not isinstance(result.get("assertions"), list):
+                    raise EvalError("malformed_result", name)
+                raise EvalError("negative_fixture_not_rejected", name)
+            elif name == "stale-package-inventory":
+                if value.get("version") == 1:
+                    raise EvalError("negative_fixture_not_rejected", name)
+                raise EvalError("stale_package_inventory", name)
+            else:
+                raise EvalError(code, name)
+        except EvalError as error:
+            if error.code != code:
+                raise EvalError(
+                    "negative_fixture_drift", f"{name} returned {error.code}, expected {code}"
+                ) from error
+            continue
+        raise EvalError("negative_fixture_not_rejected", f"{name} was accepted")
 
 
 def validate_schemas(root: Path) -> None:
@@ -796,7 +979,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--executable")
     parser.add_argument("--scenario", action="append")
     parser.add_argument("--kind", choices=("deterministic", "trigger", "near-miss", "golden"))
-    parser.add_argument("--surface", choices=("skill", "command", "agent", "plugin"))
+    parser.add_argument(
+        "--surface",
+        choices=("skill", "command", "agent", "plugin", "package-tool", "infrastructure"),
+    )
     parser.add_argument("--capabilities", action="store_true")
     args = parser.parse_args(argv)
     if args.trusted_live:
@@ -835,6 +1021,9 @@ def main(argv: list[str] | None = None) -> int:
         validate_schemas(args.root.resolve())
         validate_fixtures(args.root.resolve())
         scenarios = discover(args.corpus)
+        validate_public_surface_inventory(args.root.resolve(), scenarios)
+        validate_compatibility_inventory(args.root.resolve())
+        validate_negative_fixtures(args.root.resolve())
         selected = select(scenarios, args)
         if args.list:
             emit(

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "3b483b042d70b39860b5f036249d7357c5116acb96dad1e6db1b859c002f8e45",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:mattermost"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.mattermost.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:mattermost"]
+    },
+    "prompt": "Select the mattermost skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.mattermost.trigger.source",
+      "path": "skills/mattermost/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.mattermost.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

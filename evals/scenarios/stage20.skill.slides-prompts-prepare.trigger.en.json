@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "d50c82e5a54a4326cd3bc68c8bfbc7b13f85d9e70b9c95b90746dc82eb385c14",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:slides-prompts-prepare"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.slides-prompts-prepare.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:slides-prompts-prepare"]
+    },
+    "prompt": "Select the slides-prompts-prepare skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.slides-prompts-prepare.trigger.source",
+      "path": "skills/slides-prompts-prepare/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.slides-prompts-prepare.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

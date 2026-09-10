@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "4c239d8d0920f092ef8225fdb447694526971282a58ffad7980a3939a889c8e5",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:ast-grep"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.ast-grep.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to ast-grep; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.ast-grep.near-miss.source",
+      "path": "skills/ast-grep/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.ast-grep.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

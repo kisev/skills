@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "a075040c69d6125def4d7c3e4724439a3346434c1ecb0a8f3accc685ff48f1b6",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:team-roadmap"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.team-roadmap.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:team-roadmap"]
+    },
+    "prompt": "Verify command team-roadmap contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-roadmap.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

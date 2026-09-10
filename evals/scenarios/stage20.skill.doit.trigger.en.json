@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "4feaeeb24254c2c53d059fa3c0d7c5e7c7a811f2f2d4995c8d0315e83a7e9887",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:doit"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.doit.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:doit"]
+    },
+    "prompt": "Select the doit skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.doit.trigger.source",
+      "path": "skills/doit/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.doit.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

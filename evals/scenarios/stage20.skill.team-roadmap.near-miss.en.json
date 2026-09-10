@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "de9c4cc0dd1291d6cbe8760b2e0949bea05a957a7a0af8a415b5ec90655808a2",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:team-roadmap"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-roadmap.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to team-roadmap; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-roadmap.near-miss.source",
+      "path": "skills/team-roadmap/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-roadmap.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

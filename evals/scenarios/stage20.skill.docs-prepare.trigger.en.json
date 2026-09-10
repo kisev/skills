@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "ba3b5602152f9fda2fb3de82c60acdbe0fa1ef6d02ba905f116de6b3bd2f5749",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:docs-prepare"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.docs-prepare.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:docs-prepare"]
+    },
+    "prompt": "Select the docs-prepare skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.docs-prepare.trigger.source",
+      "path": "skills/docs-prepare/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.docs-prepare.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

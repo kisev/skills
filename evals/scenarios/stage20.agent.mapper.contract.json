@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "7bb8c80d711588683ba21be576c1625bcbe227987029d3bded8b8c2c0fdb0dfc",
+  "expected": {
+    "mutation_boundary": "host-owned-or-card-bound",
+    "not_selected": [],
+    "selected": ["agent:mapper"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.agent.mapper.contract",
+  "input": {
+    "fixture": {
+      "selected": ["agent:mapper"]
+    },
+    "prompt": "Verify agent mapper contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.agent.mapper.contract.source",
+      "path": "packages/opencode/assets/agents/mapper.md"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "agent"
+}

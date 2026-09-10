@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "f06fe887d54b5f02c36149036cb81ce3bb06d170c14f7cb26bbdde3916e02fa7",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:rtk"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.rtk.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to rtk; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.rtk.near-miss.source",
+      "path": "skills/rtk/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.rtk.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

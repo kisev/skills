@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "b940fd02b1852ba446959136708f6b917c0df465e719f98e37a1659d89b2eed9",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:commit-msg"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.commit-msg.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to commit-msg; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.commit-msg.near-miss.source",
+      "path": "skills/commit-msg/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.commit-msg.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "508e976bcbae75116b1c46bee6d29d2a0305662f7608b05e53561bd9b664757b",
+  "expected": {
+    "mutation_boundary": "host-owned-or-card-bound",
+    "not_selected": [],
+    "selected": ["agent:critic"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.agent.critic.contract",
+  "input": {
+    "fixture": {
+      "selected": ["agent:critic"]
+    },
+    "prompt": "Verify agent critic contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.agent.critic.contract.source",
+      "path": "packages/opencode/assets/agents/critic.md"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "agent"
+}

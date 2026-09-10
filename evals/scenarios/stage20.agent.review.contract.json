@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "e670f2e94f3b308f52b826cfc9dc8124207e5bda9a207ca9a5450e51258643a7",
+  "expected": {
+    "mutation_boundary": "host-owned-or-card-bound",
+    "not_selected": [],
+    "selected": ["agent:review"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.agent.review.contract",
+  "input": {
+    "fixture": {
+      "selected": ["agent:review"]
+    },
+    "prompt": "Verify agent review contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.agent.review.contract.source",
+      "path": "packages/opencode/assets/agents/review.md"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "agent"
+}

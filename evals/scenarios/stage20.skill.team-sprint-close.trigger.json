@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "0a52f1c3a84d4a07a012413924afeedcdb5f408f9c9ab21c964cac078b4673a9",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:team-sprint-close"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-sprint-close.trigger",
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-sprint-close"]
+    },
+    "prompt": "\u0412\u044b\u0431\u0435\u0440\u0438 \u043d\u0430\u0432\u044b\u043a team-sprint-close \u0434\u043b\u044f \u0435\u0433\u043e \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u043d\u043e\u0433\u043e \u0441\u0446\u0435\u043d\u0430\u0440\u0438\u044f."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-sprint-close.trigger.source",
+      "path": "skills/team-sprint-close/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage20.skill.team-sprint-close.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

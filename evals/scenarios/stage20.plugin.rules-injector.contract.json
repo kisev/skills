@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "97ee274f8ad5bc164598823613d8788c7d15005031d2000154348951b0ecffcc",
+  "expected": {
+    "mutation_boundary": "enabled-option-only",
+    "not_selected": [],
+    "selected": ["plugin:rules-injector"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.plugin.rules-injector.contract",
+  "input": {
+    "fixture": {
+      "selected": ["plugin:rules-injector"]
+    },
+    "prompt": "Verify plugin rules-injector contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.plugin.rules-injector.contract.source",
+      "path": "packages/opencode/src/plugins/rules-injector.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "plugin"
+}

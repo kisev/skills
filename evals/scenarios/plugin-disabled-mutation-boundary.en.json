@@ -1,6 +1,6 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "plugin.background-attempts.disabled-mutation-boundary.en",
+  "id": "plugin.rules-injector.disabled-mutation-boundary.en",
   "revision": 1,
   "kind": "near-miss",
   "surface": "plugin",
@@ -13,7 +13,7 @@
   },
   "expected": {
     "selected": [],
-    "not_selected": ["plugin:background-attempts"]
+    "not_selected": ["plugin:rules-injector"]
   },
   "invariants": [
     {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "97f091fe0b545e7d931ebd5cc99c9b0178150da206e748b9e65548944aa627e0",
+  "digest": "833f63f4e6ecade48f0285936ea2e86f21624e56100bcce759ff17767a6a0b0b",
   "locale": "en",
-  "pair_id": "plugin.background-attempts.disabled-mutation-boundary"
+  "pair_id": "plugin.rules-injector.disabled-mutation-boundary"
 }

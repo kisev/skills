@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "3717e33983613ce03c1cd09daaac3eeb9c6e0a1220776ce1ad16606291d6258c",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:lsp-report"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.lsp-report.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to lsp-report; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.lsp-report.near-miss.source",
+      "path": "skills/lsp-report/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.lsp-report.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

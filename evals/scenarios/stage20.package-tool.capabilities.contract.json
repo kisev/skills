@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "9c13de03fba11272db9b3c485674b25f8b2fb4c32b80be0918d64d6366e9380a",
+  "expected": {
+    "mutation_boundary": "phase-and-confirmation-bound",
+    "not_selected": [],
+    "selected": ["package-tool:capabilities"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.package-tool.capabilities.contract",
+  "input": {
+    "fixture": {
+      "selected": ["package-tool:capabilities"]
+    },
+    "prompt": "Verify package-tool capabilities contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.package-tool.capabilities.contract.source",
+      "path": "packages/opencode/src/index.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "package-tool"
+}

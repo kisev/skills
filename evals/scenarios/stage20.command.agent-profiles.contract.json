@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "c622c4654e5b605c85b97cb5c220b5fd6517816dd6e428361320499c69b973b4",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:agent-profiles"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.agent-profiles.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:agent-profiles"]
+    },
+    "prompt": "Verify command agent-profiles contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.agent-profiles.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "81c1bede3d4a2153eaec6a5f01bee9dc0c5500738e2d5c41d87900bdfa7b5aec",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:team-sprint-start"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-sprint-start.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to team-sprint-start; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-sprint-start.near-miss.source",
+      "path": "skills/team-sprint-start/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-sprint-start.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

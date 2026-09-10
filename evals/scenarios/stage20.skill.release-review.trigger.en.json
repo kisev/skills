@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "569da1db9f61b219608720f1a8005bf91afa00983c048530d27ff363ced5a34c",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:release-review"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.release-review.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:release-review"]
+    },
+    "prompt": "Select the release-review skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.release-review.trigger.source",
+      "path": "skills/release-review/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.release-review.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

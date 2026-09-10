@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "e95bca08f05f8f24210dbaf375480aef38cd7074e825ff37af7dbfdbdee8d3b8",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:lsp-report"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.lsp-report.trigger",
+  "input": {
+    "fixture": {
+      "selected": ["skill:lsp-report"]
+    },
+    "prompt": "\u0412\u044b\u0431\u0435\u0440\u0438 \u043d\u0430\u0432\u044b\u043a lsp-report \u0434\u043b\u044f \u0435\u0433\u043e \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u043d\u043e\u0433\u043e \u0441\u0446\u0435\u043d\u0430\u0440\u0438\u044f."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.lsp-report.trigger.source",
+      "path": "skills/lsp-report/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage20.skill.lsp-report.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

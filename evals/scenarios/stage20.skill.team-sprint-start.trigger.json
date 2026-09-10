@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "580ef4a9ef10772a7d412487ac2283e904ec4849a70728b71eda0b9ba419f38e",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:team-sprint-start"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-sprint-start.trigger",
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-sprint-start"]
+    },
+    "prompt": "\u0412\u044b\u0431\u0435\u0440\u0438 \u043d\u0430\u0432\u044b\u043a team-sprint-start \u0434\u043b\u044f \u0435\u0433\u043e \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u043d\u043e\u0433\u043e \u0441\u0446\u0435\u043d\u0430\u0440\u0438\u044f."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-sprint-start.trigger.source",
+      "path": "skills/team-sprint-start/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage20.skill.team-sprint-start.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

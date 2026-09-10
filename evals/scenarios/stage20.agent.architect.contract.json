@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "06418b36ad26f0b376f19b3f46e2d164d594e1f28b7ecf1d1990dbb34589bd54",
+  "expected": {
+    "mutation_boundary": "host-owned-or-card-bound",
+    "not_selected": [],
+    "selected": ["agent:architect"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.agent.architect.contract",
+  "input": {
+    "fixture": {
+      "selected": ["agent:architect"]
+    },
+    "prompt": "Verify agent architect contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.agent.architect.contract.source",
+      "path": "packages/opencode/assets/agents/architect.md"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "agent"
+}

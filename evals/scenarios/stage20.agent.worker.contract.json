@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "5521ba7f7aa798053e818feb992d9d7575c1675b7c07c7f2ee12cde6435b95e7",
+  "expected": {
+    "mutation_boundary": "host-owned-or-card-bound",
+    "not_selected": [],
+    "selected": ["agent:worker"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.agent.worker.contract",
+  "input": {
+    "fixture": {
+      "selected": ["agent:worker"]
+    },
+    "prompt": "Verify agent worker contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.agent.worker.contract.source",
+      "path": "packages/opencode/assets/agents/worker.md"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "agent"
+}

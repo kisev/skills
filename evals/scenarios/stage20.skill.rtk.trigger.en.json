@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "48b7aa521c0fd413f0315b95814c3f0ece56a5c1e1dded004c25a39906dfe965",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:rtk"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.rtk.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:rtk"]
+    },
+    "prompt": "Select the rtk skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.rtk.trigger.source",
+      "path": "skills/rtk/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.rtk.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

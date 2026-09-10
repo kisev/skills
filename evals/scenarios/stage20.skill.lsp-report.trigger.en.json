@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "dc69c5c345a40648ec34f43c6ba6bd7e5457507283f12c97e2a411a634c3bb2a",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:lsp-report"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.lsp-report.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:lsp-report"]
+    },
+    "prompt": "Select the lsp-report skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.lsp-report.trigger.source",
+      "path": "skills/lsp-report/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.lsp-report.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

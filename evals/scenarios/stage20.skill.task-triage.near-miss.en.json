@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "d46c2c98bdc7eb05a97342e79b11863ac7f8fcaa7d9dffa28ccf69e4a3bdb0dc",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:task-triage"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.task-triage.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to task-triage; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.task-triage.near-miss.source",
+      "path": "skills/task-triage/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.task-triage.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

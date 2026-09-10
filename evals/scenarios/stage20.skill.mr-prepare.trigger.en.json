@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "d4344808f77651630ba17180dc0d391d7f9f937c3e2d8c4da7b576c97ca3b13f",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:mr-prepare"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.mr-prepare.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:mr-prepare"]
+    },
+    "prompt": "Select the mr-prepare skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.mr-prepare.trigger.source",
+      "path": "skills/mr-prepare/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.mr-prepare.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

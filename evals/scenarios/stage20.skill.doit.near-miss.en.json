@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "4f0ea713d5c6610ab66e975c6dc3d7774e3733ad839b5e24b0c3c41f6d322249",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:doit"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.doit.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to doit; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.doit.near-miss.source",
+      "path": "skills/doit/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.doit.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

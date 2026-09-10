@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "7ca3c42e2888db317ea425004304024b84732526f766fb4f38551a6f37147834",
+  "expected": {
+    "mutation_boundary": "host-owned-runtime",
+    "not_selected": [],
+    "selected": ["infrastructure:core"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.infrastructure.core.contract",
+  "input": {
+    "fixture": {
+      "selected": ["infrastructure:core"]
+    },
+    "prompt": "Verify infrastructure core contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.infrastructure.core.contract.source",
+      "path": "packages/opencode/src/index.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "infrastructure"
+}

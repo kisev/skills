@@ -1,0 +1,1 @@
+{ "case": "malformed-result", "result": { "status": "passed", "assertions": "not-a-list" } }

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "032823a440c7f5a87a0746b94967331cce69f37fabdb9b7447353a7a7e809ba0",
+  "expected": {
+    "mutation_boundary": "phase-and-confirmation-bound",
+    "not_selected": [],
+    "selected": ["package-tool:route"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.package-tool.route.contract",
+  "input": {
+    "fixture": {
+      "selected": ["package-tool:route"]
+    },
+    "prompt": "Verify package-tool route contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.package-tool.route.contract.source",
+      "path": "packages/opencode/src/index.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "package-tool"
+}

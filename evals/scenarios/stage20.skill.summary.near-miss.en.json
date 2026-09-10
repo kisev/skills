@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "8e30eddfbfba3dfa60cbd12717512eb967f8b51a68227e7e4ec76c46a1b21c18",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:summary"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.summary.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to summary; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.summary.near-miss.source",
+      "path": "skills/summary/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.summary.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -13,7 +13,7 @@
   },
   "expected": {
     "selected": ["command:doctor"],
-    "not_selected": ["plugin:background-attempts"]
+    "not_selected": ["plugin:rules-injector"]
   },
   "invariants": [
     {
@@ -37,7 +37,7 @@
     "max_tokens": 1500,
     "max_cost": 1
   },
-  "digest": "abd8136e568f71d5ef192f503f156b27f48ea9d034192775d1926dc717580afd",
+  "digest": "eb4b57d9eae23ded71894ea520d5a5f67e52d37e278760cea9e8f685891391e6",
   "locale": "en",
   "pair_id": "golden.doctor.read-only-redaction"
 }

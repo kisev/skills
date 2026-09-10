@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "644215b40bd6afd00c82dc7531a947ffd3e7d5c43c94f388a445e3bffc91e969",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:stopit"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.stopit.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:stopit"]
+    },
+    "prompt": "Select the stopit skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.stopit.trigger.source",
+      "path": "skills/stopit/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.stopit.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "e438e3433bab455dc243bc54f7173a46843b6206dffe0b9c80d3bd6fa27c2842",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:team-roadmap"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-roadmap.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-roadmap"]
+    },
+    "prompt": "Select the team-roadmap skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-roadmap.trigger.source",
+      "path": "skills/team-roadmap/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-roadmap.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

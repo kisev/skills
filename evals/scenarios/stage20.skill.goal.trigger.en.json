@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "5be47bdc7f4a3c457a22f20ae2b09b0580d587f87766e2ea5986d14b2d4fca56",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:goal"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.goal.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:goal"]
+    },
+    "prompt": "Select the goal skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.goal.trigger.source",
+      "path": "skills/goal/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.goal.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

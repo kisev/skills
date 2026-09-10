@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "066282e2c8cb8029fd05a9e8e75f60ba4a88e8d7893146d2a6b454be49924e20",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:docs-prepare"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.docs-prepare.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to docs-prepare; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.docs-prepare.near-miss.source",
+      "path": "skills/docs-prepare/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.docs-prepare.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

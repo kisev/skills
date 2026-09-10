@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "5289cea1c4492585c34590a5c4cc723fa8d2737431d90fb93e1419d8c2711ede",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:team-retro"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-retro.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-retro"]
+    },
+    "prompt": "Select the team-retro skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-retro.trigger.source",
+      "path": "skills/team-retro/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-retro.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

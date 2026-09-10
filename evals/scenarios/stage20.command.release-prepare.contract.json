@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "6f31a44bc0946acc95a82ab96776b021b0e6bbdd85b4dc93f83a493b6efc8937",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:release-prepare"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.release-prepare.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:release-prepare"]
+    },
+    "prompt": "Verify command release-prepare contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.release-prepare.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

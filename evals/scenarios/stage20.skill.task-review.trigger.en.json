@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "462758d8fc77dc856c69fdf47a2c3ce36a58e0d5e2771cc8a17a6c9b8f0fc32f",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:task-review"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.task-review.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:task-review"]
+    },
+    "prompt": "Select the task-review skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.task-review.trigger.source",
+      "path": "skills/task-review/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.task-review.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

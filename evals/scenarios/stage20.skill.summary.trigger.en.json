@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "1db69c0a0a8e94aa5bbbb7b3f14a4b816cdfd378d817fcf6809be77ee93e76d4",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:summary"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.summary.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:summary"]
+    },
+    "prompt": "Select the summary skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.summary.trigger.source",
+      "path": "skills/summary/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.summary.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

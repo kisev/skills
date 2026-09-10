@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "81af9cc38646aceadd8be726d6a3bdfad646c399c587417691d208fdec86c0f3",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:task-prepare"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.task-prepare.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to task-prepare; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.task-prepare.near-miss.source",
+      "path": "skills/task-prepare/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.task-prepare.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

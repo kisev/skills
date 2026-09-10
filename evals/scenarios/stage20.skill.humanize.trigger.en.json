@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "ed1f184c3b5b616ddd78679b680dd96ea15d201421e624f1d74dc5852b48c7ea",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:humanize"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.humanize.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:humanize"]
+    },
+    "prompt": "Select the humanize skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.humanize.trigger.source",
+      "path": "skills/humanize/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.humanize.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

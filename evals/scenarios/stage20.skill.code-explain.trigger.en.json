@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "bffa247479042b18041b17c2d660a7421ffbe62a4000223b0023cc59c3ea3a4d",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:code-explain"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.code-explain.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:code-explain"]
+    },
+    "prompt": "Select the code-explain skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.code-explain.trigger.source",
+      "path": "skills/code-explain/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.code-explain.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

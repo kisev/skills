@@ -26,7 +26,9 @@
     "locale": { "enum": ["ru", "en", "neutral"] },
     "pair_id": { "type": ["string", "null"] },
     "kind": { "enum": ["deterministic", "trigger", "near-miss", "golden"] },
-    "surface": { "enum": ["skill", "command", "agent", "plugin"] },
+    "surface": {
+      "enum": ["skill", "command", "agent", "plugin", "package-tool", "infrastructure"]
+    },
     "host": { "enum": ["opencode", "codex", "any"] },
     "input": { "type": "object" },
     "expected": { "type": "object" },

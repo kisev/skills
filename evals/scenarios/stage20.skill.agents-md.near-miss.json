@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "267f2c6055cd06777a8506071d9c6a28a875f170ba6d9ec65ff268b3c9292ee1",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:agents-md"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.agents-md.near-miss",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "\u0420\u0443\u0441\u0441\u043a\u0438\u0439: \u044d\u0442\u043e \u043d\u0430\u043c\u0435\u0440\u0435\u043d\u043d\u043e \u043d\u0435 \u043e\u0442\u043d\u043e\u0441\u0438\u0442\u0441\u044f \u043a \u043d\u0430\u0432\u044b\u043a\u0443 agents-md; \u043d\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u044f\u0439 \u0437\u0430\u043f\u0440\u043e\u0441 \u0432 \u044d\u0442\u043e\u0442 \u043d\u0430\u0432\u044b\u043a."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.agents-md.near-miss.source",
+      "path": "skills/agents-md/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "stage20.skill.agents-md.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -1,0 +1,17 @@
+{
+  "case": "bad-digest",
+  "schema": "eval-scenario/v1",
+  "id": "stage20.bad-digest",
+  "revision": 1,
+  "locale": "neutral",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {},
+  "expected": {},
+  "invariants": [{ "id": "source", "path": "skills/goal/SKILL.md" }],
+  "sandbox": { "network": false },
+  "budgets": { "timeout_seconds": 1, "max_tokens": 1, "max_cost": 1 },
+  "digest": "0000000000000000000000000000000000000000000000000000000000000000"
+}

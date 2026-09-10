@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "0344d8421af9386d0ac3ef93b9f77ccfc2ba8c210ad66d9f70c5e45521ab3cd9",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:slides-prompts-prepare"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.slides-prompts-prepare.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to slides-prompts-prepare; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.slides-prompts-prepare.near-miss.source",
+      "path": "skills/slides-prompts-prepare/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.slides-prompts-prepare.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

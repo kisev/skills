@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "b09d2107fd93481b2933ea551a73c6141b8b93dd5a3cf47e767524ffd2bac9f6",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:commit-msg"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.commit-msg.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:commit-msg"]
+    },
+    "prompt": "Select the commit-msg skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.commit-msg.trigger.source",
+      "path": "skills/commit-msg/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.commit-msg.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

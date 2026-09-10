@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "810d717dbff1260db6547b4763d36089006c35b4fe319eec6db0d7d04ad00d07",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:team-retro"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-retro.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to team-retro; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-retro.near-miss.source",
+      "path": "skills/team-retro/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-retro.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

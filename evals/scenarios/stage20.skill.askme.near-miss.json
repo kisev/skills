@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "9ffcae5a10744e5db9b35cf1dce597108e4e17111b029e8d0a5f2b8779960a30",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:askme"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.askme.near-miss",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "\u0420\u0443\u0441\u0441\u043a\u0438\u0439: \u044d\u0442\u043e \u043d\u0430\u043c\u0435\u0440\u0435\u043d\u043d\u043e \u043d\u0435 \u043e\u0442\u043d\u043e\u0441\u0438\u0442\u0441\u044f \u043a \u043d\u0430\u0432\u044b\u043a\u0443 askme; \u043d\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u044f\u0439 \u0437\u0430\u043f\u0440\u043e\u0441 \u0432 \u044d\u0442\u043e\u0442 \u043d\u0430\u0432\u044b\u043a."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.askme.near-miss.source",
+      "path": "skills/askme/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "stage20.skill.askme.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "00ca2b469fcd478d2f8832cb40ddd5f4f0512083522eb21594a5437845469f06",
+  "expected": {
+    "mutation_boundary": "host-owned-or-card-bound",
+    "not_selected": [],
+    "selected": ["agent:manager"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.agent.manager.contract",
+  "input": {
+    "fixture": {
+      "selected": ["agent:manager"]
+    },
+    "prompt": "Verify agent manager contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.agent.manager.contract.source",
+      "path": "packages/opencode/assets/agents/manager.md"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "agent"
+}

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "3665c2021642ef46747275a79fa50f9e3c37618809d7ba1b7535ddc949ce3648",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:skill-improve"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.skill-improve.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:skill-improve"]
+    },
+    "prompt": "Select the skill-improve skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.skill-improve.trigger.source",
+      "path": "skills/skill-improve/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.skill-improve.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

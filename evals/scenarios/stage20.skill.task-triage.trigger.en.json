@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "376229655d813e101022217c60bcad9f693f98bfbec43099c9e73f89674ce91a",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:task-triage"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.task-triage.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:task-triage"]
+    },
+    "prompt": "Select the task-triage skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.task-triage.trigger.source",
+      "path": "skills/task-triage/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.task-triage.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

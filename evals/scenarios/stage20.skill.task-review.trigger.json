@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "08e4ec5823db8596d97fde2045bb32ac20eb8888fd6eb5814ef2e242e86c1aa4",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:task-review"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.task-review.trigger",
+  "input": {
+    "fixture": {
+      "selected": ["skill:task-review"]
+    },
+    "prompt": "\u0412\u044b\u0431\u0435\u0440\u0438 \u043d\u0430\u0432\u044b\u043a task-review \u0434\u043b\u044f \u0435\u0433\u043e \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u043d\u043e\u0433\u043e \u0441\u0446\u0435\u043d\u0430\u0440\u0438\u044f."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.task-review.trigger.source",
+      "path": "skills/task-review/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage20.skill.task-review.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

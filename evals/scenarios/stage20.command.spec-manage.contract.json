@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "d8bf18b03d5c2ec9511244e50a05415efc7544f388daf5c465d2e1d75ca80e36",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:spec-manage"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.spec-manage.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:spec-manage"]
+    },
+    "prompt": "Verify command spec-manage contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.spec-manage.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}
