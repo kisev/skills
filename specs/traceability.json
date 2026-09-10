@@ -1,0 +1,709 @@
+{
+  "schema": "traceability/v1",
+  "target": "2.0.0",
+  "source_revision": "f40e15d76257e7fadc127cad2449d5918571f166",
+  "hash": {
+    "algorithm": "sha256",
+    "canonical_block": "trimmed Markdown from the REQ heading through the paragraph before the next section heading"
+  },
+  "evidence_profiles": {
+    "inventory": {
+      "kind": "automated",
+      "test_selector": "tests/test_stage20_verification.py::test_stage20_compatibility_inventory_is_explicit_and_hostless",
+      "eval_ids": ["stage20.infrastructure.core.contract", "stage20.command.capabilities.contract"]
+    },
+    "skills": {
+      "kind": "automated",
+      "test_selector": "tests/test_skill_contracts.py::test_every_skill_has_required_frontmatter",
+      "eval_ids": ["stage20.skill.spec-manage.trigger.en", "stage20.skill.spec-manage.near-miss.en"]
+    },
+    "commands": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
+      "eval_ids": ["stage20.command.spec-manage.contract", "stage20.command.capabilities.contract"]
+    },
+    "agents": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::agent assets contain six contract-bound profiles without model selection",
+      "eval_ids": ["stage20.agent.manager.contract", "agent-worker-contract"]
+    },
+    "plugins": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/stage19.test.mjs::installer preserves exact selection and keeps core separate from plugins",
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
+    "routing": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::routing receipts bind task requirements card agent revision and expiry",
+      "eval_ids": ["stage18.routing.trigger"]
+    },
+    "doctor": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/doctor.test.mjs::doctor JSON is versioned, read-only, partial tolerant, and has stable exit code",
+      "eval_ids": ["golden-doctor.en"]
+    },
+    "profiles": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/agent-profiles.test.mjs::receipts expire, are one-use, and reject stale inventory",
+      "eval_ids": ["stage20.command.agent-profiles.contract"]
+    },
+    "reconcile": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::reconcile archives exact-owned retired assets",
+      "eval_ids": ["stage20.command.reconcile.contract"]
+    },
+    "distribution": {
+      "kind": "automated",
+      "test_selector": "tests/test_distribution.py::test_direct_git_install_is_self_contained_for_both_hosts",
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
+    "quality": {
+      "kind": "automated",
+      "test_selector": "tests/test_evals.py::test_offline_suite_is_hostless_and_has_stable_ordered_assertions",
+      "eval_ids": ["core-contracts.golden.en"]
+    },
+    "compatibility": {
+      "kind": "automated",
+      "test_selector": "tests/test_stage20_verification.py::test_stage20_compatibility_inventory_is_explicit_and_hostless",
+      "eval_ids": ["core-contracts.trigger.en"],
+      "contract_path": "evals/contracts/opencode-compatibility.json"
+    }
+  },
+  "manual_evidence": {
+    "ME-ARCH-001": {
+      "rationale": "The accepted ADR records the selected boundary between portable coordination and host routing; tests cannot establish architectural intent alone.",
+      "source": "specs/architecture/09-architecture-decisions/0003-portable-coordinator-routing-adapter.md"
+    },
+    "ME-ARCH-002": {
+      "rationale": "The accepted ADR records why direct Git materialization remains self-contained; the distribution test verifies behavior but not the decision rationale.",
+      "source": "specs/architecture/09-architecture-decisions/0001-direct-git-self-contained-skills.md"
+    },
+    "ME-ARCH-003": {
+      "rationale": "The accepted ADR records the chosen public inventory boundary and rejected alternatives.",
+      "source": "specs/architecture/09-architecture-decisions/0002-target-public-surface.md"
+    },
+    "ME-ARCH-004": {
+      "rationale": "The accepted ADR records archival as the non-destructive lifecycle decision and its consequences.",
+      "source": "specs/architecture/09-architecture-decisions/0004-content-addressed-archive.md"
+    }
+  },
+  "requirements": {
+    "REQ-F-001": {
+      "surface": "system",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "8208f34b5a268620d9c6c47388b893e837e96170afaf61aab32a38e2885204e2",
+      "evidence_profile": "inventory",
+      "manual_evidence_ids": ["ME-ARCH-003"]
+    },
+    "REQ-F-002": {
+      "surface": "orchestration",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "3ae7e58c6000e591b53545b714b5d4150a692ccfb3c01a65d90214b66c2224ed",
+      "evidence_profile": "routing",
+      "manual_evidence_ids": ["ME-ARCH-001"]
+    },
+    "REQ-F-003": {
+      "surface": "workflow",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "10c1531944744bb3e0f67e6c0cead02cce3fb6a25169ec28069d46aaf77798a3",
+      "evidence_profile": "quality"
+    },
+    "REQ-F-004": {
+      "surface": "distribution",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "a10c88330161ff30e693d1eb333db9eb3e24cfbcf966ee2066212d89a5aa0cbb",
+      "evidence_profile": "distribution",
+      "manual_evidence_ids": ["ME-ARCH-002"]
+    },
+    "REQ-F-005": {
+      "surface": "archive",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "7ae6375071fe04527f1e1546bd11584e28b96eb902afa5cb6760f54449e8f1f3",
+      "evidence_profile": "reconcile",
+      "manual_evidence_ids": ["ME-ARCH-004"]
+    },
+    "REQ-F-006": {
+      "surface": "agent-profiles",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "737017e61d6574c023241d2f56ed7ed2e5d649104ba1efe4c77e6fe9d1aa5536",
+      "evidence_profile": "profiles"
+    },
+    "REQ-F-007": {
+      "surface": "doctor",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "2ca0b7dd7f8621412f6e297bc119f6292a7a0a76f71d3db5f226257fc34e9f69",
+      "evidence_profile": "doctor"
+    },
+    "REQ-F-008": {
+      "surface": "compatibility",
+      "source": "specs/requirements/functional/README.md",
+      "block_sha256": "e19106a80521f46c5392b6d92e8940e09377a899e3bac5b7da8bf56efa47e025",
+      "evidence_profile": "compatibility"
+    },
+    "REQ-I-001": {
+      "surface": "skills",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "98d7a13115419a2b4acdd96092a5dd7d98abaf331e7ba4538b3ee3c5ebdfc389",
+      "evidence_profile": "skills"
+    },
+    "REQ-I-002": {
+      "surface": "commands",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "b81bab88025b12070646fbe0059fce54d3cbadd3d0629796e834836d73bcdad1",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-003": {
+      "surface": "package-tools",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "b44a5fe536c1d7cc674a0953d1dbb11ef7d2cf971190abb6b2cefb94f8edc66b",
+      "evidence_profile": "inventory"
+    },
+    "REQ-I-004": {
+      "surface": "plugins",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "050b0dd1cadbff61f0a9ad2217922d8882bb8700a8f0a572d9e25a37aa67b007",
+      "evidence_profile": "plugins"
+    },
+    "REQ-I-005": {
+      "surface": "evidence",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "5cef9786f80cc016f0cee5139e34dc02f0bf204941b69891e0bc1240060da6de",
+      "evidence_profile": "quality"
+    },
+    "REQ-I-006": {
+      "surface": "compatibility",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "9ce35ed173ee54d17d9c18a870b11778db926bb745001faef20f9305dfce3b0e",
+      "evidence_profile": "compatibility"
+    },
+    "REQ-Q-001": {
+      "surface": "verification",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "a2784f0bc48ab07352e12cb93e2a1fae45a6860982b2b9f251a7fde9e0a60965",
+      "evidence_profile": "quality"
+    },
+    "REQ-Q-002": {
+      "surface": "mutations",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "fb766ce09c3c49d0de4a661eb9796bc55e600e54d2d42f87d797e41fd1e68c73",
+      "evidence_profile": "profiles"
+    },
+    "REQ-Q-003": {
+      "surface": "security",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "2a3bc04d520867b7f82d8e3b97666d44d2faa841a47835bb270bcd63e6a501f0",
+      "evidence_profile": "quality"
+    },
+    "REQ-Q-004": {
+      "surface": "evidence",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "01d427fbfa99ae0d5fb5884b946907abb14223cea1bbd704a2ab0916184605e1",
+      "evidence_profile": "quality"
+    },
+    "REQ-Q-005": {
+      "surface": "distribution",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "b8a345bbee1f2cd013708e43aa79d92f22cb7609e7cc5aa4e4640f34ce9ef776",
+      "evidence_profile": "distribution"
+    },
+    "REQ-Q-006": {
+      "surface": "compatibility",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "ba045c69abd61d974d4f3b7ca1ead7b0a143337306f1f3d69a4bfb5a630acd46",
+      "evidence_profile": "compatibility"
+    },
+    "REQ-C-001": {
+      "surface": "specification",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "d574804f3d9945d9e93480a1b64a7d380adba81836ce970da207ba83fcc22666",
+      "evidence_profile": "quality"
+    },
+    "REQ-C-002": {
+      "surface": "distribution",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "686c3f9858c28ed4fc20f6e0cd947cdca26e34de1472b94b23371d367fd96902",
+      "evidence_profile": "distribution",
+      "manual_evidence_ids": ["ME-ARCH-002"]
+    },
+    "REQ-C-003": {
+      "surface": "ownership",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "e647a748e04adf737ed9f1484d73356d38d2aec690ef2148d2f9f77f743f9927",
+      "evidence_profile": "profiles"
+    },
+    "REQ-C-004": {
+      "surface": "archive",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "58e5e1ca87360db5912d13da093007a234ef279fc5ca0d5913bf92e21d8a0902",
+      "evidence_profile": "reconcile"
+    },
+    "REQ-C-005": {
+      "surface": "scope",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "d3ebb408b6786c21fcc131b662be6b7cf16a26d03b4c5a2d857b0a60376e7f87",
+      "evidence_profile": "quality"
+    },
+    "REQ-C-006": {
+      "surface": "quality-gate",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "c11a7ae39073e80b2cad5a30e6ad96e9d2f961a781e406b5fa296081dd22de5f",
+      "evidence_profile": "quality"
+    },
+    "REQ-F-101": {
+      "surface": "skill:agents-md",
+      "source": "specs/capabilities/skills/agents-md.md",
+      "block_sha256": "b529472711fa747e154b4b688df0533b2c205cd9798c3f889887495b7879aa00",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-102": {
+      "surface": "skill:askme",
+      "source": "specs/capabilities/skills/askme.md",
+      "block_sha256": "f53a0145f7b2b51b6e079b4f60ea0ec84446527781917aeeae891f1b95b0951d",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-103": {
+      "surface": "skill:ast-grep",
+      "source": "specs/capabilities/skills/ast-grep.md",
+      "block_sha256": "93760a210c941595d3dad4b04b72f0609225e13ef0b78fdfaf730db33d6a19ae",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-104": {
+      "surface": "skill:code-explain",
+      "source": "specs/capabilities/skills/code-explain.md",
+      "block_sha256": "0cb0ab8ba813108498e1e10f315f369d3d7f2228b981a8fc141629b89ed3e71e",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-105": {
+      "surface": "skill:code-review",
+      "source": "specs/capabilities/skills/code-review.md",
+      "block_sha256": "4b13ac40c7e092e9d8f9ccdf075a3122b5c33cb58902546d8c0ebd880d6557de",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-106": {
+      "surface": "skill:commit-msg",
+      "source": "specs/capabilities/skills/commit-msg.md",
+      "block_sha256": "3e12c01ec6b4ea841a148ad738f269b3b89924faff92774eed4c9561a6c35c95",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-107": {
+      "surface": "skill:docs-prepare",
+      "source": "specs/capabilities/skills/docs-prepare.md",
+      "block_sha256": "5185a2cf8a02aba3e15065d5918d5b7383119e719507dedd5db60d28e137c395",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-108": {
+      "surface": "skill:docs-review",
+      "source": "specs/capabilities/skills/docs-review.md",
+      "block_sha256": "09997e1e74592a5e82a7bc59cb798209b4a3ff94a3586db0b5df17732cb5b624",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-109": {
+      "surface": "skill:doit",
+      "source": "specs/capabilities/skills/doit.md",
+      "block_sha256": "09b19408cee80102e1e394a7f77a1c6fa80c1882ce7c3ade41c3fe6e77ee043a",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-110": {
+      "surface": "skill:goal",
+      "source": "specs/capabilities/skills/goal.md",
+      "block_sha256": "9f4ed234ecb20f94baadfacb7434a376d1a74b2dcbf37a1ca2a198898c5fd85a",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-111": {
+      "surface": "skill:humanize",
+      "source": "specs/capabilities/skills/humanize.md",
+      "block_sha256": "791be78099c986b129ba117c3233071c8eb1a372cbfd38e004d747115bd266a1",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-112": {
+      "surface": "skill:lsp-report",
+      "source": "specs/capabilities/skills/lsp-report.md",
+      "block_sha256": "6f266d7de91707c4704588b05df4e2c2b77733edbbc7dcf474b8948999fa16f4",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-113": {
+      "surface": "skill:mattermost",
+      "source": "specs/capabilities/skills/mattermost.md",
+      "block_sha256": "44bc29353e9be92df6b4f12c557f91abb4b3f159a5c5715c6986048cc4378122",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-114": {
+      "surface": "skill:mr-prepare",
+      "source": "specs/capabilities/skills/mr-prepare.md",
+      "block_sha256": "74e3cbff2be0c43287fda91f7b5259aefe6714e753845489395000f7368b6cbb",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-115": {
+      "surface": "skill:release-prepare",
+      "source": "specs/capabilities/skills/release-prepare.md",
+      "block_sha256": "95e4cf43ffcc111942dbd5b8d5cee8afdcf9a546c3ae24067004022ff7860176",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-116": {
+      "surface": "skill:release-review",
+      "source": "specs/capabilities/skills/release-review.md",
+      "block_sha256": "b239c24b7e40d9551433dbc8f6f58c3e069120fe377305474328260b9cf82c46",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-117": {
+      "surface": "skill:rtk",
+      "source": "specs/capabilities/skills/rtk.md",
+      "block_sha256": "145534a3fe9daf3dd83d99fde962e1a42ff4cdcfcc6392a7e014aac96bcf8bba",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-118": {
+      "surface": "skill:skill-improve",
+      "source": "specs/capabilities/skills/skill-improve.md",
+      "block_sha256": "505bc2e677d875f5a70fba2979f2c9200dda5ff5d18e9f9038dc0c05c57d7b18",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-119": {
+      "surface": "skill:slides-prompts-prepare",
+      "source": "specs/capabilities/skills/slides-prompts-prepare.md",
+      "block_sha256": "001dfa56c19678e000639f4f5eee7349664b1daa4f4c256e57e3cb20ad561260",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-120": {
+      "surface": "skill:spec-manage",
+      "source": "specs/capabilities/skills/spec-manage.md",
+      "block_sha256": "014cb21d55f0c875025aea6a2df5ed43a238e13e860d20701162eaea05bd1002",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-121": {
+      "surface": "skill:stopit",
+      "source": "specs/capabilities/skills/stopit.md",
+      "block_sha256": "87628773fb8591b6674068d5ce4984546a08338dff12f29bb6e1b82eaa7a6ceb",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-122": {
+      "surface": "skill:summary",
+      "source": "specs/capabilities/skills/summary.md",
+      "block_sha256": "16200c16d08b6cca8ad03889009e7f9561a41ea36c0608d03c5bc6a69a47ed9b",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-123": {
+      "surface": "skill:task-prepare",
+      "source": "specs/capabilities/skills/task-prepare.md",
+      "block_sha256": "b04198344dce85eb6c0b0abe0f8c3b76974a08b6666eab978cecb26d4b811a2d",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-124": {
+      "surface": "skill:task-review",
+      "source": "specs/capabilities/skills/task-review.md",
+      "block_sha256": "ef39d95472530a335b2911cbcc606d20a7750ce7806a5b337b87593606e1116d",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-125": {
+      "surface": "skill:task-triage",
+      "source": "specs/capabilities/skills/task-triage.md",
+      "block_sha256": "46af2ee8fdfb79944358ebda679cb837c357da3035132c62f37930873b1296a6",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-126": {
+      "surface": "skill:team-retro",
+      "source": "specs/capabilities/skills/team-retro.md",
+      "block_sha256": "4ea1a067a4c2534f702fa3038b8c71389087aa9e8bc97255fd8f840b99e70e92",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-127": {
+      "surface": "skill:team-roadmap",
+      "source": "specs/capabilities/skills/team-roadmap.md",
+      "block_sha256": "e95ab581d1b3ccd2dbcb5bf69212acd63a4d51581c02cf9720e535350b504480",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-128": {
+      "surface": "skill:team-sprint-close",
+      "source": "specs/capabilities/skills/team-sprint-close.md",
+      "block_sha256": "3534d4829f10e6d9fbc5290101947872aa75a61d40e0955baadbfcd5d9dbd339",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-129": {
+      "surface": "skill:team-sprint-start",
+      "source": "specs/capabilities/skills/team-sprint-start.md",
+      "block_sha256": "be9c3795bef4899dfd7a6ae12350110e172e00da1e1a3869f6a2404d61535390",
+      "evidence_profile": "skills"
+    },
+    "REQ-F-301": {
+      "surface": "agent:manager",
+      "source": "specs/capabilities/agents/manager.md",
+      "block_sha256": "72254a67441bfd21565b77e5c6ca806e71be501cb8c4e251a02f744fb091d7fa",
+      "evidence_profile": "agents"
+    },
+    "REQ-F-302": {
+      "surface": "agent:architect",
+      "source": "specs/capabilities/agents/architect.md",
+      "block_sha256": "463fc10eacea9598e80e36efffcfe47609170006a8c3216361b07eeb04423a77",
+      "evidence_profile": "agents"
+    },
+    "REQ-F-303": {
+      "surface": "agent:mapper",
+      "source": "specs/capabilities/agents/mapper.md",
+      "block_sha256": "aba7be3e9f26c6ff3751957f8cd06df70133aebfd992aeb8ef94aa4bbb408dae",
+      "evidence_profile": "agents"
+    },
+    "REQ-F-304": {
+      "surface": "agent:worker",
+      "source": "specs/capabilities/agents/worker.md",
+      "block_sha256": "2c14b42d3401b35603c148ae90054cd5dfadc3ddf30e7d537dbdd59567d174ee",
+      "evidence_profile": "agents"
+    },
+    "REQ-F-305": {
+      "surface": "agent:review",
+      "source": "specs/capabilities/agents/review.md",
+      "block_sha256": "2fbfc7d81e12f44fbc689e82a15eca7291ef216706b9ab7d06821aaa552efd27",
+      "evidence_profile": "agents"
+    },
+    "REQ-F-306": {
+      "surface": "agent:critic",
+      "source": "specs/capabilities/agents/critic.md",
+      "block_sha256": "eee2d6d94034005e18c53265f098ea6d2b7c65668d1ad8cd57bf5a96570f1902",
+      "evidence_profile": "agents"
+    },
+    "REQ-I-401": {
+      "surface": "plugin:rules-injector",
+      "source": "specs/capabilities/plugins/rules-injector.md",
+      "block_sha256": "aa8e0de72a128afbab48afb23c226c10bbed562d15fddf35c44a068def619deb",
+      "evidence_profile": "plugins"
+    },
+    "REQ-I-402": {
+      "surface": "plugin:rtk",
+      "source": "specs/capabilities/plugins/rtk.md",
+      "block_sha256": "63bcf38d80a7dda917578a05d83229cfbe7bfe89ba13a822cec9807c92c23664",
+      "evidence_profile": "plugins"
+    },
+    "REQ-I-403": {
+      "surface": "plugin:zed-bell",
+      "source": "specs/capabilities/plugins/zed-bell.md",
+      "block_sha256": "4d5dcaeeb6d4b8348cbedf272ad7bdbfb1d43a2a08b2193bbcfa9b227ffa657f",
+      "evidence_profile": "plugins"
+    },
+    "REQ-F-501": {
+      "surface": "tool:capabilities",
+      "source": "specs/capabilities/package-tools/capabilities.md",
+      "block_sha256": "a7d7c382810a5e2a161ec09199a9279737d7a964dc981b4d8453988a6f6022e1",
+      "evidence_profile": "inventory"
+    },
+    "REQ-F-502": {
+      "surface": "tool:route",
+      "source": "specs/capabilities/package-tools/route.md",
+      "block_sha256": "9bbcd4b5055cd805043cbe2e32327d16bfb1ffca3aef3a2778c3fad5cd01bc48",
+      "evidence_profile": "routing"
+    },
+    "REQ-F-503": {
+      "surface": "tool:doctor",
+      "source": "specs/capabilities/package-tools/doctor.md",
+      "block_sha256": "b0fc232f83333b54dcbe8f57f1b71e8f6dbb901f64d8ae16785a6e269c981ee7",
+      "evidence_profile": "doctor"
+    },
+    "REQ-F-504": {
+      "surface": "tool:agent_profiles",
+      "source": "specs/capabilities/package-tools/agent_profiles.md",
+      "block_sha256": "e149230ff1b8a3db251c458976dff9cb47bfeba4c9b03e27474173ad887804d8",
+      "evidence_profile": "profiles"
+    },
+    "REQ-F-505": {
+      "surface": "tool:reconcile",
+      "source": "specs/capabilities/package-tools/reconcile.md",
+      "block_sha256": "14f6faed4dfab3e790fc877bc0f8ba98fcf00fb387e3b19ed7effb249f728db2",
+      "evidence_profile": "reconcile"
+    },
+    "REQ-I-201": {
+      "surface": "command:agents-md",
+      "source": "specs/capabilities/commands/agents-md.md",
+      "block_sha256": "f13c66e39d9fdfbccec6c10cfcb8d8213de22fbfd8fcfb879113c4d36982589c",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-202": {
+      "surface": "command:askme",
+      "source": "specs/capabilities/commands/askme.md",
+      "block_sha256": "48d34ec84848f887793ca47dde7d92b8339d666e06bd12a71b5b234a40f7d022",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-203": {
+      "surface": "command:ast-grep",
+      "source": "specs/capabilities/commands/ast-grep.md",
+      "block_sha256": "1997e00f53377dcba79d995174b5240fe3d9cf9947f8739f18110821ec110f4a",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-204": {
+      "surface": "command:code-explain",
+      "source": "specs/capabilities/commands/code-explain.md",
+      "block_sha256": "403497ab2c3de502af3bb24b1f67bdddc549604e2515c03ce695f2648d474026",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-205": {
+      "surface": "command:code-review",
+      "source": "specs/capabilities/commands/code-review.md",
+      "block_sha256": "de6cbd77cdc7aa8b4cf3bace249d4328f58a019ac1eab3e8407f4f48c55437a3",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-206": {
+      "surface": "command:commit-msg",
+      "source": "specs/capabilities/commands/commit-msg.md",
+      "block_sha256": "7c87b10e8bb749482626f9acd4c83250abc23250677282719053db6c5e1da7c9",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-207": {
+      "surface": "command:docs-prepare",
+      "source": "specs/capabilities/commands/docs-prepare.md",
+      "block_sha256": "39bb1db68c17c40c0d118a052381db628480d03da7086d5c5ff3ff0730be3594",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-208": {
+      "surface": "command:docs-review",
+      "source": "specs/capabilities/commands/docs-review.md",
+      "block_sha256": "8817305340012917e7b22cd04f82e4505d6e3abc5358766be535fa74f27c3a8c",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-209": {
+      "surface": "command:doit",
+      "source": "specs/capabilities/commands/doit.md",
+      "block_sha256": "d12d4773272c0eb19880e29b578ff9b92a29faf5d1016029857f7babb5b140ac",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-210": {
+      "surface": "command:goal",
+      "source": "specs/capabilities/commands/goal.md",
+      "block_sha256": "21dcd968e096e81a8db276c3fb20276b99914387a50b9ec9c6d8ee64b4982045",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-211": {
+      "surface": "command:humanize",
+      "source": "specs/capabilities/commands/humanize.md",
+      "block_sha256": "1b0db41f155e93db69488a6f2f7aba807aeea9df2167c86d20ecf0ca94af276f",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-212": {
+      "surface": "command:lsp-report",
+      "source": "specs/capabilities/commands/lsp-report.md",
+      "block_sha256": "d7816f2a8fc468818c339304b7810ae63dde21631b8495d7231675418164ec61",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-213": {
+      "surface": "command:mattermost",
+      "source": "specs/capabilities/commands/mattermost.md",
+      "block_sha256": "d6e1c9fb4cca0128933887f4760929255295ff421ee74784c8c1391b32c9da2b",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-214": {
+      "surface": "command:mr-prepare",
+      "source": "specs/capabilities/commands/mr-prepare.md",
+      "block_sha256": "b1938595766e45531f2a6fe088da4be82df245140641e526a6e15e43e9ee3a54",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-215": {
+      "surface": "command:release-prepare",
+      "source": "specs/capabilities/commands/release-prepare.md",
+      "block_sha256": "5eac85e3e49fa5df427453a9b5b310a251b4d39ecab5a2687df4136091001f1f",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-216": {
+      "surface": "command:release-review",
+      "source": "specs/capabilities/commands/release-review.md",
+      "block_sha256": "163868125699ec633b6239d0147817ce803fb4244ab52f300370aad3aa670583",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-217": {
+      "surface": "command:rtk",
+      "source": "specs/capabilities/commands/rtk.md",
+      "block_sha256": "4e6954bd8c406e14a0c859423f00896836f350c78dca2b405fa8d05ec46f92f2",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-218": {
+      "surface": "command:skill-improve",
+      "source": "specs/capabilities/commands/skill-improve.md",
+      "block_sha256": "bbd286390dc49abcb00aa4e5f91332a7a221202bfca70ce7e89190c6316cf43b",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-219": {
+      "surface": "command:slides-prompts-prepare",
+      "source": "specs/capabilities/commands/slides-prompts-prepare.md",
+      "block_sha256": "42b49133cbe4765b20ec0b68d96156e03ed613d39e706857c25846af08393da3",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-220": {
+      "surface": "command:spec-manage",
+      "source": "specs/capabilities/commands/spec-manage.md",
+      "block_sha256": "34b693585ea856270215215a8d03d0c21bfe54c9982c40c75b4a35093edc4a02",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-221": {
+      "surface": "command:stopit",
+      "source": "specs/capabilities/commands/stopit.md",
+      "block_sha256": "8808c371f1f859a02d32ce2724b9918fa7dc32ecc82864c589e8be51c56532a0",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-222": {
+      "surface": "command:summary",
+      "source": "specs/capabilities/commands/summary.md",
+      "block_sha256": "915df2337b9755b5661098bfc8ea9e3669ba6438e5ca8565ed28017af0944d0d",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-223": {
+      "surface": "command:task-prepare",
+      "source": "specs/capabilities/commands/task-prepare.md",
+      "block_sha256": "89017cd76e8f92923745cc6c051458340366baa304ce808e8e81a5fc87c19bfc",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-224": {
+      "surface": "command:task-review",
+      "source": "specs/capabilities/commands/task-review.md",
+      "block_sha256": "b8d7a87fbc09409bac0a70a8bd9faaca71dafb63cf04e2ddd3675fc6215e2f78",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-225": {
+      "surface": "command:task-triage",
+      "source": "specs/capabilities/commands/task-triage.md",
+      "block_sha256": "cd51d6a88b876ad192ee788ae4d4ad2031f7417e6263c5422c298b747b4169b4",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-226": {
+      "surface": "command:team-retro",
+      "source": "specs/capabilities/commands/team-retro.md",
+      "block_sha256": "d792ca8cb209860af8a82d9e87773e926eb67cce899b106d7f28bd5619bf094c",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-227": {
+      "surface": "command:team-roadmap",
+      "source": "specs/capabilities/commands/team-roadmap.md",
+      "block_sha256": "3164b431d4e795defa807ffa4f89932b9b65ba074e826b148c3dd254e31363fb",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-228": {
+      "surface": "command:team-sprint-close",
+      "source": "specs/capabilities/commands/team-sprint-close.md",
+      "block_sha256": "65cd53c906a35d17b1f3075b221d061a591fbfb4d6947f81f23905bb27e8df85",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-229": {
+      "surface": "command:team-sprint-start",
+      "source": "specs/capabilities/commands/team-sprint-start.md",
+      "block_sha256": "bb160be9a2bdd8cae42793662402b28720bd5251296bca7910311331cefaa29b",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-230": {
+      "surface": "command:capabilities",
+      "source": "specs/capabilities/commands/capabilities.md",
+      "block_sha256": "c6589e200f1e57594a99bda0dfec4820bf473d5f0abfd43a1f706b9f9f8828dd",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-231": {
+      "surface": "command:doctor",
+      "source": "specs/capabilities/commands/doctor.md",
+      "block_sha256": "35626d9071ecf07034fb0fd3b7e20584eeef859bd9e9f2c0c2986733d5316e7a",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-232": {
+      "surface": "command:reconcile",
+      "source": "specs/capabilities/commands/reconcile.md",
+      "block_sha256": "3ec6df5e436606b23c9e8c5e8d6303581764807adc6a7b96b683aed8d1629fb3",
+      "evidence_profile": "commands"
+    },
+    "REQ-I-233": {
+      "surface": "command:agent-profiles",
+      "source": "specs/capabilities/commands/agent-profiles.md",
+      "block_sha256": "2be82b90fd0fb0a56b523a6fb00ec983098043d6f3e5ec212d5104c68b9c7c78",
+      "evidence_profile": "commands"
+    }
+  }
+}
