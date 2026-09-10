@@ -169,9 +169,20 @@ def check_evidence(
         # drift after bootstrap.
         previous = git("show", f"{revision}:{path.as_posix()}")
         source_unchanged = extract_blocks(previous).get(req_id) == block
-        if value.get("source") != path.as_posix() or (
-            value.get("block_sha256") != calculated and not source_unchanged
-        ):
+        baseline_trace = json.loads(
+            subprocess.run(
+                ["git", "show", f"{revision}:specs/traceability.json"],
+                cwd=ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+        )
+        baseline_hash = baseline_trace.get("requirements", {}).get(req_id, {}).get("block_sha256")
+        valid_hash = value.get("block_sha256") == calculated or (
+            source_unchanged and value.get("block_sha256") == baseline_hash
+        )
+        if value.get("source") != path.as_posix() or not valid_hash:
             raise SpecError("requirement_hash", req_id)
         surface = value.get("surface")
         if (
@@ -180,6 +191,17 @@ def check_evidence(
             and not re.fullmatch(r"(?:skill|command|agent|plugin|tool):[a-z0-9_-]+", surface)
         ):
             raise SpecError("unknown_surface", req_id)
+        if ":" in surface:
+            kind, name = surface.split(":", 1)
+            anchor = {
+                "skill": ROOT / "specs/capabilities/skills" / f"{name}.md",
+                "command": ROOT / "specs/capabilities/commands" / f"{name}.md",
+                "agent": ROOT / "specs/capabilities/agents" / f"{name}.md",
+                "plugin": ROOT / "specs/capabilities/plugins" / f"{name}.md",
+                "tool": ROOT / "specs/capabilities/package-tools" / f"{name}.md",
+            }.get(kind)
+            if anchor is None or not anchor.is_file():
+                raise SpecError("missing_anchor", req_id)
         profile = value.get("evidence_profile")
         if not isinstance(profile, str) or profile not in profiles:
             raise SpecError("missing_evidence", req_id)
@@ -216,6 +238,11 @@ def check_evidence(
                 eval_id == item.get("id") for item in _scenarios()
             ):
                 raise SpecError("unknown_eval", eval_id)
+        contract_path = profile.get("contract_path")
+        if contract_path is not None and (
+            not isinstance(contract_path, str) or not (ROOT / contract_path).is_file()
+        ):
+            raise SpecError("stale_evidence", name)
     if set(profiles) - {value.get("evidence_profile") for value in requirements.values()}:
         raise SpecError("orphan_evidence")
 
@@ -240,23 +267,10 @@ def check_sidecars() -> None:
 
 
 def classify_paths(paths: list[str]) -> bool:
-    behavioral = (
-        "skills/",
-        "shared/",
-        "packages/opencode/src/",
-        "packages/opencode/contracts/",
-        "packages/opencode/assets/",
-        "commands/",
-        "agents/",
-        "plugins/",
-        "schemas/",
-        "distribution",
-    )
-    return any(
-        path.startswith(behavioral)
-        or path in {"taskfile.yml", "lefthook.yml", ".github/workflows/ci.yml"}
-        for path in paths
-    )
+    config = read_json(CONFIG)
+    behavioral = tuple(config.get("behavioral_roots", []))
+    exact = tuple(config.get("behavioral_paths", []))
+    return any(path.startswith(behavioral) or path in exact for path in paths)
 
 
 def commit_has_trailer(commit: str) -> bool:
@@ -296,13 +310,18 @@ def check_staged(message_file: str) -> None:
 
 
 def skill_report(name: str) -> None:
-    if name not in {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md")}:
+    trace = read_json(TRACE)
+    canonical_names = {
+        value.get("surface", "").split(":", 1)[1]
+        for value in trace.get("requirements", {}).values()
+        if isinstance(value, dict) and str(value.get("surface", "")).startswith("skill:")
+    }
+    if name not in canonical_names:
         fail("unknown_skill", name)
     spec = ROOT / "specs/capabilities/skills" / f"{name}.md"
     if not spec.is_file():
         fail("retired_skill", name)
     text = spec.read_text(encoding="utf-8")
-    trace = read_json(TRACE)
     requirement = next(
         (
             key

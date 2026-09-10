@@ -10,5 +10,6 @@
     "schemas/",
     "distribution"
   ],
+  "behavioral_paths": ["scripts/build_distribution.py", "scripts/build_skills.py"],
   "trailer": "Spec-Impact: none - <reason>"
 }
