@@ -1,6 +1,14 @@
 {
   "schema": "spec-impact-gate/v1",
   "bootstrap_boundary": "a1e48be947aca9873eb09885599a1139cee6bc25",
-  "behavioral_roots": ["skills/", "shared/", "packages/opencode/src/", "packages/opencode/contracts/", "packages/opencode/assets/", "schemas/", "distribution"],
+  "behavioral_roots": [
+    "skills/",
+    "shared/",
+    "packages/opencode/src/",
+    "packages/opencode/contracts/",
+    "packages/opencode/assets/",
+    "schemas/",
+    "distribution"
+  ],
   "trailer": "Spec-Impact: none - <reason>"
 }
