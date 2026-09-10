@@ -2,100 +2,85 @@
 
 [Русский](README.ru.md)
 
-`@kisev/skills-opencode` is the optional npm integration. It does not include
-portable skills or mutate configuration on import.
-Managed files use exact SHA-256 ownership checks.
-It provides the capability router, OpenCode runtime, agent-profile management,
-and an opt-in installer for agents, commands, and plugins. It requires Node.js
-22+ and OpenCode 1.18.29+; import, plugin loading, and npm lifecycle do not
-write configuration.
+`@kisev/skills-opencode@2.0.2` is the optional OpenCode-specific layer. Portable
+skills have a separate lifecycle and must be installed independently through the
+[root portable flow](../../README.md).
 
-## Install Skills
+## Requirements and Ownership
 
-Install portable skills first:
+The package requires Node.js 22+ and OpenCode `>=1.18.29 <1.19.0`.
+
+| Component          | Project scope                | Global scope                                              |
+| ------------------ | ---------------------------- | --------------------------------------------------------- |
+| npm package        | project `node_modules`       | `node_modules` in the npm project at `~/.config/opencode` |
+| Commands           | `.opencode/commands`         | `~/.config/opencode/commands`                             |
+| Agents             | `.opencode/agents`           | `~/.config/opencode/agents`                               |
+| Optional wrappers  | `.opencode/plugins`          | `~/.config/opencode/plugins`                              |
+| Ownership metadata | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode`                     |
+
+The package and generated wrappers must remain resolvable after the installer
+exits. Import, plugin loading, and npm lifecycle scripts do not install assets,
+install portable skills, or edit OpenCode configuration.
+
+## Persistent Package Install
+
+### Project Scope
+
+Install in the repository's npm project and run the CLI from that project root:
 
 ```shell
-npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
+cd /path/to/project
+npm install --save-exact @kisev/skills-opencode@2.0.2
+npm exec -- skills-opencode install --scope project --dry-run
 ```
 
-Use `--skill <name>` for one skill. `npx skills` accepts a reproducible tag URL,
-for example `https://github.com/kisev/skills/tree/v2.0.0`; the package never
-installs or updates skills and reports the exact `npx skills add` command when a
-skill is missing.
+The package remains in project `node_modules`; confirmed assets go under
+`.opencode`.
 
-## Install Integration
+### Global Scope
 
-```shell
-npm install @kisev/skills-opencode@2.0.0
-```
-
-Interactive selection is available only in a TTY. Non-TTY installs require
-explicit `--commands`, `--agents`, and `--plugins` flags; selectable plugins
-default to an empty set. The wizard shows skill commands, package commands,
-fixed agents, and `rules-injector`, `rtk`, `zed-bell`.
-
-Preview before any write:
+Use `~/.config/opencode` as the persistent npm project:
 
 ```shell
+mkdir -p "$HOME/.config/opencode"
+cd "$HOME/.config/opencode"
+test -f package.json || npm init --yes
+npm install --save-exact @kisev/skills-opencode@2.0.2
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
-Apply the shown digest only:
+Keep the dependency in that npm project's `package.json` and lock file.
+Confirmed assets go under `~/.config/opencode`.
+
+## Select Assets
+
+In a TTY, `install` opens a selection wizard. Skill commands, package commands,
+and the six fixed agents start selected; optional wrappers start unselected.
+
+Outside a TTY, pass all three selection groups. This example selects three
+commands, all fixed agents, and no wrapper:
 
 ```shell
-npm exec -- skills-opencode install --scope global --confirm <digest>
+npm exec -- skills-opencode install --scope project \
+  --commands doctor,reconcile,agent-profiles \
+  --agents manager,architect,mapper,worker,review,critic \
+  --plugins none --dry-run
 ```
 
-Use `--json` for automation.
-The machine-readable plan includes `requires_restart`; a preview uses `--dry-run`
-and an apply uses `--confirm <digest>` with identical arguments.
-
-`global` manages `.config/opencode/agents`, `.config/opencode/commands`, and
-`.config/opencode/plugins`. Project scope manages `.opencode/agents`,
-`.opencode/commands`, and `.opencode/plugins`. Profile configuration is kept in
-`.config/opencode/.skills-opencode/agent-profiles.json` globally or under
-`.opencode/.skills-opencode` for a project.
-Project assets are limited to the current working directory. Scope is required;
-the installer never changes `opencode.json`, overwrites unknown or modified
-files, or records ownership manifests before confirmed apply. The short preview
-reports changed paths, conflicts, restart status, digest, and its confirm command.
-
-## Read-only Doctor
-
-`doctor` reports facts without writing:
+If any selection flag is present outside a TTY, `--commands`, `--agents`, and
+`--plugins` are all required. Query exact current names with:
 
 ```shell
-npm exec -- skills-opencode doctor --scope project
-npm exec -- skills-opencode doctor --scope global --json
+npm exec -- skills-opencode capabilities --json
 ```
 
-It never creates lifecycle state, consumes receipts, recovers journals, starts
-plugins, or starts LSP servers. Its versioned JSON report contains stable check
-IDs, catalog and installed-manifest versions, ownership/drift/collision classes,
-inventory findings, runtime summaries, redacted configuration projections, and
-LSP facts. It never serializes secrets, raw configuration, environment values,
-receipts, or credentials. Exit status `0` is clean, `1` reports findings, and
-`2` means invalid input or an incomplete probe failure.
+The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`.
 
-## Reconcile Retired Assets
+## Activate the Core Plugin
 
-`reconcile` previews retirement and preserves conflicts:
-
-```shell
-npm exec -- skills-opencode reconcile --scope project --dry-run
-npm exec -- skills-opencode reconcile --scope project --confirm <digest>
-npm exec -- skills-opencode reconcile --scope global --dry-run --json
-```
-
-It considers only public portable skills, package commands, plugins, agents, and
-installation metadata for the selected scope. Retired exact-owned files move to
-a private content-addressed XDG archive with an index, never disappear.
-Modified-managed, user-owned, unknown, symlink, unsafe-path, worktree, and
-ambiguous-source entries remain byte-for-byte conflicts. The journaled target and
-archive transaction provides rollback, recovery, and repeatable no-op operation.
-Doctor reports archive entries and conflicts read-only.
-
-Add the plugin manually:
+The installer records whether the selection needs core integration, but never
+creates or edits `opencode.json`. Add the package to the user-owned `plugin`
+array for the same scope while preserving existing entries:
 
 ```json
 {
@@ -104,104 +89,119 @@ Add the plugin manually:
 }
 ```
 
+For project scope, keep the package in project `node_modules` and configuration
+in the project. For global scope, keep the npm project and user configuration
+under `~/.config/opencode`. Restart OpenCode after activation or asset changes.
+
+## Preview and Confirm
+
+Every mutation begins with `--dry-run`. The preview reports operations,
+conflicts, restart requirements, receipt expiry, a SHA-256 digest, and the exact
+confirmation command.
+
+```shell
+npm exec -- skills-opencode install --scope project --dry-run
+```
+
+Run the command printed by the preview, including all selection flags. Receipts
+are private, valid for 10 minutes, single-use, and bound to the action, scope,
+root, and current inventory. Apply rejects stale state and unsafe conflicts.
+
+## Doctor
+
+`doctor` reads integration facts without creating receipts, recovering journals,
+starting plugins, or starting LSP servers:
+
+```shell
+npm exec -- skills-opencode doctor --scope project
+npm exec -- skills-opencode doctor --scope project --json
+```
+
+The report includes versions, ownership, drift, collisions, archive counts,
+redacted configuration projections, runtime summaries, and LSP facts. It does
+not serialize raw configuration, environment values, receipts, credentials, or
+secrets. Exit status `0` is clean, `1` reports findings, and `2` reports invalid
+input or an incomplete probe failure.
+
+## Update
+
+From the npm project that owns the dependency, install the exact intended
+version, preview and confirm `install` with the same scope and desired selection,
+then restart OpenCode:
+
+```shell
+npm install --save-exact @kisev/skills-opencode@2.0.2
+npm exec -- skills-opencode install --scope project --dry-run
+```
+
+Use the complete confirmation command printed by the preview. The installer
+updates only files whose recorded ownership and SHA-256 still match. User-owned
+or modified managed files remain conflicts. Package update does not reset agent
+model choices, variants, additional critics, or retained profile configuration.
+
+## Reconcile
+
+`reconcile` classifies current and historical portable skills, package commands,
+plugins, agents, and installation metadata for one scope:
+
+```shell
+npm exec -- skills-opencode reconcile --scope project --dry-run
+npm exec -- skills-opencode reconcile --scope project --confirm <digest>
+npm exec -- skills-opencode reconcile --scope global --dry-run --json
+```
+
+Confirmed reconcile archives exact-owned retired assets in a private
+content-addressed XDG archive and removes their deployed copies. Modified,
+user-owned, unknown, symlink, unsafe, or ambiguous entries remain unchanged as
+findings or conflicts. Worktrees and runtime state are preserved. The archive is
+inspectable through `doctor`; no archive restore or purge command is provided.
+
 ## Manage Agents
 
-The direct CLI manages models without LLM calls:
+The direct CLI manages fixed-agent models and additional critics without an LLM
+call:
 
 ```shell
 npm exec -- skills-opencode agent list --scope global
 npm exec -- skills-opencode agent configure manager --scope global --dry-run
-npm exec -- skills-opencode agent model-set worker --scope global \
-  --model openai/gpt-5 --variant high --dry-run
+npm exec -- skills-opencode agent model-set worker --scope global --model openai/gpt-5 --variant high --dry-run
+npm exec -- skills-opencode critic add security --scope global --model anthropic/claude-sonnet-4-6 --dry-run
 npm exec -- skills-opencode agent reconcile --scope global --dry-run
 ```
 
-Fixed roles preserve their names and canonical prompts and permissions; only
-model and variant change. The interactive configuration wizard selects an agent,
-provider, its models, and published variants, showing the current target and
-offering keep, change, clear variant, back, and cancel. It does not invoke an
-LLM, OpenCode Question, or catalog refresh. If the catalog is unavailable it
-does not write and prints the exact model instruction.
+Fixed roles keep their names, prompts, and permissions; only model and variant
+change. Additional critics use `critic-<safe-suffix>`. Every mutation uses the
+same preview and one-time confirmation contract.
 
-When the catalog is unavailable, use exact `--model <provider/model>` and an
-optional `--variant`; `provider/model` identifies the selected model. The
-optional `agent_profiles` tool and slash commands adapt the same direct-CLI
-plan/apply contract.
+## Uninstall
 
-```shell
-npm exec -- skills-opencode critic add security --scope global \
-  --model anthropic/claude-sonnet-4-6 --dry-run
-npm exec -- skills-opencode critic remove security --scope global --dry-run
-```
+Keep the package resolvable until its assets are removed:
 
-Additional critics use `critic-<safe-suffix>`; fixed roles and the standard
-critic cannot be renamed or removed. Every mutation uses a one-time private
-receipt valid for 10 minutes, a lifecycle lock, inventory recheck, journaled
-all-or-rollback transaction, and final validation. Interrupted mutations recover
-before requiring a fresh plan. Global profile configuration and its semantic
-deployment manifest are kept together; project scope keeps corresponding files
-under its `.opencode` directory. Package updates do not reset selected models,
-variants, or additional critics.
-
-## Upgrade and Uninstall
+1. Preview and confirm package-owned asset removal.
+2. Remove `@kisev/skills-opencode` from the user-owned `plugin` array.
+3. Uninstall the dependency from the same npm project.
+4. Restart OpenCode.
 
 ```shell
-npm exec -- skills-opencode uninstall --scope global --dry-run
-npm exec -- skills-opencode uninstall --scope global --confirm <digest>
+npm exec -- skills-opencode uninstall --scope project --dry-run
+npm exec -- skills-opencode uninstall --scope project --confirm <digest>
+npm uninstall @kisev/skills-opencode
 ```
 
-The full JSON install preview is:
-
-```shell
-npm exec -- skills-opencode install --scope global --dry-run --json
-```
-
-On upgrade, the installer updates only managed files whose SHA-256 still matches.
-The one-time `1.0.0` migration transfers the six fixed-agent ownership records
-only when package/version, manifest records, and every file hash match exactly.
-Uninstall removes only unchanged manifest-owned files; modified files remain
-conflicts and profile configuration is retained for a later installation.
-
-## Runtime Options
-
-Plugins are independent and selectable ones are opt-in.
-
-```shell
-npm exec -- skills-opencode agent list --scope global --json
-```
-
-The package exports the core OpenCode plugin and independent factories for
-`rules-injector`, `rtk`, and `zed-bell`. Retired plugin APIs and internal lifecycle
-implementations are not public. Rules injection fails soft within a bounded
-budget; RTK fails open.
-
-## Stage 18 Routing
-
-`doit` owns the complete evidence -> plan -> confirmation -> execution -> checks
--> report lifecycle; `manager` only adapts it to OpenCode. The route tool has four
-destinations: exploration to `mapper`, architecture to `architect`, implementation
-to `worker`, and review to `review` or one selected `critic`. Documentation and
-quick work remain in `doit`.
-
-The route inventory comes only from resolved host configuration. Callers cannot
-inject agents, capabilities, tools, models, or availability. Versioned receipts,
-cards, and mapper/worker/review/critic reports are checked at real Task dispatch
-and result hooks. Cards bind paths, checks, explicit VCS operations, and separate
-execution, publication, and history-rewrite confirmations.
+For global scope, run the same flow from `~/.config/opencode` with
+`--scope global`. Uninstall archives exact manifest-owned assets and preserves
+modified files as conflicts, along with worktrees, runtime state, and retained
+profile configuration. It does not remove portable skills or edit
+`opencode.json`. No archive restore or purge command is provided.
 
 ## Boundaries
 
-Portable skills and package assets install independently.
-
-```shell
-npm exec -- skills-opencode install --scope project --dry-run
-npm exec -- skills-opencode install --scope project --confirm <digest>
-```
-
-Commands are thin adapters that pass untrusted arguments to the native Skill
-tool; validation, confirmation, batch/review rules, and result format remain the
-skill or runner responsibility. `capabilities`, `route`, and `doctor` are package
-tools and commands for catalog, routing, and health. `agent_profiles` and the
-four agent slash commands are optional UX adapters, not a separate skill.
-
-The package is MIT-licensed; the repository root README has full instructions.
+- Portable skills and package assets install, update, and uninstall independently.
+- Commands corresponding to skills are thin adapters; the portable skill remains
+  authoritative and must be installed separately.
+- Package tools are `capabilities`, `route`, `doctor`, `agent_profiles`, and
+  `reconcile`; `route` has no slash command.
+- The installer owns only files proved by manifests and exact hashes.
+- The package is MIT-licensed. Current inventory and checks are in
+  [Migration Inventory](../../docs/migration-inventory.md) and
+  [Verification](../../docs/verification.md).

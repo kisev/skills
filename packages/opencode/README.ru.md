@@ -2,112 +2,85 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-`@kisev/skills-opencode` - npm package с capability router, OpenCode runtime,
-управлением agent profiles и opt-in installer для agents, commands и plugins. Он
-не включает portable skills и не меняет конфигурацию при import, plugin load или
-npm lifecycle. Package требует Node.js 22+ и OpenCode 1.18.29+.
+`@kisev/skills-opencode@2.0.2` - optional OpenCode-specific слой. У portable
+skills отдельный lifecycle: их нужно установить независимо через
+[корневую инструкцию](../../README.ru.md).
 
-## Установка skills
+## Требования и ownership
 
-Сначала установите нужные portable skills через `npx skills` из публичного
-репозитория:
+Package требует Node.js 22+ и OpenCode `>=1.18.29 <1.19.0`.
+
+| Component          | Project scope                | Global scope                                      |
+| ------------------ | ---------------------------- | ------------------------------------------------- |
+| npm package        | project `node_modules`       | `node_modules` в npm project `~/.config/opencode` |
+| Commands           | `.opencode/commands`         | `~/.config/opencode/commands`                     |
+| Agents             | `.opencode/agents`           | `~/.config/opencode/agents`                       |
+| Optional wrappers  | `.opencode/plugins`          | `~/.config/opencode/plugins`                      |
+| Ownership metadata | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode`             |
+
+Package и generated wrappers должны оставаться доступными после завершения
+installer. Import, plugin loading и npm lifecycle scripts не устанавливают
+assets или portable skills и не меняют OpenCode configuration.
+
+## Постоянная установка package
+
+### Project scope
+
+Установите package в npm project репозитория и запускайте CLI из его корня:
 
 ```shell
-npx --yes skills add kisev/skills --agent opencode --skill '*' --copy --yes
+cd /path/to/project
+npm install --save-exact @kisev/skills-opencode@2.0.2
+npm exec -- skills-opencode install --scope project --dry-run
 ```
 
-Для одного skill укажите `--skill <name>`. Для воспроизводимой установки можно
-передать URL GitHub tag, например
-`https://github.com/kisev/skills/tree/v2.0.0`. Package никогда не устанавливает
-и не обновляет skills. Если команда не нашла skill, она сообщает точную команду
-`npx skills add` для его установки.
+Package остаётся в project `node_modules`, confirmed assets размещаются в
+`.opencode`.
 
-## Установка integration
+### Global scope
 
-Установите npm package там, где OpenCode сможет разрешить plugin:
+Используйте `~/.config/opencode` как постоянный npm project:
 
 ```shell
-npm install @kisev/skills-opencode@2.0.0
-```
-
-Interactive selection доступен только в TTY. В non-TTY install нужно явно передать
-`--commands`, `--agents` и `--plugins`; selectable plugins по умолчанию пусты.
-Wizard показывает skill commands, package commands, fixed agents и
-`rules-injector`, `rtk`, `zed-bell`. Сначала покажите план installer. CLI выводит короткую сводку:
-счётчики по группам, только изменяемые paths, conflicts, restart flag, digest и
-готовую confirm-команду. Эта команда не меняет deployment:
-
-```shell
+mkdir -p "$HOME/.config/opencode"
+cd "$HOME/.config/opencode"
+test -f package.json || npm init --yes
+npm install --save-exact @kisev/skills-opencode@2.0.2
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
-Проверьте сводку и примените только показанный digest:
+Сохраните dependency в `package.json` и lock file этого npm project. Confirmed
+assets размещаются в `~/.config/opencode`.
+
+## Выбор assets
+
+В TTY команда `install` открывает selection wizard. Skill commands, package
+commands и шесть fixed agents изначально выбраны, optional wrappers - нет.
+
+Вне TTY передайте все три selection group. Этот пример выбирает три commands,
+всех fixed agents и ни одного wrapper:
 
 ```shell
-npm exec -- skills-opencode install --scope global --confirm <digest>
+npm exec -- skills-opencode install --scope project \
+  --commands doctor,reconcile,agent-profiles \
+  --agents manager,architect,mapper,worker,review,critic \
+  --plugins none --dry-run
 ```
 
-`global` устанавливает assets в `~/.config/opencode/agents`,
-`~/.config/opencode/commands` и `~/.config/opencode/plugins`. Для текущего
-repository используйте `project`:
+Если вне TTY передан любой selection flag, обязательны `--commands`, `--agents`
+и `--plugins`. Точные текущие имена показывает команда:
 
 ```shell
-npm exec -- skills-opencode install --scope project --dry-run
-npm exec -- skills-opencode install --scope project --confirm <digest>
+npm exec -- skills-opencode capabilities --json
 ```
 
-Project assets находятся в `.opencode/agents`, `.opencode/commands` и
-`.opencode/plugins` текущего working directory. Scope обязателен. Installer не изменяет `opencode.json`, не
-перезаписывает неизвестные или изменённые files и сохраняет ownership manifests
-только после confirmed apply.
+Selectable wrappers: `rules-injector`, `rtk`, `zed-bell`.
 
-Для automation добавьте `--json`. Этот режим сохраняет полный стабильный
-machine-readable plan, включая `operations` и `requires_restart`:
+## Активация core plugin
 
-```shell
-npm exec -- skills-opencode install --scope global --dry-run --json
-npm exec -- skills-opencode agent list --scope global --json
-```
-
-## Read-only doctor
-
-`doctor` is a read-only installer health report. It never creates lifecycle
-state, consumes receipts, recovers journals, starts plugins or starts LSP
-servers. `project` and `global` are isolated scopes; unavailable OpenCode host
-facts are reported as incomplete rather than inferred.
-
-```shell
-npm exec -- skills-opencode doctor --scope project
-npm exec -- skills-opencode doctor --scope global --json
-```
-
-The JSON report is versioned and contains stable check IDs, package/catalog and
-installed-manifest versions, ownership/drift/collision classifications, stage-8
-inventory findings, lifecycle/runtime state summaries, redacted config
-projections and LSP facts. Secrets, raw config, environment values, receipts
-and credentials are never serialized. Exit code `0` is clean, `1` reports
-findings, and `2` means invalid input or an incomplete probe failure.
-
-## Reconcile retired assets
-
-`reconcile` проверяет только public portable skills, package commands, plugins,
-agents и installation metadata выбранного scope. XDG runtime state не читается и
-не изменяется. Preview сохраняет private receipt с TTL и печатает digest:
-
-```shell
-npm exec -- skills-opencode reconcile --scope project --dry-run
-npm exec -- skills-opencode reconcile --scope project --confirm <digest>
-npm exec -- skills-opencode reconcile --scope global --dry-run --json
-```
-
-Retired files с доказанным inventory ownership и exact SHA-256 перемещаются в
-private content-addressed XDG archive с index, а не удаляются. Modified-managed,
-user-owned, unknown, symlink, unsafe-path, worktree и ambiguous-source entries
-остаются conflicts без изменения bytes. Journal target и archive обеспечивает
-rollback, recovery и повторный no-op reconcile. Doctor показывает archive и
-conflicts read-only.
-
-Добавьте plugin в `opencode.json` вручную:
+Installer записывает, нужна ли selection core integration, но никогда не создаёт
+и не меняет `opencode.json`. Добавьте package в user-owned массив `plugin` для
+того же scope, сохранив существующие entries:
 
 ```json
 {
@@ -116,127 +89,120 @@ conflicts read-only.
 }
 ```
 
-Полностью перезапустите OpenCode после install, upgrade или uninstall: registry
-agents и commands строится до plugin hooks.
+Для project scope храните package в project `node_modules`, а configuration - в
+project. Для global scope храните npm project и user configuration в
+`~/.config/opencode`. После activation или изменения assets перезапустите
+OpenCode.
+
+## Preview и confirm
+
+Каждая mutation начинается с `--dry-run`. Preview показывает operations,
+conflicts, необходимость restart, срок действия receipt, SHA-256 digest и точную
+confirmation command.
+
+```shell
+npm exec -- skills-opencode install --scope project --dry-run
+```
+
+Выполните команду из preview со всеми selection flags. Receipts приватны,
+действуют 10 минут, применяются один раз и связаны с action, scope, root и
+текущим inventory. Apply отклоняет stale state и unsafe conflicts.
+
+## Doctor
+
+`doctor` читает integration facts без создания receipts, recovery journals,
+запуска plugins или LSP servers:
+
+```shell
+npm exec -- skills-opencode doctor --scope project
+npm exec -- skills-opencode doctor --scope project --json
+```
+
+Report содержит versions, ownership, drift, collisions, archive counts, redacted
+configuration projections, runtime summaries и LSP facts. Raw configuration,
+environment values, receipts, credentials и secrets не сериализуются. Exit
+status `0` означает чистое состояние, `1` - findings, `2` - invalid input или
+incomplete probe failure.
+
+## Обновление
+
+В npm project, которому принадлежит dependency, установите точную нужную version,
+покажите и подтвердите `install` с тем же scope и нужной selection, затем
+перезапустите OpenCode:
+
+```shell
+npm install --save-exact @kisev/skills-opencode@2.0.2
+npm exec -- skills-opencode install --scope project --dry-run
+```
+
+Используйте полную confirmation command из preview. Installer обновляет только
+files с совпадающими recorded ownership и SHA-256. User-owned или modified
+managed files остаются conflicts. Package update не сбрасывает выбранные agent
+models, variants, additional critics или retained profile configuration.
+
+## Reconcile
+
+`reconcile` классифицирует current и historical portable skills, package
+commands, plugins, agents и installation metadata одного scope:
+
+```shell
+npm exec -- skills-opencode reconcile --scope project --dry-run
+npm exec -- skills-opencode reconcile --scope project --confirm <digest>
+npm exec -- skills-opencode reconcile --scope global --dry-run --json
+```
+
+Confirmed reconcile архивирует exact-owned retired assets в private
+content-addressed XDG archive и удаляет их deployed copies. Modified, user-owned,
+unknown, symlink, unsafe и ambiguous entries остаются без изменений как findings
+или conflicts. Worktrees и runtime state сохраняются. Archive доступен для
+просмотра через `doctor`; команд restore или purge нет.
 
 ## Управление agents
 
-Рекомендуемый интерфейс - прямой terminal CLI: он не вызывает LLM и не расходует
-токены. Fixed roles `manager`, `architect`, `mapper`, `worker`, `review` и
-стандартный `critic` всегда сохраняют имена и canonical prompts/permissions.
-Меняются только `model` и `variant`:
+Direct CLI управляет models fixed agents и additional critics без LLM call:
 
 ```shell
 npm exec -- skills-opencode agent list --scope global
 npm exec -- skills-opencode agent configure manager --scope global --dry-run
-npm exec -- skills-opencode agent model-set worker --scope global \
-  --model openai/gpt-5 --variant high --dry-run
+npm exec -- skills-opencode agent model-set worker --scope global --model openai/gpt-5 --variant high --dry-run
+npm exec -- skills-opencode critic add security --scope global --model anthropic/claude-sonnet-4-6 --dry-run
 npm exec -- skills-opencode agent reconcile --scope global --dry-run
 ```
 
-`agent configure` предлагает настоящий terminal wizard: стрелками выбираются
-agent из inventory, затем provider, только его models и, если metadata выбранной
-модели публикует variants, variant. Текущие model/variant и target показываются
-перед выбором; доступны `keep`, `change`, `clear variant`, `back` и `cancel`.
-Wizard не вызывает LLM, OpenCode Question или refresh catalog. Если catalog
-недоступен, он завершается без записи и печатает инструкцию для exact
-`--model <provider/model>` с optional `--variant`. Для модели без variants
-дополнительный selector не показывается.
+Fixed roles сохраняют имена, prompts и permissions; меняются только model и
+variant. Additional critics используют `critic-<safe-suffix>`. Каждая mutation
+использует тот же contract preview и one-time confirmation.
 
-Additional critic имеет имя `critic-<safe-suffix>`. Стандартный `critic` и fixed
-roles нельзя удалить или переименовать:
+## Uninstall
 
-```shell
-npm exec -- skills-opencode critic add security --scope global \
-  --model anthropic/claude-sonnet-4-6 --dry-run
-npm exec -- skills-opencode critic remove security --scope global --dry-run
-```
+Package должен оставаться доступным до удаления его assets:
 
-Для любой mutation используйте готовую confirm-команду из preview либо замените
-`--dry-run` на `--confirm <digest>` и повторите те же аргументы. Человекочитаемый
-plan не печатает полный JSON и сворачивает длинные группы paths. Digest связан с
-одноразовым private receipt, действует 10 минут и повторно не применяется. Для
-machine-readable result добавьте `--json`; поле `requires_restart` сообщает о
-необходимости полностью перезапустить OpenCode.
-
-В global scope profile configuration хранится в
-`~/.config/opencode/.skills-opencode/agent-profiles.json`, а semantic deployment
-manifest - рядом в `agent-profiles.manifest.json`. Для project scope те же файлы
-находятся под `.opencode/.skills-opencode/`. Configuration хранит выбранные
-model/variant и additional critics; package update её не сбрасывает. Manifest
-хранит package version, exact critic pool и hashes canonical configuration и
-rendered files.
-
-Inventory различает `package-owned`, `managed`, `user-owned`, `drift` и exact-name
-`collision`. User-owned и неизвестные agents не изменяются. Collision блокирует
-apply; drift исправляется только явным `agent reconcile`. Все mutations проходят
-под lifecycle lock, повторно проверяют inventory, используют journaled
-all-or-rollback transaction и выполняют final validation. После прерывания
-следующая mutation безопасно восстанавливает before-images и требует свежий plan.
-
-## Upgrade и uninstall
-
-После обновления npm package снова выполните dry-run и подтвердите новый digest.
-Installer обновляет только files с совпадающим managed SHA-256.
-
-При первом upgrade с `1.0.0` installer передаёт ownership шести fixed agents из
-generic manifest в profile domain только при точном совпадении package/version,
-manifest records и SHA-256 каждого файла. Любое отличие остаётся конфликтом.
-Commands и plugins продолжают принадлежать generic installer. Uninstall удаляет
-неизменённые deployments, но сохраняет profile configuration для последующей
-установки.
+1. Покажите preview и подтвердите удаление package-owned assets.
+2. Удалите `@kisev/skills-opencode` из user-owned массива `plugin`.
+3. Удалите dependency из того же npm project.
+4. Перезапустите OpenCode.
 
 ```shell
-npm exec -- skills-opencode uninstall --scope global --dry-run
-npm exec -- skills-opencode uninstall --scope global --confirm <digest>
+npm exec -- skills-opencode uninstall --scope project --dry-run
+npm exec -- skills-opencode uninstall --scope project --confirm <digest>
+npm uninstall @kisev/skills-opencode
 ```
 
-Uninstall удаляет только files из ownership manifest, если их SHA-256 не
-изменился. Изменённые пользователем files остаются как `conflict`.
-
-## Runtime options
-
-Package экспортирует core OpenCode plugin и independent plugin factories
-`rules-injector`, `rtk`, `zed-bell`. Retired plugin APIs и internal lifecycle
-implementations public surface не входят:
-
-Background Attempts создают workspace только через единый managed worktree
-owner. Records используют private current-only state, marker и repository
-fingerprint; release перепроверяет регистрацию, fingerprint и чистый status и
-возвращает `blocked` без удаления при расхождении. Scheduler принимает строгий
-five-field cron, не воспроизводит missed slots и пишет receipts `started`,
-`completed`, `failed` или `overrun`.
-
-`rules-injector` fail-soft применяет ограниченный budget и пропускает native
-project/global rules. `rtk` fail-open сжимает большой bash output и добавляет
-подсказку для edit error, но не содержит ownership guard.
-
-## Routing этапа 18
-
-`doit` владеет полным lifecycle evidence -> plan -> confirmation -> execution ->
-checks -> report; `manager` только адаптирует его к OpenCode. Tool `route` имеет
-четыре назначения: exploration -> `mapper`, architecture -> `architect`,
-implementation -> `worker`, review -> `review` или один `critic`. Documentation и
-quick остаются у `doit`.
-
-Inventory берётся только из resolved host config. Caller не может подменить agents,
-capabilities, tools, models или availability. Versioned receipts, cards и
-mapper/worker/review/critic reports проверяются на реальных Task dispatch/result
-hooks. Card связывает paths, checks, явные VCS operations и отдельные confirmations
-для execution, publication и history rewrite.
+Для global scope выполните тот же flow из `~/.config/opencode` с
+`--scope global`. Uninstall архивирует exact manifest-owned assets и сохраняет
+modified files как conflicts вместе с worktrees, runtime state и retained
+profile configuration. Он не удаляет portable skills и не меняет
+`opencode.json`. Команд restore или purge для archive нет.
 
 ## Границы
 
-Portable skills в корне `skills/` универсальны и устанавливаются только через
-`npx skills`. Этот package поставляет только OpenCode-specific assets и runtime
-router. Команды - тонкие adapters: передают `$ARGUMENTS` как недоверенный ввод
-в native Skill tool, а target validation, confirmation, batch/review rules и
-формат результата остаются ответственностью skill или runner.
-`capabilities`, `route` и `doctor` - package tools/commands для catalog, routing и
-health. Tool `doctor` and direct CLI share one read-only facts API; `/doctor` is
-only a thin adapter. Tool `agent_profiles` и четыре slash-команды `agent-list`,
-`agent-model-set`, `critic-add`, `critic-remove` - optional thin UX над теми же
-plan/apply contracts. Отдельного skill `agent-profiles` нет.
-
-Package распространяется по лицензии MIT. Полные инструкции по portable skills,
-upgrade и security boundaries находятся в корневом README репозитория.
+- Portable skills и package assets устанавливаются, обновляются и удаляются
+  независимо.
+- Commands, соответствующие skills, являются thin adapters; portable skill
+  остаётся authoritative и устанавливается отдельно.
+- Package tools: `capabilities`, `route`, `doctor`, `agent_profiles`, `reconcile`;
+  у `route` нет slash command.
+- Installer владеет только files с доказанными manifests и exact hashes.
+- Package распространяется по лицензии MIT. Текущий inventory и checks описаны в
+  [инвентаре миграции](../../docs/ru/migration-inventory.md) и
+  [документе проверки](../../docs/ru/verification.md).

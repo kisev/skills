@@ -2,50 +2,84 @@
 
 [English version](../verification.md)
 
-## Дополнительное резюме выпуска 2.0.0
+## Выпуск 2.0.2
 
-Annotated tag `v2.0.0`, npm package `@kisev/skills-opencode@2.0.0` и GitHub
-Release должны ссылаться на один exact commit. Portable skills устанавливаются
-напрямую из immutable Git tag через `npx --yes skills@1.5.23`; для exact migration
-с `v1.2.0` используйте URL tag и `--agent opencode` или `--agent codex`.
+Точный portable source:
+`https://github.com/kisev/skills/tree/v2.0.2`; optional package:
+`@kisev/skills-opencode@2.0.2`. Portable installation закрепляет
+`npx --yes skills@1.5.23`. Package требует Node.js 22+ и объявляет OpenCode
+`>=1.18.29 <1.19.0`.
 
-Migration inventory фиксирует переименования и удаления skills, command/plugin
-поверхностей и пустой набор aliases. `reconcile` сохраняет retired exact-owned
-assets в private content-addressed archive со статусом `archive-pending`; purge
-не выполняется, а изменённые и user-owned файлы остаются conflicts. Package tool
-`route` сохранён, но slash-команда `/route` и старые action/mode aliases не входят
-в выпуск.
+## Установка portable skills
 
-Optional OpenCode package совместим с `>=1.18.29 <1.19.0`, проверяется на
-`1.18.29` и `1.18.30` и требует Node.js 22+. Portable skills от него не зависят.
-Ограничения выпуска: Mattermost ещё не имеет полной parity, runtime state и
-`doctor` требуют hardening, stateful plugins остаются opt-in, а live eval не
-входит в обычный quality gate.
+Global contract для обоих поддерживаемых host:
 
-Этап 20 проверяет публичный контракт `2.0.0` без модели, сети, провайдера и
-учётных данных. `task eval:check` валидирует зафиксированный corpus и запускает
-все детерминированные assertions; эта задача входит в `task check`.
+```shell
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --agent opencode --agent codex --skill '*' --copy --global --yes
+```
 
-Для каждого из 29 skills есть четыре сценария: English trigger, English
-near-miss, Russian trigger и Russian near-miss. Пары trigger/near-miss сохраняют
-одинаковые structured outcome и mutation boundary. ID и digest сценариев стабильны,
-а ошибочные дубликаты prompts блокируются тестами corpus.
+Команда создаёт одну canonical copy в `~/.agents/skills`. Без `--global` project
+copy находится в `.agents/skills`. `kisev/skills` выбирает latest source отдельно
+от exact tag URL.
 
-Детерминированные контракты покрывают 29 skills, 33 command adapters, 6 agents, 3
-выбираемых plugins, 5 package tools и core infrastructure plugin. Зафиксированный
-negative corpus проверяет duplicate identity, digest drift, пропущенные RU/EN пары,
-неизвестные surfaces, выход из пути, malformed results, неполные budgets, утечку
-секретов, неподдерживаемый host и устаревший package inventory.
+Tag-based installation при `update` остаётся pinned. Для перехода на другой tag
+нужно повторить `add` с новым exact URL. Update не удаляет renamed или deleted
+skills. Cleanup ограничен восемью portable names из текущего
+[инвентаря миграции](migration-inventory.md); portable cleanup record `multi-run`
+отсутствует.
 
-В `evals/contracts/opencode-compatibility.json` зафиксированы минимум OpenCode
-`1.18.29` и актуальный релиз `1.18.30` внутри `>=1.18.29 <1.19.0`. Build,
-registration, config, installer и agent discovery проверяются для обоих слотов без
-учётных данных.
+## Интеграция OpenCode
 
-Live eval не входит в `task check`. Для него явно обязательны `--trusted-live`, host,
-model, timeout, token/cost budgets и output path. Default model/baseline отсутствуют,
-а untrusted CI не получает secrets и не запускает live gate.
+Portable skills не зависят от npm package, а npm package не устанавливает
+portable skills. Project integration постоянно хранится в project `node_modules`,
+global integration - в npm project `~/.config/opencode`.
 
-Generated copies и build outputs проверяются на parity. В чистом временном checkout
-build/check и полный `task check` не должны менять `git status`; committed copies
-отслеживаются, временные outputs игнорируются.
+Installer требует explicit scope и preview/confirmation. Он записывает только
+выбранные managed assets после confirmation и никогда не создаёт и не меняет
+`opencode.json`; core entry `plugin` остаётся user-owned. Update состоит из exact
+npm install, install preview, exact confirmation и перезапуска OpenCode.
+
+Порядок uninstall: preview и confirmation удаления assets, удаление user-owned
+plugin entry, npm uninstall в owning project, затем restart. Reconcile и
+uninstall архивируют exact-owned assets. Conflicts, worktrees и runtime state
+сохраняются; archive commands restore или purge отсутствуют.
+
+## Текущая поверхность
+
+Текущий inventory охватывает 29 portable skills, 33 command adapters, 6 fixed
+agents, 3 selectable plugin wrappers, 5 package tools и core plugin. У package
+tool `route` нет slash command.
+
+Описания catalog проверяются по текущим skill contracts: `goal` возвращает
+read-only structured Markdown не длиннее 4000 символов; `lsp-report` работает
+host-neutral; task workflows storage-neutral; `code-explain` принимает current
+WIP, exact range, branch или exact HTTPS MR link и показывает history без review
+verdict.
+
+## Детерминированное покрытие
+
+Обычный quality gate не вызывает model, provider или credential:
+
+```shell
+task eval:check
+task check
+```
+
+Committed corpus содержит English trigger, English near-miss, Russian trigger и
+Russian near-miss для каждого active skill. Deterministic checks покрывают
+registration, configuration, installer ownership, archive/reconcile behavior,
+agent discovery, negative inputs, path escapes, malformed results, incomplete
+budgets и secret leakage.
+
+Compatibility checks проверяют OpenCode `1.18.29` и `1.18.30` внутри
+`>=1.18.29 <1.19.0` без credentials.
+
+## Live evaluation и clean checkout
+
+Live evaluation не входит в `task check`. Для него явно нужны trusted-live mode,
+host, model, timeout, token и cost budgets и output path. Default model или
+baseline нет, untrusted CI не получает credentials.
+
+Generated runtime copies и distribution outputs проверяются на parity. В clean
+temporary checkout build и check должны оставить `git status` неизменным:
+declared generated copies tracked, temporary outputs остаются ignored.

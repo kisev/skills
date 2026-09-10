@@ -2,40 +2,70 @@
 
 [English](../migration-inventory.md)
 
-Этап нацелен на `2.0.0` от source ref
-`5f09d504758b0e99ad9c0306df796411fbcf0f4a`. Публичная поверхность точная, без
-aliases.
+## Текущий выпуск
 
-## Активные skills
+Точный текущий portable source:
+`https://github.com/kisev/skills/tree/v2.0.2`. Optional integration package:
+`@kisev/skills-opencode@2.0.2`. Latest source отдельно выбирается через
+`kisev/skills`.
 
-Активны ровно 29 skills: `agents-md`, `askme`, `ast-grep`, `code-explain`,
-`code-review`, `commit-msg`, `docs-prepare`, `docs-review`, `doit`, `goal`,
-`humanize`, `lsp-report`, `mattermost`, `mr-prepare`, `release-prepare`,
-`release-review`, `rtk`, `skill-improve`, `slides-prompts-prepare`, `spec-manage`,
-`stopit`, `summary`, `task-prepare`, `task-review`, `task-triage`, `team-retro`,
-`team-roadmap`, `team-sprint-close`, `team-sprint-start`.
+## Активные portable skills
 
-## Миграция путей
+Активны ровно 29 portable skills:
 
-`skills/project-spec` переименован в `skills/spec-manage`,
-`skills/skill-improver` в `skills/skill-improve`, а `skills/walkthrough` в
-`skills/code-explain`. Точные SHA-256 этой записи находятся
-в English inventory и в machine-readable inventory.
+`agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
+`docs-prepare`, `docs-review`, `doit`, `goal`, `humanize`, `lsp-report`,
+`mattermost`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
+`skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `summary`,
+`task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
+`team-sprint-close`, `team-sprint-start`.
 
-Удалены без replacement: `skills/attempt`, `skills/schedule`, `skills/usage`,
-`skills/overview`. `skills/team-workflow` разделён на `team-sprint-start`,
-`team-sprint-close`, `team-retro`, `team-roadmap` и `slides-prompts-prepare`;
-каждый skill имеет fixed entrypoint без public mode selector.
+Source, build и distribution inventories содержат те же self-contained skills.
+Generated shared files объявлены в `shared/manifest.json` и проверяются
+byte-for-byte.
 
-## Команды и безопасность
+## Portable cleanup records
 
-Registry содержит ровно 33 команды: 29 одноимённых skill commands и
-`/capabilities`, `/doctor`, `/reconcile`, `/agent-profiles`. Package tool
-`route` сохранён без slash-command. Aliases отсутствуют.
+Текущий migration inventory содержит ровно эти восемь portable records. Portable
+record `multi-run` в нём отсутствует.
 
-Новые retired assets получают статус `archive-pending`: reconcile сохраняет их
-bytes, а apply блокирует необратимое удаление до archive lifecycle. Archive,
-restore и purge не входят в этот этап.
+| Retired name     | Current replacement                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| `attempt`        | Нет                                                                                              |
+| `schedule`       | Нет                                                                                              |
+| `usage`          | Нет                                                                                              |
+| `overview`       | Нет                                                                                              |
+| `project-spec`   | `spec-manage`                                                                                    |
+| `skill-improver` | `skill-improve`                                                                                  |
+| `walkthrough`    | `code-explain`                                                                                   |
+| `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 
-Machine inventory: `packages/opencode/assets/migration-inventory.json` и
-`shared/manifest.json`.
+Операция `update` в CLI `skills` не удаляет renamed или deleted skills. Для
+Codex-only cleanup эти exact names удаляются явно через pinned CLI. Для OpenCode
+или shared installation их также можно удалить явно либо применить package
+reconcile, только если exact ownership доказан.
+
+## Текущая поверхность OpenCode
+
+Текущий package inventory содержит 33 commands: по одной для каждого active
+skill, а также `/capabilities`, `/doctor`, `/reconcile` и `/agent-profiles`.
+Package tool `route` доступен без slash command.
+
+Шесть fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`,
+`critic`. Selectable plugin wrappers: `rules-injector`, `rtk`, `zed-bell`.
+Package tools: `capabilities`, `route`, `doctor`, `agent_profiles`, `reconcile`.
+
+## Ownership и archive
+
+Confirmed reconcile и uninstall архивируют только exact-owned assets перед
+удалением deployed copies. Modified, user-owned, unknown, unsafe и ambiguous
+entries остаются без изменений как findings или conflicts. Worktrees и runtime
+state сохраняются. Archive поддерживает transactional rollback и read-only
+просмотр через `doctor`; команд restore или purge нет.
+
+## Machine-readable sources
+
+Точные имена, replacements, historical hashes и source metadata находятся в
+`packages/opencode/assets/migration-inventory.json`. Active package surfaces
+находятся в `packages/opencode/src/catalog.ts`, declarations generated shared
+copies - в `shared/manifest.json`.

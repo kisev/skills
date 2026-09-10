@@ -2,48 +2,71 @@
 
 [Русский](ru/migration-inventory.md)
 
-This stage targets release `2.0.0` from source ref
-`5f09d504758b0e99ad9c0306df796411fbcf0f4a`. The public surface is exact and has
-no aliases.
+## Current Release
 
-## Active Skills
+The current exact portable source is
+`https://github.com/kisev/skills/tree/v2.0.2`. The optional integration package
+is `@kisev/skills-opencode@2.0.2`. Latest source is selected separately with
+`kisev/skills`.
+
+## Active Portable Skills
+
+There are exactly 29 active portable skills:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
 `docs-prepare`, `docs-review`, `doit`, `goal`, `humanize`, `lsp-report`,
 `mattermost`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `summary`,
 `task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
-`team-sprint-close`, `team-sprint-start`.
+`team-sprint-close`, and `team-sprint-start`.
 
-The source, build, and distribution inventories each contain exactly these 29
-self-contained skills. Generated shared files are declared by
-`shared/manifest.json` and checked byte-for-byte.
+The source, build, and distribution inventories contain the same self-contained
+skills. Generated shared files are declared by `shared/manifest.json` and checked
+byte-for-byte.
 
-## Structural Migration
+## Portable Cleanup Records
 
-| Retired path | Target | Source SKILL.md SHA-256 |
-| --- | --- | --- |
-| `skills/project-spec` | `skills/spec-manage` | recorded in machine inventory |
-| `skills/skill-improver` | `skills/skill-improve` | recorded in machine inventory |
-| `skills/walkthrough` | `skills/code-explain` | recorded in machine inventory |
-| `skills/team-workflow` | five fixed skills below | recorded in machine inventory |
+The current migration inventory has exactly these eight portable records. It
+does not contain a portable `multi-run` record.
 
-Removed without replacement: `skills/attempt`, `skills/schedule`,
-`skills/usage`, and `skills/overview`. The team replacements are
-`team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, and
-`slides-prompts-prepare`; each has its own fixed workflow entrypoint and does
-not expose a public mode selector.
+| Retired name | Current replacement |
+| --- | --- |
+| `attempt` | None |
+| `schedule` | None |
+| `usage` | None |
+| `overview` | None |
+| `project-spec` | `spec-manage` |
+| `skill-improver` | `skill-improve` |
+| `walkthrough` | `code-explain` |
+| `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 
-## Commands
+The `skills` CLI `update` operation does not prune renamed or deleted skills.
+Codex-only cleanup removes these exact names explicitly with the pinned CLI.
+OpenCode or shared installations may also remove them explicitly, or use package
+reconcile only when exact ownership can be proved.
 
-There are exactly 33 commands: one command for each active skill, loading only
-the same-named skill and passing `$ARGUMENTS`, plus `/capabilities`, `/doctor`,
-`/reconcile`, and `/agent-profiles`. The package tool `route` remains available
-without a slash command. No action or mode aliases are shipped.
+## Current OpenCode Surface
 
-Retired `2.0.0` assets are reported as `archive-pending`. Reconcile preserves
-their bytes and apply rejects irreversible cleanup until the archive lifecycle
-stage. Archive, restore, and purge are out of scope.
+The current package inventory has 33 commands: one per active skill plus
+`/capabilities`, `/doctor`, `/reconcile`, and `/agent-profiles`. The package tool
+`route` remains available without a slash command.
 
-Machine-readable details, including source ref, versions, hashes, replacements,
-and `aliases: []`, are in `packages/opencode/assets/migration-inventory.json`.
+The six fixed agents are `manager`, `architect`, `mapper`, `worker`, `review`, and
+`critic`. The selectable plugin wrappers are `rules-injector`, `rtk`, and
+`zed-bell`. Package tools are `capabilities`, `route`, `doctor`, `agent_profiles`,
+and `reconcile`.
+
+## Ownership and Archive
+
+Confirmed reconcile and uninstall archive only exact-owned assets before
+removing deployed copies. Modified, user-owned, unknown, unsafe, and ambiguous
+entries remain unchanged as findings or conflicts. Worktrees and runtime state
+are preserved. The archive supports transactional rollback and read-only
+inspection through `doctor`; no archive restore or purge command is provided.
+
+## Machine-Readable Sources
+
+Exact names, replacements, historical hashes, and source metadata are in
+`packages/opencode/assets/migration-inventory.json`. Active package surfaces are
+in `packages/opencode/src/catalog.ts`; generated shared-copy declarations are in
+`shared/manifest.json`.
