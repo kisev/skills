@@ -2,43 +2,45 @@
 
 ## Purpose
 
-Run a bounded, auditable autonomous goal cycle tied to an OpenCode session.
+Formulate one verifiable, portable goal as structured Markdown without executing it.
 
 ## Triggers and Near-Misses
 
-Trigger for explicit goal mode; near-miss: an ordinary implementation request.
+Trigger for an explicit request to formulate a goal; near-miss: executing or managing one.
 
 ## Inputs and Outputs
 
-Input is goal, budget, and session. Output is bounded progress and final status.
+Input is a request plus available facts and constraints. Output is structured Markdown of at most 4000 characters, normalized internally as `work-item/v1`.
 
 ## Workflow Stages
 
-Resolve goal, set limits, execute, inspect status, report or escalate.
+Research facts, ask only material decision questions, optionally run one independent premortem, normalize and validate, present, report.
 
 ## Dependencies
 
-OpenCode session state and task routing.
+Available repository evidence, the bundled work-item contract and validator, and an optional independent premortem agent.
 
 ## Remote/Local Effects
 
-Effects are limited to the confirmed goal scope; no implicit remote effects.
+Strictly read-only: no file, XDG state, repository, session, receipt, or external-system mutation.
 
 ## Errors, Partial, Escalation
 
-Budget exhaustion or missing state yields partial or blocked status.
+Unknown required facts remain open questions and stop conditions; blocking questions prevent a ready result, and oversized goals are split rather than truncated.
 
 ## Unique Constraints
 
-Durable attempts remain inspectable and are not silently discarded.
+The skill does not execute, persist, resume, budget, or automatically continue goals.
 
 ## Requirement
 
-### REQ-F-110 - Bound autonomous goals
+### REQ-F-110 - Formulate a read-only goal
 
-The skill shall enforce explicit goal scope and budget and report durable state.
+The skill shall produce non-empty structured Markdown of at most 4000 characters
+from an internally normalized `work-item/v1` and shall not execute, persist,
+resume, or automatically continue the goal.
 
 ## Example
 
-`goal` stops at its token budget and leaves a resumable status.
+`goal` turns a repository request into bounded Problem, Outcome, Acceptance criteria, Scope, and Stop conditions sections without creating state.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

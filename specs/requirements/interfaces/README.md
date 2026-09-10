@@ -6,12 +6,15 @@
 
 Each public skill shall have an English canonical `SKILL.md`, stable frontmatter,
 portable referenced resources, explicit trigger boundaries, and the shared
-interaction/evidence contract.
+interaction/evidence contract. The `goal`, `task-prepare`, `task-review`, and
+`task-triage` skills shall normalize their documented inputs to `work-item/v1`
+before semantic processing.
 
 ### REQ-I-002 - Command interface
 
-Each public command shall route to its named skill or package tool and shall
-treat arguments as untrusted input without bypassing the selected contract.
+Each public command shall route to its named skill or package tool, shall treat
+arguments as untrusted input without bypassing the selected contract, and shall
+not add state, storage, or publication behavior absent from that contract.
 
 ### REQ-I-003 - Package tool interface
 

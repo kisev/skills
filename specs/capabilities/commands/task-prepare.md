@@ -2,43 +2,44 @@
 
 ## Purpose
 
-Expose one-task GitLab preparation.
+Expose storage-neutral work-item preparation.
 
 ## Triggers and Near-Misses
 
-Routes one exact task source; near-miss: MR preparation.
+Route one exact source for preparation; near-miss: review, triage, or publication.
 
 ## Inputs/Outputs
 
-Arguments identify one source; output is a plan.
+Arguments provide inline text, a local regular file, or an exact HTTPS link; output is a self-contained task.
 
 ## Workflow Stages
 
-Select, pass, collect, draft, validate, report.
+Select, pass untrusted source arguments, normalize, prepare, present, report.
 
 ## Dependencies
 
-`task-prepare` and exact source evidence.
+The `task-prepare` skill and one readable source.
 
 ## Remote/Local Effects
 
-Read-only remote and local artifact.
+Chat output by default; a file write requires preview and digest confirmation; no publication.
 
 ## Errors/Partial/Escalation
 
-Conflicting metadata blocks finalization.
+Missing, multiple, or unreadable sources and unresolved feasibility are explicit.
 
 ## Unique Constraints
 
-No publication.
+The command adds no tracker or storage semantics.
 
 ## Requirement
 
 ### REQ-I-223 - Route the task-prepare command
 
-The command shall load exactly `task-prepare` without creating a task.
+The command shall load exactly `task-prepare` and preserve its storage-neutral,
+chat-first, confirmation-gated file output without adding publication.
 
 ## Example
 
-`/task-prepare` prepares one issue plan.
+`/task-prepare --text "Bound the migration"` returns one work item in chat.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

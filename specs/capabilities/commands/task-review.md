@@ -2,43 +2,44 @@
 
 ## Purpose
 
-Expose read-only task metadata review.
+Expose storage-neutral work-item quality review.
 
 ## Triggers and Near-Misses
 
-Routes exact task review; near-miss: triage or mutation.
+Route one exact source for quality review; near-miss: code review, triage, or publication.
 
 ## Inputs/Outputs
 
-Arguments identify object; output is metadata findings.
+Arguments provide inline text, a local regular file, or an exact HTTPS link; output is one quality verdict and findings.
 
 ## Workflow Stages
 
-Select, pass, collect, compare, report.
+Select, pass untrusted source arguments, normalize, review, present, report.
 
 ## Dependencies
 
-`task-review` and GitLab reads.
+The `task-review` skill and one readable source.
 
 ## Remote/Local Effects
 
-Read-only.
+Chat output by default; a file write requires preview and digest confirmation; no publication.
 
 ## Errors/Partial/Escalation
 
-Unavailable fields remain incomplete.
+Source failures block review; unresolved quality yields `needs_clarification` or `blocked`.
 
 ## Unique Constraints
 
-No field changes.
+The command adds no tracker metadata or mutation semantics.
 
 ## Requirement
 
 ### REQ-I-224 - Route the task-review command
 
-The command shall load exactly `task-review` and remain non-mutating.
+The command shall load exactly `task-review` and preserve its storage-neutral
+source, verdict, chat-first output, and no-publication boundaries.
 
 ## Example
 
-`/task-review` reports missing task metadata.
+`/task-review --file task.md` returns one quality verdict without changing the file.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

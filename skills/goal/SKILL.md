@@ -1,7 +1,7 @@
 ---
 name: goal
 description: >-
-  Manage a verifiable goal bound to an OpenCode session. Russian discovery terms: проверяемая цель.
+  Prepare a read-only structured goal of at most 4000 characters. Russian discovery terms: проверяемая цель.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

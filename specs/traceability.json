@@ -1,7 +1,7 @@
 {
   "schema": "traceability/v1",
   "target": "2.0.0",
-  "source_revision": "a1e48be947aca9873eb09885599a1139cee6bc25",
+  "source_revision": "4ccbd2e57c47c3c3d31c38c00384d6b2857dbc01",
   "hash": {
     "algorithm": "sha256",
     "canonical_block": "trimmed Markdown from the REQ heading through the paragraph before the next section heading"
@@ -17,10 +17,38 @@
       "test_selector": "tests/test_skill_contracts.py::test_every_skill_has_required_frontmatter",
       "eval_ids": ["stage20.skill.spec-manage.trigger.en", "stage20.skill.spec-manage.near-miss.en"]
     },
+    "goal_skill": {
+      "kind": "automated",
+      "test_selector": "tests/test_repository.py::test_goal_output_contract_declares_bounded_deterministic_outcomes",
+      "eval_ids": ["golden.goal.work-item.en", "stage20.skill.goal.trigger.en"]
+    },
+    "task_skills": {
+      "kind": "automated",
+      "test_selector": "tests/test_repository.py::test_generic_task_skills_are_storage_neutral_and_share_runtime",
+      "eval_ids": [
+        "stage17.generic-task.trigger.en",
+        "stage20.skill.task-review.trigger.en",
+        "stage20.skill.task-triage.trigger.en"
+      ]
+    },
     "commands": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
       "eval_ids": ["stage20.command.spec-manage.contract", "stage20.command.capabilities.contract"]
+    },
+    "goal_command": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
+      "eval_ids": ["stage20.command.goal.contract"]
+    },
+    "task_commands": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
+      "eval_ids": [
+        "stage20.command.task-prepare.contract",
+        "stage20.command.task-review.contract",
+        "stage20.command.task-triage.contract"
+      ]
     },
     "agents": {
       "kind": "automated",
@@ -143,13 +171,13 @@
     "REQ-I-001": {
       "surface": "skills",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "0a9f38cab94c9961a20b03f632cc1260513fcfaffc572d7f3c3ff3312fdde041",
+      "block_sha256": "782779f2666ddf2762808e7b4e6bdeb26c8eb06d13501d098a500b7d2fd2e4c9",
       "evidence_profile": "skills"
     },
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "87ca28608213be4b9dbc2cd5d6130e10e6e3ae8a0e65d802006c545661ac7f34",
+      "block_sha256": "e081f8056fac7d816be9106ee4c84ba3bb90ce3e3f9af301c4cf930b9d8259ad",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {
@@ -306,8 +334,8 @@
     "REQ-F-110": {
       "surface": "skill:goal",
       "source": "specs/capabilities/skills/goal.md",
-      "block_sha256": "b57eee9c4ae13962d44d1d2a2f123b18a2f3be1b9ef95a9b74bb1e576307002d",
-      "evidence_profile": "skills"
+      "block_sha256": "45f39f5f46bef0c14c9771ddf5316c6ec9d88cfb5ea359a420457e0fde2baf18",
+      "evidence_profile": "goal_skill"
     },
     "REQ-F-111": {
       "surface": "skill:humanize",
@@ -384,20 +412,20 @@
     "REQ-F-123": {
       "surface": "skill:task-prepare",
       "source": "specs/capabilities/skills/task-prepare.md",
-      "block_sha256": "b0e774400d724b1452f5078affe78b831d964296f665a807f85dbd7ea2a00a85",
-      "evidence_profile": "skills"
+      "block_sha256": "a4940ee2c4cc4bfc61c408ab8d4819234767d0c166ca45ee25c2a1ca029d93e8",
+      "evidence_profile": "task_skills"
     },
     "REQ-F-124": {
       "surface": "skill:task-review",
       "source": "specs/capabilities/skills/task-review.md",
-      "block_sha256": "3d4c070ff633407fd2052f054d3f71507af1cf25290d80fbcf35250c7a4110bc",
-      "evidence_profile": "skills"
+      "block_sha256": "05f5421a71d477b71a87ab1ba5ed714f192dd5f085b31ba5af5c108cc569675f",
+      "evidence_profile": "task_skills"
     },
     "REQ-F-125": {
       "surface": "skill:task-triage",
       "source": "specs/capabilities/skills/task-triage.md",
-      "block_sha256": "55cbfe0c55c1fb614ac3f8f6b78b5ec637447285a3c3a7554e75bb60b7204e5d",
-      "evidence_profile": "skills"
+      "block_sha256": "0c1f18ab8627ff9aac8eac853ce518bf767425d1685a696e230882af962ac043",
+      "evidence_profile": "task_skills"
     },
     "REQ-F-126": {
       "surface": "skill:team-retro",
@@ -564,8 +592,8 @@
     "REQ-I-210": {
       "surface": "command:goal",
       "source": "specs/capabilities/commands/goal.md",
-      "block_sha256": "499a11c12d608f997a42115c4b64ab8ef511d6509b8be965230faee5a6f6cf8e",
-      "evidence_profile": "commands"
+      "block_sha256": "ad5e2b8bcfb48304e92de7a9d2cf668ed9f79ee5def3be9da87a3f8fb4a5cb6e",
+      "evidence_profile": "goal_command"
     },
     "REQ-I-211": {
       "surface": "command:humanize",
@@ -642,20 +670,20 @@
     "REQ-I-223": {
       "surface": "command:task-prepare",
       "source": "specs/capabilities/commands/task-prepare.md",
-      "block_sha256": "da667d3a69306635441f94e1bf2e69a3ed3cf07d58df3c228c5a756b4d1ee729",
-      "evidence_profile": "commands"
+      "block_sha256": "e3e4b4ee4f0ffef0128640944a0106af67f78ca5b4708d918c38b61153373ae0",
+      "evidence_profile": "task_commands"
     },
     "REQ-I-224": {
       "surface": "command:task-review",
       "source": "specs/capabilities/commands/task-review.md",
-      "block_sha256": "2184877151628fa44b671953af95be20a97dab0b1116a019fafa54f646a3e57a",
-      "evidence_profile": "commands"
+      "block_sha256": "8b6dbcb097eceed565476d11d88fc1ffb9c83004ea90bc0459de7a149f7f5e1c",
+      "evidence_profile": "task_commands"
     },
     "REQ-I-225": {
       "surface": "command:task-triage",
       "source": "specs/capabilities/commands/task-triage.md",
-      "block_sha256": "c0fe59e0a62359159186b39582779d764b1afd4f3a4d3811379097ba6e9f6624",
-      "evidence_profile": "commands"
+      "block_sha256": "37182ff33f3eb99686fa2215dd19e960f5c5707b866dae9faf02df2c65398615",
+      "evidence_profile": "task_commands"
     },
     "REQ-I-226": {
       "surface": "command:team-retro",
