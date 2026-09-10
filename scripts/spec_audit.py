@@ -110,10 +110,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         current = findings()
+        current_status = "OK"
     except Exception as error:
         current = [{"status": "UNKNOWN", "reason": type(error).__name__}]
+        current_status = "UNKNOWN"
     if args.critic_only:
-        emit({"schema": "spec-audit-critic/v1", "findings": current})
+        emit({"schema": "spec-audit-critic/v1", "status": current_status, "findings": current})
         return 0
     gate = subprocess.run(
         [sys.executable, str(ROOT / "scripts/check_specs.py")],
@@ -172,8 +174,10 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
         return 2
-    if critic_value.get("schema") != "spec-audit-critic/v1" or not isinstance(
-        critic_value.get("findings"), list
+    if (
+        critic_value.get("schema") != "spec-audit-critic/v1"
+        or critic_value.get("status") != "OK"
+        or not isinstance(critic_value.get("findings"), list)
     ):
         emit(
             {
