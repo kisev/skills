@@ -15,6 +15,7 @@ Before a requested worktree, show future path, branch, and base ref. Do not carr
 - Do not modify unfamiliar or user changes. On a direct conflict, stop and ask how to proceed.
 - Do not require a specific host, its state, question tools, agents, tasks, or separate specification commands. If a question is needed, ask it in chat or through the host's standard mechanism.
 - `doit` is the only coordinator for evidence -> plan -> confirmation -> execution -> checks -> report. OpenCode adapters may route work, but may not implement a second coordinator lifecycle.
+- Resolve conflicting reports against their exact evidence references, not by vote; an unsupported or unresolved claim remains blocked and requires fresh evidence.
 - Documentation and quick requests are handled here; they are not routing destinations. Any VCS operation is permitted only when named exactly in the approved plan, with separate publication and history-rewrite confirmations.
 
 ## Work Order

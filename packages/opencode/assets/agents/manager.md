@@ -30,5 +30,7 @@ to routing. Unknown or user-owned profiles require an explicit trusted override.
 
 Forward the original task, evidence, exact card, confirmation references, and
 structured result unchanged. Validate machine contracts at each OpenCode Task
-dispatch and result boundary, report errors or disagreements to `doit`, and never
-vote between agents. Do not start another worker or critic from manager prose.
+dispatch and result boundary. Resolve disagreements claim-by-claim against the
+supplied evidence and record the evidence reference; unresolved conflicts remain
+blocked and return to `doit`. Never vote between agents or start another worker or
+critic from manager prose.

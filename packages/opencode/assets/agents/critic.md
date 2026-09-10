@@ -40,6 +40,7 @@ run any other Bash command, delegate work, or propose direct worker remediation.
     "card_id": "...",
     "revision": 1,
     "findings": [],
+    "evidence": [],
     "unrun_checks": [],
     "risks": []
   }

@@ -31,6 +31,7 @@ export type ReviewReport = {
     status: "APPROVED" | "CHANGES_REQUIRED";
     target: string;
     findings: Array<Record<string, unknown>>;
+    evidence: string[];
     checks: string[];
     risks: string[];
   };
@@ -42,6 +43,7 @@ export type CriticReport = {
     card_id: string;
     revision: number;
     findings: Array<Record<string, unknown>>;
+    evidence: string[];
     unrun_checks: string[];
     risks: string[];
   };
@@ -125,6 +127,7 @@ export function validateAgentReport(agent: string, report: unknown, card?: Execu
       (!Array.isArray(value.checks) ||
         !strings(value.checks) ||
         !strings(value.risks) ||
+        !strings(value.evidence) ||
         !value.target)
     )
       throw new Error("review report fields are invalid");
@@ -133,13 +136,23 @@ export function validateAgentReport(agent: string, report: unknown, card?: Execu
       (typeof value.card_id !== "string" ||
         !Number.isInteger(value.revision) ||
         !strings(value.unrun_checks) ||
-        !strings(value.risks))
+        !strings(value.risks) ||
+        !strings(value.evidence))
     )
       throw new Error("critic report fields are invalid");
     const allowed =
       agent === "review"
-        ? ["schema_version", "status", "target", "findings", "checks", "risks"]
-        : ["schema_version", "status", "card_id", "revision", "findings", "unrun_checks", "risks"];
+        ? ["schema_version", "status", "target", "findings", "evidence", "checks", "risks"]
+        : [
+            "schema_version",
+            "status",
+            "card_id",
+            "revision",
+            "findings",
+            "evidence",
+            "unrun_checks",
+            "risks",
+          ];
     if (Object.keys(value).some((key) => !allowed.includes(key)))
       throw new Error(`${agent} report contains unknown fields`);
   } else throw new Error(`unknown report agent: ${agent}`);

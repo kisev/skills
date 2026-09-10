@@ -12,6 +12,7 @@
         "card_id",
         "revision",
         "findings",
+        "evidence",
         "unrun_checks",
         "risks"
       ],
@@ -21,6 +22,7 @@
         "card_id": { "type": "string" },
         "revision": { "type": "integer", "minimum": 1 },
         "findings": { "type": "array" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
         "unrun_checks": { "type": "array", "items": { "type": "string" } },
         "risks": { "type": "array", "items": { "type": "string" } }
       },

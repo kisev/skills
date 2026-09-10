@@ -759,6 +759,32 @@ test("route ignores caller inventory and exposes exactly four host-backed destin
   assert.deepEqual([...CATEGORIES], Object.keys(expected));
 });
 
+test("unknown profile requires an explicit trusted override", () => {
+  const user = capable("user-review", ["read", "review"], ["read", "glob", "grep"]);
+  assert.throws(
+    () =>
+      resolveRouting({
+        category: "review",
+        task: "inspect",
+        requirements: [],
+        agents: [user],
+        override: "user-review",
+      }),
+    /trusted override/,
+  );
+  assert.equal(
+    resolveRouting({
+      category: "review",
+      task: "inspect",
+      requirements: [],
+      agents: [user],
+      override: "user-review",
+      trusted_override: true,
+    }).agent,
+    "user-review",
+  );
+});
+
 test("real Task result hook rejects prose and accepts one versioned worker report", async () => {
   const hooks = await plugin({ client: hostClient(), directory: "/project" });
   const route = {

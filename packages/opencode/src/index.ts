@@ -160,6 +160,7 @@ const plugin = (async (input: PluginInput) => {
       requirements: tool.schema.array(tool.schema.string()).default([]),
       execution_card: tool.schema.any().optional(),
       override: tool.schema.string().optional(),
+      trusted_override: tool.schema.boolean().optional(),
       budget: tool.schema
         .object({
           cost_class: tool.schema.string().optional(),
@@ -176,6 +177,7 @@ const plugin = (async (input: PluginInput) => {
         requirements: string[];
         execution_card?: unknown;
         override?: string;
+        trusted_override?: boolean;
         budget?: RoutingInput["budget"];
         decision?: unknown;
       },
@@ -190,6 +192,7 @@ const plugin = (async (input: PluginInput) => {
         inventory_revision: inventory.revision,
         execution_card: args.execution_card,
         override: args.override,
+        trusted_override: args.trusted_override,
         budget: args.budget,
       };
       if (args.action === "preview") return JSON.stringify(gate.preview(input));

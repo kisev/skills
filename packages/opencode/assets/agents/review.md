@@ -22,4 +22,4 @@ with a prefix wildcard or auto-fan-out. Send the critic its clean package and
 validate its versioned `review_report` before use. Report only verified findings,
 unrun checks, risks, and resolved evidence disagreements.
 Return exactly one `review_report` with `schema_version: 1`, status `APPROVED` or
-`CHANGES_REQUIRED`, the exact target, verified findings, checks, and risks.
+`CHANGES_REQUIRED`, the exact target, verified findings, evidence, checks, and risks.
