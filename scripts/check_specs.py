@@ -100,7 +100,7 @@ def requirement_blocks() -> dict[str, tuple[Path, str]]:
 
 
 def check_structure() -> None:
-    files = [Path(item) for item in git("ls-files", "specs").splitlines() if item]
+    files = sorted(path.relative_to(ROOT) for path in (ROOT / "specs").rglob("*") if path.is_file())
     if len(files) != 108:
         raise SpecError("spec_structure", f"expected 108 files, got {len(files)}")
     required = {
