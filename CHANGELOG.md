@@ -4,6 +4,20 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.2] - 2026-09-10
+
+### Исправлено
+
+- CI specification-impact helper теперь корректно разрешает annotated tag push:
+  tag-object из `event.after` сверяется с commit из `GITHUB_SHA`, после чего
+  range строится от первого parent release commit.
+- Добавлен regression test для ошибки `v2.0.0` с zero-before и failed run
+  `https://github.com/kisev/skills/actions/runs/34496801895`.
+
+### Не изменено
+
+- Runtime, skills, public inventory и behavioral contracts не изменялись.
+
 ## [2.0.1] - 2026-09-10
 
 ### Исправлено

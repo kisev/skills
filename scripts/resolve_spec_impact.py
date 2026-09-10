@@ -70,7 +70,34 @@ def _parent(root: Path, head: str) -> str:
     return _commit(root, parent, "parent")
 
 
-def resolve_range(event: dict[str, Any], event_name: str, root: Path = ROOT) -> dict[str, str]:
+def _tag_head(root: Path, event_after: Any, github_sha: str | None) -> str:
+    after = _sha(event_after, "after")
+    try:
+        object_type = _git(root, "cat-file", "-t", after)
+    except RangeError as error:
+        raise RangeError("unreachable_sha") from error
+    if object_type == "commit":
+        event_head = after
+    elif object_type == "tag":
+        event_head = _commit(
+            root, _git(root, "rev-parse", "--verify", f"{after}^{{commit}}"), "head"
+        )
+    else:
+        raise RangeError("unreachable_sha")
+    if github_sha is None:
+        return event_head
+    head = _commit(root, github_sha, "github_head")
+    if head != event_head:
+        raise RangeError("head_mismatch")
+    return head
+
+
+def resolve_range(
+    event: dict[str, Any],
+    event_name: str,
+    root: Path = ROOT,
+    github_sha: str | None = None,
+) -> dict[str, str]:
     """Resolve and validate the exact base/head pair for one Actions event."""
     if not isinstance(event, dict) or event_name not in {"pull_request", "push"}:
         raise RangeError("unknown_event")
@@ -97,9 +124,9 @@ def resolve_range(event: dict[str, Any], event_name: str, root: Path = ROOT) -> 
     ref = event.get("ref")
     if not isinstance(ref, str):
         raise RangeError("missing_ref")
-    head = _commit(root, event.get("after"), "head")
     before = event.get("before")
     if ref.startswith("refs/tags/"):
+        head = _tag_head(root, event.get("after"), github_sha)
         parent = _parent(root, head)
         remote_main = _commit(
             root, _git(root, "rev-parse", "--verify", "refs/remotes/origin/main"), "origin_main"
@@ -115,6 +142,9 @@ def resolve_range(event: dict[str, Any], event_name: str, root: Path = ROOT) -> 
         }
     if not ref.startswith("refs/heads/"):
         raise RangeError("unknown_ref")
+    head = _commit(root, event.get("after"), "head")
+    if github_sha is not None and head != _commit(root, github_sha, "github_head"):
+        raise RangeError("head_mismatch")
     if before == ZERO_SHA:
         config = json.loads((ROOT / "scripts/spec_gate_config.json").read_text(encoding="utf-8"))
         base = _commit(root, config.get("bootstrap_boundary"), "bootstrap_boundary")
@@ -153,7 +183,12 @@ def main() -> int:
     parser.add_argument("--repository", type=Path, default=ROOT)
     args = parser.parse_args()
     try:
-        result = resolve_range(load_event(args.event_file), args.event_name, args.repository)
+        result = resolve_range(
+            load_event(args.event_file),
+            args.event_name,
+            args.repository,
+            os.environ.get("GITHUB_SHA"),
+        )
     except RangeError as error:
         print(
             json.dumps(

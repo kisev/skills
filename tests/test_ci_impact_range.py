@@ -47,6 +47,41 @@ def test_tag_push_uses_first_parent_and_never_zero_sha() -> None:
     assert FAILED_TAG_RUN.endswith("34496801895")
 
 
+def test_annotated_tag_event_uses_github_commit_not_tag_object() -> None:
+    event = fixture("tag-push")
+    event["after"] = subprocess.check_output(
+        ["git", "rev-parse", "v2.0.0"], cwd=ROOT, text=True
+    ).strip()
+    result = resolve_range(
+        event,
+        "push",
+        github_sha="88fa466589bede791c6caa7780a7a98caf89e767",
+    )
+    assert result["base"] == "8f4452c67ec33739dc987d47971dfea39e5d0f84"
+    assert result["head"] == "88fa466589bede791c6caa7780a7a98caf89e767"
+
+
+def test_v2_0_0_regression_captures_zero_before_invalid_range() -> None:
+    event = fixture("tag-push")
+    before = str(event["before"])
+    assert before == ZERO_SHA
+    result = subprocess.run(
+        [
+            "git",
+            "rev-list",
+            "--reverse",
+            f"{before}..88fa466589bede791c6caa7780a7a98caf89e767",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 128
+    assert "invalid revision range" in result.stderr.lower()
+    assert FAILED_TAG_RUN == "https://github.com/kisev/skills/actions/runs/34496801895"
+
+
 def test_tag_push_rejects_unreachable_head(tmp_path: Path) -> None:
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(
