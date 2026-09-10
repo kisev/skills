@@ -147,7 +147,10 @@ def check_evidence(
         not isinstance(revision, str)
         or not re.fullmatch(r"[0-9a-f]{40}", revision)
         or subprocess.run(
-            ["git", "merge-base", "--is-ancestor", revision, "HEAD"], cwd=ROOT, check=False
+            ["git", "merge-base", "--is-ancestor", revision, "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+            check=False,
         ).returncode
     ):
         raise SpecError("source_revision")

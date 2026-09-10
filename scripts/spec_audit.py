@@ -10,9 +10,15 @@ import subprocess
 import sys
 from pathlib import Path
 
-from scripts.check_specs import check_inventory, check_structure, read_json, requirement_blocks
-
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from scripts.check_specs import (  # noqa: E402
+    check_inventory,
+    check_structure,
+    read_json,
+    requirement_blocks,
+)
 
 
 def findings() -> list[dict[str, str]]:
