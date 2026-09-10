@@ -21,6 +21,7 @@ import {
   type Scope,
   type TransactionOptions,
 } from "./lifecycle.js";
+import { archiveMutations, type ArchiveCandidate } from "./installer.js";
 
 const PACKAGE_NAME = "@kisev/skills-opencode";
 const GENERIC_MANIFEST = ".skills-opencode-manifest.json";
@@ -237,7 +238,7 @@ function parseGenericManifest(raw: Buffer): Record<string, { sha256: string }> {
   }
   const manifest = value as { schema_version?: unknown; package?: unknown; files?: unknown };
   if (
-    manifest.schema_version !== 1 ||
+    (manifest.schema_version !== 1 && manifest.schema_version !== 2) ||
     manifest.package !== PACKAGE_NAME ||
     !manifest.files ||
     typeof manifest.files !== "object" ||
@@ -311,6 +312,7 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     "diagnostic-state-only": [],
   };
   const mutations: FileMutation[] = [];
+  const archiveCandidates: ArchiveCandidate[] = [];
   const managed = new Map<string, { sha256: string }>();
   const manifestPath = join(deployment, GENERIC_MANIFEST);
   const manifestValue = await regular(manifestPath);
@@ -391,6 +393,24 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
           record.replacement,
         ),
       );
+      const kind =
+        record.kind === "package-command"
+          ? "command"
+          : record.kind === "package-plugin"
+            ? "plugin"
+            : "state";
+      archiveCandidates.push({
+        path: relativePath(root, target),
+        record: { sha256: record.sha256!, mode: 0o644, kind },
+        content: value.content,
+        reason: "retired inventory asset",
+        kind,
+      });
+      mutations.push({
+        path: relativePath(root, target),
+        operation: "remove",
+        expected: { sha256: sha256(value.content) },
+      });
     } else if (!value && manifestRecord && record.sha256 === manifestRecord.sha256) {
       add(
         groups,
@@ -673,6 +693,18 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
             file.content,
           ),
         );
+        archiveCandidates.push({
+          path: relativePath(root, file.absolute),
+          record: { sha256: sha256(file.content!), mode: 0o644, kind: "state" },
+          content: file.content!,
+          reason: "retired portable skill",
+          kind: "state",
+        });
+        mutations.push({
+          path: relativePath(root, file.absolute),
+          operation: "remove",
+          expected: { sha256: sha256(file.content!) },
+        });
       }
     } else if (files.length) {
       for (const file of files)
@@ -687,6 +719,25 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
         );
     }
   }
+
+  if (archiveCandidates.length && manifestRaw) {
+    for (const candidate of archiveCandidates) {
+      delete manifestFiles[candidate.path];
+      delete manifestFiles[candidate.path.replace(/^\.opencode\//, "")];
+    }
+    const value = JSON.parse(manifestRaw.toString("utf8")) as Record<string, unknown>;
+    const next = Buffer.from(`${stable({ ...value, files: manifestFiles })}\n`);
+    mutations.push({
+      path: relativePath(root, manifestPath),
+      operation: "write",
+      content: next,
+      mode: 0o600,
+      expected: { sha256: sha256(manifestRaw) },
+    });
+  }
+  mutations.push(
+    ...(await archiveMutations(archiveCandidates, scope, cwd, home, inventory.inventory_version)),
+  );
 
   const portableInfo = await metadata(portable);
   if (portableInfo?.isSymbolicLink() || (portableInfo && !portableInfo.isDirectory())) {
@@ -718,27 +769,6 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
           : "portable skill is outside the canonical inventory",
       ),
     );
-  }
-
-  if (
-    manifestRaw &&
-    Object.keys(manifestFiles).sort().join("\n") !==
-      Object.keys(parseGenericManifest(manifestRaw)).sort().join("\n")
-  ) {
-    const next = {
-      schema_version: 1,
-      package: PACKAGE_NAME,
-      version: JSON.parse(manifestRaw.toString("utf8")).version,
-      files: manifestFiles,
-    };
-    const content = Buffer.from(`${stable(next)}\n`);
-    mutations.push({
-      path: relativePath(root, manifestPath),
-      operation: "write",
-      content,
-      mode: 0o600,
-      expected: { sha256: sha256(manifestRaw) },
-    });
   }
 
   const operations = mutations.map((mutation) => ({
@@ -833,11 +863,6 @@ export async function applyReconcile(
         throw new ReconcileError("stale_plan", "Reconcile inventory changed after preview");
       if (built.plan.conflicts.length || built.plan.modified_managed.length)
         throw new ReconcileError("conflict", "Reconcile contains unsafe ownership conflicts");
-      if (built.plan["archive-pending"].length)
-        throw new ReconcileError(
-          "archive_pending",
-          "Irreversible cleanup is blocked until archive lifecycle stage",
-        );
       await applyTransaction(root, stateRoot, built.mutations, {
         ...options,
         validateFinal: async () => {

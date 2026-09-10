@@ -14,15 +14,16 @@ import {
 } from "./agent-profiles.js";
 import { renderDoctor, renderInventory, renderPlan, renderReconcile, shellCommand, terminalSafe } from "./cli-output.js";
 import { collectDoctorFacts, doctorExitCode } from "./doctor.js";
-import { apply, InstallerError, preview, type Action } from "./installer.js";
+import { CATALOG } from "./catalog.js";
+import { apply, defaultSelection, InstallerError, normalizeSelection, PACKAGE_COMMANDS, preview, SELECTABLE_PLUGINS, SKILL_COMMANDS, type Action, type InstallerSelection } from "./installer.js";
 import { LifecycleError, type Scope } from "./lifecycle.js";
 import { applyReconcile, previewReconcile } from "./reconcile.js";
 import { promptText, selectOption } from "./terminal-wizard.js";
 
-type Options = { scope?: Scope; dryRun: boolean; json: boolean; confirm?: string; provider?: string; model?: string; variant?: string | null; name?: string };
+type Options = { scope?: Scope; dryRun: boolean; json: boolean; confirm?: string; provider?: string; model?: string; variant?: string | null; name?: string; commands?: string[]; agents?: string[]; plugins?: string[]; selectionFlag: boolean };
 
-function parseOptions(values: string[]): Options {
-  const options: Options = { dryRun: false, json: false };
+function parseOptions(values: string[], requireScope = true): Options {
+  const options: Options = { dryRun: false, json: false, selectionFlag: false };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (!value.startsWith("--")) {
@@ -55,12 +56,72 @@ function parseOptions(values: string[]): Options {
     } else if (value === "--json") {
       if (options.json) throw new InstallerError("invalid_input", "--json may be supplied once");
       options.json = true;
+    } else if (["--commands", "--skill-commands", "--package-commands", "--agents", "--plugins"].includes(value)) {
+      const raw = values[++index];
+      if (!raw) throw new InstallerError("invalid_input", `${value} requires a comma-separated value`);
+      const target = value === "--agents" ? "agents" : value === "--plugins" ? "plugins" : "commands";
+      const names = raw === "none" ? [] : raw.split(",").map((item) => item.trim()).filter(Boolean);
+      options.selectionFlag = true;
+      if (value === "--package-commands") {
+        options.commands = [...(options.commands ?? []), ...names];
+      } else if (value === "--skill-commands") {
+        options.commands = [...(options.commands ?? []), ...names];
+      } else {
+        options[target] = names;
+      }
     } else {
       throw new InstallerError("invalid_input", `Unknown argument: ${value}`);
     }
   }
-  if (!options.scope) throw new InstallerError("invalid_input", "--scope is required");
+  if (requireScope && !options.scope) throw new InstallerError("invalid_input", "--scope is required");
   return options;
+}
+
+function help(): string {
+  return [
+    "Usage: skills-opencode <command> [options]",
+    "",
+    "Commands: install, uninstall, doctor, capabilities, reconcile, agent list|configure|model-set|reconcile, critic add|remove",
+    "Mutations: use --dry-run for preview, then --confirm <digest>.",
+    "Install selection: --commands, --package-commands, --agents, --plugins (comma-separated or none).",
+    "Read-only: --json is stable machine-readable output; --help and --version need no scope.",
+    "",
+  ].join("\n");
+}
+
+async function interactiveInstallerSelection(): Promise<InstallerSelection> {
+  if (!process.stdin.isTTY || !process.stderr.isTTY) throw new InstallerError("terminal_required", "install requires explicit selection flags outside a terminal");
+  const group = async (label: string, names: readonly string[], initial: number): Promise<string[]> => {
+    const choices = ["Select all", "Select none", ...names];
+    const selected = await selectOption(label, choices, process.stdin, process.stderr, initial);
+    if (selected === null) throw new InstallerError("cancelled", "Wizard cancelled");
+    if (selected === 0) return [...names];
+    if (selected === 1) return [];
+    return [names[selected - 2]];
+  };
+  const commands = [
+    ...(await group("Skill commands", SKILL_COMMANDS, 0)),
+    ...(await group("Package commands", PACKAGE_COMMANDS, 0)),
+  ];
+  const agents = await group("Fixed agents", defaultSelection().agents, 0);
+  const plugins = await group("Selectable plugins (none selected by default)", SELECTABLE_PLUGINS, 1);
+  return normalizeSelection({ commands, agents: agents as InstallerSelection["agents"], plugins: plugins as InstallerSelection["plugins"] });
+}
+
+function installerSelection(options: Options): Partial<InstallerSelection> {
+  return normalizeSelection({
+    commands: options.commands,
+    agents: options.agents as InstallerSelection["agents"] | undefined,
+    plugins: options.plugins as InstallerSelection["plugins"] | undefined,
+  });
+}
+
+function selectionArguments(selection: InstallerSelection): string[] {
+  return [
+    "--commands", selection.commands.join(",") || "none",
+    "--agents", selection.agents.join(",") || "none",
+    "--plugins", selection.plugins.join(",") || "none",
+  ];
 }
 
 function requireConfirmationMode(options: Options): void {
@@ -222,6 +283,18 @@ function profileConfirmationArguments(request: AgentProfileRequest, scope: Scope
 }
 
 async function run(arguments_: string[]): Promise<void> {
+  if (arguments_.includes("--help") || arguments_.length === 0) {
+    process.stdout.write(help());
+    return;
+  }
+  if (arguments_.includes("--version")) {
+    process.stdout.write(
+      arguments_.includes("--json")
+        ? `${JSON.stringify({ status: "ok", version: CATALOG.version })}\n`
+        : `${CATALOG.version}\n`,
+    );
+    return;
+  }
   const [domain, operation, ...rest] = arguments_;
   if (domain === "doctor") {
     if (operation) rest.unshift(operation);
@@ -231,6 +304,12 @@ async function run(arguments_: string[]): Promise<void> {
     if (options.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     else process.stdout.write(renderDoctor(report));
     process.exitCode = doctorExitCode(report);
+    return;
+  }
+  if (domain === "capabilities") {
+    const options = parseOptions(rest, false);
+    if (options.dryRun || options.confirm || options.name || options.provider || options.model || options.variant !== undefined || options.selectionFlag) throw new InstallerError("invalid_input", "capabilities accepts only --scope and --json");
+    process.stdout.write(`${JSON.stringify({ schema_version: 1, status: "ok", ...CATALOG }, null, 2)}\n`);
     return;
   }
   if (domain === "reconcile") {
@@ -254,14 +333,19 @@ async function run(arguments_: string[]): Promise<void> {
     else throw new InstallerError("invalid_input", `Unexpected argument: ${operation}`);
     const options = parseOptions(rest);
     if (options.name || options.provider || options.model || options.variant !== undefined) throw new InstallerError("invalid_input", "Installer accepts only scope and confirmation options");
-    requireConfirmationMode(options);
     const action = domain as Action;
+    if (action === "install" && options.selectionFlag && (options.commands === undefined || options.agents === undefined || options.plugins === undefined))
+      throw new InstallerError("invalid_input", "Non-TTY install requires --commands, --agents, and --plugins");
+    const selection = action === "install"
+      ? options.selectionFlag ? installerSelection(options) : await interactiveInstallerSelection()
+      : undefined;
+    requireConfirmationMode(options);
     if (options.dryRun) {
-      const plan = await preview(action, options.scope!);
-      if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: false, requires_restart: false, plan }, null, 2)}\n`);
-      else process.stdout.write(renderPlan(plan, { applied: false, confirmationCommand: shellCommand([action, "--scope", options.scope!, "--confirm", plan.digest]) }));
+      const plan = await preview(action, options.scope!, process.cwd(), undefined, selection);
+      if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: false, requires_restart: plan.requires_restart, plan }, null, 2)}\n`);
+      else process.stdout.write(renderPlan(plan, { applied: false, confirmationCommand: shellCommand([action, "--scope", options.scope!, ...selectionArguments(plan.selection), "--confirm", plan.digest]) }));
     } else {
-      const plan = await apply(action, options.scope!, options.confirm!);
+      const plan = await apply(action, options.scope!, options.confirm!, process.cwd(), undefined, {}, selection);
       if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan }, null, 2)}\n`);
       else process.stdout.write(renderPlan(plan, { applied: true }));
     }

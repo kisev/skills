@@ -18,18 +18,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./plugins/background-attempts": {
-      "types": "./dist/plugins/background-attempts.d.ts",
-      "import": "./dist/plugins/background-attempts.js"
-    },
-    "./plugins/schedule": {
-      "types": "./dist/plugins/schedule.d.ts",
-      "import": "./dist/plugins/schedule.js"
-    },
-    "./plugins/autonomy-policy": {
-      "types": "./dist/plugins/autonomy-policy.d.ts",
-      "import": "./dist/plugins/autonomy-policy.js"
-    },
     "./plugins/rules-injector": {
       "types": "./dist/plugins/rules-injector.d.ts",
       "import": "./dist/plugins/rules-injector.js"
@@ -41,10 +29,6 @@
     "./plugins/zed-bell": {
       "types": "./dist/plugins/zed-bell.d.ts",
       "import": "./dist/plugins/zed-bell.js"
-    },
-    "./plugins/zed-clickable-paths": {
-      "types": "./dist/plugins/zed-clickable-paths.d.ts",
-      "import": "./dist/plugins/zed-clickable-paths.js"
     }
   },
   "bin": {
@@ -65,7 +49,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate-assets": "npm run build",
     "generate-assets:check": "npm run build && node dist/generate-assets.js --check",
-    "test": "npm run build && node --test test/agent-profiles.test.mjs && node --test test/doctor.test.mjs && node --test test/package.test.mjs",
+    "test": "npm run build && node --test test/agent-profiles.test.mjs && node --test test/doctor.test.mjs && node --test test/package.test.mjs && node --test test/stage19.test.mjs",
     "smoke": "npm run build && node test/smoke.mjs"
   },
   "peerDependencies": {

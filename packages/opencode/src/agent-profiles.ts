@@ -447,9 +447,10 @@ function desiredManifest(
   config: AgentProfileConfig,
   rendered: Record<string, Buffer>,
   canonical: Record<FixedAgentRole, Buffer>,
+  names = desiredNames(config),
 ): DeploymentManifest {
   const profiles: Record<string, DeploymentRecord> = {};
-  for (const name of desiredNames(config)) {
+  for (const name of names) {
     const role = NAME_PATTERN.test(name) ? (name as FixedAgentRole) : "critic";
     const selection = selectionFor(config, name);
     profiles[name] = {
@@ -465,9 +466,7 @@ function desiredManifest(
     package: PACKAGE_NAME,
     package_version: packageVersion(),
     scope,
-    critic_pool: desiredNames(config).filter(
-      (name) => name === "critic" || CRITIC_PATTERN.test(name),
-    ),
+    critic_pool: names.filter((name) => name === "critic" || CRITIC_PATTERN.test(name)),
     profiles,
   };
 }
@@ -564,6 +563,7 @@ export async function buildAgentProfilePlan(
   cwd = process.cwd(),
   home = homedir(),
   legacy?: LegacyAgentOwnership,
+  selectedAgents?: readonly FixedAgentRole[],
 ): Promise<BuiltPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const [state, canonical, agentFiles] = await Promise.all([
@@ -575,16 +575,25 @@ export async function buildAgentProfilePlan(
     agentFiles.filter((item) => item.name.endsWith(".md")).map((item) => [item.name, item.content]),
   );
   const config = changeConfig(state.config, request);
-  const names = request.action === "uninstall" ? [] : desiredNames(config);
+  const names =
+    request.action === "uninstall"
+      ? []
+      : selectedAgents === undefined
+        ? desiredNames(config)
+        : [...selectedAgents, ...Object.keys(config.additional_critics)].sort();
   const rendered = Object.fromEntries(
     names.map((name) => [name, renderAgentProfile(name, config, canonical)]),
   );
   const desired =
     request.action === "uninstall"
       ? undefined
-      : desiredManifest(scope, config, rendered, canonical);
+      : names.length
+        ? desiredManifest(scope, config, rendered, canonical, names)
+        : undefined;
   const legacyExact = !state.manifest && legacyIsExact(legacy, byFile);
-  const legacyTransferred = legacyExact ? FIXED_AGENT_ROLES.map((role) => `agents/${role}.md`) : [];
+  const legacyTransferred = legacyExact
+    ? (selectedAgents ?? FIXED_AGENT_ROLES).map((role) => `agents/${role}.md`)
+    : [];
   const operations: AgentProfileOperation[] = [];
   const mutations: FileMutation[] = [];
   const currentManifest = state.manifest;
@@ -691,6 +700,7 @@ export async function buildAgentProfilePlan(
   const configContent = Buffer.from(`${stable(config)}\n`);
   if (
     request.action !== "uninstall" &&
+    names.length > 0 &&
     (!state.configRaw || !state.configRaw.equals(configContent))
   ) {
     operations.push({
@@ -780,7 +790,8 @@ export async function buildAgentProfilePlan(
     inventoryDigest,
     config,
     manifest: finalManifest,
-    expectedConfig: request.action === "uninstall" ? state.configRaw : configContent,
+    expectedConfig:
+      request.action === "uninstall" ? state.configRaw : names.length ? configContent : undefined,
     expectedManifest: manifestContent,
     legacyTransferred,
   };

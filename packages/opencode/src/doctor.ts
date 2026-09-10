@@ -163,7 +163,7 @@ function manifestVersion(raw: Buffer | undefined): string | null {
         /^[a-f0-9]{64}$/.test(String((record as JsonObject).sha256 ?? "")),
     );
   return value &&
-    value.schema_version === 1 &&
+    (value.schema_version === 1 || value.schema_version === 2) &&
     value.package === packageName &&
     typeof value.version === "string" &&
     validFiles
@@ -440,6 +440,7 @@ function reconcileProjection(plan: ReconcilePlan): {
     "current",
     "renamed",
     "retired",
+    "archive-pending",
     "modified_managed",
     "user_owned",
     "unknown",

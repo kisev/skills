@@ -40,15 +40,23 @@ export class LifecycleError extends Error {
 export type Scope = "global" | "project";
 export type FileExpectation = { sha256?: string; absent?: true };
 export type FileMutation =
-  | { path: string; operation: "write"; content: Buffer; mode: number; expected: FileExpectation }
-  | { path: string; operation: "remove"; expected: FileExpectation };
+  | {
+      path: string;
+      root?: string;
+      operation: "write";
+      content: Buffer;
+      mode: number;
+      expected: FileExpectation;
+    }
+  | { path: string; root?: string; operation: "remove"; expected: FileExpectation };
 
-type JournalSnapshot = { path: string; content: string | null; mode: number | null };
+type JournalSnapshot = { path: string; root: string; content: string | null; mode: number | null };
 type Journal = {
   schema_version: 1;
   root: string;
   operations: Array<{
     path: string;
+    root?: string;
     operation: "write" | "remove";
     content?: string;
     mode?: number;
@@ -227,6 +235,14 @@ export function lifecycleRoot(scope: Scope, cwd = process.cwd(), home = homedir(
       : resolve(home, ".local", "state");
   const suffix = scope === "global" ? "global" : join("project", sha256(resolve(cwd)));
   return join(base, "opencode", "skills-opencode", suffix);
+}
+
+export function archiveRoot(scope: Scope, cwd = process.cwd(), home = homedir()): string {
+  const base =
+    process.env.XDG_DATA_HOME && home === homedir()
+      ? resolve(process.env.XDG_DATA_HOME)
+      : resolve(home, ".local", "share");
+  return join(base, "opencode", "skills-opencode", "archive", scope);
 }
 
 async function processAlive(pid: number): Promise<boolean> {
@@ -452,16 +468,26 @@ function journalPath(stateRoot: string): string {
   return join(stateRoot, "transaction-journal.json");
 }
 
+function mutationRoot(root: string, mutation: { root?: string }): string {
+  return resolve(mutation.root ?? root);
+}
+
 async function snapshot(root: string, mutation: FileMutation): Promise<JournalSnapshot> {
-  const target = destination(root, mutation.path);
+  const targetRoot = mutationRoot(root, mutation);
+  const target = destination(targetRoot, mutation.path);
   const content = await readRegular(target);
-  if (!content) return { path: mutation.path, content: null, mode: null };
+  if (!content) return { path: mutation.path, root: targetRoot, content: null, mode: null };
   const metadata = await stat(target);
-  return { path: mutation.path, content: content.toString("base64"), mode: metadata.mode & 0o777 };
+  return {
+    path: mutation.path,
+    root: targetRoot,
+    content: content.toString("base64"),
+    mode: metadata.mode & 0o777,
+  };
 }
 
 async function validateExpectation(root: string, mutation: FileMutation): Promise<void> {
-  const current = await readRegular(destination(root, mutation.path));
+  const current = await readRegular(destination(mutationRoot(root, mutation), mutation.path));
   if (mutation.expected.absent) {
     if (current)
       throw new LifecycleError("stale_plan", `Expected an absent target: ${mutation.path}`);
@@ -481,7 +507,7 @@ async function restore(root: string, journal: Journal): Promise<void> {
   for (let index = journal.snapshots.length - 1; index >= 0; index -= 1) {
     const item = journal.snapshots[index];
     const operation = journal.operations[index];
-    const target = destination(root, item.path);
+    const target = destination(item.root, item.path);
     const current = await readRegular(target);
     const currentHash = current ? sha256(current) : undefined;
     const currentMode = current ? (await lstat(target)).mode & 0o777 : undefined;
@@ -562,7 +588,11 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
   ) {
     throw new LifecycleError("invalid_journal", "Transaction journal has an unsupported schema");
   }
-  for (const item of journal.snapshots) assertSafeRelative(item.path);
+  for (const item of journal.snapshots) {
+    assertSafeRelative(item.path);
+    if (item.root !== undefined && !isAbsolute(item.root))
+      throw new LifecycleError("invalid_journal", "Transaction snapshot root must be absolute");
+  }
   for (const item of journal.snapshots) {
     if (
       (item.content !== null &&
@@ -581,6 +611,8 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
   }
   for (const item of journal.operations) {
     assertSafeRelative(item.path);
+    if (item.root !== undefined && !isAbsolute(item.root))
+      throw new LifecycleError("invalid_journal", "Transaction operation root must be absolute");
     if (item.operation !== "write" && item.operation !== "remove")
       throw new LifecycleError(
         "invalid_journal",
@@ -605,7 +637,10 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
       (item) =>
         item &&
         typeof item.path === "string" &&
-        inside(resolve(expectedRoot), resolve(item.path)) &&
+        (inside(resolve(expectedRoot), resolve(item.path)) ||
+          (journal.operations ?? []).some(
+            (operation) => operation.root && inside(resolve(operation.root), resolve(item.path)),
+          )) &&
         Number.isSafeInteger(item.device) &&
         item.device >= 0 &&
         Number.isSafeInteger(item.inode) &&
@@ -617,7 +652,10 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
       "Transaction journal contains an unsafe created directory",
     );
   }
-  return journal as Journal;
+  return {
+    ...journal,
+    snapshots: journal.snapshots.map((item) => ({ ...item, root: item.root ?? expectedRoot })),
+  } as Journal;
 }
 
 export async function recoverTransaction(root: string, stateRoot: string): Promise<boolean> {
@@ -641,12 +679,13 @@ async function ensureTransactionDirectories(
   stateRoot: string,
   journal: Journal,
 ): Promise<void> {
-  await ensureDirectory(dirname(resolve(root)), 0o700);
-  const relativeParent = relative(resolve(root), dirname(destination(root, mutation.path)));
+  const targetRoot = mutationRoot(root, mutation);
+  await ensureDirectory(dirname(targetRoot), 0o700);
+  const relativeParent = relative(targetRoot, dirname(destination(targetRoot, mutation.path)));
   const parts = relativeParent.split(sep).filter(Boolean);
   const directories = [
-    resolve(root),
-    ...parts.map((_, index) => resolve(root, ...parts.slice(0, index + 1))),
+    targetRoot,
+    ...parts.map((_, index) => resolve(targetRoot, ...parts.slice(0, index + 1))),
   ];
   for (const directory of directories) {
     const existing = await lstatSafe(directory);
@@ -688,9 +727,10 @@ export async function applyTransaction(
   const unique = new Set<string>();
   for (const mutation of mutations) {
     assertSafeRelative(mutation.path);
-    if (unique.has(mutation.path))
+    const key = `${mutationRoot(root, mutation)}:${mutation.path}`;
+    if (unique.has(key))
       throw new LifecycleError("invalid_plan", `Duplicate transaction target: ${mutation.path}`);
-    unique.add(mutation.path);
+    unique.add(key);
     await validateExpectation(root, mutation);
   }
   const snapshots = await Promise.all(mutations.map((mutation) => snapshot(root, mutation)));
@@ -701,12 +741,18 @@ export async function applyTransaction(
       mutation.operation === "write"
         ? {
             path: mutation.path,
+            ...(mutation.root ? { root: resolve(mutation.root) } : {}),
             operation: mutation.operation,
             content: mutation.content.toString("base64"),
             mode: mutation.mode,
             expected: mutation.expected,
           }
-        : { path: mutation.path, operation: mutation.operation, expected: mutation.expected },
+        : {
+            path: mutation.path,
+            ...(mutation.root ? { root: resolve(mutation.root) } : {}),
+            operation: mutation.operation,
+            expected: mutation.expected,
+          },
     ),
     snapshots,
     created_directories: [],
@@ -722,7 +768,7 @@ export async function applyTransaction(
       if (mutation.operation === "write")
         await ensureTransactionDirectories(root, mutation, stateRoot, journal);
       await validateExpectation(root, mutation);
-      const target = destination(root, mutation.path);
+      const target = destination(mutationRoot(root, mutation), mutation.path);
       if (mutation.operation === "write")
         await writeAtomic(target, mutation.content, mutation.mode);
       else await unlink(target);
@@ -736,7 +782,7 @@ export async function applyTransaction(
         throw new LifecycleError("test_failure", "Injected transaction failure");
     }
     for (const mutation of mutations) {
-      const target = destination(root, mutation.path);
+      const target = destination(mutationRoot(root, mutation), mutation.path);
       const current = await readRegular(target);
       if (
         (mutation.operation === "remove" && current) ||

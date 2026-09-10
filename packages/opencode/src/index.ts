@@ -7,15 +7,9 @@ import {
   RoutingGate,
   type RoutingInput,
 } from "./routing.js";
-import backgroundAttempts, {
-  type BackgroundAttemptsOptions,
-} from "./plugins/background-attempts.js";
-import scheduler, { type SchedulerOptions } from "./plugins/schedule.js";
-import autonomyPolicy, { type AutonomyPolicyOptions } from "./plugins/autonomy-policy.js";
 import rulesInjector, { type RulesInjectorOptions } from "./plugins/rules-injector.js";
 import rtk, { type RtkOptions } from "./plugins/rtk.js";
 import zedBell, { type ZedBellOptions } from "./plugins/zed-bell.js";
-import zedClickablePaths, { type ZedClickablePathsOptions } from "./plugins/zed-clickable-paths.js";
 import {
   applyAgentProfileChange,
   listAgentProfiles,
@@ -28,86 +22,16 @@ import { collectDoctorFacts, type DoctorHost } from "./doctor.js";
 import { CATALOG } from "./catalog.js";
 import { digest } from "./lifecycle.js";
 
-export { COMMAND_REGISTRY, renderCommand } from "./registry.js";
 export {
-  CATEGORIES,
-  resolveRouting,
-  RoutingGate,
-  ExecutionCardLifecycle,
-  validateExecutionCard,
-  validateRoutingReceipt,
-} from "./routing.js";
-export { validateAgentReport, CONTRACT_SCHEMA_VERSION } from "./contracts.js";
-export type { ExecutionCard, ExecutionCardStatus, RoutingReceipt } from "./routing.js";
-export {
-  AgentProfileError,
-  FIXED_AGENT_ROLES,
-  applyAgentProfileChange,
-  availableModels,
-  availableModelVariants,
-  listAgentProfiles,
-  previewAgentProfileChange,
-  renderAgentProfile,
-  validateAgentName,
-  validateModel,
-  validateVariant,
-} from "./agent-profiles.js";
-export type {
-  AgentInventory,
-  AgentModelSelection,
-  AgentOwnership,
-  AgentProfileAction,
-  AgentProfileConfig,
-  AgentProfileOperation,
-  AgentProfilePlan,
-  AgentProfileRecord,
-  AgentProfileRequest,
-  AgentProfileResult,
-  AgentProfileScope,
-  AgentState,
-  DeploymentManifest,
-  DeploymentRecord,
-  FixedAgentRole,
-} from "./agent-profiles.js";
-export {
-  backgroundAttempts,
-  scheduler,
-  autonomyPolicy,
   rulesInjector,
   rtk,
   zedBell,
-  zedClickablePaths,
 };
-export { applyReconcile, previewReconcile } from "./reconcile.js";
-export { inspectReconcile } from "./reconcile.js";
-export type {
-  ReconcileItem,
-  ReconcilePlan,
-  ReconcileResult,
-  ReconcileStatus,
-} from "./reconcile.js";
-export { collectDoctorFacts, doctorExitCode } from "./doctor.js";
-export type { DoctorReport, DoctorHost, DoctorCheck, DoctorCheckStatus } from "./doctor.js";
-export {
-  worktreePlan,
-  worktreeCreate,
-  worktreeStatus,
-  worktreeList,
-  worktreeRelease,
-  worktreeRecover,
-} from "./runtime/worktree.js";
-export type { WorktreeRecord, WorktreeStatus } from "./runtime/worktree.js";
 export type OpenCodeOptions = {
-  backgroundAttempts?: BackgroundAttemptsOptions;
-  scheduler?: SchedulerOptions;
-  autonomyPolicy?: AutonomyPolicyOptions;
   rulesInjector?: RulesInjectorOptions;
   rtk?: RtkOptions;
   zedBell?: ZedBellOptions;
-  zedClickablePaths?: ZedClickablePathsOptions;
 };
-
-export { CATALOG } from "./catalog.js";
 
 const plugin = (async (input: PluginInput) => {
   const gate = new RoutingGate();

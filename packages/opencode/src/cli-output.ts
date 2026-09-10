@@ -7,7 +7,15 @@ type DisplayPlan = InstallerPlan | AgentProfilePlan;
 type DisplayOperation = DisplayPlan["operations"][number];
 
 const GROUPS = ["Agents", "Commands", "Plugins", "State"] as const;
-const OPERATIONS = ["create", "update", "remove", "conflict", "missing", "unchanged"] as const;
+const OPERATIONS = [
+  "create",
+  "update",
+  "remove",
+  "archive-pending",
+  "conflict",
+  "missing",
+  "unchanged",
+] as const;
 const UNSAFE_TERMINAL_CHARACTER = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 export function terminalSafe(value: string): string {
@@ -102,6 +110,12 @@ export function renderPlan(
   const lines = [
     `${actionName(plan.action)}${version} (${plan.scope})`,
     `Target: ${terminalSafe(plan.root)}`,
+    ...("selection" in plan
+      ? [
+          `Core integration: ${plan.selection.core_activation ? "active" : "not selected"}`,
+          `Plugins: ${plan.selection.plugins.length ? plan.selection.plugins.join(", ") : "none"}`,
+        ]
+      : []),
     "",
     options.applied ? "Applied changes:" : "Planned changes:",
   ];
