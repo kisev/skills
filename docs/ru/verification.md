@@ -2,6 +2,26 @@
 
 [English version](../verification.md)
 
+## Дополнительное резюме выпуска 2.0.0
+
+Annotated tag `v2.0.0`, npm package `@kisev/skills-opencode@2.0.0` и GitHub
+Release должны ссылаться на один exact commit. Portable skills устанавливаются
+напрямую из immutable Git tag через `npx --yes skills@1.5.23`; для exact migration
+с `v1.2.0` используйте URL tag и `--agent opencode` или `--agent codex`.
+
+Migration inventory фиксирует переименования и удаления skills, command/plugin
+поверхностей и пустой набор aliases. `reconcile` сохраняет retired exact-owned
+assets в private content-addressed archive со статусом `archive-pending`; purge
+не выполняется, а изменённые и user-owned файлы остаются conflicts. Package tool
+`route` сохранён, но slash-команда `/route` и старые action/mode aliases не входят
+в выпуск.
+
+Optional OpenCode package совместим с `>=1.18.29 <1.19.0`, проверяется на
+`1.18.29` и `1.18.30` и требует Node.js 22+. Portable skills от него не зависят.
+Ограничения выпуска: Mattermost ещё не имеет полной parity, runtime state и
+`doctor` требуют hardening, stateful plugins остаются opt-in, а live eval не
+входит в обычный quality gate.
+
 Этап 20 проверяет публичный контракт `2.0.0` без модели, сети, провайдера и
 учётных данных. `task eval:check` валидирует зафиксированный corpus и запускает
 все детерминированные assertions; эта задача входит в `task check`.

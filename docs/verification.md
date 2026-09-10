@@ -2,6 +2,27 @@
 
 [Русская версия](ru/verification.md)
 
+## Release 2.0.0
+
+The release is reproducible from one exact commit: the annotated `v2.0.0` tag,
+the `@kisev/skills-opencode@2.0.0` package, and the GitHub Release must identify
+the same commit. Portable skills are installed directly from that immutable Git
+tag with `npx --yes skills@1.5.23`; use `--agent opencode` or `--agent codex` and
+pin the tag URL for an exact migration from `v1.2.0`.
+
+The migration inventory records renamed and removed skills, command/plugin
+retirements, and an empty alias set. `reconcile` preserves retired exact-owned
+assets in a private content-addressed archive as `archive-pending`; it does not
+purge archive entries, and modified or user-owned files remain conflicts. The
+package tool `route` remains available, while the `/route` slash command and old
+action/mode aliases are not shipped.
+
+The optional OpenCode package targets `>=1.18.29 <1.19.0`, is tested against
+`1.18.29` and `1.18.30`, and requires Node.js 22+. Portable skills do not depend
+on that package. Known limitations remain documented: Mattermost parity is
+incomplete, runtime state and `doctor` need further hardening, stateful plugins
+are opt-in, and live evaluation is outside the ordinary quality gate.
+
 Stage 20 verifies the `2.0.0` public contract without invoking a model, network,
 provider, or credential. `task eval:check` validates the committed scenario corpus
 and runs every deterministic assertion; it is included by `task check`.

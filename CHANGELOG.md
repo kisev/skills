@@ -4,6 +4,52 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.0] - 2026-09-10
+
+### Несовместимые изменения
+
+- Удалены skills `attempt`, `schedule`, `usage` и `overview` без replacement.
+- `project-spec`, `skill-improver` и `walkthrough` переименованы в `spec-manage`,
+  `skill-improve` и `code-explain` соответственно.
+- `team-workflow` заменён пятью fixed skills: `team-sprint-start`,
+  `team-sprint-close`, `team-retro`, `team-roadmap` и `slides-prompts-prepare`.
+- Удалены старые skill/command/plugin surfaces, включая slash-команду `/route`;
+  package tool `route` остаётся доступен без slash-команды.
+- Action и mode aliases удалены: публичная поверхность использует только точные
+  имена из catalog.
+
+### Установка и миграция
+
+- Portable skills устанавливаются напрямую из GitHub tag с pinned executable
+  (для Codex замените `opencode` на `codex`):
+
+  ```shell
+  npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.0 \
+    --agent opencode --skill '*' --copy --yes
+  ```
+
+- Exact migration с `v1.2.0` использует migration inventory и сохраняет
+  ownership/hash evidence; renamed skills требуют ручной проверки нового имени.
+- Reconcile переводит retired exact-owned assets в private content-addressed
+  archive со статусом `archive-pending`; modified, user-owned и unknown assets
+  остаются conflicts. Archive, restore и purge в этот выпуск не входят.
+
+### OpenCode
+
+- `@kisev/skills-opencode@2.0.0` совместим с OpenCode `>=1.18.29 <1.19.0` и
+  требует Node.js 22+.
+- Portable skills и optional OpenCode integration устанавливаются независимо;
+  integration не включает skills и не изменяет `opencode.json`.
+
+### Известные ограничения
+
+- Mattermost ещё не имеет полной parity с заявленными сценариями.
+- Runtime state и `doctor` требуют дополнительного hardening.
+- Stateful plugins остаются opt-in, scheduler и связанные wrappers
+  disabled-by-default; `ast-grep` и `rtk` требуют заранее установленные CLI.
+- Live evaluation не входит в обычный quality gate и запускается только явно в
+  доверенном окружении.
+
 ## [1.2.0] - 2026-09-07
 
 ### Добавлено
