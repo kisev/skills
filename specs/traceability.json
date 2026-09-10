@@ -91,156 +91,156 @@
     "REQ-F-001": {
       "surface": "system",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "8208f34b5a268620d9c6c47388b893e837e96170afaf61aab32a38e2885204e2",
+      "block_sha256": "7b7ad28b6c1d14cf702ffb62cc9f822d07a719fcf81d9ed01d798608c728f593",
       "evidence_profile": "inventory",
       "manual_evidence_ids": ["ME-ARCH-003"]
     },
     "REQ-F-002": {
       "surface": "orchestration",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "3ae7e58c6000e591b53545b714b5d4150a692ccfb3c01a65d90214b66c2224ed",
+      "block_sha256": "1e319f7541e743a3c81c2d055b491453e903350986f4847230178601afc9e63a",
       "evidence_profile": "routing",
       "manual_evidence_ids": ["ME-ARCH-001"]
     },
     "REQ-F-003": {
       "surface": "workflow",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "10c1531944744bb3e0f67e6c0cead02cce3fb6a25169ec28069d46aaf77798a3",
+      "block_sha256": "e73c37178c7be9d26af75f237e301b5a99b405d464200a528d5be9335de76333",
       "evidence_profile": "quality"
     },
     "REQ-F-004": {
       "surface": "distribution",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "a10c88330161ff30e693d1eb333db9eb3e24cfbcf966ee2066212d89a5aa0cbb",
+      "block_sha256": "11d96d820f083fa0b3d1790d29deb5fc2e60c2ddc6b62a9a60b9b03fe70cf64d",
       "evidence_profile": "distribution",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
     "REQ-F-005": {
       "surface": "archive",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "7ae6375071fe04527f1e1546bd11584e28b96eb902afa5cb6760f54449e8f1f3",
+      "block_sha256": "adee0fcaa299d5e80ed0eca631e57e4d410462829c54603c1fabac0fd09d12f5",
       "evidence_profile": "reconcile",
       "manual_evidence_ids": ["ME-ARCH-004"]
     },
     "REQ-F-006": {
       "surface": "agent-profiles",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "737017e61d6574c023241d2f56ed7ed2e5d649104ba1efe4c77e6fe9d1aa5536",
+      "block_sha256": "d9e0aa619d8bdf902d24a5a979a2b29152df9f9ef7c9f44a58923b2a3cbed7f5",
       "evidence_profile": "profiles"
     },
     "REQ-F-007": {
       "surface": "doctor",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "2ca0b7dd7f8621412f6e297bc119f6292a7a0a76f71d3db5f226257fc34e9f69",
+      "block_sha256": "de621ef472f1eddbbbd340f66a27ad459b9f8cdd8d0a84ddc15ecf69f55ca220",
       "evidence_profile": "doctor"
     },
     "REQ-F-008": {
       "surface": "compatibility",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "e19106a80521f46c5392b6d92e8940e09377a899e3bac5b7da8bf56efa47e025",
+      "block_sha256": "d2d1b6c20ec3ca756b1f4e4e8ae7db3692d958762d5cf7d94297546265b698a8",
       "evidence_profile": "compatibility"
     },
     "REQ-I-001": {
       "surface": "skills",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "98d7a13115419a2b4acdd96092a5dd7d98abaf331e7ba4538b3ee3c5ebdfc389",
+      "block_sha256": "0a9f38cab94c9961a20b03f632cc1260513fcfaffc572d7f3c3ff3312fdde041",
       "evidence_profile": "skills"
     },
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "b81bab88025b12070646fbe0059fce54d3cbadd3d0629796e834836d73bcdad1",
+      "block_sha256": "87ca28608213be4b9dbc2cd5d6130e10e6e3ae8a0e65d802006c545661ac7f34",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {
       "surface": "package-tools",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "b44a5fe536c1d7cc674a0953d1dbb11ef7d2cf971190abb6b2cefb94f8edc66b",
+      "block_sha256": "600e978939568aba214d29d71bdd61c49ffd8f95701c86d456894fe3829eb6b8",
       "evidence_profile": "inventory"
     },
     "REQ-I-004": {
       "surface": "plugins",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "050b0dd1cadbff61f0a9ad2217922d8882bb8700a8f0a572d9e25a37aa67b007",
+      "block_sha256": "4cc6a9c38bec4a2f55ed6cd38e9f98c128f4c4ed2601361c11e4e66f24c099ff",
       "evidence_profile": "plugins"
     },
     "REQ-I-005": {
       "surface": "evidence",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "5cef9786f80cc016f0cee5139e34dc02f0bf204941b69891e0bc1240060da6de",
+      "block_sha256": "68c851a5ea71b9ab62d128d2acd177c7ba5ae264c9cd4998147a1b6718e8f41a",
       "evidence_profile": "quality"
     },
     "REQ-I-006": {
       "surface": "compatibility",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "9ce35ed173ee54d17d9c18a870b11778db926bb745001faef20f9305dfce3b0e",
+      "block_sha256": "06bee0dffc1b77088e4f9401d3578b86fb321cb28e352b1e2aa9a16537490e89",
       "evidence_profile": "compatibility"
     },
     "REQ-Q-001": {
       "surface": "verification",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "a2784f0bc48ab07352e12cb93e2a1fae45a6860982b2b9f251a7fde9e0a60965",
+      "block_sha256": "3d939939d8ac53b6249a58d02b3e278b565a479e32ec535fc8ca142c1552011e",
       "evidence_profile": "quality"
     },
     "REQ-Q-002": {
       "surface": "mutations",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "fb766ce09c3c49d0de4a661eb9796bc55e600e54d2d42f87d797e41fd1e68c73",
+      "block_sha256": "831d997285d27d92b93f8498a8ee904b887916bffd5e12847d24bed95c9e7060",
       "evidence_profile": "profiles"
     },
     "REQ-Q-003": {
       "surface": "security",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "2a3bc04d520867b7f82d8e3b97666d44d2faa841a47835bb270bcd63e6a501f0",
+      "block_sha256": "fefbe9cce0be4b02c5b6f8ac7a51d9a7fdf9ba53a3f0899da211bdd2e22ab01c",
       "evidence_profile": "quality"
     },
     "REQ-Q-004": {
       "surface": "evidence",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "01d427fbfa99ae0d5fb5884b946907abb14223cea1bbd704a2ab0916184605e1",
+      "block_sha256": "88073f239131357703073bed976709eb1c634b33ace22522cc221dfbf9eb0205",
       "evidence_profile": "quality"
     },
     "REQ-Q-005": {
       "surface": "distribution",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "b8a345bbee1f2cd013708e43aa79d92f22cb7609e7cc5aa4e4640f34ce9ef776",
+      "block_sha256": "93375e74175b592c54742829b584d5e164e39b6dc952255446fd41f2f2016c0e",
       "evidence_profile": "distribution"
     },
     "REQ-Q-006": {
       "surface": "compatibility",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "ba045c69abd61d974d4f3b7ca1ead7b0a143337306f1f3d69a4bfb5a630acd46",
+      "block_sha256": "ba9f47748923ed36635762fde6acb2d55fe77b4bbf0a8459f1d515f3c17cf259",
       "evidence_profile": "compatibility"
     },
     "REQ-C-001": {
       "surface": "specification",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "d574804f3d9945d9e93480a1b64a7d380adba81836ce970da207ba83fcc22666",
+      "block_sha256": "2f079edf33edc2b2dff61e8259544b27464317ca178d38f8af4acc8948043449",
       "evidence_profile": "quality"
     },
     "REQ-C-002": {
       "surface": "distribution",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "686c3f9858c28ed4fc20f6e0cd947cdca26e34de1472b94b23371d367fd96902",
+      "block_sha256": "9b73cbf9bd379b3f468559a1dc84ad590f967849192f54fe1c14cd8c90e51857",
       "evidence_profile": "distribution",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
     "REQ-C-003": {
       "surface": "ownership",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "e647a748e04adf737ed9f1484d73356d38d2aec690ef2148d2f9f77f743f9927",
+      "block_sha256": "228e88dadd6cbfc047e10e1790d40d8e134b1651f5f1e0612eccd0ba8a010a79",
       "evidence_profile": "profiles"
     },
     "REQ-C-004": {
       "surface": "archive",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "58e5e1ca87360db5912d13da093007a234ef279fc5ca0d5913bf92e21d8a0902",
+      "block_sha256": "2007c78e6eea749c1a6f5c214e1140cf060c42121d01d590b2784ffb210ea8c7",
       "evidence_profile": "reconcile"
     },
     "REQ-C-005": {
       "surface": "scope",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "d3ebb408b6786c21fcc131b662be6b7cf16a26d03b4c5a2d857b0a60376e7f87",
+      "block_sha256": "4cd5151036cccd85b72237d9451041b6ff63f6f3368744e2cf84cb2178a7fe54",
       "evidence_profile": "quality"
     },
     "REQ-C-006": {
@@ -252,457 +252,457 @@
     "REQ-F-101": {
       "surface": "skill:agents-md",
       "source": "specs/capabilities/skills/agents-md.md",
-      "block_sha256": "b529472711fa747e154b4b688df0533b2c205cd9798c3f889887495b7879aa00",
+      "block_sha256": "738fba12e4e6177c6d70e5c5e4df4fc29d1c6d89e343ce3bfc49ba0cf49473ef",
       "evidence_profile": "skills"
     },
     "REQ-F-102": {
       "surface": "skill:askme",
       "source": "specs/capabilities/skills/askme.md",
-      "block_sha256": "f53a0145f7b2b51b6e079b4f60ea0ec84446527781917aeeae891f1b95b0951d",
+      "block_sha256": "f40e34795a5914247c0c5dbbf4bc15bfeed07c5389bb57a9c5fe0ba223fb4726",
       "evidence_profile": "skills"
     },
     "REQ-F-103": {
       "surface": "skill:ast-grep",
       "source": "specs/capabilities/skills/ast-grep.md",
-      "block_sha256": "93760a210c941595d3dad4b04b72f0609225e13ef0b78fdfaf730db33d6a19ae",
+      "block_sha256": "99774427392a71a6297584d48353c2d059e78bfe13c62fd44f6fecdb676bf46a",
       "evidence_profile": "skills"
     },
     "REQ-F-104": {
       "surface": "skill:code-explain",
       "source": "specs/capabilities/skills/code-explain.md",
-      "block_sha256": "0cb0ab8ba813108498e1e10f315f369d3d7f2228b981a8fc141629b89ed3e71e",
+      "block_sha256": "817fc4e73baaf961b2667b24ecd130852b85f49a4b9650ec03eab86529d48e86",
       "evidence_profile": "skills"
     },
     "REQ-F-105": {
       "surface": "skill:code-review",
       "source": "specs/capabilities/skills/code-review.md",
-      "block_sha256": "4b13ac40c7e092e9d8f9ccdf075a3122b5c33cb58902546d8c0ebd880d6557de",
+      "block_sha256": "abb67c046341b4138146d3ca8ee03dad376c1417c1d77a77630a5fa22113c368",
       "evidence_profile": "skills"
     },
     "REQ-F-106": {
       "surface": "skill:commit-msg",
       "source": "specs/capabilities/skills/commit-msg.md",
-      "block_sha256": "3e12c01ec6b4ea841a148ad738f269b3b89924faff92774eed4c9561a6c35c95",
+      "block_sha256": "fc7b42ee2a51e8ee2ad8ba0e0f070ed7fa03daeb76324206d15531b8ebcc7d3e",
       "evidence_profile": "skills"
     },
     "REQ-F-107": {
       "surface": "skill:docs-prepare",
       "source": "specs/capabilities/skills/docs-prepare.md",
-      "block_sha256": "5185a2cf8a02aba3e15065d5918d5b7383119e719507dedd5db60d28e137c395",
+      "block_sha256": "82712f8150c08d3c2d9dc1f514a023908fd4a6eaf72d1a3020e71a768f766dbf",
       "evidence_profile": "skills"
     },
     "REQ-F-108": {
       "surface": "skill:docs-review",
       "source": "specs/capabilities/skills/docs-review.md",
-      "block_sha256": "09997e1e74592a5e82a7bc59cb798209b4a3ff94a3586db0b5df17732cb5b624",
+      "block_sha256": "6c3a3d18fa5bf80759ab7989e4a4d06e3b0789c810256cc7486cba3f8248fd72",
       "evidence_profile": "skills"
     },
     "REQ-F-109": {
       "surface": "skill:doit",
       "source": "specs/capabilities/skills/doit.md",
-      "block_sha256": "09b19408cee80102e1e394a7f77a1c6fa80c1882ce7c3ade41c3fe6e77ee043a",
+      "block_sha256": "0c593f2a626654ebc09d19c4873e129c8c297dd70c3809002efa15eeb6749a68",
       "evidence_profile": "skills"
     },
     "REQ-F-110": {
       "surface": "skill:goal",
       "source": "specs/capabilities/skills/goal.md",
-      "block_sha256": "9f4ed234ecb20f94baadfacb7434a376d1a74b2dcbf37a1ca2a198898c5fd85a",
+      "block_sha256": "b57eee9c4ae13962d44d1d2a2f123b18a2f3be1b9ef95a9b74bb1e576307002d",
       "evidence_profile": "skills"
     },
     "REQ-F-111": {
       "surface": "skill:humanize",
       "source": "specs/capabilities/skills/humanize.md",
-      "block_sha256": "791be78099c986b129ba117c3233071c8eb1a372cbfd38e004d747115bd266a1",
+      "block_sha256": "518161a32bb0afa75f2280de630bc8ca2502dbfc0c4c81d28145a2f48f5706da",
       "evidence_profile": "skills"
     },
     "REQ-F-112": {
       "surface": "skill:lsp-report",
       "source": "specs/capabilities/skills/lsp-report.md",
-      "block_sha256": "6f266d7de91707c4704588b05df4e2c2b77733edbbc7dcf474b8948999fa16f4",
+      "block_sha256": "052d9df1a2a46ef5807e1542cce1d7b3458e545445fb72883dac275ffbbac869",
       "evidence_profile": "skills"
     },
     "REQ-F-113": {
       "surface": "skill:mattermost",
       "source": "specs/capabilities/skills/mattermost.md",
-      "block_sha256": "44bc29353e9be92df6b4f12c557f91abb4b3f159a5c5715c6986048cc4378122",
+      "block_sha256": "4e2c4693b50028b000b0c1ebd5d52767232177e65caf776d9e37659ec91c7794",
       "evidence_profile": "skills"
     },
     "REQ-F-114": {
       "surface": "skill:mr-prepare",
       "source": "specs/capabilities/skills/mr-prepare.md",
-      "block_sha256": "74e3cbff2be0c43287fda91f7b5259aefe6714e753845489395000f7368b6cbb",
+      "block_sha256": "47fe99e3266aae06c55f37b949e9340a2c8c4110cbe21e9f39685c80db867074",
       "evidence_profile": "skills"
     },
     "REQ-F-115": {
       "surface": "skill:release-prepare",
       "source": "specs/capabilities/skills/release-prepare.md",
-      "block_sha256": "95e4cf43ffcc111942dbd5b8d5cee8afdcf9a546c3ae24067004022ff7860176",
+      "block_sha256": "73c273f271a05b45c534096170b9ff690f374eff2ec00a0eb7b503f63049187c",
       "evidence_profile": "skills"
     },
     "REQ-F-116": {
       "surface": "skill:release-review",
       "source": "specs/capabilities/skills/release-review.md",
-      "block_sha256": "b239c24b7e40d9551433dbc8f6f58c3e069120fe377305474328260b9cf82c46",
+      "block_sha256": "6587314c61dd9f26ce5772272136843394bb754b337b096d0ded5178bebac2fb",
       "evidence_profile": "skills"
     },
     "REQ-F-117": {
       "surface": "skill:rtk",
       "source": "specs/capabilities/skills/rtk.md",
-      "block_sha256": "145534a3fe9daf3dd83d99fde962e1a42ff4cdcfcc6392a7e014aac96bcf8bba",
+      "block_sha256": "6901d170969a9d5c479c5f32e6d8d28f668c4eb8074666d18447dd28ff521ba6",
       "evidence_profile": "skills"
     },
     "REQ-F-118": {
       "surface": "skill:skill-improve",
       "source": "specs/capabilities/skills/skill-improve.md",
-      "block_sha256": "505bc2e677d875f5a70fba2979f2c9200dda5ff5d18e9f9038dc0c05c57d7b18",
+      "block_sha256": "1428c737169089fe1ecb6b18cee720bfcbf0c44455ffb49d72a6440912800ee0",
       "evidence_profile": "skills"
     },
     "REQ-F-119": {
       "surface": "skill:slides-prompts-prepare",
       "source": "specs/capabilities/skills/slides-prompts-prepare.md",
-      "block_sha256": "001dfa56c19678e000639f4f5eee7349664b1daa4f4c256e57e3cb20ad561260",
+      "block_sha256": "c5ef0376f40d8ee424dd10fb3c64244ad60ac5b13aad3797426fd9e6eced0af1",
       "evidence_profile": "skills"
     },
     "REQ-F-120": {
       "surface": "skill:spec-manage",
       "source": "specs/capabilities/skills/spec-manage.md",
-      "block_sha256": "014cb21d55f0c875025aea6a2df5ed43a238e13e860d20701162eaea05bd1002",
+      "block_sha256": "0d3baba23805f7a21a2e9d5fa1372d3280c5adad5e18c013feb1e455cb8f6d28",
       "evidence_profile": "skills"
     },
     "REQ-F-121": {
       "surface": "skill:stopit",
       "source": "specs/capabilities/skills/stopit.md",
-      "block_sha256": "87628773fb8591b6674068d5ce4984546a08338dff12f29bb6e1b82eaa7a6ceb",
+      "block_sha256": "f0014a5fe425e6f6423f477cbeddb821405180ebd44f36b1befc780ee803a95f",
       "evidence_profile": "skills"
     },
     "REQ-F-122": {
       "surface": "skill:summary",
       "source": "specs/capabilities/skills/summary.md",
-      "block_sha256": "16200c16d08b6cca8ad03889009e7f9561a41ea36c0608d03c5bc6a69a47ed9b",
+      "block_sha256": "719ee8007104edd04a5bf74e91909daa59765b236ee8f79fc66bb96e97c7e725",
       "evidence_profile": "skills"
     },
     "REQ-F-123": {
       "surface": "skill:task-prepare",
       "source": "specs/capabilities/skills/task-prepare.md",
-      "block_sha256": "b04198344dce85eb6c0b0abe0f8c3b76974a08b6666eab978cecb26d4b811a2d",
+      "block_sha256": "b0e774400d724b1452f5078affe78b831d964296f665a807f85dbd7ea2a00a85",
       "evidence_profile": "skills"
     },
     "REQ-F-124": {
       "surface": "skill:task-review",
       "source": "specs/capabilities/skills/task-review.md",
-      "block_sha256": "ef39d95472530a335b2911cbcc606d20a7750ce7806a5b337b87593606e1116d",
+      "block_sha256": "3d4c070ff633407fd2052f054d3f71507af1cf25290d80fbcf35250c7a4110bc",
       "evidence_profile": "skills"
     },
     "REQ-F-125": {
       "surface": "skill:task-triage",
       "source": "specs/capabilities/skills/task-triage.md",
-      "block_sha256": "46af2ee8fdfb79944358ebda679cb837c357da3035132c62f37930873b1296a6",
+      "block_sha256": "55cbfe0c55c1fb614ac3f8f6b78b5ec637447285a3c3a7554e75bb60b7204e5d",
       "evidence_profile": "skills"
     },
     "REQ-F-126": {
       "surface": "skill:team-retro",
       "source": "specs/capabilities/skills/team-retro.md",
-      "block_sha256": "4ea1a067a4c2534f702fa3038b8c71389087aa9e8bc97255fd8f840b99e70e92",
+      "block_sha256": "5b456fda9e0ae52152d804f322b235b37ebbf1cab113c9b18680d409738918ae",
       "evidence_profile": "skills"
     },
     "REQ-F-127": {
       "surface": "skill:team-roadmap",
       "source": "specs/capabilities/skills/team-roadmap.md",
-      "block_sha256": "e95ab581d1b3ccd2dbcb5bf69212acd63a4d51581c02cf9720e535350b504480",
+      "block_sha256": "00fb5c6f6932b5759a70b23f5164606434fa0de4e1495e37822775596c799c6c",
       "evidence_profile": "skills"
     },
     "REQ-F-128": {
       "surface": "skill:team-sprint-close",
       "source": "specs/capabilities/skills/team-sprint-close.md",
-      "block_sha256": "3534d4829f10e6d9fbc5290101947872aa75a61d40e0955baadbfcd5d9dbd339",
+      "block_sha256": "2d564d9b4175ed1fd0ce3218d1f33f07d3e6a427ef0ad095b706cfd38fc8a350",
       "evidence_profile": "skills"
     },
     "REQ-F-129": {
       "surface": "skill:team-sprint-start",
       "source": "specs/capabilities/skills/team-sprint-start.md",
-      "block_sha256": "be9c3795bef4899dfd7a6ae12350110e172e00da1e1a3869f6a2404d61535390",
+      "block_sha256": "b128d4922eb3b94dfc1d22d8e171e44e448e538d708598f469d2fb21c32d4d3e",
       "evidence_profile": "skills"
     },
     "REQ-F-301": {
       "surface": "agent:manager",
       "source": "specs/capabilities/agents/manager.md",
-      "block_sha256": "72254a67441bfd21565b77e5c6ca806e71be501cb8c4e251a02f744fb091d7fa",
+      "block_sha256": "ef85ddcc36f8669d90517225f50e20b6fb4a34cf81ccafc8bbbfa2397f0005fe",
       "evidence_profile": "agents"
     },
     "REQ-F-302": {
       "surface": "agent:architect",
       "source": "specs/capabilities/agents/architect.md",
-      "block_sha256": "463fc10eacea9598e80e36efffcfe47609170006a8c3216361b07eeb04423a77",
+      "block_sha256": "d8a12303968d0dd1995c83defddcfce258d8901050670697a071ce8573e471ad",
       "evidence_profile": "agents"
     },
     "REQ-F-303": {
       "surface": "agent:mapper",
       "source": "specs/capabilities/agents/mapper.md",
-      "block_sha256": "aba7be3e9f26c6ff3751957f8cd06df70133aebfd992aeb8ef94aa4bbb408dae",
+      "block_sha256": "4f941b08eda2e661fbeea3d8c7a0f4941ad5b03e3a1360db3ffccaf85f2fd1a4",
       "evidence_profile": "agents"
     },
     "REQ-F-304": {
       "surface": "agent:worker",
       "source": "specs/capabilities/agents/worker.md",
-      "block_sha256": "2c14b42d3401b35603c148ae90054cd5dfadc3ddf30e7d537dbdd59567d174ee",
+      "block_sha256": "42e7d1e66daf7b45e9ea0f7ea6b4a2ef3bc709fba4e8582047d29e3808eec1e6",
       "evidence_profile": "agents"
     },
     "REQ-F-305": {
       "surface": "agent:review",
       "source": "specs/capabilities/agents/review.md",
-      "block_sha256": "2fbfc7d81e12f44fbc689e82a15eca7291ef216706b9ab7d06821aaa552efd27",
+      "block_sha256": "abb8353967a821cfa9574320003067ec9dfdec7e33d3bdfabaaeabcc9b127e94",
       "evidence_profile": "agents"
     },
     "REQ-F-306": {
       "surface": "agent:critic",
       "source": "specs/capabilities/agents/critic.md",
-      "block_sha256": "eee2d6d94034005e18c53265f098ea6d2b7c65668d1ad8cd57bf5a96570f1902",
+      "block_sha256": "1dcc5acbbe6f40262060994ade3397ad0c3698731f2f2e6ba5cedbcb9f878bb1",
       "evidence_profile": "agents"
     },
     "REQ-I-401": {
       "surface": "plugin:rules-injector",
       "source": "specs/capabilities/plugins/rules-injector.md",
-      "block_sha256": "aa8e0de72a128afbab48afb23c226c10bbed562d15fddf35c44a068def619deb",
+      "block_sha256": "6ab0a9cfc1baab8ada15c1d91385361d5fc52d7523635173ebe4978ae7572555",
       "evidence_profile": "plugins"
     },
     "REQ-I-402": {
       "surface": "plugin:rtk",
       "source": "specs/capabilities/plugins/rtk.md",
-      "block_sha256": "63bcf38d80a7dda917578a05d83229cfbe7bfe89ba13a822cec9807c92c23664",
+      "block_sha256": "f90d28be97bda764721c38951c10c5dbf6e080bae7224eb44b8e1dd0e84cc045",
       "evidence_profile": "plugins"
     },
     "REQ-I-403": {
       "surface": "plugin:zed-bell",
       "source": "specs/capabilities/plugins/zed-bell.md",
-      "block_sha256": "4d5dcaeeb6d4b8348cbedf272ad7bdbfb1d43a2a08b2193bbcfa9b227ffa657f",
+      "block_sha256": "b9848681e6b6b32f9ca19a142d0bd551b997f221ea25d79bd6d1919c75208cfc",
       "evidence_profile": "plugins"
     },
     "REQ-F-501": {
       "surface": "tool:capabilities",
       "source": "specs/capabilities/package-tools/capabilities.md",
-      "block_sha256": "a7d7c382810a5e2a161ec09199a9279737d7a964dc981b4d8453988a6f6022e1",
+      "block_sha256": "53c04802aeb78a6a687446f40aff96dd1784a0733e5771ae6600e2406b768d4e",
       "evidence_profile": "inventory"
     },
     "REQ-F-502": {
       "surface": "tool:route",
       "source": "specs/capabilities/package-tools/route.md",
-      "block_sha256": "9bbcd4b5055cd805043cbe2e32327d16bfb1ffca3aef3a2778c3fad5cd01bc48",
+      "block_sha256": "82b3ea723a0f488cdf8999cefacbe5eeb68275b5ef48051cb0a76cf6a5294fd1",
       "evidence_profile": "routing"
     },
     "REQ-F-503": {
       "surface": "tool:doctor",
       "source": "specs/capabilities/package-tools/doctor.md",
-      "block_sha256": "b0fc232f83333b54dcbe8f57f1b71e8f6dbb901f64d8ae16785a6e269c981ee7",
+      "block_sha256": "2b591bcfe8f14d05942e6acc87cda1296e191c6e827a48d7ce994d4f04110db6",
       "evidence_profile": "doctor"
     },
     "REQ-F-504": {
       "surface": "tool:agent_profiles",
       "source": "specs/capabilities/package-tools/agent_profiles.md",
-      "block_sha256": "e149230ff1b8a3db251c458976dff9cb47bfeba4c9b03e27474173ad887804d8",
+      "block_sha256": "75e7331cdb0f3614c070b3429fd5df3178fcc346a7fb93f2983cd6fba93c682e",
       "evidence_profile": "profiles"
     },
     "REQ-F-505": {
       "surface": "tool:reconcile",
       "source": "specs/capabilities/package-tools/reconcile.md",
-      "block_sha256": "14f6faed4dfab3e790fc877bc0f8ba98fcf00fb387e3b19ed7effb249f728db2",
+      "block_sha256": "e117cb558bcb1927cd710c459e2978f5a7f98dea27790396412f9ff2664b1932",
       "evidence_profile": "reconcile"
     },
     "REQ-I-201": {
       "surface": "command:agents-md",
       "source": "specs/capabilities/commands/agents-md.md",
-      "block_sha256": "f13c66e39d9fdfbccec6c10cfcb8d8213de22fbfd8fcfb879113c4d36982589c",
+      "block_sha256": "9593e61ea555eabfdb94d57aa4ea11ed640507936a2b3cfd13bd0f97e7824617",
       "evidence_profile": "commands"
     },
     "REQ-I-202": {
       "surface": "command:askme",
       "source": "specs/capabilities/commands/askme.md",
-      "block_sha256": "48d34ec84848f887793ca47dde7d92b8339d666e06bd12a71b5b234a40f7d022",
+      "block_sha256": "ecb0b5f6fdf33e1671cf567b3c75fd7385c7929de7a7fcf3aee5065cf56b4866",
       "evidence_profile": "commands"
     },
     "REQ-I-203": {
       "surface": "command:ast-grep",
       "source": "specs/capabilities/commands/ast-grep.md",
-      "block_sha256": "1997e00f53377dcba79d995174b5240fe3d9cf9947f8739f18110821ec110f4a",
+      "block_sha256": "a24358931f3091c935eb0c9e5d23b1d3391f388271ffb3f6d58520e1579b3156",
       "evidence_profile": "commands"
     },
     "REQ-I-204": {
       "surface": "command:code-explain",
       "source": "specs/capabilities/commands/code-explain.md",
-      "block_sha256": "403497ab2c3de502af3bb24b1f67bdddc549604e2515c03ce695f2648d474026",
+      "block_sha256": "baf59ecb5813036d6d81fb18a0f89ec9bccfa2c7485c41ae4c9e7842586a76e4",
       "evidence_profile": "commands"
     },
     "REQ-I-205": {
       "surface": "command:code-review",
       "source": "specs/capabilities/commands/code-review.md",
-      "block_sha256": "de6cbd77cdc7aa8b4cf3bace249d4328f58a019ac1eab3e8407f4f48c55437a3",
+      "block_sha256": "dbf75cd5fcbe091767d6e62a11556318325c9512cec513c67764aa8719eccf3a",
       "evidence_profile": "commands"
     },
     "REQ-I-206": {
       "surface": "command:commit-msg",
       "source": "specs/capabilities/commands/commit-msg.md",
-      "block_sha256": "7c87b10e8bb749482626f9acd4c83250abc23250677282719053db6c5e1da7c9",
+      "block_sha256": "86e5587b457f338c4bb8ccbc2e79a387dac113d0cd80e4e9f4b72e8edd134dad",
       "evidence_profile": "commands"
     },
     "REQ-I-207": {
       "surface": "command:docs-prepare",
       "source": "specs/capabilities/commands/docs-prepare.md",
-      "block_sha256": "39bb1db68c17c40c0d118a052381db628480d03da7086d5c5ff3ff0730be3594",
+      "block_sha256": "5a41781f08a79bb6be7fd09ee8b95ba777b283e6f4827b916906de735ea0f1de",
       "evidence_profile": "commands"
     },
     "REQ-I-208": {
       "surface": "command:docs-review",
       "source": "specs/capabilities/commands/docs-review.md",
-      "block_sha256": "8817305340012917e7b22cd04f82e4505d6e3abc5358766be535fa74f27c3a8c",
+      "block_sha256": "0ef37d7812de85016a9f7a416a2c2330f1c76d73a7492acffb277e915d5d9d12",
       "evidence_profile": "commands"
     },
     "REQ-I-209": {
       "surface": "command:doit",
       "source": "specs/capabilities/commands/doit.md",
-      "block_sha256": "d12d4773272c0eb19880e29b578ff9b92a29faf5d1016029857f7babb5b140ac",
+      "block_sha256": "074f12253e2481cb0fde3de4bd1b8e0907ba7b4579cd7251b1695c9cbf5d79da",
       "evidence_profile": "commands"
     },
     "REQ-I-210": {
       "surface": "command:goal",
       "source": "specs/capabilities/commands/goal.md",
-      "block_sha256": "21dcd968e096e81a8db276c3fb20276b99914387a50b9ec9c6d8ee64b4982045",
+      "block_sha256": "499a11c12d608f997a42115c4b64ab8ef511d6509b8be965230faee5a6f6cf8e",
       "evidence_profile": "commands"
     },
     "REQ-I-211": {
       "surface": "command:humanize",
       "source": "specs/capabilities/commands/humanize.md",
-      "block_sha256": "1b0db41f155e93db69488a6f2f7aba807aeea9df2167c86d20ecf0ca94af276f",
+      "block_sha256": "f5ee7a53c639d563b66beddee217e65ad22d03c4a690eeb84976d236edfef3dc",
       "evidence_profile": "commands"
     },
     "REQ-I-212": {
       "surface": "command:lsp-report",
       "source": "specs/capabilities/commands/lsp-report.md",
-      "block_sha256": "d7816f2a8fc468818c339304b7810ae63dde21631b8495d7231675418164ec61",
+      "block_sha256": "b15322b9811656793c3e955b0fca15890e29f7e34714f1a806962ed70b779e20",
       "evidence_profile": "commands"
     },
     "REQ-I-213": {
       "surface": "command:mattermost",
       "source": "specs/capabilities/commands/mattermost.md",
-      "block_sha256": "d6e1c9fb4cca0128933887f4760929255295ff421ee74784c8c1391b32c9da2b",
+      "block_sha256": "e04b042873752674747a6599762584296cc2a42da47664579feec63e8f4ec980",
       "evidence_profile": "commands"
     },
     "REQ-I-214": {
       "surface": "command:mr-prepare",
       "source": "specs/capabilities/commands/mr-prepare.md",
-      "block_sha256": "b1938595766e45531f2a6fe088da4be82df245140641e526a6e15e43e9ee3a54",
+      "block_sha256": "fa61ba8eae80a3be0f9f406fdb470f9722f49cbeddd60f9785d8d9dab40b19d9",
       "evidence_profile": "commands"
     },
     "REQ-I-215": {
       "surface": "command:release-prepare",
       "source": "specs/capabilities/commands/release-prepare.md",
-      "block_sha256": "5eac85e3e49fa5df427453a9b5b310a251b4d39ecab5a2687df4136091001f1f",
+      "block_sha256": "d0d2f108d626c586169b83f0f3df2ac22d87f5c6574b0d696da254436c542dea",
       "evidence_profile": "commands"
     },
     "REQ-I-216": {
       "surface": "command:release-review",
       "source": "specs/capabilities/commands/release-review.md",
-      "block_sha256": "163868125699ec633b6239d0147817ce803fb4244ab52f300370aad3aa670583",
+      "block_sha256": "f867f57742a28adde83f7c82f70da3459b3383eb844f669be7451f76edf77451",
       "evidence_profile": "commands"
     },
     "REQ-I-217": {
       "surface": "command:rtk",
       "source": "specs/capabilities/commands/rtk.md",
-      "block_sha256": "4e6954bd8c406e14a0c859423f00896836f350c78dca2b405fa8d05ec46f92f2",
+      "block_sha256": "e7fc1229c0836051e8f0699807b589d49dc606daf4d8d76596126b2578434889",
       "evidence_profile": "commands"
     },
     "REQ-I-218": {
       "surface": "command:skill-improve",
       "source": "specs/capabilities/commands/skill-improve.md",
-      "block_sha256": "bbd286390dc49abcb00aa4e5f91332a7a221202bfca70ce7e89190c6316cf43b",
+      "block_sha256": "2ff8bed28dcd4188141aee4754e66d7faf05077758f769ead965c48aea3a0498",
       "evidence_profile": "commands"
     },
     "REQ-I-219": {
       "surface": "command:slides-prompts-prepare",
       "source": "specs/capabilities/commands/slides-prompts-prepare.md",
-      "block_sha256": "42b49133cbe4765b20ec0b68d96156e03ed613d39e706857c25846af08393da3",
+      "block_sha256": "b41e35810efbadb5d819954f135e891a64d0bef278648f0d28cf594b51c3b3a9",
       "evidence_profile": "commands"
     },
     "REQ-I-220": {
       "surface": "command:spec-manage",
       "source": "specs/capabilities/commands/spec-manage.md",
-      "block_sha256": "34b693585ea856270215215a8d03d0c21bfe54c9982c40c75b4a35093edc4a02",
+      "block_sha256": "8339e60404a4b747bced5fc7ffc1d6affd7f31d0e2c5279282139308ebf5e73c",
       "evidence_profile": "commands"
     },
     "REQ-I-221": {
       "surface": "command:stopit",
       "source": "specs/capabilities/commands/stopit.md",
-      "block_sha256": "8808c371f1f859a02d32ce2724b9918fa7dc32ecc82864c589e8be51c56532a0",
+      "block_sha256": "8d4f81740370cf7b1fc48091d36390fbeb94a016a6ebe5f81febcf1954944e80",
       "evidence_profile": "commands"
     },
     "REQ-I-222": {
       "surface": "command:summary",
       "source": "specs/capabilities/commands/summary.md",
-      "block_sha256": "915df2337b9755b5661098bfc8ea9e3669ba6438e5ca8565ed28017af0944d0d",
+      "block_sha256": "2c07a99bb7257994edc07eae70e90c0c1665adae50bd30c78063cab545577e9e",
       "evidence_profile": "commands"
     },
     "REQ-I-223": {
       "surface": "command:task-prepare",
       "source": "specs/capabilities/commands/task-prepare.md",
-      "block_sha256": "89017cd76e8f92923745cc6c051458340366baa304ce808e8e81a5fc87c19bfc",
+      "block_sha256": "da667d3a69306635441f94e1bf2e69a3ed3cf07d58df3c228c5a756b4d1ee729",
       "evidence_profile": "commands"
     },
     "REQ-I-224": {
       "surface": "command:task-review",
       "source": "specs/capabilities/commands/task-review.md",
-      "block_sha256": "b8d7a87fbc09409bac0a70a8bd9faaca71dafb63cf04e2ddd3675fc6215e2f78",
+      "block_sha256": "2184877151628fa44b671953af95be20a97dab0b1116a019fafa54f646a3e57a",
       "evidence_profile": "commands"
     },
     "REQ-I-225": {
       "surface": "command:task-triage",
       "source": "specs/capabilities/commands/task-triage.md",
-      "block_sha256": "cd51d6a88b876ad192ee788ae4d4ad2031f7417e6263c5422c298b747b4169b4",
+      "block_sha256": "c0fe59e0a62359159186b39582779d764b1afd4f3a4d3811379097ba6e9f6624",
       "evidence_profile": "commands"
     },
     "REQ-I-226": {
       "surface": "command:team-retro",
       "source": "specs/capabilities/commands/team-retro.md",
-      "block_sha256": "d792ca8cb209860af8a82d9e87773e926eb67cce899b106d7f28bd5619bf094c",
+      "block_sha256": "b366a7d53f8d47b6d492e8f3d5e73ff07271b7f44e3d00311911e3f10b1f56ce",
       "evidence_profile": "commands"
     },
     "REQ-I-227": {
       "surface": "command:team-roadmap",
       "source": "specs/capabilities/commands/team-roadmap.md",
-      "block_sha256": "3164b431d4e795defa807ffa4f89932b9b65ba074e826b148c3dd254e31363fb",
+      "block_sha256": "968fa33fe283cda409e46705f95bc986801d28096e5c701242eb1c103a8b1a3d",
       "evidence_profile": "commands"
     },
     "REQ-I-228": {
       "surface": "command:team-sprint-close",
       "source": "specs/capabilities/commands/team-sprint-close.md",
-      "block_sha256": "65cd53c906a35d17b1f3075b221d061a591fbfb4d6947f81f23905bb27e8df85",
+      "block_sha256": "0ca1ed65f14a99e6436dc672ef51eb64cf0dd8693324488bf013807771f89dbe",
       "evidence_profile": "commands"
     },
     "REQ-I-229": {
       "surface": "command:team-sprint-start",
       "source": "specs/capabilities/commands/team-sprint-start.md",
-      "block_sha256": "bb160be9a2bdd8cae42793662402b28720bd5251296bca7910311331cefaa29b",
+      "block_sha256": "a65954456581bd3c6ae9dd0b2a32f6f01e9b42f7d139f52829229b4eb2dcd2fc",
       "evidence_profile": "commands"
     },
     "REQ-I-230": {
       "surface": "command:capabilities",
       "source": "specs/capabilities/commands/capabilities.md",
-      "block_sha256": "c6589e200f1e57594a99bda0dfec4820bf473d5f0abfd43a1f706b9f9f8828dd",
+      "block_sha256": "167a70a276ba66aecdf04b62419290cbd8a3530dba4e38decfa7b068c72c0793",
       "evidence_profile": "commands"
     },
     "REQ-I-231": {
       "surface": "command:doctor",
       "source": "specs/capabilities/commands/doctor.md",
-      "block_sha256": "35626d9071ecf07034fb0fd3b7e20584eeef859bd9e9f2c0c2986733d5316e7a",
+      "block_sha256": "6e5d3bc2677e6626ff343cdfcf2ea374c225da4cbf9647f4131f0523b59ad714",
       "evidence_profile": "commands"
     },
     "REQ-I-232": {
       "surface": "command:reconcile",
       "source": "specs/capabilities/commands/reconcile.md",
-      "block_sha256": "3ec6df5e436606b23c9e8c5e8d6303581764807adc6a7b96b683aed8d1629fb3",
+      "block_sha256": "5ce8d72d32e62bf47dcd6c097a88e27543d27c7681cb4a61c7911f10abb68717",
       "evidence_profile": "commands"
     },
     "REQ-I-233": {
       "surface": "command:agent-profiles",
       "source": "specs/capabilities/commands/agent-profiles.md",
-      "block_sha256": "2be82b90fd0fb0a56b523a6fb00ec983098043d6f3e5ec212d5104c68b9c7c78",
+      "block_sha256": "bbb9c5b4351d8c076bffd396246c2c7aa3905b5fa7acb1b3e80bc565fdee3943",
       "evidence_profile": "commands"
     }
   }

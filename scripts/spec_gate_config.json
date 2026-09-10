@@ -10,6 +10,12 @@
     "schemas/",
     "distribution"
   ],
-  "behavioral_paths": ["scripts/build_distribution.py", "scripts/build_skills.py"],
+  "behavioral_paths": [
+    "scripts/build_distribution.py",
+    "scripts/build_skills.py",
+    "taskfile.yml",
+    "lefthook.yml",
+    ".github/workflows/ci.yml"
+  ],
   "trailer": "Spec-Impact: none - <reason>"
 }

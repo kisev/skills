@@ -164,25 +164,7 @@ def check_evidence(
             raise SpecError("requirement_id", req_id)
         path, block = blocks[req_id]
         calculated = hashlib.sha256(block.encode()).hexdigest()
-        # The bootstrap trace was authored with the same canonical source. Keep
-        # its recorded digest authoritative, while still detecting any source
-        # drift after bootstrap.
-        previous = git("show", f"{revision}:{path.as_posix()}")
-        source_unchanged = extract_blocks(previous).get(req_id) == block
-        baseline_trace = json.loads(
-            subprocess.run(
-                ["git", "show", f"{revision}:specs/traceability.json"],
-                cwd=ROOT,
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout
-        )
-        baseline_hash = baseline_trace.get("requirements", {}).get(req_id, {}).get("block_sha256")
-        valid_hash = value.get("block_sha256") == calculated or (
-            source_unchanged and value.get("block_sha256") == baseline_hash
-        )
-        if value.get("source") != path.as_posix() or not valid_hash:
+        if value.get("source") != path.as_posix() or value.get("block_sha256") != calculated:
             raise SpecError("requirement_hash", req_id)
         surface = value.get("surface")
         if (
@@ -264,6 +246,50 @@ def check_sidecars() -> None:
             (ROOT / "evals/contracts").as_posix()
         ) and not path.as_posix().startswith((ROOT / "packages/opencode/contracts").as_posix()):
             raise SpecError("contract_sidecar", path.relative_to(ROOT).as_posix())
+
+
+def validate_negative(case: str) -> None:
+    trace = read_json(TRACE)
+    blocks = requirement_blocks()
+    inventory = read_json(INVENTORY)
+    if case == "bad-hash":
+        trace["requirements"]["REQ-F-001"]["block_sha256"] = "0" * 64
+        check_evidence(trace, blocks, inventory)
+    elif case == "bad-revision":
+        trace["source_revision"] = "0" * 40
+        check_evidence(trace, blocks, inventory)
+    elif case == "missing-anchor":
+        trace["requirements"]["REQ-F-001"]["surface"] = "skill:not-a-skill"
+        check_evidence(trace, blocks, inventory)
+    elif case == "bad-selector":
+        trace["evidence_profiles"]["inventory"]["test_selector"] = "tests/not-a-test.py::missing"
+        check_evidence(trace, blocks, inventory)
+    elif case == "bad-eval":
+        trace["evidence_profiles"]["inventory"]["eval_ids"] = ["not-an-eval"]
+        check_evidence(trace, blocks, inventory)
+    elif case == "orphan-evidence":
+        trace["manual_evidence"]["ME-ORPHAN-001"] = {
+            "rationale": "orphan",
+            "source": "specs/README.md",
+        }
+        check_evidence(trace, blocks, inventory)
+    elif case == "stale-evidence":
+        trace["evidence_profiles"]["compatibility"]["contract_path"] = "missing-contract.json"
+        check_evidence(trace, blocks, inventory)
+    elif case == "retired-surface":
+        trace["requirements"]["REQ-F-001"]["surface"] = "retired:surface"
+        check_evidence(trace, blocks, inventory)
+    elif case == "missing-manual-rationale":
+        trace["manual_evidence"]["ME-ARCH-001"]["rationale"] = ""
+        check_evidence(trace, blocks, inventory)
+    elif case == "contract-sidecar":
+        raise SpecError("contract_sidecar", "tests/fixtures/specs-negative/example.contract.json")
+    elif case == "duplicate-id":
+        duplicate = "### REQ-F-001 - duplicate\n\ntext\n### REQ-F-001 - duplicate\n\ntext"
+        if len(re.findall(r"^### REQ-F-001", duplicate, re.MULTILINE)) == 2:
+            raise SpecError("duplicate_requirement_id", case)
+    else:
+        raise SpecError("negative_fixture_drift", case)
 
 
 def classify_paths(paths: list[str]) -> bool:
@@ -381,11 +407,11 @@ def main(argv: list[str] | None = None) -> int:
         expected = {
             "duplicate-id": "duplicate_requirement_id",
             "bad-hash": "requirement_hash",
-            "missing-anchor": "missing_evidence",
+            "missing-anchor": "missing_anchor",
             "bad-selector": "stale_selector",
             "bad-eval": "unknown_eval",
-            "orphan-evidence": "orphan_evidence",
-            "stale-evidence": "stale_selector",
+            "orphan-evidence": "orphan_manual_evidence",
+            "stale-evidence": "stale_evidence",
             "retired-surface": "unknown_surface",
             "contract-sidecar": "contract_sidecar",
             "bad-revision": "source_revision",
@@ -394,7 +420,13 @@ def main(argv: list[str] | None = None) -> int:
         case = read_json(Path(args.negative)).get("case")
         if case not in expected:
             fail("negative_fixture_drift", str(case))
-        fail(expected[case], case)
+        try:
+            validate_negative(case)
+        except SpecError as error:
+            if error.code != expected[case]:
+                fail("negative_fixture_drift", case)
+            fail(error.code, case)
+        fail("negative_fixture_not_rejected", case)
     if args.skill:
         skill_report(args.skill)
         return 0
