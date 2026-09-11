@@ -19,10 +19,10 @@ not contain or install portable skills.
 
 ## Global Quick Start
 
-Install the exact `v2.0.2` portable release for both hosts:
+Install the exact `v2.0.3` portable release for both hosts:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 This creates one canonical copy in `~/.agents/skills` for both hosts.
@@ -38,22 +38,30 @@ Omit `--global` for a project installation. The canonical project copy is
 `.agents/skills`:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
-For OpenCode, install the optional npm integration only if you want its
-OpenCode-specific assets and runtime. The package must remain installed in
-project `node_modules` or in the npm project at `~/.config/opencode`; follow the
+For OpenCode, use this mandatory integration flow when the package is needed:
+install it persistently in the owning npm project, run
+`skills-opencode install --dry-run`, execute the exact confirmation command,
+add the package to the user-owned `plugin` entry, and restart OpenCode. Only
+then run reconcile. The package must remain installed in project `node_modules`
+or in the npm project at `~/.config/opencode`; follow the
 [OpenCode integration guide](packages/opencode/README.md). Its installer neither
 installs portable skills nor edits `opencode.json`.
+
+The installer wizard preserves four independent groups: Skill command adapters,
+Package command adapters, Fixed agents, and Selectable plugins. Adapter choices
+select package command assets, not portable skills. Install portable skills only
+with the pinned `npx --yes skills@1.5.23` command above.
 
 ## Pinned Release and Latest Source
 
 The current immutable source is
-`https://github.com/kisev/skills/tree/v2.0.2`. List its catalog without writing:
+`https://github.com/kisev/skills/tree/v2.0.3`. List its catalog without writing:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --list
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --list
 ```
 
 Use `kisev/skills` separately when you intentionally want the latest source from
@@ -107,18 +115,11 @@ remove them explicitly from the selected agents:
 npx --yes skills@1.5.23 remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent opencode --agent codex --global --yes
 ```
 
-or use package reconcile when it can prove exact ownership:
-
-```shell
-npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --dry-run
-npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --confirm <digest>
-```
-
-Use the exact confirmation command printed by the preview. Omit `--global` or use
-`--scope project` for project scope. Avoid `remove --all` unless every portable
-skill in that scope should be removed. Reconcile archives only exact-owned
-assets; conflicts, worktrees, and runtime state are preserved. There is no
-archive restore or purge command.
+Do not use package install or reconcile to update or remove portable skills. Omit
+`--global` for project scope. Avoid `remove --all` unless every portable skill in
+that scope should be removed. Package reconcile has a separate lifecycle for
+package-owned assets; conflicts, worktrees, and runtime state are preserved.
+There is no archive restore or purge command.
 
 ## Doctor
 
@@ -204,10 +205,10 @@ outputs. Change canonical sources in `shared/references/` or
 
 ## Reference and Limits
 
-- Current portable release: `https://github.com/kisev/skills/tree/v2.0.2`.
+- Current portable release: `https://github.com/kisev/skills/tree/v2.0.3`.
 - Latest source selector: `kisev/skills`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.0.2`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.0.3`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners use Python 3.12+ standard library only when a runner is needed.
 - `ast-grep` and `rtk` require their external CLI; skills do not install them.

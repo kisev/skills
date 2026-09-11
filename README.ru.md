@@ -19,10 +19,10 @@ commands, agents, tools, routing и optional plugin wrappers, но не соде
 
 ## Быстрый global-старт
 
-Установите точный portable release `v2.0.2` для обоих host:
+Установите точный portable release `v2.0.3` для обоих host:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 Команда создаёт одну canonical copy в `~/.agents/skills` для обоих host.
@@ -38,22 +38,29 @@ npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --agent 
 находится в `.agents/skills`:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
-Для OpenCode устанавливайте optional npm integration, только если нужны его
-OpenCode-specific assets и runtime. Package должен оставаться установленным в
-project `node_modules` или в npm project `~/.config/opencode`; следуйте
-[инструкции по интеграции OpenCode](packages/opencode/README.ru.md). Его installer
-не устанавливает portable skills и не меняет `opencode.json`.
+Для OpenCode используйте обязательный flow: установите package постоянно в
+принадлежащем ему npm project, запустите `skills-opencode install --dry-run`,
+выполните exact confirmation command, добавьте package в user-owned `plugin` и
+перезапустите OpenCode. Только после этого запускайте reconcile. Package должен
+оставаться установленным в project `node_modules` или в npm project
+`~/.config/opencode`; следуйте [инструкции по интеграции OpenCode](packages/opencode/README.ru.md).
+Installer не устанавливает portable skills и не меняет `opencode.json`.
+
+Installer сохраняет четыре независимые группы wizard: Skill command adapters,
+Package command adapters, Fixed agents и Selectable plugins. Выбор adapter
+выбирает package command assets, а не portable skills. Portable skills
+устанавливаются только pinned командой `npx --yes skills@1.5.23` выше.
 
 ## Закреплённый release и latest source
 
 Текущий immutable source:
-`https://github.com/kisev/skills/tree/v2.0.2`. Посмотреть его catalog без записи:
+`https://github.com/kisev/skills/tree/v2.0.3`. Посмотреть его catalog без записи:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --list
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --list
 ```
 
 Используйте `kisev/skills` отдельно, когда намеренно нужен latest source из
@@ -107,18 +114,11 @@ npx --yes skills@1.5.23 remove attempt schedule usage overview project-spec skil
 npx --yes skills@1.5.23 remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent opencode --agent codex --global --yes
 ```
 
-либо используйте package reconcile, когда он может доказать exact ownership:
-
-```shell
-npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --dry-run
-npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --confirm <digest>
-```
-
-Используйте точную confirmation command из preview. Для project scope не
-передавайте `--global` или используйте `--scope project`. Не применяйте
+Не используйте package install или reconcile для обновления или удаления
+portable skills. Для project scope не передавайте `--global`. Не применяйте
 `remove --all`, если не хотите удалить каждый portable skill в этом scope.
-Reconcile архивирует только exact-owned assets; conflicts, worktrees и runtime
-state сохраняются. Команд restore или purge для archive нет.
+Package reconcile имеет отдельный lifecycle для package-owned assets; conflicts,
+worktrees и runtime state сохраняются. Команд restore или purge для archive нет.
 
 ## Диагностика
 
@@ -204,10 +204,10 @@ outputs. Меняйте canonical sources в `shared/references/` или
 
 ## Справочник и ограничения
 
-- Текущий portable release: `https://github.com/kisev/skills/tree/v2.0.2`.
+- Текущий portable release: `https://github.com/kisev/skills/tree/v2.0.3`.
 - Latest source selector: `kisev/skills`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.0.2`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.0.3`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners используют Python 3.12+ standard library, только когда нужен
   runner.

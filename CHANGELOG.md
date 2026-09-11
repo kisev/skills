@@ -4,6 +4,22 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.3] - 2026-09-11
+
+### Исправлено
+
+- Installer wizard теперь явно различает skill command adapters и package command
+  adapters и сообщает, что portable skills устанавливаются отдельно.
+- Human reconcile preview блокируется при modified managed assets или ownership
+  conflicts, перечисляет все blocking paths и показывает remediation вместо Apply.
+- Документация закрепляет persistent npm install, installer confirmation, plugin
+  activation и restart до reconcile.
+
+### Не изменено
+
+- Portable skill metadata остаётся `2.0.0`; inventory, runtime, agents, plugins и
+  manifest schema не изменялись.
+
 ## [2.0.2] - 2026-09-10
 
 ### Исправлено

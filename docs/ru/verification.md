@@ -2,11 +2,11 @@
 
 [English version](../verification.md)
 
-## Выпуск 2.0.2
+## Выпуск 2.0.3
 
 Точный portable source:
-`https://github.com/kisev/skills/tree/v2.0.2`; optional package:
-`@kisev/skills-opencode@2.0.2`. Portable installation закрепляет
+`https://github.com/kisev/skills/tree/v2.0.3`; optional package:
+`@kisev/skills-opencode@2.0.3`. Portable installation закрепляет
 `npx --yes skills@1.5.23`. Package требует Node.js 22+ и объявляет OpenCode
 `>=1.18.29 <1.19.0`.
 
@@ -15,7 +15,7 @@
 Global contract для обоих поддерживаемых host:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.2 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 Команда создаёт одну canonical copy в `~/.agents/skills`. Без `--global` project

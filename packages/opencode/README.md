@@ -2,7 +2,7 @@
 
 [Русский](README.ru.md)
 
-`@kisev/skills-opencode@2.0.2` is the optional OpenCode-specific layer. Portable
+`@kisev/skills-opencode@2.0.3` is the optional OpenCode-specific layer. Portable
 skills have a separate lifecycle and must be installed independently through the
 [root portable flow](../../README.md).
 
@@ -30,7 +30,7 @@ Install in the repository's npm project and run the CLI from that project root:
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/skills-opencode@2.0.2
+npm install --save-exact @kisev/skills-opencode@2.0.3
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -45,7 +45,7 @@ Use `~/.config/opencode` as the persistent npm project:
 mkdir -p "$HOME/.config/opencode"
 cd "$HOME/.config/opencode"
 test -f package.json || npm init --yes
-npm install --save-exact @kisev/skills-opencode@2.0.2
+npm install --save-exact @kisev/skills-opencode@2.0.3
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -54,8 +54,12 @@ Confirmed assets go under `~/.config/opencode`.
 
 ## Select Assets
 
-In a TTY, `install` opens a selection wizard. Skill commands, package commands,
-and the six fixed agents start selected; optional wrappers start unselected.
+In a TTY, `install` opens four selection groups: Skill command adapters, Package
+command adapters, Fixed agents, and Selectable plugins. The two command groups
+and six fixed agents start selected; optional plugins start unselected. Skill
+command adapters are OpenCode slash commands that load an already-installed
+same-named portable skill. Package command adapters invoke package tools. A
+command adapter selection never selects or installs a skill.
 
 Outside a TTY, pass all three selection groups. This example selects three
 commands, all fixed agents, and no wrapper:
@@ -103,6 +107,12 @@ confirmation command.
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
+The mandatory OpenCode flow is: persistent npm install, `install --dry-run`, the
+exact confirmation command printed by that preview, add the package to the
+user-owned `plugin` entry, and restart OpenCode. Use the persistent npm project
+at `~/.config/opencode` for global commands. Only after this flow is complete,
+update the package and apply its installer plan before running reconcile.
+
 Run the command printed by the preview, including all selection flags. Receipts
 are private, valid for 10 minutes, single-use, and bound to the action, scope,
 root, and current inventory. Apply rejects stale state and unsafe conflicts.
@@ -130,7 +140,7 @@ version, preview and confirm `install` with the same scope and desired selection
 then restart OpenCode:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode@2.0.2
+npm install --save-exact @kisev/skills-opencode@2.0.3
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -149,6 +159,10 @@ npm exec -- skills-opencode reconcile --scope project --dry-run
 npm exec -- skills-opencode reconcile --scope project --confirm <digest>
 npm exec -- skills-opencode reconcile --scope global --dry-run --json
 ```
+
+Before reconcile, first update the package in its owning npm project and apply
+the exact installer plan. Reconcile does not install, update, or remove portable
+skills; use only the pinned `npx --yes skills@1.5.23` flow for those skills.
 
 Confirmed reconcile archives exact-owned retired assets in a private
 content-addressed XDG archive and removes their deployed copies. Modified,

@@ -2,7 +2,7 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-`@kisev/skills-opencode@2.0.2` - optional OpenCode-specific слой. У portable
+`@kisev/skills-opencode@2.0.3` - optional OpenCode-specific слой. У portable
 skills отдельный lifecycle: их нужно установить независимо через
 [корневую инструкцию](../../README.ru.md).
 
@@ -30,7 +30,7 @@ assets или portable skills и не меняют OpenCode configuration.
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/skills-opencode@2.0.2
+npm install --save-exact @kisev/skills-opencode@2.0.3
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -45,7 +45,7 @@ Package остаётся в project `node_modules`, confirmed assets разме�
 mkdir -p "$HOME/.config/opencode"
 cd "$HOME/.config/opencode"
 test -f package.json || npm init --yes
-npm install --save-exact @kisev/skills-opencode@2.0.2
+npm install --save-exact @kisev/skills-opencode@2.0.3
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -54,8 +54,12 @@ assets размещаются в `~/.config/opencode`.
 
 ## Выбор assets
 
-В TTY команда `install` открывает selection wizard. Skill commands, package
-commands и шесть fixed agents изначально выбраны, optional wrappers - нет.
+В TTY команда `install` открывает четыре группы: Skill command adapters, Package
+command adapters, Fixed agents и Selectable plugins. Две command-группы и шесть
+fixed agents изначально выбраны, optional plugins - нет. Skill command adapters
+это OpenCode slash-команды, загружающие уже установленный одноимённый portable
+skill. Package command adapters вызывают package tools. Выбор adapter не выбирает
+и не устанавливает skill.
 
 Вне TTY передайте все три selection group. Этот пример выбирает три commands,
 всех fixed agents и ни одного wrapper:
@@ -104,6 +108,12 @@ confirmation command.
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
+Обязательный OpenCode flow: persistent npm install, `install --dry-run`, exact
+confirmation command из preview, добавление package в user-owned `plugin` и
+перезапуск OpenCode. Для global-команд используйте persistent npm project в
+`~/.config/opencode`. Только после этого обновите package, примените installer
+plan и запускайте reconcile.
+
 Выполните команду из preview со всеми selection flags. Receipts приватны,
 действуют 10 минут, применяются один раз и связаны с action, scope, root и
 текущим inventory. Apply отклоняет stale state и unsafe conflicts.
@@ -131,7 +141,7 @@ incomplete probe failure.
 перезапустите OpenCode:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode@2.0.2
+npm install --save-exact @kisev/skills-opencode@2.0.3
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -150,6 +160,11 @@ npm exec -- skills-opencode reconcile --scope project --dry-run
 npm exec -- skills-opencode reconcile --scope project --confirm <digest>
 npm exec -- skills-opencode reconcile --scope global --dry-run --json
 ```
+
+Перед reconcile сначала обновите package в принадлежащем ему npm project и
+примените exact installer plan. Reconcile не устанавливает, не обновляет и не
+удаляет portable skills; для них используйте только pinned
+`npx --yes skills@1.5.23` flow.
 
 Confirmed reconcile архивирует exact-owned retired assets в private
 content-addressed XDG archive и удаляет их deployed copies. Modified, user-owned,
