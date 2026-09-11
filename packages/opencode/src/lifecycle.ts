@@ -71,14 +71,24 @@ type Journal = {
 type Receipt = {
   schema_version: 1;
   digest: string;
+  plan_digest: string;
   nonce: string;
+  created_at: string;
   expires_at: string;
   consumed: boolean;
+  superseded?: boolean;
   kind: string;
   scope: Scope;
   root: string;
   payload: unknown;
+  superseded_digests?: string[];
   integrity: string;
+};
+export type SupersededPlan = {
+  kind: string;
+  confirmation_digest: string;
+  created_at: string;
+  expires_at: string;
 };
 
 export function stable(value: unknown): string {
@@ -348,44 +358,58 @@ export async function saveReceipt(
   root: string,
   payload: unknown,
   now = Date.now(),
-): Promise<{ digest: string; expires_at: string }> {
-  const confirmationDigest = digest({ schema_version: 1, kind, scope, root, payload });
+  planDigest = digest(payload),
+): Promise<{
+  digest: string;
+  plan_digest: string;
+  expires_at: string;
+  superseded_plan?: SupersededPlan;
+}> {
   const existingRaw = await readRegular(receiptPath(stateRoot));
+  let superseded: Receipt | undefined;
   if (existingRaw) {
     const existing = parseReceipt(existingRaw);
-    if (
-      !existing.consumed &&
-      Date.parse(existing.expires_at) >= now &&
-      existing.digest !== confirmationDigest
-    ) {
-      throw new LifecycleError(
-        "active_receipt",
-        "An unconsumed agent or installer plan is still active",
-      );
-    }
-    if (
-      !existing.consumed &&
-      Date.parse(existing.expires_at) >= now &&
-      existing.digest === confirmationDigest
-    ) {
-      return { digest: existing.digest, expires_at: existing.expires_at };
+    if (!existing.consumed && Date.parse(existing.expires_at) >= now) {
+      superseded = existing;
     }
   }
+  const confirmationDigest = sha256(randomBytes(32));
   const receipt: Receipt = {
     schema_version: 1,
     digest: confirmationDigest,
+    plan_digest: planDigest,
     nonce: randomBytes(32).toString("base64url"),
+    created_at: new Date(now).toISOString(),
     expires_at: new Date(now + RECEIPT_TTL_MS).toISOString(),
     consumed: false,
     kind,
     scope,
     root,
     payload,
+    ...(superseded
+      ? {
+          superseded_digests: [superseded.digest, ...(superseded.superseded_digests ?? [])],
+        }
+      : {}),
     integrity: "",
   };
   receipt.integrity = receiptIntegrity(receipt);
   await writeAtomic(receiptPath(stateRoot), Buffer.from(`${stable(receipt)}\n`), 0o600);
-  return { digest: receipt.digest, expires_at: receipt.expires_at };
+  return {
+    digest: receipt.digest,
+    plan_digest: receipt.plan_digest,
+    expires_at: receipt.expires_at,
+    ...(superseded
+      ? {
+          superseded_plan: {
+            kind: superseded.kind,
+            confirmation_digest: superseded.digest.slice(0, 12),
+            created_at: superseded.created_at,
+            expires_at: superseded.expires_at,
+          },
+        }
+      : {}),
+  };
 }
 
 function parseReceipt(raw: Buffer): Receipt {
@@ -401,26 +425,33 @@ function parseReceipt(raw: Buffer): Receipt {
     receipt.schema_version !== 1 ||
     typeof receipt.digest !== "string" ||
     !/^[a-f0-9]{64}$/.test(receipt.digest) ||
+    typeof receipt.plan_digest !== "string" ||
+    !/^[a-f0-9]{64}$/.test(receipt.plan_digest) ||
     typeof receipt.nonce !== "string" ||
+    typeof receipt.created_at !== "string" ||
     typeof receipt.expires_at !== "string" ||
     typeof receipt.consumed !== "boolean" ||
+    (receipt.superseded !== undefined && typeof receipt.superseded !== "boolean") ||
     typeof receipt.kind !== "string" ||
     (receipt.scope !== "global" && receipt.scope !== "project") ||
     typeof receipt.root !== "string" ||
+    (receipt.superseded_digests !== undefined &&
+      (!Array.isArray(receipt.superseded_digests) ||
+        !receipt.superseded_digests.every(
+          (value) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value),
+        ))) ||
     typeof receipt.integrity !== "string"
   ) {
     throw new LifecycleError("invalid_receipt", "Receipt has an unsupported schema");
   }
-  if (
-    receipt.digest !==
-    digest({
-      schema_version: 1,
-      kind: receipt.kind,
-      scope: receipt.scope,
-      root: receipt.root,
-      payload: receipt.payload,
-    })
-  ) {
+  const payloadRecord = receipt.payload as { plan_digest?: unknown };
+  const payloadPlanDigest =
+    payloadRecord &&
+    typeof payloadRecord === "object" &&
+    typeof payloadRecord.plan_digest === "string"
+      ? payloadRecord.plan_digest
+      : digest(receipt.payload);
+  if (receipt.plan_digest !== payloadPlanDigest) {
     throw new LifecycleError("invalid_receipt", "Receipt digest does not match its payload");
   }
   if (receipt.integrity !== receiptIntegrity(receipt as Receipt))
@@ -449,8 +480,18 @@ export async function consumeReceipt(
     receipt.scope !== expected.scope ||
     receipt.root !== expected.root
   ) {
+    if (receipt.superseded_digests?.includes(expected.digest))
+      throw new LifecycleError(
+        "superseded_plan",
+        "Confirmation receipt was superseded by a newer plan",
+      );
     throw new LifecycleError("confirmation_unknown", "Confirmation does not match the saved plan");
   }
+  if (receipt.superseded)
+    throw new LifecycleError(
+      "superseded_plan",
+      "Confirmation receipt was superseded by a newer plan",
+    );
   if (receipt.consumed)
     throw new LifecycleError("confirmation_consumed", "Confirmation receipt was already consumed");
   if (Date.parse(receipt.expires_at) < now)
@@ -462,6 +503,18 @@ export async function consumeReceipt(
   consumed.integrity = receiptIntegrity(consumed);
   await writeAtomic(receiptPath(stateRoot), Buffer.from(`${stable(consumed)}\n`), 0o600);
   return receipt.payload;
+}
+
+/** Invalidate an active receipt when a preview is blocked before a replacement exists. */
+export async function supersedeReceipt(stateRoot: string, now = Date.now()): Promise<void> {
+  const path = receiptPath(stateRoot);
+  const raw = await readRegular(path);
+  if (!raw) return;
+  const receipt = parseReceipt(raw);
+  if (receipt.consumed || receipt.superseded || Date.parse(receipt.expires_at) < now) return;
+  const superseded = { ...receipt, consumed: true, superseded: true, integrity: "" };
+  superseded.integrity = receiptIntegrity(superseded);
+  await writeAtomic(path, Buffer.from(`${stable(superseded)}\n`), 0o600);
 }
 
 function journalPath(stateRoot: string): string {

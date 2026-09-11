@@ -25,6 +25,7 @@ import {
   sha256,
   stable,
   withLifecycleLock,
+  type SupersededPlan,
   type FileMutation,
   type Scope,
   type TransactionOptions,
@@ -57,6 +58,9 @@ export type Plan = {
   package_version: string;
   selection: InstallerSelection;
   operations: PlanItem[];
+  plan_digest: string;
+  confirmation_digest?: string;
+  superseded_plan?: SupersededPlan;
   digest: string;
   receipt_expires_at?: string;
   requires_restart: boolean;
@@ -510,8 +514,9 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
 
   const sorted = operations.sort((left, right) => left.path.localeCompare(right.path) || left.operation.localeCompare(right.operation));
   const base = { schema_version: 2 as const, action, scope, root, package_version: packageVersion(), selection, operations: sorted, requires_restart: (action === "install" && owned.manifest?.package_version !== packageVersion()) || profiles.plan.requires_restart || mutations.some((item) => item.path.startsWith("agents/") || item.path.startsWith("commands/") || item.path.startsWith("plugins/")) };
+  const planDigest = digest(base);
   return {
-    plan: { ...base, digest: digest(base) },
+    plan: { ...base, plan_digest: planDigest, digest: planDigest },
     mutations,
     expectedManifest: manifestContent,
     profiles,
@@ -525,8 +530,23 @@ export async function preview(action: Action, scope: Scope, cwd = process.cwd(),
     return await withLifecycleLock(stateRoot, async () => {
       if (await recoverTransaction(root, stateRoot)) throw new InstallerError("recovered_transaction", "Recovered an interrupted transaction; request a fresh plan");
       const built = await build(action, scope, cwd, home, selection);
-      const receipt = await saveReceipt(stateRoot, `installer:${action}`, scope, root, { digest: built.plan.digest });
-      return { ...built.plan, digest: receipt.digest, receipt_expires_at: receipt.expires_at };
+      const receipt = await saveReceipt(
+        stateRoot,
+        `installer:${action}`,
+        scope,
+        root,
+        { plan_digest: built.plan.digest },
+        Date.now(),
+        built.plan.digest,
+      );
+      return {
+        ...built.plan,
+        plan_digest: built.plan.digest,
+        confirmation_digest: receipt.digest,
+        digest: receipt.digest,
+        receipt_expires_at: receipt.expires_at,
+        ...(receipt.superseded_plan ? { superseded_plan: receipt.superseded_plan } : {}),
+      };
     });
   } catch (error) {
     if (error instanceof InstallerError) throw error;
@@ -543,7 +563,8 @@ export async function apply(action: Action, scope: Scope, confirmationDigest: st
       if (await recoverTransaction(root, stateRoot)) throw new InstallerError("recovered_transaction", "Recovered an interrupted transaction; request a fresh plan");
       const receipt = (await consumeReceipt(stateRoot, { digest: confirmationDigest, kind: `installer:${action}`, scope, root })) as { digest?: string };
       const built = await build(action, scope, cwd, home, selection);
-      if (built.plan.digest !== receipt.digest) throw new InstallerError("stale_plan", "Installer plan changed after preview");
+       if (built.plan.digest !== (receipt as { plan_digest?: string }).plan_digest)
+         throw new InstallerError("stale_plan", "Installer plan changed after preview");
       if (built.plan.operations.some((item) => item.operation === "conflict" && (item.reason === "unmanaged_file" || item.reason === "v1.0.0_agent_ownership_mismatch" || item.reason?.includes("collision")))) {
         throw new InstallerError("conflict", "Installer plan contains an exact-name ownership conflict");
       }

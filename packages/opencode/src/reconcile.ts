@@ -14,9 +14,11 @@ import {
   lifecycleRoot,
   recoverTransaction,
   saveReceipt,
+  supersedeReceipt,
   sha256,
   stable,
   withLifecycleLock,
+  type SupersededPlan,
   type FileMutation,
   type Scope,
   type TransactionOptions,
@@ -92,7 +94,11 @@ export type ReconcilePlan = {
   conflicts: ReconcileItem[];
   diagnostic_state_only: ReconcileItem[];
   operations: Array<{ path: string; operation: "remove" | "write"; sha256?: string }>;
-  digest: string;
+  plan_digest: string;
+  confirmation_digest?: string;
+  superseded_plan?: SupersededPlan;
+  confirmable: boolean;
+  digest?: string;
   receipt_expires_at?: string;
 };
 
@@ -797,7 +803,11 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     diagnostic_state_only: diagnostic(scope, cwd, home),
     operations: operations.sort((left, right) => left.path.localeCompare(right.path)),
   };
-  return { plan: { ...base, digest: digest(base) }, mutations };
+  const planDigest = digest(base);
+  return {
+    plan: { ...base, plan_digest: planDigest, confirmable: true, digest: planDigest },
+    mutations,
+  };
 }
 
 export async function previewReconcile(
@@ -815,10 +825,32 @@ export async function previewReconcile(
           "Recovered an interrupted transaction; request a fresh plan",
         );
       const built = await build(scope, cwd, home);
-      const receipt = await saveReceipt(stateRoot, "reconcile", scope, root, {
-        digest: built.plan.digest,
-      });
-      return { ...built.plan, digest: receipt.digest, receipt_expires_at: receipt.expires_at };
+      const blocked = built.plan.modified_managed.length > 0 || built.plan.conflicts.length > 0;
+      if (blocked) {
+        await supersedeReceipt(stateRoot);
+        const { digest: _digest, ...withoutReceipt } = built.plan;
+        return { ...withoutReceipt, confirmable: false };
+      }
+      const receipt = await saveReceipt(
+        stateRoot,
+        "reconcile",
+        scope,
+        root,
+        {
+          plan_digest: built.plan.plan_digest,
+        },
+        Date.now(),
+        built.plan.plan_digest,
+      );
+      return {
+        ...built.plan,
+        plan_digest: built.plan.plan_digest,
+        confirmation_digest: receipt.digest,
+        digest: receipt.digest,
+        confirmable: true,
+        receipt_expires_at: receipt.expires_at,
+        ...(receipt.superseded_plan ? { superseded_plan: receipt.superseded_plan } : {}),
+      };
     });
   } catch (error) {
     if (error instanceof ReconcileError) throw error;
@@ -857,9 +889,9 @@ export async function applyReconcile(
         kind: "reconcile",
         scope,
         root,
-      })) as { digest?: string };
+      })) as { plan_digest?: string };
       const built = await build(scope, cwd, home);
-      if (built.plan.digest !== payload.digest)
+      if (built.plan.plan_digest !== payload.plan_digest)
         throw new ReconcileError("stale_plan", "Reconcile inventory changed after preview");
       if (built.plan.conflicts.length || built.plan.modified_managed.length)
         throw new ReconcileError("conflict", "Reconcile contains unsafe ownership conflicts");

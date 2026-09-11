@@ -146,7 +146,7 @@
     "REQ-F-005": {
       "surface": "archive",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "fc86955fc25882f2e5ccc53b130d55e85d78c87a5e6fe9aaf01f2d5fd79c3f8f",
+      "block_sha256": "64d58fae8f43caf6175343c450ba2c56c64ecd65367c24f6727b19b22068dade",
       "evidence_profile": "reconcile",
       "manual_evidence_ids": ["ME-ARCH-004"]
     },
@@ -177,7 +177,7 @@
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "a17a9ac8e8abd214e226d5f565370f0594e9c7262e6d1f93529baae8990d8eb0",
+      "block_sha256": "23e432c3bff320fc50907c54f9c02cc4f025a91e26ca1d4171978f09a5d0105f",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {
@@ -213,7 +213,7 @@
     "REQ-Q-002": {
       "surface": "mutations",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "831d997285d27d92b93f8498a8ee904b887916bffd5e12847d24bed95c9e7060",
+      "block_sha256": "8f308a891cc27e7d237fba3a6fde2980fd43184b721771e012c1be4c27ccf056",
       "evidence_profile": "profiles"
     },
     "REQ-Q-003": {

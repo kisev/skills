@@ -328,7 +328,7 @@ async function run(arguments_: string[]): Promise<void> {
     if (options.dryRun) {
       const plan = await previewReconcile(options.scope!);
       if (options.json) process.stdout.write(`${JSON.stringify({ status: "ok", applied: false, plan }, null, 2)}\n`);
-      else process.stdout.write(renderReconcile(plan, { applied: false, confirmationCommand: shellCommand(["reconcile", "--scope", options.scope!, "--confirm", plan.digest]) }));
+       else process.stdout.write(renderReconcile(plan, { applied: false, confirmationCommand: plan.confirmable ? shellCommand(["reconcile", "--scope", options.scope!, "--confirm", plan.confirmation_digest ?? plan.digest!]) : undefined }));
     } else {
       const applied = await applyReconcile(options.scope!, options.confirm!);
       if (options.json) process.stdout.write(`${JSON.stringify(applied, null, 2)}\n`);

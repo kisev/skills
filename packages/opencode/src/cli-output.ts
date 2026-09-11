@@ -135,8 +135,21 @@ export function renderPlan(
       : `Restart after apply: ${plan.requires_restart ? "yes" : "no"}`,
   );
   if (!options.applied) {
+    if (plan.superseded_plan)
+      lines.push(
+        "",
+        "Superseded plan:",
+        `  kind: ${terminalSafe(plan.superseded_plan.kind)}`,
+        `  confirmation: ${terminalSafe(plan.superseded_plan.confirmation_digest)}`,
+        `  created: ${terminalSafe(plan.superseded_plan.created_at)}`,
+        `  expires: ${terminalSafe(plan.superseded_plan.expires_at)}`,
+      );
     if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
-    lines.push(`Digest: ${plan.digest}`);
+    if ("plan_digest" in plan) lines.push(`Plan digest: ${plan.plan_digest}`);
+    if (plan.confirmation_digest ?? plan.digest) {
+      lines.push(`Confirmation digest: ${plan.confirmation_digest ?? plan.digest}`);
+      lines.push(`Digest: ${plan.confirmation_digest ?? plan.digest}`);
+    }
     if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
   }
   return `${lines.join("\n")}\n`;
@@ -226,8 +239,6 @@ export function renderReconcile(
       ),
     );
   if (!options.applied) {
-    lines.push("", `Digest: ${plan.digest}`);
-    if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
     const blocked = plan.modified_managed.length > 0 || plan.conflicts.length > 0;
     if (blocked) {
       lines.push("", "Blocked:");
@@ -239,6 +250,22 @@ export function renderReconcile(
       if (plan.conflicts.length)
         lines.push("  Manually resolve every ownership conflict listed above before reconciling.");
     } else if (options.confirmationCommand) {
+      if (plan.superseded_plan)
+        lines.push(
+          "",
+          "Superseded plan:",
+          `  kind: ${terminalSafe(plan.superseded_plan.kind)}`,
+          `  confirmation: ${terminalSafe(plan.superseded_plan.confirmation_digest)}`,
+          `  created: ${terminalSafe(plan.superseded_plan.created_at)}`,
+          `  expires: ${terminalSafe(plan.superseded_plan.expires_at)}`,
+        );
+      lines.push("", `Plan digest: ${plan.plan_digest}`);
+      if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
+      if (plan.confirmation_digest ?? plan.digest)
+        lines.push(
+          `Confirmation digest: ${plan.confirmation_digest ?? plan.digest}`,
+          `Digest: ${plan.confirmation_digest ?? plan.digest}`,
+        );
       lines.push("", "Apply:", `  ${options.confirmationCommand}`);
     }
   }

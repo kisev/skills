@@ -21,6 +21,7 @@ import {
   sha256,
   stable,
   withLifecycleLock,
+  type SupersededPlan,
   type FileMutation,
   type Scope,
   type TransactionOptions,
@@ -103,6 +104,9 @@ export type AgentProfilePlan = {
   root: string;
   operations: AgentProfileOperation[];
   critic_pool: string[];
+  plan_digest: string;
+  confirmation_digest?: string;
+  superseded_plan?: SupersededPlan;
   digest: string;
   receipt_expires_at?: string;
   requires_restart: boolean;
@@ -550,7 +554,10 @@ function legacyIsExact(
 }
 
 function planDigestBase(
-  plan: Omit<AgentProfilePlan, "digest" | "receipt_expires_at">,
+  plan: Omit<
+    AgentProfilePlan,
+    "digest" | "receipt_expires_at" | "plan_digest" | "confirmation_digest" | "superseded_plan"
+  >,
   inventoryDigest: string,
   request: AgentProfileRequest,
 ): string {
@@ -780,9 +787,11 @@ export async function buildAgentProfilePlan(
     critic_pool: desired?.critic_pool ?? finalManifest?.critic_pool ?? [],
     requires_restart: mutations.some((item) => item.path.startsWith("agents/")),
   };
+  const planDigest = planDigestBase(base, inventoryDigest, request);
   const plan: AgentProfilePlan = {
     ...base,
-    digest: planDigestBase(base, inventoryDigest, request),
+    plan_digest: planDigest,
+    digest: planDigest,
   };
   return {
     plan,
@@ -946,9 +955,18 @@ export async function previewAgentProfileChange(
       `agent:${request.action}`,
       scope,
       built.plan.root,
-      { request, digest: built.plan.digest },
+      { request, plan_digest: built.plan.digest },
+      Date.now(),
+      built.plan.digest,
     );
-    return { ...built.plan, digest: receipt.digest, receipt_expires_at: receipt.expires_at };
+    return {
+      ...built.plan,
+      plan_digest: built.plan.digest,
+      confirmation_digest: receipt.digest,
+      digest: receipt.digest,
+      receipt_expires_at: receipt.expires_at,
+      ...(receipt.superseded_plan ? { superseded_plan: receipt.superseded_plan } : {}),
+    };
   });
 }
 
@@ -973,14 +991,14 @@ export async function applyAgentProfileChange(
       kind: `agent:${request.action}`,
       scope,
       root,
-    })) as { request?: AgentProfileRequest; digest?: string };
+    })) as { request?: AgentProfileRequest; plan_digest?: string };
     if (stable(receipt.request) !== stable(request))
       throw new AgentProfileError(
         "confirmation_unknown",
         "Saved confirmation belongs to a different request",
       );
     const built = await buildAgentProfilePlan(request, scope, cwd, home);
-    if (built.plan.digest !== receipt.digest)
+    if (built.plan.digest !== receipt.plan_digest)
       throw new AgentProfileError("stale_plan", "Agent inventory changed after preview");
     if (
       built.plan.operations.some(

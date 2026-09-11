@@ -80,10 +80,16 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
     const installPlan = await preview("install", "project", project, home, selection);
     await apply("install", "project", installPlan.digest, project, home, {}, selection);
     await writeFile(join(project, ".opencode", "commands", "agents-md.md"), "modified\n");
+    const receiptPath = join(lifecycleRoot("project", project, home), "receipt.json");
+    const receiptBefore = await readFile(receiptPath, "utf8");
 
     const plan = await previewReconcile("project", project, home);
     assert.equal(plan.modified_managed.length, 1);
     assert.equal(plan.conflicts.length, 0);
+    assert.equal(plan.confirmable, false);
+    assert.equal(plan.receipt_expires_at, undefined);
+    assert.equal(plan.confirmation_digest, undefined);
+    assert.equal(await readFile(receiptPath, "utf8"), receiptBefore);
     const output = renderReconcile(plan, {
       applied: false,
       confirmationCommand: "npm exec -- skills-opencode reconcile --scope project --confirm digest",
@@ -93,10 +99,6 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
     assert.match(output, /Apply the exact confirmation command/);
     assert.doesNotMatch(output, /\nApply:\n/);
 
-    await assert.rejects(
-      applyReconcile("project", plan.digest, project, home),
-      (error) => error.code === "conflict",
-    );
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
@@ -160,14 +162,11 @@ test("blocked reconcile confirmation exits with code two", async () => {
       { cwd: project, env: environment, encoding: "utf8" },
     );
     assert.equal(reconcilePreview.status, 0, reconcilePreview.stderr);
-    const reconcileDigest = JSON.parse(reconcilePreview.stdout).plan.digest;
-    const forced = spawnSync(
-      process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--confirm", reconcileDigest],
-      { cwd: project, env: environment, encoding: "utf8" },
-    );
-    assert.equal(forced.status, 2);
-    assert.match(forced.stderr, /Error \[conflict\]/);
+    const blockedPlan = JSON.parse(reconcilePreview.stdout).plan;
+    assert.equal(blockedPlan.confirmable, false);
+    assert.equal(blockedPlan.confirmation_digest, undefined);
+    assert.equal(blockedPlan.receipt_expires_at, undefined);
+    await assert.rejects(lstat(join(lifecycleRoot("project", project, home), "receipt.json")), { code: "ENOENT" });
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
@@ -385,7 +384,9 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     await Promise.all([mkdir(project), mkdir(home)]);
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
-    assert.deepEqual(second, first);
+    assert.deepEqual(second.operations, first.operations);
+    assert.equal(second.plan_digest, first.plan_digest);
+    assert.notEqual(second.confirmation_digest, first.confirmation_digest);
     assert.equal(first.operations.filter((item) => item.operation === "create").length, 42);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);

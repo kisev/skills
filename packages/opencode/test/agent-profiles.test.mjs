@@ -401,6 +401,59 @@ test("receipts expire, are one-use, and reject stale inventory", async () => {
   }
 });
 
+test("new previews supersede every unconsumed domain receipt and keep plan identity deterministic", async () => {
+  const context = await roots();
+  try {
+    const first = await preview("install", "project", context.project, context.home);
+    const second = await previewAgentProfileChange(
+      { action: "critic-add", name: "critic-security", model: "openai/gpt-5" },
+      "project",
+      context.project,
+      context.home,
+    );
+    assert.match(first.plan_digest, /^[a-f0-9]{64}$/);
+    assert.match(second.plan_digest, /^[a-f0-9]{64}$/);
+    assert.notEqual(first.confirmation_digest, second.confirmation_digest);
+    assert.equal(second.superseded_plan.kind, "installer:install");
+    assert.match(second.superseded_plan.confirmation_digest, /^[a-f0-9]{12}$/);
+    assert.equal(second.superseded_plan.created_at !== undefined, true);
+    await assert.rejects(
+      apply("install", "project", first.confirmation_digest, context.project, context.home),
+      (error) => error.code === "superseded_plan",
+    );
+
+    const sameA = await previewAgentProfileChange(
+      { action: "critic-add", name: "critic-a", model: "openai/gpt-5" },
+      "project",
+      context.project,
+      context.home,
+    );
+    const sameB = await previewAgentProfileChange(
+      { action: "critic-add", name: "critic-a", model: "openai/gpt-5" },
+      "project",
+      context.project,
+      context.home,
+    );
+    assert.equal(sameA.plan_digest, sameB.plan_digest);
+    assert.notEqual(sameA.confirmation_digest, sameB.confirmation_digest);
+    await assert.rejects(
+      applyAgentProfileChange(
+        { action: "critic-add", name: "critic-a", model: "openai/gpt-5" },
+        "project",
+        sameA.confirmation_digest,
+        context.project,
+        context.home,
+      ),
+      (error) => error.code === "superseded_plan",
+    );
+
+    const global = await preview("install", "global", context.project, context.home);
+    assert.equal(global.superseded_plan, undefined);
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
 test("concurrent apply permits only one transaction", async () => {
   const context = await roots();
   try {
