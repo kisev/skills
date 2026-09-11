@@ -16,6 +16,7 @@ import { CATEGORIES, ExecutionCardLifecycle, RoutingGate, resolveRouting, valida
 import { worktreeCreate, worktreeRecover, worktreeRelease, worktreeStatus } from "../dist/runtime/worktree.js";
 import zedBell from "../dist/plugins/zed-bell.js";
 import { InstallerError, apply, preview } from "../dist/installer.js";
+import { renderReconcile } from "../dist/cli-output.js";
 import { applyReconcile, previewReconcile, ReconcileError } from "../dist/reconcile.js";
 import { lifecycleRoot } from "../dist/lifecycle.js";
 
@@ -56,6 +57,142 @@ function hostClient() {
     },
   };
 }
+
+test("installer wizard names both command adapter groups and keeps defaults", () => {
+  const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
+  assert.match(source, /Portable skills are installed separately through npx skills/);
+  assert.match(source, /This installer does not install, update, or remove portable skills/);
+  assert.match(source, /Skill command adapters/);
+  assert.match(source, /Package command adapters/);
+  assert.match(source, /group\("Fixed agents", defaultSelection\(\).agents, 0\)/);
+  assert.match(source, /group\("Selectable plugins \(none selected by default\)", SELECTABLE_PLUGINS, 1\)/);
+  assert.match(source, /--skill-commands/);
+  assert.match(source, /--package-commands/);
+});
+
+test("modified managed reconcile preview is blocked without Apply", async () => {
+  const base = temporary();
+  const project = join(base, "project");
+  const home = join(base, "home");
+  await Promise.all([mkdir(project), mkdir(home)]);
+  try {
+    const selection = { commands: ["agents-md"], agents: [], plugins: [] };
+    const installPlan = await preview("install", "project", project, home, selection);
+    await apply("install", "project", installPlan.digest, project, home, {}, selection);
+    await writeFile(join(project, ".opencode", "commands", "agents-md.md"), "modified\n");
+
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(plan.modified_managed.length, 1);
+    assert.equal(plan.conflicts.length, 0);
+    const output = renderReconcile(plan, {
+      applied: false,
+      confirmationCommand: "npm exec -- skills-opencode reconcile --scope project --confirm digest",
+    });
+    assert.match(output, /Blocked:/);
+    assert.match(output, /skills-opencode install --scope project --dry-run/);
+    assert.match(output, /Apply the exact confirmation command/);
+    assert.doesNotMatch(output, /\nApply:\n/);
+
+    await assert.rejects(
+      applyReconcile("project", plan.digest, project, home),
+      (error) => error.code === "conflict",
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("blocked reconcile confirmation exits with code two", async () => {
+  const base = temporary();
+  const project = join(base, "project");
+  const home = join(base, "home");
+  await Promise.all([mkdir(project), mkdir(home)]);
+  const environment = {
+    ...process.env,
+    HOME: home,
+    XDG_STATE_HOME: join(home, "state"),
+  };
+  try {
+    const installPreview = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "install",
+        "--scope",
+        "project",
+        "--commands",
+        "agents-md",
+        "--agents",
+        "none",
+        "--plugins",
+        "none",
+        "--dry-run",
+        "--json",
+      ],
+      { cwd: project, env: environment, encoding: "utf8" },
+    );
+    assert.equal(installPreview.status, 0, installPreview.stderr);
+    const installDigest = JSON.parse(installPreview.stdout).plan.digest;
+    const installed = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "install",
+        "--scope",
+        "project",
+        "--commands",
+        "agents-md",
+        "--agents",
+        "none",
+        "--plugins",
+        "none",
+        "--confirm",
+        installDigest,
+      ],
+      { cwd: project, env: environment, encoding: "utf8" },
+    );
+    assert.equal(installed.status, 0, installed.stderr);
+    await writeFile(join(project, ".opencode", "commands", "agents-md.md"), "modified\n");
+
+    const reconcilePreview = spawnSync(
+      process.execPath,
+      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--dry-run", "--json"],
+      { cwd: project, env: environment, encoding: "utf8" },
+    );
+    assert.equal(reconcilePreview.status, 0, reconcilePreview.stderr);
+    const reconcileDigest = JSON.parse(reconcilePreview.stdout).plan.digest;
+    const forced = spawnSync(
+      process.execPath,
+      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--confirm", reconcileDigest],
+      { cwd: project, env: environment, encoding: "utf8" },
+    );
+    assert.equal(forced.status, 2);
+    assert.match(forced.stderr, /Error \[conflict\]/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("clean reconcile preview keeps exact Apply contract", async () => {
+  const base = temporary();
+  const project = join(base, "project");
+  const home = join(base, "home");
+  await Promise.all([mkdir(project), mkdir(home)]);
+  try {
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(plan.modified_managed.length, 0);
+    assert.equal(plan.conflicts.length, 0);
+    const output = renderReconcile(plan, {
+      applied: false,
+      confirmationCommand: `npm exec -- skills-opencode reconcile --scope project --confirm ${plan.digest}`,
+    });
+    assert.match(output, /Digest:/);
+    assert.match(output, /\nApply:\n  npm exec -- skills-opencode reconcile --scope project --confirm /);
+    assert.doesNotMatch(output, /Blocked:/);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
 
 function executionCard() {
   const operations = ["write", "check", "commit", "rebase", "push", "merge", "tag", "release"].map(
@@ -142,6 +279,41 @@ test("registry generates exactly thirty-three thin command assets", () => {
       .sort(),
     ["agent-profiles", "capabilities", "doctor", "reconcile"],
   );
+});
+
+test("non-TTY install accepts explicit subsets for both command adapter groups", () => {
+  const directory = temporary();
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "install",
+        "--scope",
+        "project",
+        "--skill-commands",
+        "agents-md",
+        "--package-commands",
+        "doctor",
+        "--agents",
+        "none",
+        "--plugins",
+        "none",
+        "--dry-run",
+        "--json",
+      ],
+      { cwd: directory, env: { ...process.env, HOME: join(directory, "home") }, encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).plan.selection, {
+      commands: ["agents-md", "doctor"],
+      agents: [],
+      plugins: [],
+      core_activation: true,
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("generated asset drift rejects obsolete files", async () => {
@@ -1199,7 +1371,7 @@ test("package catalog and doctor tools are strictly observational", async () => 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
   const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
   assert.equal(packageJson.name, "@kisev/skills-opencode");
-  assert.equal(packageJson.version, "2.0.2");
+  assert.equal(packageJson.version, "2.0.3");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.type, "git");
   assert.equal(packageJson.repository.url, "git+https://github.com/kisev/skills.git");

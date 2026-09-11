@@ -1,7 +1,7 @@
 {
   "schema": "traceability/v1",
   "target": "2.0.0",
-  "source_revision": "4ccbd2e57c47c3c3d31c38c00384d6b2857dbc01",
+  "source_revision": "9078b213798af8a32fa915ea7654289b76eed88d",
   "hash": {
     "algorithm": "sha256",
     "canonical_block": "trimmed Markdown from the REQ heading through the paragraph before the next section heading"
@@ -33,7 +33,7 @@
     },
     "commands": {
       "kind": "automated",
-      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
+      "test_selector": "packages/opencode/test/package.test.mjs::installer wizard names both command adapter groups and keeps defaults",
       "eval_ids": ["stage20.command.spec-manage.contract", "stage20.command.capabilities.contract"]
     },
     "goal_command": {
@@ -77,7 +77,7 @@
     },
     "reconcile": {
       "kind": "automated",
-      "test_selector": "packages/opencode/test/package.test.mjs::reconcile archives exact-owned retired assets",
+      "test_selector": "packages/opencode/test/package.test.mjs::modified managed reconcile preview is blocked without Apply",
       "eval_ids": ["stage20.command.reconcile.contract"]
     },
     "distribution": {
@@ -146,7 +146,7 @@
     "REQ-F-005": {
       "surface": "archive",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "adee0fcaa299d5e80ed0eca631e57e4d410462829c54603c1fabac0fd09d12f5",
+      "block_sha256": "fc86955fc25882f2e5ccc53b130d55e85d78c87a5e6fe9aaf01f2d5fd79c3f8f",
       "evidence_profile": "reconcile",
       "manual_evidence_ids": ["ME-ARCH-004"]
     },
@@ -177,7 +177,7 @@
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "e081f8056fac7d816be9106ee4c84ba3bb90ce3e3f9af301c4cf930b9d8259ad",
+      "block_sha256": "a17a9ac8e8abd214e226d5f565370f0594e9c7262e6d1f93529baae8990d8eb0",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {

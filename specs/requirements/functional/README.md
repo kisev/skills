@@ -34,6 +34,10 @@ for supported hosts without depending on a separate runtime package.
 
 When exact-owned retired assets are reconciled, the system shall archive them
 content-addressably and preserve unrelated user-owned files and durable state.
+Human reconcile preview shall be blocked, without an Apply command, when
+`modified_managed` or `conflicts` is non-empty; it shall list every blocking path
+and provide remediation. Clean preview shall retain the digest and exact Apply
+command contract.
 
 ### REQ-F-006 - Manage package-owned profiles safely
 

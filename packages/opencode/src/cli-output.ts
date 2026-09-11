@@ -213,14 +213,34 @@ export function renderReconcile(
     lines.push(
       "",
       "Conflicts:",
-      ...plan.conflicts
-        .slice(0, 20)
-        .map((entry) => `  ${terminalSafe(entry.path)} (${terminalSafe(entry.reason)})`),
+      ...plan.conflicts.map(
+        (entry) => `  ${terminalSafe(entry.path)} (${terminalSafe(entry.reason)})`,
+      ),
+    );
+  if (plan.modified_managed.length)
+    lines.push(
+      "",
+      "Modified managed:",
+      ...plan.modified_managed.map(
+        (entry) => `  ${terminalSafe(entry.path)} (${terminalSafe(entry.reason)})`,
+      ),
     );
   if (!options.applied) {
     lines.push("", `Digest: ${plan.digest}`);
     if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
-    if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
+    const blocked = plan.modified_managed.length > 0 || plan.conflicts.length > 0;
+    if (blocked) {
+      lines.push("", "Blocked:");
+      if (plan.modified_managed.length)
+        lines.push(
+          `  Update managed assets first: ${shellCommand(["install", "--scope", plan.scope, "--dry-run"])}`,
+          "  Apply the exact confirmation command from that installer preview, then build a new reconcile preview.",
+        );
+      if (plan.conflicts.length)
+        lines.push("  Manually resolve every ownership conflict listed above before reconciling.");
+    } else if (options.confirmationCommand) {
+      lines.push("", "Apply:", `  ${options.confirmationCommand}`);
+    }
   }
   return `${lines.join("\n")}\n`;
 }

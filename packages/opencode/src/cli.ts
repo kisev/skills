@@ -91,6 +91,14 @@ function help(): string {
 
 async function interactiveInstallerSelection(): Promise<InstallerSelection> {
   if (!process.stdin.isTTY || !process.stderr.isTTY) throw new InstallerError("terminal_required", "install requires explicit selection flags outside a terminal");
+  process.stderr.write([
+    "Portable skills are installed separately through npx skills.",
+    "This installer does not install, update, or remove portable skills.",
+    "Skill command adapters are OpenCode slash commands that load an already-installed skill with the same name.",
+    "Package command adapters invoke package tools.",
+    "Selecting a command adapter does not select or install its skill.",
+    "\n",
+  ].join("\n"));
   const group = async (label: string, names: readonly string[], initial: number): Promise<string[]> => {
     const choices = ["Select all", "Select none", ...names];
     const selected = await selectOption(label, choices, process.stdin, process.stderr, initial);
@@ -100,8 +108,8 @@ async function interactiveInstallerSelection(): Promise<InstallerSelection> {
     return [names[selected - 2]];
   };
   const commands = [
-    ...(await group("Skill commands", SKILL_COMMANDS, 0)),
-    ...(await group("Package commands", PACKAGE_COMMANDS, 0)),
+    ...(await group("Skill command adapters", SKILL_COMMANDS, 0)),
+    ...(await group("Package command adapters", PACKAGE_COMMANDS, 0)),
   ];
   const agents = await group("Fixed agents", defaultSelection().agents, 0);
   const plugins = await group("Selectable plugins (none selected by default)", SELECTABLE_PLUGINS, 1);

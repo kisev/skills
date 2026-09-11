@@ -30,6 +30,22 @@ def test_skills_use_single_canonical_workflow_without_locale_directories() -> No
             assert not (skill / "references/en").exists()
 
 
+def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
+    english = (ROOT / "packages/opencode/README.md").read_text(encoding="utf-8")
+    russian = (ROOT / "packages/opencode/README.ru.md").read_text(encoding="utf-8")
+    for document in (english, russian):
+        assert "2.0.3" in document
+        assert "skills@1.5.23" in document
+        assert "install --dry-run" in document
+        assert "reconcile" in document
+        assert "plugin" in document
+        assert "restart" in document or "перезапуск" in document
+        assert "Skill command adapters" in document
+        assert "Package command adapters" in document
+    assert "does not install, update, or remove portable" in english
+    assert "не устанавливает, не обновляет и не" in russian
+
+
 def test_locale_checker_rejects_duplicate_neutral_path(tmp_path: Path) -> None:
     (tmp_path / "shared").mkdir()
     (tmp_path / "shared/locale-manifest.json").write_text(

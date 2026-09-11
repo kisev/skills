@@ -14,7 +14,10 @@ before semantic processing.
 
 Each public command shall route to its named skill or package tool, shall treat
 arguments as untrusted input without bypassing the selected contract, and shall
-not add state, storage, or publication behavior absent from that contract.
+not add state, storage, or publication behavior absent from that contract. Command
+selection remains the user's decision: the installer selects command adapters,
+not portable skills. Skill command adapters load an already-installed same-named
+skill, while package command adapters invoke package tools.
 
 ### REQ-I-003 - Package tool interface
 
