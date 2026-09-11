@@ -110,8 +110,8 @@ npx --yes skills@1.5.23 remove attempt schedule usage overview project-spec skil
 or use package reconcile when it can prove exact ownership:
 
 ```shell
-npm exec -- skills-opencode reconcile --scope global --dry-run
-npm exec -- skills-opencode reconcile --scope global --confirm <digest>
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --dry-run
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --confirm <digest>
 ```
 
 Use the exact confirmation command printed by the preview. Omit `--global` or use
@@ -132,12 +132,11 @@ If a new skill is not visible, check `~/.agents/skills` or `.agents/skills` and
 restart the host. After a tag change, repeat `add` for renamed additions and run
 the explicit cleanup above for retired names.
 
-Run the integration doctor from the npm project where the package is installed:
+Run the integration doctor through the npm project where the package is installed:
 
 ```shell
-cd "$HOME/.config/opencode"
-npm exec -- skills-opencode doctor --scope global
-npm exec -- skills-opencode doctor --scope global --json
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope global
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope global --json
 ```
 
 `doctor` is read-only. Exit status `0` is clean, `1` reports findings, and `2`

@@ -110,8 +110,8 @@ npx --yes skills@1.5.23 remove attempt schedule usage overview project-spec skil
 либо используйте package reconcile, когда он может доказать exact ownership:
 
 ```shell
-npm exec -- skills-opencode reconcile --scope global --dry-run
-npm exec -- skills-opencode reconcile --scope global --confirm <digest>
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --dry-run
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode reconcile --scope global --confirm <digest>
 ```
 
 Используйте точную confirmation command из preview. Для project scope не
@@ -132,12 +132,11 @@ npx --yes skills@1.5.23 list --global
 перезапустите host. После смены tag повторите `add` для renamed additions и
 выполните явную очистку retired names, описанную выше.
 
-Запускайте integration doctor из npm project, где установлен package:
+Запускайте integration doctor через npm project, где установлен package:
 
 ```shell
-cd "$HOME/.config/opencode"
-npm exec -- skills-opencode doctor --scope global
-npm exec -- skills-opencode doctor --scope global --json
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope global
+npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope global --json
 ```
 
 `doctor` работает без записи. Exit status `0` означает чистое состояние, `1` -
