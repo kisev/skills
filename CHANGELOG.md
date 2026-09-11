@@ -4,6 +4,17 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.6] - 2026-09-11
+
+### Fixed
+
+- Trusted Goal Mode authorization now covers every action explicitly listed in
+  the frozen accepted objective without a redundant confirmation prompt.
+- Synthetic continuations, untrusted markers, and later prompts cannot approve
+  pending actions or expand the accepted objective.
+- Offline policy runners now enforce bounded paths, shared timeouts, stable JSON
+  errors, and compatibility with the previous GitLab evidence scenario.
+
 ## [2.0.5] - 2026-09-11
 
 ### Fixed

@@ -2,7 +2,7 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-`@kisev/skills-opencode@2.0.5` - optional OpenCode-specific слой. У portable
+`@kisev/skills-opencode@2.0.6` - optional OpenCode-specific слой. У portable
 skills отдельный lifecycle: их нужно установить независимо через
 [корневую инструкцию](../../README.ru.md).
 
@@ -30,7 +30,7 @@ assets или portable skills и не меняют OpenCode configuration.
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/skills-opencode@2.0.5
+npm install --save-exact @kisev/skills-opencode@2.0.6
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -45,7 +45,7 @@ Package остаётся в project `node_modules`, confirmed assets разме�
 mkdir -p "$HOME/.config/opencode"
 cd "$HOME/.config/opencode"
 test -f package.json || npm init --yes
-npm install --save-exact @kisev/skills-opencode@2.0.5
+npm install --save-exact @kisev/skills-opencode@2.0.6
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -149,7 +149,7 @@ incomplete probe failure.
 перезапустите OpenCode:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode@2.0.5
+npm install --save-exact @kisev/skills-opencode@2.0.6
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 

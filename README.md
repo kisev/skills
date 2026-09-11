@@ -19,10 +19,10 @@ not contain or install portable skills.
 
 ## Global Quick Start
 
-Install the exact `v2.0.5` portable release for both hosts:
+Install the exact `v2.0.6` portable release for both hosts:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.5 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 This creates one canonical copy in `~/.agents/skills` for both hosts.
@@ -38,7 +38,7 @@ Omit `--global` for a project installation. The canonical project copy is
 `.agents/skills`:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.5 --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
 For OpenCode, use this mandatory integration flow when the package is needed:
@@ -59,10 +59,10 @@ with the pinned `npx --yes skills@1.5.23` command above.
 ## Pinned Release and Latest Source
 
 The current immutable source is
-`https://github.com/kisev/skills/tree/v2.0.5`. List its catalog without writing:
+`https://github.com/kisev/skills/tree/v2.0.6`. List its catalog without writing:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.5 --list
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --list
 ```
 
 Use `kisev/skills` separately when you intentionally want the latest source from
@@ -206,10 +206,10 @@ outputs. Change canonical sources in `shared/references/` or
 
 ## Reference and Limits
 
-- Current portable release: `https://github.com/kisev/skills/tree/v2.0.5`.
+- Current portable release: `https://github.com/kisev/skills/tree/v2.0.6`.
 - Latest source selector: `kisev/skills`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.0.5`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.0.6`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners use Python 3.12+ standard library only when a runner is needed.
 - `ast-grep` and `rtk` require their external CLI; skills do not install them.
