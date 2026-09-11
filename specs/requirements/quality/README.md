@@ -8,7 +8,9 @@ for pass, fail, skipped, error, timeout, malformed, and budget-exceeded cases.
 ### REQ-Q-002 - Mutation safety
 
 Every package mutation shall validate ownership, scope, confirmation digest, and
-freshness before writing, and shall be atomic or recoverable on failure.
+freshness before writing, and shall be atomic or recoverable on failure. Preview
+receipts shall use a deterministic plan digest plus a unique confirmation digest;
+same-scope supersession and one-use confirmation shall fail closed.
 
 ### REQ-Q-003 - Secret safety
 

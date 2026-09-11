@@ -18,6 +18,10 @@ not add state, storage, or publication behavior absent from that contract. Comma
 selection remains the user's decision: the installer selects command adapters,
 not portable skills. Skill command adapters load an already-installed same-named
 skill, while package command adapters invoke package tools.
+Pre-selector guidance shall identify portable installation through `npx skills`,
+and previews shall expose deterministic `plan_digest` separately from the
+unique `confirmation_digest`; superseded plans expose only redacted kind,
+short confirmation digest, and timestamps.
 
 ### REQ-I-003 - Package tool interface
 

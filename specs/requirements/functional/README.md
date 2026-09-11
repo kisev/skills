@@ -37,7 +37,10 @@ content-addressably and preserve unrelated user-owned files and durable state.
 Human reconcile preview shall be blocked, without an Apply command, when
 `modified_managed` or `conflicts` is non-empty; it shall list every blocking path
 and provide remediation. Clean preview shall retain the digest and exact Apply
-command contract.
+command contract. Every new dry-run in one project or global scope shall
+supersede the previous unconsumed receipt across installer, reconcile, profile,
+and critic domains; deterministic plan and unique confirmation digests are
+separate, and superseded confirmation fails closed.
 
 ### REQ-F-006 - Manage package-owned profiles safely
 

@@ -100,8 +100,12 @@ under `~/.config/opencode`. Restart OpenCode after activation or asset changes.
 ## Preview and Confirm
 
 Every mutation begins with `--dry-run`. The preview reports operations,
-conflicts, restart requirements, receipt expiry, a SHA-256 digest, and the exact
-confirmation command.
+conflicts, restart requirements, receipt expiry, separate plan and confirmation
+digests, and the exact confirmation command. If reconcile reports modified
+managed files or ownership conflicts, it is blocked: no receipt or Apply command
+is issued. Install or upgrade the current package first, apply its exact
+installer confirmation, then repeat reconcile; resolve ownership conflicts
+manually.
 
 ```shell
 npm exec -- skills-opencode install --scope project --dry-run
@@ -110,8 +114,13 @@ npm exec -- skills-opencode install --scope project --dry-run
 The mandatory OpenCode flow is: persistent npm install, `install --dry-run`, the
 exact confirmation command printed by that preview, add the package to the
 user-owned `plugin` entry, and restart OpenCode. Use the persistent npm project
-at `~/.config/opencode` for global commands. Only after this flow is complete,
-update the package and apply its installer plan before running reconcile.
+at `~/.config/opencode` for global commands. Install or upgrade the package and
+apply its installer plan before every reconcile.
+
+The preview has a deterministic `plan_digest` and a unique
+`confirmation_digest`. A later dry-run in the same scope supersedes any older
+unconsumed preview, including previews from another package or agent operation;
+the older confirmation is rejected.
 
 Run the command printed by the preview, including all selection flags. Receipts
 are private, valid for 10 minutes, single-use, and bound to the action, scope,

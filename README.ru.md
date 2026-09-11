@@ -44,7 +44,8 @@ npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.3 --agent 
 Для OpenCode используйте обязательный flow: установите package постоянно в
 принадлежащем ему npm project, запустите `skills-opencode install --dry-run`,
 выполните exact confirmation command, добавьте package в user-owned `plugin` и
-перезапустите OpenCode. Только после этого запускайте reconcile. Package должен
+перезапустите OpenCode. Перед каждым reconcile обязательно установите или
+обновите package. Только после этого запускайте reconcile. Package должен
 оставаться установленным в project `node_modules` или в npm project
 `~/.config/opencode`; следуйте [инструкции по интеграции OpenCode](packages/opencode/README.ru.md).
 Installer не устанавливает portable skills и не меняет `opencode.json`.

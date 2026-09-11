@@ -45,8 +45,9 @@ For OpenCode, use this mandatory integration flow when the package is needed:
 install it persistently in the owning npm project, run
 `skills-opencode install --dry-run`, execute the exact confirmation command,
 add the package to the user-owned `plugin` entry, and restart OpenCode. Only
-then run reconcile. The package must remain installed in project `node_modules`
-or in the npm project at `~/.config/opencode`; follow the
+then run reconcile. Install or upgrade the package before every reconcile. The
+package must remain installed in project `node_modules` or in the npm project at
+`~/.config/opencode`; follow the
 [OpenCode integration guide](packages/opencode/README.md). Its installer neither
 installs portable skills nor edits `opencode.json`.
 

@@ -12,6 +12,10 @@
   adapters и сообщает, что portable skills устанавливаются отдельно.
 - Human reconcile preview блокируется при modified managed assets или ownership
   conflicts, перечисляет все blocking paths и показывает remediation вместо Apply.
+- Новый dry-run в одном scope supersede-ит старый unconsumed preview across
+  installer, reconcile, agent и critic operations; plan и confirmation digests
+  разделены, а superseded confirmation отклоняется.
+- Blocked reconcile не создаёт новый receipt и не раскрывает confirmation details.
 - Документация закрепляет persistent npm install, installer confirmation, plugin
   activation и restart до reconcile.
 
