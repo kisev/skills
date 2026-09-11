@@ -34,7 +34,7 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
     english = (ROOT / "packages/opencode/README.md").read_text(encoding="utf-8")
     russian = (ROOT / "packages/opencode/README.ru.md").read_text(encoding="utf-8")
     for document in (english, russian):
-        assert "2.0.3" in document
+        assert "2.0.4" in document
         assert "skills@1.5.23" in document
         assert "install --dry-run" in document
         assert "reconcile" in document

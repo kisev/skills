@@ -4,6 +4,15 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.4] - 2026-09-11
+
+### Release
+
+- Republishes the 2.0.3 installer, reconcile, and receipt lifecycle fixes under
+  a new immutable release tag because `v2.0.3` already exists.
+- Portable skill metadata remains `2.0.0`; inventory and archive ownership are
+  unchanged.
+
 ## [2.0.3] - 2026-09-11
 
 ### Исправлено
