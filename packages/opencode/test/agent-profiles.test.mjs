@@ -32,10 +32,12 @@ import {
   appendPrivate,
   applyTransaction,
   consumeReceipt,
+  digest,
   deploymentRoot,
   lifecycleRoot,
   saveReceipt,
   sha256,
+  stable,
   withLifecycleLock,
 } from "../dist/lifecycle.js";
 
@@ -449,6 +451,44 @@ test("new previews supersede every unconsumed domain receipt and keep plan ident
 
     const global = await preview("install", "global", context.project, context.home);
     assert.equal(global.superseded_plan, undefined);
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
+test("a legacy 2.0.3 receipt is replaced by the next preview", async () => {
+  const context = await roots();
+  try {
+    const state = lifecycleRoot("project", context.project, context.home);
+    const root = deploymentRoot("project", context.project, context.home);
+    const payload = { digest: "0".repeat(64) };
+    const kind = "installer:install";
+    const scope = "project";
+    const legacy = {
+      schema_version: 1,
+      digest: digest({ schema_version: 1, kind, scope, root, payload }),
+      nonce: "legacy-nonce",
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      consumed: false,
+      kind,
+      scope,
+      root,
+      payload,
+      integrity: "",
+    };
+    const { integrity: _integrity, ...legacyDocument } = legacy;
+    legacy.integrity = digest(legacyDocument);
+    await mkdir(state, { recursive: true });
+    chmodSync(state, 0o700);
+    await writeFile(join(state, "receipt.json"), `${stable(legacy)}\n`, { mode: 0o600 });
+    const next = await preview("install", "project", context.project, context.home);
+    assert.equal(next.superseded_plan.kind, kind);
+    await assert.rejects(
+      (async () => {
+        await consumeReceipt(state, { digest: legacy.digest, kind, scope, root });
+      })(),
+      (error) => error.code === "superseded_plan",
+    );
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
   }

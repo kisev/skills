@@ -563,7 +563,9 @@ export async function apply(action: Action, scope: Scope, confirmationDigest: st
       if (await recoverTransaction(root, stateRoot)) throw new InstallerError("recovered_transaction", "Recovered an interrupted transaction; request a fresh plan");
       const receipt = (await consumeReceipt(stateRoot, { digest: confirmationDigest, kind: `installer:${action}`, scope, root })) as { digest?: string };
       const built = await build(action, scope, cwd, home, selection);
-       if (built.plan.digest !== (receipt as { plan_digest?: string }).plan_digest)
+      const savedPlanDigest = (receipt as { plan_digest?: string; digest?: string }).plan_digest ??
+        (receipt as { digest?: string }).digest;
+      if (built.plan.digest !== savedPlanDigest)
          throw new InstallerError("stale_plan", "Installer plan changed after preview");
       if (built.plan.operations.some((item) => item.operation === "conflict" && (item.reason === "unmanaged_file" || item.reason === "v1.0.0_agent_ownership_mismatch" || item.reason?.includes("collision")))) {
         throw new InstallerError("conflict", "Installer plan contains an exact-name ownership conflict");

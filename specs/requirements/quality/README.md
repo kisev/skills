@@ -11,6 +11,8 @@ Every package mutation shall validate ownership, scope, confirmation digest, and
 freshness before writing, and shall be atomic or recoverable on failure. Preview
 receipts shall use a deterministic plan digest plus a unique confirmation digest;
 same-scope supersession and one-use confirmation shall fail closed.
+Receipts persisted by the previous package patch shall be safely normalized or
+replaced during the next preview without weakening integrity validation.
 
 ### REQ-Q-003 - Secret safety
 

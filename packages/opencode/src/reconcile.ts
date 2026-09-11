@@ -889,9 +889,9 @@ export async function applyReconcile(
         kind: "reconcile",
         scope,
         root,
-      })) as { plan_digest?: string };
+      })) as { plan_digest?: string; digest?: string };
       const built = await build(scope, cwd, home);
-      if (built.plan.plan_digest !== payload.plan_digest)
+      if (built.plan.plan_digest !== (payload.plan_digest ?? payload.digest))
         throw new ReconcileError("stale_plan", "Reconcile inventory changed after preview");
       if (built.plan.conflicts.length || built.plan.modified_managed.length)
         throw new ReconcileError("conflict", "Reconcile contains unsafe ownership conflicts");

@@ -421,6 +421,70 @@ function parseReceipt(raw: Buffer): Receipt {
   }
   const receipt = value as Partial<Receipt>;
   if (
+    receipt &&
+    receipt.schema_version === 1 &&
+    typeof receipt.digest === "string" &&
+    /^[a-f0-9]{64}$/.test(receipt.digest) &&
+    typeof receipt.nonce === "string" &&
+    typeof receipt.expires_at === "string" &&
+    typeof receipt.consumed === "boolean" &&
+    typeof receipt.kind === "string" &&
+    (receipt.scope === "global" || receipt.scope === "project") &&
+    typeof receipt.root === "string" &&
+    typeof receipt.integrity === "string" &&
+    receipt.plan_digest === undefined
+  ) {
+    const legacyDocument = {
+      schema_version: 1 as const,
+      digest: receipt.digest,
+      nonce: receipt.nonce,
+      expires_at: receipt.expires_at,
+      consumed: receipt.consumed,
+      kind: receipt.kind,
+      scope: receipt.scope,
+      root: receipt.root,
+      payload: receipt.payload,
+      integrity: receipt.integrity,
+    };
+    if (
+      receipt.digest !==
+        digest({
+          schema_version: 1,
+          kind: receipt.kind,
+          scope: receipt.scope,
+          root: receipt.root,
+          payload: receipt.payload,
+        }) ||
+      receipt.integrity !==
+        digest({
+          schema_version: 1,
+          digest: receipt.digest,
+          nonce: receipt.nonce,
+          expires_at: receipt.expires_at,
+          consumed: receipt.consumed,
+          kind: receipt.kind,
+          scope: receipt.scope,
+          root: receipt.root,
+          payload: receipt.payload,
+        })
+    ) {
+      throw new LifecycleError("invalid_receipt", "Receipt integrity check failed");
+    }
+    const payloadRecord = receipt.payload as { digest?: unknown };
+    const planDigest =
+      payloadRecord &&
+      typeof payloadRecord === "object" &&
+      typeof payloadRecord.digest === "string" &&
+      /^[a-f0-9]{64}$/.test(payloadRecord.digest)
+        ? payloadRecord.digest
+        : digest(receipt.payload);
+    return {
+      ...legacyDocument,
+      plan_digest: planDigest,
+      created_at: new Date(Date.parse(receipt.expires_at) - RECEIPT_TTL_MS).toISOString(),
+    };
+  }
+  if (
     !receipt ||
     receipt.schema_version !== 1 ||
     typeof receipt.digest !== "string" ||

@@ -991,14 +991,14 @@ export async function applyAgentProfileChange(
       kind: `agent:${request.action}`,
       scope,
       root,
-    })) as { request?: AgentProfileRequest; plan_digest?: string };
+    })) as { request?: AgentProfileRequest; plan_digest?: string; digest?: string };
     if (stable(receipt.request) !== stable(request))
       throw new AgentProfileError(
         "confirmation_unknown",
         "Saved confirmation belongs to a different request",
       );
     const built = await buildAgentProfilePlan(request, scope, cwd, home);
-    if (built.plan.digest !== receipt.plan_digest)
+    if (built.plan.digest !== (receipt.plan_digest ?? receipt.digest))
       throw new AgentProfileError("stale_plan", "Agent inventory changed after preview");
     if (
       built.plan.operations.some(

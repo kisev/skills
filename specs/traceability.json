@@ -213,7 +213,7 @@
     "REQ-Q-002": {
       "surface": "mutations",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "8f308a891cc27e7d237fba3a6fde2980fd43184b721771e012c1be4c27ccf056",
+      "block_sha256": "8ad96a60e1d6581c548ae3114cd634bd547fe768555a29082430c0772c6c7748",
       "evidence_profile": "profiles"
     },
     "REQ-Q-003": {
