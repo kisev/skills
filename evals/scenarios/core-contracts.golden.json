@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "golden.core-contracts",
-  "revision": 1,
+  "revision": 2,
   "kind": "golden",
   "locale": "ru",
   "pair_id": "golden.core-contracts",
@@ -16,7 +16,7 @@
     {
       "id": "plan-bound",
       "path": "skills/doit/references/workflow.md",
-      "contains": "only confirmed plan actions"
+      "contains": "frozen accepted goal objective"
     },
     {
       "id": "separate-history",
@@ -31,5 +31,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "5a329a77425b4515e63f370bd4c05036a9ec579ea363505dfe8ba76cf14cbeb5"
+  "digest": "4b88a310559534db287689d5f602064af491782df256690198902c2d703249b1"
 }

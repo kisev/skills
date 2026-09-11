@@ -30,7 +30,35 @@
       "enum": ["skill", "command", "agent", "plugin", "package-tool", "infrastructure"]
     },
     "host": { "enum": ["opencode", "codex", "any"] },
-    "input": { "type": "object" },
+    "input": {
+      "type": "object",
+      "properties": {
+        "offline_runner": {
+          "type": "object",
+          "properties": {
+            "protocol": { "enum": ["assertions-v1", "portable-gitlab-v2"] },
+            "skill": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+            "script": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+            },
+            "target": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false,
+          "oneOf": [
+            { "required": ["protocol", "skill", "script", "target"] },
+            {
+              "required": ["skill", "script", "target"],
+              "not": { "required": ["protocol"] },
+              "properties": {
+                "skill": { "const": "code-review" },
+                "script": { "const": "scripts/review_mr.py" }
+              }
+            }
+          ]
+        }
+      }
+    },
     "expected": { "type": "object" },
     "invariants": {
       "type": "array",

@@ -17,6 +17,15 @@
       "test_selector": "tests/test_skill_contracts.py::test_every_skill_has_required_frontmatter",
       "eval_ids": ["stage20.skill.spec-manage.trigger.en", "stage20.skill.spec-manage.near-miss.en"]
     },
+    "goal_authorization": {
+      "kind": "automated",
+      "test_selector": "tests/test_evals.py::test_goal_authorization_offline_runner_exercises_decision_cases",
+      "eval_ids": [
+        "doit.goal-mode-authorization",
+        "golden.core-contracts",
+        "golden.core-contracts.en"
+      ]
+    },
     "goal_skill": {
       "kind": "automated",
       "test_selector": "tests/test_repository.py::test_goal_output_contract_declares_bounded_deterministic_outcomes",
@@ -316,8 +325,8 @@
     "REQ-F-107": {
       "surface": "skill:docs-prepare",
       "source": "specs/capabilities/skills/docs-prepare.md",
-      "block_sha256": "82712f8150c08d3c2d9dc1f514a023908fd4a6eaf72d1a3020e71a768f766dbf",
-      "evidence_profile": "skills"
+      "block_sha256": "d6d06daf581db19e6e8ac23b2af2f448b260e397f18bb783529d02700ad91104",
+      "evidence_profile": "goal_authorization"
     },
     "REQ-F-108": {
       "surface": "skill:docs-review",
@@ -328,8 +337,8 @@
     "REQ-F-109": {
       "surface": "skill:doit",
       "source": "specs/capabilities/skills/doit.md",
-      "block_sha256": "0c593f2a626654ebc09d19c4873e129c8c297dd70c3809002efa15eeb6749a68",
-      "evidence_profile": "skills"
+      "block_sha256": "8d4c04f0d6d4e863ab7d85b3ad2a006a3505fe5f3ca59f4572b9d4d8793d3fda",
+      "evidence_profile": "goal_authorization"
     },
     "REQ-F-110": {
       "surface": "skill:goal",
@@ -394,8 +403,8 @@
     "REQ-F-120": {
       "surface": "skill:spec-manage",
       "source": "specs/capabilities/skills/spec-manage.md",
-      "block_sha256": "0d3baba23805f7a21a2e9d5fa1372d3280c5adad5e18c013feb1e455cb8f6d28",
-      "evidence_profile": "skills"
+      "block_sha256": "22b792a655fd20578a3603e5e16ec33b2a9ebb26698fd7da52d95d9bbe0fbecd",
+      "evidence_profile": "goal_authorization"
     },
     "REQ-F-121": {
       "surface": "skill:stopit",

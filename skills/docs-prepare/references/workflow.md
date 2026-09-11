@@ -4,7 +4,7 @@ Read applicable `AGENTS.md`, the existing target document, source, tests, config
 
 Before drafting, choose one reader and one document type: a tutorial guides a new user through learning, a how-to guide reaches a concrete result, reference records exact commands/API/configuration, and explanation gives concepts, rationale, and context. Create or improve one document using repository conventions, or the appropriate Diataxis directory in `docs/` when none exists. Do not create an empty four-directory tree or mix document types.
 
-Follow `references/interaction-contract.md`. Verify each claim against source and tests, prepare the complete new file or exact existing-file diff, store a private content-addressed preview artifact, and show only TLDR, scope, risks, checks, path, and SHA-256 digest. Do not print the draft or diff in chat. After Confirmation, apply only the agreed change and report verified sources, checks, and limits. If the document reveals a specification mismatch, separately offer `spec-manage` `spec-audit` or `spec-update`; never combine workflows.
+Follow `references/interaction-contract.md`. Verify each claim against source and tests, prepare the complete new file or exact existing-file diff, store a private content-addressed preview artifact, and show only TLDR, scope, risks, checks, path, and SHA-256 digest. Do not print the draft or diff in chat. After ordinary Confirmation or exact frozen trusted Goal authorization for the action and boundary, apply only the agreed change and report verified sources, checks, and limits. If the document reveals a specification mismatch, separately offer `spec-manage` `spec-audit` or `spec-update`; never combine workflows.
 
 ## Boundary
 
@@ -31,6 +31,6 @@ Read `references/interaction-contract.md` and follow its lifecycle.
 1. Confirm every claim against source code, tests, and canonical specifications.
 2. Prepare a complete draft of a new file or an exact diff of an existing one.
 3. Save a private content-addressed preview artifact and show only its TLDR, scope, risks, checks, path, and SHA-256 digest; do not print the draft or diff in chat.
-4. After Confirmation, make only the agreed change and report verified sources, checks, and limitations separately.
+4. After ordinary Confirmation or exact frozen trusted Goal authorization for the action and boundary, make only the agreed change and report verified sources, checks, and limitations separately.
 
 If the document reveals a mismatch with a canonical specification, separately propose running `spec-manage` in `spec-audit` or `spec-update` mode; do not modify specs or combine these workflows.

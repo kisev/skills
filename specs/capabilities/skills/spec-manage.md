@@ -14,7 +14,7 @@ Input is explicit mode and repository scope. Output is canonical specs or read-o
 
 ## Workflow Stages
 
-Resolve mode, inspect evidence, classify claims, preview, confirm, apply, report.
+Resolve mode, inspect evidence, classify claims, preview, authorize, apply, report.
 
 ## Dependencies
 
@@ -22,7 +22,8 @@ Templates, repository evidence, requirements, architecture, and ADR rules.
 
 ## Remote/Local Effects
 
-Local reads and confirmed `specs/` writes; no remote effects.
+Local reads and `specs/` writes authorized by ordinary Confirmation or exact
+frozen trusted Goal authorization for the action and boundary; no remote effects.
 
 ## Errors, Partial, Escalation
 
@@ -36,7 +37,9 @@ Onboarding describes current post-merge state and uses explicit English language
 
 ### REQ-F-120 - Maintain canonical current specifications
 
-The skill shall keep canonical specs evidence-backed, compact, language-explicit, and free of roadmap artifacts.
+The skill shall keep canonical specs evidence-backed, compact, language-explicit,
+and free of roadmap artifacts while gating writes by ordinary Confirmation or
+exact frozen trusted Goal authorization for the action and boundary.
 
 ## Example
 

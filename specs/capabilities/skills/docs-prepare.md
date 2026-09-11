@@ -10,11 +10,11 @@ Trigger for README/tutorial/reference/how-to work; near-miss: canonical `specs/`
 
 ## Inputs and Outputs
 
-Input is one document path and scope. Output is a draft or confirmed document.
+Input is one document path and scope. Output is a draft or authorized document.
 
 ## Workflow Stages
 
-Resolve audience, inspect sources, draft, check links, present, confirm, report.
+Resolve audience, inspect sources, draft, check links, present, authorize, report.
 
 ## Dependencies
 
@@ -22,7 +22,8 @@ Source, tests, and existing documentation.
 
 ## Remote/Local Effects
 
-Local reads and confirmed local writes; no remote effects.
+Local reads and local writes authorized by ordinary Confirmation or exact frozen
+trusted Goal authorization for the action and boundary; no remote effects.
 
 ## Errors, Partial, Escalation
 
@@ -36,7 +37,9 @@ Does not modify `specs/` or invent behavior.
 
 ### REQ-F-107 - Prepare factual documentation
 
-The skill shall keep user-facing documentation claims traceable to repository evidence.
+The skill shall keep user-facing documentation claims traceable to repository
+evidence and gate writes by ordinary Confirmation or exact frozen trusted Goal
+authorization for the action and boundary.
 
 ## Example
 

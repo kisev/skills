@@ -23,6 +23,16 @@ SCHEMA_VERSION = 1
 SCENARIO_SCHEMA = "eval-scenario/v1"
 RESULT_SCHEMA = "eval-result/v1"
 ADAPTER_PROTOCOLS = {"opencode": "opencode-cli-json/v1", "codex": "codex-cli-json/v1"}
+OFFLINE_RUNNERS = {
+    "assertions-v1": {("doit", "scripts/goal_authorization.py")},
+    "portable-gitlab-v2": {("code-review", "scripts/review_mr.py")},
+}
+LEGACY_GITLAB_V2_DIGEST = "60641989df03379e5a79a39dec59588b7e359f7424ca985b74b08265e8b52979"
+LEGACY_GITLAB_V2_RUNNER = {
+    "skill": "code-review",
+    "script": "scripts/review_mr.py",
+    "target": "https://gitlab.example/group/project/-/merge_requests/7",
+}
 PUBLIC_SURFACES = ROOT / "evals" / "contracts" / "public-surfaces.json"
 SENSITIVE_KEY = re.compile(r"(?:token|secret|password|authorization|cookie|api[_-]?key)", re.I)
 CONTROL = re.compile(r"[\x00-\x1f\x7f]")
@@ -113,9 +123,120 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def safe_relative(value: str) -> Path:
     path = Path(value)
-    if path.is_absolute() or ".." in path.parts or not value:
+    if (
+        path.is_absolute()
+        or ".." in path.parts
+        or not value
+        or "\\" in value
+        or path.as_posix() != value
+    ):
         raise EvalError("sandbox_escape", "scenario path escapes the repository sandbox")
     return path
+
+
+def is_legacy_gitlab_v2(scenario: dict[str, Any], runner: dict[str, Any]) -> bool:
+    fixture = scenario.get("input", {}).get("fixture")
+    return (
+        scenario.get("schema") == SCENARIO_SCHEMA
+        and scenario.get("id") == "gitlab.evidence-contract"
+        and scenario.get("revision") == 2
+        and scenario.get("digest") == LEGACY_GITLAB_V2_DIGEST
+        and scenario_digest(scenario) == LEGACY_GITLAB_V2_DIGEST
+        and fixture == {"selected": []}
+        and runner == LEGACY_GITLAB_V2_RUNNER
+    )
+
+
+def offline_runner_config(
+    scenario: dict[str, Any], filename: str
+) -> tuple[str, str, str, str] | None:
+    runner = scenario["input"].get("offline_runner")
+    if runner is None:
+        return None
+    required = {"protocol", "skill", "script", "target"}
+    legacy = {"skill", "script", "target"}
+    if not isinstance(runner, dict):
+        raise EvalError("malformed_scenario", f"{filename}: offline_runner fields are invalid")
+    fields = frozenset(runner)
+    if fields not in {frozenset(required), frozenset(legacy)}:
+        raise EvalError("malformed_scenario", f"{filename}: offline_runner fields are invalid")
+    skill, script, target = runner.get("skill"), runner.get("script"), runner.get("target")
+    protocol = runner.get("protocol")
+    legacy_gitlab = False
+    if fields == frozenset(legacy):
+        legacy_gitlab = is_legacy_gitlab_v2(scenario, runner)
+        if not legacy_gitlab:
+            raise EvalError(
+                "unsupported_runner_protocol",
+                f"{filename}: legacy offline_runner is not allowlisted",
+            )
+        protocol = "portable-gitlab-v2"
+    if not isinstance(protocol, str) or protocol not in OFFLINE_RUNNERS:
+        raise EvalError(
+            "unsupported_runner_protocol", f"{filename}: offline_runner protocol is unsupported"
+        )
+    if not all(isinstance(value, str) and value for value in (skill, script, target)):
+        raise EvalError("malformed_scenario", f"{filename}: offline_runner values are invalid")
+    assert isinstance(skill, str) and isinstance(script, str) and isinstance(target, str)
+    skill_path = safe_relative(skill)
+    script_path = safe_relative(script)
+    if len(skill_path.parts) != 1 or script_path == Path("."):
+        raise EvalError("sandbox_escape", f"{filename}: offline_runner path is unsafe")
+    fixture = scenario["input"].get("fixture")
+    selected = fixture.get("selected") if isinstance(fixture, dict) else None
+    if legacy_gitlab:
+        selected = [f"skill:{skill}"]
+    if not isinstance(selected, list) or f"skill:{skill}" not in selected:
+        raise EvalError("unselected_runner", f"{filename}: offline_runner skill is not selected")
+    if (skill, script) not in OFFLINE_RUNNERS[protocol]:
+        raise EvalError("unsupported_runner", f"{filename}: offline_runner is not allowlisted")
+    return protocol, skill, script, target
+
+
+def materialized_runner_path(root: Path, skill: str, script: str) -> Path:
+    current = root
+    for part in (".build", "skills", skill, *safe_relative(script).parts):
+        current /= part
+        if current.is_symlink():
+            raise EvalError("sandbox_escape", "offline_runner path contains a symlink")
+    if not current.is_file():
+        raise EvalError("missing_runner", "offline_runner is not materialized")
+    return current
+
+
+def run_with_deadline(
+    command: list[str],
+    *,
+    cwd: Path,
+    env: dict[str, str],
+    deadline: float,
+    timeout_seconds: float,
+    input_value: str | None = None,
+) -> subprocess.CompletedProcess[str]:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise EvalError(
+            "offline_runner_timeout",
+            f"offline_runner exceeded timeout_seconds={timeout_seconds:g}",
+            4,
+        )
+    try:
+        return subprocess.run(
+            command,
+            cwd=cwd,
+            env=env,
+            input=input_value,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=remaining,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise EvalError(
+            "offline_runner_timeout",
+            f"offline_runner exceeded timeout_seconds={timeout_seconds:g}",
+            4,
+        ) from error
 
 
 def scenario_digest(scenario: dict[str, Any]) -> str:
@@ -180,6 +301,7 @@ def validate_scenario(scenario: dict[str, Any], filename: str) -> list[str]:
         raise EvalError("malformed_scenario", f"{filename}: host is invalid")
     if not isinstance(scenario["input"], dict) or not isinstance(scenario["expected"], dict):
         raise EvalError("malformed_scenario", f"{filename}: input and expected must be objects")
+    offline_runner_config(scenario, filename)
     if not isinstance(scenario["invariants"], list) or not scenario["invariants"]:
         raise EvalError("malformed_scenario", f"{filename}: invariants must be a nonempty list")
     if not isinstance(scenario["sandbox"], dict) or scenario["sandbox"].get("network") is not False:
@@ -496,18 +618,59 @@ def expected_assertions(
 
 def offline_observation(scenario: dict[str, Any], root: Path) -> dict[str, Any]:
     """Run explicitly declared portable runner checks without a host or network."""
+    timeout_seconds = float(scenario["budgets"]["timeout_seconds"])
+    deadline = time.monotonic() + timeout_seconds
     fixture = scenario["input"].get("fixture", {})
     selected = fixture.get("selected", []) if isinstance(fixture, dict) else []
-    runner = scenario["input"].get("offline_runner")
-    if not isinstance(runner, dict):
+    config = offline_runner_config(scenario, str(scenario.get("id", "scenario")))
+    if config is None:
         return {"selected": selected, "usage": {"telemetry": "not-applicable"}}
-    skill, script, target = runner.get("skill"), runner.get("script"), runner.get("target")
-    if not all(isinstance(value, str) and value for value in (skill, script, target)):
-        raise EvalError("malformed_scenario", "offline_runner requires skill, script, and target")
-    assert isinstance(skill, str) and isinstance(script, str) and isinstance(target, str)
-    executable = root / ".build" / "skills" / skill / script
-    if not executable.is_file():
-        raise EvalError("missing_runner", "offline_runner is not materialized")
+    protocol, skill, script, target = config
+    executable = materialized_runner_path(root, skill, script)
+    if protocol == "assertions-v1":
+        with tempfile.TemporaryDirectory(prefix="skills-assertions-eval-") as temporary:
+            sandbox = Path(temporary)
+            process = run_with_deadline(
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-B",
+                    str(executable),
+                    "verify",
+                    "--target",
+                    target,
+                ],
+                cwd=sandbox,
+                env=isolated_environment(sandbox),
+                input_value=json.dumps(fixture, sort_keys=True, separators=(",", ":")),
+                deadline=deadline,
+                timeout_seconds=timeout_seconds,
+            )
+        try:
+            output = json.loads(process.stdout)
+        except json.JSONDecodeError as error:
+            raise EvalError(
+                "malformed_runner_output", "assertions runner returned invalid JSON"
+            ) from error
+        raw_assertions = output.get("assertions") if isinstance(output, dict) else None
+        if not isinstance(raw_assertions, list) or not all(
+            isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and item.get("status") in {"passed", "failed"}
+            for item in raw_assertions
+        ):
+            raise EvalError(
+                "malformed_runner_output", "assertions runner returned invalid assertions"
+            )
+        return {
+            "selected": selected,
+            "usage": {"telemetry": "not-applicable"},
+            "runner_assertions": [
+                {"id": "runner:exit", "status": "passed" if process.returncode == 0 else "failed"},
+                *raw_assertions,
+            ],
+        }
     with tempfile.TemporaryDirectory(prefix="skills-gitlab-eval-") as temporary:
         sandbox = Path(temporary)
         log = sandbox / "glab.jsonl"
@@ -547,13 +710,12 @@ print(json.dumps(value))
                 "FAKE_GLAB_STATE": str(state),
             }
         )
-        process = subprocess.run(
+        process = run_with_deadline(
             [sys.executable, "-I", "-S", "-B", str(executable), "prepare", "--url", target],
             cwd=sandbox,
             env=environment,
-            capture_output=True,
-            text=True,
-            check=False,
+            deadline=deadline,
+            timeout_seconds=timeout_seconds,
         )
         try:
             output = json.loads(process.stdout)
@@ -566,7 +728,7 @@ print(json.dumps(value))
             evidence = items[0].get("artifact_path")
             artifact_root = items[0].get("artifact_root")
             if isinstance(evidence, str) and isinstance(artifact_root, str):
-                finalized = subprocess.run(
+                finalized = run_with_deadline(
                     [
                         sys.executable,
                         "-I",
@@ -579,9 +741,8 @@ print(json.dumps(value))
                     ],
                     cwd=sandbox,
                     env=environment,
-                    capture_output=True,
-                    text=True,
-                    check=False,
+                    deadline=deadline,
+                    timeout_seconds=timeout_seconds,
                 )
                 try:
                     final_output = json.loads(finalized.stdout)
@@ -650,33 +811,23 @@ print(json.dumps(value))
                         "--mode",
                         "deep",
                     ]
-                    review_status = (
-                        "passed"
-                        if subprocess.run(
-                            review_command,
-                            cwd=sandbox,
-                            env=environment,
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                        ).returncode
-                        == 0
-                        else "failed"
+                    review_process = run_with_deadline(
+                        review_command,
+                        cwd=sandbox,
+                        env=environment,
+                        deadline=deadline,
+                        timeout_seconds=timeout_seconds,
                     )
+                    review_status = "passed" if review_process.returncode == 0 else "failed"
                     state.write_text("changed", encoding="utf-8")
-                    stale_status = (
-                        "passed"
-                        if subprocess.run(
-                            review_command,
-                            cwd=sandbox,
-                            env=environment,
-                            capture_output=True,
-                            text=True,
-                            check=False,
-                        ).returncode
-                        == 2
-                        else "failed"
+                    stale_process = run_with_deadline(
+                        review_command,
+                        cwd=sandbox,
+                        env=environment,
+                        deadline=deadline,
+                        timeout_seconds=timeout_seconds,
                     )
+                    stale_status = "passed" if stale_process.returncode == 2 else "failed"
         calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
         assertions = [
             {"id": "runner:json", "status": "passed" if isinstance(output, dict) else "failed"},
@@ -899,9 +1050,18 @@ def budget_assertions(
 def result_for(scenario: dict[str, Any], args: argparse.Namespace, root: Path) -> dict[str, Any]:
     started_at = time.time()
     if args.offline:
-        observation = offline_observation(scenario, root)
-        run_status = "passed"
-        error: dict[str, Any] = {"classification": None}
+        try:
+            observation = offline_observation(scenario, root)
+            run_status = "passed"
+            error: dict[str, Any] = {"classification": None}
+        except EvalError as runner_error:
+            if runner_error.code != "offline_runner_timeout":
+                raise
+            fixture = scenario["input"].get("fixture")
+            selected = fixture.get("selected", []) if isinstance(fixture, dict) else []
+            observation = {"selected": selected, "usage": {"telemetry": "not-applicable"}}
+            run_status = "error"
+            error = {"classification": runner_error.code, "message": runner_error.message}
         evidence: list[dict[str, str]] = []
     else:
         observation, error, run_status, evidence = run_host(scenario, args)

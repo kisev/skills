@@ -31,7 +31,7 @@ Read `references/interaction-contract.md` and follow its lifecycle.
 
 Separate confirmed repository facts from human intent. When requirements, external behavior, architecture, compatibility, security, or quality are ambiguous, use the host's native interactive mechanism; if unavailable, ask in chat. Do not ask what is already confirmed.
 
-In writing modes, prepare a complete content-addressed private preview artifact with the exact diff of created or modified canonical documents. In chat, output only compact TLDR, scope, risks, checks, path, and SHA-256 digest; do not print the full diff. After confirmation of the exact mutation, apply the agreed change without new semantic changes and report the result and actual checks separately.
+In writing modes, prepare a complete content-addressed private preview artifact with the exact diff of created or modified canonical documents. In chat, output only compact TLDR, scope, risks, checks, path, and SHA-256 digest; do not print the full diff. After ordinary Confirmation or exact frozen trusted Goal authorization for the action and boundary, apply the agreed change without new semantic changes and report the result and actual checks separately.
 
 When selecting a durable design in writing modes, develop at least two materially different options, compare them against constraints, interfaces, failures, compatibility, security, observability, testability, migration, and rollback. Obtain the human's choice. Preserve architecturally significant alternatives and the outcome in an ADR.
 
@@ -41,7 +41,7 @@ When selecting a durable design in writing modes, develop at least two materiall
 
 1. Verify that `specs/` is absent and the project is truly greenfield. If meaningful source code, tests, schemas, configuration, CLI/API, CI, or deployment already exist, stop and propose `spec-onboard`.
 2. Conduct an adaptive interview using the areas in `references/interviewing.md`.
-3. Prepare a preview of the complete `specs/`, present a compact summary, obtain confirmation, and create all 19 files.
+3. Prepare a preview of the complete `specs/`, present a compact summary, obtain ordinary Confirmation or exact frozen trusted Goal authorization for the action and boundary, and create all 19 files.
 4. Do not modify code or create an implementation plan.
 
 ### `spec-onboard`
@@ -49,14 +49,14 @@ When selecting a durable design in writing modes, develop at least two materiall
 1. Verify that `specs/` is absent. Otherwise propose `spec-update` or `spec-audit`.
 2. Investigate repository evidence according to `references/onboarding.md` before asking questions.
 3. Classify individual claims as `KNOWN`, `AMBIGUOUS`, `UNKNOWN`, or `CONFLICT`. Do not present current code behavior as a supported contract.
-4. After the interview, show a preview and create only canonical `specs/` and necessary ADRs.
+4. After the interview, show a preview, obtain ordinary Confirmation or exact frozen trusted Goal authorization for the action and boundary, and create only canonical `specs/` and necessary ADRs.
 
 ### `spec-update`
 
 1. Verify that `specs/` exists, read the affected area, and agree on the desired change.
 2. Before design, mandatory perform the analysis in `references/consolidation.md`. Explicitly include `Consolidation: required` with precise simplifications or `Consolidation: not required` with a reason in the preview.
 3. Agree on an unambiguous target state. A new material requirement receives a new ID; do not renumber or reuse existing IDs.
-4. After confirmation, modify only `specs/`, including ADRs within `specs/architecture/09-architecture-decisions/`.
+4. After ordinary Confirmation or exact frozen trusted Goal authorization for the action and boundary, modify only `specs/`, including ADRs within `specs/architecture/09-architecture-decisions/`.
 
 ### `spec-audit`
 
