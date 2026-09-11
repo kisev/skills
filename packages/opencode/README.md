@@ -2,7 +2,7 @@
 
 [Русский](README.ru.md)
 
-`@kisev/skills-opencode@2.0.4` is the optional OpenCode-specific layer. Portable
+`@kisev/skills-opencode@2.0.5` is the optional OpenCode-specific layer. Portable
 skills have a separate lifecycle and must be installed independently through the
 [root portable flow](../../README.md).
 
@@ -30,7 +30,7 @@ Install in the repository's npm project and run the CLI from that project root:
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/skills-opencode@2.0.4
+npm install --save-exact @kisev/skills-opencode@2.0.5
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -45,7 +45,7 @@ Use `~/.config/opencode` as the persistent npm project:
 mkdir -p "$HOME/.config/opencode"
 cd "$HOME/.config/opencode"
 test -f package.json || npm init --yes
-npm install --save-exact @kisev/skills-opencode@2.0.4
+npm install --save-exact @kisev/skills-opencode@2.0.5
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -149,7 +149,7 @@ version, preview and confirm `install` with the same scope and desired selection
 then restart OpenCode:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode@2.0.4
+npm install --save-exact @kisev/skills-opencode@2.0.5
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 

@@ -4,6 +4,14 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.0.5] - 2026-09-11
+
+### Fixed
+
+- Legacy preview receipts are accepted and replaced during the next preview.
+- Legacy `2.0.3` preview receipts are normalized and replaced by the next
+  preview instead of failing with `invalid_receipt`.
+
 ## [2.0.4] - 2026-09-11
 
 ### Release

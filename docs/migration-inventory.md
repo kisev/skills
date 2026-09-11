@@ -5,8 +5,8 @@
 ## Current Release
 
 The current exact portable source is
-`https://github.com/kisev/skills/tree/v2.0.4`. The optional integration package
-is `@kisev/skills-opencode@2.0.4`. Latest source is selected separately with
+`https://github.com/kisev/skills/tree/v2.0.5`. The optional integration package
+is `@kisev/skills-opencode@2.0.5`. Latest source is selected separately with
 `kisev/skills`.
 
 ## Active Portable Skills

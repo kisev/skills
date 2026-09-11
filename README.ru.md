@@ -19,10 +19,10 @@ commands, agents, tools, routing и optional plugin wrappers, но не соде
 
 ## Быстрый global-старт
 
-Установите точный portable release `v2.0.4` для обоих host:
+Установите точный portable release `v2.0.5` для обоих host:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.4 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.5 --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 Команда создаёт одну canonical copy в `~/.agents/skills` для обоих host.
@@ -38,7 +38,7 @@ npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.4 --agent 
 находится в `.agents/skills`:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.4 --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.5 --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
 Для OpenCode используйте обязательный flow: установите package постоянно в
@@ -58,10 +58,10 @@ Package command adapters, Fixed agents и Selectable plugins. Выбор adapter
 ## Закреплённый release и latest source
 
 Текущий immutable source:
-`https://github.com/kisev/skills/tree/v2.0.4`. Посмотреть его catalog без записи:
+`https://github.com/kisev/skills/tree/v2.0.5`. Посмотреть его catalog без записи:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.4 --list
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.5 --list
 ```
 
 Используйте `kisev/skills` отдельно, когда намеренно нужен latest source из
@@ -205,10 +205,10 @@ outputs. Меняйте canonical sources в `shared/references/` или
 
 ## Справочник и ограничения
 
-- Текущий portable release: `https://github.com/kisev/skills/tree/v2.0.4`.
+- Текущий portable release: `https://github.com/kisev/skills/tree/v2.0.5`.
 - Latest source selector: `kisev/skills`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.0.4`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.0.5`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners используют Python 3.12+ standard library, только когда нужен
   runner.
