@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Edit Russian prose into natural, direct language without altering exact tokens.
+Edit user-facing prose in the language of the latest request into natural, direct language without altering exact tokens.
 
 ## Triggers and Near-Misses
 
-Trigger for Russian prose editing; near-miss: translation or code editing.
+Trigger for writing or editing user-facing prose; near-miss: translation without prose editing or code editing.
 
 ## Inputs and Outputs
 
@@ -40,5 +40,5 @@ The skill shall humanize prose without changing code, commands, IDs, or exact qu
 
 ## Example
 
-`humanize` improves a Russian announcement while preserving a command verbatim.
+`humanize` improves an announcement while preserving a command verbatim.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

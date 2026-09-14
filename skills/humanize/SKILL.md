@@ -1,7 +1,12 @@
 ---
 name: humanize
 description: >-
-  Write and edit natural Russian prose without bureaucratic phrasing. Russian discovery terms: естественный русский текст.
+  Use when writing or editing any user-facing prose, including chat replies,
+  reviews, thread replies, MR and issue descriptions, documentation,
+  announcements, plans, presentations, meeting notes, and commit messages.
+  Follow the language of the latest request and write naturally without
+  bureaucratic phrasing. Other skills should load humanize before drafting
+  user-facing text. Russian discovery terms: естественный русский текст.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
