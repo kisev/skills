@@ -98,20 +98,10 @@ def wait_for_metadata(name: str, version: str, attempts: int = 24) -> dict[str, 
     return None
 
 
-def verify_provenance(metadata: dict[str, Any], expected_sha512: str, revision: str) -> None:
-    dist = metadata.get("dist")
-    if not isinstance(dist, dict):
-        raise PublicationError("npm distribution metadata is missing")
-    attestations = dist.get("attestations")
-    if not isinstance(attestations, dict) or not isinstance(attestations.get("url"), str):
-        raise PublicationError("npm provenance metadata is missing")
-    provenance = attestations.get("provenance")
-    if not isinstance(provenance, dict) or provenance.get("predicateType") != SLSA_PREDICATE:
-        raise PublicationError("npm SLSA provenance declaration is invalid")
-    document = request_json(attestations["url"])
+def provenance_matches(document: dict[str, Any], expected_sha512: str, revision: str) -> bool:
     records = document.get("attestations") if document else None
     if not isinstance(records, list):
-        raise PublicationError("npm attestations document is invalid")
+        return False
     for record in records:
         if not isinstance(record, dict) or record.get("predicateType") != SLSA_PREDICATE:
             continue
@@ -148,7 +138,32 @@ def verify_provenance(metadata: dict[str, Any], expected_sha512: str, revision: 
             for dependency in dependencies
         )
         if subject_matches and workflow_matches and revision_matches:
+            return True
+    return False
+
+
+def verify_provenance(
+    metadata: dict[str, Any],
+    expected_sha512: str,
+    revision: str,
+    attempts: int = 24,
+    delay: float = 5,
+) -> None:
+    dist = metadata.get("dist")
+    if not isinstance(dist, dict):
+        raise PublicationError("npm distribution metadata is missing")
+    attestations = dist.get("attestations")
+    if not isinstance(attestations, dict) or not isinstance(attestations.get("url"), str):
+        raise PublicationError("npm provenance metadata is missing")
+    provenance = attestations.get("provenance")
+    if not isinstance(provenance, dict) or provenance.get("predicateType") != SLSA_PREDICATE:
+        raise PublicationError("npm SLSA provenance declaration is invalid")
+    for attempt in range(max(attempts, 1)):
+        document = request_json(attestations["url"])
+        if document is not None and provenance_matches(document, expected_sha512, revision):
             return
+        if attempt + 1 < attempts:
+            time.sleep(delay)
     raise PublicationError("npm provenance does not bind the artifact, workflow, and revision")
 
 

@@ -4,6 +4,14 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.2.2] - 2026-09-14
+
+### Fixed
+
+- npm post-publication verification now retries the attestations endpoint while
+  registry provenance propagates, without accepting a mismatched artifact.
+- GitHub artifact uploads use the supported Node 24 action runtime.
+
 ## [2.2.1] - 2026-09-14
 
 ### Added

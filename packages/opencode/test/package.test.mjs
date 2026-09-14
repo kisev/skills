@@ -1457,7 +1457,7 @@ test("package catalog and doctor tools are strictly observational", async () => 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
   const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
   assert.equal(packageJson.name, "@kisev/skills-opencode");
-  assert.equal(packageJson.version, "2.2.1");
+  assert.equal(packageJson.version, "2.2.2");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.type, "git");
   assert.equal(packageJson.repository.url, "git+https://github.com/kisev/skills.git");

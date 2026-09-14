@@ -140,7 +140,7 @@ def check_inventory() -> dict[str, Any]:
 def check_evidence(
     trace: dict[str, Any], blocks: dict[str, tuple[Path, str]], inventory: dict[str, Any]
 ) -> None:
-    if trace.get("schema") != "traceability/v1" or trace.get("target") != "2.2.1":
+    if trace.get("schema") != "traceability/v1" or trace.get("target") != "2.2.2":
         raise SpecError("traceability_schema")
     revision = trace.get("source_revision")
     if (
