@@ -413,6 +413,14 @@
     {
       "source": "references/language-policy.md",
       "destination": "slides-prompts-prepare/references/language-policy.md"
+    },
+    {
+      "source": "references/label-semantics.md",
+      "destination": "mr-prepare/references/label-semantics.md"
+    },
+    {
+      "source": "references/label-semantics.md",
+      "destination": "release-prepare/references/label-semantics.md"
     }
   ]
 }

@@ -79,6 +79,8 @@ start_sha = os.environ.get("FAKE_START_SHA", "b")
 changed_path = os.environ.get("FAKE_CHANGED_PATH")
 if endpoint.startswith("projects/group%%2Fproject"):
     value = {"id": 19}
+elif endpoint.startswith("projects/19/labels"):
+    value = [{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}, {"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}]
 elif endpoint == "projects/19/merge_requests/7":
     value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
@@ -158,6 +160,14 @@ print(json.dumps(value))
                     {
                         "title": "Prepare exact merge request publication plan",
                         "description": "Proposed description",
+                        "label_intent": {
+                            "change_type": None,
+                            "workflow_state": None,
+                            "urgency": None,
+                            "impact": None,
+                            "compatibility": None,
+                            "origin": None,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -273,6 +283,14 @@ print(json.dumps(value))
                         "version": "1.1.0",
                         "announcement": "Three verified release outcomes.",
                         "illustration_prompt": "Horizontal 16:9 editorial illustration without text or logos.",
+                        "label_intent": {
+                            "change_type": "release",
+                            "workflow_state": None,
+                            "urgency": None,
+                            "impact": None,
+                            "compatibility": "minor",
+                            "origin": None,
+                        },
                     }
                 ),
                 encoding="utf-8",
@@ -293,6 +311,10 @@ print(json.dumps(value))
             self.assertEqual(len(scaffold["companions"]), 3)
             self.assertTrue(all(Path(item["path"]).is_file() for item in scaffold["companions"]))
             plan = scaffold["artifact_path"]
+            plan_payload = json.loads(Path(plan).read_text(encoding="utf-8"))["payload"]
+            self.assertEqual(
+                plan_payload["label_review"]["add"], ["ship-ready", "next-compatible"]
+            )
             finalized = self.run_runner(
                 "release-prepare", "finalize", "--plan", plan, env=environment
             )
@@ -425,6 +447,67 @@ print(json.dumps(value))
         self.assertIn("### Title\n\nTitle", markdown)
         self.assertIn("### Description\n\nDescription", markdown)
         self.assertNotRegex(markdown, r"[А-Яа-яЁё]")
+
+    def test_semantic_label_review_uses_catalog_meaning_not_fixed_names(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py",
+            "portable_gitlab_label_semantics",
+        )
+        bundle = {
+            "object": {
+                "labels": ["team-owned", "kind/feature", "legacy release"],
+            },
+            "labels": {
+                "items": [
+                    {"name": "team-owned", "description": "Team routing"},
+                    {"name": "kind/feature", "description": None},
+                    {"name": "legacy release", "description": None},
+                    {
+                        "name": "customer-defect",
+                        "description": "semantic-role: change_type; semantic-value: bug",
+                    },
+                    {"name": "risk/high", "description": None},
+                    {
+                        "name": "compatible-fix",
+                        "description": "semantic-role=compatibility; semantic-value=patch",
+                    },
+                ],
+                "complete": True,
+            },
+        }
+        intent = {
+            "change_type": "bug",
+            "workflow_state": None,
+            "urgency": None,
+            "impact": "high",
+            "compatibility": "patch",
+            "origin": "external",
+        }
+        result = module.review_labels(bundle, intent)
+
+        self.assertTrue(result["complete"])
+        self.assertEqual(
+            result["add"], ["customer-defect", "risk/high", "compatible-fix"]
+        )
+        self.assertEqual(result["remove"], ["kind/feature"])
+        self.assertEqual(
+            result["proposed"],
+            ["team-owned", "legacy release", "customer-defect", "risk/high", "compatible-fix"],
+        )
+        self.assertIn("legacy release", result["proposed"])
+        origin = next(
+            item for item in result["decisions"] if item["role"] == "origin"
+        )
+        self.assertEqual(origin["action"], "unsupported")
+
+        ambiguous = json.loads(json.dumps(bundle))
+        ambiguous["labels"]["items"].append(
+            {"name": "another-defect", "description": "semantic-role: change_type; semantic-value: bug"}
+        )
+        unresolved = module.review_labels(ambiguous, intent)
+        self.assertFalse(unresolved["complete"])
+        self.assertNotIn("customer-defect", unresolved["add"])
+        self.assertNotIn("kind/feature", unresolved["remove"])
 
     @unittest.skip("GitLab task adapter removed in stage 17")
     def test_glab_boundary_forces_get_without_shell_or_credentials(self) -> None:

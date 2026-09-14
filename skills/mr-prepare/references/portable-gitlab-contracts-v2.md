@@ -17,6 +17,10 @@ tag-to-head commit range. `review_context` binds current-user role, complete
 threads and notes, and read-only local Git verification to an evidence snapshot.
 `publication_plan`, `review_plan`, `analysis_report`, and `critic_receipt` bind
 their evidence digest; the latter records `run_id` and `session_id`.
+MR and release publication plans may contain a read-only `label_review`. It maps
+closed semantic roles and values to unique labels from the complete project and
+inherited-group catalog, preserves unknown labels, and records only an add/remove
+delta. Concrete label names are catalog results, never policy constants.
 New code-review findings record severity, risk, exact evidence, consequence,
 relation to the reviewed change, and a minimum fix. Legacy ID-only findings
 remain readable for existing v2 artifacts but cannot create a new review plan.

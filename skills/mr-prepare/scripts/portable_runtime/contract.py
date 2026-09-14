@@ -30,6 +30,127 @@ SECRET_RE = re.compile(r"(?i)(token|password|secret|private[_-]?token)\s*[=:]\s*
 SEMVER_RE = re.compile(
     r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
 )
+LABEL_ROLE_VALUES = {
+    "change_type": {"release", "feature", "bug", "maintenance", "documentation", "security"},
+    "workflow_state": {
+        "in_progress",
+        "review",
+        "blocked",
+        "completed",
+        "declined",
+        "needs_info",
+        "stale",
+    },
+    "urgency": {"emergency", "urgent", "standard", "low"},
+    "impact": {"critical", "high", "medium", "low"},
+    "compatibility": {"major", "minor", "patch"},
+    "origin": {"internal", "external", "inner_source"},
+}
+LABEL_ROLE_ALIASES = {
+    "change_type": "change_type",
+    "type": "change_type",
+    "kind": "change_type",
+    "category": "change_type",
+    "workflow_state": "workflow_state",
+    "status": "workflow_state",
+    "state": "workflow_state",
+    "workflow": "workflow_state",
+    "urgency": "urgency",
+    "priority": "urgency",
+    "impact": "impact",
+    "risk": "impact",
+    "severity": "impact",
+    "compatibility": "compatibility",
+    "semver": "compatibility",
+    "version": "compatibility",
+    "origin": "origin",
+    "source": "origin",
+}
+LABEL_VALUE_ALIASES = {
+    "change_type": {
+        "release": "release",
+        "delivery": "release",
+        "feature": "feature",
+        "enhancement": "feature",
+        "capability": "feature",
+        "bug": "bug",
+        "defect": "bug",
+        "fix": "bug",
+        "maintenance": "maintenance",
+        "chore": "maintenance",
+        "refactor": "maintenance",
+        "technical": "maintenance",
+        "tech_debt": "maintenance",
+        "documentation": "documentation",
+        "docs": "documentation",
+        "security": "security",
+        "vulnerability": "security",
+    },
+    "workflow_state": {
+        "in_progress": "in_progress",
+        "progress": "in_progress",
+        "doing": "in_progress",
+        "development": "in_progress",
+        "review": "review",
+        "review_ready": "review",
+        "ready_for_review": "review",
+        "blocked": "blocked",
+        "on_hold": "blocked",
+        "completed": "completed",
+        "done": "completed",
+        "closed": "completed",
+        "declined": "declined",
+        "rejected": "declined",
+        "wontfix": "declined",
+        "needs_info": "needs_info",
+        "need_info": "needs_info",
+        "waiting_for_info": "needs_info",
+        "stale": "stale",
+        "inactive": "stale",
+    },
+    "urgency": {
+        "emergency": "emergency",
+        "p0": "emergency",
+        "blocker": "emergency",
+        "critical": "emergency",
+        "urgent": "urgent",
+        "p1": "urgent",
+        "high": "urgent",
+        "standard": "standard",
+        "p2": "standard",
+        "normal": "standard",
+        "medium": "standard",
+        "low": "low",
+        "p3": "low",
+    },
+    "impact": {
+        "critical": "critical",
+        "s1": "critical",
+        "high": "high",
+        "s2": "high",
+        "medium": "medium",
+        "s3": "medium",
+        "low": "low",
+        "s4": "low",
+    },
+    "compatibility": {
+        "major": "major",
+        "breaking": "major",
+        "minor": "minor",
+        "feature": "minor",
+        "patch": "patch",
+        "fix": "patch",
+    },
+    "origin": {
+        "internal": "internal",
+        "team": "internal",
+        "external": "external",
+        "customer": "external",
+        "inner_source": "inner_source",
+        "innersource": "inner_source",
+        "community": "inner_source",
+    },
+}
 PROFILES = {
     "task-triage": {"issues"},
     "task-review": {"issues", "merge_requests"},
@@ -396,6 +517,232 @@ def thread_decisions_are_valid(value: object) -> bool:
     )
 
 
+def semantic_token(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
+
+
+def semantic_role(value: str) -> str | None:
+    return LABEL_ROLE_ALIASES.get(semantic_token(value))
+
+
+def semantic_value(role: str, value: str) -> str | None:
+    return LABEL_VALUE_ALIASES.get(role, {}).get(semantic_token(value))
+
+
+def label_semantics(value: object) -> tuple[str, str] | None:
+    if not isinstance(value, dict) or not nonempty_string(value.get("name")):
+        return None
+    name = cast(str, value["name"])
+    description = value.get("description")
+    if isinstance(description, str):
+        marker = re.search(
+            r"semantic[-_ ]role\s*[:=]\s*([^;\n]+)\s*;\s*semantic[-_ ]value\s*[:=]\s*([^;\n]+)",
+            description,
+            re.IGNORECASE,
+        )
+        if marker is not None:
+            role = semantic_role(marker.group(1))
+            item_value = semantic_value(role, marker.group(2)) if role is not None else None
+            if role is not None and item_value in LABEL_ROLE_VALUES[role]:
+                return role, item_value
+            return None
+    parts = re.split(r"::|:|/|=", name, maxsplit=1)
+    if len(parts) != 2:
+        return None
+    role = semantic_role(parts[0])
+    item_value = semantic_value(role, parts[1]) if role is not None else None
+    if role is None or item_value not in LABEL_ROLE_VALUES[role]:
+        return None
+    return role, item_value
+
+
+def label_intent_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != set(LABEL_ROLE_VALUES):
+        return False
+    return all(
+        item is None or isinstance(item, str) and item in LABEL_ROLE_VALUES[role]
+        for role, item in value.items()
+    )
+
+
+def review_labels(bundle: dict[str, Any], intent: dict[str, str | None]) -> dict[str, Any]:
+    labels_component = bundle.get("labels")
+    object_value = bundle.get("object")
+    if not isinstance(labels_component, dict) or not isinstance(object_value, dict):
+        raise WorkflowError("label evidence is unavailable")
+    raw_current = object_value.get("labels")
+    if not isinstance(raw_current, list) or not all(isinstance(item, str) for item in raw_current):
+        raise WorkflowError("current MR labels are invalid")
+    current = cast(list[str], raw_current)
+    semantics_by_name: dict[str, set[tuple[str, str]]] = {}
+    for item in cast(list[object], labels_component.get("items", [])):
+        semantics = label_semantics(item)
+        if semantics is None or not isinstance(item, dict) or not isinstance(item.get("name"), str):
+            continue
+        semantics_by_name.setdefault(item["name"], set()).add(semantics)
+    resolved_by_name = {
+        name: next(iter(values)) for name, values in semantics_by_name.items() if len(values) == 1
+    }
+    candidates: dict[tuple[str, str], list[str]] = {}
+    for name, semantics in resolved_by_name.items():
+        candidates.setdefault(semantics, []).append(name)
+    for names in candidates.values():
+        names.sort(key=str.casefold)
+    add: list[str] = []
+    remove: list[str] = []
+    unresolved: list[str] = []
+    decisions: list[dict[str, Any]] = []
+    catalog_complete = labels_component.get("complete") is True
+    for role in LABEL_ROLE_VALUES:
+        requested = intent[role]
+        current_for_role = [
+            name for name in current if resolved_by_name.get(name, (None, None))[0] == role
+        ]
+        if requested is None:
+            decisions.append(
+                {
+                    "role": role,
+                    "intent": None,
+                    "current": current_for_role,
+                    "desired_label": None,
+                    "action": "keep",
+                    "reason": "no semantic intent supplied",
+                }
+            )
+            continue
+        matching = candidates.get((role, requested), []) if catalog_complete else []
+        if not catalog_complete or len(matching) > 1:
+            reason = (
+                "project label catalog is incomplete"
+                if not catalog_complete
+                else "multiple project labels match the same semantic intent"
+            )
+            unresolved.append(f"{role}={requested}: {reason}")
+            decisions.append(
+                {
+                    "role": role,
+                    "intent": requested,
+                    "current": current_for_role,
+                    "desired_label": None,
+                    "action": "unresolved",
+                    "reason": reason,
+                }
+            )
+            continue
+        if not matching:
+            decisions.append(
+                {
+                    "role": role,
+                    "intent": requested,
+                    "current": current_for_role,
+                    "desired_label": None,
+                    "action": "unsupported",
+                    "reason": "semantic role and value are not represented in the project catalog",
+                }
+            )
+            continue
+        desired_label = matching[0]
+        role_remove = [name for name in current_for_role if name != desired_label]
+        for name in role_remove:
+            if name not in remove:
+                remove.append(name)
+        if desired_label not in current and desired_label not in add:
+            add.append(desired_label)
+        decisions.append(
+            {
+                "role": role,
+                "intent": requested,
+                "current": current_for_role,
+                "desired_label": desired_label,
+                "action": "change" if role_remove or desired_label in add else "keep",
+                "reason": "unique semantic match in the project label catalog",
+            }
+        )
+    proposed = [name for name in current if name not in remove]
+    proposed.extend(name for name in add if name not in proposed)
+    return {
+        "complete": catalog_complete and not unresolved,
+        "intent": intent,
+        "current": current,
+        "proposed": proposed,
+        "add": add,
+        "remove": remove,
+        "decisions": decisions,
+        "unresolved": unresolved,
+    }
+
+
+def label_review_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "complete",
+        "intent",
+        "current",
+        "proposed",
+        "add",
+        "remove",
+        "decisions",
+        "unresolved",
+    }:
+        return False
+    if (
+        not isinstance(value["complete"], bool)
+        or not label_intent_is_valid(value["intent"])
+        or not all(
+            isinstance(value[key], list) and all(isinstance(item, str) for item in value[key])
+            for key in ("current", "proposed", "add", "remove", "unresolved")
+        )
+        or not isinstance(value["decisions"], list)
+    ):
+        return False
+    decisions = cast(list[object], value["decisions"])
+    required = {"role", "intent", "current", "desired_label", "action", "reason"}
+    if not all(
+        isinstance(item, dict)
+        and set(item) == required
+        and isinstance(item.get("role"), str)
+        and item["role"] in LABEL_ROLE_VALUES
+        and (
+            item.get("intent") is None
+            or isinstance(item.get("intent"), str)
+            and item["intent"] in LABEL_ROLE_VALUES[item["role"]]
+        )
+        and isinstance(item.get("current"), list)
+        and all(isinstance(name, str) for name in item["current"])
+        and (item.get("desired_label") is None or isinstance(item.get("desired_label"), str))
+        and item.get("action") in {"keep", "change", "unsupported", "unresolved"}
+        and nonempty_string(item.get("reason"))
+        for item in decisions
+    ):
+        return False
+    typed_decisions = cast(list[dict[str, Any]], decisions)
+    roles = [item["role"] for item in typed_decisions]
+    current = cast(list[str], value["current"])
+    add = cast(list[str], value["add"])
+    remove = cast(list[str], value["remove"])
+    expected = [name for name in current if name not in remove]
+    expected.extend(name for name in add if name not in expected)
+    return (
+        len(roles) == len(LABEL_ROLE_VALUES)
+        and set(roles) == set(LABEL_ROLE_VALUES)
+        and all(
+            name in current
+            for item in typed_decisions
+            for name in item["current"]
+        )
+        and all(name in current for name in remove)
+        and all(name in value["proposed"] for name in add)
+        and not set(add).intersection(remove)
+        and len(add) == len(set(add))
+        and len(remove) == len(set(remove))
+        and (
+            value["complete"] is False
+            or not value["unresolved"]
+            and all(item["action"] != "unresolved" for item in typed_decisions)
+        )
+        and value["proposed"] == expected
+    )
+
+
 def companions_are_valid(value: object) -> bool:
     if not isinstance(value, list):
         return False
@@ -755,11 +1102,20 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "external_mutations",
         }
         release_fields = {"inventory_digest", "release_version", "companions"}
-        expected_keys = (
-            required | release_fields if payload.get("profile") == "release-prepare" else required
-        )
+        label_fields = {"label_review"}
+        profile = payload.get("profile")
+        actual_keys = set(payload)
+        if profile == "release-prepare":
+            expected_keys = required | release_fields
+            keys_valid = actual_keys == expected_keys or actual_keys == (expected_keys | label_fields)
+        elif profile == "mr-prepare":
+            expected_keys = required
+            keys_valid = actual_keys == expected_keys or actual_keys == (expected_keys | label_fields)
+        else:
+            expected_keys = required
+            keys_valid = actual_keys == expected_keys
         if (
-            set(payload) != expected_keys
+            not keys_valid
             or not nonempty_string(payload.get("profile"))
             or not isinstance(payload.get("target"), dict)
             or not is_digest(payload.get("evidence_digest"))
@@ -776,6 +1132,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                     or not companions_are_valid(payload.get("companions"))
                 )
             )
+            or ("label_review" in payload and not label_review_is_valid(payload["label_review"]))
         ):
             raise WorkflowError("publication plan payload is schema-invalid")
     elif kind == "review_plan":
@@ -1099,7 +1456,7 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
     project_id = project["id"]
     identity = {**target, "project_id": project_id}
     root = state_directory(profile, identity)
-    labels = paginated(hostname, f"projects/{project_id}/labels")
+    labels = paginated(hostname, f"projects/{project_id}/labels?include_ancestor_groups=true")
     if kind == "new_issue":
         bundle: dict[str, object] = {
             "schema_version": ARTIFACT_VERSION,
@@ -1305,10 +1662,59 @@ def pipeline_summary(bundle: dict[str, Any]) -> tuple[str, dict[str, Any] | None
     return f"unsupported raw state: {raw_status!s}", pipeline
 
 
+def label_markdown_cell(value: object) -> str:
+    if isinstance(value, list):
+        value = ", ".join(str(item) for item in value) or "none"
+    if value is None:
+        value = "none"
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def label_review_markdown(label_review: dict[str, Any]) -> list[str]:
+    lines = [
+        "",
+        "## Semantic label review",
+        "",
+        f"- Completeness: `{'complete' if label_review['complete'] else 'unresolved'}`",
+        f"- Current: {label_markdown_cell(label_review['current'])}",
+        f"- Proposed: {label_markdown_cell(label_review['proposed'])}",
+        f"- Add: {label_markdown_cell(label_review['add'])}",
+        f"- Remove: {label_markdown_cell(label_review['remove'])}",
+        "",
+        "| Semantic role | Intent | Current labels | Desired label | Action | Reason |",
+        "|---|---|---|---|---|---|",
+    ]
+    for decision in label_review["decisions"]:
+        lines.append(
+            "| "
+            + " | ".join(
+                label_markdown_cell(decision[key])
+                for key in ("role", "intent", "current", "desired_label", "action", "reason")
+            )
+            + " |"
+        )
+    if label_review["unresolved"]:
+        lines.extend(
+            [
+                "",
+                "Unresolved semantic intents:",
+                *[f"- {value}" for value in label_review["unresolved"]],
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "This is a read-only delta. No label mutation command was generated or executed.",
+        ]
+    )
+    return lines
+
+
 def publication_markdown(
     bundle: dict[str, Any],
-    content: dict[str, str],
+    content: dict[str, Any],
     inventory: dict[str, Any] | None = None,
+    label_review: dict[str, Any] | None = None,
 ) -> str:
     target = bundle.get("target", {})
     profile = bundle.get("profile")
@@ -1338,6 +1744,8 @@ def publication_markdown(
     object_value = bundle.get("object")
     if not isinstance(object_value, dict):
         raise WorkflowError("evidence object is invalid")
+    if label_review is None:
+        raise WorkflowError("publication plan requires a semantic label review")
     current_title = object_value.get("title")
     current_description = object_value.get("description")
     if not isinstance(current_title, str) or current_description is not None and not isinstance(
@@ -1409,6 +1817,7 @@ def publication_markdown(
                 "### Proposed description",
                 "",
                 marked_preview("PROPOSED DESCRIPTION", proposed_description),
+                *label_review_markdown(label_review),
                 *release_sections,
                 "",
                 "Before manual publication, run `finalize --plan` for this JSON envelope; stale or incomplete evidence blocks readiness.",
@@ -1435,7 +1844,10 @@ def scaffold(
     release_inventory: dict[str, Any] | None = None
     inventory_digest: str | None = None
     release_companions: list[dict[str, str]] = []
+    label_review: dict[str, Any] | None = None
     content_fields = {"title", "description"}
+    if profile in {"mr-prepare", "release-prepare"}:
+        content_fields.add("label_intent")
     if profile == "release-prepare":
         if inventory_file is None:
             raise WorkflowError("release publication plan requires --inventory")
@@ -1451,17 +1863,26 @@ def scaffold(
         content_value["description"], str
     ):
         raise WorkflowError("content requires a non-empty title and a description string")
-    content = cast(dict[str, str], content_value)
+    content = content_value
+    if profile in {"mr-prepare", "release-prepare"}:
+        if not label_intent_is_valid(content.get("label_intent")):
+            raise WorkflowError("content requires a complete semantic label_intent object")
+        label_review = review_labels(
+            bundle, cast(dict[str, str | None], content["label_intent"])
+        )
     if profile == "release-prepare":
+        release_label_intent = cast(dict[str, str | None], content["label_intent"])
         if (
             not isinstance(content.get("version"), str)
             or SEMVER_RE.fullmatch(content["version"]) is None
             or not nonempty_string(content.get("description"))
             or not nonempty_string(content.get("announcement"))
             or not nonempty_string(content.get("illustration_prompt"))
+            or release_label_intent["change_type"] != "release"
+            or release_label_intent["compatibility"] not in {"major", "minor", "patch"}
         ):
             raise WorkflowError(
-                "release content requires SemVer, announcement, and illustration_prompt"
+                "release content requires SemVer, release/compatibility label intent, announcement, and illustration_prompt"
             )
         version = content["version"]
         for name, value in (
@@ -1476,10 +1897,10 @@ def scaffold(
                     "sha256": hashlib.sha256(value.encode()).hexdigest(),
                 }
             )
-    markdown = publication_markdown(bundle, content, release_inventory)
+    markdown = publication_markdown(bundle, content, release_inventory, label_review)
     complete = bool(bundle.get("retrieval_complete")) and (
         release_inventory is None or release_inventory.get("complete") is True
-    )
+    ) and (label_review is None or label_review.get("complete") is True)
     payload: dict[str, Any] = {
         "profile": bundle.get("profile"),
         "external_mutations": False,
@@ -1497,6 +1918,8 @@ def scaffold(
                 "companions": release_companions,
             }
         )
+    if label_review is not None:
+        payload["label_review"] = label_review
     path, plan_digest = write_artifact(root, "publication_plan", payload)
     markdown_path, markdown_digest = write_companion(path.with_suffix(".md"), markdown)
     companion_outputs: list[dict[str, str]] = []
@@ -1516,11 +1939,12 @@ def scaffold(
         "summary": {
             "tldr": "Prepared a local Markdown plan for manual publication.",
             "scope": [str(bundle.get("target", {}).get("url", "local"))],
-            "risks": [] if complete else ["collection or release inventory incomplete"],
+            "risks": [] if complete else ["collection, inventory, or label intent incomplete"],
             "checks": [
                 "schema-valid evidence",
                 "content-addressed publication plan",
                 *(["exact release inventory"] if release_inventory is not None else []),
+                *(["semantic label delta"] if label_review is not None else []),
             ],
         },
         "artifact_path": str(path),
@@ -1603,6 +2027,11 @@ def plan_context(
     _, baseline = artifact_payload(source, "evidence_snapshot")
     release_inventory: dict[str, Any] | None = None
     expected_complete = baseline.get("retrieval_complete")
+    label_review = plan.get("label_review")
+    if label_review is not None:
+        if not label_review_is_valid(label_review):
+            raise WorkflowError("publication plan label review is invalid")
+        expected_complete = bool(expected_complete) and label_review.get("complete") is True
     if plan.get("profile") == "release-prepare":
         inventory_digest = plan.get("inventory_digest")
         if not is_digest(inventory_digest):
@@ -1641,7 +2070,7 @@ def plan_context(
 def finalize_plan(
     plan_value: str,
 ) -> tuple[dict[str, object], Path, Path, dict[str, Any]]:
-    root, _, _, plan_digest, source, baseline, release_inventory = plan_context(plan_value)
+    root, _, plan, plan_digest, source, baseline, release_inventory = plan_context(plan_value)
     target = baseline.get("target")
     if not isinstance(target, dict):
         raise WorkflowError("evidence target is missing")
@@ -1660,7 +2089,10 @@ def finalize_plan(
     current = collect(target, str(baseline.get("profile", "task-triage")), persist=False)
     before, after = fingerprint(baseline), fingerprint(current)
     changed = [name for name in before if before[name] != after[name]]
-    complete = bool(current.get("retrieval_complete"))
+    plan_label_review = plan.get("label_review")
+    complete = bool(current.get("retrieval_complete")) and (
+        plan_label_review is None or plan_label_review.get("complete") is True
+    )
     if release_inventory is not None:
         inventory_module = importlib.import_module("release_inventory")
         current_inventory = inventory_module.refresh_inventory(release_inventory, source)

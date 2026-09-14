@@ -50,6 +50,86 @@
       },
       "additionalProperties": false
     },
+    "label_intent": {
+      "type": "object",
+      "required": ["change_type", "workflow_state", "urgency", "impact", "compatibility", "origin"],
+      "properties": {
+        "change_type": {
+          "anyOf": [
+            { "enum": ["release", "feature", "bug", "maintenance", "documentation", "security"] },
+            { "type": "null" }
+          ]
+        },
+        "workflow_state": {
+          "anyOf": [
+            {
+              "enum": [
+                "in_progress",
+                "review",
+                "blocked",
+                "completed",
+                "declined",
+                "needs_info",
+                "stale"
+              ]
+            },
+            { "type": "null" }
+          ]
+        },
+        "urgency": {
+          "anyOf": [{ "enum": ["emergency", "urgent", "standard", "low"] }, { "type": "null" }]
+        },
+        "impact": {
+          "anyOf": [{ "enum": ["critical", "high", "medium", "low"] }, { "type": "null" }]
+        },
+        "compatibility": {
+          "anyOf": [{ "enum": ["major", "minor", "patch"] }, { "type": "null" }]
+        },
+        "origin": {
+          "anyOf": [{ "enum": ["internal", "external", "inner_source"] }, { "type": "null" }]
+        }
+      },
+      "additionalProperties": false
+    },
+    "label_decision": {
+      "type": "object",
+      "required": ["role", "intent", "current", "desired_label", "action", "reason"],
+      "properties": {
+        "role": {
+          "enum": ["change_type", "workflow_state", "urgency", "impact", "compatibility", "origin"]
+        },
+        "intent": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "current": { "type": "array", "items": { "type": "string" } },
+        "desired_label": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "action": { "enum": ["keep", "change", "unsupported", "unresolved"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "label_review": {
+      "type": "object",
+      "required": [
+        "complete",
+        "intent",
+        "current",
+        "proposed",
+        "add",
+        "remove",
+        "decisions",
+        "unresolved"
+      ],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "intent": { "$ref": "#/$defs/label_intent" },
+        "current": { "type": "array", "items": { "type": "string" } },
+        "proposed": { "type": "array", "items": { "type": "string" } },
+        "add": { "type": "array", "items": { "type": "string" } },
+        "remove": { "type": "array", "items": { "type": "string" } },
+        "decisions": { "type": "array", "items": { "$ref": "#/$defs/label_decision" } },
+        "unresolved": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
     "finding": {
       "type": "object",
       "required": ["id"],
@@ -399,7 +479,8 @@
                 "plan_name": { "type": "string", "minLength": 1 },
                 "inventory_digest": { "$ref": "#/$defs/digest" },
                 "release_version": { "type": "string", "minLength": 1 },
-                "companions": { "type": "array", "items": { "$ref": "#/$defs/companion" } }
+                "companions": { "type": "array", "items": { "$ref": "#/$defs/companion" } },
+                "label_review": { "$ref": "#/$defs/label_review" }
               }
             }
           }
