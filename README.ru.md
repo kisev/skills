@@ -19,7 +19,7 @@ commands, agents, tools, routing и optional plugin wrappers, но не соде
 
 ## Быстрый global-старт
 
-Установите текущую стабильную portable distribution `v2.2.1` для обоих host:
+Установите текущую стабильную portable distribution `v2.2.2` для обоих host:
 
 ```shell
 npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
@@ -59,7 +59,7 @@ Package command adapters, Fixed agents и Selectable plugins. Выбор adapter
 
 Поддерживаемый portable source - стабильный канал GitHub Pages по адресу
 `https://kisev.github.io/skills`. В этом выпуске его metadata указывает версию
-`2.2.1` и commit с tag `v2.2.1`. Посмотреть catalog без записи:
+`2.2.2` и commit с tag `v2.2.2`. Посмотреть catalog без записи:
 
 ```shell
 npx --yes skills@1.5.23 add https://kisev.github.io/skills --list
@@ -219,10 +219,10 @@ Portable entrypoints называются `SKILL.source.md`; build создаё�
 
 ## Справочник и ограничения
 
-- Stable portable distribution: `https://kisev.github.io/skills` (`2.2.1`).
-- Source provenance: `https://github.com/kisev/skills/tree/v2.2.1`.
+- Stable portable distribution: `https://kisev.github.io/skills` (`2.2.2`).
+- Source provenance: `https://github.com/kisev/skills/tree/v2.2.2`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.2.1`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.2.2`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners используют Python 3.12+ standard library, только когда нужен
   runner.

@@ -23,7 +23,7 @@ archival can preserve recovery and auditability.
 
 ### REQ-C-005 - Bounded distribution change in this target
 
-The `2.2.1` target changes portable build, publication, and installation
+The `2.2.2` target changes portable build, publication, and installation
 transport without expanding the `29/33/6/3/5` capability inventory or the
 declared OpenCode compatibility range.
 
