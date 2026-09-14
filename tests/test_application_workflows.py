@@ -1412,6 +1412,54 @@ class MattermostAndTeamTests(unittest.TestCase):
             check=False,
         )
 
+    def example_team_profile(self, skill: str, name: str) -> dict[str, Any]:
+        profile = json.loads(
+            (BUILT_SKILLS / skill / "references/team-context.example.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        profile["profile"] = name
+        return cast("dict[str, Any]", profile)
+
+    def save_team_profile(
+        self,
+        skill: str,
+        candidate: Path,
+        name: str,
+        environment: dict[str, str],
+        *,
+        set_default: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        default_flag = ("--set-default",) if set_default else ()
+        prepared = self.run_script(
+            skill,
+            "team_workflow.py",
+            "profile-prepare",
+            "--name",
+            name,
+            "--input",
+            str(candidate),
+            *default_flag,
+            cwd=candidate.parent,
+            env=environment,
+        )
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        preview = json.loads(prepared.stdout)
+        return self.run_script(
+            skill,
+            "team_workflow.py",
+            "profile-save",
+            "--name",
+            name,
+            "--input",
+            str(candidate),
+            "--digest",
+            preview["digest"],
+            *default_flag,
+            cwd=candidate.parent,
+            env=environment,
+        )
+
     def test_mattermost_origin_binding_and_missing_auth_do_not_leak_secret(self) -> None:
         module = self.mattermost_module("origin")
         with tempfile.TemporaryDirectory() as temporary:
@@ -2096,6 +2144,241 @@ class MattermostAndTeamTests(unittest.TestCase):
             self.assertEqual(payload["status"], "setup-required")
             self.assertIn("scope", payload["missing"])
             self.assertFalse(state.exists())
+
+    def test_team_missing_default_profile_is_read_only_setup_required(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config = root / "config"
+            state = root / "state"
+            result = self.run_script(
+                "team-retro",
+                "team_workflow.py",
+                "action-check",
+                cwd=root,
+                env={"XDG_CONFIG_HOME": str(config), "XDG_STATE_HOME": str(state)},
+            )
+            self.assertEqual(result.returncode, 3, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status"], "setup-required")
+            self.assertEqual(payload["missing"], ["profile.default"])
+            self.assertFalse(config.exists())
+            self.assertFalse(state.exists())
+
+    def test_team_profile_setup_resolves_default_privately_without_plan_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate.json"
+            profile = self.example_team_profile("team-retro", "platform-team")
+            private_marker = "PRIVATE-PROFILE-MARKER"
+            profile["team"]["description"] = private_marker
+            candidate.write_text(json.dumps(profile), encoding="utf-8")
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            applied = self.save_team_profile(
+                "team-retro", candidate, "platform-team", environment
+            )
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+
+            profile_root = root / "config/opencode/team-contexts"
+            saved = profile_root / "platform-team.json"
+            settings = profile_root / "settings.json"
+            self.assertEqual(stat_mode(profile_root), 0o700)
+            self.assertEqual(stat_mode(saved), 0o600)
+            self.assertEqual(stat_mode(settings), 0o600)
+            for skill in ("team-retro", "team-roadmap", "slides-prompts-prepare"):
+                resolved = self.run_script(
+                    skill,
+                    "team_workflow.py",
+                    "action-check",
+                    cwd=root,
+                    env=environment,
+                )
+                self.assertEqual(resolved.returncode, 0, resolved.stderr)
+                resolved_payload = json.loads(resolved.stdout)
+                self.assertEqual(resolved_payload["context_source"], "profile:platform-team")
+                self.assertEqual(resolved_payload["projects"], 1)
+                self.assertEqual(Path(resolved_payload["context_path"]), saved)
+
+            retained = "".join(
+                path.read_text(encoding="utf-8")
+                for path in (root / "state/agent-skills/team-workflow/plans").glob("*.json")
+            )
+            retained += "".join(
+                path.read_text(encoding="utf-8")
+                for path in (root / "state/agent-skills/team-workflow/reports").glob("*.json")
+            )
+            self.assertNotIn(private_marker, retained)
+
+            saved.chmod(0o644)
+            insecure = self.run_script(
+                "team-retro",
+                "team_workflow.py",
+                "action-check",
+                cwd=root,
+                env=environment,
+            )
+            self.assertEqual(insecure.returncode, 2, insecure.stderr)
+            self.assertIn("group or other users", insecure.stderr)
+
+    def test_team_profile_inspect_is_action_specific_and_strict(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate.json"
+            profile = self.example_team_profile("team-retro", "platform-team")
+            del profile["actions"]["retro"]
+            candidate.write_text(json.dumps(profile), encoding="utf-8")
+            missing = self.run_script(
+                "team-retro",
+                "team_workflow.py",
+                "profile-inspect",
+                "--input",
+                str(candidate),
+                cwd=root,
+                env={
+                    "XDG_CONFIG_HOME": str(root / "config"),
+                    "XDG_STATE_HOME": str(root / "state"),
+                },
+            )
+            self.assertEqual(missing.returncode, 3, missing.stderr)
+            self.assertIn("actions.retro", json.loads(missing.stdout)["missing"])
+
+            profile["unexpected"] = "value"
+            candidate.write_text(json.dumps(profile), encoding="utf-8")
+            invalid = self.run_script(
+                "team-retro",
+                "team_workflow.py",
+                "profile-inspect",
+                "--input",
+                str(candidate),
+                cwd=root,
+            )
+            self.assertEqual(invalid.returncode, 2, invalid.stderr)
+            self.assertIn("unexpected", json.loads(invalid.stdout)["invalid"])
+
+            del profile["unexpected"]
+            private_value = "SHOULD-NOT-LEAK"
+            profile["extensions"] = {"access_token": private_value}
+            candidate.write_text(json.dumps(profile), encoding="utf-8")
+            unsafe = self.run_script(
+                "team-retro",
+                "team_workflow.py",
+                "profile-inspect",
+                "--input",
+                str(candidate),
+                cwd=root,
+            )
+            self.assertEqual(unsafe.returncode, 2, unsafe.stderr)
+            self.assertNotIn(private_value, unsafe.stdout + unsafe.stderr)
+
+    def test_team_explicit_profile_overrides_default_without_rebinding_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            default_candidate = root / "default.json"
+            default_candidate.write_text(
+                json.dumps(self.example_team_profile("team-retro", "default-team")),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                self.save_team_profile(
+                    "team-retro", default_candidate, "default-team", environment
+                ).returncode,
+                0,
+            )
+            other_candidate = root / "other.json"
+            other_profile = self.example_team_profile("team-retro", "other-team")
+            other_profile["projects"].append(
+                {
+                    "key": "second-project",
+                    "name": "Second Project",
+                    "path": "platform/second-project",
+                    "category": "Core",
+                    "description": "Second bounded project.",
+                    "include": True,
+                }
+            )
+            other_candidate.write_text(json.dumps(other_profile), encoding="utf-8")
+            self.assertEqual(
+                self.save_team_profile(
+                    "team-retro",
+                    other_candidate,
+                    "other-team",
+                    environment,
+                    set_default=False,
+                ).returncode,
+                0,
+            )
+            default = self.run_script(
+                "team-retro", "team_workflow.py", "action-check", cwd=root, env=environment
+            )
+            explicit = self.run_script(
+                "team-retro",
+                "team_workflow.py",
+                "action-check",
+                "--profile",
+                "other-team",
+                cwd=root,
+                env=environment,
+            )
+            self.assertEqual(json.loads(default.stdout)["profile"], "default-team")
+            self.assertEqual(json.loads(explicit.stdout)["profile"], "other-team")
+            self.assertEqual(json.loads(explicit.stdout)["projects"], 2)
+
+    def test_team_profile_update_rejects_concurrent_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate.json"
+            profile = self.example_team_profile("team-roadmap", "platform-team")
+            candidate.write_text(json.dumps(profile), encoding="utf-8")
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            applied = self.save_team_profile(
+                "team-roadmap", candidate, "platform-team", environment
+            )
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+
+            profile["team"]["members"].append(
+                {"id": "bob", "groups": ["platform"], "active": True}
+            )
+            candidate.write_text(json.dumps(profile), encoding="utf-8")
+            prepared = self.run_script(
+                "team-roadmap",
+                "team_workflow.py",
+                "profile-prepare",
+                "--name",
+                "platform-team",
+                "--input",
+                str(candidate),
+                cwd=root,
+                env=environment,
+            )
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            digest = json.loads(prepared.stdout)["digest"]
+            saved = root / "config/opencode/team-contexts/platform-team.json"
+            saved.write_text(saved.read_text(encoding="utf-8") + "\n", encoding="utf-8")
+            saved.chmod(0o600)
+            stale = self.run_script(
+                "team-roadmap",
+                "team_workflow.py",
+                "profile-save",
+                "--name",
+                "platform-team",
+                "--input",
+                str(candidate),
+                "--digest",
+                digest,
+                cwd=root,
+                env=environment,
+            )
+            self.assertNotEqual(stale.returncode, 0)
+            self.assertIn("digest", json.loads(stale.stdout)["error"]["message"])
 
     def test_all_team_skills_use_shared_runtime_and_fixed_action(self) -> None:
         actions = {

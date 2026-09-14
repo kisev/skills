@@ -10,11 +10,13 @@ Trigger for sprint close; near-miss: starting a sprint or general retro.
 
 ## Inputs and Outputs
 
-Input is context and fixed action. Output is bounded close report and state result.
+Input is the fixed action and an automatically resolved default private profile
+or explicit legacy context. Output is a bounded close report and state result.
 
 ## Workflow Stages
 
-Resolve context, inspect state, execute action, validate digest, report.
+Resolve or self-setup the profile, inspect state, execute the fixed action,
+validate the digest, and report.
 
 ## Dependencies
 

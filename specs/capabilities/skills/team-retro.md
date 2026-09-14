@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Run one explicitly selected retrospective action against team context.
+Prepare one evidence-based retrospective, delivery review, report, or
+presentation against a strict private team profile.
 
 ## Triggers and Near-Misses
 
@@ -10,27 +11,35 @@ Trigger for a retrospective action; near-miss: roadmap or sprint planning.
 
 ## Inputs and Outputs
 
-Input is explicit context and action. Output is structured retrospective material.
+Input is the fixed action, an automatically resolved default profile or explicit
+context override, an exact period, and bounded evidence. Output is structured
+retrospective material plus evidence-completeness and verification results.
 
 ## Workflow Stages
 
-Resolve context, inspect state, execute fixed action, validate, report.
+Resolve or self-setup the profile, establish `[since, until)`, inventory every
+configured project, collect and validate evidence, distinguish delivery states,
+draft the configured artifact, preview writes, verify, and report.
 
 ## Dependencies
 
-Shared team workflow runtime and owned state.
+Shared team profile runtime, optional bounded GitLab metrics collector, declared
+evidence connectors, and owned local state.
 
 ## Remote/Local Effects
 
-Bounded local state effects; external effects only if declared by the action.
+Read-only evidence collection and confirmation-bound local profile or artifact
+writes. No implicit external publication.
 
 ## Errors, Partial, Escalation
 
-Missing context or invalid action returns structured JSON failure.
+Missing profile fields trigger guided self-setup. Partial project, page, signal,
+or timestamp evidence remains explicit and prevents a complete claim.
 
 ## Unique Constraints
 
-One fixed action is selected and state ownership is explicit.
+One fixed action is selected; every configured project is accounted for, and
+`merged`, `tagged`, and `shipped` are never treated as synonyms.
 
 ## Requirement
 

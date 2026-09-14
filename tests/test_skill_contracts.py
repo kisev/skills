@@ -90,6 +90,59 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             assert marker in workflow, (name, marker)
 
 
+def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None:
+    expected_markers = {
+        "team-retro": (
+            "every profile project where `include` is true",
+            "`period.semantics` is `[since, until)`",
+            "Do not present `merged`, `tagged`, and `shipped` as synonyms",
+            "outcome - purpose",
+            "external contributors",
+            "verification_command",
+        ),
+        "team-roadmap": (
+            "evidence matrix",
+            "past plans are historical records",
+            "Every unfinished goal needs one explicit destination",
+            "create issues, epics, milestones",
+            "verification_commands",
+        ),
+        "slides-prompts-prepare": (
+            "Theme and technical content are complementary layers",
+            "research it through current web sources",
+            "order of slides",
+            "team_reference_policy",
+            "Do not modify files matching `image_pattern`",
+        ),
+    }
+    for name, markers in expected_markers.items():
+        workflow = (ROOT / "skills" / name / "references" / "workflow.md").read_text(
+            encoding="utf-8"
+        )
+        for marker in markers:
+            assert marker in workflow, (name, marker)
+
+
+def test_team_profile_contract_is_distributed_without_private_values() -> None:
+    schema = ROOT / "shared/references/team_runtime/team-context.schema.json"
+    example = ROOT / "shared/references/team_runtime/team-context.example.json"
+    assert schema.is_file()
+    assert example.is_file()
+    example_text = example.read_text(encoding="utf-8")
+    assert "gitlab.example.test" in example_text
+    assert "wildberries" not in example_text.lower()
+    for name in (
+        "team-sprint-start",
+        "team-sprint-close",
+        "team-retro",
+        "team-roadmap",
+        "slides-prompts-prepare",
+    ):
+        references = ROOT / "skills" / name / "references"
+        assert (references / "team-context.schema.json").read_bytes() == schema.read_bytes()
+        assert (references / "team-context.example.json").read_bytes() == example.read_bytes()
+
+
 def test_skills_use_english_canonical_workflows_without_locale_references() -> None:
     cyrillic = re.compile(r"[А-Яа-яЁё]")
     for skill in (ROOT / "skills").iterdir():

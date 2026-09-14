@@ -99,6 +99,74 @@
       "destination": "slides-prompts-prepare/scripts/team_workflow.py"
     },
     {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-sprint-start/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-sprint-close/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-retro/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-roadmap/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "slides-prompts-prepare/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-sprint-start/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-sprint-close/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-retro/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-roadmap/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "slides-prompts-prepare/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-sprint-start/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-sprint-close/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-retro/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-roadmap/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "slides-prompts-prepare/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-retro/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-roadmap/scripts/gitlab_period_metrics.py"
+    },
+    {
       "source": "references/work_item_runtime/__init__.py",
       "destination": "task-triage/scripts/portable_runtime/__init__.py"
     },

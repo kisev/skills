@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Prepare structured slide and illustration prompts from a bounded team context.
+Prepare cohesive image prompts by combining a user-selected theme with factual
+slide content and concise team or technology references.
 
 ## Triggers and Near-Misses
 
@@ -10,27 +11,35 @@ Trigger for slides or prompts; near-miss: sending a presentation or choosing a c
 
 ## Inputs and Outputs
 
-Input is explicit context and audience. Output is English prompt material and plan.
+Input is the fixed action, an automatically resolved default profile or explicit
+context override, an existing presentation, and a selected or saved visual
+direction. Output is one English prompt file per slide and a local write plan.
 
 ## Workflow Stages
 
-Resolve context, collect evidence, draft prompts, check constraints, report.
+Resolve or self-setup the profile, research named themes when needed, analyze
+every slide, map theme plus factual technical references, draft one prompt per
+slide, verify coverage and unchanged images, preview writes, and report.
 
 ## Dependencies
 
-Team context and repository evidence.
+Shared team profile runtime, presentation and repository evidence, and current
+web research for named external themes.
 
 ## Remote/Local Effects
 
-Local reads and plan artifact; no publication or external message.
+Read-only research and confirmation-bound prompt-file writes; no presentation,
+image, publication, or external-message mutation.
 
 ## Errors, Partial, Escalation
 
-Missing context is partial; sensitive material is escalated.
+Missing profile fields trigger guided self-setup. Missing slides, unsupported
+facts, uncertain theme references, or ambiguous overlay constraints remain explicit.
 
 ## Unique Constraints
 
-Illustration prompts contain no text or logos unless explicitly allowed by contract.
+Theme and technical content are complementary. Text or logos follow the saved
+policy, remain factual and concise, and never duplicate the slide title.
 
 ## Requirement
 

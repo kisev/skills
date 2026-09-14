@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Produce a roadmap view from explicit team context without turning it into execution.
+Review or update an evidence-based roadmap from a strict private team profile
+without turning it into execution.
 
 ## Triggers and Near-Misses
 
@@ -10,27 +11,35 @@ Trigger for roadmap action; near-miss: sprint close or implementation planning.
 
 ## Inputs and Outputs
 
-Input is explicit context and action. Output is a structured roadmap view.
+Input is the fixed action, an automatically resolved default profile or explicit
+context override, target periods, the current roadmap, and bounded delivery
+evidence. Output is a structured roadmap view or confirmation-bound update.
 
 ## Workflow Stages
 
-Resolve context, inspect owned state, run action, validate, report.
+Resolve or self-setup the profile, establish period boundaries, build a
+goal-by-goal evidence matrix, reconcile plan and fact, preserve history, assign
+every unfinished goal a destination, preview updates, verify, and report.
 
 ## Dependencies
 
-Shared team workflow runtime and context files.
+Shared team profile runtime, declared evidence connectors, current roadmap and
+baseline files, and optional bounded GitLab metrics collection.
 
 ## Remote/Local Effects
 
-Declared local state effects only; no implicit publication.
+Read-only evidence collection and confirmation-bound local profile or roadmap
+writes; no work-item creation or implicit publication.
 
 ## Errors, Partial, Escalation
 
-Missing or stale context is reported as partial or blocked.
+Missing profile fields trigger guided self-setup. Stale, contradictory, or
+partial evidence is attached to affected goals and blocks unsupported claims.
 
 ## Unique Constraints
 
-Roadmap output is not a task list or implementation commitment.
+Past plans remain historical under the configured policy, every unfinished goal
+has an explicit destination, and roadmap output is not an implementation commitment.
 
 ## Requirement
 

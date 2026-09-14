@@ -10,7 +10,8 @@ Routes roadmap action; near-miss: task creation.
 
 ## Inputs/Outputs
 
-Arguments select context/action; output is a roadmap view.
+Arguments may override automatic default-profile resolution; the action remains
+fixed and output is a roadmap view or local update preview.
 
 ## Workflow Stages
 

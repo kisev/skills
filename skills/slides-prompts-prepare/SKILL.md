@@ -1,13 +1,15 @@
 ---
 name: slides-prompts-prepare
 description: >-
-  Prepare presentation prompts from supplied team context. Russian discovery terms: промпты слайдов.
+  Prepare cohesive image prompts for presentation slides by combining a chosen theme with concise factual team and technology references. Russian discovery terms: промпты слайдов, фоновые изображения, тема презентации, графика для слайдов.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 
 # slides-prompts-prepare
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Read `references/team-profile-workflow.md`, then follow
+`references/workflow.md`. Apply `references/language-policy.md` for user-facing
+prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

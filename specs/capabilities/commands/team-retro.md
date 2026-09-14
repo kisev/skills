@@ -10,7 +10,8 @@ Routes retrospective context; near-miss: roadmap planning.
 
 ## Inputs/Outputs
 
-Arguments select context/action; output is structured material.
+Arguments may override automatic default-profile resolution; the action remains
+fixed and output is structured retrospective material.
 
 ## Workflow Stages
 

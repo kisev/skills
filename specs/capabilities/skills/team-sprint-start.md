@@ -10,11 +10,13 @@ Trigger for sprint start; near-miss: roadmap review or sprint close.
 
 ## Inputs and Outputs
 
-Input is context and fixed action. Output is structured start result and evidence.
+Input is the fixed action and an automatically resolved default private profile
+or explicit legacy context. Output is structured start result and evidence.
 
 ## Workflow Stages
 
-Resolve context, inspect prerequisites, execute action, validate, report.
+Resolve or self-setup the profile, inspect prerequisites, execute the fixed
+action, validate, and report.
 
 ## Dependencies
 

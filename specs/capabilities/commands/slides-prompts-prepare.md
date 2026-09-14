@@ -10,7 +10,8 @@ Routes prompt work; near-miss: publication.
 
 ## Inputs/Outputs
 
-Arguments provide context; output is prompt material.
+Arguments may override automatic default-profile resolution and provide a
+presentation or visual direction; output is prompt material.
 
 ## Workflow Stages
 

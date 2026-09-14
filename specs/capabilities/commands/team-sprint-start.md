@@ -10,7 +10,8 @@ Routes sprint start; near-miss: sprint close.
 
 ## Inputs/Outputs
 
-Arguments select context/action; output is validated start status.
+Arguments may override automatic default-profile resolution; the action remains
+fixed and output is validated start status.
 
 ## Workflow Stages
 
