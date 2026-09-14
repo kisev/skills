@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
+import subprocess
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -108,3 +112,21 @@ def test_precommit_matches_root_level_and_nested_files() -> None:
     assert groups["data"] == ["top.json"]
     assert groups["python"] == ["skills/lsp-report/scripts/lsp_report.py"]
     assert groups["skills"] == ["skills/lsp-report/scripts/lsp_report.py"]
+
+
+def test_precommit_removes_repository_local_git_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    module = _load_precommit()
+    for name in module.GIT_LOCAL_ENV_VARS:
+        monkeypatch.setenv(name, f"poisoned-{name.lower()}")
+    monkeypatch.setattr(module, "_resolve_skills_binary", lambda _env: None)
+
+    env = module._base_env()
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repository, env=env, check=True)
+
+    assert module.GIT_LOCAL_ENV_VARS.isdisjoint(env)
+    assert (repository / ".git").is_dir()
+    assert os.environ["GIT_DIR"] == "poisoned-git_dir"

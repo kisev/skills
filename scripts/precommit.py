@@ -27,10 +27,34 @@ PACKAGE_METADATA = frozenset(
 )
 WORKFLOW_FILES = frozenset({"lefthook.yml", "taskfile.yml", ".yamllint.yml"})
 PYTHON_ROOTS = ("scripts", "shared", "skills", "tests")
+GIT_LOCAL_ENV_VARS = frozenset(
+    {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_CONFIG",
+        "GIT_CONFIG_COUNT",
+        "GIT_CONFIG_PARAMETERS",
+        "GIT_DIR",
+        "GIT_GRAFT_FILE",
+        "GIT_IMPLICIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_INTERNAL_SUPER_PREFIX",
+        "GIT_NO_REPLACE_OBJECTS",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_PREFIX",
+        "GIT_REPLACE_REF_BASE",
+        "GIT_SHALLOW_FILE",
+        "GIT_WORK_TREE",
+    }
+)
 
 
 def _posix(path: str) -> str:
     return PurePosixPath(path).as_posix()
+
+
+def _clean_git_env() -> dict[str, str]:
+    return {key: value for key, value in os.environ.items() if key not in GIT_LOCAL_ENV_VARS}
 
 
 def staged_files() -> list[str]:
@@ -46,6 +70,7 @@ def staged_files() -> list[str]:
             "-z",
         ],
         cwd=ROOT,
+        env=_clean_git_env(),
         check=True,
         capture_output=True,
     )
@@ -88,11 +113,12 @@ def classify(files: Iterable[str]) -> dict[str, list[str]]:
     return {name: sorted(paths) for name, paths in groups.items()}
 
 
-def _resolve_skills_binary() -> str | None:
+def _resolve_skills_binary(env: dict[str, str]) -> str | None:
     try:
         result = subprocess.run(
             ["mise", "which", "skills"],
             cwd=ROOT,
+            env=env,
             capture_output=True,
             check=False,
             text=True,
@@ -125,8 +151,8 @@ class _Runner:
 
 
 def _base_env() -> dict[str, str]:
-    env = dict(os.environ)
-    binary = _resolve_skills_binary()
+    env = _clean_git_env()
+    binary = _resolve_skills_binary(env)
     if binary:
         env["SKILLS_BINARY"] = binary
     return env
