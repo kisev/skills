@@ -6,7 +6,9 @@
     { "$ref": "#/$defs/evidence_snapshot" },
     { "$ref": "#/$defs/local_wip_snapshot" },
     { "$ref": "#/$defs/release_inventory" },
+    { "$ref": "#/$defs/review_context" },
     { "$ref": "#/$defs/publication_plan" },
+    { "$ref": "#/$defs/review_plan" },
     { "$ref": "#/$defs/analysis_report" },
     { "$ref": "#/$defs/critic_receipt" },
     { "$ref": "#/$defs/review_decision" },
@@ -51,7 +53,30 @@
     "finding": {
       "type": "object",
       "required": ["id"],
-      "properties": { "id": { "type": "string", "minLength": 1 } },
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "risk": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "consequence": { "type": "string", "minLength": 1 },
+        "relation_to_change": { "type": "string", "minLength": 1 },
+        "minimum_fix": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "thread_decision": {
+      "type": "object",
+      "required": ["id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["open", "resolved", "plain"] },
+        "assessment": { "enum": ["accepted", "fixed", "false_positive", "duplicate", "not_related", "question", "neutral"] },
+        "rationale": { "type": "string", "minLength": 1 },
+        "outcome": { "enum": ["no_publication", "local_fix"] },
+        "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+      },
       "additionalProperties": false
     },
     "response": {
@@ -278,6 +303,57 @@
         }
       ]
     },
+    "review_context": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "properties": {
+            "schema": { "const": "portable-gitlab/review_context/v2" },
+            "kind": { "const": "review_context" },
+            "payload": {
+              "type": "object",
+              "required": [
+                "schema_version",
+                "profile",
+                "external_mutations",
+                "evidence_digest",
+                "target",
+                "role",
+                "current_user_username",
+                "mr_author_username",
+                "discussions",
+                "notes",
+                "counts",
+                "exact_git",
+                "complete",
+                "errors",
+                "artifact_root",
+                "prepared_at"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "schema_version": { "const": 2 },
+                "profile": { "const": "code-review" },
+                "external_mutations": { "const": false },
+                "evidence_digest": { "$ref": "#/$defs/digest" },
+                "target": { "type": "object" },
+                "role": { "enum": ["author", "reviewer"] },
+                "current_user_username": { "type": "string", "minLength": 1 },
+                "mr_author_username": { "type": "string", "minLength": 1 },
+                "discussions": { "type": "array" },
+                "notes": { "type": "array" },
+                "counts": { "type": "object" },
+                "exact_git": { "type": "object" },
+                "complete": { "type": "boolean" },
+                "errors": { "type": "array", "items": { "type": "string" } },
+                "artifact_root": { "type": "string", "minLength": 1 },
+                "prepared_at": { "type": "string", "format": "date-time" }
+              }
+            }
+          }
+        }
+      ]
+    },
     "publication_plan": {
       "allOf": [
         { "$ref": "#/$defs/envelope" },
@@ -308,6 +384,59 @@
                 "inventory_digest": { "$ref": "#/$defs/digest" },
                 "release_version": { "type": "string", "minLength": 1 },
                 "companions": { "type": "array", "items": { "$ref": "#/$defs/companion" } }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "review_plan": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "properties": {
+            "schema": { "const": "portable-gitlab/review_plan/v2" },
+            "kind": { "const": "review_plan" },
+            "payload": {
+              "type": "object",
+              "required": [
+                "profile",
+                "external_mutations",
+                "evidence_digest",
+                "context_digest",
+                "decision_digest",
+                "target",
+                "role",
+                "mode",
+                "verdict",
+                "complete",
+                "summary",
+                "architecture_assessment",
+                "semver_impact",
+                "checks",
+                "findings",
+                "thread_decisions",
+                "markdown"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "profile": { "const": "code-review" },
+                "external_mutations": { "const": false },
+                "evidence_digest": { "$ref": "#/$defs/digest" },
+                "context_digest": { "$ref": "#/$defs/digest" },
+                "decision_digest": { "$ref": "#/$defs/digest" },
+                "target": { "type": "object" },
+                "role": { "enum": ["author", "reviewer"] },
+                "mode": { "enum": ["fast", "normal", "deep"] },
+                "verdict": { "enum": ["ready", "not_ready", "blocked"] },
+                "complete": { "type": "boolean" },
+                "summary": { "type": "string", "minLength": 1 },
+                "architecture_assessment": { "type": "string", "minLength": 1 },
+                "semver_impact": { "enum": ["major", "minor", "patch", "none", "not_applicable", "unknown"] },
+                "checks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+                "thread_decisions": { "type": "array", "items": { "$ref": "#/$defs/thread_decision" } },
+                "markdown": { "type": "string" }
               }
             }
           }
@@ -403,6 +532,7 @@
                 "schema": { "const": "portable-gitlab/review-decision/v2" },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "finalize_digest": { "$ref": "#/$defs/digest" },
+                "context_digest": { "$ref": "#/$defs/digest" },
                 "mode": { "enum": ["fast", "normal", "deep"] },
                 "external_mutations": { "const": false },
                 "run_id": { "type": "string", "minLength": 1 },

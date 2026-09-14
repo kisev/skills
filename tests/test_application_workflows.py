@@ -74,12 +74,15 @@ endpoint = sys.argv[-1]
 Path(os.environ["FAKE_GLAB_LOG"]).open("a", encoding="utf-8").write(json.dumps(sys.argv[1:]) + "\\n")
 changed = Path(os.environ["FAKE_GLAB_STATE"]).read_text(encoding="utf-8") == "changed"
 head_sha = os.environ.get("FAKE_HEAD_SHA", "c")
+base_sha = os.environ.get("FAKE_BASE_SHA", "a")
+start_sha = os.environ.get("FAKE_START_SHA", "b")
+changed_path = os.environ.get("FAKE_CHANGED_PATH")
 if endpoint.startswith("projects/group%%2Fproject"):
     value = {"id": 19}
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": head_sha}}
+    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
-    value = {"changes": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": head_sha}}
+    value = {"changes": [{"old_path": changed_path, "new_path": changed_path}] if changed_path else [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
     value = [{"id": head_sha}]
 elif "/repository/commits/" in endpoint and "/merge_requests?" in endpoint:
@@ -87,6 +90,12 @@ elif "/repository/commits/" in endpoint and "/merge_requests?" in endpoint:
     value = [{"id": 107, "iid": 17, "title": "Associated change", "description": "Component MR", "labels": ["type::feature"], "author": {"username": "developer"}, "web_url": "https://gitlab.example/group/project/-/merge_requests/17", "source_branch": "feature", "target_branch": "dev", "merge_commit_sha": None, "squash_commit_sha": sha, "merged_at": "2026-01-02T00:00:00Z", "state": "merged"}] if sha == os.environ.get("FAKE_ASSOCIATED_SHA") else []
 elif "/repository/tags/" in endpoint:
     value = {"name": endpoint.rsplit("/", 1)[-1], "created_at": "2026-01-01T00:00:00Z", "commit": {"created_at": "2026-01-01T00:00:00Z"}}
+elif endpoint == "user":
+    value = {"username": os.environ.get("FAKE_CURRENT_USER", "reviewer")}
+elif endpoint.startswith("projects/19/merge_requests/7/discussions"):
+    value = [{"id": "discussion-42", "notes": [{"id": 42, "system": False, "resolvable": True, "resolved": False, "author": {"username": "other-reviewer"}, "body": "Retry needs an idempotency key", "position": {"head_sha": head_sha, "new_path": changed_path, "new_line": 2}}]}] if os.environ.get("FAKE_DISCUSSION") else []
+elif endpoint.startswith("projects/19/merge_requests/7/notes"):
+    value = []
 else:
     value = []
 print(json.dumps(value))
@@ -791,6 +800,28 @@ print(json.dumps(value))
     def test_runner_final_review_requires_bound_current_finalize_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            repository = root / "repository"
+            repository.mkdir()
+            for arguments in (
+                ("init", "-q"),
+                ("config", "user.email", "reviewer@example.invalid"),
+                ("config", "user.name", "Example Reviewer"),
+            ):
+                subprocess.run(
+                    ["git", *arguments], cwd=repository, check=True, capture_output=True
+                )
+            source = repository / "review.txt"
+            source.write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "review.txt"], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
+            base_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            source.write_text("base\nreviewed change\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-qam", "change"], cwd=repository, check=True)
+            head_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
             _glab, state = self.fake_glab(root)
             log = root / "glab.log"
             environment = {
@@ -798,8 +829,21 @@ print(json.dumps(value))
                 "PATH": f"{root}:{os.environ['PATH']}",
                 "FAKE_GLAB_STATE": str(state),
                 "FAKE_GLAB_LOG": str(log),
+                "FAKE_BASE_SHA": base_sha,
+                "FAKE_START_SHA": base_sha,
+                "FAKE_HEAD_SHA": head_sha,
+                "FAKE_CHANGED_PATH": "review.txt",
+                "FAKE_DISCUSSION": "1",
             }
             target = "https://gitlab.example/group/project/-/merge_requests/7"
+            batch = self.run_runner(
+                "code-review", "prepare", "--url", target, "--url", target, env=environment
+            )
+            self.assertEqual(batch.returncode, 2)
+            self.assertFalse(log.exists())
+            self.assertEqual(
+                self.run_runner("code-review", "scaffold-batch", env=environment).returncode, 2
+            )
             prepared = self.run_runner("code-review", "prepare", "--url", target, env=environment)
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
             evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
@@ -808,12 +852,47 @@ print(json.dumps(value))
             )
             evidence_digest = hashlib.sha256(Path(evidence).read_bytes()).hexdigest()
             artifact_root = json.loads(prepared.stdout)["items"][0]["artifact_root"]
+            context_result = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                evidence,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(context_result.returncode, 0, context_result.stderr)
+            context = json.loads(context_result.stdout)
+            self.assertEqual(context["role"], "reviewer")
+            self.assertEqual(context["counts"]["open_resolvable"], 1)
+            context_digest = context["digest"]
+            context_path = context["artifact_path"]
             finalized = self.run_runner(
                 "code-review", "finalize", "--artifact-root", artifact_root, env=environment
             )
             self.assertEqual(finalized.returncode, 0, finalized.stdout + finalized.stderr)
             finalize_digest = json.loads(finalized.stdout)["digest"]
             finalize_report = json.loads(finalized.stdout)["artifact_path"]
+            primary_finding = {
+                "id": "primary-1",
+                "severity": "high",
+                "summary": "Retry can repeat the external operation",
+                "risk": "A retry can execute the operation twice.",
+                "evidence": [f"{target}#note_42 at {head_sha}"],
+                "consequence": "Users can observe duplicate side effects.",
+                "relation_to_change": "The reviewed change adds the retry path.",
+                "minimum_fix": "Persist an idempotency key before the external call.",
+            }
+            critic_finding = {
+                "id": "critic-1",
+                "severity": "medium",
+                "summary": "Retry failure is not observable",
+                "risk": "Operators cannot distinguish retry exhaustion.",
+                "evidence": [f"The exact reviewed SHA is {head_sha}."],
+                "consequence": "Incident diagnosis takes longer.",
+                "relation_to_change": "The new retry path emits no terminal signal.",
+                "minimum_fix": "Emit the existing terminal retry metric.",
+            }
             receipt = root / "receipt.json"
             receipt.write_text(
                 json.dumps(
@@ -823,7 +902,7 @@ print(json.dumps(value))
                         "evidence_digest": evidence_digest,
                         "run_id": "critic-run",
                         "session_id": "critic-session",
-                        "findings": [],
+                        "findings": [critic_finding],
                     }
                 ),
                 encoding="utf-8",
@@ -837,12 +916,17 @@ print(json.dumps(value))
                         "external_mutations": False,
                         "evidence_digest": evidence_digest,
                         "finalize_digest": finalize_digest,
-                        "verdict": "ready",
+                        "context_digest": context_digest,
+                        "verdict": "not_ready",
                         "run_id": "primary-run",
                         "session_id": "primary-session",
-                        "findings": [],
-                        "unresolved_threads": [],
-                        "responses": [],
+                        "findings": [primary_finding],
+                        "unresolved_threads": [{"id": "42"}],
+                        "responses": [
+                            {"id": "primary-1", "decision": "accept", "reason": "confirmed"},
+                            {"id": "critic-1", "decision": "accept", "reason": "confirmed"},
+                            {"id": "42", "decision": "accept", "reason": "still open"},
+                        ],
                     }
                 ),
                 encoding="utf-8",
@@ -854,6 +938,8 @@ print(json.dumps(value))
                 evidence,
                 "--report",
                 str(decision),
+                "--context",
+                context_path,
                 "--critic-receipt",
                 str(receipt),
                 "--finalize-report",
@@ -863,7 +949,78 @@ print(json.dumps(value))
                 env=environment,
             )
             self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
-            self.assertFalse(json.loads(reviewed.stdout)["external_mutations"])
+            reviewed_result = json.loads(reviewed.stdout)
+            self.assertFalse(reviewed_result["external_mutations"])
+            review_content = root / "review-content.json"
+            review_content.write_text(
+                json.dumps(
+                    {
+                        "summary": "The change is small and preserves the reviewed contract.",
+                        "architecture_assessment": "The responsibility remains with its existing owner.",
+                        "semver_impact": "patch",
+                        "checks": ["Compared the exact base and head revisions."],
+                        "findings": [primary_finding],
+                        "thread_decisions": [
+                            {
+                                "id": "42",
+                                "url": f"{target}#note_42",
+                                "state": "open",
+                                "assessment": "accepted",
+                                "rationale": "The issue remains present at the exact head SHA.",
+                                "outcome": "no_publication",
+                                "proposed_response": "The retry needs an idempotency key before the call.",
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            review_plan = self.run_runner(
+                "code-review",
+                "scaffold-review",
+                "--evidence",
+                evidence,
+                "--context",
+                context_path,
+                "--decision",
+                reviewed_result["artifact_path"],
+                "--content",
+                str(review_content),
+                env=environment,
+            )
+            self.assertEqual(review_plan.returncode, 0, review_plan.stderr)
+            plan_result = json.loads(review_plan.stdout)
+            self.assertTrue(Path(plan_result["markdown_path"]).is_file())
+            markdown = Path(plan_result["markdown_path"]).read_text(encoding="utf-8")
+            self.assertIn("Retry can repeat the external operation", markdown)
+            self.assertIn(f"{target}#note_42", markdown)
+            environment["FAKE_CURRENT_USER"] = "author"
+            stale_plan = self.run_runner(
+                "code-review",
+                "scaffold-review",
+                "--evidence",
+                evidence,
+                "--context",
+                context_path,
+                "--decision",
+                reviewed_result["artifact_path"],
+                "--content",
+                str(review_content),
+                env=environment,
+            )
+            self.assertEqual(stale_plan.returncode, 2)
+            author_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                evidence,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(author_context.returncode, 0, author_context.stderr)
+            self.assertEqual(json.loads(author_context.stdout)["role"], "author")
+            environment.pop("FAKE_CURRENT_USER")
             duplicate = json.loads(receipt.read_text(encoding="utf-8"))
             duplicate["run_id"] = "primary-run"
             receipt.write_text(json.dumps(duplicate), encoding="utf-8")
@@ -875,6 +1032,8 @@ print(json.dumps(value))
                     evidence,
                     "--report",
                     str(decision),
+                    "--context",
+                    context_path,
                     "--critic-receipt",
                     str(receipt),
                     "--finalize-report",
@@ -893,7 +1052,7 @@ print(json.dumps(value))
                         "evidence_digest": evidence_digest,
                         "run_id": "critic-run",
                         "session_id": "critic-session",
-                        "findings": [],
+                        "findings": [critic_finding],
                     }
                 ),
                 encoding="utf-8",
@@ -908,6 +1067,8 @@ print(json.dumps(value))
                 evidence,
                 "--report",
                 str(decision),
+                "--context",
+                context_path,
                 "--critic-receipt",
                 str(receipt),
                 "--finalize-report",

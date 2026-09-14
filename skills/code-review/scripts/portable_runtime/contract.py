@@ -42,7 +42,9 @@ PROFILES = {
 ARTIFACT_KINDS = {
     "evidence_snapshot",
     "release_inventory",
+    "review_context",
     "publication_plan",
+    "review_plan",
     "analysis_report",
     "critic_receipt",
     "review_decision",
@@ -339,8 +341,57 @@ def component_is_valid(value: object) -> bool:
 
 
 def findings_are_valid(value: object) -> bool:
+    if not isinstance(value, list):
+        return False
+    legacy = {"id"}
+    detailed = {
+        "id",
+        "severity",
+        "summary",
+        "risk",
+        "evidence",
+        "consequence",
+        "relation_to_change",
+        "minimum_fix",
+    }
+    return all(
+        isinstance(item, dict)
+        and (set(item) == legacy or set(item) == detailed)
+        and nonempty_string(item.get("id"))
+        and (
+            set(item) == legacy
+            or (
+                item.get("severity") in {"critical", "high", "medium", "low"}
+                and all(
+                    nonempty_string(item.get(key))
+                    for key in detailed - {"id", "severity", "evidence"}
+                )
+                and isinstance(item.get("evidence"), list)
+                and bool(item["evidence"])
+                and all(nonempty_string(value) for value in item["evidence"])
+            )
+        )
+        for item in value
+    )
+
+
+def detailed_findings_are_valid(value: object) -> bool:
+    return findings_are_valid(value) and all(
+        isinstance(item, dict) and set(item) != {"id"} for item in cast(list[object], value)
+    )
+
+
+def thread_decisions_are_valid(value: object) -> bool:
+    required = {"id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"}
     return isinstance(value, list) and all(
-        isinstance(item, dict) and set(item) == {"id"} and nonempty_string(item.get("id"))
+        isinstance(item, dict)
+        and set(item) == required
+        and all(nonempty_string(item.get(key)) for key in ("id", "url", "rationale"))
+        and item.get("state") in {"open", "resolved", "plain"}
+        and item.get("assessment")
+        in {"accepted", "fixed", "false_positive", "duplicate", "not_related", "question", "neutral"}
+        and item.get("outcome") in {"no_publication", "local_fix"}
+        and (item.get("proposed_response") is None or isinstance(item.get("proposed_response"), str))
         for item in value
     )
 
@@ -629,6 +680,70 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not all(isinstance(item, int) and not isinstance(item, bool) and item >= 0 for item in counts.values())
         ):
             raise WorkflowError("release inventory payload is schema-invalid")
+    elif kind == "review_context":
+        required = {
+            "schema_version",
+            "profile",
+            "external_mutations",
+            "evidence_digest",
+            "target",
+            "role",
+            "current_user_username",
+            "mr_author_username",
+            "discussions",
+            "notes",
+            "counts",
+            "exact_git",
+            "complete",
+            "errors",
+            "artifact_root",
+            "prepared_at",
+        }
+        exact_keys(payload, required, "review context payload")
+        counts = payload["counts"]
+        exact_git = payload["exact_git"]
+        if (
+            payload["schema_version"] != ARTIFACT_VERSION
+            or payload["profile"] != "code-review"
+            or payload["external_mutations"] is not False
+            or not is_digest(payload["evidence_digest"])
+            or not isinstance(payload["target"], dict)
+            or payload["role"] not in {"author", "reviewer"}
+            or not all(
+                nonempty_string(payload[key])
+                for key in ("current_user_username", "mr_author_username", "artifact_root", "prepared_at")
+            )
+            or (payload["current_user_username"] == payload["mr_author_username"])
+            != (payload["role"] == "author")
+            or not all(isinstance(payload[key], list) for key in ("discussions", "notes", "errors"))
+            or not all(isinstance(item, str) for item in payload["errors"])
+            or not isinstance(payload["complete"], bool)
+            or not isinstance(counts, dict)
+            or set(counts)
+            != {
+                "discussions",
+                "notes",
+                "content_notes",
+                "system_notes",
+                "open_resolvable",
+                "resolved_resolvable",
+                "plain_discussions",
+            }
+            or not all(isinstance(item, int) and not isinstance(item, bool) and item >= 0 for item in counts.values())
+            or not isinstance(exact_git, dict)
+            or set(exact_git)
+            != {"repo_root", "refs", "changed_paths", "diff_sha256", "complete", "errors"}
+            or not nonempty_string(exact_git.get("repo_root"))
+            or not isinstance(exact_git.get("refs"), dict)
+            or not isinstance(exact_git.get("changed_paths"), list)
+            or not all(isinstance(item, str) for item in exact_git["changed_paths"])
+            or not is_digest(exact_git.get("diff_sha256"))
+            and exact_git.get("diff_sha256") is not None
+            or not isinstance(exact_git.get("complete"), bool)
+            or not isinstance(exact_git.get("errors"), list)
+            or not all(isinstance(item, str) for item in exact_git["errors"])
+        ):
+            raise WorkflowError("review context payload is schema-invalid")
     elif kind == "publication_plan":
         required = {
             "profile",
@@ -663,6 +778,51 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             )
         ):
             raise WorkflowError("publication plan payload is schema-invalid")
+    elif kind == "review_plan":
+        required = {
+            "profile",
+            "external_mutations",
+            "evidence_digest",
+            "context_digest",
+            "decision_digest",
+            "target",
+            "role",
+            "mode",
+            "verdict",
+            "complete",
+            "summary",
+            "architecture_assessment",
+            "semver_impact",
+            "checks",
+            "findings",
+            "thread_decisions",
+            "markdown",
+        }
+        exact_keys(payload, required, "review plan payload")
+        if (
+            payload["profile"] != "code-review"
+            or payload["external_mutations"] is not False
+            or not all(
+                is_digest(payload[key])
+                for key in ("evidence_digest", "context_digest", "decision_digest")
+            )
+            or not isinstance(payload["target"], dict)
+            or payload["role"] not in {"author", "reviewer"}
+            or payload["mode"] not in {"fast", "normal", "deep"}
+            or payload["verdict"] not in {"ready", "not_ready", "blocked"}
+            or not isinstance(payload["complete"], bool)
+            or not all(
+                nonempty_string(payload[key]) for key in ("summary", "architecture_assessment")
+            )
+            or payload["semver_impact"]
+            not in {"major", "minor", "patch", "none", "not_applicable", "unknown"}
+            or not isinstance(payload["checks"], list)
+            or not all(nonempty_string(item) for item in payload["checks"])
+            or not detailed_findings_are_valid(payload["findings"])
+            or not thread_decisions_are_valid(payload["thread_decisions"])
+            or not isinstance(payload["markdown"], str)
+        ):
+            raise WorkflowError("review plan payload is schema-invalid")
     elif kind in {"analysis_report", "critic_receipt"}:
         exact_keys(
             payload,
@@ -700,7 +860,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "responses",
         }
         if not required.issubset(payload) or not set(payload).issubset(
-            required | {"low_risk", "blocking_findings", "external_mutations"}
+            required | {"context_digest", "low_risk", "blocking_findings", "external_mutations"}
         ):
             raise WorkflowError("review decision payload has unknown or missing fields")
         responses = payload["responses"]
@@ -708,6 +868,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             payload["schema"] != "portable-gitlab/review-decision/v2"
             or not is_digest(payload["evidence_digest"])
             or not is_digest(payload["finalize_digest"])
+            or ("context_digest" in payload and not is_digest(payload["context_digest"]))
             or payload["mode"] not in {"fast", "normal", "deep"}
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
@@ -825,7 +986,7 @@ def allowed_endpoint(endpoint: str) -> bool:
     # These are the complete collection endpoints. Query values are generated, never caller input.
     return bool(
         re.fullmatch(
-            r"projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?)",
+            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?))",
             endpoint,
         )
     )
@@ -1688,11 +1849,16 @@ def validate_critic(receipt: dict[str, Any], evidence_digest: str) -> None:
 
 
 def validate_decision(
-    report: dict[str, Any], evidence_digest: str, receipt: dict[str, Any] | None, mode: str
+    report: dict[str, Any],
+    evidence_digest: str,
+    receipt: dict[str, Any] | None,
+    mode: str,
+    context_digest: str | None = None,
 ) -> None:
     if (
         report.get("schema") != "portable-gitlab/review-decision/v2"
         or report.get("evidence_digest") != evidence_digest
+        or (context_digest is not None and report.get("context_digest") != context_digest)
         or not is_digest(report.get("finalize_digest"))
         or report.get("mode") != mode
         or report.get("external_mutations") is not False
@@ -1815,17 +1981,28 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     prepare = subparsers.add_parser("prepare")
     prepare.add_argument("--url", action="append")
     prepare.add_argument("--project-url")
-    scaffold_parser = subparsers.add_parser("scaffold")
-    scaffold_parser.add_argument("--bundle", required=True)
-    scaffold_parser.add_argument("--content", required=True)
+    if profile != "code-review":
+        scaffold_parser = subparsers.add_parser("scaffold")
+        scaffold_parser.add_argument("--bundle", required=True)
+        scaffold_parser.add_argument("--content", required=True)
+        if profile == "release-prepare":
+            scaffold_parser.add_argument("--inventory", required=True)
     if profile == "release-prepare":
-        scaffold_parser.add_argument("--inventory", required=True)
         inventory = subparsers.add_parser("inventory")
         inventory.add_argument("--evidence", required=True)
         inventory.add_argument("--repo-root", required=True)
         inventory.add_argument("--previous-ref")
         inventory.add_argument("--workers", type=int, default=8)
-    if profile not in {"mr-prepare", "release-prepare"}:
+    if profile == "code-review":
+        context = subparsers.add_parser("context")
+        context.add_argument("--evidence", required=True)
+        context.add_argument("--repo-root", required=True)
+        review_plan = subparsers.add_parser("scaffold-review")
+        review_plan.add_argument("--evidence", required=True)
+        review_plan.add_argument("--context", required=True)
+        review_plan.add_argument("--decision", required=True)
+        review_plan.add_argument("--content", required=True)
+    if profile not in {"mr-prepare", "release-prepare", "code-review"}:
         batch = subparsers.add_parser("scaffold-batch")
         batch.add_argument("--bundle", required=True)
         batch.add_argument("--content", required=True)
@@ -1849,6 +2026,8 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     decision.add_argument("--mode", choices=("fast", "normal", "deep"), required=True)
     decision.add_argument("--critic-receipt")
     decision.add_argument("--finalize-report", required=True)
+    if profile == "code-review":
+        decision.add_argument("--context", required=True)
     record = subparsers.add_parser("record-artifact")
     record.add_argument(
         "--kind", choices=("analysis_report", "critic_receipt", "release_readiness"), required=True
@@ -1862,6 +2041,22 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     if args.capabilities:
         return capabilities(profile)
     try:
+        if args.command == "context":
+            context_module = importlib.import_module("review_context")
+            context_result = context_module.prepare_context(args.evidence, args.repo_root)
+            emit(context_result)
+            return 0 if context_result["status"] == "ok" else 2
+        if args.command == "scaffold-review":
+            context_module = importlib.import_module("review_context")
+            emit(
+                context_module.scaffold_review(
+                    args.evidence,
+                    args.context,
+                    args.decision,
+                    args.content,
+                )
+            )
+            return 0
         if args.command == "inventory":
             inventory_module = importlib.import_module("release_inventory")
             inventory_result = inventory_module.prepare_inventory(
@@ -1877,7 +2072,9 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 raise WorkflowError("provide exact --url target or --project-url, but not both")
             if args.project_url and profile != "task-prepare":
                 raise WorkflowError("project creation mode is only available for task preparation")
-            if profile in {"mr-prepare", "release-prepare"} and len(args.url or []) != 1:
+            if profile in {"mr-prepare", "release-prepare", "code-review"} and len(
+                args.url or []
+            ) != 1:
                 raise WorkflowError(f"{profile} accepts exactly one --url target")
             targets = (
                 [parse_target(value, expected) for value in args.url]
@@ -2081,6 +2278,12 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 or value.get("evidence_digest") != evidence_digest
             ):
                 raise WorkflowError("analysis report is schema-invalid or does not bind evidence")
+            if (
+                evidence.get("profile") == "code-review"
+                and args.kind in {"analysis_report", "critic_receipt"}
+                and not detailed_findings_are_valid(value.get("findings"))
+            ):
+                raise WorkflowError("new code review findings require complete structured evidence")
             root = artifact_root(Path(str(evidence["artifact_root"])))
             path, artifact_digest = write_artifact(root, args.kind, value)
             emit(
@@ -2113,6 +2316,20 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 current
             ):
                 raise WorkflowError("evidence is stale or incomplete at final review")
+            context_digest = None
+            if profile == "code-review":
+                context_module = importlib.import_module("review_context")
+                _, review_context, context_digest = context_module.validate_context_binding(
+                    args.context, args.evidence
+                )
+                current_context = context_module.refresh_context(review_context, args.evidence)
+                if (
+                    review_context.get("complete") is not True
+                    or current_context.get("complete") is not True
+                    or context_module.context_fingerprint(review_context)
+                    != context_module.context_fingerprint(current_context)
+                ):
+                    raise WorkflowError("review context is stale or incomplete at final review")
             _, finalize_digest = validate_finalize_report(
                 Path(args.finalize_report), Path(args.evidence), evidence
             )
@@ -2126,11 +2343,19 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 _, receipt = artifact_payload(Path(args.critic_receipt), "critic_receipt")
             if receipt is not None:
                 validate_critic(receipt, evidence_digest)
+                if profile == "code-review" and not detailed_findings_are_valid(
+                    receipt.get("findings")
+                ):
+                    raise WorkflowError("critic findings require complete structured evidence")
                 if receipt["run_id"] == report.get("run_id") or receipt["session_id"] == report.get(
                     "session_id"
                 ):
                     raise WorkflowError("critic receipt is not independent of the primary review")
-            validate_decision(report, evidence_digest, receipt, args.mode)
+            if profile == "code-review" and not detailed_findings_are_valid(
+                report.get("findings")
+            ):
+                raise WorkflowError("review findings require complete structured evidence")
+            validate_decision(report, evidence_digest, receipt, args.mode, context_digest)
             if report["finalize_digest"] != finalize_digest:
                 raise WorkflowError("review decision does not bind exact finalize report")
             if not evidence.get("retrieval_complete") or (
@@ -2149,6 +2374,11 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                         "risks": [],
                         "checks": [
                             "evidence binding",
+                            *(
+                                ["role and review context binding"]
+                                if profile == "code-review"
+                                else []
+                            ),
                             "independent critic",
                             "all findings and threads covered",
                         ],
