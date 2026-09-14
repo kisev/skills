@@ -1,7 +1,7 @@
 ---
 name: release-prepare
 description: >-
-  Prepare a release GitLab merge request and publication plan. Russian discovery terms: подготовить релиз.
+  Prepare a GitLab release MR from an exact tag-to-head inventory, including SemVer rationale, direct commits, release notes, announcement, illustration prompt, and a publication plan. Russian discovery terms: подготовить релиз.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

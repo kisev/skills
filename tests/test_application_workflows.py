@@ -73,14 +73,20 @@ from pathlib import Path
 endpoint = sys.argv[-1]
 Path(os.environ["FAKE_GLAB_LOG"]).open("a", encoding="utf-8").write(json.dumps(sys.argv[1:]) + "\\n")
 changed = Path(os.environ["FAKE_GLAB_STATE"]).read_text(encoding="utf-8") == "changed"
+head_sha = os.environ.get("FAKE_HEAD_SHA", "c")
 if endpoint.startswith("projects/group%%2Fproject"):
     value = {"id": 19}
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": head_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
-    value = {"changes": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+    value = {"changes": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": head_sha}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
-    value = [{"id": "c"}]
+    value = [{"id": head_sha}]
+elif "/repository/commits/" in endpoint and "/merge_requests?" in endpoint:
+    sha = endpoint.split("/repository/commits/", 1)[1].split("/", 1)[0]
+    value = [{"id": 107, "iid": 17, "title": "Associated change", "description": "Component MR", "labels": ["type::feature"], "author": {"username": "developer"}, "web_url": "https://gitlab.example/group/project/-/merge_requests/17", "source_branch": "feature", "target_branch": "dev", "merge_commit_sha": None, "squash_commit_sha": sha, "merged_at": "2026-01-02T00:00:00Z", "state": "merged"}] if sha == os.environ.get("FAKE_ASSOCIATED_SHA") else []
+elif "/repository/tags/" in endpoint:
+    value = {"name": endpoint.rsplit("/", 1)[-1], "created_at": "2026-01-01T00:00:00Z", "commit": {"created_at": "2026-01-01T00:00:00Z"}}
 else:
     value = []
 print(json.dumps(value))
@@ -115,6 +121,189 @@ print(json.dumps(value))
                 result = self.run_runner(skill, "prepare")
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(json.loads(result.stdout)["status"], "error")
+
+    def test_mr_prepare_plan_binds_evidence_and_markdown_companion(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _glab, state = self.fake_glab(root)
+            log = root / "glab.log"
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(state),
+                "FAKE_GLAB_LOG": str(log),
+            }
+            target = "https://gitlab.example/group/project/-/merge_requests/7"
+            batch = self.run_runner(
+                "mr-prepare", "prepare", "--url", target, "--url", target, env=environment
+            )
+            self.assertEqual(batch.returncode, 2)
+            self.assertFalse(log.exists())
+
+            prepared = self.run_runner("mr-prepare", "prepare", "--url", target, env=environment)
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
+            content = root / "content.json"
+            content.write_text(
+                json.dumps(
+                    {
+                        "title": "Prepare exact merge request publication plan",
+                        "description": "Proposed description",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            scaffolded = self.run_runner(
+                "mr-prepare",
+                "scaffold",
+                "--bundle",
+                evidence,
+                "--content",
+                str(content),
+                env=environment,
+            )
+            self.assertEqual(scaffolded.returncode, 0, scaffolded.stderr)
+            scaffold = json.loads(scaffolded.stdout)
+            plan = scaffold["artifact_path"]
+            markdown = Path(scaffold["markdown_path"])
+            markdown_text = markdown.read_text(encoding="utf-8")
+            self.assertIn("- Decision: `change`", markdown_text)
+            self.assertIn("Pipeline status for exact head SHA: `missing`", markdown_text)
+            self.assertEqual(markdown.stat().st_mode & 0o777, 0o600)
+
+            finalized = self.run_runner("mr-prepare", "finalize", "--plan", plan, env=environment)
+            self.assertEqual(finalized.returncode, 0, finalized.stderr)
+            self.assertEqual(
+                json.loads(finalized.stdout)["result"]["publication_plan_digest"],
+                scaffold["digest"],
+            )
+
+            state.write_text("changed", encoding="utf-8")
+            refreshed = self.run_runner("mr-prepare", "prepare", "--url", target, env=environment)
+            self.assertEqual(refreshed.returncode, 0, refreshed.stderr)
+            stale = self.run_runner("mr-prepare", "finalize", "--plan", plan, env=environment)
+            self.assertEqual(stale.returncode, 2)
+            self.assertEqual(json.loads(stale.stdout)["status"], "stale")
+
+            state.write_text("fresh", encoding="utf-8")
+            markdown.write_text("modified", encoding="utf-8")
+            modified = self.run_runner("mr-prepare", "finalize", "--plan", plan, env=environment)
+            self.assertEqual(modified.returncode, 2)
+            self.assertEqual(json.loads(modified.stdout)["status"], "error")
+
+    def test_release_prepare_inventory_artifacts_and_freshness(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = root / "repository"
+            repository.mkdir()
+            for arguments in (
+                ("init", "-q"),
+                ("config", "user.email", "developer@example.invalid"),
+                ("config", "user.name", "Example Developer"),
+            ):
+                subprocess.run(
+                    ["git", *arguments], cwd=repository, check=True, capture_output=True
+                )
+            source = repository / "release.txt"
+            source.write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "release.txt"], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
+            subprocess.run(["git", "tag", "v1.0.0"], cwd=repository, check=True)
+            source.write_text("base\ndirect\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-qam", "fix direct behavior"], cwd=repository, check=True)
+            source.write_text("base\ndirect\nassociated\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-qam", "add associated behavior"], cwd=repository, check=True)
+            head_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+
+            _glab, state = self.fake_glab(root)
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(state),
+                "FAKE_GLAB_LOG": str(root / "glab.log"),
+                "FAKE_HEAD_SHA": head_sha,
+                "FAKE_ASSOCIATED_SHA": head_sha,
+            }
+            target = "https://gitlab.example/group/project/-/merge_requests/7"
+            prepared = self.run_runner(
+                "release-prepare", "prepare", "--url", target, env=environment
+            )
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
+            inventory_result = self.run_runner(
+                "release-prepare",
+                "inventory",
+                "--evidence",
+                evidence,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(inventory_result.returncode, 0, inventory_result.stderr)
+            inventory = json.loads(inventory_result.stdout)
+            self.assertEqual(inventory["previous_ref"], "v1.0.0")
+            self.assertEqual(
+                inventory["counts"],
+                {
+                    "commits": 2,
+                    "merge_requests": 1,
+                    "direct_commits": 1,
+                    "errors": 0,
+                    "warnings": 0,
+                },
+            )
+
+            content = root / "release-content.json"
+            content.write_text(
+                json.dumps(
+                    {
+                        "title": "Prepare reliable release publication artifacts",
+                        "description": "### Compatibility and migration\n\n- Migration: none\n",
+                        "version": "1.1.0",
+                        "announcement": "Three verified release outcomes.",
+                        "illustration_prompt": "Horizontal 16:9 editorial illustration without text or logos.",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            scaffolded = self.run_runner(
+                "release-prepare",
+                "scaffold",
+                "--bundle",
+                evidence,
+                "--inventory",
+                inventory["artifact_path"],
+                "--content",
+                str(content),
+                env=environment,
+            )
+            self.assertEqual(scaffolded.returncode, 0, scaffolded.stderr)
+            scaffold = json.loads(scaffolded.stdout)
+            self.assertEqual(len(scaffold["companions"]), 3)
+            self.assertTrue(all(Path(item["path"]).is_file() for item in scaffold["companions"]))
+            plan = scaffold["artifact_path"]
+            finalized = self.run_runner(
+                "release-prepare", "finalize", "--plan", plan, env=environment
+            )
+            self.assertEqual(finalized.returncode, 0, finalized.stderr)
+
+            subprocess.run(["git", "tag", "v1.1.0"], cwd=repository, check=True)
+            stale = self.run_runner(
+                "release-prepare", "finalize", "--plan", plan, env=environment
+            )
+            self.assertEqual(stale.returncode, 2, stale.stderr)
+            self.assertIn("release_inventory", json.loads(stale.stdout)["result"]["changed"])
+            subprocess.run(["git", "tag", "-d", "v1.1.0"], cwd=repository, check=True)
+
+            companion = Path(scaffold["companions"][0]["path"])
+            companion.write_text("modified", encoding="utf-8")
+            modified = self.run_runner(
+                "release-prepare", "finalize", "--plan", plan, env=environment
+            )
+            self.assertEqual(modified.returncode, 2)
+            self.assertEqual(json.loads(modified.stdout)["status"], "error")
 
     @unittest.skip("GitLab task adapter removed in stage 17")
     def test_pagination_deduplicates_and_preserves_partial_failure(self) -> None:

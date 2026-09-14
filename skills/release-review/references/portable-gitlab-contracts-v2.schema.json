@@ -5,6 +5,7 @@
   "oneOf": [
     { "$ref": "#/$defs/evidence_snapshot" },
     { "$ref": "#/$defs/local_wip_snapshot" },
+    { "$ref": "#/$defs/release_inventory" },
     { "$ref": "#/$defs/publication_plan" },
     { "$ref": "#/$defs/analysis_report" },
     { "$ref": "#/$defs/critic_receipt" },
@@ -34,6 +35,16 @@
         "errors": { "type": "array", "items": { "type": "string" } },
         "pages": { "type": "integer", "minimum": 0 },
         "truncated": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "companion": {
+      "type": "object",
+      "required": ["name", "content", "sha256"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$" },
+        "content": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/digest" }
       },
       "additionalProperties": false
     },
@@ -200,6 +211,73 @@
         }
       ]
     },
+    "release_inventory": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "properties": {
+            "schema": { "const": "portable-gitlab/release_inventory/v2" },
+            "kind": { "const": "release_inventory" },
+            "payload": {
+              "type": "object",
+              "required": [
+                "schema_version",
+                "profile",
+                "external_mutations",
+                "evidence_digest",
+                "target",
+                "repo_root",
+                "project_id",
+                "hostname",
+                "head_sha",
+                "component_target_branch",
+                "previous_ref",
+                "previous_ref_explicit",
+                "previous_sha",
+                "previous_tag",
+                "revision_range",
+                "commits",
+                "merge_requests",
+                "direct_commits",
+                "errors",
+                "warnings",
+                "complete",
+                "artifact_root",
+                "prepared_at",
+                "counts"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "schema_version": { "const": 2 },
+                "profile": { "const": "release-prepare" },
+                "external_mutations": { "const": false },
+                "evidence_digest": { "$ref": "#/$defs/digest" },
+                "target": { "type": "object" },
+                "repo_root": { "type": "string", "minLength": 1 },
+                "project_id": { "type": "integer", "minimum": 1 },
+                "hostname": { "type": "string", "minLength": 1 },
+                "head_sha": { "$ref": "#/$defs/sha" },
+                "component_target_branch": { "type": "string", "minLength": 1 },
+                "previous_ref": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+                "previous_ref_explicit": { "type": "boolean" },
+                "previous_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+                "previous_tag": { "anyOf": [{ "type": "object" }, { "type": "null" }] },
+                "revision_range": { "type": "string", "minLength": 1 },
+                "commits": { "type": "array" },
+                "merge_requests": { "type": "array" },
+                "direct_commits": { "type": "array" },
+                "errors": { "type": "array" },
+                "warnings": { "type": "array" },
+                "complete": { "type": "boolean" },
+                "artifact_root": { "type": "string", "minLength": 1 },
+                "prepared_at": { "type": "string", "format": "date-time" },
+                "counts": { "type": "object" }
+              }
+            }
+          }
+        }
+      ]
+    },
     "publication_plan": {
       "allOf": [
         { "$ref": "#/$defs/envelope" },
@@ -226,7 +304,10 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "complete": { "type": "boolean" },
                 "markdown": { "type": "string" },
-                "plan_name": { "type": "string", "minLength": 1 }
+                "plan_name": { "type": "string", "minLength": 1 },
+                "inventory_digest": { "$ref": "#/$defs/digest" },
+                "release_version": { "type": "string", "minLength": 1 },
+                "companions": { "type": "array", "items": { "$ref": "#/$defs/companion" } }
               }
             }
           }
@@ -406,6 +487,7 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "evidence_kind": { "enum": ["evidence_snapshot", "local_wip_snapshot"] },
                 "evidence_fingerprint_digest": { "$ref": "#/$defs/digest" },
+                "publication_plan_digest": { "$ref": "#/$defs/digest" },
                 "external_mutations": { "const": false },
                 "head_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
                 "release_readiness_digest": { "$ref": "#/$defs/digest" },

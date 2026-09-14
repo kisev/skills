@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -26,6 +27,9 @@ URL_RE = re.compile(
     r"^https://(?P<host>[^/?#]+)/(?P<project>.+?)/-/(?P<kind>issues|merge_requests)/(?P<iid>[1-9][0-9]*)/?$"
 )
 SECRET_RE = re.compile(r"(?i)(token|password|secret|private[_-]?token)\s*[=:]\s*[^\s,]+")
+SEMVER_RE = re.compile(
+    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
+)
 PROFILES = {
     "task-triage": {"issues"},
     "task-review": {"issues", "merge_requests"},
@@ -37,6 +41,7 @@ PROFILES = {
 }
 ARTIFACT_KINDS = {
     "evidence_snapshot",
+    "release_inventory",
     "publication_plan",
     "analysis_report",
     "critic_receipt",
@@ -91,7 +96,10 @@ def capabilities(profile: str) -> int:
             "mutation": "local-write",
             "dry_run": True,
             "state_protocol": "private-content-addressed-artifacts",
-            "external_tools": {"glab": shutil.which("glab") is not None},
+            "external_tools": {
+                "glab": shutil.which("glab") is not None,
+                "git": shutil.which("git") is not None,
+            },
             "destructive_flags": [],
             "profile": profile,
             "external_mutations": False,
@@ -257,6 +265,23 @@ def write_artifact(root: Path, kind: str, payload: dict[str, Any]) -> tuple[Path
     return path, content_digest
 
 
+def write_companion(path: Path, content: str) -> tuple[Path, str]:
+    """Write a private immutable companion next to its content-addressed envelope."""
+    data = content.encode()
+    content_digest = hashlib.sha256(data).hexdigest()
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        if regular_file(path, "Markdown companion").read_bytes() != data:
+            raise WorkflowError("immutable Markdown companion conflict")
+        return path.resolve(), content_digest
+    with os.fdopen(fd, "wb") as handle:
+        handle.write(data)
+        handle.flush()
+        os.fsync(handle.fileno())
+    return path.resolve(), content_digest
+
+
 def artifact_payload(path: Path, kind: str) -> tuple[dict[str, Any], dict[str, Any]]:
     value = read_json(path, "artifact")
     if (
@@ -318,6 +343,27 @@ def findings_are_valid(value: object) -> bool:
         isinstance(item, dict) and set(item) == {"id"} and nonempty_string(item.get("id"))
         for item in value
     )
+
+
+def companions_are_valid(value: object) -> bool:
+    if not isinstance(value, list):
+        return False
+    names: set[str] = set()
+    for item in value:
+        if not isinstance(item, dict) or set(item) != {"name", "content", "sha256"}:
+            return False
+        name, content, content_digest = item["name"], item["content"], item["sha256"]
+        if (
+            not isinstance(name, str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}", name) is None
+            or name in names
+            or not isinstance(content, str)
+            or not is_digest(content_digest)
+            or hashlib.sha256(content.encode()).hexdigest() != content_digest
+        ):
+            return False
+        names.add(name)
+    return True
 
 
 def artifact_schema() -> dict[str, Any]:
@@ -523,24 +569,98 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not isinstance(payload["retrieval_complete"], bool)
         ):
             raise WorkflowError("local WIP payload is schema-invalid")
+    elif kind == "release_inventory":
+        required = {
+            "schema_version",
+            "profile",
+            "external_mutations",
+            "evidence_digest",
+            "target",
+            "repo_root",
+            "project_id",
+            "hostname",
+            "head_sha",
+            "component_target_branch",
+            "previous_ref",
+            "previous_ref_explicit",
+            "previous_sha",
+            "previous_tag",
+            "revision_range",
+            "commits",
+            "merge_requests",
+            "direct_commits",
+            "errors",
+            "warnings",
+            "complete",
+            "artifact_root",
+            "prepared_at",
+            "counts",
+        }
+        exact_keys(payload, required, "release inventory payload")
+        counts = payload["counts"]
+        if (
+            payload["schema_version"] != ARTIFACT_VERSION
+            or payload["profile"] != "release-prepare"
+            or payload["external_mutations"] is not False
+            or not is_digest(payload["evidence_digest"])
+            or not isinstance(payload["target"], dict)
+            or not nonempty_string(payload["repo_root"])
+            or not isinstance(payload["project_id"], int)
+            or isinstance(payload["project_id"], bool)
+            or payload["project_id"] < 1
+            or not all(
+                nonempty_string(payload[key])
+                for key in ("hostname", "component_target_branch", "revision_range")
+            )
+            or not is_sha(payload["head_sha"])
+            or (payload["previous_ref"] is not None and not nonempty_string(payload["previous_ref"]))
+            or not isinstance(payload["previous_ref_explicit"], bool)
+            or not is_sha(payload["previous_sha"], nullable=True)
+            or (payload["previous_tag"] is not None and not isinstance(payload["previous_tag"], dict))
+            or not all(
+                isinstance(payload[key], list)
+                for key in ("commits", "merge_requests", "direct_commits", "errors", "warnings")
+            )
+            or not isinstance(payload["complete"], bool)
+            or not nonempty_string(payload["artifact_root"])
+            or not nonempty_string(payload["prepared_at"])
+            or not isinstance(counts, dict)
+            or set(counts) != {"commits", "merge_requests", "direct_commits", "errors", "warnings"}
+            or not all(isinstance(item, int) and not isinstance(item, bool) and item >= 0 for item in counts.values())
+        ):
+            raise WorkflowError("release inventory payload is schema-invalid")
     elif kind == "publication_plan":
-        exact_keys(
-            payload,
-            {
-                "profile",
-                "target",
-                "evidence_digest",
-                "complete",
-                "markdown",
-                "plan_name",
-                "external_mutations",
-            },
-            "publication plan payload",
+        required = {
+            "profile",
+            "target",
+            "evidence_digest",
+            "complete",
+            "markdown",
+            "plan_name",
+            "external_mutations",
+        }
+        release_fields = {"inventory_digest", "release_version", "companions"}
+        expected_keys = (
+            required | release_fields if payload.get("profile") == "release-prepare" else required
         )
         if (
-            not is_digest(payload["evidence_digest"])
+            set(payload) != expected_keys
+            or not nonempty_string(payload.get("profile"))
+            or not isinstance(payload.get("target"), dict)
+            or not is_digest(payload.get("evidence_digest"))
+            or not isinstance(payload.get("markdown"), str)
+            or not nonempty_string(payload.get("plan_name"))
             or not isinstance(payload["complete"], bool)
             or payload["external_mutations"] is not False
+            or (
+                payload.get("profile") == "release-prepare"
+                and (
+                    not is_digest(payload.get("inventory_digest"))
+                    or not isinstance(payload.get("release_version"), str)
+                    or SEMVER_RE.fullmatch(cast(str, payload.get("release_version"))) is None
+                    or not companions_are_valid(payload.get("companions"))
+                )
+            )
         ):
             raise WorkflowError("publication plan payload is schema-invalid")
     elif kind in {"analysis_report", "critic_receipt"}:
@@ -654,6 +774,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "evidence_digest",
             "evidence_kind",
             "evidence_fingerprint_digest",
+            "publication_plan_digest",
             "external_mutations",
             "release_readiness_digest",
             "release_readiness_valid",
@@ -681,6 +802,10 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or payload["evidence_kind"] not in {"evidence_snapshot", "local_wip_snapshot"}
             or not is_digest(payload["evidence_fingerprint_digest"])
+            or (
+                "publication_plan_digest" in payload
+                and not is_digest(payload["publication_plan_digest"])
+            )
             or payload["external_mutations"] is not False
             or (
                 "release_readiness_digest" in payload
@@ -700,7 +825,7 @@ def allowed_endpoint(endpoint: str) -> bool:
     # These are the complete collection endpoints. Query values are generated, never caller input.
     return bool(
         re.fullmatch(
-            r"projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits))?(?:\?[^#]+)?)",
+            r"projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?)",
             endpoint,
         )
     )
@@ -952,10 +1077,11 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
     bundle["retrieval_complete"] = all(components_complete.values())
     if persist:
         artifact_path, artifact_digest = write_artifact(root, "evidence_snapshot", bundle)
-        write_json(
-            root / "current.json",
-            {"evidence_path": str(artifact_path), "evidence_digest": artifact_digest},
-        )
+        if profile not in {"mr-prepare", "release-prepare"}:
+            write_json(
+                root / "current.json",
+                {"evidence_path": str(artifact_path), "evidence_digest": artifact_digest},
+            )
         bundle["preview_artifact_path"], bundle["preview_digest"] = (
             str(artifact_path),
             artifact_digest,
@@ -981,8 +1107,109 @@ def evidence_from_root(root: Path) -> tuple[Path, dict[str, Any]]:
         return source, payload
 
 
-def publication_markdown(bundle: dict[str, Any], content: dict[str, Any]) -> str:
+def marked_preview(label: str, value: str) -> str:
+    separator = "" if value.endswith("\n") else "\n"
+    return f"<!-- {label} START -->\n{value}{separator}<!-- {label} END -->"
+
+
+def pipeline_summary(bundle: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
+    pipelines = bundle.get("pipelines")
+    head_sha = bundle.get("head_sha")
+    if not isinstance(pipelines, dict) or pipelines.get("complete") is not True:
+        return "unverified: collection incomplete", None
+    if not isinstance(head_sha, str) or not head_sha:
+        return "unverified: exact head SHA unavailable", None
+    items = pipelines.get("items")
+    if not isinstance(items, list):
+        return "unverified: pipeline data invalid", None
+    exact = [
+        item
+        for item in items
+        if isinstance(item, dict) and item.get("sha") == head_sha
+    ]
+    if not exact:
+        return "missing", None
+    pipeline = exact[0]
+    for candidate in exact[1:]:
+        candidate_id, pipeline_id = candidate.get("id"), pipeline.get("id")
+        if isinstance(candidate_id, int) and (
+            not isinstance(pipeline_id, int) or candidate_id > pipeline_id
+        ):
+            pipeline = candidate
+    raw_status = pipeline.get("status")
+    if raw_status in {"success", "running", "failed", "canceled"}:
+        return str(raw_status), pipeline
+    if raw_status in {"created", "waiting_for_resource", "preparing", "pending"}:
+        return "running", pipeline
+    return f"unsupported raw state: {raw_status!s}", pipeline
+
+
+def publication_markdown(
+    bundle: dict[str, Any],
+    content: dict[str, str],
+    inventory: dict[str, Any] | None = None,
+) -> str:
     target = bundle.get("target", {})
+    profile = bundle.get("profile")
+    if profile not in {"mr-prepare", "release-prepare"}:
+        return (
+            "\n".join(
+                [
+                    "# Verified publication plan",
+                    "",
+                    f"- Target: {target.get('url', 'local')}",
+                    f"- Base SHA: {bundle.get('base_sha') or 'not applicable'}",
+                    f"- Start SHA: {bundle.get('start_sha') or 'not applicable'}",
+                    f"- Head SHA: {bundle.get('head_sha') or 'not applicable'}",
+                    f"- Collection completeness: {'complete' if bundle.get('retrieval_complete') else 'partial'}",
+                    "- `external_mutations=false`: this plan does not perform or propose automated publish/resolve/approve/merge operations.",
+                    "",
+                    "## Proposed text",
+                    "",
+                    f"### Title\n\n{content.get('title', '') or 'No changes.'}",
+                    f"\n### Description\n\n{content.get('description', '') or 'No changes.'}",
+                    "",
+                    "Before manual publication, run `finalize`; stale or incomplete evidence blocks ready.",
+                ]
+            )
+            + "\n"
+        )
+    object_value = bundle.get("object")
+    if not isinstance(object_value, dict):
+        raise WorkflowError("evidence object is invalid")
+    current_title = object_value.get("title")
+    current_description = object_value.get("description")
+    if not isinstance(current_title, str) or current_description is not None and not isinstance(
+        current_description, str
+    ):
+        raise WorkflowError("current title or description is invalid")
+    current_description = current_description or ""
+    proposed_title = content["title"]
+    proposed_description = content["description"]
+    pipeline_status, pipeline = pipeline_summary(bundle)
+    pipeline_id = pipeline.get("id") if pipeline is not None else None
+    release_details: list[str] = []
+    release_sections: list[str] = []
+    if profile == "release-prepare":
+        if inventory is None:
+            raise WorkflowError("release publication plan requires an inventory")
+        release_details = [
+            f"- Release version: `v{content['version']}`",
+            f"- Previous boundary: {inventory.get('previous_ref') or 'first release'}",
+            f"- Previous SHA: {inventory.get('previous_sha') or 'not applicable'}",
+            f"- Release range: `{inventory.get('revision_range')}`",
+            f"- Inventory completeness: {'complete' if inventory.get('complete') else 'partial'}",
+        ]
+        release_sections = [
+            "",
+            "## Announcement",
+            "",
+            marked_preview("ANNOUNCEMENT", content["announcement"]),
+            "",
+            "## Illustration prompt",
+            "",
+            marked_preview("ILLUSTRATION PROMPT", content["illustration_prompt"]),
+        ]
     return (
         "\n".join(
             [
@@ -993,48 +1220,153 @@ def publication_markdown(bundle: dict[str, Any], content: dict[str, Any]) -> str
                 f"- Start SHA: {bundle.get('start_sha') or 'not applicable'}",
                 f"- Head SHA: {bundle.get('head_sha') or 'not applicable'}",
                 f"- Collection completeness: {'complete' if bundle.get('retrieval_complete') else 'partial'}",
+                f"- Pipeline status for exact head SHA: `{pipeline_status}`",
+                f"- Pipeline ID: {pipeline_id if pipeline_id is not None else 'not applicable'}",
+                *release_details,
                 "- `external_mutations=false`: this plan does not perform or propose automated publish/resolve/approve/merge operations.",
                 "",
-                "## Proposed text",
+                "## Title",
                 "",
-                f"### Title\n\n{content.get('title', '') or 'No changes.'}",
-                f"\n### Description\n\n{content.get('description', '') or 'No changes.'}",
+                f"- Decision: `{'change' if current_title != proposed_title else 'keep'}`",
                 "",
-                "Before manual publication, run `finalize`; stale or incomplete evidence blocks ready.",
+                "### Current title",
+                "",
+                marked_preview("CURRENT TITLE", current_title),
+                "",
+                "### Proposed title",
+                "",
+                marked_preview("PROPOSED TITLE", proposed_title),
+                "",
+                "## Description",
+                "",
+                f"- Decision: `{'change' if current_description != proposed_description else 'keep'}`",
+                "",
+                "### Current description",
+                "",
+                marked_preview("CURRENT DESCRIPTION", current_description),
+                "",
+                "### Proposed description",
+                "",
+                marked_preview("PROPOSED DESCRIPTION", proposed_description),
+                *release_sections,
+                "",
+                "Before manual publication, run `finalize --plan` for this JSON envelope; stale or incomplete evidence blocks readiness.",
             ]
         )
         + "\n"
     )
 
 
-def scaffold(bundle_file: str, content_file: str, plan_name: str) -> dict[str, object]:
-    source = Path(bundle_file)
+def scaffold(
+    bundle_file: str,
+    content_file: str,
+    plan_name: str,
+    inventory_file: str | None = None,
+) -> dict[str, object]:
+    source = regular_file(Path(bundle_file), "evidence snapshot")
     _, bundle = artifact_payload(source, "evidence_snapshot")
     root = artifact_root(Path(str(bundle["artifact_root"])))
-    content = read_json(Path(content_file), "content")
-    markdown = publication_markdown(bundle, content)
-    payload = {
+    evidence_digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    expected_source = root / "artifacts" / "evidence_snapshot" / f"{evidence_digest}.json"
+    if source != expected_source:
+        raise WorkflowError("evidence snapshot is not in its content-addressed collection")
+    profile = bundle.get("profile")
+    release_inventory: dict[str, Any] | None = None
+    inventory_digest: str | None = None
+    release_companions: list[dict[str, str]] = []
+    content_fields = {"title", "description"}
+    if profile == "release-prepare":
+        if inventory_file is None:
+            raise WorkflowError("release publication plan requires --inventory")
+        inventory_module = importlib.import_module("release_inventory")
+        _, release_inventory, inventory_digest = inventory_module.validate_inventory_binding(
+            inventory_file, source
+        )
+        content_fields |= {"version", "announcement", "illustration_prompt"}
+    content_value = exact_keys(
+        read_json(Path(content_file), "content"), content_fields, "content"
+    )
+    if not nonempty_string(content_value["title"]) or not isinstance(
+        content_value["description"], str
+    ):
+        raise WorkflowError("content requires a non-empty title and a description string")
+    content = cast(dict[str, str], content_value)
+    if profile == "release-prepare":
+        if (
+            not isinstance(content.get("version"), str)
+            or SEMVER_RE.fullmatch(content["version"]) is None
+            or not nonempty_string(content.get("description"))
+            or not nonempty_string(content.get("announcement"))
+            or not nonempty_string(content.get("illustration_prompt"))
+        ):
+            raise WorkflowError(
+                "release content requires SemVer, announcement, and illustration_prompt"
+            )
+        version = content["version"]
+        for name, value in (
+            (f"release-description-v{version}.md", content["description"]),
+            (f"release-announcement-v{version}.md", content["announcement"]),
+            (f"release-illustration-prompt-v{version}.md", content["illustration_prompt"]),
+        ):
+            release_companions.append(
+                {
+                    "name": name,
+                    "content": value,
+                    "sha256": hashlib.sha256(value.encode()).hexdigest(),
+                }
+            )
+    markdown = publication_markdown(bundle, content, release_inventory)
+    complete = bool(bundle.get("retrieval_complete")) and (
+        release_inventory is None or release_inventory.get("complete") is True
+    )
+    payload: dict[str, Any] = {
         "profile": bundle.get("profile"),
         "external_mutations": False,
         "target": bundle.get("target"),
-        "evidence_digest": hashlib.sha256(
-            regular_file(source, "evidence snapshot").read_bytes()
-        ).hexdigest(),
-        "complete": bundle.get("retrieval_complete"),
+        "evidence_digest": evidence_digest,
+        "complete": complete,
         "markdown": markdown,
         "plan_name": Path(plan_name).name,
     }
+    if profile == "release-prepare":
+        payload.update(
+            {
+                "inventory_digest": inventory_digest,
+                "release_version": content["version"],
+                "companions": release_companions,
+            }
+        )
     path, plan_digest = write_artifact(root, "publication_plan", payload)
+    markdown_path, markdown_digest = write_companion(path.with_suffix(".md"), markdown)
+    companion_outputs: list[dict[str, str]] = []
+    for companion in release_companions:
+        companion_path, companion_digest = write_companion(
+            path.with_name(f"{plan_digest}-{companion['name']}"), companion["content"]
+        )
+        companion_outputs.append(
+            {
+                "name": companion["name"],
+                "path": str(companion_path),
+                "digest": companion_digest,
+            }
+        )
     return {
-        "status": "ok" if bundle.get("retrieval_complete") else "incomplete",
+        "status": "ok" if complete else "incomplete",
         "summary": {
             "tldr": "Prepared a local Markdown plan for manual publication.",
             "scope": [str(bundle.get("target", {}).get("url", "local"))],
-            "risks": [] if bundle.get("retrieval_complete") else ["collection incomplete"],
-            "checks": ["schema-valid evidence", "content-addressed publication plan"],
+            "risks": [] if complete else ["collection or release inventory incomplete"],
+            "checks": [
+                "schema-valid evidence",
+                "content-addressed publication plan",
+                *(["exact release inventory"] if release_inventory is not None else []),
+            ],
         },
         "artifact_path": str(path),
         "digest": plan_digest,
+        "markdown_path": str(markdown_path),
+        "markdown_digest": markdown_digest,
+        "companions": companion_outputs,
         "external_mutations": False,
     }
 
@@ -1078,6 +1410,116 @@ def finalize(root_value: str) -> dict[str, object]:
         "complete": current.get("retrieval_complete"),
         "evidence_digest": hashlib.sha256(source.read_bytes()).hexdigest(),
     }
+
+
+def plan_context(
+    plan_value: str,
+) -> tuple[Path, Path, dict[str, Any], str, Path, dict[str, Any], dict[str, Any] | None]:
+    plan_path = regular_file(Path(plan_value), "publication plan")
+    _, plan = artifact_payload(plan_path, "publication_plan")
+    plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
+    if plan_path.parent.name != "publication_plan" or plan_path.parent.parent.name != "artifacts":
+        raise WorkflowError("publication plan path is outside a collection")
+    root = artifact_root(plan_path.parent.parent.parent)
+    expected_plan = root / "artifacts" / "publication_plan" / f"{plan_digest}.json"
+    if plan_path != expected_plan:
+        raise WorkflowError("publication plan is not in its content-addressed collection")
+    markdown = plan.get("markdown")
+    if not isinstance(markdown, str):
+        raise WorkflowError("publication plan Markdown is invalid")
+    markdown_path = regular_file(plan_path.with_suffix(".md"), "Markdown companion")
+    if markdown_path.read_bytes() != markdown.encode():
+        raise WorkflowError("Markdown companion does not match the publication plan")
+    evidence_digest = plan.get("evidence_digest")
+    if not is_digest(evidence_digest):
+        raise WorkflowError("publication plan evidence digest is invalid")
+    source = regular_file(
+        root / "artifacts" / "evidence_snapshot" / f"{evidence_digest}.json",
+        "evidence snapshot",
+    )
+    if hashlib.sha256(source.read_bytes()).hexdigest() != evidence_digest:
+        raise WorkflowError("evidence snapshot does not match the publication plan")
+    _, baseline = artifact_payload(source, "evidence_snapshot")
+    release_inventory: dict[str, Any] | None = None
+    expected_complete = baseline.get("retrieval_complete")
+    if plan.get("profile") == "release-prepare":
+        inventory_digest = plan.get("inventory_digest")
+        if not is_digest(inventory_digest):
+            raise WorkflowError("release publication plan inventory digest is invalid")
+        inventory_module = importlib.import_module("release_inventory")
+        inventory_path = root / "artifacts" / "release_inventory" / f"{inventory_digest}.json"
+        _, release_inventory, actual_inventory_digest = (
+            inventory_module.validate_inventory_binding(inventory_path, source)
+        )
+        if actual_inventory_digest != inventory_digest:
+            raise WorkflowError("release inventory does not match the publication plan")
+        expected_complete = bool(expected_complete) and release_inventory.get("complete") is True
+        companions = plan.get("companions")
+        if not companions_are_valid(companions):
+            raise WorkflowError("release publication companions are invalid")
+        for companion in cast(list[dict[str, str]], companions):
+            companion_path = regular_file(
+                plan_path.with_name(f"{plan_digest}-{companion['name']}"),
+                "release publication companion",
+            )
+            if (
+                companion_path.read_bytes() != companion["content"].encode()
+                or hashlib.sha256(companion_path.read_bytes()).hexdigest()
+                != companion["sha256"]
+            ):
+                raise WorkflowError("release publication companion does not match the plan")
+    if (
+        plan.get("profile") != baseline.get("profile")
+        or plan.get("target") != baseline.get("target")
+        or plan.get("complete") != expected_complete
+    ):
+        raise WorkflowError("publication plan does not bind its evidence identity")
+    return root, plan_path, plan, plan_digest, source, baseline, release_inventory
+
+
+def finalize_plan(
+    plan_value: str,
+) -> tuple[dict[str, object], Path, Path, dict[str, Any]]:
+    root, _, _, plan_digest, source, baseline, release_inventory = plan_context(plan_value)
+    target = baseline.get("target")
+    if not isinstance(target, dict):
+        raise WorkflowError("evidence target is missing")
+    if target.get("kind") == "new_issue":
+        return (
+            {
+                "status": "not_applicable",
+                "changed": [],
+                "complete": baseline.get("retrieval_complete"),
+                "publication_plan_digest": plan_digest,
+            },
+            root,
+            source,
+            baseline,
+        )
+    current = collect(target, str(baseline.get("profile", "task-triage")), persist=False)
+    before, after = fingerprint(baseline), fingerprint(current)
+    changed = [name for name in before if before[name] != after[name]]
+    complete = bool(current.get("retrieval_complete"))
+    if release_inventory is not None:
+        inventory_module = importlib.import_module("release_inventory")
+        current_inventory = inventory_module.refresh_inventory(release_inventory, source)
+        if inventory_module.inventory_fingerprint(
+            release_inventory
+        ) != inventory_module.inventory_fingerprint(current_inventory):
+            changed.append("release_inventory")
+        complete = complete and current_inventory.get("complete") is True
+    return (
+        {
+            "status": "ok" if not changed and complete else "stale",
+            "changed": changed,
+            "head_sha": current.get("head_sha"),
+            "complete": complete,
+            "publication_plan_digest": plan_digest,
+        },
+        root,
+        source,
+        baseline,
+    )
 
 
 def git_read(root: Path, *args: str, text: bool = True) -> str | bytes:
@@ -1376,11 +1818,22 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     scaffold_parser = subparsers.add_parser("scaffold")
     scaffold_parser.add_argument("--bundle", required=True)
     scaffold_parser.add_argument("--content", required=True)
-    batch = subparsers.add_parser("scaffold-batch")
-    batch.add_argument("--bundle", required=True)
-    batch.add_argument("--content", required=True)
+    if profile == "release-prepare":
+        scaffold_parser.add_argument("--inventory", required=True)
+        inventory = subparsers.add_parser("inventory")
+        inventory.add_argument("--evidence", required=True)
+        inventory.add_argument("--repo-root", required=True)
+        inventory.add_argument("--previous-ref")
+        inventory.add_argument("--workers", type=int, default=8)
+    if profile not in {"mr-prepare", "release-prepare"}:
+        batch = subparsers.add_parser("scaffold-batch")
+        batch.add_argument("--bundle", required=True)
+        batch.add_argument("--content", required=True)
     final = subparsers.add_parser("finalize")
-    final.add_argument("--artifact-root", required=True)
+    if profile in {"mr-prepare", "release-prepare"}:
+        final.add_argument("--plan", required=True)
+    else:
+        final.add_argument("--artifact-root", required=True)
     final.add_argument("--report")
     local = subparsers.add_parser("prepare-local")
     local.add_argument("--repo-root", required=True)
@@ -1409,11 +1862,23 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     if args.capabilities:
         return capabilities(profile)
     try:
+        if args.command == "inventory":
+            inventory_module = importlib.import_module("release_inventory")
+            inventory_result = inventory_module.prepare_inventory(
+                args.evidence,
+                args.repo_root,
+                args.previous_ref,
+                args.workers,
+            )
+            emit(inventory_result)
+            return 0 if inventory_result["status"] == "ok" else 2
         if args.command == "prepare":
             if bool(args.url) == bool(args.project_url):
                 raise WorkflowError("provide exact --url target or --project-url, but not both")
             if args.project_url and profile != "task-prepare":
                 raise WorkflowError("project creation mode is only available for task preparation")
+            if profile in {"mr-prepare", "release-prepare"} and len(args.url or []) != 1:
+                raise WorkflowError(f"{profile} accepts exactly one --url target")
             targets = (
                 [parse_target(value, expected) for value in args.url]
                 if args.url
@@ -1463,20 +1928,29 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             )
             return 0 if status == "ok" else 1
         if args.command in {"scaffold", "scaffold-batch"}:
+            plan_name = (
+                "release-publication.md"
+                if profile == "release-prepare"
+                else "publication-plan.md"
+                if args.command == "scaffold"
+                else "batch-publication-plan.md"
+            )
             emit(
                 scaffold(
                     args.bundle,
                     args.content,
-                    "publication-plan.md"
-                    if args.command == "scaffold"
-                    else "batch-publication-plan.md",
+                    plan_name,
+                    getattr(args, "inventory", None),
                 )
             )
             return 0
         if args.command == "finalize":
-            result = finalize(args.artifact_root)
-            root = artifact_root(Path(args.artifact_root))
-            evidence_path, bundle = evidence_from_root(root)
+            if profile in {"mr-prepare", "release-prepare"}:
+                result, root, evidence_path, bundle = finalize_plan(args.plan)
+            else:
+                result = finalize(args.artifact_root)
+                root = artifact_root(Path(args.artifact_root))
+                evidence_path, bundle = evidence_from_root(root)
             result = finalize_payload(result, evidence_path, bundle, "evidence_snapshot")
             if profile == "release-review":
                 if not args.report:
