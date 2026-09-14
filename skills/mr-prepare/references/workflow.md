@@ -1,6 +1,6 @@
 # Ordinary MR preparation
 
-Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, and `references/language-policy.md`. Accept exactly one MR URL; do not infer an MR from a branch and do not create a batch. The runner collects metadata, changed files, commits, discussions, pipelines for the exact head SHA, and the complete paginated label list.
+Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, and `references/language-policy.md`. Accept only one exact MR URL; do not infer an MR from a branch and do not create a batch. The runner collects metadata, changed files, commits, discussions, pipelines for the exact head SHA, and the complete paginated label list.
 
 Verify the title and description against the collected diff, commits, discussions, and linked context that is actually available. Use project templates only when they are already available in the local checkout or collected evidence; do not widen collection to fetch templates, linked issues, `AGENTS.md`, or CONTRIBUTING. Explicitly list unavailable context.
 

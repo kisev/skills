@@ -58,7 +58,11 @@
         "severity": { "enum": ["critical", "high", "medium", "low"] },
         "summary": { "type": "string", "minLength": 1 },
         "risk": { "type": "string", "minLength": 1 },
-        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
         "consequence": { "type": "string", "minLength": 1 },
         "relation_to_change": { "type": "string", "minLength": 1 },
         "minimum_fix": { "type": "string", "minLength": 1 }
@@ -72,7 +76,17 @@
         "id": { "type": "string", "minLength": 1 },
         "url": { "type": "string", "minLength": 1 },
         "state": { "enum": ["open", "resolved", "plain"] },
-        "assessment": { "enum": ["accepted", "fixed", "false_positive", "duplicate", "not_related", "question", "neutral"] },
+        "assessment": {
+          "enum": [
+            "accepted",
+            "fixed",
+            "false_positive",
+            "duplicate",
+            "not_related",
+            "question",
+            "neutral"
+          ]
+        },
         "rationale": { "type": "string", "minLength": 1 },
         "outcome": { "enum": ["no_publication", "local_fix"] },
         "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
@@ -283,7 +297,9 @@
                 "hostname": { "type": "string", "minLength": 1 },
                 "head_sha": { "$ref": "#/$defs/sha" },
                 "component_target_branch": { "type": "string", "minLength": 1 },
-                "previous_ref": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+                "previous_ref": {
+                  "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+                },
                 "previous_ref_explicit": { "type": "boolean" },
                 "previous_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
                 "previous_tag": { "anyOf": [{ "type": "object" }, { "type": "null" }] },
@@ -432,10 +448,15 @@
                 "complete": { "type": "boolean" },
                 "summary": { "type": "string", "minLength": 1 },
                 "architecture_assessment": { "type": "string", "minLength": 1 },
-                "semver_impact": { "enum": ["major", "minor", "patch", "none", "not_applicable", "unknown"] },
+                "semver_impact": {
+                  "enum": ["major", "minor", "patch", "none", "not_applicable", "unknown"]
+                },
                 "checks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
-                "thread_decisions": { "type": "array", "items": { "$ref": "#/$defs/thread_decision" } },
+                "thread_decisions": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/thread_decision" }
+                },
                 "markdown": { "type": "string" }
               }
             }

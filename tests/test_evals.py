@@ -249,7 +249,7 @@ def test_portable_gitlab_uses_one_deadline_for_every_subprocess(
     observation = offline_observation(gitlab_scenario(), ROOT)
 
     assert observation["runner_assertions"]
-    assert len(deadlines) == 4
+    assert len(deadlines) == 5
     assert len(set(deadlines)) == 1
 
 

@@ -2,6 +2,8 @@
 
 Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/architecture-checklist.md`, and `references/finding-examples.md`.
 
+`/code-review` distinguishes a remote-MR target from local-WIP input.
+
 For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter URLs, and branch inference before any API call or artifact creation. Run `scripts/review_mr.py prepare --url <mr-url>`, then create role and thread context with `scripts/review_mr.py context --evidence <evidence-path> --repo-root <checkout>`. The context must bind the current GitLab user, MR author, role, all paginated discussions and notes, exact note permalinks, and a local repository containing the exact base/start/head commits.
 
 For local WIP, use only the current existing checkout and `prepare-local`; do not clone, fetch, checkout, stash, reset, clean, or create a worktree. The role is `author`, there is no GitLab publication target, and unavailable remote context must remain explicit.
@@ -16,7 +18,7 @@ Reconstruct intent from the MR title, description, source branch, commits, discu
 
 Read every non-system discussion, including resolved threads and all replies. Do not treat `resolved=true`, `Fixed`, approvals, green CI, or no conflicts as proof. For each thread record its permalink, position head SHA, current state, assessment, rationale, and whether no publication or a local fix is appropriate. Never reply, resolve, reopen, approve, merge, or push.
 
-Choose `fast`, `normal`, or `deep`. `fast` is only for a small confirmed low-risk change. `normal` and `deep` require an independent critic with a different run and session identity. The primary reviewer must accept or reject every critic finding and unresolved thread with a reason.
+Choose `fast`, `normal`, or `deep`. `fast` is only for a small confirmed low-risk change. `normal` and `deep` require an independent critic receipt with a different run and session identity. The primary reviewer must accept or reject every critic finding and unresolved thread with a reason.
 
 Every finding must contain `id`, `severity`, `summary`, `risk`, exact-SHA `evidence`, `consequence`, `relation_to_change`, and `minimum_fix`. Findings come first, ordered by severity. Do not raise severity for style, size, or missing tests without a concrete consequence. Always state the architecture assessment and SemVer impact, including `none`, `not_applicable`, or `unknown` when appropriate.
 

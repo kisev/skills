@@ -673,6 +673,22 @@ def offline_observation(scenario: dict[str, Any], root: Path) -> dict[str, Any]:
         }
     with tempfile.TemporaryDirectory(prefix="skills-gitlab-eval-") as temporary:
         sandbox = Path(temporary)
+        repository = sandbox / "repository"
+        repository.mkdir()
+        for arguments in (
+            ("init", "-q"),
+            ("config", "user.email", "reviewer@example.invalid"),
+            ("config", "user.name", "Example Reviewer"),
+        ):
+            subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "--allow-empty", "-qm", "review fixture"],
+            cwd=repository,
+            check=True,
+        )
+        review_sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+        ).strip()
         log = sandbox / "glab.jsonl"
         state = sandbox / "state"
         state.write_text("fresh", encoding="utf-8")
@@ -686,14 +702,17 @@ from pathlib import Path
 endpoint = sys.argv[-1]
 Path(os.environ["FAKE_GLAB_LOG"]).open("a", encoding="utf-8").write(json.dumps(sys.argv[1:]) + "\\n")
 changed = Path(os.environ["FAKE_GLAB_STATE"]).read_text(encoding="utf-8") == "changed"
+review_sha = os.environ["FAKE_REVIEW_SHA"]
 if endpoint.startswith("projects/group%%2Fproject"):
     value = {"id": 19}
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "updated_at": "changed" if changed else "fresh", "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+    value = {"iid": 7, "title": "Review fixture", "description": "Fixture", "source_branch": "feature", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": "author"}, "updated_at": "changed" if changed else "fresh", "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
-    value = {"changes": [], "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"}}
+    value = {"changes": [], "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
-    value = [{"id": "c"}]
+    value = [{"id": review_sha}]
+elif endpoint == "user":
+    value = {"username": "reviewer"}
 else:
     value = []
 print(json.dumps(value))
@@ -708,6 +727,7 @@ print(json.dumps(value))
                 "PATH": f"{sandbox}:{environment['PATH']}",
                 "FAKE_GLAB_LOG": str(log),
                 "FAKE_GLAB_STATE": str(state),
+                "FAKE_REVIEW_SHA": review_sha,
             }
         )
         process = run_with_deadline(
@@ -728,6 +748,36 @@ print(json.dumps(value))
             evidence = items[0].get("artifact_path")
             artifact_root = items[0].get("artifact_root")
             if isinstance(evidence, str) and isinstance(artifact_root, str):
+                context_process = run_with_deadline(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-S",
+                        "-B",
+                        str(executable),
+                        "context",
+                        "--evidence",
+                        evidence,
+                        "--repo-root",
+                        str(repository),
+                    ],
+                    cwd=sandbox,
+                    env=environment,
+                    deadline=deadline,
+                    timeout_seconds=timeout_seconds,
+                )
+                try:
+                    context_output = json.loads(context_process.stdout)
+                except json.JSONDecodeError:
+                    context_output = {}
+                context_path = (
+                    context_output.get("artifact_path")
+                    if isinstance(context_output, dict)
+                    else None
+                )
+                context_digest = (
+                    context_output.get("digest") if isinstance(context_output, dict) else None
+                )
                 finalized = run_with_deadline(
                     [
                         sys.executable,
@@ -758,6 +808,9 @@ print(json.dumps(value))
                     finalized.returncode == 0
                     and isinstance(final_path, str)
                     and isinstance(final_digest, str)
+                    and context_process.returncode == 0
+                    and isinstance(context_path, str)
+                    and isinstance(context_digest, str)
                 ):
                     evidence_digest = hashlib.sha256(Path(evidence).read_bytes()).hexdigest()
                     receipt = sandbox / "receipt.json"
@@ -783,6 +836,7 @@ print(json.dumps(value))
                                 "external_mutations": False,
                                 "evidence_digest": evidence_digest,
                                 "finalize_digest": final_digest,
+                                "context_digest": context_digest,
                                 "verdict": "ready",
                                 "run_id": "primary",
                                 "session_id": "primary-session",
@@ -804,6 +858,8 @@ print(json.dumps(value))
                         evidence,
                         "--report",
                         str(decision),
+                        "--context",
+                        context_path,
                         "--critic-receipt",
                         str(receipt),
                         "--finalize-report",
@@ -834,7 +890,9 @@ print(json.dumps(value))
             {"id": "runner:exit", "status": "passed" if process.returncode == 0 else "failed"},
             {
                 "id": "runner:exact-sha",
-                "status": "passed" if items and items[0].get("head_sha") == "c" else "failed",
+                "status": "passed"
+                if items and items[0].get("head_sha") == review_sha
+                else "failed",
             },
             {
                 "id": "runner:complete",
