@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "mattermost.read.trigger",
-  "revision": 1,
+  "revision": 2,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
@@ -19,7 +19,7 @@
     {
       "id": "read-only-scope",
       "path": "skills/mattermost/references/workflow.md",
-      "contains": "All API requests are GET-only"
+      "contains": "requests are GET-only"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "451307cb248d5b3003d71e4d6b55db5519fe6ba7ed6dfea68837d51aee3cdeac",
+  "digest": "2d43f6bdefee5fd5a57c8ea71909a6d56cb922bbdb87f9ef754041f724a2194b",
   "locale": "ru",
   "pair_id": "mattermost.read.trigger"
 }
