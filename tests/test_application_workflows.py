@@ -1442,6 +1442,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         expected = {
             "origin": "https://chat.example",
             "kind": "post",
+            "route": "pl",
             "team": "team",
             "channel": None,
             "post_id": "post-1",
@@ -1472,20 +1473,21 @@ class MattermostAndTeamTests(unittest.TestCase):
 
     def test_mattermost_pagination_deduplicates_and_marks_repeated_pages_partial(self) -> None:
         module = self.mattermost_module("pages")
-        posts = {str(index): {"id": str(index), "create_at": index} for index in range(200)}
+        posts = {
+            str(index): {"id": str(index), "channel_id": "channel-id", "create_at": index}
+            for index in range(1, 201)
+        }
+        page = {"order": list(posts), "posts": posts}
 
         class FakeClient:
             def get(self, path: str) -> object:
-                if path == "/channels/channel-id/posts?page=0&per_page=200":
-                    return {"posts": posts}
-                if path == "/channels/channel-id/posts?page=1&per_page=200":
-                    return {"posts": posts}
-                raise AssertionError(path)
+                return page
 
         result, complete, pages, errors, warnings = module.read_channel(
             FakeClient(),
             {"id": "channel-id"},
-            {"since": None, "until": None},
+            0,
+            1000,
         )
         self.assertFalse(complete)
         self.assertEqual(len(result), 200)
@@ -1495,8 +1497,17 @@ class MattermostAndTeamTests(unittest.TestCase):
 
     def test_mattermost_pagination_collects_pages_and_marks_error_or_limit_partial(self) -> None:
         module = self.mattermost_module("pagination_bounds")
-        first = {str(index): {"id": str(index), "create_at": index} for index in range(200)}
-        second = {"last": {"id": "last", "create_at": 201}}
+        first = {
+            str(index): {
+                "id": str(index),
+                "channel_id": "channel-id",
+                "create_at": index,
+            }
+            for index in range(1, 201)
+        }
+        second = {"last": {"id": "last", "channel_id": "channel-id", "create_at": 201}}
+        first_page = {"order": list(first), "posts": first}
+        second_page = {"order": ["last"], "posts": second}
 
         class CompleteClient:
             def get(self, path: str) -> object:
@@ -1506,13 +1517,13 @@ class MattermostAndTeamTests(unittest.TestCase):
                     "/users/me": {"id": "viewer"},
                     "/teams/name/team": {"id": "team-id"},
                     "/teams/team-id/channels/name/channel": {"id": "channel-id", "name": "channel"},
-                    "/channels/channel-id/posts?page=0&per_page=200": {"posts": first},
-                    "/channels/channel-id/posts?page=1&per_page=200": {"posts": second},
                 }
+                if path.startswith("/channels/channel-id/posts?"):
+                    return second_page if "before=" in path else first_page
                 return responses[path]
 
         posts, complete, pages, errors, warnings = module.read_channel(
-            CompleteClient(), {"id": "channel-id"}, {"since": None, "until": None}
+            CompleteClient(), {"id": "channel-id"}, 0, 1000
         )
         self.assertTrue(complete)
         self.assertEqual(len(posts), 201)
@@ -1528,12 +1539,12 @@ class MattermostAndTeamTests(unittest.TestCase):
                     return {"id": "team-id"}
                 if path == "/teams/team-id/channels/name/channel":
                     return {"id": "channel-id", "name": "channel"}
-                if path.endswith("page=0&per_page=200"):
-                    return {"posts": first}
+                if path.startswith("/channels/channel-id/posts?") and "before=" not in path:
+                    return first_page
                 raise module.MattermostError("page failed")
 
         posts, complete, pages, errors, _ = module.read_channel(
-            ErrorClient(), {"id": "channel-id"}, {"since": None, "until": None}
+            ErrorClient(), {"id": "channel-id"}, 0, 1000
         )
         self.assertFalse(complete)
         self.assertEqual(len(posts), 200)
@@ -1542,7 +1553,7 @@ class MattermostAndTeamTests(unittest.TestCase):
 
         with patch.object(module, "MAX_PAGES", 1):
             posts, complete, pages, errors, _ = module.read_channel(
-                CompleteClient(), {"id": "channel-id"}, {"since": None, "until": None}
+                CompleteClient(), {"id": "channel-id"}, 0, 1000
             )
         self.assertFalse(complete)
         self.assertEqual(len(posts), 200)
@@ -1590,17 +1601,26 @@ class MattermostAndTeamTests(unittest.TestCase):
 
     def test_mattermost_partial_thread_and_members_preserve_safe_evidence(self) -> None:
         module = self.mattermost_module("partial")
-        post = {"id": "reply", "root_id": "root", "create_at": 1}
+        post = {"id": "reply", "root_id": "root", "channel_id": "channel-id", "create_at": 1}
 
         class ThreadClient:
             def get(self, path: str) -> object:
                 raise module.MattermostError("thread unavailable")
 
-        posts, complete, errors, warnings = module.read_post(ThreadClient(), post)
+        posts, complete, errors, warnings, cache_hit, cache_age = module.read_post(
+            ThreadClient(),
+            post,
+            None,
+            read_cache=False,
+            write_cache=False,
+            current_ms=1000,
+        )
         self.assertFalse(complete)
         self.assertEqual(posts, [post])
         self.assertEqual(errors[0]["code"], "thread_unavailable")
         self.assertEqual(warnings[0]["code"], "thread_unavailable")
+        self.assertFalse(cache_hit)
+        self.assertIsNone(cache_age)
         summary = module.result_base(scope="post")
         summary.update({"posts": posts, "complete": False, "errors": errors})
         self.assertEqual(module.finalize_result(summary)["counts"]["posts"], 1)
@@ -1639,75 +1659,22 @@ class MattermostAndTeamTests(unittest.TestCase):
 
     def test_mattermost_cache_is_identity_bound_expiring_and_revalidated(self) -> None:
         module = self.mattermost_module("cache")
-        target = module.classify_url("https://chat.example/team/pl/post-1")
-        period = None
-        result = module.result_base(
-            scope="post", target=module.normalized_target(target), period=period
-        )
-        result.update(
-            {"status": "ok", "complete": True, "posts": [{"id": "post-1", "create_at": 1}]}
-        )
+        root = {
+            "id": "post-1",
+            "channel_id": "channel-id",
+            "root_id": "",
+            "create_at": 1,
+            "update_at": 1,
+        }
         with tempfile.TemporaryDirectory() as temporary:
             environment = {"XDG_CACHE_HOME": temporary}
             with patch.dict(os.environ, environment, clear=False):
-                key = module.cache_key("https://chat.example", "user-one", target, period)
-                module.cache_write(
-                    key,
-                    origin="https://chat.example",
-                    user_id="user-one",
-                    target=target,
-                    period=period,
-                    value=result,
-                )
-                cached, age = module.cache_read(
-                    key,
-                    origin="https://chat.example",
-                    user_id="user-one",
-                    target=target,
-                    period=period,
-                )
-                self.assertEqual(cached["status"], "ok")
-                self.assertIsNotNone(age)
-                self.assertIsNone(
-                    module.cache_read(
-                        key,
-                        origin="https://chat.example",
-                        user_id="user-two",
-                        target=target,
-                        period=period,
-                    )[0]
-                )
-                with module.cache_connection() as database:
-                    database.execute(
-                        "UPDATE snapshots_v2 SET fetched = ?",
-                        (module.now() - module.CACHE_TTL_SECONDS - 1,),
-                    )
-                self.assertIsNone(
-                    module.cache_read(
-                        key,
-                        origin="https://chat.example",
-                        user_id="user-one",
-                        target=target,
-                        period=period,
-                    )[0]
-                )
-                with module.cache_connection() as database:
-                    database.execute(
-                        "CREATE TABLE snapshots (key TEXT PRIMARY KEY, fetched TEXT NOT NULL, payload TEXT NOT NULL)"
-                    )
-                    database.execute(
-                        "INSERT INTO snapshots VALUES (?, ?, ?)",
-                        (key, "legacy", json.dumps(result)),
-                    )
-                self.assertIsNone(
-                    module.cache_read(
-                        key,
-                        origin="https://chat.example",
-                        user_id="user-two",
-                        target=target,
-                        period=period,
-                    )[0]
-                )
+                fetched_at = module.now() * 1000
+                with module.CacheStore("https://chat.example", "user-one") as store:
+                    store.put_thread("post-1", [root], fetched_at, complete=True)
+                    self.assertIsNotNone(store.get_post("post-1"))
+                with module.CacheStore("https://chat.example", "user-two") as store:
+                    self.assertIsNone(store.get_post("post-1"))
 
         calls: list[str] = []
 
@@ -1717,24 +1684,27 @@ class MattermostAndTeamTests(unittest.TestCase):
                 if path == "/users/me":
                     return {"id": "viewer"}
                 if path == "/posts/post-1":
-                    return {"id": "post-1", "create_at": 1}
+                    return root
                 raise AssertionError(path)
 
         with tempfile.TemporaryDirectory() as temporary:
             with patch.dict(os.environ, {"XDG_CACHE_HOME": temporary}, clear=False):
-                key = module.cache_key("https://chat.example", "viewer", target, None)
-                module.cache_write(
-                    key,
-                    origin="https://chat.example",
-                    user_id="viewer",
-                    target=target,
-                    period=None,
-                    value=result,
-                )
+                with module.CacheStore("https://chat.example", "viewer") as store:
+                    store.put_thread(
+                        "post-1",
+                        [root],
+                        module.now() * 1000,
+                        complete=True,
+                    )
                 with patch.object(module, "read_token", return_value="private-value"):
                     with patch.object(module, "Client", return_value=CachedClient()):
                         cached = module.read_one(
-                            "https://chat.example/team/pl/post-1", None, None, True, True
+                            "https://chat.example/team/pl/post-1",
+                            None,
+                            None,
+                            True,
+                            True,
+                            include_reactions=False,
                         )
         self.assertTrue(cached["cache_hit"])
         self.assertTrue(cached["access_revalidated"])

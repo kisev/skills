@@ -22,13 +22,17 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 AUTH_REQUIRED = 3
+CACHE_ERROR_EXIT = 4
 SCHEMA_VERSION = 2
 CACHE_TTL_SECONDS = 300
+CACHE_SCHEMA_VERSION = 3
+CACHE_STABLE_AGE_SECONDS = 7 * 24 * 60 * 60
 MAX_RESPONSE = 32 * 1024 * 1024
 PAGE_SIZE = 200
 MAX_PAGES = 10_000
 RECEIPT_TTL_SECONDS = 300
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.@-]{0,127}\Z")
+MATTERMOST_ID = re.compile(r"[a-z0-9]{26}\Z")
 
 
 class MattermostError(ValueError):
@@ -37,6 +41,10 @@ class MattermostError(ValueError):
 
 class AuthorizationRequired(MattermostError):
     """No valid origin-bound credential is available."""
+
+
+class CacheError(MattermostError):
+    """The local cache cannot be trusted."""
 
 
 class ContractArgumentParser(argparse.ArgumentParser):
@@ -214,6 +222,34 @@ def default_since() -> str:
     return local.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(UTC).isoformat()
 
 
+def datetime_millis_ceiling(value: datetime) -> int:
+    epoch = datetime(1970, 1, 1, tzinfo=UTC)
+    delta = value.astimezone(UTC) - epoch
+    return (
+        delta.days * 24 * 60 * 60 * 1000
+        + delta.seconds * 1000
+        + (delta.microseconds + 999) // 1000
+    )
+
+
+def period_bounds(period: dict[str, str | None], current_ms: int) -> tuple[int, int]:
+    since = (
+        datetime.fromisoformat(period["since"].replace("Z", "+00:00"))
+        if period["since"]
+        else datetime(1970, 1, 1, tzinfo=UTC)
+    )
+    until = (
+        datetime.fromisoformat(period["until"].replace("Z", "+00:00"))
+        if period["until"]
+        else datetime.fromtimestamp(current_ms / 1000, UTC)
+    )
+    since_ms = datetime_millis_ceiling(since)
+    until_ms = min(datetime_millis_ceiling(until), current_ms)
+    if since_ms >= until_ms:
+        raise MattermostError("Mattermost period has not started or is empty")
+    return since_ms, until_ms
+
+
 def classify_url(value: str) -> dict[str, str | None]:
     parsed = urllib.parse.urlsplit(value)
     origin = normalized_origin(value)
@@ -222,7 +258,13 @@ def classify_url(value: str) -> dict[str, str | None]:
     pieces = parsed.path.split("/")
     if len(pieces) != 4 or pieces[0] or not all(pieces[1:]):
         raise MattermostError("Mattermost URL must identify exactly one supported target")
-    team, route, item = (identifier(piece, "path component") for piece in pieces[1:])
+    team = identifier(pieces[1], "team")
+    route = identifier(pieces[2], "route")
+    item = (
+        f"@{identifier(pieces[3][1:], 'username')}"
+        if route == "messages" and pieces[3].startswith("@")
+        else identifier(pieces[3], "path component")
+    )
     pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
     post_values = [item for key, item in pairs if key in {"post", "post_id", "focusedPostId"}]
     if len(post_values) > 1 or any(not value for value in post_values):
@@ -234,6 +276,7 @@ def classify_url(value: str) -> dict[str, str | None]:
         return {
             "origin": origin,
             "kind": "post",
+            "route": route,
             "team": team,
             "channel": None,
             "post_id": identifier(item, "post ID"),
@@ -242,6 +285,7 @@ def classify_url(value: str) -> dict[str, str | None]:
         return {
             "origin": origin,
             "kind": "post" if post_id else "channel",
+            "route": route,
             "team": team,
             "channel": item,
             "post_id": post_id,
@@ -250,6 +294,7 @@ def classify_url(value: str) -> dict[str, str | None]:
         return {
             "origin": origin,
             "kind": "post" if post_id else "chat",
+            "route": route,
             "team": team,
             "channel": item,
             "post_id": post_id,
@@ -307,121 +352,705 @@ def user_identity(client: Client) -> str:
     return identifier(value.get("id"), "user ID")
 
 
-def resolve_channel(client: Client, target: dict[str, str | None]) -> dict[str, Any]:
-    team = identifier(target["team"], "team")
-    channel = identifier(target["channel"], "channel")
-    team_data = client.get(f"/teams/name/{urllib.parse.quote(team, safe='')}")
-    if not isinstance(team_data, dict) or not isinstance(team_data.get("id"), str):
-        raise MattermostError("Mattermost team identity is incomplete")
-    team_id = identifier(team_data["id"], "team ID")
-    data = client.get(f"/teams/{team_id}/channels/name/{urllib.parse.quote(channel, safe='')}")
-    if not isinstance(data, dict) or not isinstance(data.get("id"), str):
+def channel_response(value: object, *, expected_id: str | None = None) -> dict[str, Any]:
+    if not isinstance(value, dict) or not isinstance(value.get("id"), str):
         raise MattermostError("Mattermost channel identity is incomplete")
-    identifier(data["id"], "channel ID")
+    channel_id = identifier(value["id"], "channel ID")
+    if expected_id is not None and channel_id != expected_id:
+        raise MattermostError("Mattermost returned a different channel")
+    return value
+
+
+def team_identity(client: Client, team: str) -> str:
+    value = client.get(f"/teams/name/{urllib.parse.quote(team, safe='')}")
+    if not isinstance(value, dict) or not isinstance(value.get("id"), str):
+        raise MattermostError("Mattermost team identity is incomplete")
+    return identifier(value["id"], "team ID")
+
+
+def user_team_channels(client: Client, user_id: str, team_id: str) -> list[dict[str, Any]]:
+    value = client.get(
+        f"/users/{urllib.parse.quote(user_id, safe='')}/teams/"
+        f"{urllib.parse.quote(team_id, safe='')}/channels"
+    )
+    if not isinstance(value, list):
+        raise MattermostError("Mattermost user channel list is incomplete")
+    return [item for item in value if isinstance(item, dict)]
+
+
+def validate_chat_type(channel: dict[str, Any], route: str | None) -> None:
+    channel_type = channel.get("type")
+    expected = {"G"} if route == "group" else {"D", "G"}
+    if channel_type not in expected:
+        raise MattermostError("Mattermost chat URL resolved to a different channel type")
+
+
+def resolve_channel(
+    client: Client, target: dict[str, str | None], user_id: str
+) -> dict[str, Any]:
+    team = identifier(target["team"], "team")
+    channel_value = target["channel"]
+    channel = (
+        f"@{identifier(channel_value[1:], 'username')}"
+        if isinstance(channel_value, str) and channel_value.startswith("@")
+        else identifier(channel_value, "channel")
+    )
+    team_id = team_identity(client, team)
+    if MATTERMOST_ID.fullmatch(channel):
+        data = channel_response(
+            client.get(f"/channels/{urllib.parse.quote(channel, safe='')}"),
+            expected_id=channel,
+        )
+        if data.get("type") in {"D", "G"}:
+            matches = [
+                item
+                for item in user_team_channels(client, user_id, team_id)
+                if item.get("id") == channel
+            ]
+            if len(matches) != 1:
+                raise MattermostError("Mattermost chat is not available in the URL team")
+        elif data.get("team_id") != team_id:
+            raise MattermostError("Mattermost channel is not in the URL team")
+        if target["kind"] == "chat":
+            validate_chat_type(data, target.get("route"))
+        return data
+
+    if target["kind"] == "chat" and channel.startswith("@"):
+        username = identifier(channel[1:], "username")
+        peer = client.get(f"/users/username/{urllib.parse.quote(username, safe='')}")
+        if not isinstance(peer, dict) or not isinstance(peer.get("id"), str):
+            raise MattermostError("Mattermost direct-message peer is incomplete")
+        peer_id = identifier(peer["id"], "user ID")
+        expected_name = "__".join(sorted((user_id, peer_id)))
+        matches = [
+            item
+            for item in user_team_channels(client, user_id, team_id)
+            if item.get("type") == "D" and item.get("name") == expected_name
+        ]
+        if len(matches) != 1:
+            raise MattermostError("Mattermost direct chat could not be resolved exactly")
+        resolved = channel_response(matches[0])
+        validate_chat_type(resolved, target.get("route"))
+        return resolved
+
+    direct_parts = channel.split("__")
+    if (
+        len(direct_parts) == 2
+        and all(MATTERMOST_ID.fullmatch(part) for part in direct_parts)
+    ):
+        matches = [
+            item
+            for item in user_team_channels(client, user_id, team_id)
+            if item.get("type") == "D" and item.get("name") == channel
+        ]
+        if len(matches) != 1:
+            raise MattermostError("Mattermost direct chat could not be resolved exactly")
+        resolved = channel_response(matches[0])
+        if target["kind"] == "chat":
+            validate_chat_type(resolved, target.get("route"))
+        return resolved
+
+    data = channel_response(
+        client.get(
+            f"/teams/{urllib.parse.quote(team_id, safe='')}/channels/name/"
+            f"{urllib.parse.quote(channel, safe='')}"
+        )
+    )
+    if target["kind"] == "chat":
+        validate_chat_type(data, target.get("route"))
     return data
 
 
 def revalidate_access(
-    client: Client, target: dict[str, str | None]
+    client: Client, target: dict[str, str | None], user_id: str
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     if target["kind"] == "post":
         post = client.get(
             f"/posts/{urllib.parse.quote(identifier(target['post_id'], 'post ID'), safe='')}"
         )
-        if not isinstance(post, dict) or post.get("id") != target["post_id"]:
+        if (
+            not isinstance(post, dict)
+            or post.get("id") != target["post_id"]
+            or not isinstance(post.get("channel_id"), str)
+            or not isinstance(post.get("create_at"), int)
+            or post["create_at"] <= 0
+        ):
             raise MattermostError("Mattermost post access response is incomplete")
         return post, None
-    return None, resolve_channel(client, target)
+    return None, resolve_channel(client, target, user_id)
 
 
-def cache_connection() -> sqlite3.Connection:
-    root = private_directory(cache_root())
-    path = root / "cache.sqlite3"
-    if path.exists():
-        private_file(path)
-    connection = sqlite3.connect(path)
-    path.chmod(0o600)
-    connection.execute("PRAGMA secure_delete=ON")
-    connection.execute(
-        """CREATE TABLE IF NOT EXISTS snapshots_v2 (
-        key TEXT PRIMARY KEY, schema_version INTEGER NOT NULL, origin TEXT NOT NULL,
-        user_id TEXT NOT NULL, target TEXT NOT NULL, period TEXT NOT NULL,
-        fetched INTEGER NOT NULL, payload TEXT NOT NULL)"""
-    )
-    return connection
+class CacheStore:
+    def __init__(self, origin: str | None = None, user_id: str | None = None):
+        self.origin = normalized_origin(origin) if origin is not None else ""
+        self.user_id = identifier(user_id, "user ID") if user_id is not None else ""
+        self.path = cache_path()
+        try:
+            root = private_directory(self.path.parent)
+            self.path = root / self.path.name
+            if self.path.exists():
+                private_file(self.path)
+            self.database = sqlite3.connect(self.path, timeout=5)
+            self.database.row_factory = sqlite3.Row
+            self.path.chmod(0o600)
+            self.database.execute("PRAGMA busy_timeout=5000")
+            self.database.execute("PRAGMA journal_mode=DELETE")
+            self.database.execute("PRAGMA secure_delete=ON")
+            self._initialize()
+        except (MattermostError, OSError, sqlite3.Error) as exc:
+            database = getattr(self, "database", None)
+            if database is not None:
+                database.close()
+            raise CacheError(f"Mattermost cache is unavailable: {exc}") from exc
 
+    def __enter__(self) -> "CacheStore":
+        return self
 
-def cache_key(origin: str, user_id: str, target: dict[str, str | None], period: object) -> str:
-    content = {
-        "schema_version": SCHEMA_VERSION,
-        "origin": origin,
-        "user_id": user_id,
-        "target": normalized_target(target),
-        "period": period,
-    }
-    return hashlib.sha256(
-        json.dumps(content, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
 
+    def close(self) -> None:
+        self.database.close()
 
-def cache_read(
-    key: str, *, origin: str, user_id: str, target: dict[str, str | None], period: object
-) -> tuple[dict[str, object] | None, int | None]:
-    try:
-        with cache_connection() as database:
-            row = database.execute(
-                "SELECT schema_version, origin, user_id, target, period, fetched, payload FROM snapshots_v2 WHERE key = ?",
-                (key,),
-            ).fetchone()
-    except sqlite3.Error:
-        return None, None
-    if not row:
-        return None, None
-    schema, row_origin, row_user, row_target, row_period, fetched, payload = row
-    age = now() - fetched if isinstance(fetched, int) else None
-    expected_target = json.dumps(normalized_target(target), sort_keys=True, separators=(",", ":"))
-    expected_period = json.dumps(period, sort_keys=True, separators=(",", ":"))
-    if (
-        schema != SCHEMA_VERSION
-        or row_origin != origin
-        or row_user != user_id
-        or row_target != expected_target
-        or row_period != expected_period
-        or age is None
-        or age < 0
-        or age > CACHE_TTL_SECONDS
-    ):
-        return None, age
-    try:
-        value = json.loads(payload)
-    except json.JSONDecodeError:
-        return None, age
-    return (value if isinstance(value, dict) else None), age
-
-
-def cache_write(
-    key: str,
-    *,
-    origin: str,
-    user_id: str,
-    target: dict[str, str | None],
-    period: object,
-    value: dict[str, object],
-) -> None:
-    with cache_connection() as database:
-        database.execute(
-            "INSERT OR REPLACE INTO snapshots_v2(key, schema_version, origin, user_id, target, period, fetched, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                key,
-                SCHEMA_VERSION,
-                origin,
-                user_id,
-                json.dumps(normalized_target(target), sort_keys=True, separators=(",", ":")),
-                json.dumps(period, sort_keys=True, separators=(",", ":")),
-                now(),
-                json.dumps(value, ensure_ascii=False, sort_keys=True),
-            ),
+    def _initialize(self) -> None:
+        version = int(self.database.execute("PRAGMA user_version").fetchone()[0])
+        if version not in {0, CACHE_SCHEMA_VERSION}:
+            raise CacheError(
+                f"Mattermost cache schema {version} is unsupported; clear the cache"
+            )
+        if version == 0:
+            self.database.execute("DROP TABLE IF EXISTS snapshots_v2")
+            self.database.execute("DROP TABLE IF EXISTS posts_v3")
+            self.database.execute("DROP TABLE IF EXISTS threads_v3")
+            self.database.execute("DROP TABLE IF EXISTS coverages_v3")
+        self.database.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS posts_v3 (
+                origin TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                post_id TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                root_id TEXT NOT NULL,
+                create_at INTEGER NOT NULL,
+                activity_at INTEGER NOT NULL,
+                fetched_at INTEGER NOT NULL,
+                payload TEXT NOT NULL,
+                PRIMARY KEY (origin, user_id, post_id)
+            );
+            CREATE INDEX IF NOT EXISTS posts_v3_range
+                ON posts_v3 (origin, user_id, channel_id, create_at, post_id);
+            CREATE TABLE IF NOT EXISTS threads_v3 (
+                origin TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                root_id TEXT NOT NULL,
+                post_ids TEXT NOT NULL,
+                fetched_at INTEGER NOT NULL,
+                complete INTEGER NOT NULL,
+                PRIMARY KEY (origin, user_id, root_id)
+            );
+            CREATE TABLE IF NOT EXISTS coverages_v3 (
+                origin TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                since_ms INTEGER NOT NULL,
+                until_ms INTEGER NOT NULL,
+                fetched_at INTEGER NOT NULL,
+                PRIMARY KEY (origin, user_id, channel_id, since_ms, until_ms),
+                CHECK (since_ms < until_ms)
+            );
+            CREATE INDEX IF NOT EXISTS coverages_v3_range
+                ON coverages_v3 (origin, user_id, channel_id, since_ms, until_ms);
+            """
         )
+        expected_columns = {
+            "posts_v3": (
+                ("origin", "TEXT", 1, 1),
+                ("user_id", "TEXT", 1, 2),
+                ("post_id", "TEXT", 1, 3),
+                ("channel_id", "TEXT", 1, 0),
+                ("root_id", "TEXT", 1, 0),
+                ("create_at", "INTEGER", 1, 0),
+                ("activity_at", "INTEGER", 1, 0),
+                ("fetched_at", "INTEGER", 1, 0),
+                ("payload", "TEXT", 1, 0),
+            ),
+            "threads_v3": (
+                ("origin", "TEXT", 1, 1),
+                ("user_id", "TEXT", 1, 2),
+                ("root_id", "TEXT", 1, 3),
+                ("post_ids", "TEXT", 1, 0),
+                ("fetched_at", "INTEGER", 1, 0),
+                ("complete", "INTEGER", 1, 0),
+            ),
+            "coverages_v3": (
+                ("origin", "TEXT", 1, 1),
+                ("user_id", "TEXT", 1, 2),
+                ("channel_id", "TEXT", 1, 3),
+                ("since_ms", "INTEGER", 1, 4),
+                ("until_ms", "INTEGER", 1, 5),
+                ("fetched_at", "INTEGER", 1, 0),
+            ),
+        }
+        for table, expected in expected_columns.items():
+            observed = tuple(
+                (
+                    str(row["name"]),
+                    str(row["type"]).upper(),
+                    int(row["notnull"]),
+                    int(row["pk"]),
+                )
+                for row in self.database.execute(f"PRAGMA table_info({table})").fetchall()
+            )
+            if observed != expected:
+                raise CacheError(f"Mattermost cache table {table} has an invalid schema")
+        coverage_schema = self.database.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='coverages_v3'"
+        ).fetchone()
+        coverage_sql = str(coverage_schema["sql"]) if coverage_schema is not None else ""
+        if "CHECK (since_ms < until_ms)" not in coverage_sql:
+            raise CacheError("Mattermost cache coverage constraint is missing")
+        self.database.execute(f"PRAGMA user_version={CACHE_SCHEMA_VERSION}")
+        self.database.commit()
+
+    @staticmethod
+    def _cacheable_post(post: dict[str, Any]) -> tuple[str, str, str, int, int, str]:
+        post_id = identifier(post.get("id"), "post ID")
+        channel_id = identifier(post.get("channel_id"), "channel ID")
+        root_value = post.get("root_id") or ""
+        root_id = identifier(root_value, "root post ID") if root_value else ""
+        create_at = post.get("create_at")
+        if not isinstance(create_at, int) or create_at <= 0:
+            raise CacheError("Mattermost cache received a post without create_at")
+        activity_values = [
+            value
+            for key in ("create_at", "update_at", "edit_at", "delete_at")
+            if isinstance((value := post.get(key)), int)
+        ]
+        clean = safe_post(post, include_reactions=False)
+        clean.pop("context_only", None)
+        payload = json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return post_id, channel_id, root_id, create_at, max(activity_values), payload
+
+    @classmethod
+    def _decoded_post(cls, row: sqlite3.Row, current_ms: int) -> dict[str, Any]:
+        try:
+            payload = row["payload"]
+            value = json.loads(payload) if isinstance(payload, str) else None
+        except json.JSONDecodeError as exc:
+            raise CacheError("Mattermost cache contains invalid post JSON") from exc
+        if not isinstance(value, dict):
+            raise CacheError("Mattermost cache contains an invalid post")
+        post_id, channel_id, root_id, create_at, activity_at, _payload = cls._cacheable_post(
+            value
+        )
+        expected = (
+            str(row["post_id"]),
+            str(row["channel_id"]),
+            str(row["root_id"]),
+            int(row["create_at"]),
+            int(row["activity_at"]),
+        )
+        if (post_id, channel_id, root_id, create_at, activity_at) != expected:
+            raise CacheError("Mattermost cache post index does not match its payload")
+        if int(row["fetched_at"]) < 0 or int(row["fetched_at"]) > current_ms:
+            raise CacheError("Mattermost cache post has an invalid fetch time")
+        return value
+
+    def _put_posts(self, posts: list[dict[str, Any]], fetched_at: int) -> None:
+        values = []
+        for post in posts:
+            cached = self._cacheable_post(post)
+            post_id, channel_id, _root_id, create_at, _activity_at, _payload = cached
+            existing = self.database.execute(
+                """
+                SELECT 1 FROM posts_v3
+                WHERE origin=? AND user_id=? AND post_id=?
+                """,
+                (self.origin, self.user_id, post_id),
+            ).fetchone()
+            newer_coverage = self.database.execute(
+                """
+                SELECT 1 FROM coverages_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND since_ms<=? AND until_ms>? AND fetched_at>?
+                LIMIT 1
+                """,
+                (self.origin, self.user_id, channel_id, create_at, create_at, fetched_at),
+            ).fetchone()
+            if existing is None and newer_coverage is not None:
+                continue
+            values.append((self.origin, self.user_id, *cached, fetched_at))
+        if not values:
+            return
+        self.database.executemany(
+            """
+            INSERT INTO posts_v3 (
+                origin, user_id, post_id, channel_id, root_id,
+                create_at, activity_at, payload, fetched_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (origin, user_id, post_id) DO UPDATE SET
+                channel_id=excluded.channel_id,
+                root_id=excluded.root_id,
+                create_at=excluded.create_at,
+                activity_at=excluded.activity_at,
+                payload=excluded.payload,
+                fetched_at=excluded.fetched_at
+            WHERE excluded.activity_at > posts_v3.activity_at
+               OR (
+                    excluded.activity_at = posts_v3.activity_at
+                    AND excluded.fetched_at >= posts_v3.fetched_at
+               )
+            """,
+            values,
+        )
+
+    def put_posts(self, posts: list[dict[str, Any]], fetched_at: int) -> None:
+        try:
+            self.database.execute("BEGIN IMMEDIATE")
+            self._put_posts(posts, fetched_at)
+            self.database.commit()
+        except (MattermostError, ValueError, TypeError, sqlite3.Error) as exc:
+            self.database.rollback()
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache write failed: {exc}") from exc
+
+    def get_post(
+        self, post_id: str, current_ms: int | None = None
+    ) -> tuple[dict[str, Any], int] | None:
+        checked_at = current_ms if current_ms is not None else int(time.time() * 1000)
+        try:
+            row = self.database.execute(
+                """
+                SELECT post_id, channel_id, root_id, create_at, activity_at,
+                       payload, fetched_at FROM posts_v3
+                WHERE origin=? AND user_id=? AND post_id=?
+                """,
+                (self.origin, self.user_id, post_id),
+            ).fetchone()
+            if row is None:
+                return None
+            return self._decoded_post(row, checked_at), int(row["fetched_at"])
+        except (ValueError, TypeError, sqlite3.Error) as exc:
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache read failed: {exc}") from exc
+
+    def posts_by_ids(
+        self, post_ids: list[str], current_ms: int | None = None
+    ) -> list[dict[str, Any]]:
+        if not post_ids:
+            return []
+        checked_at = current_ms if current_ms is not None else int(time.time() * 1000)
+        try:
+            placeholders = ",".join("?" for _ in post_ids)
+            rows = self.database.execute(
+                f"""
+                SELECT post_id, channel_id, root_id, create_at, activity_at,
+                       payload, fetched_at FROM posts_v3
+                WHERE origin=? AND user_id=? AND post_id IN ({placeholders})
+                """,
+                (self.origin, self.user_id, *post_ids),
+            ).fetchall()
+            found = {
+                str(row["post_id"]): self._decoded_post(row, checked_at)
+                for row in rows
+            }
+            return [found[post_id] for post_id in post_ids if post_id in found]
+        except (ValueError, TypeError, sqlite3.Error) as exc:
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache read failed: {exc}") from exc
+
+    def posts_between(
+        self,
+        channel_id: str,
+        since_ms: int,
+        until_ms: int,
+        current_ms: int | None = None,
+    ) -> list[dict[str, Any]]:
+        checked_at = current_ms if current_ms is not None else int(time.time() * 1000)
+        try:
+            rows = self.database.execute(
+                """
+                SELECT post_id, channel_id, root_id, create_at, activity_at,
+                       payload, fetched_at FROM posts_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND create_at>=? AND create_at<?
+                ORDER BY create_at, post_id
+                """,
+                (self.origin, self.user_id, channel_id, since_ms, until_ms),
+            ).fetchall()
+            return [
+                self._decoded_post(row, checked_at) for row in rows
+            ]
+        except (ValueError, TypeError, sqlite3.Error) as exc:
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache read failed: {exc}") from exc
+
+    def coverage(
+        self,
+        channel_id: str,
+        since_ms: int,
+        until_ms: int,
+        *,
+        fetched_after: int | None,
+        current_ms: int,
+    ) -> tuple[bool, int | None]:
+        try:
+            query = """
+                SELECT since_ms, until_ms, fetched_at FROM coverages_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND until_ms>? AND since_ms<?
+            """
+            parameters: list[object] = [
+                self.origin,
+                self.user_id,
+                channel_id,
+                since_ms,
+                until_ms,
+            ]
+            if fetched_after is not None:
+                query += " AND fetched_at>=?"
+                parameters.append(fetched_after)
+            query += " ORDER BY since_ms, until_ms"
+            rows = self.database.execute(query, parameters).fetchall()
+            covered_until = since_ms
+            used_fetched_at: list[int] = []
+            for row in rows:
+                row_since = int(row["since_ms"])
+                row_until = int(row["until_ms"])
+                row_fetched_at = int(row["fetched_at"])
+                if row_since >= row_until or row_fetched_at < 0 or row_fetched_at > current_ms:
+                    raise CacheError("Mattermost cache contains invalid coverage")
+                if row_since > covered_until:
+                    return False, None
+                if row_until > covered_until:
+                    covered_until = row_until
+                    used_fetched_at.append(row_fetched_at)
+                if covered_until >= until_ms:
+                    age = max(0, (current_ms - min(used_fetched_at)) // 1000)
+                    return True, age
+            return False, None
+        except (ValueError, TypeError, sqlite3.Error) as exc:
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache coverage read failed: {exc}") from exc
+
+    def replace_segment(
+        self,
+        channel_id: str,
+        since_ms: int,
+        until_ms: int,
+        posts: list[dict[str, Any]],
+        fetched_at: int,
+    ) -> None:
+        try:
+            selected = [
+                post
+                for post in posts
+                if post.get("channel_id") == channel_id
+                and isinstance(post.get("create_at"), int)
+                and since_ms <= post["create_at"] < until_ms
+            ]
+            self.database.execute("BEGIN IMMEDIATE")
+            newer = self.database.execute(
+                """
+                SELECT 1 FROM coverages_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND until_ms>? AND since_ms<? AND fetched_at>=?
+                LIMIT 1
+                """,
+                (
+                    self.origin,
+                    self.user_id,
+                    channel_id,
+                    since_ms,
+                    until_ms,
+                    fetched_at,
+                ),
+            ).fetchone()
+            if newer is not None:
+                self.database.rollback()
+                return
+            existing_rows = self.database.execute(
+                """
+                SELECT post_id, channel_id, root_id, create_at, activity_at,
+                       payload, fetched_at FROM posts_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND create_at>=? AND create_at<?
+                """,
+                (self.origin, self.user_id, channel_id, since_ms, until_ms),
+            ).fetchall()
+            selected_by_id = {post["id"]: post for post in selected}
+            checked_at = max(fetched_at, int(time.time() * 1000))
+            for row in existing_rows:
+                existing = self._decoded_post(row, checked_at)
+                incoming = selected_by_id.get(existing["id"])
+                if incoming is not None:
+                    incoming_activity = self._cacheable_post(incoming)[4]
+                    if int(row["activity_at"]) > incoming_activity:
+                        selected_by_id[existing["id"]] = existing
+            selected = list(selected_by_id.values())
+            self.database.execute(
+                """
+                DELETE FROM coverages_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND until_ms>? AND since_ms<? AND fetched_at<=?
+                """,
+                (
+                    self.origin,
+                    self.user_id,
+                    channel_id,
+                    since_ms,
+                    until_ms,
+                    fetched_at,
+                ),
+            )
+            self.database.execute(
+                """
+                DELETE FROM posts_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND create_at>=? AND create_at<? AND fetched_at<=?
+                """,
+                (
+                    self.origin,
+                    self.user_id,
+                    channel_id,
+                    since_ms,
+                    until_ms,
+                    fetched_at,
+                ),
+            )
+            self._put_posts(selected, fetched_at)
+            self.database.execute(
+                """
+                INSERT INTO coverages_v3 (
+                    origin, user_id, channel_id, since_ms, until_ms, fetched_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (self.origin, self.user_id, channel_id, since_ms, until_ms, fetched_at),
+            )
+            self.database.commit()
+        except (MattermostError, ValueError, TypeError, sqlite3.Error) as exc:
+            self.database.rollback()
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache segment write failed: {exc}") from exc
+
+    def invalidate_coverage(
+        self, channel_id: str, since_ms: int, until_ms: int, fetched_at: int
+    ) -> None:
+        try:
+            self.database.execute(
+                """
+                DELETE FROM coverages_v3
+                WHERE origin=? AND user_id=? AND channel_id=?
+                  AND until_ms>? AND since_ms<? AND fetched_at<=?
+                """,
+                (
+                    self.origin,
+                    self.user_id,
+                    channel_id,
+                    since_ms,
+                    until_ms,
+                    fetched_at,
+                ),
+            )
+            self.database.commit()
+        except sqlite3.Error as exc:
+            self.database.rollback()
+            raise CacheError(f"Mattermost cache invalidation failed: {exc}") from exc
+
+    def get_thread(
+        self, root_id: str, fetched_after: int, current_ms: int
+    ) -> tuple[list[dict[str, Any]], int] | None:
+        try:
+            row = self.database.execute(
+                """
+                SELECT post_ids, fetched_at, complete FROM threads_v3
+                WHERE origin=? AND user_id=? AND root_id=?
+                """,
+                (self.origin, self.user_id, root_id),
+            ).fetchone()
+            if row is None or not bool(row["complete"]) or int(row["fetched_at"]) < fetched_after:
+                return None
+            if int(row["fetched_at"]) > current_ms:
+                raise CacheError("Mattermost cache contains a future thread snapshot")
+            post_ids = json.loads(row["post_ids"])
+            if (
+                not isinstance(post_ids, list)
+                or len(post_ids) != len(set(post_ids))
+                or not all(isinstance(item, str) and IDENTIFIER.fullmatch(item) for item in post_ids)
+            ):
+                raise CacheError("Mattermost cache contains an invalid thread snapshot")
+            posts = self.posts_by_ids(post_ids, current_ms)
+            if len(posts) != len(post_ids):
+                return None
+            age = max(0, (current_ms - int(row["fetched_at"])) // 1000)
+            return posts, age
+        except (ValueError, TypeError, sqlite3.Error) as exc:
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache thread read failed: {exc}") from exc
+
+    def put_thread(
+        self,
+        root_id: str,
+        posts: list[dict[str, Any]],
+        fetched_at: int,
+        *,
+        complete: bool,
+    ) -> None:
+        try:
+            self.database.execute("BEGIN IMMEDIATE")
+            self._put_posts(posts, fetched_at)
+            self.database.execute(
+                """
+                INSERT INTO threads_v3 (
+                    origin, user_id, root_id, post_ids, fetched_at, complete
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (origin, user_id, root_id) DO UPDATE SET
+                    post_ids=excluded.post_ids,
+                    fetched_at=excluded.fetched_at,
+                    complete=excluded.complete
+                WHERE excluded.fetched_at>=threads_v3.fetched_at
+                """,
+                (
+                    self.origin,
+                    self.user_id,
+                    root_id,
+                    json.dumps([post["id"] for post in posts], separators=(",", ":")),
+                    fetched_at,
+                    int(complete),
+                ),
+            )
+            self.database.commit()
+        except (MattermostError, ValueError, TypeError, sqlite3.Error) as exc:
+            self.database.rollback()
+            if isinstance(exc, CacheError):
+                raise
+            raise CacheError(f"Mattermost cache thread write failed: {exc}") from exc
+
+    def status(self) -> dict[str, object]:
+        try:
+            counts = {
+                name: int(self.database.execute(f"SELECT COUNT(*) FROM {name}_v3").fetchone()[0])
+                for name in ("posts", "threads", "coverages")
+            }
+            return {
+                "status": "ok",
+                "cache": str(self.path),
+                "exists": True,
+                "schema_version": CACHE_SCHEMA_VERSION,
+                "ttl_seconds": CACHE_TTL_SECONDS,
+                "stable_age_seconds": CACHE_STABLE_AGE_SECONDS,
+                "counts": counts,
+                "external_mutations": False,
+            }
+        except sqlite3.Error as exc:
+            raise CacheError(f"Mattermost cache status failed: {exc}") from exc
 
 
 def valid_posts(value: object) -> tuple[list[dict[str, Any]], bool]:
@@ -429,21 +1058,57 @@ def valid_posts(value: object) -> tuple[list[dict[str, Any]], bool]:
         raise MattermostError("Mattermost post response is incomplete")
     posts: list[dict[str, Any]] = []
     malformed = False
+    seen_ids: set[str] = set()
     for post in value["posts"].values():
         if (
             not isinstance(post, dict)
             or not isinstance(post.get("id"), str)
+            or not IDENTIFIER.fullmatch(post["id"])
+            or not isinstance(post.get("channel_id"), str)
+            or not IDENTIFIER.fullmatch(post["channel_id"])
             or not isinstance(post.get("create_at"), int)
+            or post["create_at"] <= 0
+            or (
+                bool(post.get("root_id"))
+                and (
+                    not isinstance(post.get("root_id"), str)
+                    or not IDENTIFIER.fullmatch(post["root_id"])
+                )
+            )
         ):
             malformed = True
             continue
+        if post["id"] in seen_ids:
+            malformed = True
+            continue
+        seen_ids.add(post["id"])
         posts.append(post)
     return sorted(posts, key=lambda post: (post["create_at"], post["id"])), malformed
 
 
-def safe_post(post: dict[str, Any]) -> dict[str, Any]:
+def thread_response_posts(value: object) -> tuple[list[dict[str, Any]], bool]:
+    posts, malformed = valid_posts(value)
+    if not isinstance(value, dict) or "order" not in value:
+        return posts, malformed
+    order = value.get("order")
+    if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+        return posts, True
+    post_ids = {post["id"] for post in posts}
+    ordered_ids = set(order)
+    return (
+        posts,
+        malformed
+        or len(order) != len(set(order))
+        or any(post_id not in post_ids for post_id in order)
+        or any(post_id not in ordered_ids for post_id in post_ids),
+    )
+
+
+def safe_post(post: dict[str, Any], *, include_reactions: bool = True) -> dict[str, Any]:
     """Keep message fields and exact reaction identity, never attachment files."""
     result = {key: value for key, value in post.items() if key not in {"attachments", "reactions"}}
+    if not include_reactions:
+        return result
     reactions = post.get("reactions", [])
     if isinstance(reactions, list):
         result["reactions"] = [
@@ -475,12 +1140,28 @@ def read_reactions(
                 and isinstance(item.get("emoji_name"), str)
                 and isinstance(item.get("user_id"), str)
             ]
-        except (MattermostError, AuthorizationRequired):
+        except AuthorizationRequired:
+            raise
+        except MattermostError:
             complete = False
             errors.append(error_item("reactions_unavailable", "Mattermost reactions could not be fully read", retryable=True))
             clean["reactions"] = []
         result.append(clean)
     return result, complete, errors
+
+
+def without_reactions(
+    posts: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], bool, list[dict[str, object]]]:
+    return [safe_post(post, include_reactions=False) for post in posts], True, []
+
+
+def enrich_posts(
+    client: Client, posts: list[dict[str, Any]], *, include_reactions: bool
+) -> tuple[list[dict[str, Any]], bool, list[dict[str, object]]]:
+    if include_reactions:
+        return read_reactions(client, posts)
+    return without_reactions(posts)
 
 
 def warning(code: str, message: str) -> dict[str, object]:
@@ -492,14 +1173,76 @@ def result_list(result: dict[str, object], key: str) -> list[object]:
     return value if isinstance(value, list) else []
 
 
+def scoped_thread_posts(
+    posts: list[dict[str, Any]], root_id: str, selected_id: str, channel_id: str
+) -> tuple[list[dict[str, Any]], bool]:
+    scoped: list[dict[str, Any]] = []
+    malformed = False
+    root_seen = False
+    selected_seen = False
+    for post in posts:
+        post_id = post["id"]
+        if post["channel_id"] != channel_id:
+            malformed = True
+            continue
+        if post_id == root_id:
+            if post.get("root_id"):
+                malformed = True
+                continue
+            root_seen = True
+        elif post.get("root_id") != root_id:
+            malformed = True
+            continue
+        selected_seen = selected_seen or post_id == selected_id
+        scoped.append(post)
+    return (
+        sorted(scoped, key=lambda item: (item["create_at"], item["id"])),
+        malformed or not root_seen or not selected_seen,
+    )
+
+
 def read_post(
-    client: Client, post: dict[str, Any]
-) -> tuple[list[dict[str, Any]], bool, list[dict[str, object]], list[dict[str, object]]]:
+    client: Client,
+    post: dict[str, Any],
+    cache: CacheStore | None,
+    *,
+    read_cache: bool,
+    write_cache: bool,
+    current_ms: int,
+) -> tuple[
+    list[dict[str, Any]],
+    bool,
+    list[dict[str, object]],
+    list[dict[str, object]],
+    bool,
+    int | None,
+]:
     root_id = post.get("root_id") or post["id"]
+    root_id = identifier(root_id, "root post ID")
+    if cache is not None and read_cache:
+        cached = cache.get_thread(
+            root_id,
+            current_ms - CACHE_TTL_SECONDS * 1000,
+            current_ms,
+        )
+        if cached is not None:
+            posts, age = cached
+            posts, malformed = scoped_thread_posts(
+                posts, root_id, post["id"], post["channel_id"]
+            )
+            if malformed:
+                raise CacheError("Mattermost cache contains an invalid thread snapshot")
+            posts = [post if item["id"] == post["id"] else item for item in posts]
+            if write_cache:
+                cache.put_posts([post], current_ms)
+            return posts, True, [], [], True, age
     try:
-        root_id = identifier(root_id, "root post ID")
         thread = client.get(f"/posts/{urllib.parse.quote(root_id, safe='')}/thread")
-        posts, malformed = valid_posts(thread)
+        posts, malformed = thread_response_posts(thread)
+        posts, scope_malformed = scoped_thread_posts(
+            posts, root_id, post["id"], post["channel_id"]
+        )
+        malformed = malformed or scope_malformed
         if not any(item.get("id") == post["id"] for item in posts):
             posts.append(post)
             posts.sort(key=lambda item: (item["create_at"], item["id"]))
@@ -513,8 +1256,16 @@ def read_post(
             if malformed
             else []
         )
-        return posts, not malformed, errors, []
-    except (MattermostError, AuthorizationRequired) as exc:
+        if cache is not None and write_cache:
+            cache.put_thread(root_id, posts, current_ms, complete=not malformed)
+        return posts, not malformed, errors, [], False, None
+    except AuthorizationRequired:
+        raise
+    except MattermostError as exc:
+        if isinstance(exc, CacheError):
+            raise
+        if cache is not None and write_cache:
+            cache.put_thread(root_id, [post], current_ms, complete=False)
         return (
             [post],
             False,
@@ -526,37 +1277,66 @@ def read_post(
                 )
             ],
             [warning("thread_unavailable", str(exc))],
+            False,
+            None,
         )
 
 
-def in_period(post: dict[str, Any], period: dict[str, str | None]) -> bool:
-    created = datetime.fromtimestamp(post["create_at"] / 1000, UTC)
-    since = (
-        datetime.fromisoformat(period["since"].replace("Z", "+00:00")) if period["since"] else None
-    )
-    until = (
-        datetime.fromisoformat(period["until"].replace("Z", "+00:00")) if period["until"] else None
-    )
-    return (since is None or created >= since) and (until is None or created < until)
+def in_period(post: dict[str, Any], since_ms: int, until_ms: int) -> bool:
+    created = post.get("create_at")
+    return isinstance(created, int) and since_ms <= created < until_ms
+
+
+def channel_post_page(
+    value: object,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str], bool]:
+    if not isinstance(value, dict) or not isinstance(value.get("posts"), dict):
+        raise MattermostError("Mattermost post page is incomplete")
+    posts, malformed = valid_posts(value)
+    by_id = {post["id"]: post for post in posts}
+    order = value.get("order")
+    if not isinstance(order, list) or not all(isinstance(item, str) for item in order):
+        raise MattermostError("Mattermost post page order is incomplete")
+    clean_order = [item for item in order if IDENTIFIER.fullmatch(item)]
+    malformed = malformed or len(clean_order) != len(order)
+    malformed = malformed or len(clean_order) != len(set(clean_order))
+    malformed = malformed or bool(posts) and not clean_order
+    missing = [post_id for post_id in clean_order if post_id not in by_id]
+    malformed = malformed or bool(missing)
+    ordered = [by_id[post_id] for post_id in clean_order if post_id in by_id]
+    return posts, ordered, clean_order, malformed
 
 
 def read_channel(
-    client: Client, channel: dict[str, Any], period: dict[str, str | None]
+    client: Client, channel: dict[str, Any], since_ms: int, until_ms: int
 ) -> tuple[list[dict[str, Any]], bool, int, list[dict[str, object]], list[dict[str, object]]]:
     channel_id = identifier(channel.get("id"), "channel ID")
     items: dict[str, dict[str, Any]] = {}
     warnings: list[dict[str, object]] = []
     errors: list[dict[str, object]] = []
-    signatures: set[tuple[str, ...]] = set()
+    used_cursors: set[str] = set()
     complete = True
     pages = 0
-    for page in range(MAX_PAGES):
+    before: str | None = None
+    filtered_after_until = 0
+    for _page in range(MAX_PAGES):
+        query = {
+            "page": "0",
+            "per_page": str(PAGE_SIZE),
+            "skipFetchThreads": "false",
+            "collapsedThreads": "false",
+        }
+        if before is not None:
+            query["before"] = before
         try:
             value = client.get(
-                f"/channels/{urllib.parse.quote(channel_id, safe='')}/posts?page={page}&per_page={PAGE_SIZE}"
+                f"/channels/{urllib.parse.quote(channel_id, safe='')}/posts?"
+                f"{urllib.parse.urlencode(query)}"
             )
-            posts, malformed = valid_posts(value)
-        except (MattermostError, AuthorizationRequired) as exc:
+            posts, ordered, order, malformed = channel_post_page(value)
+        except AuthorizationRequired:
+            raise
+        except MattermostError as exc:
             complete = False
             errors.append(
                 error_item(
@@ -566,39 +1346,304 @@ def read_channel(
             warnings.append(warning("page_unavailable", str(exc)))
             break
         pages += 1
-        signature = tuple(sorted(post["id"] for post in posts))
-        if signature in signatures and posts:
-            complete = False
-            errors.append(error_item("repeated_page", "Mattermost returned a repeated post page"))
-            break
-        signatures.add(signature)
+        cross_channel = [post for post in posts if post["channel_id"] != channel_id]
+        if cross_channel:
+            posts = [post for post in posts if post["channel_id"] == channel_id]
+            malformed = True
         if malformed:
             complete = False
             errors.append(
                 error_item("malformed_page", "Mattermost post page contained malformed posts")
             )
         for post in posts:
-            items[post["id"]] = post
-        if len(posts) < PAGE_SIZE:
+            if in_period(post, since_ms, until_ms):
+                items[post["id"]] = post
+            elif post["create_at"] >= until_ms:
+                filtered_after_until += 1
+        page_times = [post["create_at"] for post in ordered]
+        if not page_times or min(page_times) < since_ms or len(order) < PAGE_SIZE:
             break
-        if period["since"] and posts:
-            oldest = min(post["create_at"] for post in posts)
-            since = datetime.fromisoformat(period["since"].replace("Z", "+00:00"))
-            if datetime.fromtimestamp(oldest / 1000, UTC) < since:
-                break
+        cursor = order[-1]
+        if cursor in used_cursors:
+            complete = False
+            errors.append(error_item("repeated_page", "Mattermost returned a repeated post cursor"))
+            break
+        used_cursors.add(cursor)
+        before = cursor
     else:
         complete = False
         errors.append(error_item("pagination_limit", "Mattermost post pagination limit reached"))
+    if filtered_after_until:
+        warnings.append(
+            warning(
+                "posts_after_until_filtered",
+                f"Mattermost returned {filtered_after_until} posts after the upper bound; they were excluded",
+            )
+        )
     return (
-        [
-            post
-            for post in sorted(items.values(), key=lambda item: (item["create_at"], item["id"]))
-            if in_period(post, period)
-        ],
+        sorted(items.values(), key=lambda item: (item["create_at"], item["id"])),
         complete,
         pages,
         errors,
         warnings,
+    )
+
+
+def cached_channel_posts(
+    client: Client,
+    channel: dict[str, Any],
+    since_ms: int,
+    until_ms: int,
+    cache: CacheStore | None,
+    *,
+    read_cache: bool,
+    write_cache: bool,
+    current_ms: int,
+) -> tuple[
+    list[dict[str, Any]],
+    bool,
+    int,
+    list[dict[str, object]],
+    list[dict[str, object]],
+    bool,
+    int | None,
+    int,
+    int,
+]:
+    channel_id = identifier(channel.get("id"), "channel ID")
+    segments: list[tuple[int, int, bool]]
+    if cache is None or not read_cache:
+        segments = [(since_ms, until_ms, False)]
+    else:
+        stable_until = min(until_ms, current_ms - CACHE_STABLE_AGE_SECONDS * 1000)
+        segments = []
+        if since_ms < stable_until:
+            segments.append((since_ms, stable_until, True))
+        recent_since = max(since_ms, stable_until)
+        if recent_since < until_ms:
+            segments.append((recent_since, until_ms, False))
+
+    selected: dict[str, dict[str, Any]] = {}
+    errors: list[dict[str, object]] = []
+    warnings: list[dict[str, object]] = []
+    complete = True
+    pages = 0
+    cache_hit = False
+    cache_ages: list[int] = []
+    cached_ids: set[str] = set()
+    fetched_ids: set[str] = set()
+
+    for segment_since, segment_until, stable in segments:
+        covered = False
+        age: int | None = None
+        if cache is not None and read_cache:
+            covered, age = cache.coverage(
+                channel_id,
+                segment_since,
+                segment_until,
+                fetched_after=(
+                    None if stable else current_ms - CACHE_TTL_SECONDS * 1000
+                ),
+                current_ms=current_ms,
+            )
+        if covered and cache is not None:
+            cached = cache.posts_between(
+                channel_id, segment_since, segment_until, current_ms
+            )
+            for post in cached:
+                selected[post["id"]] = post
+                cached_ids.add(post["id"])
+            cache_hit = True
+            if age is not None:
+                cache_ages.append(age)
+            continue
+
+        if cache is not None and write_cache and not read_cache:
+            cache.invalidate_coverage(
+                channel_id, segment_since, segment_until, current_ms
+            )
+        posts, segment_complete, segment_pages, segment_errors, segment_warnings = read_channel(
+            client,
+            channel,
+            segment_since,
+            segment_until,
+        )
+        complete = complete and segment_complete
+        pages += segment_pages
+        errors.extend(segment_errors)
+        warnings.extend(segment_warnings)
+        for post in posts:
+            selected[post["id"]] = post
+            fetched_ids.add(post["id"])
+        if cache is not None and write_cache:
+            if segment_complete:
+                cache.replace_segment(
+                    channel_id,
+                    segment_since,
+                    segment_until,
+                    posts,
+                    current_ms,
+                )
+            else:
+                cache.put_posts(posts, current_ms)
+
+    return (
+        sorted(selected.values(), key=lambda item: (item["create_at"], item["id"])),
+        complete,
+        pages,
+        errors,
+        warnings,
+        cache_hit,
+        max(cache_ages) if cache_ages else None,
+        len(cached_ids),
+        len(fetched_ids),
+    )
+
+
+def add_context_roots(
+    client: Client,
+    posts: list[dict[str, Any]],
+    since_ms: int,
+    until_ms: int,
+    cache: CacheStore | None,
+    *,
+    read_cache: bool,
+    write_cache: bool,
+    current_ms: int,
+) -> tuple[
+    list[dict[str, Any]],
+    list[dict[str, object]],
+    int,
+    int,
+    int | None,
+    int,
+    bool,
+]:
+    selected_ids = {post["id"] for post in posts}
+    expected_channels = {
+        post["root_id"]: post["channel_id"]
+        for post in posts
+        if isinstance(post.get("root_id"), str) and post["root_id"]
+    }
+    root_ids = sorted(
+        {
+            post["root_id"]
+            for post in posts
+            if isinstance(post.get("root_id"), str)
+            and post["root_id"]
+            and post["root_id"] not in selected_ids
+        }
+    )
+    earliest_replies = {
+        root_id: min(
+            post["create_at"]
+            for post in posts
+            if post.get("root_id") == root_id and isinstance(post.get("create_at"), int)
+        )
+        for root_id in root_ids
+    }
+    roots: list[dict[str, Any]] = []
+    warnings: list[dict[str, object]] = []
+    cached_roots = 0
+    fetched_roots = 0
+    cache_ages: list[int] = []
+    context_ids: set[str] = set()
+    roots_complete = True
+    for root_id in root_ids:
+        root: dict[str, Any] | None = None
+        root_from_cache = False
+        root_cache_age: int | None = None
+        if cache is not None and read_cache:
+            cached = cache.get_post(root_id, current_ms)
+            if cached is not None:
+                candidate, fetched_at = cached
+                activity = max(
+                    value
+                    for key in ("create_at", "update_at", "edit_at", "delete_at")
+                    if isinstance((value := candidate.get(key)), int)
+                )
+                if (
+                    activity <= current_ms - CACHE_STABLE_AGE_SECONDS * 1000
+                    or fetched_at >= current_ms - CACHE_TTL_SECONDS * 1000
+                ) and candidate.get("channel_id") == expected_channels[root_id] and not candidate.get(
+                    "root_id"
+                ):
+                    root = candidate
+                    root_from_cache = True
+                    root_cache_age = max(0, (current_ms - fetched_at) // 1000)
+        if root is None:
+            try:
+                value = client.get(f"/posts/{urllib.parse.quote(root_id, safe='')}")
+            except AuthorizationRequired:
+                raise
+            except MattermostError as exc:
+                if isinstance(exc, CacheError):
+                    raise
+                warnings.append(
+                    warning(
+                        "context_root_unavailable",
+                        f"Mattermost root post {root_id} could not be read: {exc}",
+                    )
+                )
+                continue
+            if (
+                not isinstance(value, dict)
+                or value.get("id") != root_id
+                or not isinstance(value.get("create_at"), int)
+                or value["create_at"] <= 0
+                or not isinstance(value.get("channel_id"), str)
+                or value["channel_id"] != expected_channels[root_id]
+                or bool(value.get("root_id"))
+            ):
+                roots_complete = False
+                warnings.append(
+                    warning(
+                        "malformed_context_root",
+                        f"Mattermost root post {root_id} response is incomplete",
+                    )
+                )
+                continue
+            root = value
+        if root["create_at"] > earliest_replies[root_id] or root["create_at"] >= until_ms:
+            roots_complete = False
+            warnings.append(
+                warning(
+                    "malformed_context_root",
+                    f"Mattermost root post {root_id} is not older than its in-period reply",
+                )
+            )
+            continue
+        if root_from_cache:
+            cached_roots += 1
+            if root_cache_age is not None:
+                cache_ages.append(root_cache_age)
+        else:
+            fetched_roots += 1
+            if cache is not None and write_cache:
+                cache.put_posts([root], current_ms)
+        if root["create_at"] >= since_ms:
+            roots_complete = False
+            warnings.append(
+                warning(
+                    "in_period_root_recovered",
+                    f"Mattermost root post {root_id} was recovered outside channel pagination",
+                )
+            )
+        else:
+            context_ids.add(root_id)
+        roots.append(root)
+    combined = [*posts, *roots]
+    combined.sort(key=lambda item: (item["create_at"], item["id"]))
+    for post in combined:
+        post["context_only"] = post["id"] in context_ids
+    return (
+        combined,
+        warnings,
+        cached_roots,
+        fetched_roots,
+        max(cache_ages) if cache_ages else None,
+        len(context_ids),
+        roots_complete,
     )
 
 
@@ -618,15 +1663,15 @@ def finalize_result(result: dict[str, object]) -> dict[str, object]:
         }
     if "members" in result and isinstance(members, list):
         result["counts"] = {**base_counts, "resolved": len(members)}
-    if not posts and not members and not complete and not result["errors"]:
-        result["errors"] = [error_item("no_data", "Mattermost did not return safe data")]
-    if not posts and not members and complete:
+    if result.get("scope") == "members" and not members and complete:
         result["complete"] = False
         result["errors"] = [
             *result_list(result, "errors"),
-            error_item("no_data", "Mattermost target returned no data"),
+            error_item("no_data", "Mattermost channel returned no members"),
         ]
         complete = False
+    if not posts and not members and not complete and not result["errors"]:
+        result["errors"] = [error_item("no_data", "Mattermost did not return safe data")]
     result["status"] = "ok" if complete else "partial"
     if not posts and not members and result["errors"]:
         result["status"] = "error"
@@ -634,79 +1679,133 @@ def finalize_result(result: dict[str, object]) -> dict[str, object]:
 
 
 def read_one(
-    url: str, since: str | None, until: str | None, read_cache: bool, write_cache: bool
+    url: str,
+    since: str | None,
+    until: str | None,
+    read_cache: bool,
+    write_cache: bool,
+    *,
+    include_reactions: bool = True,
 ) -> dict[str, object]:
     target = classify_url(url)
     period = parse_period(since, until, allowed=target["kind"] != "post")
     token = read_token(str(target["origin"]))
     client = Client(str(target["origin"]), token)
     user_id = user_identity(client)
-    access_post, access_channel = revalidate_access(client, target)
-    key = cache_key(str(target["origin"]), user_id, target, period)
-    if read_cache:
-        cached, age = cache_read(
-            key, origin=str(target["origin"]), user_id=user_id, target=target, period=period
+    access_post, access_channel = revalidate_access(client, target, user_id)
+    current_ms = int(time.time() * 1000)
+    cache = CacheStore(str(target["origin"]), user_id) if read_cache or write_cache else None
+    try:
+        result = result_base(
+            scope=str(target["kind"]), target=normalized_target(target), period=period
         )
-        if cached is not None:
-            if isinstance(cached.get("posts"), list):
-                cached["posts"] = [
-                    safe_post(post) for post in cached["posts"] if isinstance(post, dict)
-                ]
-            cached["cache_hit"] = True
-            cached["cache_age"] = age
-            cached["access_revalidated"] = True
-            cached["external_mutations"] = False
-            return cached
-    result = result_base(scope=str(target["kind"]), target=normalized_target(target), period=period)
-    result["access_revalidated"] = True
-    if target["kind"] == "post":
-        assert access_post is not None
-        posts, complete, errors, warnings = read_post(client, access_post)
-        posts, reactions_complete, reaction_errors = read_reactions(client, posts)
-        complete = complete and reactions_complete
-        errors.extend(reaction_errors)
-        result.update(
-            {
-                "posts": posts,
-                "complete": complete,
-                "errors": errors,
-                "warnings": warnings,
-                "pages": {"posts": 1, "members": 0},
-            }
-        )
-    else:
-        assert access_channel is not None and period is not None
-        posts, complete, pages, errors, warnings = read_channel(client, access_channel, period)
-        posts, reactions_complete, reaction_errors = read_reactions(client, posts)
-        complete = complete and reactions_complete
-        errors.extend(reaction_errors)
-        result.update(
-            {
-                "posts": posts,
-                "channel": {"id": access_channel["id"], "name": access_channel.get("name")},
-                "complete": complete,
-                "errors": errors,
-                "warnings": warnings,
-                "pages": {"posts": pages, "members": 0},
-            }
-        )
-    result = finalize_result(result)
-    if write_cache and result["status"] != "error":
-        try:
-            cache_write(
-                key,
-                origin=str(target["origin"]),
-                user_id=user_id,
-                target=target,
-                period=period,
-                value=result,
+        result["access_revalidated"] = True
+        if target["kind"] == "post":
+            assert access_post is not None
+            posts, complete, errors, warnings, cache_hit, cache_age = read_post(
+                client,
+                access_post,
+                cache,
+                read_cache=read_cache,
+                write_cache=write_cache,
+                current_ms=current_ms,
             )
-        except (MattermostError, sqlite3.Error):
-            result["warnings"] = [
-                *result_list(result, "warnings"),
-                warning("cache_write_failed", "Mattermost cache could not be updated"),
-            ]
-    return result
+            posts, reactions_complete, reaction_errors = enrich_posts(
+                client, posts, include_reactions=include_reactions
+            )
+            complete = complete and reactions_complete
+            errors.extend(reaction_errors)
+            result.update(
+                {
+                    "posts": posts,
+                    "complete": complete,
+                    "errors": errors,
+                    "warnings": warnings,
+                    "pages": {"posts": 0 if cache_hit else 1, "members": 0},
+                    "cache_hit": cache_hit,
+                    "cache_age": cache_age,
+                }
+            )
+        else:
+            assert access_channel is not None and period is not None
+            since_ms, until_ms = period_bounds(period, current_ms)
+            (
+                posts,
+                complete,
+                pages,
+                errors,
+                warnings,
+                cache_hit,
+                cache_age,
+                cached_posts,
+                fetched_posts,
+            ) = cached_channel_posts(
+                client,
+                access_channel,
+                since_ms,
+                until_ms,
+                cache,
+                read_cache=read_cache,
+                write_cache=write_cache,
+                current_ms=current_ms,
+            )
+            (
+                posts,
+                root_warnings,
+                cached_roots,
+                fetched_roots,
+                root_cache_age,
+                context_roots,
+                roots_complete,
+            ) = add_context_roots(
+                client,
+                posts,
+                since_ms,
+                until_ms,
+                cache,
+                read_cache=read_cache,
+                write_cache=write_cache,
+                current_ms=current_ms,
+            )
+            warnings.extend(root_warnings)
+            complete = complete and roots_complete
+            if not roots_complete and cache is not None and write_cache:
+                cache.invalidate_coverage(
+                    str(access_channel["id"]), since_ms, until_ms, current_ms
+                )
+            cache_hit = cache_hit or cached_roots > 0
+            ages = [age for age in (cache_age, root_cache_age) if age is not None]
+            posts, reactions_complete, reaction_errors = enrich_posts(
+                client, posts, include_reactions=include_reactions
+            )
+            complete = complete and reactions_complete
+            errors.extend(reaction_errors)
+            result.update(
+                {
+                    "scope": "chat" if access_channel.get("type") in {"D", "G"} else "channel",
+                    "posts": posts,
+                    "channel": {"id": access_channel["id"], "name": access_channel.get("name")},
+                    "complete": complete,
+                    "errors": errors,
+                    "warnings": warnings,
+                    "pages": {"posts": pages, "members": 0},
+                    "counts": {
+                        "posts": 0,
+                        "threads": 0,
+                        "members": 0,
+                        "resolved": 0,
+                        "context_roots": context_roots,
+                        "cached_posts": cached_posts + cached_roots,
+                        "fetched_posts": fetched_posts + fetched_roots,
+                    },
+                    "cache_hit": cache_hit,
+                    "cache_age": max(ages) if ages else None,
+                }
+            )
+        return finalize_result(result)
+    finally:
+        if cache is not None:
+            cache.close()
 
 
 def collect_members(url: str) -> dict[str, object]:
@@ -715,8 +1814,8 @@ def collect_members(url: str) -> dict[str, object]:
         raise MattermostError("members requires a channel, direct, or group chat URL")
     token = read_token(str(target["origin"]))
     client = Client(str(target["origin"]), token)
-    user_identity(client)
-    _, channel = revalidate_access(client, target)
+    user_id = user_identity(client)
+    _, channel = revalidate_access(client, target, user_id)
     assert channel is not None
     channel_id = identifier(channel.get("id"), "channel ID")
     result = result_base(scope="members", target=normalized_target(target), period=None)
@@ -734,7 +1833,9 @@ def collect_members(url: str) -> dict[str, object]:
             page_value = client.get(
                 f"/channels/{urllib.parse.quote(channel_id, safe='')}/members?page={page}&per_page={PAGE_SIZE}"
             )
-        except (MattermostError, AuthorizationRequired) as exc:
+        except AuthorizationRequired:
+            raise
+        except MattermostError as exc:
             complete = False
             errors.append(
                 error_item(
@@ -790,7 +1891,9 @@ def collect_members(url: str) -> dict[str, object]:
     for user_id in member_ids:
         try:
             profile = client.get(f"/users/{urllib.parse.quote(user_id, safe='')}")
-        except (MattermostError, AuthorizationRequired) as exc:
+        except AuthorizationRequired:
+            raise
+        except MattermostError as exc:
             complete = False
             unresolved.append(user_id)
             errors.append(
@@ -918,24 +2021,79 @@ def consume_receipt(
     os.replace(temporary, destination)
 
 
+def browser_cookies(value: object) -> list[dict[str, Any]]:
+    candidate = value
+    if isinstance(candidate, dict):
+        if "success" in candidate and candidate.get("success") is not True:
+            raise MattermostError("browser cookie adapter reported failure")
+        candidate = candidate.get("cookies", candidate.get("data"))
+    if isinstance(candidate, dict):
+        if "success" in candidate and candidate.get("success") is not True:
+            raise MattermostError("browser cookie adapter reported failure")
+        candidate = candidate.get("cookies")
+    if not isinstance(candidate, list):
+        raise MattermostError("browser cookie input does not contain a cookie array")
+    return [item for item in candidate if isinstance(item, dict)]
+
+
+def cookie_matches_host(cookie: dict[str, Any], hostname: str) -> bool:
+    raw_domain = str(cookie.get("domain") or "").lower()
+    domain = raw_domain.lstrip(".")
+    return bool(domain) and (
+        hostname == domain
+        or (raw_domain.startswith(".") and hostname.endswith(f".{domain}"))
+    )
+
+
+def cookie_expiry(cookie: dict[str, Any]) -> int | None:
+    value = cookie.get("expires")
+    if value is None or value == "":
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def cookie_is_current(cookie: dict[str, Any]) -> bool:
+    expires = cookie_expiry(cookie)
+    return expires is not None and (expires <= 0 or expires > now())
+
+
+def token_from_cookies(origin: str, value: object) -> str:
+    hostname = urllib.parse.urlsplit(normalized_origin(origin)).hostname
+    if hostname is None:
+        raise MattermostError("Mattermost origin does not contain a hostname")
+    matches = [
+        cookie
+        for cookie in browser_cookies(value)
+        if cookie.get("name") == "MMAUTHTOKEN"
+        and isinstance(cookie.get("value"), str)
+        and cookie["value"]
+        and "\n" not in cookie["value"]
+        and "\r" not in cookie["value"]
+        and cookie_matches_host(cookie, hostname)
+        and cookie_is_current(cookie)
+    ]
+    matches.sort(
+        key=lambda cookie: (
+            str(cookie.get("domain") or "").lower().lstrip(".") == hostname,
+            len(str(cookie.get("domain") or "")),
+            cookie_expiry(cookie) or 0,
+        ),
+        reverse=True,
+    )
+    if matches:
+        return str(matches[0]["value"])
+    raise MattermostError("browser did not provide an origin-bound session cookie")
+
+
 def cookie_token(origin: str) -> str:
     try:
-        cookies = json.load(sys.stdin)
+        value = json.load(sys.stdin)
     except json.JSONDecodeError as exc:
         raise MattermostError("browser cookie input must be JSON") from exc
-    if not isinstance(cookies, list):
-        raise MattermostError("browser cookie input must be an array")
-    hostname = urllib.parse.urlsplit(origin).hostname
-    for cookie in cookies:
-        if (
-            isinstance(cookie, dict)
-            and cookie.get("name") == "MMAUTHTOKEN"
-            and str(cookie.get("domain", "")).lstrip(".").lower() == hostname
-        ):
-            token = cookie.get("value")
-            if isinstance(token, str) and token and "\n" not in token and "\r" not in token:
-                return token
-    raise MattermostError("browser did not provide an origin-bound session cookie")
+    return token_from_cookies(origin, value)
 
 
 def agent_browser_token(origin: str) -> str:
@@ -954,15 +2112,7 @@ def agent_browser_token(origin: str) -> str:
         values = json.loads(cookies.stdout)
     except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
         raise MattermostError("agent-browser authentication failed") from exc
-    if not isinstance(values, list):
-        raise MattermostError("agent-browser returned invalid cookie data")
-    hostname = urllib.parse.urlsplit(origin).hostname
-    for cookie in values:
-        if isinstance(cookie, dict) and cookie.get("name") == "MMAUTHTOKEN" and str(cookie.get("domain", "")).lstrip(".").lower() == hostname:
-            token = cookie.get("value")
-            if isinstance(token, str) and token and "\n" not in token and "\r" not in token:
-                return token
-    raise MattermostError("agent-browser did not provide an origin-bound session cookie")
+    return token_from_cookies(origin, values)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -975,12 +2125,14 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--until")
     read.add_argument("--refresh", action="store_true")
     read.add_argument("--no-cache", action="store_true")
+    read.add_argument("--no-reactions", action="store_true")
     many = subparsers.add_parser("read-many")
     many.add_argument("urls", nargs="+")
     many.add_argument("--since")
     many.add_argument("--until")
     many.add_argument("--refresh", action="store_true")
     many.add_argument("--no-cache", action="store_true")
+    many.add_argument("--no-reactions", action="store_true")
     members = subparsers.add_parser("members")
     members.add_argument("url")
     auth = subparsers.add_parser("auth")
@@ -1006,11 +2158,11 @@ def main(argv: list[str] | None = None) -> int:
             emit(
                 {
                     "schema_version": 1,
-                    "payload_version": "2.0.0",
+                    "payload_version": "2.1.0",
                     "mutation": "private-confirmed-only",
                     "dry_run": True,
-                    "state_protocol": "origin-token-and-identity-cache",
-                    "external_tools": {"browser_auth": False},
+                    "state_protocol": "origin-identity-segmented-history-cache",
+                    "external_tools": {"browser_auth": True},
                     "destructive_flags": ["auth apply --confirm", "cache clear --confirm"],
                     "external_mutations": False,
                 }
@@ -1029,26 +2181,44 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "cache":
             path = cache_path()
             if args.cache_action == "status":
+                if path.is_symlink():
+                    raise CacheError("Mattermost cache path is a symbolic link")
                 exists = path.exists() and not path.is_symlink()
-                if exists:
-                    private_file(path)
-                emit(
-                    {
-                        "status": "ok",
-                        "cache": str(path),
-                        "exists": exists,
-                        "ttl_seconds": CACHE_TTL_SECONDS,
-                        "external_mutations": False,
-                    }
-                )
+                if not exists:
+                    emit(
+                        {
+                            "status": "ok",
+                            "cache": str(path),
+                            "exists": False,
+                            "schema_version": CACHE_SCHEMA_VERSION,
+                            "ttl_seconds": CACHE_TTL_SECONDS,
+                            "stable_age_seconds": CACHE_STABLE_AGE_SECONDS,
+                            "counts": {"posts": 0, "threads": 0, "coverages": 0},
+                            "external_mutations": False,
+                        }
+                    )
+                    return 0
+                with CacheStore() as store:
+                    emit(store.status())
                 return 0
             if not args.confirm:
                 emit(prepare_receipt("cache-clear", path=path))
                 return 0
             consume_receipt(args.confirm, "cache-clear", path=path)
-            if path.exists():
-                private_file(path)
-                path.unlink()
+            for candidate in (
+                path,
+                Path(f"{path}-journal"),
+                Path(f"{path}-wal"),
+                Path(f"{path}-shm"),
+            ):
+                if candidate.exists() or candidate.is_symlink():
+                    try:
+                        private_file(candidate)
+                        candidate.unlink()
+                    except (MattermostError, OSError) as exc:
+                        raise CacheError(
+                            f"Mattermost cache could not be cleared safely: {exc}"
+                        ) from exc
             emit(
                 {
                     "status": "ok",
@@ -1072,6 +2242,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.until,
                     read_cache,
                     write_cache,
+                    include_reactions=not args.no_reactions,
                 )
                 emit(result)
                 return 0 if result["status"] == "ok" else 1 if result["status"] == "partial" else 2
@@ -1088,8 +2259,11 @@ def main(argv: list[str] | None = None) -> int:
                             args.until,
                             read_cache,
                             write_cache,
+                            include_reactions=not args.no_reactions,
                         )
                     )
+                except CacheError:
+                    raise
                 except AuthorizationRequired as exc:
                     results.append(
                         {
@@ -1106,7 +2280,11 @@ def main(argv: list[str] | None = None) -> int:
                     )
             complete = all(result["status"] == "ok" for result in results)
             authentication_required = any(
-                any(error.get("code") == "authentication_required" for error in result_list(result, "errors"))
+                any(
+                    isinstance(error, dict)
+                    and error.get("code") == "authentication_required"
+                    for error in result_list(result, "errors")
+                )
                 for result in results
             )
             status = (
@@ -1135,6 +2313,8 @@ def main(argv: list[str] | None = None) -> int:
             emit(result)
             return 0 if result["status"] == "ok" else 1 if result["status"] == "partial" else 2
         raise MattermostError("a supported subcommand is required")
+    except CacheError as exc:
+        return fail("cache_error", str(exc), CACHE_ERROR_EXIT)
     except AuthorizationRequired as exc:
         return fail("authentication_required", str(exc), AUTH_REQUIRED)
     except MattermostError as exc:

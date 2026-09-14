@@ -5,9 +5,11 @@ description: >-
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
-  version: "2.0.0"
+  version: "2.1.0"
 ---
 
 # mattermost
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for
+user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and
+quotations.
