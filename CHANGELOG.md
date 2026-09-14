@@ -4,6 +4,43 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.1.0] - 2026-09-14
+
+### Added
+
+- Team workflows now support strict private profiles, automatic default-profile
+  resolution, guided self-setup from explicit files, URLs, repositories, or
+  connector evidence, and digest-bound profile updates outside the public repository.
+- `team-retro` and `team-roadmap` include complete evidence workflows and a
+  bounded GitLab period collector with strict `[since, until)` semantics,
+  pagination, deduplication, timestamp provenance, and explicit partial results.
+- `slides-prompts-prepare` combines a user-selected theme with concise factual
+  team, project, technology, and delivery references while preserving one prompt
+  per slide and existing images.
+- Mattermost reading now includes origin- and user-isolated SQLite caching,
+  exact-scope access revalidation, reaction and membership collection, bounded
+  periods, and confirmed cache cleanup.
+- GitLab preparation workflows can derive semantic label recommendations from
+  the live label catalog without replacing unrelated labels.
+- Code review and release preparation include role-aware evidence, architecture
+  checks, release inventory, and companion artifact guidance.
+
+### Changed
+
+- `agents-md`, `commit-msg`, and `humanize` use stronger evidence boundaries and
+  more explicit output contracts.
+- Team profile files require private filesystem permissions and never place raw
+  profile content in preview plans or reports.
+- Portable metadata for Mattermost and the five shared team workflows is now
+  `2.1.0`; the OpenCode package, release tag, and documentation use the same version.
+
+### Fixed
+
+- Mattermost eval fixtures now track the current GET-only and stdin-cookie
+  contracts.
+- Pre-commit checks isolate their Git environment, and GitLab eval/schema
+  formatting remains deterministic.
+
 ## [2.0.6] - 2026-09-11
 
 ### Fixed

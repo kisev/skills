@@ -19,10 +19,10 @@ commands, agents, tools, routing и optional plugin wrappers, но не соде
 
 ## Быстрый global-старт
 
-Установите точный portable release `v2.0.6` для обоих host:
+Установите точный portable release `v2.1.0` для обоих host:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 Команда создаёт одну canonical copy в `~/.agents/skills` для обоих host.
@@ -38,7 +38,7 @@ npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --agent 
 находится в `.agents/skills`:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
 Для OpenCode используйте обязательный flow: установите package постоянно в
@@ -58,10 +58,10 @@ Package command adapters, Fixed agents и Selectable plugins. Выбор adapter
 ## Закреплённый release и latest source
 
 Текущий immutable source:
-`https://github.com/kisev/skills/tree/v2.0.6`. Посмотреть его catalog без записи:
+`https://github.com/kisev/skills/tree/v2.1.0`. Посмотреть его catalog без записи:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --list
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --list
 ```
 
 Используйте `kisev/skills` отдельно, когда намеренно нужен latest source из
@@ -144,6 +144,21 @@ npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope glo
 findings, `2` - invalid input или incomplete probe failure. Разбирайте conflicts,
 а не перезаписывайте их.
 
+## Профили команд
+
+Командные skills автоматически находят приватный default profile в
+`${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts/`. При первом запуске они
+могут собрать его из ответов пользователя и явно указанных файлов, URL,
+репозиториев или connector evidence, спросить только недостающие поля и
+сохранить после confirmation-bound preview. Просьба запомнить участника, проект,
+источник или визуальное предпочтение обновляет приватный profile, а не публичный
+skill.
+
+Версионированная публичная schema и обезличенный пример поставляются в каждом
+командном skill как `references/team-context.schema.json` и
+`references/team-context.example.json`. Profiles остаются вне этого репозитория;
+не храните в них credentials или персональные заметки.
+
 ## Текущий каталог
 
 | Skill                    | Назначение                                                                                              |
@@ -166,17 +181,17 @@ findings, `2` - invalid input или incomplete probe failure. Разбирай�
 | `release-review`         | Проверить release MR на полноту и совместимость.                                                        |
 | `rtk`                    | Выборочно использовать RTK для сжатия многословного command output.                                     |
 | `skill-improve`          | Проверить и улучшить один Agent Skill в iterative loop.                                                 |
-| `slides-prompts-prepare` | Подготовить prompts для командной презентации по explicit context.                                      |
+| `slides-prompts-prepare` | Соединить выбранную тему презентации с фактическими отсылками к команде и технологиям.                  |
 | `spec-manage`            | Инициализировать, изучить, обновить или проверить canonical project specs.                              |
 | `stopit`                 | Записать обезличенный handoff для следующей session.                                                    |
 | `summary`                | Превратить transcripts, notes или research в structured factual summary.                                |
 | `task-prepare`           | Подготовить storage-neutral self-contained work item без публикации.                                    |
 | `task-review`            | Проверить storage-neutral work item без изменения external state.                                       |
 | `task-triage`            | Разобрать explicit storage-neutral work-item material без записи.                                       |
-| `team-retro`             | Подготовить одну retrospective по explicit team context.                                                |
-| `team-roadmap`           | Подготовить один roadmap view по explicit team context.                                                 |
-| `team-sprint-close`      | Завершить один sprint cycle по explicit team context.                                                   |
-| `team-sprint-start`      | Начать один sprint cycle по explicit team context.                                                      |
+| `team-retro`             | Подготовить evidence-based retrospective или delivery presentation по приватному profile.               |
+| `team-roadmap`           | Проверить или обновить evidence-based roadmap по приватному profile.                                    |
+| `team-sprint-close`      | Завершить один sprint cycle по приватному profile или explicit context.                                 |
+| `team-sprint-start`      | Начать один sprint cycle по приватному profile или explicit context.                                    |
 
 Точный active и retired inventory находится в
 [инвентаре миграции](docs/ru/migration-inventory.md).
@@ -205,10 +220,10 @@ outputs. Меняйте canonical sources в `shared/references/` или
 
 ## Справочник и ограничения
 
-- Текущий portable release: `https://github.com/kisev/skills/tree/v2.0.6`.
+- Текущий portable release: `https://github.com/kisev/skills/tree/v2.1.0`.
 - Latest source selector: `kisev/skills`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.0.6`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.1.0`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners используют Python 3.12+ standard library, только когда нужен
   runner.

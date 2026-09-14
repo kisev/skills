@@ -19,10 +19,10 @@ not contain or install portable skills.
 
 ## Global Quick Start
 
-Install the exact `v2.0.6` portable release for both hosts:
+Install the exact `v2.1.0` portable release for both hosts:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 This creates one canonical copy in `~/.agents/skills` for both hosts.
@@ -38,7 +38,7 @@ Omit `--global` for a project installation. The canonical project copy is
 `.agents/skills`:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
 For OpenCode, use this mandatory integration flow when the package is needed:
@@ -59,10 +59,10 @@ with the pinned `npx --yes skills@1.5.23` command above.
 ## Pinned Release and Latest Source
 
 The current immutable source is
-`https://github.com/kisev/skills/tree/v2.0.6`. List its catalog without writing:
+`https://github.com/kisev/skills/tree/v2.1.0`. List its catalog without writing:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.6 --list
+npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --list
 ```
 
 Use `kisev/skills` separately when you intentionally want the latest source from
@@ -145,6 +145,20 @@ npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope glo
 reports invalid input or an incomplete probe failure. Inspect conflicts instead
 of overwriting them.
 
+## Team Profiles
+
+The team skills resolve a default private profile from
+`${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts/`. On first use they can
+build one from user answers and explicit files, URLs, repositories, or connector
+evidence, ask only for missing fields, and save it after a confirmation-bound
+preview. Requests to remember a member, project, source, or visual preference
+update that private profile rather than the public skill.
+
+The versioned public schema and sanitized example ship with every team skill as
+`references/team-context.schema.json` and
+`references/team-context.example.json`. Profiles remain outside this repository;
+do not put credentials or personal notes in them.
+
 ## Current Catalog
 
 | Skill                    | Purpose                                                                                                    |
@@ -167,17 +181,17 @@ of overwriting them.
 | `release-review`         | Review a release MR for completeness and compatibility.                                                    |
 | `rtk`                    | Use RTK selectively to compress verbose command output.                                                    |
 | `skill-improve`          | Check and improve one Agent Skill through an iterative loop.                                               |
-| `slides-prompts-prepare` | Prepare prompts for team presentation slides from explicit context.                                        |
+| `slides-prompts-prepare` | Combine a chosen presentation theme with factual team and technology references.                           |
 | `spec-manage`            | Initialize, onboard, update, or audit canonical project specifications.                                    |
 | `stopit`                 | Write a sanitized handoff for the next session.                                                            |
 | `summary`                | Turn transcripts, notes, or research into a structured factual summary.                                    |
 | `task-prepare`           | Prepare a storage-neutral, self-contained work item without publication.                                   |
 | `task-review`            | Review a storage-neutral work item without changing external state.                                        |
 | `task-triage`            | Triage explicit storage-neutral work-item material read-only.                                              |
-| `team-retro`             | Prepare one retrospective from explicit team context.                                                      |
-| `team-roadmap`           | Prepare one roadmap view from explicit team context.                                                       |
-| `team-sprint-close`      | Close one sprint cycle from explicit team context.                                                         |
-| `team-sprint-start`      | Start one sprint cycle from explicit team context.                                                         |
+| `team-retro`             | Prepare an evidence-based retrospective or delivery presentation from a private profile.                   |
+| `team-roadmap`           | Review or update an evidence-based roadmap from a private profile.                                         |
+| `team-sprint-close`      | Close one sprint cycle from a private profile or explicit context.                                         |
+| `team-sprint-start`      | Start one sprint cycle from a private profile or explicit context.                                         |
 
 The exact active and retired inventory is in the
 [Migration Inventory](docs/migration-inventory.md).
@@ -206,10 +220,10 @@ outputs. Change canonical sources in `shared/references/` or
 
 ## Reference and Limits
 
-- Current portable release: `https://github.com/kisev/skills/tree/v2.0.6`.
+- Current portable release: `https://github.com/kisev/skills/tree/v2.1.0`.
 - Latest source selector: `kisev/skills`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.0.6`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.1.0`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners use Python 3.12+ standard library only when a runner is needed.
 - `ast-grep` and `rtk` require their external CLI; skills do not install them.
