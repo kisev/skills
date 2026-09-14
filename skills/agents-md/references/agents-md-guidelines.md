@@ -1,7 +1,7 @@
 # AGENTS.md guidelines
 
 Read this reference when updating `AGENTS.md` requires the standard shared
-section, a fact-gathering checklist, or a minimal example.
+section or a fact-gathering checklist.
 
 ## Standard shared section
 
@@ -22,14 +22,19 @@ Copy this section unchanged when the shared section is absent or must be restore
 ### Core engineering rules
 
 - Deliver complete implementations without stubs.
-- Before making changes, examine 3-5 relevant files: analogous implementations, tests, and documentation.
+- Before making changes, examine the minimum sufficient set of relevant files,
+  including analogous implementations, tests, and documentation; expand the set
+  for monorepos or multiple build systems.
 - Start with this repository's rules and structure, then use its documentation.
+- Do not invent branch, merge/pull-request, or deployment rules; take them from
+  current repository configuration or canonical documentation.
 - Do not duplicate existing utilities, templates, or logic blocks.
 - Base change verification only on available facts.
 - If data is insufficient, explicitly label the conclusion as an assumption.
 - Do not make a finding without a clear risk, impact, or minimal remediation.
 - Consider edge cases, security, input validation, compatibility, and performance.
 - Remove unused code and do not complicate the solution unnecessarily.
+- Add comments only when the code's purpose or constraint is not obvious.
 - After changes, explicitly state completed and unrun checks.
 
 ### Document maintenance rules

@@ -22,7 +22,8 @@ Uses repository paths and the shared interaction contract.
 
 ## Remote/Local Effects
 
-Local reads; confirmed local writes only. No remote effects.
+Local checkout reads, or exact-revision remote reads when no checkout is
+available; confirmed local writes only. No remote mutations.
 
 ## Errors, Partial, Escalation
 
@@ -30,7 +31,8 @@ Ambiguous scope is blocked; missing evidence is partial and escalated.
 
 ## Unique Constraints
 
-Nested instruction scope and precedence must remain explicit.
+Nested instruction scope and precedence must remain explicit. A local checkout,
+including uncommitted changes, remains the source of truth when available.
 
 ## Requirement
 

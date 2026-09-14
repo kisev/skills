@@ -45,7 +45,14 @@ def test_rebuilding_portable_skills_does_not_change_repository_state() -> None:
 
 def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
     expected_markers = {
-        "agents-md": ("rule -> source", "at most 20 one-line bullets", "exact diff"),
+        "agents-md": (
+            "rule -> source",
+            "at most 20 one-line bullets",
+            "uncommitted changes",
+            "exact requested revision",
+            "merge/pull-request",
+            "exact diff",
+        ),
         "askme": ("**Proposed task**", "current frontier", "never simulated self-review"),
         "ast-grep": (
             "--apply --confirm <DIGEST>",

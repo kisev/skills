@@ -1,7 +1,9 @@
 ---
 name: agents-md
 description: >-
-  Create, update, reduce, or verify AGENTS.md from repository facts. Russian discovery terms: инструкции агентам.
+  Create, update, reduce, or verify repository-scoped AGENTS.md from repository
+  facts, including inherited and nested instructions. Use for agent instructions,
+  not README.md or CONTRIBUTING.md. Russian discovery terms: инструкции агентам.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -10,4 +12,6 @@ metadata:
 
 # agents-md
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Read and follow `references/workflow.md`. Apply `references/language-policy.md` for
+user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and
+quotations.
