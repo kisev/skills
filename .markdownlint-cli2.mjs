@@ -9,5 +9,13 @@ export default {
     MD041: false,
     MD060: false,
   },
-  globs: ["**/*.md", "!**/node_modules/**", "!RESEARCH*.md", "!TODO*.md"],
+  globs: [
+    "**/*.md",
+    "!.build/**",
+    "!.venv/**",
+    "!packages/opencode/dist/**",
+    "!**/node_modules/**",
+    "!RESEARCH*.md",
+    "!TODO*.md",
+  ],
 };

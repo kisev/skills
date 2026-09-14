@@ -40,5 +40,5 @@ The tool shall report the exact `29/33/6/3/5` inventory and core/plugin distinct
 
 ## Example
 
-`capabilities` returns schema version `1` and package version `2.2.0`.
+`capabilities` returns schema version `1` and package version `2.2.1`.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

@@ -7,6 +7,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 
 def _bootstrap() -> None:
@@ -17,8 +18,12 @@ def _bootstrap() -> None:
 
 _bootstrap()
 
-from portable_runtime.capabilities import emit_capabilities
-from portable_runtime.contract import ContractArgumentParser, emit_escalation
+if TYPE_CHECKING:
+    from shared.references.python_runtime.capabilities import emit_capabilities
+    from shared.references.python_runtime.contract import ContractArgumentParser, emit_escalation
+else:
+    from portable_runtime.capabilities import emit_capabilities
+    from portable_runtime.contract import ContractArgumentParser, emit_escalation
 
 
 def parser() -> ContractArgumentParser:

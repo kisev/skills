@@ -140,7 +140,7 @@ def check_inventory() -> dict[str, Any]:
 def check_evidence(
     trace: dict[str, Any], blocks: dict[str, tuple[Path, str]], inventory: dict[str, Any]
 ) -> None:
-    if trace.get("schema") != "traceability/v1" or trace.get("target") != "2.2.0":
+    if trace.get("schema") != "traceability/v1" or trace.get("target") != "2.2.1":
         raise SpecError("traceability_schema")
     revision = trace.get("source_revision")
     if (
@@ -209,15 +209,28 @@ def check_evidence(
             raise SpecError("manual_evidence", evidence_id)
     for name, profile in profiles.items():
         selector = profile.get("test_selector")
+        selector_list = profile.get("test_selectors")
         eval_ids = profile.get("eval_ids")
-        if not isinstance(selector, str) or not isinstance(eval_ids, list) or not eval_ids:
-            raise SpecError("evidence_profile", name)
-        selector_path, _, selector_text = selector.partition("::")
-        target = ROOT / selector_path
-        if not target.is_file() or (
-            selector_text and selector_text not in target.read_text(encoding="utf-8")
+        if isinstance(selector, str) and selector_list is None:
+            selectors = [selector]
+        elif (
+            selector is None
+            and isinstance(selector_list, list)
+            and selector_list
+            and all(isinstance(item, str) for item in selector_list)
         ):
-            raise SpecError("stale_selector", name)
+            selectors = selector_list
+        else:
+            raise SpecError("evidence_profile", name)
+        if not isinstance(eval_ids, list) or not eval_ids:
+            raise SpecError("evidence_profile", name)
+        for selected in selectors:
+            selector_path, _, selector_text = selected.partition("::")
+            target = ROOT / selector_path
+            if not target.is_file() or (
+                selector_text and selector_text not in target.read_text(encoding="utf-8")
+            ):
+                raise SpecError("stale_selector", name)
         for eval_id in eval_ids:
             if not isinstance(eval_id, str) or not any(
                 eval_id == item.get("id") for item in _scenarios()
@@ -343,7 +356,9 @@ def check_range(base: str, head: str = "HEAD") -> None:
 
 
 def check_staged(message_file: str) -> None:
-    paths = git("diff", "--cached", "--name-only", "--diff-filter=ACMR").splitlines()
+    paths = git(
+        "diff", "--cached", "--name-only", "--diff-filter=ACMRTD", "--no-renames"
+    ).splitlines()
     if classify_paths(paths) and not any(path.startswith("specs/") for path in paths):
         message = Path(message_file).read_text(encoding="utf-8")
         if not re.search(r"^Spec-Impact: none - .+", message, re.MULTILINE):

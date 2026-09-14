@@ -6,9 +6,12 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from portable_runtime import contract as portable
+if TYPE_CHECKING:
+    from shared.references.portable_gitlab import contract as portable
+else:
+    from portable_runtime import contract as portable
 
 
 def repository_root(value: str) -> Path:

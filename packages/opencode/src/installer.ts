@@ -41,7 +41,8 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsRoot = resolve(packageRoot, "dist", "assets");
 
 export type Action = "install" | "uninstall";
-export type Operation = "create" | "update" | "remove" | "unchanged" | "missing" | "conflict" | "archive-pending";
+export type Operation =
+  "create" | "update" | "remove" | "unchanged" | "missing" | "conflict" | "archive-pending";
 export type PlanItem = { path: string; operation: Operation; reason?: string; sha256?: string };
 export type SelectablePlugin = (typeof CATALOG.plugins)[number];
 export type InstallerSelection = {
@@ -66,7 +67,11 @@ export type Plan = {
   requires_restart: boolean;
 };
 type Asset = { relativePath: string; content: Buffer; sha256: string; mode: number };
-type ManifestFile = { sha256: string; mode: number; kind: "command" | "agent" | "plugin" | "state" };
+type ManifestFile = {
+  sha256: string;
+  mode: number;
+  kind: "command" | "agent" | "plugin" | "state";
+};
 type Manifest = {
   schema_version: 2;
   package: string;
@@ -94,7 +99,9 @@ export type ArchiveCandidate = {
 };
 
 function retiredAssetPaths(): Set<string> {
-  const inventory = JSON.parse(readFileSync(resolve(assetsRoot, "migration-inventory.json"), "utf8")) as {
+  const inventory = JSON.parse(
+    readFileSync(resolve(assetsRoot, "migration-inventory.json"), "utf8"),
+  ) as {
     retired_command_hashes?: Record<string, string>;
     retired_plugin_hashes?: Record<string, string>;
   };
@@ -122,22 +129,31 @@ export function normalizeSelection(value: Partial<InstallerSelection> = {}): Ins
   const commands = [...new Set(value.commands ?? defaultSelection().commands)].sort();
   const agents = [...new Set(value.agents ?? FIXED_AGENT_ROLES)] as FixedAgentRole[];
   const plugins = [...new Set(value.plugins ?? [])] as SelectablePlugin[];
-  if (commands.some((name) => !allCommands.has(name))) throw new InstallerError("invalid_selection", "Unknown command selection");
-  if (agents.some((name) => !FIXED_AGENT_ROLES.includes(name))) throw new InstallerError("invalid_selection", "Unknown agent selection");
-  if (plugins.some((name) => !SELECTABLE_PLUGINS.includes(name))) throw new InstallerError("invalid_selection", "Unknown plugin selection");
+  if (commands.some((name) => !allCommands.has(name)))
+    throw new InstallerError("invalid_selection", "Unknown command selection");
+  if (agents.some((name) => !FIXED_AGENT_ROLES.includes(name)))
+    throw new InstallerError("invalid_selection", "Unknown agent selection");
+  if (plugins.some((name) => !SELECTABLE_PLUGINS.includes(name)))
+    throw new InstallerError("invalid_selection", "Unknown plugin selection");
   return {
     commands,
     agents: agents.sort(),
     plugins: plugins.sort(),
-    core_activation: Boolean(value.core_activation ?? (commands.some((name) => PACKAGE_COMMANDS.includes(name)) || agents.length)),
+    core_activation: Boolean(
+      value.core_activation ??
+      (commands.some((name) => PACKAGE_COMMANDS.includes(name)) || agents.length),
+    ),
   };
 }
 
 export class InstallerError extends LifecycleError {}
 
 function packageVersion(): string {
-  const metadata = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as { version?: unknown };
-  if (typeof metadata.version !== "string" || !metadata.version) throw new InstallerError("invalid_package", "Package version is unavailable");
+  const metadata = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as {
+    version?: unknown;
+  };
+  if (typeof metadata.version !== "string" || !metadata.version)
+    throw new InstallerError("invalid_package", "Package version is unavailable");
   return metadata.version;
 }
 
@@ -145,10 +161,16 @@ async function assets(selection: InstallerSelection): Promise<Asset[]> {
   const result: Asset[] = [];
   for (const category of ["commands", "plugins"] as const) {
     const directory = resolve(assetsRoot, category);
-    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) => left.name.localeCompare(right.name))) {
+    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) =>
+      left.name.localeCompare(right.name),
+    )) {
       const extension = category === "plugins" ? ".js" : ".md";
       const name = entry.name.slice(0, -extension.length);
-      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(extension)) throw new InstallerError("asset_error", `Asset is not a regular ${extension} file: ${entry.name}`);
+      if (!entry.isFile() || entry.isSymbolicLink() || !entry.name.endsWith(extension))
+        throw new InstallerError(
+          "asset_error",
+          `Asset is not a regular ${extension} file: ${entry.name}`,
+        );
       if (category === "plugins" && !selection.plugins.includes(name as SelectablePlugin)) continue;
       if (category === "commands" && !selection.commands.includes(name)) continue;
       const relativePath = `${category}/${entry.name}`;
@@ -198,28 +220,72 @@ function parseManifest(raw: Buffer, path: string): Manifest {
       package_version: manifest.version,
       version: manifest.version,
       scope: "global",
-      commands: Object.keys(files).filter((path) => path.startsWith("commands/")).map((path) => path.slice(9, -3)).sort(),
+      commands: Object.keys(files)
+        .filter((path) => path.startsWith("commands/"))
+        .map((path) => path.slice(9, -3))
+        .sort(),
       agents: [...FIXED_AGENT_ROLES].filter((role) => `agents/${role}.md` in files),
-      plugins: Object.keys(files).filter((path) => path.startsWith("plugins/")).map((path) => path.slice(8, -3)).filter((name): name is SelectablePlugin => SELECTABLE_PLUGINS.includes(name as SelectablePlugin)),
+      plugins: Object.keys(files)
+        .filter((path) => path.startsWith("plugins/"))
+        .map((path) => path.slice(8, -3))
+        .filter((name): name is SelectablePlugin =>
+          SELECTABLE_PLUGINS.includes(name as SelectablePlugin),
+        ),
       core_activation: true,
       files,
     };
   }
-  if (manifest.schema_version !== 2 || manifest.package !== PACKAGE_NAME || typeof manifest.package_version !== "string" || (manifest.scope !== "global" && manifest.scope !== "project") || !Array.isArray(manifest.commands) || !Array.isArray(manifest.agents) || !Array.isArray(manifest.plugins) || typeof manifest.core_activation !== "boolean" || !manifest.files || typeof manifest.files !== "object" || Array.isArray(manifest.files)) {
-    throw new InstallerError("invalid_manifest", `Ownership manifest has an unexpected format: ${path}`);
+  if (
+    manifest.schema_version !== 2 ||
+    manifest.package !== PACKAGE_NAME ||
+    typeof manifest.package_version !== "string" ||
+    (manifest.scope !== "global" && manifest.scope !== "project") ||
+    !Array.isArray(manifest.commands) ||
+    !Array.isArray(manifest.agents) ||
+    !Array.isArray(manifest.plugins) ||
+    typeof manifest.core_activation !== "boolean" ||
+    !manifest.files ||
+    typeof manifest.files !== "object" ||
+    Array.isArray(manifest.files)
+  ) {
+    throw new InstallerError(
+      "invalid_manifest",
+      `Ownership manifest has an unexpected format: ${path}`,
+    );
   }
-  const files = Object.fromEntries(Object.entries(manifest.files).map(([relativePath, record]) => {
-    destination("/", relativePath);
-    if (!record || typeof record !== "object" || typeof (record as ManifestFile).sha256 !== "string" || !/^[a-f0-9]{64}$/.test((record as ManifestFile).sha256)) {
-      throw new InstallerError("invalid_manifest", `Ownership manifest has an invalid record: ${relativePath}`);
-    }
-    const existing = record as Partial<ManifestFile>;
-    return [relativePath, {
-      sha256: existing.sha256,
-      mode: Number.isInteger(existing.mode) ? existing.mode : 0o644,
-      kind: ["command", "agent", "plugin", "state"].includes(String(existing.kind)) ? existing.kind : relativePath.startsWith("commands/") ? "command" : relativePath.startsWith("plugins/") ? "plugin" : relativePath.startsWith("agents/") ? "agent" : "state",
-    }];
-  })) as Manifest["files"];
+  const files = Object.fromEntries(
+    Object.entries(manifest.files).map(([relativePath, record]) => {
+      destination("/", relativePath);
+      if (
+        !record ||
+        typeof record !== "object" ||
+        typeof (record as ManifestFile).sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test((record as ManifestFile).sha256)
+      ) {
+        throw new InstallerError(
+          "invalid_manifest",
+          `Ownership manifest has an invalid record: ${relativePath}`,
+        );
+      }
+      const existing = record as Partial<ManifestFile>;
+      return [
+        relativePath,
+        {
+          sha256: existing.sha256,
+          mode: Number.isInteger(existing.mode) ? existing.mode : 0o644,
+          kind: ["command", "agent", "plugin", "state"].includes(String(existing.kind))
+            ? existing.kind
+            : relativePath.startsWith("commands/")
+              ? "command"
+              : relativePath.startsWith("plugins/")
+                ? "plugin"
+                : relativePath.startsWith("agents/")
+                  ? "agent"
+                  : "state",
+        },
+      ];
+    }),
+  ) as Manifest["files"];
   return { ...manifest, files } as Manifest;
 }
 
@@ -242,13 +308,19 @@ export async function archiveMutations(
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw new InstallerError("unsafe_path", "Archive root is inaccessible");
   });
-  if (rootInfo && (!rootInfo.isDirectory() || rootInfo.isSymbolicLink() || (rootInfo.mode & 0o077) !== 0))
+  if (
+    rootInfo &&
+    (!rootInfo.isDirectory() || rootInfo.isSymbolicLink() || (rootInfo.mode & 0o077) !== 0)
+  )
     throw new InstallerError("unsafe_path", "Archive root must be a private directory");
   const objectsInfo = await lstat(join(root, "objects")).catch((error: unknown) => {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw new InstallerError("unsafe_path", "Archive object store is inaccessible");
   });
-  if (objectsInfo && (!objectsInfo.isDirectory() || objectsInfo.isSymbolicLink() || (objectsInfo.mode & 0o077) !== 0))
+  if (
+    objectsInfo &&
+    (!objectsInfo.isDirectory() || objectsInfo.isSymbolicLink() || (objectsInfo.mode & 0o077) !== 0)
+  )
     throw new InstallerError("unsafe_path", "Archive object store must be private");
   const indexPath = destination(root, "index.json");
   const existingRaw = await readRegular(indexPath);
@@ -260,14 +332,25 @@ export async function archiveMutations(
   let entries: Array<Record<string, unknown>> = [];
   if (existingRaw) {
     try {
-      const parsed = JSON.parse(existingRaw.toString("utf8")) as { schema_version?: unknown; entries?: unknown };
-      if (parsed.schema_version !== 1 || !Array.isArray(parsed.entries)) throw new Error("invalid archive index");
-      entries = parsed.entries.filter((entry): entry is Record<string, unknown> => Boolean(entry && typeof entry === "object" && !Array.isArray(entry)));
+      const parsed = JSON.parse(existingRaw.toString("utf8")) as {
+        schema_version?: unknown;
+        entries?: unknown;
+      };
+      if (parsed.schema_version !== 1 || !Array.isArray(parsed.entries))
+        throw new Error("invalid archive index");
+      entries = parsed.entries.filter((entry): entry is Record<string, unknown> =>
+        Boolean(entry && typeof entry === "object" && !Array.isArray(entry)),
+      );
     } catch {
-      throw new InstallerError("invalid_archive", "Archive index is not valid content-addressed state");
+      throw new InstallerError(
+        "invalid_archive",
+        "Archive index is not valid content-addressed state",
+      );
     }
   }
-  const known = new Set(entries.map((entry) => `${String(entry.original_path)}:${String(entry.digest)}`));
+  const known = new Set(
+    entries.map((entry) => `${String(entry.original_path)}:${String(entry.digest)}`),
+  );
   const mutations: FileMutation[] = [];
   const now = new Date(0).toISOString();
   for (const candidate of candidates) {
@@ -303,9 +386,18 @@ export async function archiveMutations(
     });
     known.add(key);
   }
-  const next = Buffer.from(`${stable({ schema_version: 1, version: packageVersion(), entries: entries.sort((a, b) => String(a.original_path).localeCompare(String(b.original_path)) || String(a.digest).localeCompare(String(b.digest))) })}\n`);
+  const next = Buffer.from(
+    `${stable({ schema_version: 1, version: packageVersion(), entries: entries.sort((a, b) => String(a.original_path).localeCompare(String(b.original_path)) || String(a.digest).localeCompare(String(b.digest))) })}\n`,
+  );
   if (!existingRaw || !existingRaw.equals(next)) {
-    mutations.push({ root, path: "index.json", operation: "write", content: next, mode: 0o600, expected: existingRaw ? { sha256: sha256(existingRaw) } : { absent: true } });
+    mutations.push({
+      root,
+      path: "index.json",
+      operation: "write",
+      content: next,
+      mode: 0o600,
+      expected: existingRaw ? { sha256: sha256(existingRaw) } : { absent: true },
+    });
   }
   return mutations;
 }
@@ -345,11 +437,17 @@ async function validateGenericDeployment(
       .sort()
       .join(",") !== [...expected.keys()].sort().join(",")
   ) {
-    throw new InstallerError("final_validation_failed", "Generic ownership inventory is incomplete");
+    throw new InstallerError(
+      "final_validation_failed",
+      "Generic ownership inventory is incomplete",
+    );
   }
   for (const [relativePath, record] of Object.entries(owned.manifest.files)) {
     if (relativePath.startsWith("agents/"))
-      throw new InstallerError("final_validation_failed", "Generic installer retained agent ownership");
+      throw new InstallerError(
+        "final_validation_failed",
+        "Generic installer retained agent ownership",
+      );
     const target = destination(root, relativePath);
     const content = await readRegular(target);
     const planned = plannedOperations.find((item) => item.path === relativePath);
@@ -381,10 +479,18 @@ async function validateGenericDeployment(
 }
 
 function asLegacy(manifest: Manifest | undefined): LegacyInstallerManifest | undefined {
-  return manifest?.version === "1.0.0" ? (manifest as unknown as LegacyInstallerManifest) : undefined;
+  return manifest?.version === "1.0.0"
+    ? (manifest as unknown as LegacyInstallerManifest)
+    : undefined;
 }
 
-async function build(action: Action, scope: Scope, cwd = process.cwd(), home = homedir(), requestedSelection?: Partial<InstallerSelection>): Promise<BuiltInstallerPlan> {
+async function build(
+  action: Action,
+  scope: Scope,
+  cwd = process.cwd(),
+  home = homedir(),
+  requestedSelection?: Partial<InstallerSelection>,
+): Promise<BuiltInstallerPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const owned = await currentManifest(root);
   const selection = normalizeSelection(
@@ -400,11 +506,27 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
   );
   const bundled = await assets(selection);
   const retiredPaths = retiredAssetPaths();
-  const legacyRecord = owned.manifest && owned.raw && asLegacy(owned.manifest)
-    ? { manifest: asLegacy(owned.manifest)!, manifestPath: destination(root, MANIFEST_NAME), manifestSha256: sha256(owned.raw) }
-    : undefined;
-  const profiles = await buildAgentProfilePlan({ action }, scope, cwd, home, legacyRecord, selection.agents);
-  const operations: PlanItem[] = profiles.plan.operations.map((item) => ({ path: item.path, operation: item.operation, reason: item.reason }));
+  const legacyRecord =
+    owned.manifest && owned.raw && asLegacy(owned.manifest)
+      ? {
+          manifest: asLegacy(owned.manifest)!,
+          manifestPath: destination(root, MANIFEST_NAME),
+          manifestSha256: sha256(owned.raw),
+        }
+      : undefined;
+  const profiles = await buildAgentProfilePlan(
+    { action },
+    scope,
+    cwd,
+    home,
+    legacyRecord,
+    selection.agents,
+  );
+  const operations: PlanItem[] = profiles.plan.operations.map((item) => ({
+    path: item.path,
+    operation: item.operation,
+    reason: item.reason,
+  }));
   const mutations: FileMutation[] = [...profiles.mutations];
   const archiveCandidates: ArchiveCandidate[] = [];
   const desiredFiles: Record<string, ManifestFile> = {};
@@ -420,11 +542,27 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
       const record = owned.manifest?.files[asset.relativePath];
       if (!current) {
         operations.push({ path: asset.relativePath, operation: "create", sha256: asset.sha256 });
-        mutations.push({ path: asset.relativePath, operation: "write", content: asset.content, mode: asset.mode, expected: { absent: true } });
+        mutations.push({
+          path: asset.relativePath,
+          operation: "write",
+          content: asset.content,
+          mode: asset.mode,
+          expected: { absent: true },
+        });
       } else if (!record) {
-        operations.push({ path: asset.relativePath, operation: "conflict", reason: "unmanaged_file", sha256: sha256(current) });
+        operations.push({
+          path: asset.relativePath,
+          operation: "conflict",
+          reason: "unmanaged_file",
+          sha256: sha256(current),
+        });
       } else if (sha256(current) !== record.sha256) {
-        operations.push({ path: asset.relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+        operations.push({
+          path: asset.relativePath,
+          operation: "conflict",
+          reason: "managed_file_changed",
+          sha256: sha256(current),
+        });
       } else if (
         current.equals(asset.content) &&
         ((await lstat(destination(root, asset.relativePath))).mode & 0o777) === asset.mode
@@ -432,88 +570,230 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
         operations.push({ path: asset.relativePath, operation: "unchanged", sha256: asset.sha256 });
       } else {
         operations.push({ path: asset.relativePath, operation: "update", sha256: asset.sha256 });
-        mutations.push({ path: asset.relativePath, operation: "write", content: asset.content, mode: asset.mode, expected: { sha256: record.sha256 } });
+        mutations.push({
+          path: asset.relativePath,
+          operation: "write",
+          content: asset.content,
+          mode: asset.mode,
+          expected: { sha256: record.sha256 },
+        });
       }
     }
     const active = new Set(bundled.map((asset) => asset.relativePath));
-    for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+    for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(
+      ([left], [right]) => left.localeCompare(right),
+    )) {
       if (active.has(relativePath) || profiles.legacyTransferred.includes(relativePath)) continue;
       const current = await readRegular(destination(root, relativePath));
       if (retiredPaths.has(relativePath)) {
         if (!current) {
           operations.push({ path: relativePath, operation: "missing", sha256: record.sha256 });
         } else if (sha256(current) !== record.sha256) {
-          operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+          operations.push({
+            path: relativePath,
+            operation: "conflict",
+            reason: "managed_file_changed",
+            sha256: sha256(current),
+          });
         } else {
-          operations.push({ path: relativePath, operation: "archive-pending", reason: "archive lifecycle is pending", sha256: record.sha256 });
-          archiveCandidates.push({ path: relativePath, record, content: current!, reason: "retired managed asset", kind: record.kind });
-          mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
+          operations.push({
+            path: relativePath,
+            operation: "archive-pending",
+            reason: "archive lifecycle is pending",
+            sha256: record.sha256,
+          });
+          archiveCandidates.push({
+            path: relativePath,
+            record,
+            content: current!,
+            reason: "retired managed asset",
+            kind: record.kind,
+          });
+          mutations.push({
+            path: relativePath,
+            operation: "remove",
+            expected: { sha256: record.sha256 },
+          });
         }
         continue;
       }
       if (relativePath.startsWith("agents/")) {
-        operations.push({ path: relativePath, operation: "conflict", reason: "v1.0.0_agent_ownership_mismatch" });
+        operations.push({
+          path: relativePath,
+          operation: "conflict",
+          reason: "v1.0.0_agent_ownership_mismatch",
+        });
         continue;
       }
       if (!current) operations.push({ path: relativePath, operation: "missing" });
       else if (sha256(current) === record.sha256) {
-        operations.push({ path: relativePath, operation: "archive-pending", reason: "stale managed asset is archived", sha256: record.sha256 });
-        archiveCandidates.push({ path: relativePath, record, content: current, reason: "stale managed asset", kind: record.kind });
-        mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
-      } else operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+        operations.push({
+          path: relativePath,
+          operation: "archive-pending",
+          reason: "stale managed asset is archived",
+          sha256: record.sha256,
+        });
+        archiveCandidates.push({
+          path: relativePath,
+          record,
+          content: current,
+          reason: "stale managed asset",
+          kind: record.kind,
+        });
+        mutations.push({
+          path: relativePath,
+          operation: "remove",
+          expected: { sha256: record.sha256 },
+        });
+      } else
+        operations.push({
+          path: relativePath,
+          operation: "conflict",
+          reason: "managed_file_changed",
+          sha256: sha256(current),
+        });
     }
   } else {
-    for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+    for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(
+      ([left], [right]) => left.localeCompare(right),
+    )) {
       const current = await readRegular(destination(root, relativePath));
       if (retiredPaths.has(relativePath)) {
         if (!current) {
           operations.push({ path: relativePath, operation: "missing", sha256: record.sha256 });
         } else if (sha256(current) !== record.sha256) {
-          operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+          operations.push({
+            path: relativePath,
+            operation: "conflict",
+            reason: "managed_file_changed",
+            sha256: sha256(current),
+          });
         } else {
-          operations.push({ path: relativePath, operation: "archive-pending", reason: "archive lifecycle is pending", sha256: record.sha256 });
-          archiveCandidates.push({ path: relativePath, record, content: current!, reason: "retired managed asset", kind: record.kind });
-          mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
+          operations.push({
+            path: relativePath,
+            operation: "archive-pending",
+            reason: "archive lifecycle is pending",
+            sha256: record.sha256,
+          });
+          archiveCandidates.push({
+            path: relativePath,
+            record,
+            content: current!,
+            reason: "retired managed asset",
+            kind: record.kind,
+          });
+          mutations.push({
+            path: relativePath,
+            operation: "remove",
+            expected: { sha256: record.sha256 },
+          });
         }
       } else if (!current) operations.push({ path: relativePath, operation: "missing" });
       else if (sha256(current) === record.sha256) {
-        operations.push({ path: relativePath, operation: "archive-pending", reason: "stale managed asset is archived", sha256: record.sha256 });
-        archiveCandidates.push({ path: relativePath, record, content: current, reason: "stale managed asset", kind: record.kind });
-        mutations.push({ path: relativePath, operation: "remove", expected: { sha256: record.sha256 } });
+        operations.push({
+          path: relativePath,
+          operation: "archive-pending",
+          reason: "stale managed asset is archived",
+          sha256: record.sha256,
+        });
+        archiveCandidates.push({
+          path: relativePath,
+          record,
+          content: current,
+          reason: "stale managed asset",
+          kind: record.kind,
+        });
+        mutations.push({
+          path: relativePath,
+          operation: "remove",
+          expected: { sha256: record.sha256 },
+        });
       } else {
-        operations.push({ path: relativePath, operation: "conflict", reason: "managed_file_changed", sha256: sha256(current) });
+        operations.push({
+          path: relativePath,
+          operation: "conflict",
+          reason: "managed_file_changed",
+          sha256: sha256(current),
+        });
         desiredFiles[relativePath] = record;
       }
     }
   }
 
-  mutations.push(...await archiveMutations(archiveCandidates, scope, cwd, home, owned.manifest?.package_version ?? "1.0.0"));
+  mutations.push(
+    ...(await archiveMutations(
+      archiveCandidates,
+      scope,
+      cwd,
+      home,
+      owned.manifest?.package_version ?? "1.0.0",
+    )),
+  );
 
-  const nextManifest: Manifest | undefined = action === "install" || Object.keys(desiredFiles).length
-    ? {
-        schema_version: 2,
-        package: PACKAGE_NAME,
-        package_version: packageVersion(),
-        version: packageVersion(),
-        scope,
-        commands: selection.commands,
-        agents: selection.agents,
-        plugins: selection.plugins,
-        core_activation: selection.core_activation,
-        files: desiredFiles,
-      }
-    : undefined;
+  const nextManifest: Manifest | undefined =
+    action === "install" || Object.keys(desiredFiles).length
+      ? {
+          schema_version: 2,
+          package: PACKAGE_NAME,
+          package_version: packageVersion(),
+          version: packageVersion(),
+          scope,
+          commands: selection.commands,
+          agents: selection.agents,
+          plugins: selection.plugins,
+          core_activation: selection.core_activation,
+          files: desiredFiles,
+        }
+      : undefined;
   const manifestContent = nextManifest ? Buffer.from(`${stable(nextManifest)}\n`) : undefined;
   if (manifestContent && (!owned.raw || !owned.raw.equals(manifestContent))) {
-    operations.push({ path: MANIFEST_NAME, operation: owned.raw ? "update" : "create", reason: "generic installer ownership" });
-    mutations.push({ path: MANIFEST_NAME, operation: "write", content: manifestContent, mode: 0o600, expected: owned.raw ? { sha256: sha256(owned.raw) } : { absent: true } });
+    operations.push({
+      path: MANIFEST_NAME,
+      operation: owned.raw ? "update" : "create",
+      reason: "generic installer ownership",
+    });
+    mutations.push({
+      path: MANIFEST_NAME,
+      operation: "write",
+      content: manifestContent,
+      mode: 0o600,
+      expected: owned.raw ? { sha256: sha256(owned.raw) } : { absent: true },
+    });
   } else if (!manifestContent && owned.raw) {
-    operations.push({ path: MANIFEST_NAME, operation: "remove", reason: "generic assets uninstalled" });
-    mutations.push({ path: MANIFEST_NAME, operation: "remove", expected: { sha256: sha256(owned.raw) } });
+    operations.push({
+      path: MANIFEST_NAME,
+      operation: "remove",
+      reason: "generic assets uninstalled",
+    });
+    mutations.push({
+      path: MANIFEST_NAME,
+      operation: "remove",
+      expected: { sha256: sha256(owned.raw) },
+    });
   }
 
-  const sorted = operations.sort((left, right) => left.path.localeCompare(right.path) || left.operation.localeCompare(right.operation));
-  const base = { schema_version: 2 as const, action, scope, root, package_version: packageVersion(), selection, operations: sorted, requires_restart: (action === "install" && owned.manifest?.package_version !== packageVersion()) || profiles.plan.requires_restart || mutations.some((item) => item.path.startsWith("agents/") || item.path.startsWith("commands/") || item.path.startsWith("plugins/")) };
+  const sorted = operations.sort(
+    (left, right) =>
+      left.path.localeCompare(right.path) || left.operation.localeCompare(right.operation),
+  );
+  const base = {
+    schema_version: 2 as const,
+    action,
+    scope,
+    root,
+    package_version: packageVersion(),
+    selection,
+    operations: sorted,
+    requires_restart:
+      (action === "install" && owned.manifest?.package_version !== packageVersion()) ||
+      profiles.plan.requires_restart ||
+      mutations.some(
+        (item) =>
+          item.path.startsWith("agents/") ||
+          item.path.startsWith("commands/") ||
+          item.path.startsWith("plugins/"),
+      ),
+  };
   const planDigest = digest(base);
   return {
     plan: { ...base, plan_digest: planDigest, digest: planDigest },
@@ -523,12 +803,22 @@ async function build(action: Action, scope: Scope, cwd = process.cwd(), home = h
   };
 }
 
-export async function preview(action: Action, scope: Scope, cwd = process.cwd(), home = homedir(), selection?: Partial<InstallerSelection>): Promise<Plan> {
+export async function preview(
+  action: Action,
+  scope: Scope,
+  cwd = process.cwd(),
+  home = homedir(),
+  selection?: Partial<InstallerSelection>,
+): Promise<Plan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot)) throw new InstallerError("recovered_transaction", "Recovered an interrupted transaction; request a fresh plan");
+      if (await recoverTransaction(root, stateRoot))
+        throw new InstallerError(
+          "recovered_transaction",
+          "Recovered an interrupted transaction; request a fresh plan",
+        );
       const built = await build(action, scope, cwd, home, selection);
       const receipt = await saveReceipt(
         stateRoot,
@@ -555,22 +845,55 @@ export async function preview(action: Action, scope: Scope, cwd = process.cwd(),
   }
 }
 
-export async function apply(action: Action, scope: Scope, confirmationDigest: string, cwd = process.cwd(), home = homedir(), options: TransactionOptions = {}, selection?: Partial<InstallerSelection>): Promise<Plan> {
+export async function apply(
+  action: Action,
+  scope: Scope,
+  confirmationDigest: string,
+  cwd = process.cwd(),
+  home = homedir(),
+  options: TransactionOptions = {},
+  selection?: Partial<InstallerSelection>,
+): Promise<Plan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot)) throw new InstallerError("recovered_transaction", "Recovered an interrupted transaction; request a fresh plan");
-      const receipt = (await consumeReceipt(stateRoot, { digest: confirmationDigest, kind: `installer:${action}`, scope, root })) as { digest?: string };
+      if (await recoverTransaction(root, stateRoot))
+        throw new InstallerError(
+          "recovered_transaction",
+          "Recovered an interrupted transaction; request a fresh plan",
+        );
+      const receipt = (await consumeReceipt(stateRoot, {
+        digest: confirmationDigest,
+        kind: `installer:${action}`,
+        scope,
+        root,
+      })) as { digest?: string };
       const built = await build(action, scope, cwd, home, selection);
-      const savedPlanDigest = (receipt as { plan_digest?: string; digest?: string }).plan_digest ??
+      const savedPlanDigest =
+        (receipt as { plan_digest?: string; digest?: string }).plan_digest ??
         (receipt as { digest?: string }).digest;
       if (built.plan.digest !== savedPlanDigest)
-         throw new InstallerError("stale_plan", "Installer plan changed after preview");
-      if (built.plan.operations.some((item) => item.operation === "conflict" && (item.reason === "unmanaged_file" || item.reason === "v1.0.0_agent_ownership_mismatch" || item.reason?.includes("collision")))) {
-        throw new InstallerError("conflict", "Installer plan contains an exact-name ownership conflict");
+        throw new InstallerError("stale_plan", "Installer plan changed after preview");
+      if (
+        built.plan.operations.some(
+          (item) =>
+            item.operation === "conflict" &&
+            (item.reason === "unmanaged_file" ||
+              item.reason === "v1.0.0_agent_ownership_mismatch" ||
+              item.reason?.includes("collision")),
+        )
+      ) {
+        throw new InstallerError(
+          "conflict",
+          "Installer plan contains an exact-name ownership conflict",
+        );
       }
-      if (action === "install" && built.plan.operations.some((item) => item.operation === "conflict")) throw new InstallerError("conflict", "Installer plan contains managed drift");
+      if (
+        action === "install" &&
+        built.plan.operations.some((item) => item.operation === "conflict")
+      )
+        throw new InstallerError("conflict", "Installer plan contains managed drift");
       await applyTransaction(root, stateRoot, built.mutations, {
         ...options,
         validateFinal: async () => {
@@ -579,15 +902,25 @@ export async function apply(action: Action, scope: Scope, confirmationDigest: st
           await validateGenericDeployment(
             root,
             action,
-             await assets(built.plan.selection),
+            await assets(built.plan.selection),
             built.plan.operations,
             built.expectedManifest,
             retiredAssetPaths(),
           );
           if (action !== "install") return;
           const inventory = await listAgentProfiles(scope, cwd, home);
-           if (built.plan.selection.agents.length > 0 && (inventory.collisions.length || inventory.drift.length || inventory.profiles.filter((item) => item.ownership !== "user-owned").some((item) => item.state !== "current"))) {
-            throw new InstallerError("final_validation_failed", "Final installed agent inventory is invalid");
+          if (
+            built.plan.selection.agents.length > 0 &&
+            (inventory.collisions.length ||
+              inventory.drift.length ||
+              inventory.profiles
+                .filter((item) => item.ownership !== "user-owned")
+                .some((item) => item.state !== "current"))
+          ) {
+            throw new InstallerError(
+              "final_validation_failed",
+              "Final installed agent inventory is invalid",
+            );
           }
         },
       });
@@ -601,5 +934,9 @@ export async function apply(action: Action, scope: Scope, confirmationDigest: st
 }
 
 export function result(plan: Plan, applied: boolean): string {
-  return JSON.stringify({ status: "ok", applied, requires_restart: applied && plan.requires_restart, plan }, null, 2);
+  return JSON.stringify(
+    { status: "ok", applied, requires_restart: applied && plan.requires_restart, plan },
+    null,
+    2,
+  );
 }

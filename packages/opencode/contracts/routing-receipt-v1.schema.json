@@ -24,7 +24,7 @@
     "agent": { "type": "string", "minLength": 1 },
     "card_digest": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "card_revision": { "type": ["integer", "null"], "minimum": 1 },
-    "host_inventory_revision": { "type": "string", "minLength": 1 },
+    "host_inventory_revision": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "expires_at": { "type": "string", "format": "date-time" },
     "nonce": { "type": "string", "minLength": 32 },
     "receipt_digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }

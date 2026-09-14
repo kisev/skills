@@ -43,6 +43,7 @@ task check
 | `skills:validate`            | Запустить agnix, pinned skills-ref и internal contracts.      |
 | `package:check`              | Выполнить полный lifecycle OpenCode package.                  |
 | `eval:check`                 | Проверить schemas/corpus и hostless offline eval suite.       |
+| `dependency:audit`           | Проверить locked Python и npm dependencies.                   |
 | `security`                   | Проверить историю Git через gitleaks.                         |
 | `check`                      | Запустить полный локальный и CI quality gate.                 |
 | `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.                 |
@@ -68,8 +69,9 @@ lefthook install
 
 `pre-commit` вызывает `task pre-commit`: он выбирает быстрые non-mutating проверки
 по staged paths - docs/data, Python/skills и package затрагиваются только при
-изменении соответствующей области, а docs-only правка не запускает package
-lifecycle. `pre-push` вызывает полный `task check`. Полный gate выполняет package
+изменении соответствующей области, учитывая deletions, schemas, specs и toolchain
+metadata, а docs-only правка не запускает package lifecycle. `pre-push` вызывает
+полный `task check`, затем `task dependency:audit`. Полный gate выполняет package
 lifecycle один раз (без отдельного дублирующего package typecheck/test/generate до
 `package:check`). Hooks не применяют fixes и не выполняют `git add`.
 
@@ -108,6 +110,8 @@ lifecycle один раз (без отдельного дублирующего 
 Версии portable skills фиксируются в их metadata. Pages distribution, версия
 `@kisev/skills-opencode`, tag и GitHub Release должны относиться к одному commit.
 Не изменяйте опубликованную версию: исправление выпускается новой patch-версией.
-Push tag независимо развёртывает Pages через `.github/workflows/pages.yml` и
-публикует npm через `.github/workflows/publish.yml`; оба workflow проверяют одну
-версию и revision. npm publishing использует trusted publishing через OIDC.
+Push tag запускает единый release workflow `.github/workflows/publish.yml`. Он
+сначала выполняет полный quality gate, собирает один exact npm tarball и manifest
+digest-ов обоих каналов, затем публикует и проверяет Pages и npm и только после
+этого создаёт GitHub Release. npm publishing использует trusted publishing через
+OIDC и проверяет registry tarball, imports, CLI, signatures и provenance.

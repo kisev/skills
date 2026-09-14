@@ -25,12 +25,14 @@ When required evidence is missing, stale, malformed, or contradictory, a
 workflow shall return a structured `partial`, `blocked`, or `error` outcome and
 shall identify the missing evidence and safe escalation.
 
-### REQ-F-004 - Publish the portable Pages distribution
+### REQ-F-004 - Publish one verified release
 
-On a validated release tag, CI shall build the exact tagged source and deploy a
-standard well-known index plus one digest-bound self-contained archive for every
-public skill to GitHub Pages. The distribution version and source revision shall
-match the tag and shall not depend on the OpenCode runtime package.
+On a validated release tag, CI shall pass the complete quality gate before any
+publication, build the exact tagged Pages distribution and one exact npm tarball,
+and bind both to one release manifest. CI shall verify deployed Pages bytes, npm
+integrity, signatures, provenance, imports, and CLI before creating the GitHub
+Release. The distribution version and source revision shall match the immutable
+tag, and a rerun shall accept only identical previously published bytes.
 
 ### REQ-F-005 - Archive owned retired assets
 

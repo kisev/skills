@@ -5,9 +5,9 @@
 ## Текущий выпуск
 
 Текущий portable source - stable channel GitHub Pages:
-`https://kisev.github.io/skills`. Его release metadata указывает `2.2.0` и commit
-с tag `v2.2.0`. Optional integration package:
-`@kisev/skills-opencode@2.2.0`.
+`https://kisev.github.io/skills`. Его release metadata указывает `2.2.1` и commit
+с tag `v2.2.1`. Optional integration package:
+`@kisev/skills-opencode@2.2.1`.
 
 ## Активные portable skills
 

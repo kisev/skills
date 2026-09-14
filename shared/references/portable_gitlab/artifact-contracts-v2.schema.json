@@ -193,6 +193,55 @@
       },
       "additionalProperties": false
     },
+    "release_counts": {
+      "type": "object",
+      "required": ["commits", "merge_requests", "direct_commits", "errors", "warnings"],
+      "properties": {
+        "commits": { "type": "integer", "minimum": 0 },
+        "merge_requests": { "type": "integer", "minimum": 0 },
+        "direct_commits": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "review_counts": {
+      "type": "object",
+      "required": [
+        "discussions",
+        "notes",
+        "content_notes",
+        "system_notes",
+        "open_resolvable",
+        "resolved_resolvable",
+        "plain_discussions"
+      ],
+      "properties": {
+        "discussions": { "type": "integer", "minimum": 0 },
+        "notes": { "type": "integer", "minimum": 0 },
+        "content_notes": { "type": "integer", "minimum": 0 },
+        "system_notes": { "type": "integer", "minimum": 0 },
+        "open_resolvable": { "type": "integer", "minimum": 0 },
+        "resolved_resolvable": { "type": "integer", "minimum": 0 },
+        "plain_discussions": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "exact_git": {
+      "type": "object",
+      "required": ["repo_root", "refs", "changed_paths", "diff_sha256", "complete", "errors"],
+      "properties": {
+        "repo_root": { "type": "string", "minLength": 1 },
+        "refs": { "type": "object" },
+        "changed_paths": { "type": "array", "items": { "type": "string" } },
+        "diff_sha256": {
+          "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }]
+        },
+        "complete": { "type": "boolean" },
+        "errors": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
     "envelope": {
       "type": "object",
       "required": ["schema", "schema_version", "kind", "created_at", "payload"],
@@ -392,7 +441,7 @@
                 "complete": { "type": "boolean" },
                 "artifact_root": { "type": "string", "minLength": 1 },
                 "prepared_at": { "type": "string", "format": "date-time" },
-                "counts": { "type": "object" }
+                "counts": { "$ref": "#/$defs/release_counts" }
               }
             }
           }
@@ -438,8 +487,8 @@
                 "mr_author_username": { "type": "string", "minLength": 1 },
                 "discussions": { "type": "array" },
                 "notes": { "type": "array" },
-                "counts": { "type": "object" },
-                "exact_git": { "type": "object" },
+                "counts": { "$ref": "#/$defs/review_counts" },
+                "exact_git": { "$ref": "#/$defs/exact_git" },
                 "complete": { "type": "boolean" },
                 "errors": { "type": "array", "items": { "type": "string" } },
                 "artifact_root": { "type": "string", "minLength": 1 },

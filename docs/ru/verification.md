@@ -2,11 +2,11 @@
 
 [English version](../verification.md)
 
-## Выпуск 2.2.0
+## Выпуск 2.2.1
 
 Поддерживаемый portable source - stable channel GitHub Pages:
 `https://kisev.github.io/skills`; optional package:
-`@kisev/skills-opencode@2.2.0`. Portable installation закрепляет
+`@kisev/skills-opencode@2.2.1`. Portable installation закрепляет
 `npx --yes skills@1.5.23`. Package требует Node.js 22+ и объявляет OpenCode
 `>=1.18.29 <1.19.0`.
 
@@ -63,6 +63,7 @@ verdict.
 ```shell
 task eval:check
 task check
+task dependency:audit
 ```
 
 Committed corpus содержит English trigger, English near-miss, Russian trigger и
@@ -85,4 +86,6 @@ parity. В clean temporary checkout build и check должны оставить
 неизменным. Distribution tests отдают полный Pages layout из local HTTP fixture,
 устанавливают его через pinned `skills@1.5.23`, удаляют fixture и затем запускают
 installed runners. Release CI дополнительно проверяет tag, version, source
-revision, deployed index, archive paths и SHA-256 digests.
+revision, каждый deployed Pages byte, exact npm tarball, package imports и CLI,
+registry signatures, SLSA provenance и cross-channel digests до создания GitHub
+Release.

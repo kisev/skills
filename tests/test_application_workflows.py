@@ -220,18 +220,20 @@ print(json.dumps(value))
                 ("config", "user.email", "developer@example.invalid"),
                 ("config", "user.name", "Example Developer"),
             ):
-                subprocess.run(
-                    ["git", *arguments], cwd=repository, check=True, capture_output=True
-                )
+                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
             source = repository / "release.txt"
             source.write_text("base\n", encoding="utf-8")
             subprocess.run(["git", "add", "release.txt"], cwd=repository, check=True)
             subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
             subprocess.run(["git", "tag", "v1.0.0"], cwd=repository, check=True)
             source.write_text("base\ndirect\n", encoding="utf-8")
-            subprocess.run(["git", "commit", "-qam", "fix direct behavior"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "commit", "-qam", "fix direct behavior"], cwd=repository, check=True
+            )
             source.write_text("base\ndirect\nassociated\n", encoding="utf-8")
-            subprocess.run(["git", "commit", "-qam", "add associated behavior"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "commit", "-qam", "add associated behavior"], cwd=repository, check=True
+            )
             head_sha = subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=repository, text=True
             ).strip()
@@ -312,18 +314,14 @@ print(json.dumps(value))
             self.assertTrue(all(Path(item["path"]).is_file() for item in scaffold["companions"]))
             plan = scaffold["artifact_path"]
             plan_payload = json.loads(Path(plan).read_text(encoding="utf-8"))["payload"]
-            self.assertEqual(
-                plan_payload["label_review"]["add"], ["ship-ready", "next-compatible"]
-            )
+            self.assertEqual(plan_payload["label_review"]["add"], ["ship-ready", "next-compatible"])
             finalized = self.run_runner(
                 "release-prepare", "finalize", "--plan", plan, env=environment
             )
             self.assertEqual(finalized.returncode, 0, finalized.stderr)
 
             subprocess.run(["git", "tag", "v1.1.0"], cwd=repository, check=True)
-            stale = self.run_runner(
-                "release-prepare", "finalize", "--plan", plan, env=environment
-            )
+            stale = self.run_runner("release-prepare", "finalize", "--plan", plan, env=environment)
             self.assertEqual(stale.returncode, 2, stale.stderr)
             self.assertIn("release_inventory", json.loads(stale.stdout)["result"]["changed"])
             subprocess.run(["git", "tag", "-d", "v1.1.0"], cwd=repository, check=True)
@@ -486,23 +484,22 @@ print(json.dumps(value))
         result = module.review_labels(bundle, intent)
 
         self.assertTrue(result["complete"])
-        self.assertEqual(
-            result["add"], ["customer-defect", "risk/high", "compatible-fix"]
-        )
+        self.assertEqual(result["add"], ["customer-defect", "risk/high", "compatible-fix"])
         self.assertEqual(result["remove"], ["kind/feature"])
         self.assertEqual(
             result["proposed"],
             ["team-owned", "legacy release", "customer-defect", "risk/high", "compatible-fix"],
         )
         self.assertIn("legacy release", result["proposed"])
-        origin = next(
-            item for item in result["decisions"] if item["role"] == "origin"
-        )
+        origin = next(item for item in result["decisions"] if item["role"] == "origin")
         self.assertEqual(origin["action"], "unsupported")
 
         ambiguous = json.loads(json.dumps(bundle))
         ambiguous["labels"]["items"].append(
-            {"name": "another-defect", "description": "semantic-role: change_type; semantic-value: bug"}
+            {
+                "name": "another-defect",
+                "description": "semantic-role: change_type; semantic-value: bug",
+            }
         )
         unresolved = module.review_labels(ambiguous, intent)
         self.assertFalse(unresolved["complete"])
@@ -890,9 +887,7 @@ print(json.dumps(value))
                 ("config", "user.email", "reviewer@example.invalid"),
                 ("config", "user.name", "Example Reviewer"),
             ):
-                subprocess.run(
-                    ["git", *arguments], cwd=repository, check=True, capture_output=True
-                )
+                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
             source = repository / "review.txt"
             source.write_text("base\n", encoding="utf-8")
             subprocess.run(["git", "add", "review.txt"], cwd=repository, check=True)
@@ -2176,9 +2171,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 "XDG_CONFIG_HOME": str(root / "config"),
                 "XDG_STATE_HOME": str(root / "state"),
             }
-            applied = self.save_team_profile(
-                "team-retro", candidate, "platform-team", environment
-            )
+            applied = self.save_team_profile("team-retro", candidate, "platform-team", environment)
             self.assertEqual(applied.returncode, 0, applied.stderr)
 
             profile_root = root / "config/opencode/team-contexts"
@@ -2344,9 +2337,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
             self.assertEqual(applied.returncode, 0, applied.stderr)
 
-            profile["team"]["members"].append(
-                {"id": "bob", "groups": ["platform"], "active": True}
-            )
+            profile["team"]["members"].append({"id": "bob", "groups": ["platform"], "active": True})
             candidate.write_text(json.dumps(profile), encoding="utf-8")
             prepared = self.run_script(
                 "team-roadmap",

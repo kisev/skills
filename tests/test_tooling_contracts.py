@@ -35,6 +35,16 @@ PUBLIC_TASKS = {
     "locale:check",
     "skills:validate",
     "package:check",
+    "dependency:audit",
+    "eval:live",
+    "ci:portable",
+    "ci:python",
+    "ci:spec-impact",
+    "ci:static",
+    "release:github",
+    "release:npm",
+    "release:pages:verify",
+    "release:prepare",
     "security",
     "check",
     "pre-commit",
@@ -58,25 +68,33 @@ def test_hooks_only_delegate_to_public_tasks() -> None:
 
 def test_workflows_delegate_quality_checks_to_task() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-    pages = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
     publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
-    assert "run: task check" in ci
-    assert "run: task package:check" in publish
+    live = (ROOT / ".github/workflows/evals-live.yml").read_text(encoding="utf-8")
+    assert not (ROOT / ".github/workflows/pages.yml").exists()
+    for task in ("ci:spec-impact", 'task "$CHECK_TASK"'):
+        assert task in ci
+    for task in ("release:prepare", "release:pages:verify", "release:npm", "release:github"):
+        assert task in publish
     assert "fetch-depth: 0" in ci
     assert "fetch-depth: 0" in publish
-    assert "task release:check" in pages
-    assert "task release:check" in publish
-    assert 'tags:\n      - "v*"' in pages
-    assert "branches:" not in pages
-    assert "path: .build/packages/skills" in pages
-    assert "include-hidden-files: true" in pages
-    assert "pages: write" in pages
-    assert "id-token: write" in pages
-    assert "environment:" in pages and "name: github-pages" in pages
-    assert "npm publish" not in pages
-    assert "deploy-pages" not in publish
-    for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", pages):
-        assert re.fullmatch(r"[0-9a-f]{40}", reference)
+    assert 'tags:\n      - "v*"' in publish
+    assert "path: .build/packages/skills" in publish
+    assert "include-hidden-files: true" in publish
+    assert "pages: write" in publish
+    assert "id-token: write" in publish
+    assert "name: github-pages" in publish
+    assert "deploy-pages" in publish
+    assert "task eval:live" in live
+    live_command = re.search(
+        r"- name: Run explicitly trusted live suite\n\s+run: (?P<run>.+)", live
+    )
+    assert live_command is not None
+    assert "${{ inputs." not in live_command.group("run")
+    assert "github.event.deleted != true" in ci
+    assert 'test "$DELETED_REF" = true' in ci
+    for workflow in (ci, publish, live):
+        for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", workflow):
+            assert re.fullmatch(r"[0-9a-f]{40}", reference)
     for duplicated in ("ruff ", "pytest", "npm ci", "npm test", "agentskills"):
         assert duplicated not in ci
         assert duplicated not in publish
@@ -99,11 +117,17 @@ def test_precommit_selects_checks_by_staged_paths() -> None:
             "skills/askme/SKILL.source.md",
             "shared/manifest.json",
             "lefthook.yml",
+            "specs/README.md",
+            "uv.lock",
+            ".prettierignore",
+            ".markdownlint-cli2.mjs",
+            "packages/opencode/contracts/instances-v1.json",
         ]
     )
-    assert groups["docs"] == ["README.md", "skills/askme/SKILL.source.md"]
+    assert groups["docs"] == ["README.md", "skills/askme/SKILL.source.md", "specs/README.md"]
     assert groups["data"] == [
         "packages/opencode/assets/migration-inventory.json",
+        "packages/opencode/contracts/instances-v1.json",
         "shared/manifest.json",
     ]
     assert groups["python"] == ["tests/test_repository.py"]
@@ -111,9 +135,14 @@ def test_precommit_selects_checks_by_staged_paths() -> None:
     assert groups["skills"] == ["shared/manifest.json", "skills/askme/SKILL.source.md"]
     assert groups["package"] == [
         "packages/opencode/assets/migration-inventory.json",
+        "packages/opencode/contracts/instances-v1.json",
         "packages/opencode/src/index.ts",
     ]
     assert groups["workflow"] == ["lefthook.yml"]
+    assert groups["specs"] == ["specs/README.md"]
+    assert groups["toolchain"] == ["uv.lock"]
+    assert groups["format_config"] == [".markdownlint-cli2.mjs", ".prettierignore"]
+    assert groups["markdownlint_config"] == [".markdownlint-cli2.mjs"]
 
 
 def test_precommit_skips_package_for_docs_only_change() -> None:
@@ -125,10 +154,58 @@ def test_precommit_skips_package_for_docs_only_change() -> None:
 
 
 def test_precommit_matches_root_level_and_nested_files() -> None:
-    groups = _load_precommit().classify(["top.json", "skills/lsp-report/scripts/lsp_report.py"])
-    assert groups["data"] == ["top.json"]
-    assert groups["python"] == ["skills/lsp-report/scripts/lsp_report.py"]
-    assert groups["skills"] == ["skills/lsp-report/scripts/lsp_report.py"]
+    groups = _load_precommit().classify(
+        [
+            "top.json",
+            "skills/lsp-report/scripts/lsp_report.py",
+            "skills/mattermost/tests/test_mattermost.py",
+            "evals/schemas/result-v1.schema.json",
+            "packages/opencode/contracts/execution-card-v1.schema.json",
+        ]
+    )
+    assert groups["data"] == [
+        "evals/schemas/result-v1.schema.json",
+        "packages/opencode/contracts/execution-card-v1.schema.json",
+        "top.json",
+    ]
+    assert groups["python"] == [
+        "skills/lsp-report/scripts/lsp_report.py",
+        "skills/mattermost/tests/test_mattermost.py",
+    ]
+    assert groups["python_tests"] == ["skills/mattermost/tests/test_mattermost.py"]
+    assert groups["skills"] == [
+        "skills/lsp-report/scripts/lsp_report.py",
+        "skills/mattermost/tests/test_mattermost.py",
+    ]
+    assert groups["schemas"] == [
+        "evals/schemas/result-v1.schema.json",
+        "packages/opencode/contracts/execution-card-v1.schema.json",
+    ]
+    assert groups["package"] == ["packages/opencode/contracts/execution-card-v1.schema.json"]
+
+
+def test_precommit_deletions_trigger_broad_non_file_checks(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = _load_precommit().run(
+        [],
+        deleted_files=[
+            "skills/mattermost/tests/test_mattermost.py",
+            "specs/requirements/README.md",
+            "evals/schemas/result-v1.schema.json",
+            "tombi.toml",
+            ".markdownlint-cli2.mjs",
+        ],
+        dry_run=True,
+    )
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "scripts/check_specs.py" in output
+    assert "pytest tests/test_json_schemas.py" in output
+    assert "uv run --locked pytest" in output
+    assert "test_mattermost.py" not in output
+    assert "tombi format --offline --check" in output
+    assert "markdownlint-cli2" in output
 
 
 def test_precommit_removes_repository_local_git_environment(

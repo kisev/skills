@@ -1,6 +1,6 @@
 {
   "schema": "traceability/v1",
-  "target": "2.2.0",
+  "target": "2.2.1",
   "source_revision": "d4336eb24006eebbcf9a62a997c358b0a88c0816",
   "hash": {
     "algorithm": "sha256",
@@ -94,6 +94,28 @@
       "test_selector": "tests/test_distribution.py::test_pages_install_is_self_contained_for_both_hosts_and_scopes",
       "eval_ids": ["stage20.infrastructure.core.contract"]
     },
+    "release": {
+      "kind": "automated",
+      "test_selectors": [
+        "tests/test_release_contract.py::test_release_workflow_gates_publication_and_final_release",
+        "tests/test_release_contract.py::test_release_manifest_rejects_tampered_tarball",
+        "tests/test_release_contract.py::test_npm_provenance_binds_artifact_workflow_and_revision",
+        "tests/test_release_contract.py::test_registry_smoke_installs_the_optional_runtime_peer",
+        "tests/test_release_contract.py::test_pages_manifest_verifies_every_exact_file",
+        "tests/test_release_contract.py::test_github_release_creation_binds_tag_revision_and_notes"
+      ],
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
+    "reproducibility": {
+      "kind": "automated",
+      "test_selector": "tests/test_distribution.py::test_distribution_is_byte_reproducible",
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
+    "schemas": {
+      "kind": "automated",
+      "test_selector": "tests/test_json_schemas.py::test_every_committed_json_schema_has_a_concrete_contract",
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
     "quality": {
       "kind": "automated",
       "test_selector": "tests/test_evals.py::test_offline_suite_is_hostless_and_has_stable_ordered_assertions",
@@ -148,8 +170,8 @@
     "REQ-F-004": {
       "surface": "distribution",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "14bf3995f51a28bb520640161ace81d1c8e426799762c20c32de54870441a719",
-      "evidence_profile": "distribution",
+      "block_sha256": "b7fa438102a92d15fc54a512711ebb3d988fb9d85ad893c45dac3286c114497f",
+      "evidence_profile": "release",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
     "REQ-F-005": {
@@ -241,13 +263,25 @@
       "surface": "distribution",
       "source": "specs/requirements/quality/README.md",
       "block_sha256": "bbb053ae73e9a81b390d20f68b7de23b10f125ee4f7bfd3a6586b48ac25181da",
-      "evidence_profile": "distribution"
+      "evidence_profile": "reproducibility"
     },
     "REQ-Q-006": {
       "surface": "compatibility",
       "source": "specs/requirements/quality/README.md",
       "block_sha256": "ba9f47748923ed36635762fde6acb2d55fe77b4bbf0a8459f1d515f3c17cf259",
       "evidence_profile": "compatibility"
+    },
+    "REQ-Q-007": {
+      "surface": "verification",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "559d377d4934518a70aa151249228abc86bbcb8f8dafec2bd9b04fb03a8b7297",
+      "evidence_profile": "schemas"
+    },
+    "REQ-Q-008": {
+      "surface": "distribution",
+      "source": "specs/requirements/quality/README.md",
+      "block_sha256": "4748ca7be69058e895c740a8893266ed0006f85a8bc068717e37602ff0d5701a",
+      "evidence_profile": "release"
     },
     "REQ-C-001": {
       "surface": "specification",
@@ -277,7 +311,7 @@
     "REQ-C-005": {
       "surface": "scope",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "f1a0274c3d176a5923e129a580cc093ad3d884b9cef20d8ce8052b5250e4f1d6",
+      "block_sha256": "b63e4b4a60ae2a62d3e390a6431571c6e5d9e35f1bdf9e545107890006a66830",
       "evidence_profile": "quality"
     },
     "REQ-C-006": {

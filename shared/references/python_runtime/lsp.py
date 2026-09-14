@@ -28,7 +28,9 @@ def detect(project: Path) -> dict[str, Any]:
     suffixes: set[str] = set()
     try:
         for path in root.rglob("*"):
-            if any(part in {".git", "node_modules", ".venv", "dist", "build"} for part in path.parts):
+            if any(
+                part in {".git", "node_modules", ".venv", "dist", "build"} for part in path.parts
+            ):
                 continue
             if path.is_file() and not path.is_symlink():
                 suffixes.add(path.suffix.lower())
@@ -48,22 +50,24 @@ def detect(project: Path) -> dict[str, Any]:
             reason = "missing-dependency"
         else:
             reason = "available"
-        servers.append({
-            "name": name,
-            "applicable": applicable,
-            "active": active,
-            "configured": "unknown",
-            "binary_available": available,
-            "runtime_status": "unknown",
-            "applicability": "applicable" if applicable else "not-applicable",
-            "configuration": "unknown",
-            "binary": "available" if available else "missing",
-            "runtime": "active" if active else "inactive",
-            "requirement_class": requirement,
-            "missing": [] if available else [executable],
-            "reason": reason,
-            "install": f"Install {executable} with your project toolchain.",
-        })
+        servers.append(
+            {
+                "name": name,
+                "applicable": applicable,
+                "active": active,
+                "configured": "unknown",
+                "binary_available": available,
+                "runtime_status": "unknown",
+                "applicability": "applicable" if applicable else "not-applicable",
+                "configuration": "unknown",
+                "binary": "available" if available else "missing",
+                "runtime": "active" if active else "inactive",
+                "requirement_class": requirement,
+                "missing": [] if available else [executable],
+                "reason": reason,
+                "install": f"Install {executable} with your project toolchain.",
+            }
+        )
     return {
         "schema_version": 1,
         "catalog_version": _catalog["catalog_version"],

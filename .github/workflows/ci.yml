@@ -2,30 +2,77 @@ name: CI
 
 on:
   push:
+    branches:
+      - "**"
   pull_request:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  check:
-    runs-on: ubuntu-latest
+  spec-impact:
+    name: Specification impact
+    if: ${{ github.event.deleted != true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
-      - name: Resolve specification impact range
-        id: spec-range
+      - run: task ci:spec-impact
+
+  quality:
+    name: ${{ matrix.name }}
+    if: ${{ github.event.deleted != true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Static analysis
+            task: ci:static
+          - name: Python tests
+            task: ci:python
+          - name: Portable distribution
+            task: ci:portable
+          - name: Offline evaluations
+            task: eval:check
+          - name: OpenCode package
+            task: package:check
+          - name: Secret scanning
+            task: security
+    env:
+      CHECK_TASK: ${{ matrix.task }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+      - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+      - run: task "$CHECK_TASK"
+
+  check:
+    name: check
+    if: ${{ always() }}
+    needs:
+      - spec-impact
+      - quality
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      DELETED_REF: ${{ github.event.deleted }}
+      SPEC_IMPACT_RESULT: ${{ needs.spec-impact.result }}
+      QUALITY_RESULT: ${{ needs.quality.result }}
+    steps:
+      - name: Require every CI gate
         run: |
-          resolved="$(uv run --locked python scripts/resolve_spec_impact.py)"
-          printf '%s\n' "$resolved"
-          echo "base=$(jq -er '.base' <<<"$resolved")" >> "$GITHUB_OUTPUT"
-          echo "head=$(jq -er '.head' <<<"$resolved")" >> "$GITHUB_OUTPUT"
-      - name: Specification impact gate
-        run: >-
-          task spec:impact
-          BASE=${{ steps.spec-range.outputs.base }}
-          HEAD=${{ steps.spec-range.outputs.head }}
-      - name: Quality gate
-        run: task check
+          if test "$DELETED_REF" = true; then
+            exit 0
+          fi
+          test "$SPEC_IMPACT_RESULT" = success
+          test "$QUALITY_RESULT" = success

@@ -6,7 +6,8 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { appendPrivate, withLifecycleLock, writeAtomic } from "../lifecycle.js";
 
 function home(value = process.env.HOME ?? homedir()): string {
-  if (!isAbsolute(value) || value.split(sep).includes("..")) throw new Error("HOME must be an absolute safe path");
+  if (!isAbsolute(value) || value.split(sep).includes(".."))
+    throw new Error("HOME must be an absolute safe path");
   return resolve(value);
 }
 
@@ -17,13 +18,17 @@ function inside(root: string, target: string): boolean {
 
 export function stateRoot(name: string, homePath?: string): string {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw new Error("unsafe state name");
-  const base = process.env.XDG_STATE_HOME ? resolve(process.env.XDG_STATE_HOME) : join(home(homePath), ".local", "state");
+  const base = process.env.XDG_STATE_HOME
+    ? resolve(process.env.XDG_STATE_HOME)
+    : join(home(homePath), ".local", "state");
   return join(base, "opencode", "skills", name);
 }
 
 export function configRoot(name: string, homePath?: string): string {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw new Error("unsafe config name");
-  const base = process.env.XDG_CONFIG_HOME ? resolve(process.env.XDG_CONFIG_HOME) : join(home(homePath), ".config");
+  const base = process.env.XDG_CONFIG_HOME
+    ? resolve(process.env.XDG_CONFIG_HOME)
+    : join(home(homePath), ".config");
   return join(base, "opencode", "skill-config", name);
 }
 
@@ -42,7 +47,8 @@ async function safeDirectory(path: string, boundary: string, create = false): Pr
       current = join(current, piece);
       try {
         const info = await lstat(current);
-        if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("state directory is unsafe");
+        if (!info.isDirectory() || info.isSymbolicLink())
+          throw new Error("state directory is unsafe");
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
         await mkdir(current, { mode: 0o700 });
@@ -50,7 +56,8 @@ async function safeDirectory(path: string, boundary: string, create = false): Pr
     }
   }
   const rootInfo = await lstat(boundary);
-  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink()) throw new Error("state directory is unsafe");
+  if (!rootInfo.isDirectory() || rootInfo.isSymbolicLink())
+    throw new Error("state directory is unsafe");
   let current = resolve(boundary);
   for (const piece of relative(current, target).split(sep).filter(Boolean)) {
     current = join(current, piece);

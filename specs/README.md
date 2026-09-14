@@ -2,7 +2,7 @@
 
 ## Target
 
-This English-only specification describes the merged target `2.2.0` of the
+This English-only specification describes the merged target `2.2.1` of the
 portable Agent Skills repository. It records supported contracts, not history,
 roadmap, or implementation plans.
 

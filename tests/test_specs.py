@@ -68,6 +68,19 @@ def test_hash_tampering_is_rejected_even_when_the_source_block_is_unchanged() ->
 
 
 def test_behavioral_classifier_uses_versioned_boundaries() -> None:
-    assert classify_paths(["scripts/build_distribution.py"])
-    assert classify_paths(["packages/opencode/src/cli.ts"])
+    for path in (
+        "evals/schemas/result-v1.schema.json",
+        "packages/opencode/src/cli.ts",
+        "scripts/build_distribution.py",
+        "scripts/build_release_artifacts.py",
+        "scripts/check_ci_spec_impact.py",
+        "scripts/check_specs.py",
+        "scripts/create_github_release.py",
+        "scripts/publish_npm_release.py",
+        "scripts/resolve_spec_impact.py",
+        "scripts/spec_gate_config.json",
+        ".github/workflows/evals-live.yml",
+        ".github/workflows/publish.yml",
+    ):
+        assert classify_paths([path]), path
     assert not classify_paths(["docs/release-notes.md", "tests/test_specs.py"])

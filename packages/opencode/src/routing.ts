@@ -135,6 +135,21 @@ function digest(value: unknown): string {
   return createHash("sha256").update(stable(value), "utf8").digest("hex");
 }
 
+function validRfc3339(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const match =
+    /^(\d{4})-(0[1-9]|1[0-2])-(\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/i.exec(
+      value,
+    );
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return year > 0 && day >= 1 && day <= monthDays[month - 1];
+}
+
 export function validateRoutingReceipt(
   value: unknown,
   context?: { task?: string; category?: string; requirements?: string[]; card?: unknown },
@@ -144,13 +159,32 @@ export function validateRoutingReceipt(
   const decision = value as RoutingDecision;
   if ("destination" in decision) {
     const receipt = value as RoutingReceipt;
+    const receiptFields = [
+      "schema_version",
+      "task_digest",
+      "requirements_digest",
+      "destination",
+      "agent",
+      "card_digest",
+      "card_revision",
+      "host_inventory_revision",
+      "expires_at",
+      "nonce",
+      "receipt_digest",
+    ];
     if (
+      Object.keys(receipt).sort().join(",") !== receiptFields.sort().join(",") ||
       receipt.schema_version !== 1 ||
       !CATEGORIES.includes(receipt.destination) ||
       !receipt.agent ||
-      !receipt.nonce ||
+      !/^[a-f0-9]{64}$/.test(receipt.task_digest) ||
+      !/^[a-f0-9]{64}$/.test(receipt.requirements_digest) ||
+      (receipt.card_digest !== null && !/^[a-f0-9]{64}$/.test(receipt.card_digest)) ||
+      typeof receipt.nonce !== "string" ||
+      receipt.nonce.length < 32 ||
       !/^[a-f0-9]{64}$/.test(receipt.host_inventory_revision) ||
       !/^[a-f0-9]{64}$/.test(receipt.receipt_digest) ||
+      !validRfc3339(receipt.expires_at) ||
       !Number.isFinite(Date.parse(receipt.expires_at)) ||
       (receipt.card_revision !== null &&
         (!Number.isInteger(receipt.card_revision) || receipt.card_revision < 1))

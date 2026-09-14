@@ -9,6 +9,7 @@ import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 
 def _bootstrap() -> None:
@@ -19,8 +20,12 @@ def _bootstrap() -> None:
 
 _bootstrap()
 
-from portable_runtime.capabilities import emit_capabilities
-from portable_runtime.contract import ContractArgumentParser, report_error
+if TYPE_CHECKING:
+    from shared.references.python_runtime.capabilities import emit_capabilities
+    from shared.references.python_runtime.contract import ContractArgumentParser, report_error
+else:
+    from portable_runtime.capabilities import emit_capabilities
+    from portable_runtime.contract import ContractArgumentParser, report_error
 
 NAME_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 TOP_LEVEL_RE = re.compile(r"^([A-Za-z0-9_.-]+):\s*(.*)$")
@@ -59,18 +64,12 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], int, list[Issue]]:
             0,
             [Issue("critical", "frontmatter-missing", 1, "frontmatter block missing")],
         )
-    closing = next(
-        (index for index, line in enumerate(lines[1:], 1) if line == "---"), -1
-    )
+    closing = next((index for index, line in enumerate(lines[1:], 1) if line == "---"), -1)
     if closing < 0:
         return (
             {},
             0,
-            [
-                Issue(
-                    "critical", "frontmatter-unclosed", 1, "frontmatter block unclosed"
-                )
-            ],
+            [Issue("critical", "frontmatter-unclosed", 1, "frontmatter block unclosed")],
         )
     fields: dict[str, str] = {}
     active: str | None = None
@@ -78,9 +77,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], int, list[Issue]]:
         match = TOP_LEVEL_RE.match(line)
         if match:
             active, value = match.groups()
-            fields[active] = (
-                "" if value.strip() in {">", ">-", "|", "|-"} else value.strip()
-            )
+            fields[active] = "" if value.strip() in {">", ">-", "|", "|-"} else value.strip()
         elif line.startswith((" ", "\t")) and active is not None:
             fields[active] = f"{fields[active]} {line.strip()}".strip()
         else:
@@ -104,9 +101,7 @@ def check_frontmatter(skill_dir: Path, fields: dict[str, str]) -> list[Issue]:
         issues.append(Issue("critical", "name-missing", 2, "frontmatter name missing"))
     else:
         if not NAME_RE.fullmatch(name) or len(name) > MAX_SKILL_NAME_LENGTH:
-            issues.append(
-                Issue("critical", "name-invalid", 2, f"invalid skill name {name!r}")
-            )
+            issues.append(Issue("critical", "name-invalid", 2, f"invalid skill name {name!r}"))
         if name != skill_dir.name:
             issues.append(
                 Issue(
@@ -119,9 +114,7 @@ def check_frontmatter(skill_dir: Path, fields: dict[str, str]) -> list[Issue]:
     description = fields.get("description", "")
     if not description:
         issues.append(
-            Issue(
-                "critical", "description-missing", 3, "frontmatter description missing"
-            )
+            Issue("critical", "description-missing", 3, "frontmatter description missing")
         )
     elif len(description) > MAX_SKILL_DESCRIPTION_LENGTH:
         issues.append(
@@ -137,9 +130,7 @@ def check_frontmatter(skill_dir: Path, fields: dict[str, str]) -> list[Issue]:
 
 def safe_resource(skill_dir: Path, token: str) -> tuple[Path | None, str | None]:
     relative = Path(token)
-    if relative.is_absolute() or any(
-        part in {"", ".", ".."} for part in relative.parts
-    ):
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
         return None, "unsafe"
     candidate = skill_dir / relative
     current = skill_dir
@@ -166,11 +157,7 @@ def check_resources(skill_dir: Path, lines: list[str]) -> list[Issue]:
             seen.add((number, token))
             _path, failure = safe_resource(skill_dir, token)
             if failure is not None:
-                rule = (
-                    "resource-unsafe"
-                    if failure in {"unsafe", "symlink"}
-                    else "resource-missing"
-                )
+                rule = "resource-unsafe" if failure in {"unsafe", "symlink"} else "resource-missing"
                 issues.append(
                     Issue(
                         "critical",
@@ -214,10 +201,7 @@ def check_scripts(skill_dir: Path, lines: list[str]) -> list[Issue]:
 
 
 def check_size(skill_dir: Path, lines: list[str]) -> list[Issue]:
-    if (
-        len(lines) <= MAX_SKILL_LINES_WITHOUT_REFERENCES
-        or (skill_dir / "references").is_dir()
-    ):
+    if len(lines) <= MAX_SKILL_LINES_WITHOUT_REFERENCES or (skill_dir / "references").is_dir():
         return []
     return [
         Issue(
@@ -251,9 +235,7 @@ def check_skill(skill_dir: Path) -> list[Issue]:
         if TODO_RE.search(line)
     )
     order = {"critical": 0, "major": 1, "minor": 2}
-    return sorted(
-        issues, key=lambda issue: (order[issue.severity], issue.rule, issue.line)
-    )
+    return sorted(issues, key=lambda issue: (order[issue.severity], issue.rule, issue.line))
 
 
 def check_command(path: Path) -> int:
@@ -267,9 +249,7 @@ def check_command(path: Path) -> int:
             {
                 "schema_version": 1,
                 "skill": str(path.resolve()),
-                "status": "pass"
-                if not counts["critical"] and not counts["major"]
-                else "fail",
+                "status": "pass" if not counts["critical"] and not counts["major"] else "fail",
                 "counts": counts,
                 "issues": [asdict(issue) for issue in issues],
             },

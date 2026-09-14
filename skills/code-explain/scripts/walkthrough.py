@@ -10,6 +10,7 @@ import subprocess
 import sys
 import urllib.parse
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 
 def _bootstrap() -> None:
@@ -20,8 +21,12 @@ def _bootstrap() -> None:
 
 _bootstrap()
 
-from portable_runtime.capabilities import emit_capabilities
-from portable_runtime.contract import ContractArgumentParser, report_error
+if TYPE_CHECKING:
+    from shared.references.python_runtime.capabilities import emit_capabilities
+    from shared.references.python_runtime.contract import ContractArgumentParser, report_error
+else:
+    from portable_runtime.capabilities import emit_capabilities
+    from portable_runtime.contract import ContractArgumentParser, report_error
 
 DIFF_HEADER = re.compile(r"^diff --git a/(.+) b/(.+)$")
 HUNK_HEADER = re.compile(r"^@@ -(?P<old>\d+)(?:,\d+)? \+(?P<new>\d+)(?:,\d+)? @@")
@@ -70,9 +75,7 @@ def collect_diff(repo: Path, diff_range: str | None, diff_file: Path | None) -> 
     for name in untracked.splitlines():
         path = repo / name
         if path.is_file() and not path.is_symlink():
-            content = path.read_text(encoding="utf-8", errors="replace").splitlines(
-                keepends=True
-            )
+            content = path.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
             pieces.append(
                 f"diff --git a/{name} b/{name}\nnew file mode 100644\n"
                 + "".join(
@@ -143,23 +146,20 @@ def parse_diff(text: str) -> tuple[list[dict[str, object]], dict[str, list[str]]
                 raise ValueError("invalid hunk accumulator")
             hunks.append(hunk)
         elif line.startswith("+") and not line.startswith("+++"):
-            current["additions"] = int(current["additions"]) + 1
+            current["additions"] = cast(int, current["additions"]) + 1
             added[str(current["path"])].append(line[1:])
             if hunk is not None:
-                hunk["additions"] = int(hunk["additions"]) + 1
+                hunk["additions"] = cast(int, hunk["additions"]) + 1
         elif line.startswith("-") and not line.startswith("---"):
-            current["deletions"] = int(current["deletions"]) + 1
+            current["deletions"] = cast(int, current["deletions"]) + 1
             if hunk is not None:
-                hunk["deletions"] = int(hunk["deletions"]) + 1
+                hunk["deletions"] = cast(int, hunk["deletions"]) + 1
     return files, added
 
 
 def category(path: str) -> tuple[int, str]:
     lower = path.lower()
-    if any(
-        token in lower
-        for token in ("schema", "openapi", "interface", "types", "contract")
-    ):
+    if any(token in lower for token in ("schema", "openapi", "interface", "types", "contract")):
         return 0, "contracts"
     if (
         "/test" in lower
@@ -189,9 +189,7 @@ def module(path: str) -> str:
     return "." if len(parts) == 1 else "/".join(parts[: min(2, len(parts) - 1)])
 
 
-def relationship_content(
-    repo: Path, path: str, status: object, added: dict[str, list[str]]
-) -> str:
+def relationship_content(repo: Path, path: str, status: object, added: dict[str, list[str]]) -> str:
     candidate = repo / path
     if status == "deleted" or not candidate.is_file() or candidate.is_symlink():
         return "\n".join(added.get(path, []))
@@ -251,10 +249,7 @@ def build_relationships(
                         "evidence": f"{symbol}()",
                     }
                 )
-    return [
-        dict(item)
-        for item in sorted({tuple(relation.items()) for relation in relations})
-    ]
+    return [dict(item) for item in sorted({tuple(relation.items()) for relation in relations})]
 
 
 def build(
@@ -303,7 +298,7 @@ def build(
     step_by_path = {
         str(item["path"]): str(cluster["id"])
         for cluster in all_clusters
-        for item in cluster["files"]
+        for item in cast(list[dict[str, object]], cluster["files"])
     }
     relationships = [
         {
@@ -337,18 +332,20 @@ def build(
         },
         "statistics": {
             "files": len(files),
-            "hunks": sum(len(item["hunks"]) for item in files),
-            "additions": sum(int(item["additions"]) for item in files),
-            "deletions": sum(int(item["deletions"]) for item in files),
+            "hunks": sum(len(cast(list[object], item["hunks"])) for item in files),
+            "additions": sum(cast(int, item["additions"]) for item in files),
+            "deletions": sum(cast(int, item["deletions"]) for item in files),
         },
         "clusters": selected,
         "relationships": relationships,
         "coverage": {
             "files_total": len(files),
-            "files_clustered": sum(len(cluster["files"]) for cluster in selected),
+            "files_clustered": sum(
+                len(cast(list[object], cluster["files"])) for cluster in selected
+            ),
             "complete": chunk_index is None,
             "uncovered_files": len(files)
-            - sum(len(cluster["files"]) for cluster in selected),
+            - sum(len(cast(list[object], cluster["files"])) for cluster in selected),
             "chunks": len(chunks),
             "chunk_size": chunk_size,
             "chunk_index": chunk_index,
@@ -358,7 +355,9 @@ def build(
                 "index": index,
                 "step_ids": [str(cluster["id"]) for cluster in chunk],
                 "files": [
-                    str(item["path"]) for cluster in chunk for item in cluster["files"]
+                    str(item["path"])
+                    for cluster in chunk
+                    for item in cast(list[dict[str, object]], cluster["files"])
                 ],
             }
             for index, chunk in enumerate(chunks)
@@ -368,7 +367,12 @@ def build(
             for reason, paths in sorted(attention.items())
         ],
         "chronology": [
-            {"path": str(item["path"]), "commits": run_git(repo, "log", "--format=%H %s", "-5", "--", str(item["path"])).splitlines()}
+            {
+                "path": str(item["path"]),
+                "commits": run_git(
+                    repo, "log", "--format=%H %s", "-5", "--", str(item["path"])
+                ).splitlines(),
+            }
             for item in files
         ],
     }
@@ -400,14 +404,8 @@ def main(argv: list[str] | None = None) -> int:
     ):
         return 0
     arguments = arguments_parser.parse_args(argv)
-    if (
-        arguments.chunk_size < 1
-        or arguments.chunk_index is not None
-        and arguments.chunk_index < 0
-    ):
-        arguments_parser.error(
-            "chunk size must be positive and chunk index must not be negative"
-        )
+    if arguments.chunk_size < 1 or arguments.chunk_index is not None and arguments.chunk_index < 0:
+        arguments_parser.error("chunk size must be positive and chunk index must not be negative")
     try:
         repo = repository_root(arguments.repo_root)
         diff_range = arguments.diff_range

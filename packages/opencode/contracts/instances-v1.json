@@ -1,0 +1,105 @@
+{
+  "critic-report-v1.schema.json": {
+    "critic_report": {
+      "schema_version": 1,
+      "status": "APPROVED",
+      "card_id": "contract-card",
+      "revision": 1,
+      "findings": [],
+      "evidence": ["tests/test_json_schemas.py"],
+      "unrun_checks": [],
+      "risks": []
+    }
+  },
+  "execution-card-v1.schema.json": {
+    "schema_version": 1,
+    "status": "READY",
+    "card_id": "contract-card",
+    "revision": 1,
+    "objective": "Validate the committed contract examples.",
+    "evidence": ["packages/opencode/contracts/instances-v1.json"],
+    "changed_behavior": ["Contract examples are checked by both validators."],
+    "risks": ["Schema and runtime validation could drift."],
+    "write_set": ["packages/opencode/contracts/instances-v1.json"],
+    "control_markers": [
+      { "path": "packages/opencode/contracts/instances-v1.json", "expected_absent": true }
+    ],
+    "decisions": ["Use one shared set of concrete examples."],
+    "steps": [{ "path": "packages/opencode/contracts/instances-v1.json", "operation": "validate" }],
+    "acceptance_criteria": ["Every committed OpenCode schema accepts its example."],
+    "checks": ["task check"],
+    "operations": [
+      {
+        "kind": "write",
+        "command": "validate contract examples",
+        "path": "packages/opencode/contracts/instances-v1.json"
+      },
+      {
+        "kind": "check",
+        "command": "task check",
+        "path": "packages/opencode/contracts/instances-v1.json"
+      },
+      { "kind": "commit", "command": "git commit", "confirmation_ref": "execution" },
+      { "kind": "rebase", "command": "git rebase", "confirmation_ref": "history" },
+      { "kind": "push", "command": "git push", "confirmation_ref": "publication" },
+      { "kind": "merge", "command": "merge pull request", "confirmation_ref": "publication" },
+      { "kind": "tag", "command": "git tag", "confirmation_ref": "publication" },
+      { "kind": "release", "command": "publish release", "confirmation_ref": "publication" }
+    ],
+    "confirmations": {
+      "execution": "execution",
+      "publication": "publication",
+      "history_rewrite": "history"
+    },
+    "boundaries": {
+      "scope": "repository",
+      "forbidden_paths": ["packages/opencode/contracts/forbidden.json"]
+    }
+  },
+  "mapper-report-v1.schema.json": {
+    "mapper_report": {
+      "schema_version": 1,
+      "paths": [{ "path": "packages/opencode/contracts" }],
+      "callers": [{ "path": "packages/opencode/test/package.test.mjs" }],
+      "tests": [{ "path": "tests/test_json_schemas.py" }],
+      "patterns": [{ "name": "committed-example" }],
+      "evidence_gaps": []
+    }
+  },
+  "review-report-v1.schema.json": {
+    "review_report": {
+      "schema_version": 1,
+      "status": "APPROVED",
+      "target": "packages/opencode/contracts/instances-v1.json",
+      "findings": [],
+      "evidence": ["tests/test_json_schemas.py"],
+      "checks": ["task check"],
+      "risks": []
+    }
+  },
+  "routing-receipt-v1.schema.json": {
+    "schema_version": 1,
+    "task_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "requirements_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "destination": "implementation",
+    "agent": "worker",
+    "card_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "card_revision": 1,
+    "host_inventory_revision": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "expires_at": "2099-01-01T00:00:00Z",
+    "nonce": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "receipt_digest": "918041d4e37af855df0e16fab7b4032fba2dcee4f5b5a273896c93bfce627fc7"
+  },
+  "worker-report-v1.schema.json": {
+    "worker_report": {
+      "schema_version": 1,
+      "status": "COMPLETED",
+      "card_id": "contract-card",
+      "revision": 1,
+      "changed_files": ["packages/opencode/contracts/instances-v1.json"],
+      "checks": [{ "command": "task check", "status": "passed" }],
+      "writes_performed": true,
+      "risks": []
+    }
+  }
+}

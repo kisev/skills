@@ -4,6 +4,31 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.2.1] - 2026-09-14
+
+### Added
+
+- Root agent guidance, pull request ownership and review templates, exhaustive
+  JSON Schema validation with concrete instances, and locked dependency audits.
+- Exact cross-channel release manifests, npm registry smoke checks, signature and
+  SLSA provenance verification, and automated GitHub Release creation.
+
+### Changed
+
+- CI now runs independent specification, static, Python, portable-distribution,
+  evaluation, package, and secret-scanning gates with one stable aggregate check.
+- One tag workflow performs the complete preflight before publishing the exact
+  Pages and npm artifacts and verifies both channels after publication.
+- Strict Python typing and formatting now cover maintained skill-local runners
+  and all previously excluded maintained source files.
+
+### Fixed
+
+- Canonical pytest discovery now includes the 41 Mattermost-local regression
+  tests, and pre-commit checks handle deletions, schemas, specs, and toolchain files.
+- Ordinary push CI no longer runs on release tags, removing the historical tag
+  specification-range failure mode.
+
 ## [2.2.0] - 2026-09-14
 
 ### Added

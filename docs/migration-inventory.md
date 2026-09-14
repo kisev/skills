@@ -5,9 +5,9 @@
 ## Current Release
 
 The current portable source is the GitHub Pages stable channel at
-`https://kisev.github.io/skills`. Its release metadata identifies `2.2.0` and
-the commit tagged `v2.2.0`. The optional integration package is
-`@kisev/skills-opencode@2.2.0`.
+`https://kisev.github.io/skills`. Its release metadata identifies `2.2.1` and
+the commit tagged `v2.2.1`. The optional integration package is
+`@kisev/skills-opencode@2.2.1`.
 
 ## Active Portable Skills
 
@@ -30,16 +30,16 @@ byte-for-byte.
 The current migration inventory has exactly these eight portable records. It
 does not contain a portable `multi-run` record.
 
-| Retired name | Current replacement |
-| --- | --- |
-| `attempt` | None |
-| `schedule` | None |
-| `usage` | None |
-| `overview` | None |
-| `project-spec` | `spec-manage` |
-| `skill-improver` | `skill-improve` |
-| `walkthrough` | `code-explain` |
-| `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
+| Retired name     | Current replacement                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------ |
+| `attempt`        | None                                                                                             |
+| `schedule`       | None                                                                                             |
+| `usage`          | None                                                                                             |
+| `overview`       | None                                                                                             |
+| `project-spec`   | `spec-manage`                                                                                    |
+| `skill-improver` | `skill-improve`                                                                                  |
+| `walkthrough`    | `code-explain`                                                                                   |
+| `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 
 The `skills` CLI `update` operation does not prune renamed or deleted skills.
 Cleanup removes these exact names explicitly with pinned `skills@1.5.23` and the

@@ -43,6 +43,9 @@ copied LSP catalog are generated only into
 `package:check` itself runs `npm ci`, Prettier, oxlint, tsc, Node tests,
 generated-assets drift, smoke through pinned OpenCode, and the npm-pack
 allowlist. An ordinary check does not need separate npm commands.
+`dependency:audit` checks the locked Python and npm dependency graphs. Lefthook
+runs it after the complete quality gate before push; it remains separate from
+ordinary CI because it depends on live vulnerability services.
 
 If an executable is missing, run `mise current` after installation. If
 `uv run --locked` reports drift, deliberately change the pin in `pyproject.toml`
@@ -80,8 +83,9 @@ lefthook install
 ```
 
 `pre-commit` invokes `task pre-commit` and selects fast non-mutating checks by
-staged paths. `pre-push` invokes full `task check`. Hooks do not apply fixes or
-run `git add`.
+staged and deleted paths, including schemas, specs, and toolchain metadata.
+`pre-push` invokes full `task check` followed by `task dependency:audit`. Hooks
+do not apply fixes or run `git add`.
 
 Use English for code, comments, and commit messages; user documentation follows
 the language of its existing section. Preserve machine tokens exactly.
@@ -96,6 +100,8 @@ checks run, and deliberately omitted checks in a pull request.
 Portable-skill versions are fixed in their metadata. The Pages distribution,
 `@kisev/skills-opencode` version, tag, and GitHub Release must refer to one
 commit. Do not change a published version: release a new patch version instead.
-A tag push independently deploys Pages through `.github/workflows/pages.yml` and
-publishes npm through `.github/workflows/publish.yml`; both verify the same
-version and revision. npm publishing uses trusted publishing through OIDC.
+A tag push starts the single `.github/workflows/publish.yml` release workflow.
+It runs the full quality gate before publishing, builds one exact npm tarball and
+a cross-channel digest manifest, publishes and verifies Pages and npm, and only
+then creates the GitHub Release. npm publishing uses trusted publishing through
+OIDC and verifies the registry tarball, imports, CLI, signatures, and provenance.

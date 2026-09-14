@@ -5,7 +5,8 @@
   exact build destinations.
 - `packages/skills/`, `build_skills.py`, and `build_distribution.py` define the
   private build and public Pages distribution boundary.
-- `.github/workflows/pages.yml` validates release provenance and deploys Pages.
+- `.github/workflows/publish.yml` gates, builds, publishes, and verifies both
+  release channels before creating the GitHub Release.
 - `packages/opencode/src/` contains catalog, registry, plugins, routing, tools,
   installer, profiles, lifecycle, and state adapters.
 - `packages/opencode/test/` contains package lifecycle and security contracts.

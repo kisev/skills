@@ -14,7 +14,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 
 def _bootstrap() -> None:
@@ -25,12 +25,20 @@ def _bootstrap() -> None:
 
 _bootstrap()
 
-from portable_runtime.capabilities import emit_capabilities
-from portable_runtime.contract import (
-    ContractArgumentParser,
-    emit_escalation,
-    report_error,
-)
+if TYPE_CHECKING:
+    from shared.references.python_runtime.capabilities import emit_capabilities
+    from shared.references.python_runtime.contract import (
+        ContractArgumentParser,
+        emit_escalation,
+        report_error,
+    )
+else:
+    from portable_runtime.capabilities import emit_capabilities
+    from portable_runtime.contract import (
+        ContractArgumentParser,
+        emit_escalation,
+        report_error,
+    )
 
 
 class ToolUnavailable(Exception):
@@ -134,9 +142,7 @@ def rewrite_paths(values: list[str], workspace: Path) -> list[str]:
         try:
             resolved.relative_to(workspace)
         except ValueError as error:
-            raise ValueError(
-                f"rewrite input path is outside workspace: {raw}"
-            ) from error
+            raise ValueError(f"rewrite input path is outside workspace: {raw}") from error
         if candidate.is_symlink():
             raise ValueError(f"rewrite input path is a symlink: {raw}")
         if not resolved.exists():
@@ -159,9 +165,7 @@ def apply_changes(original: bytes, changes: list[dict[str, Any]]) -> bytes:
 def preview(arguments: Any) -> dict[str, Any]:
     workspace = workspace_path(arguments.workspace)
     targets = rewrite_paths(arguments.paths, workspace)
-    matches = run_ast_grep(
-        arguments.lang, arguments.pattern, targets, arguments.rewrite
-    )
+    matches = run_ast_grep(arguments.lang, arguments.pattern, targets, arguments.rewrite)
     changes: list[dict[str, Any]] = []
     for item in matches:
         target = checked_target(str(item.get("file", "")), workspace)
@@ -187,13 +191,9 @@ def preview(arguments: Any) -> dict[str, Any]:
                 "original_sha256": hashlib.sha256(original).hexdigest(),
             }
         )
-    changes.sort(
-        key=lambda item: (str(item["file"]), int(item["start"]), int(item["end"]))
-    )
+    changes.sort(key=lambda item: (str(item["file"]), int(item["start"]), int(item["end"])))
     for previous, current in itertools.pairwise(changes):
-        if previous["file"] == current["file"] and int(previous["end"]) > int(
-            current["start"]
-        ):
+        if previous["file"] == current["file"] and int(previous["end"]) > int(current["start"]):
             raise ValueError("overlapping AST rewrites are not supported")
     grouped: dict[str, list[dict[str, Any]]] = {}
     for change in changes:
@@ -241,9 +241,7 @@ def atomic_replace(updates: list[tuple[Path, bytes]]) -> None:
             candidate.write_bytes(content)
             candidate.chmod(stat.S_IMODE(path.stat().st_mode))
             staged.append(candidate)
-        for index, ((path, _content), candidate) in enumerate(
-            zip(updates, staged, strict=True)
-        ):
+        for index, ((path, _content), candidate) in enumerate(zip(updates, staged, strict=True)):
             backup = stage / f"backup-{index}"
             os.replace(path, backup)
             try:
@@ -281,9 +279,7 @@ def apply_preview(document: dict[str, Any], expected: str) -> None:
             hashlib.sha256(original).hexdigest() != str(change["original_sha256"])
             for change in changes
         ):
-            raise ValueError(
-                f"digest_mismatch: rewrite target changed after preview: {path}"
-            )
+            raise ValueError(f"digest_mismatch: rewrite target changed after preview: {path}")
         updates.append((path, apply_changes(original, changes)))
     atomic_replace(updates)
 
@@ -306,9 +302,7 @@ def main(argv: list[str] | None = None) -> int:
         if arguments.command == "search":
             print(
                 json.dumps(
-                    run_ast_grep(
-                        arguments.lang, arguments.pattern, arguments.paths or ["."]
-                    ),
+                    run_ast_grep(arguments.lang, arguments.pattern, arguments.paths or ["."]),
                     ensure_ascii=False,
                     sort_keys=True,
                 )
@@ -339,9 +333,7 @@ def main(argv: list[str] | None = None) -> int:
     except (OSError, TypeError, ValueError, UnicodeError) as error:
         message = str(error)
         report_error(
-            "digest_mismatch"
-            if message.startswith("digest_mismatch:")
-            else "ast_grep_error",
+            "digest_mismatch" if message.startswith("digest_mismatch:") else "ast_grep_error",
             message.removeprefix("digest_mismatch: ").strip(),
         )
         return 2

@@ -226,9 +226,7 @@ def datetime_millis_ceiling(value: datetime) -> int:
     epoch = datetime(1970, 1, 1, tzinfo=UTC)
     delta = value.astimezone(UTC) - epoch
     return (
-        delta.days * 24 * 60 * 60 * 1000
-        + delta.seconds * 1000
-        + (delta.microseconds + 999) // 1000
+        delta.days * 24 * 60 * 60 * 1000 + delta.seconds * 1000 + (delta.microseconds + 999) // 1000
     )
 
 
@@ -385,9 +383,7 @@ def validate_chat_type(channel: dict[str, Any], route: str | None) -> None:
         raise MattermostError("Mattermost chat URL resolved to a different channel type")
 
 
-def resolve_channel(
-    client: Client, target: dict[str, str | None], user_id: str
-) -> dict[str, Any]:
+def resolve_channel(client: Client, target: dict[str, str | None], user_id: str) -> dict[str, Any]:
     team = identifier(target["team"], "team")
     channel_value = target["channel"]
     channel = (
@@ -434,10 +430,7 @@ def resolve_channel(
         return resolved
 
     direct_parts = channel.split("__")
-    if (
-        len(direct_parts) == 2
-        and all(MATTERMOST_ID.fullmatch(part) for part in direct_parts)
-    ):
+    if len(direct_parts) == 2 and all(MATTERMOST_ID.fullmatch(part) for part in direct_parts):
         matches = [
             item
             for item in user_team_channels(client, user_id, team_id)
@@ -515,9 +508,7 @@ class CacheStore:
     def _initialize(self) -> None:
         version = int(self.database.execute("PRAGMA user_version").fetchone()[0])
         if version not in {0, CACHE_SCHEMA_VERSION}:
-            raise CacheError(
-                f"Mattermost cache schema {version} is unsupported; clear the cache"
-            )
+            raise CacheError(f"Mattermost cache schema {version} is unsupported; clear the cache")
         if version == 0:
             self.database.execute("DROP TABLE IF EXISTS snapshots_v2")
             self.database.execute("DROP TABLE IF EXISTS posts_v3")
@@ -640,9 +631,7 @@ class CacheStore:
             raise CacheError("Mattermost cache contains invalid post JSON") from exc
         if not isinstance(value, dict):
             raise CacheError("Mattermost cache contains an invalid post")
-        post_id, channel_id, root_id, create_at, activity_at, _payload = cls._cacheable_post(
-            value
-        )
+        post_id, channel_id, root_id, create_at, activity_at, _payload = cls._cacheable_post(value)
         expected = (
             str(row["post_id"]),
             str(row["channel_id"]),
@@ -752,10 +741,7 @@ class CacheStore:
                 """,
                 (self.origin, self.user_id, *post_ids),
             ).fetchall()
-            found = {
-                str(row["post_id"]): self._decoded_post(row, checked_at)
-                for row in rows
-            }
+            found = {str(row["post_id"]): self._decoded_post(row, checked_at) for row in rows}
             return [found[post_id] for post_id in post_ids if post_id in found]
         except (ValueError, TypeError, sqlite3.Error) as exc:
             if isinstance(exc, CacheError):
@@ -781,9 +767,7 @@ class CacheStore:
                 """,
                 (self.origin, self.user_id, channel_id, since_ms, until_ms),
             ).fetchall()
-            return [
-                self._decoded_post(row, checked_at) for row in rows
-            ]
+            return [self._decoded_post(row, checked_at) for row in rows]
         except (ValueError, TypeError, sqlite3.Error) as exc:
             if isinstance(exc, CacheError):
                 raise
@@ -982,7 +966,9 @@ class CacheStore:
             if (
                 not isinstance(post_ids, list)
                 or len(post_ids) != len(set(post_ids))
-                or not all(isinstance(item, str) and IDENTIFIER.fullmatch(item) for item in post_ids)
+                or not all(
+                    isinstance(item, str) and IDENTIFIER.fullmatch(item) for item in post_ids
+                )
             ):
                 raise CacheError("Mattermost cache contains an invalid thread snapshot")
             posts = self.posts_by_ids(post_ids, current_ms)
@@ -1130,7 +1116,9 @@ def read_reactions(
     for post in posts:
         clean = safe_post(post)
         try:
-            value = client.get(f"/posts/{urllib.parse.quote(identifier(post['id'], 'post ID'), safe='')}/reactions")
+            value = client.get(
+                f"/posts/{urllib.parse.quote(identifier(post['id'], 'post ID'), safe='')}/reactions"
+            )
             if not isinstance(value, list):
                 raise MattermostError("Mattermost reaction response is malformed")
             clean["reactions"] = [
@@ -1144,7 +1132,13 @@ def read_reactions(
             raise
         except MattermostError:
             complete = False
-            errors.append(error_item("reactions_unavailable", "Mattermost reactions could not be fully read", retryable=True))
+            errors.append(
+                error_item(
+                    "reactions_unavailable",
+                    "Mattermost reactions could not be fully read",
+                    retryable=True,
+                )
+            )
             clean["reactions"] = []
         result.append(clean)
     return result, complete, errors
@@ -1227,9 +1221,7 @@ def read_post(
         )
         if cached is not None:
             posts, age = cached
-            posts, malformed = scoped_thread_posts(
-                posts, root_id, post["id"], post["channel_id"]
-            )
+            posts, malformed = scoped_thread_posts(posts, root_id, post["id"], post["channel_id"])
             if malformed:
                 raise CacheError("Mattermost cache contains an invalid thread snapshot")
             posts = [post if item["id"] == post["id"] else item for item in posts]
@@ -1239,9 +1231,7 @@ def read_post(
     try:
         thread = client.get(f"/posts/{urllib.parse.quote(root_id, safe='')}/thread")
         posts, malformed = thread_response_posts(thread)
-        posts, scope_malformed = scoped_thread_posts(
-            posts, root_id, post["id"], post["channel_id"]
-        )
+        posts, scope_malformed = scoped_thread_posts(posts, root_id, post["id"], post["channel_id"])
         malformed = malformed or scope_malformed
         if not any(item.get("id") == post["id"] for item in posts):
             posts.append(post)
@@ -1441,15 +1431,11 @@ def cached_channel_posts(
                 channel_id,
                 segment_since,
                 segment_until,
-                fetched_after=(
-                    None if stable else current_ms - CACHE_TTL_SECONDS * 1000
-                ),
+                fetched_after=(None if stable else current_ms - CACHE_TTL_SECONDS * 1000),
                 current_ms=current_ms,
             )
         if covered and cache is not None:
-            cached = cache.posts_between(
-                channel_id, segment_since, segment_until, current_ms
-            )
+            cached = cache.posts_between(channel_id, segment_since, segment_until, current_ms)
             for post in cached:
                 selected[post["id"]] = post
                 cached_ids.add(post["id"])
@@ -1459,9 +1445,7 @@ def cached_channel_posts(
             continue
 
         if cache is not None and write_cache and not read_cache:
-            cache.invalidate_coverage(
-                channel_id, segment_since, segment_until, current_ms
-            )
+            cache.invalidate_coverage(channel_id, segment_since, segment_until, current_ms)
         posts, segment_complete, segment_pages, segment_errors, segment_warnings = read_channel(
             client,
             channel,
@@ -1563,10 +1547,12 @@ def add_context_roots(
                     if isinstance((value := candidate.get(key)), int)
                 )
                 if (
-                    activity <= current_ms - CACHE_STABLE_AGE_SECONDS * 1000
-                    or fetched_at >= current_ms - CACHE_TTL_SECONDS * 1000
-                ) and candidate.get("channel_id") == expected_channels[root_id] and not candidate.get(
-                    "root_id"
+                    (
+                        activity <= current_ms - CACHE_STABLE_AGE_SECONDS * 1000
+                        or fetched_at >= current_ms - CACHE_TTL_SECONDS * 1000
+                    )
+                    and candidate.get("channel_id") == expected_channels[root_id]
+                    and not candidate.get("root_id")
                 ):
                     root = candidate
                     root_from_cache = True
@@ -1770,9 +1756,7 @@ def read_one(
             warnings.extend(root_warnings)
             complete = complete and roots_complete
             if not roots_complete and cache is not None and write_cache:
-                cache.invalidate_coverage(
-                    str(access_channel["id"]), since_ms, until_ms, current_ms
-                )
+                cache.invalidate_coverage(str(access_channel["id"]), since_ms, until_ms, current_ms)
             cache_hit = cache_hit or cached_roots > 0
             ages = [age for age in (cache_age, root_cache_age) if age is not None]
             posts, reactions_complete, reaction_errors = enrich_posts(
@@ -2040,8 +2024,7 @@ def cookie_matches_host(cookie: dict[str, Any], hostname: str) -> bool:
     raw_domain = str(cookie.get("domain") or "").lower()
     domain = raw_domain.lstrip(".")
     return bool(domain) and (
-        hostname == domain
-        or (raw_domain.startswith(".") and hostname.endswith(f".{domain}"))
+        hostname == domain or (raw_domain.startswith(".") and hostname.endswith(f".{domain}"))
     )
 
 
@@ -2100,12 +2083,20 @@ def agent_browser_token(origin: str) -> str:
     """Use the explicitly consented host adapter without exposing credentials."""
     try:
         opened = subprocess.run(
-            ["agent-browser", "open", origin], capture_output=True, check=False, text=True, timeout=30
+            ["agent-browser", "open", origin],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=30,
         )
         if opened.returncode != 0:
             raise MattermostError("agent-browser could not open the exact origin")
         cookies = subprocess.run(
-            ["agent-browser", "cookies", "--json"], capture_output=True, check=False, text=True, timeout=30
+            ["agent-browser", "cookies", "--json"],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=30,
         )
         if cookies.returncode != 0:
             raise MattermostError("agent-browser could not read browser cookies")
@@ -2281,8 +2272,7 @@ def main(argv: list[str] | None = None) -> int:
             complete = all(result["status"] == "ok" for result in results)
             authentication_required = any(
                 any(
-                    isinstance(error, dict)
-                    and error.get("code") == "authentication_required"
+                    isinstance(error, dict) and error.get("code") == "authentication_required"
                     for error in result_list(result, "errors")
                 )
                 for result in results
@@ -2307,7 +2297,15 @@ def main(argv: list[str] | None = None) -> int:
                     "external_mutations": False,
                 }
             )
-            return 0 if complete else 1 if status == "partial" else AUTH_REQUIRED if authentication_required else 2
+            return (
+                0
+                if complete
+                else 1
+                if status == "partial"
+                else AUTH_REQUIRED
+                if authentication_required
+                else 2
+            )
         if args.command == "members":
             result = collect_members(args.url)
             emit(result)

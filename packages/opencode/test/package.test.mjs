@@ -12,8 +12,21 @@ for (const variable of ["GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete process.env[v
 
 import plugin from "../dist/index.js";
 import { COMMAND_REGISTRY, renderCommand } from "../dist/registry.js";
-import { CATEGORIES, ExecutionCardLifecycle, RoutingGate, resolveRouting, validateExecutionCard } from "../dist/routing.js";
-import { worktreeCreate, worktreeRecover, worktreeRelease, worktreeStatus } from "../dist/runtime/worktree.js";
+import {
+  CATEGORIES,
+  ExecutionCardLifecycle,
+  RoutingGate,
+  resolveRouting,
+  validateExecutionCard,
+  validateRoutingReceipt,
+} from "../dist/routing.js";
+import { validateAgentReport } from "../dist/contracts.js";
+import {
+  worktreeCreate,
+  worktreeRecover,
+  worktreeRelease,
+  worktreeStatus,
+} from "../dist/runtime/worktree.js";
 import zedBell from "../dist/plugins/zed-bell.js";
 import { InstallerError, apply, preview } from "../dist/installer.js";
 import { renderReconcile } from "../dist/cli-output.js";
@@ -65,7 +78,10 @@ test("installer wizard names both command adapter groups and keeps defaults", ()
   assert.match(source, /Skill command adapters/);
   assert.match(source, /Package command adapters/);
   assert.match(source, /group\("Fixed agents", defaultSelection\(\).agents, 0\)/);
-  assert.match(source, /group\("Selectable plugins \(none selected by default\)", SELECTABLE_PLUGINS, 1\)/);
+  assert.match(
+    source,
+    /group\(\s*"Selectable plugins \(none selected by default\)",\s*SELECTABLE_PLUGINS,\s*1,?\s*\)/,
+  );
   assert.match(source, /--skill-commands/);
   assert.match(source, /--package-commands/);
 });
@@ -98,7 +114,6 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
     assert.match(output, /skills-opencode install --scope project --dry-run/);
     assert.match(output, /Apply the exact confirmation command/);
     assert.doesNotMatch(output, /\nApply:\n/);
-
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
@@ -166,7 +181,9 @@ test("blocked reconcile confirmation exits with code two", async () => {
     assert.equal(blockedPlan.confirmable, false);
     assert.equal(blockedPlan.confirmation_digest, undefined);
     assert.equal(blockedPlan.receipt_expires_at, undefined);
-    await assert.rejects(lstat(join(lifecycleRoot("project", project, home), "receipt.json")), { code: "ENOENT" });
+    await assert.rejects(lstat(join(lifecycleRoot("project", project, home), "receipt.json")), {
+      code: "ENOENT",
+    });
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
@@ -186,7 +203,10 @@ test("clean reconcile preview keeps exact Apply contract", async () => {
       confirmationCommand: `npm exec -- skills-opencode reconcile --scope project --confirm ${plan.digest}`,
     });
     assert.match(output, /Digest:/);
-    assert.match(output, /\nApply:\n  npm exec -- skills-opencode reconcile --scope project --confirm /);
+    assert.match(
+      output,
+      /\nApply:\n  npm exec -- skills-opencode reconcile --scope project --confirm /,
+    );
     assert.doesNotMatch(output, /Blocked:/);
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -232,6 +252,58 @@ function executionCard() {
     boundaries: { forbidden_paths: ["src/other.ts"], scope: "repository" },
   };
 }
+
+test("committed contract instances match runtime validators", () => {
+  const instances = JSON.parse(
+    readFileSync(join(PACKAGE, "contracts", "instances-v1.json"), "utf8"),
+  );
+  const card = instances["execution-card-v1.schema.json"];
+  const receiptWith = (change) => {
+    const { receipt_digest: _digest, ...base } = instances["routing-receipt-v1.schema.json"];
+    const changed = { ...base, ...change };
+    return {
+      ...changed,
+      receipt_digest: createHash("sha256")
+        .update(JSON.stringify(Object.fromEntries(Object.entries(changed).sort())))
+        .digest("hex"),
+    };
+  };
+  assert.equal(validateExecutionCard(card).valid, true);
+  assert.equal(validateRoutingReceipt(instances["routing-receipt-v1.schema.json"]).agent, "worker");
+  assert.equal(
+    validateRoutingReceipt(receiptWith({ expires_at: "2099-01-01t00:00:00z" })).agent,
+    "worker",
+  );
+  assert.throws(
+    () => validateRoutingReceipt(receiptWith({ expires_at: "2099-02-30T00:00:00Z" })),
+    /malformed/,
+  );
+  assert.throws(
+    () =>
+      validateRoutingReceipt({
+        ...instances["routing-receipt-v1.schema.json"],
+        host_inventory_revision: "not-a-digest",
+      }),
+    /malformed/,
+  );
+  for (const change of [
+    { task_digest: "not-a-digest" },
+    { requirements_digest: "not-a-digest" },
+    { card_digest: "not-a-digest" },
+    { nonce: "too-short" },
+    { expires_at: "January 1, 2099" },
+    { unexpected: true },
+  ]) {
+    assert.throws(
+      () => validateRoutingReceipt({ ...instances["routing-receipt-v1.schema.json"], ...change }),
+      /malformed/,
+    );
+  }
+  validateAgentReport("mapper", instances["mapper-report-v1.schema.json"]);
+  validateAgentReport("worker", instances["worker-report-v1.schema.json"], card);
+  validateAgentReport("review", instances["review-report-v1.schema.json"]);
+  validateAgentReport("critic", instances["critic-report-v1.schema.json"], card);
+});
 
 async function install(scope, cwd, home) {
   const plan = await preview("install", scope, cwd, home);
@@ -1365,8 +1437,19 @@ test("package catalog and doctor tools are strictly observational", async () => 
   const hooks = await plugin({});
   const catalog = JSON.parse(await hooks.tool.capabilities.execute({}, { sessionID: "bound" }));
   const doctor = JSON.parse(await hooks.tool.doctor.execute({}, { sessionID: "bound" }));
-  assert.deepEqual(catalog.package_commands, ["capabilities", "doctor", "reconcile", "agent-profiles"]);
-  assert.deepEqual(catalog.tools, ["capabilities", "route", "doctor", "agent_profiles", "reconcile"]);
+  assert.deepEqual(catalog.package_commands, [
+    "capabilities",
+    "doctor",
+    "reconcile",
+    "agent-profiles",
+  ]);
+  assert.deepEqual(catalog.tools, [
+    "capabilities",
+    "route",
+    "doctor",
+    "agent_profiles",
+    "reconcile",
+  ]);
   assert.equal(doctor.mutations, false);
   assert.ok(!catalog.skills.includes("agent-profiles"));
 });
@@ -1374,7 +1457,7 @@ test("package catalog and doctor tools are strictly observational", async () => 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
   const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
   assert.equal(packageJson.name, "@kisev/skills-opencode");
-  assert.equal(packageJson.version, "2.2.0");
+  assert.equal(packageJson.version, "2.2.1");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.type, "git");
   assert.equal(packageJson.repository.url, "git+https://github.com/kisev/skills.git");

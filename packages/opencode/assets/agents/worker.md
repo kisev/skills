@@ -59,7 +59,18 @@ worker's own delta to equal write_set. Status is only COMPLETED, BLOCKED, FAILED
 or REJECTED_PLAN; COMPLETED requires every check.
 
 ```json
-{"worker_report":{"schema_version":1,"status":"COMPLETED","card_id":"...","revision":1,"changed_files":["..."],"checks":[{"command":"...","status":"passed"}],"writes_performed":true,"risks":["..."]}}
+{
+  "worker_report": {
+    "schema_version": 1,
+    "status": "COMPLETED",
+    "card_id": "...",
+    "revision": 1,
+    "changed_files": ["..."],
+    "checks": [{ "command": "...", "status": "passed" }],
+    "writes_performed": true,
+    "risks": ["..."]
+  }
+}
 ```
 
 Do not delegate work or expand scope. Do not commit, rebase, push, merge, tag, or

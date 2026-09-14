@@ -510,9 +510,19 @@ def thread_decisions_are_valid(value: object) -> bool:
         and all(nonempty_string(item.get(key)) for key in ("id", "url", "rationale"))
         and item.get("state") in {"open", "resolved", "plain"}
         and item.get("assessment")
-        in {"accepted", "fixed", "false_positive", "duplicate", "not_related", "question", "neutral"}
+        in {
+            "accepted",
+            "fixed",
+            "false_positive",
+            "duplicate",
+            "not_related",
+            "question",
+            "neutral",
+        }
         and item.get("outcome") in {"no_publication", "local_fix"}
-        and (item.get("proposed_response") is None or isinstance(item.get("proposed_response"), str))
+        and (
+            item.get("proposed_response") is None or isinstance(item.get("proposed_response"), str)
+        )
         for item in value
     )
 
@@ -724,11 +734,7 @@ def label_review_is_valid(value: object) -> bool:
     return (
         len(roles) == len(LABEL_ROLE_VALUES)
         and set(roles) == set(LABEL_ROLE_VALUES)
-        and all(
-            name in current
-            for item in typed_decisions
-            for name in item["current"]
-        )
+        and all(name in current for item in typed_decisions for name in item["current"])
         and all(name in current for name in remove)
         and all(name in value["proposed"] for name in add)
         and not set(add).intersection(remove)
@@ -1011,10 +1017,15 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 for key in ("hostname", "component_target_branch", "revision_range")
             )
             or not is_sha(payload["head_sha"])
-            or (payload["previous_ref"] is not None and not nonempty_string(payload["previous_ref"]))
+            or (
+                payload["previous_ref"] is not None and not nonempty_string(payload["previous_ref"])
+            )
             or not isinstance(payload["previous_ref_explicit"], bool)
             or not is_sha(payload["previous_sha"], nullable=True)
-            or (payload["previous_tag"] is not None and not isinstance(payload["previous_tag"], dict))
+            or (
+                payload["previous_tag"] is not None
+                and not isinstance(payload["previous_tag"], dict)
+            )
             or not all(
                 isinstance(payload[key], list)
                 for key in ("commits", "merge_requests", "direct_commits", "errors", "warnings")
@@ -1024,7 +1035,10 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not nonempty_string(payload["prepared_at"])
             or not isinstance(counts, dict)
             or set(counts) != {"commits", "merge_requests", "direct_commits", "errors", "warnings"}
-            or not all(isinstance(item, int) and not isinstance(item, bool) and item >= 0 for item in counts.values())
+            or not all(
+                isinstance(item, int) and not isinstance(item, bool) and item >= 0
+                for item in counts.values()
+            )
         ):
             raise WorkflowError("release inventory payload is schema-invalid")
     elif kind == "review_context":
@@ -1058,7 +1072,12 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or payload["role"] not in {"author", "reviewer"}
             or not all(
                 nonempty_string(payload[key])
-                for key in ("current_user_username", "mr_author_username", "artifact_root", "prepared_at")
+                for key in (
+                    "current_user_username",
+                    "mr_author_username",
+                    "artifact_root",
+                    "prepared_at",
+                )
             )
             or (payload["current_user_username"] == payload["mr_author_username"])
             != (payload["role"] == "author")
@@ -1076,7 +1095,10 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 "resolved_resolvable",
                 "plain_discussions",
             }
-            or not all(isinstance(item, int) and not isinstance(item, bool) and item >= 0 for item in counts.values())
+            or not all(
+                isinstance(item, int) and not isinstance(item, bool) and item >= 0
+                for item in counts.values()
+            )
             or not isinstance(exact_git, dict)
             or set(exact_git)
             != {"repo_root", "refs", "changed_paths", "diff_sha256", "complete", "errors"}
@@ -1107,10 +1129,14 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         actual_keys = set(payload)
         if profile == "release-prepare":
             expected_keys = required | release_fields
-            keys_valid = actual_keys == expected_keys or actual_keys == (expected_keys | label_fields)
+            keys_valid = actual_keys == expected_keys or actual_keys == (
+                expected_keys | label_fields
+            )
         elif profile == "mr-prepare":
             expected_keys = required
-            keys_valid = actual_keys == expected_keys or actual_keys == (expected_keys | label_fields)
+            keys_valid = actual_keys == expected_keys or actual_keys == (
+                expected_keys | label_fields
+            )
         else:
             expected_keys = required
             keys_valid = actual_keys == expected_keys
@@ -1640,11 +1666,7 @@ def pipeline_summary(bundle: dict[str, Any]) -> tuple[str, dict[str, Any] | None
     items = pipelines.get("items")
     if not isinstance(items, list):
         return "unverified: pipeline data invalid", None
-    exact = [
-        item
-        for item in items
-        if isinstance(item, dict) and item.get("sha") == head_sha
-    ]
+    exact = [item for item in items if isinstance(item, dict) and item.get("sha") == head_sha]
     if not exact:
         return "missing", None
     pipeline = exact[0]
@@ -1748,8 +1770,10 @@ def publication_markdown(
         raise WorkflowError("publication plan requires a semantic label review")
     current_title = object_value.get("title")
     current_description = object_value.get("description")
-    if not isinstance(current_title, str) or current_description is not None and not isinstance(
-        current_description, str
+    if (
+        not isinstance(current_title, str)
+        or current_description is not None
+        and not isinstance(current_description, str)
     ):
         raise WorkflowError("current title or description is invalid")
     current_description = current_description or ""
@@ -1856,9 +1880,7 @@ def scaffold(
             inventory_file, source
         )
         content_fields |= {"version", "announcement", "illustration_prompt"}
-    content_value = exact_keys(
-        read_json(Path(content_file), "content"), content_fields, "content"
-    )
+    content_value = exact_keys(read_json(Path(content_file), "content"), content_fields, "content")
     if not nonempty_string(content_value["title"]) or not isinstance(
         content_value["description"], str
     ):
@@ -1867,9 +1889,7 @@ def scaffold(
     if profile in {"mr-prepare", "release-prepare"}:
         if not label_intent_is_valid(content.get("label_intent")):
             raise WorkflowError("content requires a complete semantic label_intent object")
-        label_review = review_labels(
-            bundle, cast(dict[str, str | None], content["label_intent"])
-        )
+        label_review = review_labels(bundle, cast(dict[str, str | None], content["label_intent"]))
     if profile == "release-prepare":
         release_label_intent = cast(dict[str, str | None], content["label_intent"])
         if (
@@ -1898,9 +1918,11 @@ def scaffold(
                 }
             )
     markdown = publication_markdown(bundle, content, release_inventory, label_review)
-    complete = bool(bundle.get("retrieval_complete")) and (
-        release_inventory is None or release_inventory.get("complete") is True
-    ) and (label_review is None or label_review.get("complete") is True)
+    complete = (
+        bool(bundle.get("retrieval_complete"))
+        and (release_inventory is None or release_inventory.get("complete") is True)
+        and (label_review is None or label_review.get("complete") is True)
+    )
     payload: dict[str, Any] = {
         "profile": bundle.get("profile"),
         "external_mutations": False,
@@ -2038,8 +2060,8 @@ def plan_context(
             raise WorkflowError("release publication plan inventory digest is invalid")
         inventory_module = importlib.import_module("release_inventory")
         inventory_path = root / "artifacts" / "release_inventory" / f"{inventory_digest}.json"
-        _, release_inventory, actual_inventory_digest = (
-            inventory_module.validate_inventory_binding(inventory_path, source)
+        _, release_inventory, actual_inventory_digest = inventory_module.validate_inventory_binding(
+            inventory_path, source
         )
         if actual_inventory_digest != inventory_digest:
             raise WorkflowError("release inventory does not match the publication plan")
@@ -2054,8 +2076,7 @@ def plan_context(
             )
             if (
                 companion_path.read_bytes() != companion["content"].encode()
-                or hashlib.sha256(companion_path.read_bytes()).hexdigest()
-                != companion["sha256"]
+                or hashlib.sha256(companion_path.read_bytes()).hexdigest() != companion["sha256"]
             ):
                 raise WorkflowError("release publication companion does not match the plan")
     if (
@@ -2504,9 +2525,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 raise WorkflowError("provide exact --url target or --project-url, but not both")
             if args.project_url and profile != "task-prepare":
                 raise WorkflowError("project creation mode is only available for task preparation")
-            if profile in {"mr-prepare", "release-prepare", "code-review"} and len(
-                args.url or []
-            ) != 1:
+            if (
+                profile in {"mr-prepare", "release-prepare", "code-review"}
+                and len(args.url or []) != 1
+            ):
                 raise WorkflowError(f"{profile} accepts exactly one --url target")
             targets = (
                 [parse_target(value, expected) for value in args.url]
@@ -2783,9 +2805,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     "session_id"
                 ):
                     raise WorkflowError("critic receipt is not independent of the primary review")
-            if profile == "code-review" and not detailed_findings_are_valid(
-                report.get("findings")
-            ):
+            if profile == "code-review" and not detailed_findings_are_valid(report.get("findings")):
                 raise WorkflowError("review findings require complete structured evidence")
             validate_decision(report, evidence_digest, receipt, args.mode, context_digest)
             if report["finalize_digest"] != finalize_digest:

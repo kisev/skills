@@ -7,14 +7,20 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 scripts = Path(__file__).resolve().parent
 if str(scripts) not in sys.path:
     sys.path.insert(0, str(scripts))
 
-from portable_runtime.capabilities import emit_capabilities
-from portable_runtime.contract import ContractArgumentParser, report_error
-from portable_runtime.lsp import detect
+if TYPE_CHECKING:
+    from shared.references.python_runtime.capabilities import emit_capabilities
+    from shared.references.python_runtime.contract import ContractArgumentParser, report_error
+    from shared.references.python_runtime.lsp import detect
+else:
+    from portable_runtime.capabilities import emit_capabilities
+    from portable_runtime.contract import ContractArgumentParser, report_error
+    from portable_runtime.lsp import detect
 
 
 def parser() -> argparse.ArgumentParser:
@@ -27,8 +33,7 @@ def parser() -> argparse.ArgumentParser:
 
 def text(report: dict[str, object]) -> str:
     rows = [f"{report['project']}: catalog {report.get('catalog_version', 'unknown')}"]
-    for server in report["servers"]:  # type: ignore[index]
-        item = server  # type: ignore[assignment]
+    for item in cast(list[dict[str, object]], report["servers"]):
         rows.append(
             f"{item['name']}: applicability={item['applicability']}; "
             f"configuration={item['configuration']}; binary={item['binary']}; "
@@ -39,14 +44,20 @@ def text(report: dict[str, object]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     cli = parser()
-    if emit_capabilities(argv, cli, payload_version="1.0.0", mutation="read", supports_dry_run=False):
+    if emit_capabilities(
+        argv, cli, payload_version="1.0.0", mutation="read", supports_dry_run=False
+    ):
         return 0
     args = cli.parse_args(argv)
     report = detect(Path(args.project))
     if report["status"] == "error":
         report_error("invalid_project", str(report["error"]))
         return 2
-    print(json.dumps(report, ensure_ascii=False, sort_keys=True) if args.format == "json" else text(report))
+    print(
+        json.dumps(report, ensure_ascii=False, sort_keys=True)
+        if args.format == "json"
+        else text(report)
+    )
     return 0
 
 

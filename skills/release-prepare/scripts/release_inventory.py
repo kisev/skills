@@ -8,10 +8,13 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote as urlquote
 
-from portable_runtime import contract as portable
+if TYPE_CHECKING:
+    from shared.references.portable_gitlab import contract as portable
+else:
+    from portable_runtime import contract as portable
 
 DEFAULT_WORKERS = 8
 MAX_WORKERS = 32

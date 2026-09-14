@@ -36,3 +36,17 @@ files.
 
 The package shall preserve the declared OpenCode host range and shall fail safely
 when host capabilities, configuration, or state are unavailable or malformed.
+
+### REQ-Q-007 - Validate schema contracts
+
+Every committed JSON Schema shall pass its declared meta-schema and validate at
+least one concrete contract instance through a standards-compliant validator.
+Expressible runtime structure constraints shall remain aligned with the schema
+and shall reject the same malformed contract examples.
+
+### REQ-Q-008 - Verify release promotion
+
+Release promotion shall preserve the exact preflighted npm tarball and compare
+every deployed Pages file with the release manifest. Registry verification shall
+bind npm integrity, signatures, provenance, imports, and CLI behavior to the
+release revision before the GitHub Release is created.

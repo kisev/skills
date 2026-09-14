@@ -22,11 +22,7 @@ import { collectDoctorFacts, type DoctorHost } from "./doctor.js";
 import { CATALOG } from "./catalog.js";
 import { digest } from "./lifecycle.js";
 
-export {
-  rulesInjector,
-  rtk,
-  zedBell,
-};
+export { rulesInjector, rtk, zedBell };
 export type OpenCodeOptions = {
   rulesInjector?: RulesInjectorOptions;
   rtk?: RtkOptions;

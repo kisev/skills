@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -15,6 +16,7 @@ OPENCODE_PACKAGE = ROOT / "packages" / "opencode" / "package.json"
 OPENCODE_LOCK = ROOT / "packages" / "opencode" / "package-lock.json"
 CATALOG = ROOT / "packages" / "opencode" / "src" / "catalog.ts"
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
+CHANGELOG = ROOT / "CHANGELOG.md"
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
@@ -58,6 +60,7 @@ def validate(tag: str | None = None) -> dict[str, str]:
     versions = {
         "portable": portable,
         "opencode": opencode,
+        "opencode_lock_document": lock.get("version"),
         "opencode_lock": lock_root[""].get("version"),
         "catalog": catalog_version(),
     }
@@ -69,8 +72,20 @@ def validate(tag: str | None = None) -> dict[str, str]:
     version = normalized["portable"]
     if not SEMVER.fullmatch(version):
         raise ReleaseError(f"invalid release version: {version}")
+    if (
+        re.search(
+            rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}$",
+            CHANGELOG.read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
+        is None
+    ):
+        raise ReleaseError(f"CHANGELOG.md has no release heading for {version}")
 
     revision = git("rev-parse", "HEAD")
+    expected_revision = os.environ.get("RELEASE_REVISION")
+    if expected_revision is not None and expected_revision != revision:
+        raise ReleaseError("release environment revision does not match HEAD")
     release_index = read_json(DISTRIBUTION / "index.json")
     if release_index.get("version") != version:
         raise ReleaseError("Pages distribution version does not match release version")
@@ -85,6 +100,15 @@ def validate(tag: str | None = None) -> dict[str, str]:
             raise ReleaseError("release tag must be annotated")
         if git("rev-parse", f"refs/tags/{tag}^{{commit}}") != revision:
             raise ReleaseError("release tag does not reference HEAD")
+        stable_tags = [
+            value.removeprefix("v")
+            for value in git("tag", "--list", "v*").splitlines()
+            if SEMVER.fullmatch(value.removeprefix("v"))
+        ]
+        if stable_tags and tuple(map(int, version.split("."))) != max(
+            tuple(map(int, value.split("."))) for value in stable_tags
+        ):
+            raise ReleaseError("release tag is older than the latest stable tag")
         result = subprocess.run(
             ["git", "merge-base", "--is-ancestor", revision, "origin/main"],
             cwd=ROOT,
@@ -100,7 +124,7 @@ def validate(tag: str | None = None) -> dict[str, str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--tag")
+    parser.add_argument("--tag", default=os.environ.get("RELEASE_TAG"))
     args = parser.parse_args(argv)
     try:
         result = validate(args.tag)

@@ -26,8 +26,10 @@ CLI `skills-opencode` только для OpenCode integration. Maintainer scrip
 `packages/skills/package.json` является private version manifest portable
 distribution. `scripts/build_distribution.py` собирает GitHub Pages payload в
 `.build/packages/skills`: standard well-known index, release metadata и по одному
-content-addressed SHA-256 archive с root `SKILL.md` на skill. Push tag развёртывает
-этот payload по адресу `https://kisev.github.io/skills`.
+content-addressed SHA-256 archive с root `SKILL.md` на skill. Единый tag workflow
+выполняет полный gate, фиксирует hashes каждого Pages file и exact npm tarball,
+публикует оба канала, проверяет remote bytes и npm provenance и затем создаёт
+GitHub Release.
 
 ## Интеграция с host
 
@@ -99,6 +101,8 @@ forbidden paths, steps, checks, явные VCS operations и отдельные 
 - Source tree не меняется; build output заменяется только после полной подготовки.
 - `--check` сравнивает существующий artifact с clean staging и сообщает о drift.
 - Release checks связывают Pages version и source revision с exact tag.
+- Release publication продвигает только прошедшие preflight artifacts и проверяет
+  оба remote channel до создания GitHub Release.
 - Проверка work item сортирует findings по стабильному ключу и связывает report с
   digest item/evidence, поэтому неизменный повторный check даёт тот же verdict.
 - LSP applicability использует один machine-readable catalog, добавляемый в built

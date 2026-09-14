@@ -33,7 +33,29 @@ def fetch(url: str) -> bytes:
         return bytes(response.read())
 
 
-def verify(base_url: str, version: str, revision: str) -> int:
+def verify_manifest_files(base: str, manifest_path: Path) -> int:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    pages = manifest.get("pages") if isinstance(manifest, dict) else None
+    files = pages.get("files") if isinstance(pages, dict) else None
+    if not isinstance(files, dict) or not files:
+        raise VerificationError("release manifest has no Pages file inventory")
+    for path, expected in sorted(files.items()):
+        candidate = Path(path) if isinstance(path, str) else Path("/")
+        if (
+            not isinstance(path, str)
+            or candidate.is_absolute()
+            or ".." in candidate.parts
+            or not isinstance(expected, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected) is None
+        ):
+            raise VerificationError("release manifest contains an unsafe Pages entry")
+        content = fetch(urllib.parse.urljoin(base, urllib.parse.quote(path, safe="/")))
+        if hashlib.sha256(content).hexdigest() != expected:
+            raise VerificationError(f"deployed Pages file differs from release artifact: {path}")
+    return len(files)
+
+
+def verify(base_url: str, version: str, revision: str, manifest_path: Path | None = None) -> int:
     base = base_url.rstrip("/") + "/"
     release = json.loads(fetch(urllib.parse.urljoin(base, "index.json")))
     if release.get("version") != version or release.get("source_revision") != revision:
@@ -83,6 +105,8 @@ def verify(base_url: str, version: str, revision: str) -> int:
         names.add(name)
     if names != expected_names:
         raise VerificationError("deployed skills do not match the public inventory")
+    if manifest_path is not None:
+        verify_manifest_files(base, manifest_path)
     return len(names)
 
 
@@ -93,11 +117,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--revision", required=True)
     parser.add_argument("--attempts", type=int, default=1)
     parser.add_argument("--delay", type=float, default=5)
+    parser.add_argument("--manifest", type=Path)
     args = parser.parse_args(argv)
     error: Exception | None = None
     for attempt in range(max(args.attempts, 1)):
         try:
-            count = verify(args.base_url, args.version, args.revision)
+            count = verify(args.base_url, args.version, args.revision, args.manifest)
             print(f"verified {count} deployed skill archives at {args.base_url}")
             return 0
         except (

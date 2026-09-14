@@ -42,6 +42,8 @@
     "model_version": { "type": ["string", "null"] },
     "status": { "enum": ["passed", "failed", "blocked", "skipped", "incomplete", "error"] },
     "assertions": { "type": "array" },
+    "started_at": { "type": "integer", "minimum": 0 },
+    "duration_ms": { "type": "integer", "minimum": 0 },
     "usage": { "type": "object" },
     "evidence": { "type": "array" },
     "error": { "type": "object" },

@@ -24,8 +24,10 @@ skills never read `shared/`.
 `packages/skills/package.json` is the private version manifest for the portable
 distribution. `scripts/build_distribution.py` produces the GitHub Pages payload
 under `.build/packages/skills`: a standard well-known index, release metadata,
-and one content-addressed SHA-256 archive with root `SKILL.md` per skill. A tag
-push deploys that payload at `https://kisev.github.io/skills`.
+and one content-addressed SHA-256 archive with root `SKILL.md` per skill. The
+single tag workflow runs the complete gate, records hashes for every Pages file
+and the exact npm tarball, publishes both channels, verifies their remote bytes
+and npm provenance, then creates the GitHub Release.
 
 ## Host Integration
 
@@ -79,5 +81,7 @@ separate execution, publication, and history-rewrite confirmations.
   isolated output; source and destination symlinks are rejected.
 - Source is unchanged and output is replaced only after complete staging.
 - Release checks bind the Pages version and source revision to the exact tag.
+- Release publication promotes only preflighted artifacts and verifies both
+  remote channels before creating the GitHub Release.
 - Work-item findings have stable sort order and bind reports to item/evidence
   digests, so unchanged checks produce the same verdict.

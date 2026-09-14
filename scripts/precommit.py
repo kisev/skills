@@ -17,7 +17,7 @@ from collections.abc import Iterable, Sequence
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE_SOURCE_DIRS = ("assets", "scripts", "src", "test")
+PACKAGE_SOURCE_DIRS = ("assets", "contracts", "scripts", "src", "test")
 PACKAGE_METADATA = frozenset(
     {
         "packages/opencode/package.json",
@@ -27,6 +27,9 @@ PACKAGE_METADATA = frozenset(
 )
 WORKFLOW_FILES = frozenset({"lefthook.yml", "taskfile.yml", ".yamllint.yml"})
 PYTHON_ROOTS = ("scripts", "shared", "skills", "tests")
+TOOLCHAIN_FILES = frozenset({"mise.toml", "pyproject.toml", "tombi.toml", "uv.lock"})
+FORMAT_CONFIG_FILES = frozenset({".markdownlint-cli2.mjs", ".prettierignore", ".prettierrc.json"})
+MARKDOWNLINT_CONFIG_FILES = frozenset({".markdownlint-cli2.mjs"})
 GIT_LOCAL_ENV_VARS = frozenset(
     {
         "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -57,7 +60,7 @@ def _clean_git_env() -> dict[str, str]:
     return {key: value for key, value in os.environ.items() if key not in GIT_LOCAL_ENV_VARS}
 
 
-def staged_files() -> list[str]:
+def staged_files(diff_filter: str = "ACMT") -> list[str]:
     result = subprocess.run(
         [
             "git",
@@ -66,7 +69,8 @@ def staged_files() -> list[str]:
             "diff",
             "--cached",
             "--name-only",
-            "--diff-filter=ACM",
+            f"--diff-filter={diff_filter}",
+            "--no-renames",
             "-z",
         ],
         cwd=ROOT,
@@ -81,10 +85,15 @@ def classify(files: Iterable[str]) -> dict[str, list[str]]:
     groups: dict[str, list[str]] = {
         "docs": [],
         "data": [],
+        "format_config": [],
+        "markdownlint_config": [],
         "python": [],
         "python_tests": [],
         "skills": [],
         "package": [],
+        "schemas": [],
+        "specs": [],
+        "toolchain": [],
         "workflow": [],
     }
     for value in files:
@@ -95,9 +104,13 @@ def classify(files: Iterable[str]) -> dict[str, list[str]]:
             groups["docs"].append(path)
         if path.endswith(".json"):
             groups["data"].append(path)
+        if path in FORMAT_CONFIG_FILES:
+            groups["format_config"].append(path)
+        if path in MARKDOWNLINT_CONFIG_FILES:
+            groups["markdownlint_config"].append(path)
         if root in PYTHON_ROOTS and path.endswith(".py"):
             groups["python"].append(path)
-            if root == "tests":
+            if root == "tests" or "tests" in parts:
                 groups["python_tests"].append(path)
         if root in ("skills", "shared"):
             groups["skills"].append(path)
@@ -108,6 +121,12 @@ def classify(files: Iterable[str]) -> dict[str, list[str]]:
             and parts[2] in PACKAGE_SOURCE_DIRS
         ):
             groups["package"].append(path)
+        if path.endswith(".schema.json"):
+            groups["schemas"].append(path)
+        if root == "specs":
+            groups["specs"].append(path)
+        if path in TOOLCHAIN_FILES:
+            groups["toolchain"].append(path)
         if (root == ".github" and path.endswith((".yml", ".yaml"))) or path in WORKFLOW_FILES:
             groups["workflow"].append(path)
     return {name: sorted(paths) for name, paths in groups.items()}
@@ -158,18 +177,22 @@ def _base_env() -> dict[str, str]:
     return env
 
 
-def run(files: Sequence[str], *, dry_run: bool = False) -> int:
+def run(files: Sequence[str], *, deleted_files: Sequence[str] = (), dry_run: bool = False) -> int:
     groups = classify(files)
+    all_files = sorted(set(files) | set(deleted_files))
+    all_groups = classify(all_files)
     runner = _Runner(dry_run=dry_run, env=_base_env())
     if any(
-        path.startswith(
-            ("skills/", "shared/", "packages/opencode/", "packages/skills/", "schemas/")
-        )
-        for path in files
+        path.startswith(("skills/", "shared/", "packages/opencode/", "packages/skills/", "specs/"))
+        for path in all_files
     ):
         runner.call("spec:check", ["uv", "run", "--locked", "python", "scripts/check_specs.py"])
     runner.batch("docs", ["prettier", "--check"], groups["docs"])
     runner.batch("data", ["jq", "empty"], groups["data"])
+    if all_groups["format_config"]:
+        runner.call("format:check", ["task", "format:check"])
+    if all_groups["markdownlint_config"]:
+        runner.call("markdownlint", ["markdownlint-cli2"])
     runner.batch(
         "python:format",
         ["uv", "run", "--locked", "ruff", "format", "--check", "--force-exclude"],
@@ -180,11 +203,18 @@ def run(files: Sequence[str], *, dry_run: bool = False) -> int:
         ["uv", "run", "--locked", "ruff", "check", "--force-exclude"],
         groups["python"],
     )
-    if groups["python_tests"]:
+    if any(path in deleted_files for path in all_groups["python_tests"]):
+        runner.call("python:tests", ["uv", "run", "--locked", "pytest"])
+    elif groups["python_tests"]:
         runner.batch("python:tests", ["uv", "run", "--locked", "pytest"], groups["python_tests"])
-    if groups["skills"] or groups["docs"]:
+    if all_groups["schemas"]:
+        runner.call(
+            "schemas",
+            ["uv", "run", "--locked", "pytest", "tests/test_json_schemas.py"],
+        )
+    if all_groups["skills"] or all_groups["docs"]:
         runner.call("locales", ["uv", "run", "--locked", "python", "scripts/check_locales.py"])
-    if groups["skills"]:
+    if all_groups["skills"]:
         runner.call(
             "skills:build",
             ["uv", "run", "--locked", "python", "scripts/build_skills.py"],
@@ -198,9 +228,30 @@ def run(files: Sequence[str], *, dry_run: bool = False) -> int:
             "skills:tests",
             ["uv", "run", "--locked", "pytest", "tests/test_skill_contracts.py"],
         )
-    if groups["package"]:
+    if all_groups["package"]:
         runner.call("package", ["task", "package:check"])
-    if groups["workflow"]:
+    if any(path in {"pyproject.toml", "uv.lock"} for path in all_files):
+        runner.call("python:lock", ["uv", "lock", "--check"])
+    if any(path.endswith(".toml") for path in all_groups["toolchain"]):
+        runner.call(
+            "toolchain:toml-format",
+            [
+                "tombi",
+                "format",
+                "--offline",
+                "--check",
+                "mise.toml",
+                "pyproject.toml",
+                "tombi.toml",
+            ],
+        )
+        runner.call(
+            "toolchain:toml-lint",
+            ["tombi", "lint", "--offline", "mise.toml", "pyproject.toml", "tombi.toml"],
+        )
+    if "mise.toml" in all_files:
+        runner.call("toolchain:mise", ["mise", "ls", "--current", "--local"])
+    if all_groups["workflow"]:
         runner.batch("workflow:yaml", ["uv", "run", "--locked", "yamllint"], groups["workflow"])
         runner.call("workflow:actionlint", ["actionlint"])
         runner.call("workflow:lefthook", ["lefthook", "validate"])
@@ -212,8 +263,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print selected commands only")
     parser.add_argument("files", nargs="*", help="override staged files")
     args = parser.parse_args(argv)
-    files = args.files or staged_files()
-    return run(files, dry_run=args.dry_run)
+    if args.files:
+        files, deleted = args.files, []
+    else:
+        files, deleted = staged_files(), staged_files("D")
+    return run(files, deleted_files=deleted, dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

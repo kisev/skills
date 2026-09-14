@@ -40,6 +40,40 @@ tasks:
       - task: build:distribution
       - uv run --locked python scripts/check_release.py {{.CLI_ARGS}}
 
+  release:prepare:
+    desc: Run the full gate and build immutable release artifacts
+    cmds:
+      - task: ci:spec-impact
+      - task: check
+      - task: release:check
+      - uv run --locked python scripts/build_release_artifacts.py
+
+  release:npm:
+    desc: Publish or accept and verify the exact npm release artifact
+    cmds:
+      - uv run --locked python scripts/publish_npm_release.py
+
+  release:pages:verify:
+    desc: Verify the exact deployed Pages release artifact
+    cmds:
+      - >-
+        uv run --locked python scripts/verify_distribution_url.py "$PAGES_URL"
+        --version "${RELEASE_TAG#v}" --revision "$RELEASE_REVISION"
+        --attempts 24 --manifest .build/release/release.json
+
+  release:github:
+    desc: Create or verify the final GitHub Release
+    cmds:
+      - uv run --locked python scripts/create_github_release.py
+
+  dependency:audit:
+    desc: Audit locked Python and npm dependencies
+    cmds:
+      - >-
+        uv export --locked --all-groups --no-emit-project --format requirements.txt
+        | uv run --locked pip-audit --requirement /dev/stdin --disable-pip
+      - task: package:audit
+
   format:
     desc: Format canonical maintained sources and regenerate assets
     cmds:
@@ -83,7 +117,7 @@ tasks:
     cmds:
       - fd --hidden --type f --extension json --exclude node_modules --exclude dist --exec jq empty
       - >-
-        yq --exit-status '.' .github/workflows/ci.yml .github/workflows/pages.yml
+        yq --exit-status '.' .github/workflows/ci.yml .github/workflows/evals-live.yml
         .github/workflows/publish.yml
         lefthook.yml taskfile.yml .yamllint.yml >/dev/null
       - >-
@@ -204,23 +238,52 @@ tasks:
       - uv run --locked python scripts/eval_runner.py --validate
       - uv run --locked python scripts/eval_runner.py --offline
 
+  eval:live:
+    desc: Run an explicitly configured trusted live evaluation
+    cmds:
+      - >-
+        uv run --locked python scripts/eval_runner.py --trusted-live
+        --host "$EVAL_HOST" --model "$EVAL_MODEL" --timeout "$EVAL_TIMEOUT"
+        --max-tokens "$EVAL_MAX_TOKENS" --max-cost "$EVAL_MAX_COST"
+        --output evals/live/result.json
+
   security:
     desc: Scan the repository for committed secrets
     cmds:
       - gitleaks git --config .gitleaks.toml --redact --no-banner
       - gitleaks dir . --config .gitleaks.toml --redact --no-banner
 
-  check:
-    desc: Run the complete local and CI quality gate
+  ci:static:
+    desc: Run repository formatting, specification, lint, and Python type checks
     cmds:
       - task: format:repository:check
       - task: spec:check
       - task: lint:repository
       - task: typecheck:python
+
+  ci:python:
+    desc: Run repository and skill-local Python tests
+    cmds:
       - task: test:python
+
+  ci:portable:
+    desc: Validate portable skills and the Pages distribution
+    cmds:
       - task: locale:check
       - task: distribution:check
       - task: skills:validate
+
+  ci:spec-impact:
+    desc: Resolve and check the specification impact for the CI event
+    cmds:
+      - uv run --locked python scripts/check_ci_spec_impact.py
+
+  check:
+    desc: Run the complete local and CI quality gate
+    cmds:
+      - task: ci:static
+      - task: ci:python
+      - task: ci:portable
       - task: eval:check
       - task: package:check
       - task: security
@@ -234,6 +297,7 @@ tasks:
     desc: Run the complete quality gate before push
     cmds:
       - task: check
+      - task: dependency:audit
 
   package:format:
     internal: true
@@ -280,3 +344,9 @@ tasks:
     dir: packages/opencode
     cmds:
       - npm ci
+
+  package:audit:
+    internal: true
+    dir: packages/opencode
+    cmds:
+      - npm audit --package-lock-only
