@@ -25,10 +25,12 @@ When required evidence is missing, stale, malformed, or contradictory, a
 workflow shall return a structured `partial`, `blocked`, or `error` outcome and
 shall identify the missing evidence and safe escalation.
 
-### REQ-F-004 - Materialize direct Git distribution
+### REQ-F-004 - Publish the portable Pages distribution
 
-The distribution shall install self-contained skill material directly from Git
-for supported hosts without depending on a separate runtime package.
+On a validated release tag, CI shall build the exact tagged source and deploy a
+standard well-known index plus one digest-bound self-contained archive for every
+public skill to GitHub Pages. The distribution version and source revision shall
+match the tag and shall not depend on the OpenCode runtime package.
 
 ### REQ-F-005 - Archive owned retired assets
 

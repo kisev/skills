@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "ba6cc6052ff9a1f04855cb7f1eb6e343c1459b90a4e3f643e104750886bdedae",
+  "digest": "63648c98bdbe103865858c159a0e487ea77875d8470a8e7967110f15f5fd5191",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:slides-prompts-prepare"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.slides-prompts-prepare.near-miss.source",
-      "path": "skills/slides-prompts-prepare/SKILL.md"
+      "path": ".build/skills/slides-prompts-prepare/SKILL.md"
     }
   ],
   "kind": "near-miss",

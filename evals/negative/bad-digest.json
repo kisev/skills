@@ -10,7 +10,7 @@
   "host": "any",
   "input": {},
   "expected": {},
-  "invariants": [{ "id": "source", "path": "skills/goal/SKILL.md" }],
+  "invariants": [{ "id": "source", "path": ".build/skills/goal/SKILL.md" }],
   "sandbox": { "network": false },
   "budgets": { "timeout_seconds": 1, "max_tokens": 1, "max_cost": 1 },
   "digest": "0000000000000000000000000000000000000000000000000000000000000000"

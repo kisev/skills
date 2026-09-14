@@ -2,7 +2,7 @@
 
 ## Target
 
-This English-only specification describes the merged target `2.0.0` of the
+This English-only specification describes the merged target `2.2.0` of the
 portable Agent Skills repository. It records supported contracts, not history,
 roadmap, or implementation plans.
 
@@ -22,7 +22,7 @@ available; selectable plugins are `rules-injector`, `rtk`, and `zed-bell`.
 
 ## Scope Boundary
 
-The specification covers direct Git distribution, the OpenCode package and CLI,
+The specification covers the GitHub Pages distribution, the OpenCode package and CLI,
 orchestration, durable state, content-addressed archive behavior, security
 boundaries, tests, evals, and compatibility. Repository quality gates are part
 of the supported contract: `task spec:check` is deterministic and mandatory,

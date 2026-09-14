@@ -14,7 +14,9 @@ def isolated_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     sources = tmp_path / "skills"
     (shared / "references").mkdir(parents=True)
     (sources / "foo").mkdir(parents=True)
-    (sources / "foo" / "SKILL.md").write_text("---\nname: foo\n---\n", encoding="utf-8")
+    (sources / "foo" / "SKILL.source.md").write_text(
+        "---\nname: foo\ndescription: Foo\n---\n", encoding="utf-8"
+    )
     (shared / "references" / "canonical.md").write_text("canonical\n", encoding="utf-8")
     manifest = shared / "manifest.json"
     manifest.write_text(
@@ -100,7 +102,7 @@ def test_generated_destinations_are_bounded_to_existing_skill_directories(
             build_skills.manifest_entries()
 
 
-def test_check_rejects_destination_symlink_mode_drift_and_undeclared_copy(
+def test_source_check_rejects_generated_copy_entrypoint_and_symlink(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sources = isolated_manifest(tmp_path, monkeypatch)
@@ -108,38 +110,78 @@ def test_check_rejects_destination_symlink_mode_drift_and_undeclared_copy(
     target = sources / "foo/references/canonical.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(entries[0][0].read_bytes())
+    with pytest.raises(build_skills.BuildError, match="generated destination committed"):
+        build_skills.check_sources(entries)
+
+    target.unlink()
+    (sources / "foo/SKILL.md").write_text("generated\n", encoding="utf-8")
+    with pytest.raises(build_skills.BuildError, match="generated SKILL.md"):
+        build_skills.check_sources(entries)
+    (sources / "foo/SKILL.md").unlink()
+
+    target.symlink_to(entries[0][0])
+    with pytest.raises(build_skills.BuildError, match="symbolic link"):
+        build_skills.check_sources(entries)
+
+
+def test_built_check_rejects_symlink_content_mode_and_undeclared_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    isolated_manifest(tmp_path, monkeypatch)
+    entries = build_skills.manifest_entries()
+    built = tmp_path / "built"
+    build_skills.copy_source(built)
+    build_skills.materialize(built, entries)
+    target = built / "foo/references/canonical.md"
 
     target.unlink()
     target.symlink_to(entries[0][0])
     with pytest.raises(build_skills.BuildError):
-        build_skills.check_materialized(sources, entries)
+        build_skills.check_materialized(built, entries)
     target.unlink()
     target.write_bytes(b"modified\n")
     with pytest.raises(build_skills.BuildError):
-        build_skills.check_materialized(sources, entries)
+        build_skills.check_materialized(built, entries)
     target.write_bytes(entries[0][0].read_bytes())
     os.chmod(target, 0o600)
     os.chmod(entries[0][0], 0o644)
     with pytest.raises(build_skills.BuildError):
-        build_skills.check_materialized(sources, entries)
+        build_skills.check_materialized(built, entries)
     os.chmod(target, 0o644)
-    extra = sources / "other/references/canonical.md"
+    extra = built / "other/references/canonical.md"
     extra.parent.mkdir(parents=True)
     extra.write_text("modified\n", encoding="utf-8")
     with pytest.raises(build_skills.BuildError):
-        build_skills.check_materialized(sources, entries)
+        build_skills.check_materialized(built, entries)
 
 
 def test_check_does_not_create_output_or_change_source(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     sources = isolated_manifest(tmp_path, monkeypatch)
-    entries = build_skills.manifest_entries()
-    target = sources / "foo/references/canonical.md"
-    target.parent.mkdir(parents=True)
-    target.write_bytes(entries[0][0].read_bytes())
     output = tmp_path / "missing-output"
-    before = target.read_bytes()
+    before = {
+        path.relative_to(sources): path.read_bytes()
+        for path in sources.rglob("*")
+        if path.is_file()
+    }
     assert build_skills.build(output, True) == 0
     assert not output.exists()
-    assert target.read_bytes() == before
+    assert {
+        path.relative_to(sources): path.read_bytes()
+        for path in sources.rglob("*")
+        if path.is_file()
+    } == before
+
+
+def test_build_materializes_only_in_output(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sources = isolated_manifest(tmp_path, monkeypatch)
+    output = tmp_path / "built"
+
+    assert build_skills.build(output, False) == 0
+
+    assert (output / "foo/SKILL.md").is_file()
+    assert not (output / "foo/SKILL.source.md").exists()
+    assert (output / "foo/references/canonical.md").read_text(encoding="utf-8") == "canonical\n"
+    assert not (sources / "foo/SKILL.md").exists()
+    assert not (sources / "foo/references/canonical.md").exists()

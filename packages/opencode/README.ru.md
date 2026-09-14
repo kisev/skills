@@ -2,7 +2,7 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-`@kisev/skills-opencode@2.1.0` - optional OpenCode-specific слой. У portable
+`@kisev/skills-opencode@2.2.0` - optional OpenCode-specific слой. У portable
 skills отдельный lifecycle: их нужно установить независимо через
 [корневую инструкцию](../../README.ru.md).
 
@@ -30,7 +30,7 @@ assets или portable skills и не меняют OpenCode configuration.
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/skills-opencode@2.1.0
+npm install --save-exact @kisev/skills-opencode@2.2.0
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -45,7 +45,7 @@ Package остаётся в project `node_modules`, confirmed assets разме�
 mkdir -p "$HOME/.config/opencode"
 cd "$HOME/.config/opencode"
 test -f package.json || npm init --yes
-npm install --save-exact @kisev/skills-opencode@2.1.0
+npm install --save-exact @kisev/skills-opencode@2.2.0
 npm exec -- skills-opencode install --scope global --dry-run
 ```
 
@@ -149,7 +149,7 @@ incomplete probe failure.
 перезапустите OpenCode:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode@2.1.0
+npm install --save-exact @kisev/skills-opencode@2.2.0
 npm exec -- skills-opencode install --scope project --dry-run
 ```
 
@@ -172,7 +172,7 @@ npm exec -- skills-opencode reconcile --scope global --dry-run --json
 Перед reconcile сначала обновите package в принадлежащем ему npm project и
 примените exact installer plan. Reconcile не устанавливает, не обновляет и не
 удаляет portable skills; для них используйте только pinned
-`npx --yes skills@1.5.23` flow.
+`npx --yes skills@1.5.23` с `https://kisev.github.io/skills`.
 
 Confirmed reconcile архивирует exact-owned retired assets в private
 content-addressed XDG archive и удаляет их deployed copies. Modified, user-owned,

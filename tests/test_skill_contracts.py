@@ -26,8 +26,6 @@ def test_built_skill_files_match_canonical_sources() -> None:
     for source, relative_destination in manifest_entries():
         destination = BUILT_SKILLS / relative_destination
         assert destination.read_bytes() == source.read_bytes(), destination
-        source_copy = ROOT / "skills" / relative_destination
-        assert source_copy.read_bytes() == source.read_bytes(), source_copy
 
 
 def test_rebuilding_portable_skills_does_not_change_repository_state() -> None:
@@ -138,7 +136,7 @@ def test_team_profile_contract_is_distributed_without_private_values() -> None:
         "team-roadmap",
         "slides-prompts-prepare",
     ):
-        references = ROOT / "skills" / name / "references"
+        references = BUILT_SKILLS / name / "references"
         assert (references / "team-context.schema.json").read_bytes() == schema.read_bytes()
         assert (references / "team-context.example.json").read_bytes() == example.read_bytes()
 
@@ -146,17 +144,17 @@ def test_team_profile_contract_is_distributed_without_private_values() -> None:
 def test_skills_use_english_canonical_workflows_without_locale_references() -> None:
     cyrillic = re.compile(r"[А-Яа-яЁё]")
     for skill in (ROOT / "skills").iterdir():
-        if not skill.is_dir() or not (skill / "SKILL.md").is_file():
+        if not skill.is_dir() or not (skill / "SKILL.source.md").is_file():
             continue
-        skill_text = (skill / "SKILL.md").read_text(encoding="utf-8")
+        skill_text = (skill / "SKILL.source.md").read_text(encoding="utf-8")
         frontmatter, body = skill_text.split("---", 2)[1:]
-        assert not cyrillic.search(body), skill / "SKILL.md"
+        assert not cyrillic.search(body), skill / "SKILL.source.md"
         cyrillic_frontmatter_lines = [
             line for line in frontmatter.splitlines() if cyrillic.search(line)
         ]
-        assert cyrillic_frontmatter_lines, skill / "SKILL.md"
+        assert cyrillic_frontmatter_lines, skill / "SKILL.source.md"
         assert all("Russian discovery terms:" in line for line in cyrillic_frontmatter_lines), (
-            skill / "SKILL.md"
+            skill / "SKILL.source.md"
         )
         workflows = list(skill.glob("references/workflow.md"))
         assert len(workflows) == 1, skill
@@ -184,7 +182,7 @@ def test_all_english_canonical_skill_material_is_cyrillic_free() -> None:
         if "skills/spec-manage/templates/ru/" in relative:
             continue
         text = path.read_text(encoding="utf-8")
-        if path.name == "SKILL.md":
+        if path.name == "SKILL.source.md":
             text = text.split("---", 2)[2]
         assert not cyrillic.search(text), path
 

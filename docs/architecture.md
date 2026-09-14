@@ -4,28 +4,28 @@
 
 ## Source of Truth
 
-Portable skills in `skills/<name>/` are self-contained committed Git sources.
-`shared/` is the authored maintainer source for common contracts/runtime, not an
-installed runtime dependency. The declarative `shared/manifest.json` maps exact
-source files to committed generated copies; `scripts/build_skills.py --generate`
-is the only materialization command. Its `--check` mode stages expected bytes in
-a temporary root and never writes the worktree.
+Portable definitions live in `skills/<name>/` with authored
+`SKILL.source.md` entrypoints and unique resources. `shared/` is the single
+source for common contracts and runtime, not an installed dependency. The
+declarative `shared/manifest.json` maps exact shared files into build paths.
+`scripts/build_skills.py` creates complete skills only under `.build/skills` and
+never writes generated copies into the authored tree.
 
-The canonical maintainer checkout is `/home/kisev/Projects/Github/kisev/skills`;
-other local copies are neither installation nor change sources. The repository
-has no user CLI. Maintainer scripts use Python standard library only, while a
-skill runner belongs inside its owning skill.
+The repository has no user CLI and is intentionally not a portable installation
+source. Maintainer scripts use Python standard library only, while every built
+runner and referenced resource belongs inside its owning skill archive.
 
-Shared English contracts are materialized from `shared/references/`; schemas
-and `work_item.py` remain canonical machine inputs. In particular,
-`shared/references/work-item-contract.schema.json` is materialized for
-`task-prepare` and `task-review`; its validator can return
-`needs_clarification`. Installed skills never read `shared/`.
+Shared English contracts are injected from `shared/references/`; schemas and
+`work_item.py` remain canonical machine inputs. In particular,
+`shared/references/work-item-contract.schema.json` is built into `task-prepare`
+and `task-review`; its validator can return `needs_clarification`. Installed
+skills never read `shared/`.
 
-`packages/skills/package.json` defines the private build-only `@kisev/skills`
-distribution. It is not the public installation source. `scripts/build_distribution.py` produces
-`.build/packages/skills` archives with root `SKILL.md`, SHA-256 locks and the
-source revision; this is the boundary before `npm pack`.
+`packages/skills/package.json` is the private version manifest for the portable
+distribution. `scripts/build_distribution.py` produces the GitHub Pages payload
+under `.build/packages/skills`: a standard well-known index, release metadata,
+and one content-addressed SHA-256 archive with root `SKILL.md` per skill. A tag
+push deploys that payload at `https://kisev.github.io/skills`.
 
 ## Host Integration
 
@@ -41,9 +41,8 @@ are opt-in and create no state, timers, sessions, or mutations while disabled.
 ## OpenCode Runtime
 
 Materialized runners use only their own files and XDG state. Package tools do
-not make portable skills depend on the checkout. The canonical checkout is
-`/home/kisev/Projects/Github/kisev/skills`, package assets are materialized in
-`packages/opencode/dist/assets`, and unavailable host facts are explicitly
+not make portable skills depend on the checkout. Package assets are materialized
+in `packages/opencode/dist/assets`, and unavailable host facts are explicitly
 `unavailable/incomplete`. The optional `agent_profiles` adapter does not change
 those boundaries. Specialized Python-runner skills remain ordinary self-contained
 Agent Skills; `goal` is a read-only prompt-only adapter. `doctor` shares a
@@ -71,14 +70,14 @@ separate execution, publication, and history-rewrite confirmations.
 
 ## Build Invariants
 
-- The JSON manifest maps machine inputs to build paths.
-- `--generate` updates only declared committed generated copies.
-- `--check` reports source and artifact drift without changing tracked or
-  untracked files.
-- Direct installation is supported from a clean Git clone without `.build` or a
-  package build hook.
+- The JSON manifest maps canonical shared inputs to build-only paths.
+- Authored skill trees contain `SKILL.source.md` and no generated destination.
+- `--check` reports source and artifact drift without changing authored files.
+- The supported installer reads the well-known Pages index and verifies each
+  archive digest before installation.
 - Paths are normalized, relative, and constrained to the shared references and
   isolated output; source and destination symlinks are rejected.
 - Source is unchanged and output is replaced only after complete staging.
+- Release checks bind the Pages version and source revision to the exact tag.
 - Work-item findings have stable sort order and bind reports to item/evidence
   digests, so unchanged checks produce the same verdict.

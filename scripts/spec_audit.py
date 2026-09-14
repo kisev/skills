@@ -31,13 +31,13 @@ def findings() -> list[dict[str, str]]:
         surface = str(trace["requirements"].get(req_id, {}).get("surface", ""))
         if surface.startswith("skill:"):
             name = surface.split(":", 1)[1]
-            if not (ROOT / "skills" / name / "SKILL.md").is_file():
+            if not (ROOT / "skills" / name / "SKILL.source.md").is_file():
                 result.append(
                     {
                         "status": "SPEC_AHEAD",
                         "requirement": req_id,
                         "spec": path.as_posix(),
-                        "source": f"skills/{name}/SKILL.md",
+                        "source": f"skills/{name}/SKILL.source.md",
                     }
                 )
         elif (

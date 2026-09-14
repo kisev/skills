@@ -4,10 +4,11 @@
 
 ## Область изменений
 
-Каждый каталог в `skills/` должен оставаться переносимой и самодостаточной
-единицей. Не добавляйте зависимости на checkout, пользовательский home, конкретный
-provider, credentials или конфигурацию отдельной команды. OpenCode-specific
-agents, commands и plugins находятся только в `packages/opencode/`.
+Каждый каталог в `skills/` является authored definition, а не installation
+artifact. Build должен превратить каждую definition в переносимый и
+самодостаточный skill без зависимости от checkout, пользовательского home,
+конкретного provider, credentials или конфигурации отдельной команды.
+OpenCode-specific agents, commands и plugins находятся только в `packages/opencode/`.
 
 Согласуйте существенное изменение поведения, совместимости или security boundary
 до реализации. Новому runner-у нужен наблюдаемый контракт: JSON в stdout,
@@ -46,13 +47,12 @@ task check
 | `check`                      | Запустить полный локальный и CI quality gate.                 |
 | `pre-commit`, `pre-push`     | Выполнить наборы, которые вызывают Git hooks.                 |
 
-`format` и явная source generation меняют tracked checkout. Если меняются shared references,
-сначала измените canonical-файл в `shared/references/`, затем запустите
-`task generate`; portable copies committed в объявленные destinations, а ignored
-build artifacts создаются отдельно. Для отдельной
-materialization-команды используйте `python3 scripts/build_skills.py --generate`.
-Команды OpenCode и copied LSP catalog создаются только в `packages/opencode/dist/assets/`
-перед pack; их источники - `packages/opencode/src/registry.ts` и `shared/references/`.
+`format` может изменить tracked checkout, а `task generate` записывает только
+ignored artifacts. Portable authored entrypoints называются `SKILL.source.md`;
+`scripts/build_skills.py` создаёт `SKILL.md` и добавляет файлы из
+`shared/manifest.json` только в `.build/skills`. Команды OpenCode и copied LSP
+catalog создаются только в `packages/opencode/dist/assets/` перед pack; их
+источники - `packages/opencode/src/registry.ts` и `shared/references/`.
 
 `package:check` сам выполняет `npm ci`, Prettier, oxlint, tsc, Node tests,
 generated-assets drift, smoke через закреплённый OpenCode и npm pack allowlist.
@@ -90,7 +90,7 @@ lifecycle один раз (без отдельного дублирующего 
 ## Качество и review
 
 - Сохраняйте frontmatter и ограничения формата agentskills.io для каждого
-  `SKILL.md`.
+  `SKILL.source.md`; built name - `SKILL.md`.
 - Добавляйте тест для публичного контракта или существенного риска регрессии, а
   не для деталей реализации.
 - Не включайте в изменения credentials, tokens, внутренние endpoints, локальные
@@ -105,10 +105,9 @@ lifecycle один раз (без отдельного дублирующего 
 
 ## Выпуски
 
-Версии portable skills фиксируются в их metadata. Версия
+Версии portable skills фиксируются в их metadata. Pages distribution, версия
 `@kisev/skills-opencode`, tag и GitHub Release должны относиться к одному commit.
 Не изменяйте опубликованную версию: исправление выпускается новой patch-версией.
-Публикация npm package запускается только push tag из
-`.github/workflows/publish.yml`: workflow сверяет tag с версией package и
-использует npm trusted publishing через OIDC. v1.0.0 - одноразовый
-интерактивный bootstrap до создания package relationship.
+Push tag независимо развёртывает Pages через `.github/workflows/pages.yml` и
+публикует npm через `.github/workflows/publish.yml`; оба workflow проверяют одну
+версию и revision. npm publishing использует trusted publishing через OIDC.

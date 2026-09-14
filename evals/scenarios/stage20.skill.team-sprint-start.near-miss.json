@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "a9d131492bd02be79b2b1139455cfeb5dd9d7a7ca9853fd9a056cc88db87407d",
+  "digest": "8f93950e84a45be5e6fab069e26c9bfba8ae210cdd35143d2ae23c167c1822d1",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:team-sprint-start"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-sprint-start.near-miss.source",
-      "path": "skills/team-sprint-start/SKILL.md"
+      "path": ".build/skills/team-sprint-start/SKILL.md"
     }
   ],
   "kind": "near-miss",

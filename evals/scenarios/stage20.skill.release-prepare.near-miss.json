@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "1ff88b7ffaec0f73a1448568d79cbe110861c13e732a784ca2e4d335da25b0bf",
+  "digest": "1d268476faba9e800241e0cbeab4479ad500f9553ec01562d7115ac184af0263",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:release-prepare"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.release-prepare.near-miss.source",
-      "path": "skills/release-prepare/SKILL.md"
+      "path": ".build/skills/release-prepare/SKILL.md"
     }
   ],
   "kind": "near-miss",

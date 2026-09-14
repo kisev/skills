@@ -162,7 +162,10 @@ def run(files: Sequence[str], *, dry_run: bool = False) -> int:
     groups = classify(files)
     runner = _Runner(dry_run=dry_run, env=_base_env())
     if any(
-        path.startswith(("skills/", "shared/", "packages/opencode/", "schemas/")) for path in files
+        path.startswith(
+            ("skills/", "shared/", "packages/opencode/", "packages/skills/", "schemas/")
+        )
+        for path in files
     ):
         runner.call("spec:check", ["uv", "run", "--locked", "python", "scripts/check_specs.py"])
     runner.batch("docs", ["prettier", "--check"], groups["docs"])
@@ -182,9 +185,13 @@ def run(files: Sequence[str], *, dry_run: bool = False) -> int:
     if groups["skills"] or groups["docs"]:
         runner.call("locales", ["uv", "run", "--locked", "python", "scripts/check_locales.py"])
     if groups["skills"]:
+        runner.call(
+            "skills:build",
+            ["uv", "run", "--locked", "python", "scripts/build_skills.py"],
+        )
         runner.call("skills:agnix", ["uv", "run", "--locked", "python", "scripts/check_agnix.py"])
         runner.call(
-            "skills:materialize",
+            "skills:build-check",
             ["uv", "run", "--locked", "python", "scripts/build_skills.py", "--check"],
         )
         runner.call(

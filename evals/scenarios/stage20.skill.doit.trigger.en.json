@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "4feaeeb24254c2c53d059fa3c0d7c5e7c7a811f2f2d4995c8d0315e83a7e9887",
+  "digest": "cc237cb6773c9bff341485ef7095fbd94f38fb4a5f2d46732503d2f46014d917",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.doit.trigger.source",
-      "path": "skills/doit/SKILL.md"
+      "path": ".build/skills/doit/SKILL.md"
     }
   ],
   "kind": "trigger",

@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "e50cf3cbe259dd6de97ad03f8eff7f5fac519f63ee2db1642bffaeb5d26c12d4",
+  "digest": "aa1ac6649adccda3793f68a232ad23f9a0ac535d34a069f55ba221e56a4b023f",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:lsp-report"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.lsp-report.near-miss.source",
-      "path": "skills/lsp-report/SKILL.md"
+      "path": ".build/skills/lsp-report/SKILL.md"
     }
   ],
   "kind": "near-miss",

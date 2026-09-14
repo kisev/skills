@@ -221,7 +221,7 @@ RUNNERS = {
 class PortableSkillValidationTests(unittest.TestCase):
     def test_all_portable_skills_have_required_frontmatter(self) -> None:
         for name in PORTABLE_SKILLS:
-            skill = ROOT / "skills" / name / "SKILL.md"
+            skill = ROOT / "skills" / name / "SKILL.source.md"
             with self.subTest(skill=name):
                 self.assertTrue(skill.is_file())
                 lines = skill.read_text(encoding="utf-8").splitlines()
@@ -338,17 +338,10 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn("TLDR", text)
                 self.assertIn("do not print", text.lower())
 
-    def test_language_policy_is_materialized_in_each_source_skill(self) -> None:
+    def test_language_policy_is_materialized_in_each_built_skill(self) -> None:
         source = ROOT / "shared/references/language-policy.md"
         for name in PORTABLE_SKILLS:
             with self.subTest(skill=name):
-                self.assertTrue(
-                    (ROOT / "skills" / name / "references/language-policy.md").is_file()
-                )
-                self.assertEqual(
-                    (ROOT / "skills" / name / "references/language-policy.md").read_bytes(),
-                    source.read_bytes(),
-                )
                 self.assertEqual(
                     (BUILT_SKILLS / name / "references/language-policy.md").read_bytes(),
                     source.read_bytes(),
@@ -388,7 +381,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn(section, adr)
 
     def test_askme_remains_compatible_with_portable_contract(self) -> None:
-        skill = ROOT / "skills/askme/SKILL.md"
+        skill = ROOT / "skills/askme/SKILL.source.md"
         text = skill.read_text(encoding="utf-8")
         self.assertIn("references/workflow.md", text)
         workflow = (ROOT / "skills/askme/references/workflow.md").read_text(encoding="utf-8")

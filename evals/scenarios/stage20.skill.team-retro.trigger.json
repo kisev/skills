@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "559a3c47869f6a15fee10684b00e0b5fdabd678dc8c108c52a55e3c6bba8d604",
+  "digest": "6ae7192cd3f636d2a4c9dae662bbba660ca1ad0b8dce0279635497957eb53f96",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-retro.trigger.source",
-      "path": "skills/team-retro/SKILL.md"
+      "path": ".build/skills/team-retro/SKILL.md"
     }
   ],
   "kind": "trigger",

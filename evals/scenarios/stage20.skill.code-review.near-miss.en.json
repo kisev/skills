@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "6eced70dad204bdb26482233ebd82bf5845366fdb4b618b76bea0d3379d38879",
+  "digest": "04e272b3868018b197a93bc672de0fb11d0d40b0dacdaf4fc2e4bff120c7396d",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:code-review"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.code-review.near-miss.source",
-      "path": "skills/code-review/SKILL.md"
+      "path": ".build/skills/code-review/SKILL.md"
     }
   ],
   "kind": "near-miss",

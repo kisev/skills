@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "b940fd02b1852ba446959136708f6b917c0df465e719f98e37a1659d89b2eed9",
+  "digest": "0b3310dc5a0ef35c11a3342c6c1ec45bd8232f6f9085143642303d2a28eeefb0",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:commit-msg"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.commit-msg.near-miss.source",
-      "path": "skills/commit-msg/SKILL.md"
+      "path": ".build/skills/commit-msg/SKILL.md"
     }
   ],
   "kind": "near-miss",

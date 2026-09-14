@@ -27,5 +27,7 @@ Issues, Discussions или pull request. Откройте private security advis
 ## Поддерживаемые версии
 
 Поддерживается последняя опубликованная stable-версия portable skills и npm
-package. Исправления безопасности выпускаются новой patch-версией; существующие
-tags и опубликованные tarballs не переписываются.
+package. Stable Pages index продвигается только новым release tag и связывает
+каждый content-addressed archive с SHA-256 digest; mismatch завершается без
+установки. Исправления безопасности выпускаются новой patch-версией;
+существующие tags и опубликованные archive bytes не переписываются.

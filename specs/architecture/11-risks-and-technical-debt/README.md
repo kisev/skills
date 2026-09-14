@@ -5,3 +5,8 @@ External host APIs may be unavailable or change within the declared compatibilit
 range. Live integrations remain bounded by hostless contracts and may require
 manual evidence. A malformed or inaccessible local state file is reported as
 incomplete rather than repaired implicitly.
+
+GitHub Pages availability is now part of portable installation. A stale Pages
+cache, partial deployment, or mismatched archive must fail digest and release
+verification rather than install mixed bytes. The stable Pages URL intentionally
+moves between releases; Git tags remain immutable provenance.

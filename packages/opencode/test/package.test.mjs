@@ -248,8 +248,10 @@ test("registry generates exactly thirty-three thin command assets", () => {
     assert.match(rendered, entry.packageTool ? /package tool/ : /native Skill tool/);
     assert.match(rendered, /untrusted input/);
     assert.match(rendered, /\$ARGUMENTS/);
-    if (entry.skill)
+    if (entry.skill) {
       assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
+      assert.ok(rendered.includes("npx --yes skills@1.5.23 add https://kisev.github.io/skills"));
+    }
     assert.doesNotMatch(rendered, /python|runner|curl|fetch\(/i);
     assert.equal(
       readFileSync(join(PACKAGE, "dist", "assets", "commands", `${entry.name}.md`), "utf8"),
@@ -1372,7 +1374,7 @@ test("package catalog and doctor tools are strictly observational", async () => 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
   const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
   assert.equal(packageJson.name, "@kisev/skills-opencode");
-  assert.equal(packageJson.version, "2.1.0");
+  assert.equal(packageJson.version, "2.2.0");
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.type, "git");
   assert.equal(packageJson.repository.url, "git+https://github.com/kisev/skills.git");

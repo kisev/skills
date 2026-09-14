@@ -2,6 +2,7 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-Этот build-only package содержит well-known index и self-contained `.tar.gz`
-archive для каждого skill. Исходники находятся в корне репозитория; публикуемые
-artifacts создаёт `task generate`.
+Этот private manifest задаёт версию portable distribution, которую CI собирает
+и развёртывает на GitHub Pages. `task distribution:build` создаёт standard
+well-known discovery index, integrity metadata и отдельный self-contained
+archive для каждого public skill. Этот каталог не публикуется в npm.

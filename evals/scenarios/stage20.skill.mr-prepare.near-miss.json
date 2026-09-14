@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "d4e382d351a14530a1536e436b58a1d4ad075ef20abb847d1ed1c2acf2e7cc80",
+  "digest": "2fa61ea3364e244e8485077c9e5b38d5359ff22462c4702f2ce9f36e9abb6c3d",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:mr-prepare"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.mr-prepare.near-miss.source",
-      "path": "skills/mr-prepare/SKILL.md"
+      "path": ".build/skills/mr-prepare/SKILL.md"
     }
   ],
   "kind": "near-miss",

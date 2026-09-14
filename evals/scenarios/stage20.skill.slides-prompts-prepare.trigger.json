@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "b67d45351ea68ad5dd87f038ba0014fecb1fb5b4f1f8cf32d07324de95381439",
+  "digest": "c0f63e39399fce8172182eab7b215719a943587694a70a27068c7192f90d3161",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.slides-prompts-prepare.trigger.source",
-      "path": "skills/slides-prompts-prepare/SKILL.md"
+      "path": ".build/skills/slides-prompts-prepare/SKILL.md"
     }
   ],
   "kind": "trigger",

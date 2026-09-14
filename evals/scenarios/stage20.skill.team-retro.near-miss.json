@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "23a9465bb404e9b1e904b3aaee4316e5e57bdfd35e5c003ecfb265a0accf64ca",
+  "digest": "f4599edbb14bd306e932e818da8becd669f6020db1e50aaddb1f08498e39ba8e",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:team-retro"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-retro.near-miss.source",
-      "path": "skills/team-retro/SKILL.md"
+      "path": ".build/skills/team-retro/SKILL.md"
     }
   ],
   "kind": "near-miss",

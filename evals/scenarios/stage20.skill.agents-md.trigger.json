@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "1b4015360d72c397b23e9df6e1ae08cb387284382590f69b87c981fc070fe3e0",
+  "digest": "a7ab6333bff01cbd8b33610702d5360f47ce8c9e3d14bd6f12806a1a72548324",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.agents-md.trigger.source",
-      "path": "skills/agents-md/SKILL.md"
+      "path": ".build/skills/agents-md/SKILL.md"
     }
   ],
   "kind": "trigger",

@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "9be98ea8b028eb531cfb663aea0a63fa09b4f0bae1d97ff419011713623a7301",
+  "digest": "fe35db90bb89907513a61b7435fbbd22fbdc70de73fe926085bd06d1009b8ab8",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.stopit.trigger.source",
-      "path": "skills/stopit/SKILL.md"
+      "path": ".build/skills/stopit/SKILL.md"
     }
   ],
   "kind": "trigger",

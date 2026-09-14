@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "dd3ab318aacef4a0b972f41885879bdbfa9affe9e261233c09cec4ab137c2c94",
+  "digest": "481f3dde8eb9789f611a119ebe4c0550a5c441ad75e0791498b227475b2dad25",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-roadmap.trigger.source",
-      "path": "skills/team-roadmap/SKILL.md"
+      "path": ".build/skills/team-roadmap/SKILL.md"
     }
   ],
   "kind": "trigger",

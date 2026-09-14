@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "674c83360e877d043611225394b49d87396501deb8c1edc6494c63c997c4d134",
+  "digest": "21821bf9a53b83e325ee94c88199e1ed9fc2a8734e932328ce2044b9b2461829",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.rtk.trigger.source",
-      "path": "skills/rtk/SKILL.md"
+      "path": ".build/skills/rtk/SKILL.md"
     }
   ],
   "kind": "trigger",

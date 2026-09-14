@@ -12,3 +12,7 @@ Routing resolves host inventory, creates a receipt, consumes it once for a
 matching Task, validates the structured result, and expires the receipt.
 Installation and reconciliation validate ownership and digests before
 publishing or archiving.
+
+Portable installation resolves the Pages well-known index, verifies an archive
+SHA-256 digest, extracts root `SKILL.md` plus local resources, and records the
+Pages source for later updates. No build command runs on the user's machine.

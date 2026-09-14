@@ -5,10 +5,11 @@
 Canonical `specs/` prose shall be English-only, shall contain no `specs/ru`, and
 shall not create per-capability contract sidecars beside source files.
 
-### REQ-C-002 - Direct Git self-containment
+### REQ-C-002 - Portable distribution boundary
 
-Direct Git distribution shall remain self-contained and shall not require the
-OpenCode package at runtime.
+Supported portable installation shall use pinned `skills@1.5.23` against the
+GitHub Pages well-known endpoint. Authored Git sources shall remain deduplicated,
+while every published archive is self-contained and requires no OpenCode package.
 
 ### REQ-C-003 - Explicit ownership boundaries
 
@@ -20,11 +21,11 @@ shall have distinct owners; a workflow shall not infer ownership from its caller
 Retired or stale assets shall not be destructively removed when content-addressed
 archival can preserve recovery and auditability.
 
-### REQ-C-005 - No runtime expansion in this target
+### REQ-C-005 - Bounded distribution change in this target
 
-The canonical target shall describe the current merged behavior without changing
-skills, commands, agents, plugins, package tools, eval corpus, or distribution
-behavior.
+The `2.2.0` target changes portable build, publication, and installation
+transport without expanding the `29/33/6/3/5` capability inventory or the
+declared OpenCode compatibility range.
 
 ### REQ-C-006 - Mandatory specification traceability gate
 

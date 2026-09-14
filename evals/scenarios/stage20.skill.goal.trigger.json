@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "9c405783172970f1f00abecc229abc8af4fd61b59eff89768778d16a75e0e6ec",
+  "digest": "497050511c50d8f93e1a1efecfcb172b96620b80b0e367c6dd4d007f3f35a551",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.goal.trigger.source",
-      "path": "skills/goal/SKILL.md"
+      "path": ".build/skills/goal/SKILL.md"
     }
   ],
   "kind": "trigger",

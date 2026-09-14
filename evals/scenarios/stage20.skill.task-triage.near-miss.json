@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "decc374494e2fc1d5b0dfed200e284d02ec5a32f7661487844a4dcb68cce7f75",
+  "digest": "4ad768555925c0b49cfaa6c4e43b9037b5aced77184ce0b62d2379dadb7e7017",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:task-triage"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.task-triage.near-miss.source",
-      "path": "skills/task-triage/SKILL.md"
+      "path": ".build/skills/task-triage/SKILL.md"
     }
   ],
   "kind": "near-miss",

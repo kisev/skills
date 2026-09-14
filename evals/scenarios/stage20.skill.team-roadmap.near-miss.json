@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "794264993db51e64da9157af50ec0cdbb28e514c20e76513636e30346b540025",
+  "digest": "75eb66e5ff08ef98c7bc88b7ef3c9d88c6d6f56e6d56184661c41dd109347685",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:team-roadmap"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-roadmap.near-miss.source",
-      "path": "skills/team-roadmap/SKILL.md"
+      "path": ".build/skills/team-roadmap/SKILL.md"
     }
   ],
   "kind": "near-miss",

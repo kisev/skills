@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "4a71c96b7875d3e88403944cf8c88293b9088c13bdd44c15fa36b1fb553e54c1",
+  "digest": "7a53556f3a9a9d642de2f610557e9e5160197d02b04de7a85a78f4f0af629414",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.mattermost.trigger.source",
-      "path": "skills/mattermost/SKILL.md"
+      "path": ".build/skills/mattermost/SKILL.md"
     }
   ],
   "kind": "trigger",

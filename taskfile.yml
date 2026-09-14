@@ -34,6 +34,12 @@ tasks:
     cmds:
       - uv run --locked python scripts/spec_audit.py --critic-pass
 
+  release:check:
+    desc: Validate aligned release versions and built Pages provenance
+    cmds:
+      - task: build:distribution
+      - uv run --locked python scripts/check_release.py {{.CLI_ARGS}}
+
   format:
     desc: Format canonical maintained sources and regenerate assets
     cmds:
@@ -77,7 +83,8 @@ tasks:
     cmds:
       - fd --hidden --type f --extension json --exclude node_modules --exclude dist --exec jq empty
       - >-
-        yq --exit-status '.' .github/workflows/ci.yml .github/workflows/publish.yml
+        yq --exit-status '.' .github/workflows/ci.yml .github/workflows/pages.yml
+        .github/workflows/publish.yml
         lefthook.yml taskfile.yml .yamllint.yml >/dev/null
       - >-
         rg --files --hidden -g '*.toml' -g '!packages/opencode/node_modules/**'
@@ -112,34 +119,38 @@ tasks:
       - SKILLS_BINARY="$(mise which skills)" uv run --locked pytest
 
   generate:
-    desc: Materialize source copies and build untracked artifacts
+    desc: Build all untracked distribution and package artifacts
     cmds:
-      - task: generate:source
       - task: build:skills
       - task: build:distribution
       - task: package:generate
 
   generate:check:
-    desc: Check source parity and generated artifacts without writing them
+    desc: Check generated artifacts without changing authored sources
     cmds:
-      - task: generate:source:check
+      - task: build:skills:check
       - task: generate:distribution:check
       - task: package:generate:check
-
-  generate:source:
-    internal: true
-    cmds:
-      - uv run --locked python scripts/build_skills.py --generate
-
-  generate:source:check:
-    internal: true
-    cmds:
-      - uv run --locked python scripts/build_skills.py --check
 
   build:skills:
     internal: true
     cmds:
       - uv run --locked python scripts/build_skills.py
+
+  build:skills:check:
+    internal: true
+    cmds:
+      - uv run --locked python scripts/build_skills.py --check
+
+  distribution:build:
+    desc: Build the GitHub Pages portable distribution
+    cmds:
+      - task: build:distribution
+
+  distribution:check:
+    desc: Check the reproducible GitHub Pages portable distribution
+    cmds:
+      - task: generate:distribution:check
 
   build:distribution:
     internal: true
@@ -166,6 +177,7 @@ tasks:
 
   locale:check:
     desc: Validate translated public documentation and materialized references
+    deps: [build:skills]
     cmds:
       - uv run --locked python scripts/check_locales.py
       - uv run --locked python scripts/build_skills.py --check
@@ -187,6 +199,7 @@ tasks:
 
   eval:check:
     desc: Validate behavioral eval schemas and run the hostless deterministic suite
+    deps: [build:skills]
     cmds:
       - uv run --locked python scripts/eval_runner.py --validate
       - uv run --locked python scripts/eval_runner.py --offline
@@ -206,7 +219,7 @@ tasks:
       - task: typecheck:python
       - task: test:python
       - task: locale:check
-      - task: generate:source:check
+      - task: distribution:check
       - task: skills:validate
       - task: eval:check
       - task: package:check

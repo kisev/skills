@@ -4,10 +4,10 @@
 
 ## Текущий выпуск
 
-Точный текущий portable source:
-`https://github.com/kisev/skills/tree/v2.1.0`. Optional integration package:
-`@kisev/skills-opencode@2.1.0`. Latest source отдельно выбирается через
-`kisev/skills`.
+Текущий portable source - stable channel GitHub Pages:
+`https://kisev.github.io/skills`. Его release metadata указывает `2.2.0` и commit
+с tag `v2.2.0`. Optional integration package:
+`@kisev/skills-opencode@2.2.0`.
 
 ## Активные portable skills
 
@@ -20,8 +20,9 @@
 `task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
 `team-sprint-close`, `team-sprint-start`.
 
-Source, build и distribution inventories содержат те же self-contained skills.
-Generated shared files объявлены в `shared/manifest.json` и проверяются
+Authored inventory содержит deduplicated definitions; build и distribution
+inventories содержат те же 29 self-contained skills. Shared files объявлены в
+`shared/manifest.json`, добавляются только в `.build/skills` и проверяются
 byte-for-byte.
 
 ## Portable cleanup records
@@ -40,10 +41,10 @@ record `multi-run` в нём отсутствует.
 | `walkthrough`    | `code-explain`                                                                                   |
 | `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 
-Операция `update` в CLI `skills` не удаляет renamed или deleted skills. Для
-Codex-only cleanup эти exact names удаляются явно через pinned CLI. Для OpenCode
-или shared installation их также можно удалить явно либо применить package
-reconcile, только если exact ownership доказан.
+Операция `update` в CLI `skills` не удаляет renamed или deleted skills. Cleanup
+удаляет эти exact names явно через pinned `skills@1.5.23` с теми же agents и scope,
+что и installation. Package installation и reconcile не заменяют portable source
+rebind или cleanup flow.
 
 ## Текущая поверхность OpenCode
 
@@ -67,5 +68,6 @@ state сохраняются. Archive поддерживает transactional rol
 
 Точные имена, replacements, historical hashes и source metadata находятся в
 `packages/opencode/assets/migration-inventory.json`. Active package surfaces
-находятся в `packages/opencode/src/catalog.ts`, declarations generated shared
-copies - в `shared/manifest.json`.
+находятся в `packages/opencode/src/catalog.ts`, portable release metadata - в
+`packages/skills/package.json`, а build-only shared-file declarations - в
+`shared/manifest.json`.

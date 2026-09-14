@@ -1,6 +1,6 @@
 # ADR-0001: Direct Git Self-Contained Skills
 
-- Status: accepted
+- Status: superseded by [ADR-0005](0005-github-pages-well-known-distribution.md)
 - Date: 2026-09-10
 
 ## Context

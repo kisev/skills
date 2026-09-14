@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "e1daacc7e576400a8a812e7e9e48eb9ee73f51d5bbe44eba8aaf318ebcc1cd80",
+  "digest": "b22f11e45120e994f3cef6da90cb4aa05405962c4e0c2ee68b0a680d50e192d3",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.task-prepare.trigger.source",
-      "path": "skills/task-prepare/SKILL.md"
+      "path": ".build/skills/task-prepare/SKILL.md"
     }
   ],
   "kind": "trigger",

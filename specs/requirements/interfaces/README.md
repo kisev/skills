@@ -4,8 +4,9 @@
 
 ### REQ-I-001 - Skill interface
 
-Each public skill shall have an English canonical `SKILL.md`, stable frontmatter,
-portable referenced resources, explicit trigger boundaries, and the shared
+Each public skill definition shall have an English canonical `SKILL.source.md`
+with stable frontmatter and explicit trigger boundaries. Its published archive
+shall expose root `SKILL.md`, portable referenced resources, and the shared
 interaction/evidence contract. The `goal`, `task-prepare`, `task-review`, and
 `task-triage` skills shall normalize their documented inputs to `work-item/v1`
 before semantic processing.
@@ -18,8 +19,8 @@ not add state, storage, or publication behavior absent from that contract. Comma
 selection remains the user's decision: the installer selects command adapters,
 not portable skills. Skill command adapters load an already-installed same-named
 skill, while package command adapters invoke package tools.
-Pre-selector guidance shall identify portable installation through `npx skills`,
-and previews shall expose deterministic `plan_digest` separately from the
+Pre-selector guidance shall identify pinned `skills@1.5.23` and the supported
+Pages source, and previews shall expose deterministic `plan_digest` separately from the
 unique `confirmation_digest`; superseded plans expose only redacted kind,
 short confirmation digest, and timestamps.
 

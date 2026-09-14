@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "e95bca08f05f8f24210dbaf375480aef38cd7074e825ff37af7dbfdbdee8d3b8",
+  "digest": "ca574e14686b5671c845a7447f461c9114dc0443ffcd85562585c7fc1ed662c0",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.lsp-report.trigger.source",
-      "path": "skills/lsp-report/SKILL.md"
+      "path": ".build/skills/lsp-report/SKILL.md"
     }
   ],
   "kind": "trigger",

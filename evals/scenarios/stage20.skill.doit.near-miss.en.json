@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "4f0ea713d5c6610ab66e975c6dc3d7774e3733ad839b5e24b0c3c41f6d322249",
+  "digest": "844b4117d47bff683e40b0bc279e3ca09c0e0bcf09961e34224f8b99422af578",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:doit"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.doit.near-miss.source",
-      "path": "skills/doit/SKILL.md"
+      "path": ".build/skills/doit/SKILL.md"
     }
   ],
   "kind": "near-miss",

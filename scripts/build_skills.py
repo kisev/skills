@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize and verify self-contained portable skills."""
+"""Build and verify self-contained portable skills from deduplicated sources."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ SHARED = ROOT / "shared"
 SOURCES = ROOT / "skills"
 MANIFEST = SHARED / "manifest.json"
 DEFAULT_OUTPUT = ROOT / ".build" / "skills"
+SOURCE_ENTRYPOINT = "SKILL.source.md"
 
 
 class BuildError(Exception):
@@ -50,7 +51,7 @@ def manifest_entries() -> list[tuple[Path, Path]]:
         if len(destination.parts) < 2:
             raise BuildError(f"generated destination must be inside a skill: {destination}")
         skill = SOURCES / destination.parts[0]
-        if skill.is_symlink() or not (skill / "SKILL.md").is_file():
+        if skill.is_symlink() or not (skill / SOURCE_ENTRYPOINT).is_file():
             raise BuildError(f"generated destination names an unknown skill: {destination}")
         if destination in destinations:
             raise BuildError(f"duplicate destination: {destination}")
@@ -69,6 +70,27 @@ def manifest_entries() -> list[tuple[Path, Path]]:
     return entries
 
 
+def check_sources(entries: list[tuple[Path, Path]]) -> None:
+    if SOURCES.is_symlink() or not SOURCES.is_dir():
+        raise BuildError(f"skill source root is not a directory: {SOURCES}")
+    generated = {destination for _, destination in entries}
+    for skill in SOURCES.iterdir():
+        if not skill.is_dir() or skill.is_symlink():
+            continue
+        entrypoint = skill / SOURCE_ENTRYPOINT
+        if not entrypoint.is_file() or entrypoint.is_symlink():
+            raise BuildError(f"skill source has no regular {SOURCE_ENTRYPOINT}: {skill.name}")
+        if (skill / "SKILL.md").exists():
+            raise BuildError(f"authored skill exposes a generated SKILL.md: {skill.name}")
+        for path in skill.rglob("*"):
+            if path.is_symlink():
+                raise BuildError(f"symbolic link in skill source: {path.relative_to(SOURCES)}")
+            if path.is_file() and path.relative_to(SOURCES) in generated:
+                raise BuildError(
+                    f"generated destination committed in skill source: {path.relative_to(SOURCES)}"
+                )
+
+
 def copy_source(destination: Path) -> None:
     if destination.exists():
         shutil.rmtree(destination)
@@ -78,10 +100,27 @@ def copy_source(destination: Path) -> None:
         symlinks=True,
         ignore=shutil.ignore_patterns("__pycache__", "ru", "en"),
     )
+    for skill in destination.iterdir():
+        if not skill.is_dir() or skill.is_symlink():
+            continue
+        source_entrypoint = skill / SOURCE_ENTRYPOINT
+        if not source_entrypoint.is_file() or source_entrypoint.is_symlink():
+            raise BuildError(f"built skill has no regular source entrypoint: {skill.name}")
+        source_entrypoint.rename(skill / "SKILL.md")
+
+
+def materialize(root: Path, entries: list[tuple[Path, Path]]) -> None:
+    for source, relative in entries:
+        target = root / relative
+        if target.exists() or target.is_symlink():
+            raise BuildError(f"generated destination collides with authored material: {relative}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, target)
+        target.chmod(stat.S_IMODE(source.stat().st_mode))
 
 
 def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
-    """Verify committed copies without modifying the authored source tree."""
+    """Verify generated copies in one built skill tree."""
     if root.is_symlink() or not root.is_dir():
         raise BuildError(f"materialization root is not a directory: {root}")
     expected: set[Path] = set()
@@ -99,6 +138,8 @@ def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
     for skill in root.iterdir():
         if not skill.is_dir() or skill.is_symlink():
             continue
+        if not (skill / "SKILL.md").is_file() or (skill / SOURCE_ENTRYPOINT).exists():
+            raise BuildError(f"invalid built skill entrypoint: {skill.name}")
         for path in skill.rglob("*"):
             if path.is_symlink():
                 raise BuildError(f"symbolic link in skill source: {path.relative_to(root)}")
@@ -117,24 +158,9 @@ def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
                 raise BuildError(f"undeclared generated copy: {relative}")
 
 
-def materialize(entries: list[tuple[Path, Path]]) -> int:
-    for source, relative in entries:
-        target = SOURCES / relative
-        if target.is_symlink():
-            raise BuildError(f"generated target is a symbolic link: {relative}")
-        if any(parent.is_symlink() for parent in target.parents if parent != SOURCES):
-            raise BuildError(f"generated target parent is a symbolic link: {relative}")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source, target)
-        target.chmod(stat.S_IMODE(source.stat().st_mode))
-    check_materialized(SOURCES, entries)
-    print(f"materialized {len(entries)} shared copies in {SOURCES}")
-    return 0
-
-
 def build(output: Path, check: bool) -> int:
     entries = manifest_entries()
-    check_materialized(SOURCES, entries)
+    check_sources(entries)
     if output.is_symlink():
         raise BuildError("output must not be a symbolic link")
     stage_parent = output.parent
@@ -145,6 +171,8 @@ def build(output: Path, check: bool) -> int:
     ) as temporary:
         staged = Path(temporary) / "skills"
         copy_source(staged)
+        materialize(staged, entries)
+        check_materialized(staged, entries)
         if check:
             if not output.is_dir():
                 print(
@@ -188,16 +216,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
-    parser.add_argument(
-        "--generate",
-        action="store_true",
-        help="materialize declared shared copies into skills/",
-    )
     args = parser.parse_args(argv)
     try:
-        if args.generate:
-            return materialize(manifest_entries())
-        return build(args.output.resolve(), args.check)
+        if args.output.is_symlink():
+            raise BuildError("output must not be a symbolic link")
+        return build(args.output.absolute(), args.check)
     except BuildError as error:
         parser.error(str(error))
     return 2

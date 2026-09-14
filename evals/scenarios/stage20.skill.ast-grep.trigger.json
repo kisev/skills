@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "84a68a8842b79863a64c4d4460774af911c7fbc39086b6d7fe3fb2d97d9c6a83",
+  "digest": "a4705f000ee9e13ff356a9a9eeeb52095a2c20dc1932459d5cd7708739618cdc",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.ast-grep.trigger.source",
-      "path": "skills/ast-grep/SKILL.md"
+      "path": ".build/skills/ast-grep/SKILL.md"
     }
   ],
   "kind": "trigger",

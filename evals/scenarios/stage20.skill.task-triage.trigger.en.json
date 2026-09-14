@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "376229655d813e101022217c60bcad9f693f98bfbec43099c9e73f89674ce91a",
+  "digest": "ae4f9664b3c924ab675c03ff14ea8615bc37e448870e76a264de0671be998775",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.task-triage.trigger.source",
-      "path": "skills/task-triage/SKILL.md"
+      "path": ".build/skills/task-triage/SKILL.md"
     }
   ],
   "kind": "trigger",

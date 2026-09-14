@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "03e86cae3cbea7d01ffdcf3aca8a751213094f0489ae0bc6cf8109cab0f89f14",
+  "digest": "eb658f85886b8be79f5c736b1760ae3a28cdb7a0f888d4bc3dd88088f9c5de16",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:mattermost"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.mattermost.near-miss.source",
-      "path": "skills/mattermost/SKILL.md"
+      "path": ".build/skills/mattermost/SKILL.md"
     }
   ],
   "kind": "near-miss",

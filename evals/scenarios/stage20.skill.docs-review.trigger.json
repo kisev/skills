@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "beb8c4d7d234626e772962bf24ef0e1ec30a449b8045c50359800c1deb7a7b8b",
+  "digest": "594580c6df9b898374af9810462ae339dbb190719d46fa869471989552df38e3",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.docs-review.trigger.source",
-      "path": "skills/docs-review/SKILL.md"
+      "path": ".build/skills/docs-review/SKILL.md"
     }
   ],
   "kind": "trigger",

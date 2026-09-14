@@ -4,10 +4,10 @@
 
 ## Current Release
 
-The current exact portable source is
-`https://github.com/kisev/skills/tree/v2.1.0`. The optional integration package
-is `@kisev/skills-opencode@2.1.0`. Latest source is selected separately with
-`kisev/skills`.
+The current portable source is the GitHub Pages stable channel at
+`https://kisev.github.io/skills`. Its release metadata identifies `2.2.0` and
+the commit tagged `v2.2.0`. The optional integration package is
+`@kisev/skills-opencode@2.2.0`.
 
 ## Active Portable Skills
 
@@ -20,8 +20,9 @@ There are exactly 29 active portable skills:
 `task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
 `team-sprint-close`, and `team-sprint-start`.
 
-The source, build, and distribution inventories contain the same self-contained
-skills. Generated shared files are declared by `shared/manifest.json` and checked
+The authored inventory contains deduplicated definitions; build and distribution
+inventories contain the same 29 self-contained skills. Shared files are declared
+by `shared/manifest.json`, injected only into `.build/skills`, and checked
 byte-for-byte.
 
 ## Portable Cleanup Records
@@ -41,9 +42,9 @@ does not contain a portable `multi-run` record.
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 
 The `skills` CLI `update` operation does not prune renamed or deleted skills.
-Codex-only cleanup removes these exact names explicitly with the pinned CLI.
-OpenCode or shared installations may also remove them explicitly, or use package
-reconcile only when exact ownership can be proved.
+Cleanup removes these exact names explicitly with pinned `skills@1.5.23` and the
+same agents and scope as the installation. Package installation and reconcile do
+not replace the portable source rebind or cleanup flow.
 
 ## Current OpenCode Surface
 
@@ -68,5 +69,6 @@ inspection through `doctor`; no archive restore or purge command is provided.
 
 Exact names, replacements, historical hashes, and source metadata are in
 `packages/opencode/assets/migration-inventory.json`. Active package surfaces are
-in `packages/opencode/src/catalog.ts`; generated shared-copy declarations are in
+in `packages/opencode/src/catalog.ts`; portable release metadata is in
+`packages/skills/package.json`; build-only shared-file declarations are in
 `shared/manifest.json`.

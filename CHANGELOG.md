@@ -4,6 +4,32 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.2.0] - 2026-09-14
+
+### Added
+
+- Release-tag CI now deploys the portable distribution to GitHub Pages and
+  verifies the served release metadata, archive paths, and SHA-256 digests.
+- The Pages payload exposes the agentskills.io discovery `0.2.0` index and one
+  deterministic content-addressed archive per public skill.
+
+### Changed
+
+- Portable installation now uses the moving stable source
+  `https://kisev.github.io/skills` instead of Git repository selectors.
+- Authored entrypoints are named `SKILL.source.md`; shared contracts and runtimes
+  are injected only into ignored `.build/skills` output, removing 126 committed
+  generated copies from the source tree.
+- `@kisev/skills-opencode@2.2.0`, portable distribution metadata, release tag,
+  and GitHub Release are version-aligned to the same commit while retaining
+  independent installation and update lifecycles.
+
+### Migration
+
+- Existing Git-based portable installations remain bound to their old source.
+  Repeat `skills add` with `https://kisev.github.io/skills` and the same scope and
+  agents to rebind them before using `skills update`.
+
 ## [2.1.0] - 2026-09-14
 
 ### Added

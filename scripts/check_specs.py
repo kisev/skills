@@ -101,8 +101,8 @@ def requirement_blocks() -> dict[str, tuple[Path, str]]:
 
 def check_structure() -> None:
     files = sorted(path.relative_to(ROOT) for path in (ROOT / "specs").rglob("*") if path.is_file())
-    if len(files) != 108:
-        raise SpecError("spec_structure", f"expected 108 files, got {len(files)}")
+    if len(files) != 109:
+        raise SpecError("spec_structure", f"expected 109 files, got {len(files)}")
     required = {
         "specs/README.md",
         "specs/traceability.json",
@@ -124,7 +124,7 @@ def check_inventory() -> dict[str, Any]:
             raise SpecError("inventory", key)
     if len(inventory.get("infrastructure", [])) != 1 or inventory["infrastructure"] != ["core"]:
         raise SpecError("inventory", "infrastructure")
-    skill_dirs = sorted(path.parent.name for path in (ROOT / "skills").glob("*/SKILL.md"))
+    skill_dirs = sorted(path.parent.name for path in (ROOT / "skills").glob("*/SKILL.source.md"))
     if skill_dirs != sorted(inventory["skills"]):
         raise SpecError("inventory", "skills do not match source")
     command_specs = sorted(
@@ -140,7 +140,7 @@ def check_inventory() -> dict[str, Any]:
 def check_evidence(
     trace: dict[str, Any], blocks: dict[str, tuple[Path, str]], inventory: dict[str, Any]
 ) -> None:
-    if trace.get("schema") != "traceability/v1" or trace.get("target") != "2.0.0":
+    if trace.get("schema") != "traceability/v1" or trace.get("target") != "2.2.0":
         raise SpecError("traceability_schema")
     revision = trace.get("source_revision")
     if (
@@ -472,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
                     "schema": "spec-check/v1",
                     "status": "passed",
                     "requirements": len(blocks),
-                    "spec_files": 108,
+                    "spec_files": 109,
                 },
                 sort_keys=True,
                 separators=(",", ":"),

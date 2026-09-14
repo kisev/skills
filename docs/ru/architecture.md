@@ -4,21 +4,16 @@
 
 ## Источник истины
 
-Единственный canonical checkout сопровождающего находится в
-`/home/kisev/Projects/Github/kisev/skills`. Другие локальные копии не являются
-источником изменений или установки.
-
-Переносимые skills находятся в `skills/<name>/` и являются законченными
-единицами установки непосредственно в Git. `shared/` - authored source общих
-контрактов/runtime, а не runtime-зависимость установленного skill.
-Декларативный `shared/manifest.json` задаёт точные generated copies внутри
-`skills/<name>/`; единственная явная materialize-команда -
-`scripts/build_skills.py --generate`. `--check` строит ожидаемые bytes во
-временном root и не меняет worktree.
+Portable definitions находятся в `skills/<name>/` с authored entrypoints
+`SKILL.source.md` и уникальными resources. `shared/` - единственный source общих
+контрактов и runtime, а не зависимость установленного skill. Декларативный
+`shared/manifest.json` отображает exact shared files в build paths.
+`scripts/build_skills.py` создаёт полные skills только в `.build/skills` и не
+записывает generated copies в authored tree.
 
 Для `askme`, `task-prepare`, `task-review` и read-only `goal` canonical
 `shared/references/work-item-contract.schema.json`, описание контракта и
-stdlib-only `work_item.py` materialize-ятся в каждый skill. Установленный skill
+stdlib-only `work_item.py` добавляются в каждый built skill. Установленный skill
 использует только свою копию. Validator отдельно возвращает machine findings и
 structured semantic assessment, затем детерминированно вычисляет verdict
 `ready`, `needs_clarification` или `blocked`.
@@ -28,13 +23,11 @@ CLI `skills-opencode` только для OpenCode integration. Maintainer scrip
 использовать только Python stdlib; Python runners, если они нужны skill, находятся
 внутри этого skill.
 
-`packages/skills/package.json` описывает private build-only package
-`@kisev/skills`, который не является публичным source для установки.
-`scripts/build_distribution.py` собирает `.build/packages/skills`:
-well-known index, lock с SHA-256 каждого archive, source revision и один archive
-на skill с root `SKILL.md`. Это boundary будущего unpkg distribution; в source
-tree не появляются archive, runtime copies, generated commands или copied LSP
-catalog.
+`packages/skills/package.json` является private version manifest portable
+distribution. `scripts/build_distribution.py` собирает GitHub Pages payload в
+`.build/packages/skills`: standard well-known index, release metadata и по одному
+content-addressed SHA-256 archive с root `SKILL.md` на skill. Push tag развёртывает
+этот payload по адресу `https://kisev.github.io/skills`.
 
 ## Интеграция с host
 
@@ -93,17 +86,19 @@ forbidden paths, steps, checks, явные VCS operations и отдельные 
 
 ## Инварианты build
 
-- JSON manifest - единственное отображение общих исходников в пути build skills,
-  включая minimal Python runtime для автономных runner-ов.
-- `--generate` обновляет только объявленные committed copies.
-- `--check` проверяет source parity и artifacts без изменения tracked или
-  untracked state.
-- Direct Git installation работает из clean clone без `.build` и build hook.
+- JSON manifest отображает canonical shared inputs только в build paths, включая
+  minimal Python runtime для автономных runner-ов.
+- Authored skill trees содержат `SKILL.source.md` и не содержат generated
+  destinations.
+- `--check` проверяет source parity и artifacts без изменения authored files.
+- Supported installer читает well-known Pages index и проверяет digest каждого
+  archive перед installation.
 - Пути относительные, нормализованные и ограничены соответственно каталогами
   `shared/references/` и isolated build output.
 - Symlinks в исходных и конечных путях отклоняются.
 - Source tree не меняется; build output заменяется только после полной подготовки.
 - `--check` сравнивает существующий artifact с clean staging и сообщает о drift.
+- Release checks связывают Pages version и source revision с exact tag.
 - Проверка work item сортирует findings по стабильному ключу и связывает report с
   digest item/evidence, поэтому неизменный повторный check даёт тот же verdict.
 - LSP applicability использует один machine-readable catalog, добавляемый в built

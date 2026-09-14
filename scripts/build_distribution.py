@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create a deterministic, build-only @kisev/skills distribution."""
+"""Create the deterministic GitHub Pages portable-skill distribution."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ from scripts.build_skills import build as build_skills  # noqa: E402
 from scripts.check_locales import validate as validate_locales  # noqa: E402
 
 PACKAGE = ROOT / "packages" / "skills"
+INVENTORY = ROOT / "evals" / "contracts" / "public-surfaces.json"
 DEFAULT_OUTPUT = ROOT / ".build" / "packages" / "skills"
 
 
@@ -31,6 +32,7 @@ class DistributionError(Exception):
 
 
 DESCRIPTION = re.compile(r"^description:\s*>-?\s*\n\s+(.+)$", re.MULTILINE)
+SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
 def skill_description(skill: Path) -> str:
@@ -77,28 +79,36 @@ def build(output: Path, check: bool) -> int:
     validate_locales(built=BUILT_SKILLS)
     manifest = json.loads((PACKAGE / "package.json").read_text(encoding="utf-8"))
     version = manifest.get("version")
-    if not isinstance(version, str):
+    if not isinstance(version, str) or not SEMVER.fullmatch(version):
         raise DistributionError("distribution package version is invalid")
+    inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    public_skills = inventory.get("skills")
+    if not isinstance(public_skills, list) or not all(
+        isinstance(name, str) for name in public_skills
+    ):
+        raise DistributionError("public skill inventory is invalid")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="skills-dist-", dir=output.parent) as temporary:
         staged = Path(temporary) / "skills"
-        archives = staged / "archives"
+        archives = staged / "archives" / "sha256"
         archives.mkdir(parents=True)
         entries = []
         for skill in sorted(BUILT_SKILLS.iterdir()):
             if not skill.is_dir() or not (skill / "SKILL.md").is_file():
                 continue
             content = archive(skill)
-            name = f"{skill.name}.tar.gz"
-            destination = archives / name
+            digest = hashlib.sha256(content).hexdigest()
+            destination = archives / f"{digest}.tar.gz"
             destination.write_bytes(content)
             entries.append(
                 {
                     "name": skill.name,
-                    "archive": f"archives/{name}",
-                    "sha256": hashlib.sha256(content).hexdigest(),
+                    "archive": f"archives/sha256/{digest}.tar.gz",
+                    "sha256": digest,
                 }
             )
+        if [entry["name"] for entry in entries] != sorted(public_skills):
+            raise DistributionError("built skills do not match the public inventory")
         index = {
             "schema": "@kisev/skills/index/v1",
             "package": "@kisev/skills",
@@ -135,7 +145,7 @@ def build(output: Path, check: bool) -> int:
             ],
         }
         (agent_skills / "index.json").write_bytes(canonical(agent_index))
-        (staged / "package.json").write_bytes(canonical({**manifest, "private": False}))
+        (staged / ".nojekyll").write_bytes(b"")
         if check:
             if not output.is_dir():
                 print("validated distribution in isolated staging area")

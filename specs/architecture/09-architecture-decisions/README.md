@@ -7,3 +7,4 @@ not proposals or roadmap items.
 - [ADR-0002: Target public surface](0002-target-public-surface.md)
 - [ADR-0003: Portable coordinator and routing adapter](0003-portable-coordinator-routing-adapter.md)
 - [ADR-0004: Content-addressed archive](0004-content-addressed-archive.md)
+- [ADR-0005: GitHub Pages well-known distribution](0005-github-pages-well-known-distribution.md)

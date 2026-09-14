@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "4c239d8d0920f092ef8225fdb447694526971282a58ffad7980a3939a889c8e5",
+  "digest": "8f35ea4eb75c0b36979b93376751f32f7aaa2d2fcf1db63adb5120ef65ac6873",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:ast-grep"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.ast-grep.near-miss.source",
-      "path": "skills/ast-grep/SKILL.md"
+      "path": ".build/skills/ast-grep/SKILL.md"
     }
   ],
   "kind": "near-miss",

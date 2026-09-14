@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "3636f1ff9f84ca82c42c2027c29e7011dfc277ef1c7193f387a328d1b634b834",
+  "digest": "4a78181399003ee8a2954ee6dfe4cdc0333b0315b3c329e02adec8d034a039bf",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-sprint-start.trigger.source",
-      "path": "skills/team-sprint-start/SKILL.md"
+      "path": ".build/skills/team-sprint-start/SKILL.md"
     }
   ],
   "kind": "trigger",

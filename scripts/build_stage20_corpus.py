@@ -89,7 +89,7 @@ def main() -> None:
                         expected,
                         rejected,
                         "skill",
-                        f"skills/{name}/SKILL.md",
+                        f".build/skills/{name}/SKILL.md",
                         "no-writes",
                     )
                 )

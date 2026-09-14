@@ -1,13 +1,7 @@
 {
   "name": "@kisev/skills",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "private": true,
-  "description": "Build-only distribution index for Kisev portable skills.",
-  "license": "MIT",
-  "files": [
-    ".well-known",
-    "archives",
-    "index.json",
-    "package.json"
-  ]
+  "description": "Private version manifest for the CI-built GitHub Pages portable-skill distribution.",
+  "license": "MIT"
 }

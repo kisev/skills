@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "e1245996e770179e8812c8052b077f6a895e1e15fb153f94d318aa5fe302f10f",
+  "digest": "262ffe76277b6ea600693d5b84dccd0fed269e896fdfeb98d7a2e316850e9040",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:goal"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.goal.near-miss.source",
-      "path": "skills/goal/SKILL.md"
+      "path": ".build/skills/goal/SKILL.md"
     }
   ],
   "kind": "near-miss",

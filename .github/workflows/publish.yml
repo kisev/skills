@@ -19,6 +19,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+      - name: Verify release
+        run: task release:check -- --tag "$GITHUB_REF_NAME"
       - name: Verify package
         run: task package:check
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -26,12 +28,6 @@ jobs:
           node-version: "24"
           registry-url: "https://registry.npmjs.org"
           package-manager-cache: false
-      - name: Verify tag and package version
-        working-directory: packages/opencode
-        run: |
-          expected_version="${GITHUB_REF_NAME#v}"
-          actual_version="$(node -p 'require("./package.json").version')"
-          test "$actual_version" = "$expected_version"
       - name: Publish package
         working-directory: packages/opencode
         run: npm publish --access public --provenance

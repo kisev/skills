@@ -4,6 +4,7 @@
   "behavioral_roots": [
     "skills/",
     "shared/",
+    "packages/skills/",
     "packages/opencode/src/",
     "packages/opencode/contracts/",
     "packages/opencode/assets/",
@@ -13,9 +14,13 @@
   "behavioral_paths": [
     "scripts/build_distribution.py",
     "scripts/build_skills.py",
+    "scripts/check_release.py",
+    "scripts/verify_distribution_url.py",
     "taskfile.yml",
     "lefthook.yml",
-    ".github/workflows/ci.yml"
+    ".github/workflows/ci.yml",
+    ".github/workflows/pages.yml",
+    ".github/workflows/publish.yml"
   ],
   "trailer": "Spec-Impact: none - <reason>"
 }

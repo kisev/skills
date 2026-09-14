@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "549e3b7fe6d1766c719c5a5faeb08e4a790e1dd4a00670d661bc558d84a2da88",
+  "digest": "2d9b1c98650dadfea8526f2dfa71f9e744ccca210400b7edc60b166b7d67c748",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:code-explain"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.code-explain.near-miss.source",
-      "path": "skills/code-explain/SKILL.md"
+      "path": ".build/skills/code-explain/SKILL.md"
     }
   ],
   "kind": "near-miss",

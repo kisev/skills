@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "1ae56ac747a87736232d6941192ff748fffb4635a8bdbed81553d6ddc917e32e",
+  "digest": "3dfbbec8ee50729ff341cf90fd616623b3d44a4b931c5fc618fea243935489c7",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.humanize.trigger.source",
-      "path": "skills/humanize/SKILL.md"
+      "path": ".build/skills/humanize/SKILL.md"
     }
   ],
   "kind": "trigger",

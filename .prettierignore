@@ -1,7 +1,6 @@
 packages/opencode/assets/commands/
 packages/opencode/dist/
 packages/opencode/node_modules/
-skills/*/scripts/portable_runtime/
 uv.lock
 
 # Existing formatting debt. New files remain checked by default.
@@ -24,4 +23,4 @@ packages/opencode/src/routing.ts
 packages/opencode/src/runtime/state.ts
 packages/opencode/test/package.test.mjs
 packages/opencode/test/smoke.mjs
-skills/summary/SKILL.md
+skills/summary/SKILL.source.md

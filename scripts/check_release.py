@@ -1,0 +1,114 @@
+#!/usr/bin/env python3
+"""Validate release versions, provenance, and the built Pages distribution."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PORTABLE_PACKAGE = ROOT / "packages" / "skills" / "package.json"
+OPENCODE_PACKAGE = ROOT / "packages" / "opencode" / "package.json"
+OPENCODE_LOCK = ROOT / "packages" / "opencode" / "package-lock.json"
+CATALOG = ROOT / "packages" / "opencode" / "src" / "catalog.ts"
+DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
+SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+
+class ReleaseError(Exception):
+    pass
+
+
+def read_json(path: Path) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ReleaseError(f"cannot read {path}: {error}") from error
+    if not isinstance(value, dict):
+        raise ReleaseError(f"expected an object in {path}")
+    return value
+
+
+def git(*arguments: str) -> str:
+    result = subprocess.run(
+        ["git", *arguments], cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    if result.returncode:
+        raise ReleaseError(result.stderr.strip() or f"git {' '.join(arguments)} failed")
+    return result.stdout.strip()
+
+
+def catalog_version() -> str:
+    match = re.search(r'\bversion:\s*"([^"]+)"', CATALOG.read_text(encoding="utf-8"))
+    if not match:
+        raise ReleaseError("OpenCode catalog version is missing")
+    return match.group(1)
+
+
+def validate(tag: str | None = None) -> dict[str, str]:
+    portable = read_json(PORTABLE_PACKAGE).get("version")
+    opencode = read_json(OPENCODE_PACKAGE).get("version")
+    lock = read_json(OPENCODE_LOCK)
+    lock_root = lock.get("packages")
+    if not isinstance(lock_root, dict) or not isinstance(lock_root.get(""), dict):
+        raise ReleaseError("OpenCode package lock root is invalid")
+    versions = {
+        "portable": portable,
+        "opencode": opencode,
+        "opencode_lock": lock_root[""].get("version"),
+        "catalog": catalog_version(),
+    }
+    if not all(isinstance(value, str) for value in versions.values()):
+        raise ReleaseError("release versions must be strings")
+    normalized = {name: str(value) for name, value in versions.items()}
+    if len(set(normalized.values())) != 1:
+        raise ReleaseError(f"release versions differ: {normalized}")
+    version = normalized["portable"]
+    if not SEMVER.fullmatch(version):
+        raise ReleaseError(f"invalid release version: {version}")
+
+    revision = git("rev-parse", "HEAD")
+    release_index = read_json(DISTRIBUTION / "index.json")
+    if release_index.get("version") != version:
+        raise ReleaseError("Pages distribution version does not match release version")
+    if release_index.get("source_revision") != revision:
+        raise ReleaseError("Pages distribution revision does not match HEAD")
+
+    if tag is not None:
+        expected = f"v{version}"
+        if tag != expected:
+            raise ReleaseError(f"tag {tag!r} does not match {expected!r}")
+        if git("cat-file", "-t", f"refs/tags/{tag}") != "tag":
+            raise ReleaseError("release tag must be annotated")
+        if git("rev-parse", f"refs/tags/{tag}^{{commit}}") != revision:
+            raise ReleaseError("release tag does not reference HEAD")
+        result = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", revision, "origin/main"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode:
+            raise ReleaseError("release commit is not reachable from origin/main")
+
+    return {"version": version, "revision": revision}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tag")
+    args = parser.parse_args(argv)
+    try:
+        result = validate(args.tag)
+    except ReleaseError as error:
+        parser.error(str(error))
+    print(json.dumps({"status": "ok", **result}, sort_keys=True, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

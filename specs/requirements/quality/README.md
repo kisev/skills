@@ -27,8 +27,10 @@ contradictory.
 
 ### REQ-Q-005 - Reproducible distribution
 
-Builds, generated assets, archives, and package manifests shall be reproducible
-and shall reject undeclared or drifting files.
+Two builds from one commit and release version shall produce byte-identical
+indexes, locks, and archives. Archive URLs shall be content-addressed; build and
+deployment checks shall reject undeclared, drifting, unsafe, or digest-mismatched
+files.
 
 ### REQ-Q-006 - Compatibility preservation
 

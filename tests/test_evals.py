@@ -26,7 +26,7 @@ from scripts.eval_runner import (
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "eval_runner.py"
-GOAL_AUTHORIZATION = ROOT / "skills/doit/scripts/goal_authorization.py"
+GOAL_AUTHORIZATION = ROOT / ".build/skills/doit/scripts/goal_authorization.py"
 LEGACY_GITLAB_V2 = ROOT / "tests/fixtures/evals/gitlab-evidence-contract-v2.json"
 
 
@@ -143,7 +143,7 @@ def test_goal_authorization_offline_runner_exercises_decision_cases() -> None:
     contract = (ROOT / "shared/references/interaction-contract.md").read_bytes()
     for skill in ("docs-prepare", "doit", "spec-manage"):
         assert (
-            ROOT / "skills" / skill / "references/interaction-contract.md"
+            ROOT / ".build/skills" / skill / "references/interaction-contract.md"
         ).read_bytes() == contract
     authorization = "ordinary Confirmation or exact frozen trusted Goal authorization"
     for skill in ("docs-prepare", "spec-manage"):

@@ -1,6 +1,6 @@
 {
   "schema": "traceability/v1",
-  "target": "2.0.0",
+  "target": "2.2.0",
   "source_revision": "9078b213798af8a32fa915ea7654289b76eed88d",
   "hash": {
     "algorithm": "sha256",
@@ -91,7 +91,7 @@
     },
     "distribution": {
       "kind": "automated",
-      "test_selector": "tests/test_distribution.py::test_direct_git_install_is_self_contained_for_both_hosts",
+      "test_selector": "tests/test_distribution.py::test_pages_install_is_self_contained_for_both_hosts_and_scopes",
       "eval_ids": ["stage20.infrastructure.core.contract"]
     },
     "quality": {
@@ -112,8 +112,8 @@
       "source": "specs/architecture/09-architecture-decisions/0003-portable-coordinator-routing-adapter.md"
     },
     "ME-ARCH-002": {
-      "rationale": "The accepted ADR records why direct Git materialization remains self-contained; the distribution test verifies behavior but not the decision rationale.",
-      "source": "specs/architecture/09-architecture-decisions/0001-direct-git-self-contained-skills.md"
+      "rationale": "The accepted ADR records why CI-built well-known archives replace committed generated copies; distribution tests verify bytes but not architectural intent.",
+      "source": "specs/architecture/09-architecture-decisions/0005-github-pages-well-known-distribution.md"
     },
     "ME-ARCH-003": {
       "rationale": "The accepted ADR records the chosen public inventory boundary and rejected alternatives.",
@@ -148,7 +148,7 @@
     "REQ-F-004": {
       "surface": "distribution",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "11d96d820f083fa0b3d1790d29deb5fc2e60c2ddc6b62a9a60b9b03fe70cf64d",
+      "block_sha256": "14bf3995f51a28bb520640161ace81d1c8e426799762c20c32de54870441a719",
       "evidence_profile": "distribution",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
@@ -180,13 +180,13 @@
     "REQ-I-001": {
       "surface": "skills",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "782779f2666ddf2762808e7b4e6bdeb26c8eb06d13501d098a500b7d2fd2e4c9",
+      "block_sha256": "fa1bd36803a323f7c5e6ff9653d5f1fc659f7fff14c3f8826fae04800744f17c",
       "evidence_profile": "skills"
     },
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "23e432c3bff320fc50907c54f9c02cc4f025a91e26ca1d4171978f09a5d0105f",
+      "block_sha256": "a3e6b232de5b3d0d8e8f0a77343089027da7a75049cd782920651160e6074be4",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {
@@ -240,7 +240,7 @@
     "REQ-Q-005": {
       "surface": "distribution",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "93375e74175b592c54742829b584d5e164e39b6dc952255446fd41f2f2016c0e",
+      "block_sha256": "bbb053ae73e9a81b390d20f68b7de23b10f125ee4f7bfd3a6586b48ac25181da",
       "evidence_profile": "distribution"
     },
     "REQ-Q-006": {
@@ -258,7 +258,7 @@
     "REQ-C-002": {
       "surface": "distribution",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "9b73cbf9bd379b3f468559a1dc84ad590f967849192f54fe1c14cd8c90e51857",
+      "block_sha256": "69ebf18e2ebe25545dbaee29ac75f50c31f84856c832b27ad108a79c8d348594",
       "evidence_profile": "distribution",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
@@ -277,7 +277,7 @@
     "REQ-C-005": {
       "surface": "scope",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "4cd5151036cccd85b72237d9451041b6ff63f6f3368744e2cf84cb2178a7fe54",
+      "block_sha256": "f1a0274c3d176a5923e129a580cc093ad3d884b9cef20d8ce8052b5250e4f1d6",
       "evidence_profile": "quality"
     },
     "REQ-C-006": {

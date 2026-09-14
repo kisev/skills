@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "d2d73345745b4c3c5dfc40325b9af928749bb9b4b82f4642840ec5fb5dbfdeae",
+  "digest": "d22498ca1f1bd64b91bb9518940fa234ec2381478ec0ed330ca8851af8d5147e",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:stopit"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.stopit.near-miss.source",
-      "path": "skills/stopit/SKILL.md"
+      "path": ".build/skills/stopit/SKILL.md"
     }
   ],
   "kind": "near-miss",

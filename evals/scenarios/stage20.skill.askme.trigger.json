@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "aca94d64a21310150dfcc8590d142a781b49728b849fb004833ed2048e884f7e",
+  "digest": "a65463415498b9320851c5d4a623d2366d20a90e0a28075604fbbb4037300ee9",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.askme.trigger.source",
-      "path": "skills/askme/SKILL.md"
+      "path": ".build/skills/askme/SKILL.md"
     }
   ],
   "kind": "trigger",

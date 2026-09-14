@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "7d39ad3643c4da8ff781d784f73e8397fe043bba4c724348bcb47b8bdccc3001",
+  "digest": "765aae932067c24089ebc79e777bc0af98a103dda2f86c2f2424d78ff65dfd0d",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:humanize"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.humanize.near-miss.source",
-      "path": "skills/humanize/SKILL.md"
+      "path": ".build/skills/humanize/SKILL.md"
     }
   ],
   "kind": "near-miss",

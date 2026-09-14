@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "267f2c6055cd06777a8506071d9c6a28a875f170ba6d9ec65ff268b3c9292ee1",
+  "digest": "4d6b9f993ed595e79194a62aa035ee98a34557ada385ca2db0178c6c8cb474cc",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:agents-md"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.agents-md.near-miss.source",
-      "path": "skills/agents-md/SKILL.md"
+      "path": ".build/skills/agents-md/SKILL.md"
     }
   ],
   "kind": "near-miss",

@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "6521a401e83c167b121bfb93efc969b5f94dfee05f713873223b360c04ebe1a6",
+  "digest": "31f4ae1de7e2624dc39044382191782e1328e2e3e5c0daadcb362319f45b648f",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:spec-manage"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.spec-manage.near-miss.source",
-      "path": "skills/spec-manage/SKILL.md"
+      "path": ".build/skills/spec-manage/SKILL.md"
     }
   ],
   "kind": "near-miss",

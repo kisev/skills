@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "acf1e8433cbc019acc72ac33dbd3035cbfe9454c8a5257d69f65d372a9ae2172",
+  "digest": "9828b6ea7c2daa201d40522cb5b197fa35e8e45ca341388c85f91aae41c643e1",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.code-explain.trigger.source",
-      "path": "skills/code-explain/SKILL.md"
+      "path": ".build/skills/code-explain/SKILL.md"
     }
   ],
   "kind": "trigger",

@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "9ffcae5a10744e5db9b35cf1dce597108e4e17111b029e8d0a5f2b8779960a30",
+  "digest": "500d45da657798601f75cf96d45c2cf7fa31157b9e5780242f961c86a4135f7e",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:askme"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.askme.near-miss.source",
-      "path": "skills/askme/SKILL.md"
+      "path": ".build/skills/askme/SKILL.md"
     }
   ],
   "kind": "near-miss",

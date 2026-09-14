@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "9f16e58d2556f19888e5b3d094340b36c56269908e502010966e7a0924fee984",
+  "digest": "69f0aeec6ffc4c27dd230dc31381d639d99d05076ff37a7cf6938c3f4db5bd5b",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.commit-msg.trigger.source",
-      "path": "skills/commit-msg/SKILL.md"
+      "path": ".build/skills/commit-msg/SKILL.md"
     }
   ],
   "kind": "trigger",

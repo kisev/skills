@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "5f810f4034d329549041e6c984963f5c7893156cbc129e5da7c448bdd46d7c62",
+  "digest": "f5bc837fe2a95c89281c15d03449a422aec5cd8ca186b4a3d24ac8864adf33b1",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:team-sprint-close"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-sprint-close.near-miss.source",
-      "path": "skills/team-sprint-close/SKILL.md"
+      "path": ".build/skills/team-sprint-close/SKILL.md"
     }
   ],
   "kind": "near-miss",

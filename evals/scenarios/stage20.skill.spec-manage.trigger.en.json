@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "97da51f5986f8e2ada59dbab95b1a7b33e3c29fc027325beeb754782f737ae30",
+  "digest": "63a23d558f1a9dd5d2f9f335eff7a85b421b0a7722089eefd17c004c0db614a3",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.spec-manage.trigger.source",
-      "path": "skills/spec-manage/SKILL.md"
+      "path": ".build/skills/spec-manage/SKILL.md"
     }
   ],
   "kind": "trigger",

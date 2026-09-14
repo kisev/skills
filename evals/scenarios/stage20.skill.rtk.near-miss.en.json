@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "f06fe887d54b5f02c36149036cb81ce3bb06d170c14f7cb26bbdde3916e02fa7",
+  "digest": "699cb3dc14b48e078ce50f42c08afe5954ce526de9f8e7c3579f24442fdf0150",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:rtk"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.rtk.near-miss.source",
-      "path": "skills/rtk/SKILL.md"
+      "path": ".build/skills/rtk/SKILL.md"
     }
   ],
   "kind": "near-miss",

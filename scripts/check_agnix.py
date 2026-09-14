@@ -11,6 +11,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = ROOT / ".agnix-warnings.json"
+BUILT_SKILLS = ROOT / ".build" / "skills"
 
 
 def fingerprint(diagnostic: dict[str, Any]) -> str:
@@ -26,7 +27,7 @@ def main() -> int:
             "--format",
             "json",
             "validate",
-            "skills",
+            str(BUILT_SKILLS),
         ],
         cwd=ROOT,
         check=False,

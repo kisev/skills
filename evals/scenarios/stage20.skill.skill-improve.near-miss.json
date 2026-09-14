@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "0b154e47e063899883f73e0c1339215de607585acf9c84b2123f88a2c92b2ac5",
+  "digest": "36784881514cb569e4f1bf21bd9b7f142da6f14a63a7d6e2730cb19bd9d6921d",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:skill-improve"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.skill-improve.near-miss.source",
-      "path": "skills/skill-improve/SKILL.md"
+      "path": ".build/skills/skill-improve/SKILL.md"
     }
   ],
   "kind": "near-miss",

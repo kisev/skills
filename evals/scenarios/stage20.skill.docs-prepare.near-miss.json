@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "2513724183b762fed74378e4b66e51fb7cce86ffbb671aa235e93e5f2bf82834",
+  "digest": "512244bd2ab143f9fef0114fcc0b1eee1f537515c9dda08429ce2f4a27a7b5d2",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:docs-prepare"],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.docs-prepare.near-miss.source",
-      "path": "skills/docs-prepare/SKILL.md"
+      "path": ".build/skills/docs-prepare/SKILL.md"
     }
   ],
   "kind": "near-miss",

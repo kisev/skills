@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "0a52f1c3a84d4a07a012413924afeedcdb5f408f9c9ab21c964cac078b4673a9",
+  "digest": "54da3e73d3067040b17f95af892379bc33365967caece958ee462c5c26775110",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.team-sprint-close.trigger.source",
-      "path": "skills/team-sprint-close/SKILL.md"
+      "path": ".build/skills/team-sprint-close/SKILL.md"
     }
   ],
   "kind": "trigger",

@@ -29,6 +29,9 @@ PUBLIC_TASKS = {
     "test",
     "generate",
     "generate:check",
+    "distribution:build",
+    "distribution:check",
+    "release:check",
     "locale:check",
     "skills:validate",
     "package:check",
@@ -55,11 +58,25 @@ def test_hooks_only_delegate_to_public_tasks() -> None:
 
 def test_workflows_delegate_quality_checks_to_task() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    pages = (ROOT / ".github/workflows/pages.yml").read_text(encoding="utf-8")
     publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
     assert "run: task check" in ci
     assert "run: task package:check" in publish
     assert "fetch-depth: 0" in ci
     assert "fetch-depth: 0" in publish
+    assert "task release:check" in pages
+    assert "task release:check" in publish
+    assert 'tags:\n      - "v*"' in pages
+    assert "branches:" not in pages
+    assert "path: .build/packages/skills" in pages
+    assert "include-hidden-files: true" in pages
+    assert "pages: write" in pages
+    assert "id-token: write" in pages
+    assert "environment:" in pages and "name: github-pages" in pages
+    assert "npm publish" not in pages
+    assert "deploy-pages" not in publish
+    for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", pages):
+        assert re.fullmatch(r"[0-9a-f]{40}", reference)
     for duplicated in ("ruff ", "pytest", "npm ci", "npm test", "agentskills"):
         assert duplicated not in ci
         assert duplicated not in publish
@@ -79,19 +96,19 @@ def test_precommit_selects_checks_by_staged_paths() -> None:
             "packages/opencode/assets/migration-inventory.json",
             "packages/opencode/src/index.ts",
             "tests/test_repository.py",
-            "skills/askme/SKILL.md",
+            "skills/askme/SKILL.source.md",
             "shared/manifest.json",
             "lefthook.yml",
         ]
     )
-    assert groups["docs"] == ["README.md", "skills/askme/SKILL.md"]
+    assert groups["docs"] == ["README.md", "skills/askme/SKILL.source.md"]
     assert groups["data"] == [
         "packages/opencode/assets/migration-inventory.json",
         "shared/manifest.json",
     ]
     assert groups["python"] == ["tests/test_repository.py"]
     assert groups["python_tests"] == ["tests/test_repository.py"]
-    assert groups["skills"] == ["shared/manifest.json", "skills/askme/SKILL.md"]
+    assert groups["skills"] == ["shared/manifest.json", "skills/askme/SKILL.source.md"]
     assert groups["package"] == [
         "packages/opencode/assets/migration-inventory.json",
         "packages/opencode/src/index.ts",

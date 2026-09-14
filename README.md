@@ -19,10 +19,10 @@ not contain or install portable skills.
 
 ## Global Quick Start
 
-Install the exact `v2.1.0` portable release for both hosts:
+Install the current stable `v2.2.0` portable distribution for both hosts:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 This creates one canonical copy in `~/.agents/skills` for both hosts.
@@ -38,7 +38,7 @@ Omit `--global` for a project installation. The canonical project copy is
 `.agents/skills`:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
 For OpenCode, use this mandatory integration flow when the package is needed:
@@ -56,35 +56,33 @@ Package command adapters, Fixed agents, and Selectable plugins. Adapter choices
 select package command assets, not portable skills. Install portable skills only
 with the pinned `npx --yes skills@1.5.23` command above.
 
-## Pinned Release and Latest Source
+## Published Distribution and Source Provenance
 
-The current immutable source is
-`https://github.com/kisev/skills/tree/v2.1.0`. List its catalog without writing:
-
-```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --list
-```
-
-Use `kisev/skills` separately when you intentionally want the latest source from
-the repository rather than a pinned release:
+The supported portable source is the GitHub Pages stable channel at
+`https://kisev.github.io/skills`. At this release its metadata identifies
+version `2.2.0` and the commit tagged `v2.2.0`. List the catalog without writing:
 
 ```shell
-npx --yes skills@1.5.23 add kisev/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://kisev.github.io/skills --list
 ```
 
-Install one skill by replacing `'*'` with its exact current name.
+The Pages URL is a moving stable-release channel, not an immutable tag URL. Git
+tags provide source provenance, while the Pages index binds every autonomous
+archive to a SHA-256 digest. Install one skill by replacing `'*'` with its exact
+current name. The authored repository is intentionally not an install source.
 
 ## Update
 
-A tag installation remains pinned to that tag:
+An installation from Pages follows later stable archive digests:
 
 ```shell
 npx --yes skills@1.5.23 update --global --yes
 ```
 
-Omit `--global` for project scope. To move to another release, repeat `add` with
-the new exact tag URL. `update` refreshes tracked skills but does not prune names
-renamed or deleted upstream.
+Omit `--global` for project scope. Installations previously created from a Git
+repository or tag remain bound to that source; repeat `add` with the Pages URL
+and the same scope and agents to rebind them. `update` refreshes tracked skills
+but does not prune names renamed or deleted upstream.
 
 Update the OpenCode integration independently: install the exact npm version in
 its owning npm project, run a new `install --dry-run`, execute the exact
@@ -213,17 +211,17 @@ task generate:check
 lefthook install
 ```
 
-`task generate` materializes declared shared copies and creates ignored build
-outputs. Change canonical sources in `shared/references/` or
-`packages/opencode/src/registry.ts`, not generated copies. See
+`task generate` creates ignored build outputs without changing authored skills.
+Portable entrypoints use `SKILL.source.md`; the build writes `SKILL.md` and
+injects canonical files from `shared/references/` only in `.build/skills`. See
 [CONTRIBUTING.md](CONTRIBUTING.md) for the check structure.
 
 ## Reference and Limits
 
-- Current portable release: `https://github.com/kisev/skills/tree/v2.1.0`.
-- Latest source selector: `kisev/skills`.
+- Stable portable distribution: `https://kisev.github.io/skills` (`2.2.0`).
+- Source provenance: `https://github.com/kisev/skills/tree/v2.2.0`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.1.0`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.2.0`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners use Python 3.12+ standard library only when a runner is needed.
 - `ast-grep` and `rtk` require their external CLI; skills do not install them.

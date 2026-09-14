@@ -2,11 +2,11 @@
 
 [Русская версия](ru/verification.md)
 
-## Release 2.1.0
+## Release 2.2.0
 
-The exact portable source is
-`https://github.com/kisev/skills/tree/v2.1.0`; the optional package is
-`@kisev/skills-opencode@2.1.0`. Portable installation pins
+The supported portable source is the GitHub Pages stable channel at
+`https://kisev.github.io/skills`; the optional package is
+`@kisev/skills-opencode@2.2.0`. Portable installation pins
 `npx --yes skills@1.5.23`. The package requires Node.js 22+ and declares OpenCode
 `>=1.18.29 <1.19.0`.
 
@@ -15,18 +15,18 @@ The exact portable source is
 The global contract for both supported hosts is:
 
 ```shell
-npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.1.0 --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 It produces one canonical copy in `~/.agents/skills`. Without `--global`, the
-project copy is `.agents/skills`. `kisev/skills` selects latest source separately
-from the exact tag URL.
+project copy is `.agents/skills`. The release tag provides source provenance;
+the authored repository is not an installation source.
 
-A tag-based installation remains pinned during `update`. Moving to another tag
-requires repeating `add` with the new exact URL. Update does not prune renamed or
-deleted skills. Cleanup is limited to the eight portable names in the current
-[Migration Inventory](migration-inventory.md); no portable `multi-run` cleanup
-record exists.
+The Pages URL is a moving stable-release channel. `update` verifies the current
+well-known digest and downloads only changed archives; it does not prune renamed
+or deleted skills. Existing Git-based installations must repeat `add` with the
+Pages URL and the same scope and agents to rebind their source. Cleanup remains
+limited to the eight names in the current [Migration Inventory](migration-inventory.md).
 
 ## OpenCode Integration
 
@@ -82,6 +82,9 @@ mode, host, model, timeout, token and cost budgets, and an output path. No model
 or baseline is selected by default, and untrusted CI does not receive
 credentials.
 
-Generated runtime copies and distribution outputs are checked for parity. In a
-clean temporary checkout, build and check must leave `git status` unchanged:
-declared generated copies are tracked and temporary outputs remain ignored.
+Shared runtime copies exist only in ignored build outputs and are checked for
+parity. In a clean temporary checkout, build and check must leave `git status`
+unchanged. Distribution tests serve the complete Pages layout from a local HTTP
+fixture, install it through pinned `skills@1.5.23`, remove the fixture, and then
+run the installed runners. Release CI additionally checks the tag, version,
+source revision, deployed index, archive paths, and SHA-256 digests.

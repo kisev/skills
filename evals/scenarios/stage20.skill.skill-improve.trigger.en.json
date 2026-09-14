@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "3665c2021642ef46747275a79fa50f9e3c37618809d7ba1b7535ddc949ce3648",
+  "digest": "d188b50707994bda1bdfc0bb913bfd745d1e3c4a86bd5e7effb0dce0ae84b3c7",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.skill.skill-improve.trigger.source",
-      "path": "skills/skill-improve/SKILL.md"
+      "path": ".build/skills/skill-improve/SKILL.md"
     }
   ],
   "kind": "trigger",
