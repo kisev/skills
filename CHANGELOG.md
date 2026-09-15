@@ -4,6 +4,26 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.3.0] - 2026-09-15
+
+### Added
+
+- Structured root and contextual CLI help now documents every command and group,
+  accepted options, safe mutation workflow, scope behavior, and examples.
+- Unified terminal selectors add consistent keyboard guidance and true
+  multi-selection for arbitrary command, agent, and plugin subsets during install.
+- Diataxis documentation adds focused tutorials, how-to guides, reference
+  material, and explanations for portable skills and the OpenCode integration.
+
+### Changed
+
+- User documentation now follows stable npm channels, while generated OpenCode
+  confirmation commands retain exact package versions and global CLI execution is
+  independent of the current directory.
+- Project release, portable installer, and OpenCode compatibility versions now
+  have centralized checked authorities; per-skill metadata versions were removed
+  in favor of distribution metadata and content-addressed archive digests.
+
 ## [2.2.3] - 2026-09-15
 
 ### Fixed

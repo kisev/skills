@@ -72,10 +72,17 @@ def test_release_artifact_hashes_use_registry_integrity_format() -> None:
     }
 
 
-def test_release_notes_are_taken_from_the_exact_changelog_section() -> None:
-    notes = create_github_release.changelog(RELEASE_VERSION)
-    assert "plain absolute artifact paths" in notes
-    assert "## [2.2.1]" not in notes
+def test_release_notes_are_taken_from_the_exact_changelog_section(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "CHANGELOG.md").write_text(
+        "# Changes\n\n"
+        "## [9.9.9] - 2026-09-15\n\n### Added\n\n- Current release.\n\n"
+        "## [9.9.8] - 2026-09-14\n\n### Fixed\n\n- Previous release.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(create_github_release, "ROOT", tmp_path)
+    assert create_github_release.changelog("9.9.9") == "### Added\n\n- Current release.\n"
 
 
 def test_npm_provenance_binds_artifact_workflow_and_revision(
@@ -207,6 +214,7 @@ def test_github_release_creation_binds_tag_revision_and_notes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[tuple[str, str, dict[str, object] | None]] = []
+    release_notes = "### Added\n\n- Exact release notes.\n"
 
     def api(
         method: str,
@@ -224,12 +232,13 @@ def test_github_release_creation_binds_tag_revision_and_notes(
     monkeypatch.setenv("RELEASE_TAG", f"v{RELEASE_VERSION}")
     monkeypatch.setenv("RELEASE_REVISION", "a" * 40)
     monkeypatch.setattr(create_github_release, "api", api)
+    monkeypatch.setattr(create_github_release, "changelog", lambda _version: release_notes)
     assert create_github_release.create()["html_url"] == "https://github.example/release"
     payload = calls[-1][2]
     assert payload is not None
     assert payload["tag_name"] == f"v{RELEASE_VERSION}"
     assert payload["target_commitish"] == "a" * 40
-    assert "plain absolute artifact paths" in str(payload["body"])
+    assert payload["body"] == release_notes
 
 
 def test_release_environment_revision_must_match_head(monkeypatch: pytest.MonkeyPatch) -> None:
