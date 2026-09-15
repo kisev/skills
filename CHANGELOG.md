@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
+## [2.4.2] - 2026-09-16
+
+### Release
+
+- Republishes the 2.4.1 documentation and locale-validation fixes under a new
+  immutable release tag because npm recorded 2.4.1 without a downloadable tarball.
+- Documentation, locale contracts, and runtime behavior are unchanged from 2.4.1.
+
 ## [2.4.1] - 2026-09-16
 
 ### Fixed
