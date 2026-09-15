@@ -796,8 +796,7 @@ export async function buildAgentProfilePlan(
     inventoryDigest,
     config,
     manifest: finalManifest,
-    expectedConfig:
-      request.action === "uninstall" ? state.configRaw : names.length ? configContent : undefined,
+    expectedConfig: names.length ? configContent : state.configRaw,
     expectedManifest: manifestContent,
     legacyTransferred,
   };

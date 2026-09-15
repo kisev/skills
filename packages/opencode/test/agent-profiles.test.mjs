@@ -341,6 +341,41 @@ test("model and variant configuration survives package install", async () => {
   }
 });
 
+test("agent deselection removes managed profiles and preserves profile configuration", async () => {
+  const context = await roots();
+  try {
+    const installed = await confirmedInstall(context.project, context.home);
+    const configPath = join(context.root, ".skills-opencode", "agent-profiles.json");
+    const config = await readFile(configPath);
+    const selection = { ...installed.selection, agents: [] };
+    const plan = await preview("install", "project", context.project, context.home, selection);
+
+    assert.equal(
+      plan.operations.filter(
+        (item) => item.path.startsWith("agents/") && item.operation === "remove",
+      ).length,
+      FIXED.length,
+    );
+    assert.equal(
+      plan.operations.some((item) => item.path === ".skills-opencode/agent-profiles.json"),
+      false,
+    );
+    await apply("install", "project", plan.digest, context.project, context.home, {}, selection);
+
+    assert.deepEqual(await readFile(configPath), config);
+    await assert.rejects(
+      readFile(join(context.root, ".skills-opencode", "agent-profiles.manifest.json")),
+      { code: "ENOENT" },
+    );
+    for (const name of FIXED)
+      await assert.rejects(readFile(join(context.root, "agents", `${name}.md`)), {
+        code: "ENOENT",
+      });
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
 test("additional critic atomically changes the exact manager and review pools", async () => {
   const context = await roots();
   try {
