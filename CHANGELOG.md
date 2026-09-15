@@ -4,6 +4,13 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.3.1] - 2026-09-15
+
+### Fixed
+
+- OpenCode installer upgrades that deselect every fixed agent now preserve the
+  separate profile configuration while removing managed profiles without rollback.
+
 ## [2.3.0] - 2026-09-15
 
 ### Added
