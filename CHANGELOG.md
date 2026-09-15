@@ -4,6 +4,22 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.4.0] - 2026-09-16
+
+### Added
+
+- Code review now restores incremental review workflows with persisted evidence,
+  reviewer plans, and structured output for follow-up review rounds.
+- Specification management preserves decision history and provides explicit
+  traceability for its lifecycle requirements.
+
+### Changed
+
+- The `summary` skill and command are renamed to `briefing`; catalog,
+  migration inventory, documentation, and evaluation triggers use the new name.
+- Local release gates now use the single `task pre-push` entrypoint before a
+  branch and its annotated release tag are pushed atomically.
+
 ## [2.3.1] - 2026-09-15
 
 ### Fixed
