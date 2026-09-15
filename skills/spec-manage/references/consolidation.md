@@ -1,6 +1,6 @@
 # Canonical specification consolidation
 
-Consolidation is a mandatory part of every `spec-update`, not a separate periodic project. Its purpose is to keep `specs/` a compact model of the current system that a person can read and hold in mind. Git retains history; canonical documents are not a change log.
+Consolidation is a mandatory part of every `spec-update`, not a separate periodic project. Its purpose is to keep `specs/` a compact model of the current system that a person can read and hold in mind. Canonical documents are not a change log, but they retain compact lifecycle records for stable requirements and decisions; Git retains the full edit history.
 
 ## Scope
 
@@ -10,7 +10,7 @@ An explicit request to consolidate the specification requires a native question:
 
 ## Analysis
 
-Before preview, check whether the affected area requires combining two normative formulations of one contract into one canonical point and replacing a duplicate with a reference; removing a withdrawn requirement, temporary implementation plan, or behavior no longer in the agreed target state; removing details that do not affect an observable contract or architectural invariant while retaining necessary causality and references; repairing a link to a removed path, stale `REQ-*`/`ADR-*`, or withdrawn interface; or replacing a changed architectural decision with a new ADR with explicit supersession rather than rewriting an accepted ADR.
+Before preview, check whether the affected area requires combining two normative formulations of one contract into one canonical point and replacing a duplicate with a reference; compacting a withdrawn or superseded requirement into the historical form from `references/requirements.md`; removing a temporary implementation plan or behavior no longer in the agreed target state; removing details that do not affect an observable contract or architectural invariant while retaining necessary causality and references; repairing a link to a removed path, stale `REQ-*`/`ADR-*`, or withdrawn interface; or replacing a changed architectural decision with a new ADR with explicit supersession rather than rewriting an accepted ADR.
 
 Do not remove current non-scope, confirmed risk, compatibility boundary, or necessary explanation merely for brevity. Do not create an archive, version, changelog, plan, delta, or other durable workflow artifact inside `specs/`.
 
@@ -37,4 +37,4 @@ For `required`, the preview must contain both the substantive change and justifi
 
 ## Completion
 
-After change in the checked area, no competing canonical documents exist for one interface or constraint, no withdrawn norm or duplicate formulation remains, and no link is broken. If evidence is insufficient, ask; do not remove text based on an assumption.
+After change in the checked area, no competing canonical documents exist for one interface or constraint, no withdrawn text remains normative, every stable ID retains its required lifecycle record, no duplicate formulation remains, and no link is broken. If evidence is insufficient, ask; do not remove text based on an assumption.

@@ -7,7 +7,7 @@ Explain that this section contains normative, verifiable agreements for system b
 ## Included
 
 - An index of the four requirement types.
-- Shared stable-ID and traceability rules.
+- Shared append-only stable-ID, lifecycle-history, and traceability rules.
 - References to machine-readable contracts.
 
 ## Excluded
@@ -31,4 +31,4 @@ requirements/
 
 ## Content Template
 
-Give a short section index and rules for `REQ-F-*`, `REQ-I-*`, `REQ-Q-*`, and `REQ-C-*`. Remove these instructions from the created document.
+Give a short section index and rules for `REQ-F-*`, `REQ-I-*`, `REQ-Q-*`, and `REQ-C-*`. State that new numbers must exceed the historical maximum and retired requirements remain as compact lifecycle records. Remove these instructions from the created document.

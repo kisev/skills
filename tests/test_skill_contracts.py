@@ -89,6 +89,27 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             assert marker in workflow, (name, marker)
 
 
+def test_project_spec_identifiers_and_decisions_are_append_only() -> None:
+    skill = ROOT / "skills/spec-manage"
+    requirements = (skill / "references/requirements.md").read_text(encoding="utf-8")
+    adr = (skill / "references/adr.md").read_text(encoding="utf-8")
+    consolidation = (skill / "references/consolidation.md").read_text(encoding="utf-8")
+    audit = (skill / "references/auditing.md").read_text(encoding="utf-8")
+    workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
+
+    assert "greater than the highest number ever assigned" in requirements
+    assert "Never fill a gap, renumber an entry, or reuse an ID" in requirements
+    assert "Do not delete a requirement when its lifecycle status changes" in requirements
+    assert "A superseded or withdrawn entry may be shortened" in requirements
+    assert "preserve the ID, former requirement, status-change reason" in requirements
+    assert "greater than the highest number ever assigned" in adr
+    assert "Never fill a gap, renumber an ADR, reuse a number, or delete" in adr
+    assert "reason for deprecation or supersession" in adr
+    assert "compacting a withdrawn or superseded requirement" in consolidation
+    assert "increase above the historical" in audit
+    assert "stable requirements and decisions" in workflow
+
+
 def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None:
     expected_markers = {
         "team-retro": (

@@ -17,6 +17,11 @@
       "test_selector": "tests/test_skill_contracts.py::test_every_skill_has_required_frontmatter",
       "eval_ids": ["stage20.skill.spec-manage.trigger.en", "stage20.skill.spec-manage.near-miss.en"]
     },
+    "spec_lifecycle": {
+      "kind": "automated",
+      "test_selector": "tests/test_skill_contracts.py::test_project_spec_identifiers_and_decisions_are_append_only",
+      "eval_ids": ["stage20.skill.spec-manage.trigger.en"]
+    },
     "goal_authorization": {
       "kind": "automated",
       "test_selector": "tests/test_evals.py::test_goal_authorization_offline_runner_exercises_decision_cases",
@@ -369,6 +374,12 @@
       "source": "specs/requirements/constraints/README.md",
       "block_sha256": "4722175013d8ffd02518dd789b7661a93cf729396b43249c7efc4a7be5e1f3dd",
       "evidence_profile": "version_authorities"
+    },
+    "REQ-C-008": {
+      "surface": "specification",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "f928a11f327a7b78c65da7f7612d2a3e3d410047becacd1b31ee0aa75b7fe291",
+      "evidence_profile": "spec_lifecycle"
     },
     "REQ-F-101": {
       "surface": "skill:agents-md",

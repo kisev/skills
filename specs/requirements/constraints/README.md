@@ -42,3 +42,11 @@ each have one declared authority. Required package, lock, specification, runtime
 and toolchain mirrors shall be checked automatically. User documentation shall
 follow stable channels without copying the current project release, and portable
 skill metadata shall not carry a version.
+
+### REQ-C-008 - Preserve specification lifecycle history
+
+`spec-manage` shall allocate each new `REQ-*` and `ADR-*` number above the
+historical maximum of its namespace without filling gaps or reusing identifiers.
+Withdrawn, deprecated, and superseded records shall remain in canonical `specs/`
+with enough context to identify the former requirement or decision, its status,
+the reason it changed, and its replacement when one exists.

@@ -2,6 +2,9 @@
 
 - Status: proposed
 - Date: YYYY-MM-DD
+- Status changed: none
+- Supersedes: none
+- Superseded by: none
 
 ## Контекст и постановка проблемы
 

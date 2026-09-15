@@ -22,7 +22,13 @@ Do not force every text into this form.
 - `REQ-Q-NNN` - quality requirement;
 - `REQ-C-NNN` - constraint.
 
-Do not renumber or reuse existing IDs. A clarification retains its ID, a removed ID remains reserved, and a move without semantic change does not change its ID. Before assigning a new ID, check canonical documents and available Git history, then choose the next never-used number. If history is unavailable and a safe number cannot be determined, ask the user.
+Treat each identifier namespace as an append-only sequence. A clarification retains its ID, and a move without semantic change does not change its ID. Before assigning a new ID, check canonical documents and available Git history, then choose a number greater than the highest number ever assigned in that namespace. Never fill a gap, renumber an entry, or reuse an ID. If history is unavailable and the historical maximum cannot be determined safely, ask the user.
+
+## Lifecycle history
+
+Do not delete a requirement when its lifecycle status changes or it stops being normative. Keep it under its original heading and ID. Use `deprecated` while it remains supported but is discouraged; it retains its full normative statement and verification. Use `superseded` when another requirement replaces it and `withdrawn` when it no longer applies without a replacement. Record the status-change date and reason, and the replacement ID when one exists.
+
+A superseded or withdrawn entry may be shortened during later consolidation, but it must continue to preserve the ID, former requirement, status-change reason, and replacement link when applicable. Git contains the full edit history; the canonical specification contains the minimum context needed to understand that the requirement existed and why it changed.
 
 Recommended format:
 

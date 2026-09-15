@@ -1,6 +1,6 @@
 # Canonical project specification
 
-Maintain `specs/` as the shared source of truth for people and agents. Documents describe the agreed system state after merge; Git keeps history.
+Maintain `specs/` as the shared source of truth for people and agents. Documents describe the agreed system state after merge and retain a compact lifecycle record for stable requirements and decisions; Git keeps the full edit history.
 
 ## Mode selection
 
@@ -23,6 +23,7 @@ Use `templates/` as content guidance. Do not copy placeholders or operational pr
 - Document prose uses the language of the latest user request; use English when that language is ambiguous. Do not translate identifiers, paths, stable `REQ-*` and `ADR-*` IDs, glossary terms, or widely accepted technical terms.
 - Requirements and architecture are organized by knowledge type, not feature, milestone, or issue. The machine-readable contract remains the source of truth for syntax; Markdown records semantics, errors, compatibility, and invariants.
 - Additional files are allowed only at semantic boundaries from the guidance. Create an ADR only for an architecturally significant decision.
+- Stable `REQ-*` and `ADR-*` namespaces are append-only. New numbers are greater than every number previously assigned in the namespace; never fill a gap, renumber an entry, reuse an ID, or delete its compact lifecycle record.
 - Do not create roadmap, archive, proposal, delta, tasks, plan, research, analysis, mapping, or other durable process artifacts.
 
 ## Dialogue and writing
@@ -55,7 +56,7 @@ When selecting a durable design in writing modes, develop at least two materiall
 
 1. Verify that `specs/` exists, read the affected area, and agree on the desired change.
 2. Before design, mandatory perform the analysis in `references/consolidation.md`. Explicitly include `Consolidation: required` with precise simplifications or `Consolidation: not required` with a reason in the preview.
-3. Agree on an unambiguous target state. A new material requirement receives a new ID; do not renumber or reuse existing IDs.
+3. Agree on an unambiguous target state. A new material requirement receives a number above the historical maximum for its namespace. Retain withdrawn and superseded entries as compact lifecycle records according to `references/requirements.md` and `references/adr.md`.
 4. After ordinary Confirmation or exact frozen trusted Goal authorization for the action and boundary, modify only `specs/`, including ADRs within `specs/architecture/09-architecture-decisions/`.
 
 ### `spec-audit`

@@ -2,6 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-14
+- Supersedes: [ADR-0001](0001-direct-git-self-contained-skills.md)
 
 ## Context
 

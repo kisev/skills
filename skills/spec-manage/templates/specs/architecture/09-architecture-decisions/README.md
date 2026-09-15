@@ -6,7 +6,7 @@ Describe the canonical target state supported by verified evidence.
 
 ## Included
 
-State the responsibilities, stable identifiers, and relevant interfaces.
+State the responsibilities, append-only stable identifiers, lifecycle status, and relevant interfaces. Retain compact entries for deprecated and superseded ADRs.
 
 ## Excluded
 

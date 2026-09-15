@@ -12,3 +12,5 @@ the syntax source of truth.
 
 IDs use `REQ-F-NNN`, `REQ-I-NNN`, `REQ-Q-NNN`, and `REQ-C-NNN`. A requirement
 block is hashed in `traceability.json`; requirement text is not duplicated there.
+Each namespace is append-only: new numbers exceed its historical maximum, and a
+retired ID remains as a compact record of the former requirement and its outcome.

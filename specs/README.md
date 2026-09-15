@@ -3,7 +3,8 @@
 ## Target
 
 This English-only specification describes the current merged target of the
-portable Agent Skills repository. It records supported contracts, not history,
+portable Agent Skills repository. It records supported contracts and compact
+lifecycle history for stable requirements and decisions, not a change log,
 roadmap, or implementation plans.
 
 ## Public Surface

@@ -90,7 +90,7 @@ SPEC_TEMPLATE_READMES = tuple(
     )
 )
 PROJECT_REFERENCE_CONTRACTS = {
-    "references/requirements.md": "do not renumber or reuse existing ids",
+    "references/requirements.md": "append-only sequence",
     "references/architecture.md": "additional markdown files are allowed only",
     "references/interviewing.md": "readiness check",
     "references/onboarding.md": "`known`",
