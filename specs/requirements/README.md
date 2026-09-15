@@ -1,6 +1,6 @@
 # Requirements
 
-This section contains the normative English contracts for the `2.2.3` target.
+This section contains the normative English contracts for the current target.
 Requirements are atomic, observable, uniquely identified, and traceable to
 evidence. The machine-readable public-surface and compatibility contracts remain
 the syntax source of truth.

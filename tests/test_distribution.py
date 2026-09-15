@@ -19,7 +19,12 @@ from scripts import build_distribution
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".build" / "packages" / "skills"
-PINNED_SKILLS = ["npx", "--yes", "skills@1.5.23"]
+PACKAGE_METADATA = json.loads(
+    (ROOT / "packages" / "opencode" / "package.json").read_text(encoding="utf-8")
+)
+RELEASE_VERSION = PACKAGE_METADATA["version"]
+SKILLS_INSTALLER_VERSION = PACKAGE_METADATA["skillsInstallerVersion"]
+PINNED_SKILLS = ["npx", "--yes", f"skills@{SKILLS_INSTALLER_VERSION}"]
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -34,7 +39,7 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
     release = json.loads((OUTPUT / "index.json").read_text(encoding="utf-8"))
     inventory = json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())
     assert index["$schema"] == "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
-    assert release["version"] == "2.2.3"
+    assert release["version"] == RELEASE_VERSION
     assert (
         release["source_revision"]
         == run(
@@ -104,7 +109,7 @@ def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -
             run(
                 [*PINNED_SKILLS, "--version"], capture_output=True, text=True, check=True
             ).stdout.strip()
-            == "1.5.23"
+            == SKILLS_INSTALLER_VERSION
         )
         for agent in ("opencode", "codex"):
             home, state = tmp_path / agent / "home", tmp_path / agent / "state"

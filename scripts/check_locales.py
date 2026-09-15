@@ -154,6 +154,8 @@ def validate(root: Path = ROOT, built: Path | None = None) -> int:
             raise LocaleError(f"section structure differs: {english}, {russian}")
         en_links = _links(root, english, en_text)
         ru_links = _links(root, russian, ru_text)
+        if russian in ru_links:
+            raise LocaleError(f"Russian documentation links to itself: {russian}")
         if require_language_link and (russian not in en_links or english not in ru_links):
             raise LocaleError(f"missing reciprocal language link: {english}, {russian}")
     documented = set(paths) | set(neutral)

@@ -69,7 +69,8 @@ package failure, run `task package:check` from the repository root.
 ## Quality and Review
 
 - Preserve frontmatter and agentskills.io format constraints for every
-  `SKILL.source.md`; the built name is `SKILL.md`.
+  `SKILL.source.md`; the built name is `SKILL.md`, and neither authored nor built
+  skill metadata carries a version.
 - Add focused tests for public contracts or meaningful regression risk.
 - Never include credentials, tokens, internal endpoints, local paths, caches, or
   build artifacts in changes.
@@ -97,9 +98,11 @@ checks run, and deliberately omitted checks in a pull request.
 
 ## Releases
 
-Portable-skill versions are fixed in their metadata. The Pages distribution,
-`@kisev/skills-opencode` version, tag, and GitHub Release must refer to one
-commit. Do not change a published version: release a new patch version instead.
+Portable skills carry no version. Release identity belongs to the Pages
+distribution metadata and each content-addressed archive digest. The Pages
+distribution, `@kisev/skills-opencode` version, tag, and GitHub Release must
+refer to one commit. Do not change a published version: release a new patch
+version instead.
 A tag push starts the single `.github/workflows/publish.yml` release workflow.
 It runs the full quality gate before publishing, builds one exact npm tarball and
 a cross-channel digest manifest, publishes and verifies Pages and npm, and only

@@ -5,9 +5,10 @@
 ## Current Release
 
 The current portable source is the GitHub Pages stable channel at
-`https://kisev.github.io/skills`. Its release metadata identifies `2.2.3` and
-the commit tagged `v2.2.3`. The optional integration package is
-`@kisev/skills-opencode@2.2.3`.
+`https://kisev.github.io/skills`. Its release metadata identifies the release and
+source revision, while `https://github.com/kisev/skills/releases/latest` resolves
+the current GitHub Release. The optional integration package is
+`@kisev/skills-opencode`.
 
 ## Active Portable Skills
 
@@ -42,7 +43,7 @@ does not contain a portable `multi-run` record.
 | `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 
 The `skills` CLI `update` operation does not prune renamed or deleted skills.
-Cleanup removes these exact names explicitly with pinned `skills@1.5.23` and the
+Cleanup removes these exact names explicitly with stable `skills@latest` and the
 same agents and scope as the installation. Package installation and reconcile do
 not replace the portable source rebind or cleanup flow.
 

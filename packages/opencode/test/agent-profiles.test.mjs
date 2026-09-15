@@ -25,7 +25,7 @@ import {
   listAgentProfiles,
   previewAgentProfileChange,
 } from "../dist/agent-profiles.js";
-import { promptText, selectOption } from "../dist/terminal-wizard.js";
+import { promptText, selectOption, selectOptions } from "../dist/terminal-wizard.js";
 import { apply, preview } from "../dist/installer.js";
 import {
   LifecycleError,
@@ -46,8 +46,23 @@ const REPOSITORY = resolve(PACKAGE, "../..");
 const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8")).version;
 const FIXED = ["architect", "critic", "manager", "mapper", "review", "worker"];
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function temporary() {
   return mkdtempSync(join(tmpdir(), "skills-opencode-agents-"));
+}
+
+function fakeTTY() {
+  const stdin = new PassThrough();
+  const stderr = new PassThrough();
+  const chunks = [];
+  stdin.isTTY = true;
+  stderr.isTTY = true;
+  stdin.setRawMode = () => stdin;
+  stderr.on("data", (chunk) => chunks.push(chunk.toString()));
+  return { stdin, stderr, output: () => chunks.join("") };
 }
 
 async function roots() {
@@ -199,16 +214,8 @@ test("incomplete non-TTY configure exits with JSON guidance and leaves no receip
 });
 
 test("keyboard selector flow is deterministic and never asks for model text", async () => {
-  const makeTTY = () => {
-    const stdin = new PassThrough();
-    const stderr = new PassThrough();
-    stdin.isTTY = true;
-    stderr.isTTY = true;
-    stdin.setRawMode = () => stdin;
-    return { stdin, stderr };
-  };
   const select = async (label, values, keys) => {
-    const { stdin, stderr } = makeTTY();
+    const { stdin, stderr } = fakeTTY();
     const result = selectOption(label, values, stdin, stderr);
     stdin.write(keys);
     return result;
@@ -220,12 +227,74 @@ test("keyboard selector flow is deterministic and never asks for model text", as
   assert.equal(await select("Variant", ["(none)", "low", "high"], "\x1b[B\x1b[B\r"), 2);
 });
 
+test("single and multi selectors share visual controls and deterministic selection", async () => {
+  const single = fakeTTY();
+  const singleResult = selectOption(
+    "Select provider:",
+    ["anthropic", "openai"],
+    single.stdin,
+    single.stderr,
+  );
+  single.stdin.write("\x1b[B\r");
+  assert.equal(await singleResult, 1);
+  assert.match(single.output(), /\? Select provider:/);
+  assert.match(single.output(), /Up\/Down move \| Enter select \| Esc cancel/);
+  assert.match(single.output(), /> openai/);
+
+  const multiple = fakeTTY();
+  const multipleResult = selectOptions(
+    "Fixed agents",
+    ["manager", "review", "critic"],
+    ["manager"],
+    multiple.stdin,
+    multiple.stderr,
+  );
+  multiple.stdin.write("\x1b[B \r");
+  assert.deepEqual(await multipleResult, ["manager", "review"]);
+  assert.match(
+    multiple.output(),
+    /Up\/Down move \| Space toggle \| A all \| N none \| Enter confirm \| Esc cancel/,
+  );
+  assert.match(multiple.output(), /\[x] manager/);
+  assert.match(multiple.output(), /\[ ] review/);
+  assert.match(multiple.output(), /Selected 1\/3/);
+
+  const subset = fakeTTY();
+  const subsetResult = selectOptions(
+    "Commands",
+    ["doctor", "reconcile", "agent-profiles"],
+    ["doctor", "reconcile", "agent-profiles"],
+    subset.stdin,
+    subset.stderr,
+  );
+  subset.stdin.write("n\x1b[B \r");
+  assert.deepEqual(await subsetResult, ["reconcile"]);
+
+  const all = fakeTTY();
+  const allResult = selectOptions(
+    "Plugins",
+    ["rules-injector", "rtk", "zed-bell"],
+    [],
+    all.stdin,
+    all.stderr,
+  );
+  all.stdin.write("a\r");
+  assert.deepEqual(await allResult, ["rules-injector", "rtk", "zed-bell"]);
+
+  const cancelled = fakeTTY();
+  const cancelledResult = selectOptions(
+    "Plugins",
+    ["rules-injector", "rtk"],
+    [],
+    cancelled.stdin,
+    cancelled.stderr,
+  );
+  cancelled.stdin.write("\x1b");
+  assert.equal(await cancelledResult, null);
+});
+
 test("keyboard selector supports cancel and text prompt only for critic identity", async () => {
-  const stdin = new PassThrough();
-  const stderr = new PassThrough();
-  stdin.isTTY = true;
-  stderr.isTTY = true;
-  stdin.setRawMode = () => stdin;
+  const { stdin, stderr } = fakeTTY();
   const cancelled = selectOption(
     "Action",
     ["Keep", "Change", "Clear variant", "Back", "Cancel"],
@@ -235,14 +304,13 @@ test("keyboard selector supports cancel and text prompt only for critic identity
   stdin.write("\x1b");
   assert.equal(await cancelled, null);
 
-  const nameInput = new PassThrough();
-  const nameOutput = new PassThrough();
-  nameInput.isTTY = true;
-  nameOutput.isTTY = true;
-  nameInput.setRawMode = () => nameInput;
-  const name = promptText("Critic name", nameInput, nameOutput);
-  nameInput.write("security\r");
+  const namePrompt = fakeTTY();
+  const name = promptText("Critic name", namePrompt.stdin, namePrompt.stderr);
+  namePrompt.stdin.write("security\r");
   assert.equal(await name, "security");
+  assert.match(namePrompt.output(), /\? Critic name/);
+  assert.match(namePrompt.output(), /Type a value \| Enter confirm \| Esc cancel/);
+  assert.match(namePrompt.output(), /> security/);
 });
 
 test("model and variant configuration survives package install", async () => {
@@ -1008,7 +1076,13 @@ test("CLI defaults to a concise human plan and table", async () => {
     assert.match(previewResult.stdout, /^  State: create 3$/m);
     assert.match(previewResult.stdout, /^Conflicts: none$/m);
     assert.match(previewResult.stdout, /^Digest: [a-f0-9]{64}$/m);
-    assert.match(previewResult.stdout, /^Apply:\n  npm exec -- skills-opencode install /m);
+    assert.match(
+      previewResult.stdout,
+      new RegExp(
+        `^Apply:\\n  npx --yes ${escapeRegExp(`@kisev/skills-opencode@${PACKAGE_VERSION}`)} install `,
+        "m",
+      ),
+    );
     assert.doesNotMatch(previewResult.stdout, /"operations"|"status"/);
     assert.ok(previewResult.stdout.length < 2500);
     const digest = previewResult.stdout.match(/^Digest: ([a-f0-9]{64})$/m)?.[1];

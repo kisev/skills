@@ -1,5 +1,4 @@
 import { execFile } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -26,6 +25,7 @@ import {
   type Scope,
   type TransactionOptions,
 } from "./lifecycle.js";
+import { readPackageVersion } from "./package-metadata.js";
 
 export { type Scope as AgentProfileScope } from "./lifecycle.js";
 
@@ -164,12 +164,9 @@ const V1_AGENT_SHA256: Readonly<Record<FixedAgentRole, string>> = {
 };
 
 function packageVersion(): string {
-  const value = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as {
-    version?: unknown;
-  };
-  if (typeof value.version !== "string")
-    throw new AgentProfileError("invalid_package", "Package version is unavailable");
-  return value.version;
+  const version = readPackageVersion();
+  if (!version) throw new AgentProfileError("invalid_package", "Package version is unavailable");
+  return version;
 }
 
 function emptyConfig(): AgentProfileConfig {

@@ -1,4 +1,5 @@
 import type { AgentInventory, AgentProfilePlan } from "./agent-profiles.js";
+import { CATALOG } from "./catalog.js";
 import type { Plan as InstallerPlan } from "./installer.js";
 import type { ReconcilePlan } from "./reconcile.js";
 import type { DoctorReport } from "./doctor.js";
@@ -191,7 +192,7 @@ export function renderInventory(inventory: AgentInventory): string {
 }
 
 export function shellCommand(arguments_: readonly string[]): string {
-  return ["npm", "exec", "--", "skills-opencode", ...arguments_]
+  return ["npx", "--yes", `@kisev/skills-opencode@${CATALOG.version}`, ...arguments_]
     .map((value) =>
       /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replaceAll("'", `'"'"'`)}'`,
     )
@@ -278,10 +279,10 @@ export function renderDoctor(report: DoctorReport): string {
   );
   const next = new Set(actionable.flatMap((item) => item.remediation ?? []));
   if (report.conflicts.length) {
-    next.add(`npm exec -- skills-opencode reconcile --scope ${report.scope} --dry-run`);
+    next.add(shellCommand(["reconcile", "--scope", report.scope, "--dry-run"]));
   }
   if (actionable.some((item) => item.id.startsWith("assets."))) {
-    next.add(`npm exec -- skills-opencode install --scope ${report.scope} --dry-run`);
+    next.add(shellCommand(["install", "--scope", report.scope, "--dry-run"]));
   }
   const lines = [
     `Doctor TLDR: ${report.status} (${report.scope})`,

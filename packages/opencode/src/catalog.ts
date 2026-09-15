@@ -1,3 +1,5 @@
+import { requirePackageVersion } from "./package-metadata.js";
+
 export const CATALOG = {
   skills: [
     "agents-md",
@@ -34,5 +36,5 @@ export const CATALOG = {
   agents: ["manager", "architect", "mapper", "worker", "review", "critic"],
   package_commands: ["capabilities", "doctor", "reconcile", "agent-profiles"],
   tools: ["capabilities", "route", "doctor", "agent_profiles", "reconcile"],
-  version: "2.2.3",
+  version: requirePackageVersion(),
 } as const;

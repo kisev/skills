@@ -29,12 +29,26 @@ import {
 } from "../dist/runtime/worktree.js";
 import zedBell from "../dist/plugins/zed-bell.js";
 import { InstallerError, apply, preview } from "../dist/installer.js";
-import { renderReconcile } from "../dist/cli-output.js";
+import { renderReconcile, shellCommand } from "../dist/cli-output.js";
 import { applyReconcile, previewReconcile, ReconcileError } from "../dist/reconcile.js";
 import { lifecycleRoot } from "../dist/lifecycle.js";
+import {
+  readPackageVersion,
+  requirePackageVersion,
+  requireSkillsInstallerVersion,
+  skillsInstallerSpec,
+} from "../dist/package-metadata.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
 const REPOSITORY = resolve(PACKAGE, "../..");
+const PACKAGE_METADATA = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
+const PACKAGE_VERSION = PACKAGE_METADATA.version;
+const PACKAGE_SPEC = `@kisev/skills-opencode@${PACKAGE_VERSION}`;
+const SKILLS_INSTALLER_SPEC = `skills@${PACKAGE_METADATA.skillsInstallerVersion}`;
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function temporary() {
   return mkdtempSync(join(tmpdir(), "skills-opencode-test-"));
@@ -71,17 +85,18 @@ function hostClient() {
   };
 }
 
-test("installer wizard names both command adapter groups and keeps defaults", () => {
+test("installer wizard uses shared multi-select groups and keeps defaults", () => {
   const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
   assert.match(source, /Portable skills are installed separately through npx skills/);
   assert.match(source, /This installer does not install, update, or remove portable skills/);
   assert.match(source, /Skill command adapters/);
   assert.match(source, /Package command adapters/);
-  assert.match(source, /group\("Fixed agents", defaultSelection\(\).agents, 0\)/);
-  assert.match(
-    source,
-    /group\(\s*"Selectable plugins \(none selected by default\)",\s*SELECTABLE_PLUGINS,\s*1,?\s*\)/,
-  );
+  assert.match(source, /selectOptions\(\s*label,\s*names,\s*initialSelected,/);
+  assert.match(source, /group\("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS\)/);
+  assert.match(source, /group\("Package command adapters", PACKAGE_COMMANDS, PACKAGE_COMMANDS\)/);
+  assert.match(source, /group\("Fixed agents", defaults\.agents, defaults\.agents\)/);
+  assert.match(source, /group\("Selectable plugins", SELECTABLE_PLUGINS, \[\]\)/);
+  assert.doesNotMatch(source, /"Select all", "Select none"/);
   assert.match(source, /--skill-commands/);
   assert.match(source, /--package-commands/);
 });
@@ -108,10 +123,13 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
     assert.equal(await readFile(receiptPath, "utf8"), receiptBefore);
     const output = renderReconcile(plan, {
       applied: false,
-      confirmationCommand: "npm exec -- skills-opencode reconcile --scope project --confirm digest",
+      confirmationCommand: shellCommand(["reconcile", "--scope", "project", "--confirm", "digest"]),
     });
     assert.match(output, /Blocked:/);
-    assert.match(output, /skills-opencode install --scope project --dry-run/);
+    assert.match(
+      output,
+      new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --scope project --dry-run`),
+    );
     assert.match(output, /Apply the exact confirmation command/);
     assert.doesNotMatch(output, /\nApply:\n/);
   } finally {
@@ -200,12 +218,20 @@ test("clean reconcile preview keeps exact Apply contract", async () => {
     assert.equal(plan.conflicts.length, 0);
     const output = renderReconcile(plan, {
       applied: false,
-      confirmationCommand: `npm exec -- skills-opencode reconcile --scope project --confirm ${plan.digest}`,
+      confirmationCommand: shellCommand([
+        "reconcile",
+        "--scope",
+        "project",
+        "--confirm",
+        plan.digest,
+      ]),
     });
     assert.match(output, /Digest:/);
     assert.match(
       output,
-      /\nApply:\n  npm exec -- skills-opencode reconcile --scope project --confirm /,
+      new RegExp(
+        `\\nApply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} reconcile --scope project --confirm `,
+      ),
     );
     assert.doesNotMatch(output, /Blocked:/);
   } finally {
@@ -322,7 +348,9 @@ test("registry generates exactly thirty-three thin command assets", () => {
     assert.match(rendered, /\$ARGUMENTS/);
     if (entry.skill) {
       assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
-      assert.ok(rendered.includes("npx --yes skills@1.5.23 add https://kisev.github.io/skills"));
+      assert.ok(
+        rendered.includes(`npx --yes ${SKILLS_INSTALLER_SPEC} add https://kisev.github.io/skills`),
+      );
     }
     assert.doesNotMatch(rendered, /python|runner|curl|fetch\(/i);
     assert.equal(
@@ -1450,14 +1478,22 @@ test("package catalog and doctor tools are strictly observational", async () => 
     "agent_profiles",
     "reconcile",
   ]);
+  assert.equal(catalog.version, PACKAGE_VERSION);
   assert.equal(doctor.mutations, false);
+  assert.equal(doctor.versions.package, PACKAGE_VERSION);
+  assert.equal(doctor.versions.catalog, PACKAGE_VERSION);
   assert.ok(!catalog.skills.includes("agent-profiles"));
 });
 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
   const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
   assert.equal(packageJson.name, "@kisev/skills-opencode");
-  assert.equal(packageJson.version, "2.2.3");
+  assert.equal(packageJson.version, PACKAGE_VERSION);
+  assert.equal(packageJson.skillsInstallerVersion, PACKAGE_METADATA.skillsInstallerVersion);
+  assert.equal(readPackageVersion(), PACKAGE_VERSION);
+  assert.equal(requirePackageVersion(), PACKAGE_VERSION);
+  assert.equal(requireSkillsInstallerVersion(), PACKAGE_METADATA.skillsInstallerVersion);
+  assert.equal(skillsInstallerSpec(), SKILLS_INSTALLER_SPEC);
   assert.equal(packageJson.license, "MIT");
   assert.equal(packageJson.repository.type, "git");
   assert.equal(packageJson.repository.url, "git+https://github.com/kisev/skills.git");
@@ -1525,6 +1561,11 @@ test("published package metadata and tarball expose only the OpenCode integratio
     const unpacked = join(directory, "package");
     assert.equal(readdirSync(unpacked).includes("skills"), false);
     symlinkSync(join(PACKAGE, "node_modules"), join(unpacked, "node_modules"));
+    const unpackedMetadata = await import(
+      pathToFileURL(join(unpacked, "dist", "package-metadata.js")).href
+    );
+    assert.equal(unpackedMetadata.readPackageVersion(), PACKAGE_VERSION);
+    assert.equal(unpackedMetadata.skillsInstallerSpec(), SKILLS_INSTALLER_SPEC);
     const imported = await import(pathToFileURL(join(unpacked, "dist", "index.js")).href);
     assert.equal(typeof imported.default, "function");
     assert.equal(typeof imported.server, "function");
@@ -1636,7 +1677,9 @@ test("reconcile CLI returns stable JSON and a ready confirmation command", () =>
     assert.equal(human.status, 0);
     assert.match(
       human.stdout,
-      /npm exec -- skills-opencode reconcile --scope project --confirm [a-f0-9]{64}/,
+      new RegExp(
+        `npx --yes ${escapeRegExp(PACKAGE_SPEC)} reconcile --scope project --confirm [a-f0-9]{64}`,
+      ),
     );
     const invalid = spawnSync(
       process.execPath,
@@ -1654,6 +1697,49 @@ test("reconcile CLI returns stable JSON and a ready confirmation command", () =>
     );
     assert.equal(invalid.status, 2);
     assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("global CLI is cwd-independent and prints pinned npx confirmation", () => {
+  const directory = temporary();
+  try {
+    const invocation = join(directory, "invocation");
+    const home = join(directory, "home");
+    mkdirSync(invocation);
+    mkdirSync(home);
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "install",
+        "--scope",
+        "global",
+        "--commands",
+        "none",
+        "--agents",
+        "none",
+        "--plugins",
+        "none",
+        "--dry-run",
+      ],
+      {
+        cwd: invocation,
+        env: { ...process.env, HOME: home, XDG_STATE_HOME: join(home, ".state") },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, new RegExp(`^Target: ${join(home, ".config", "opencode")}$`, "m"));
+    assert.match(
+      result.stdout,
+      new RegExp(
+        `^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --scope global `,
+        "m",
+      ),
+    );
+    assert.doesNotMatch(result.stdout, /npm exec -- skills-opencode/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

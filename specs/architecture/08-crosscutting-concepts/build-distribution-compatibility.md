@@ -8,3 +8,6 @@ One release manifest binds every Pages file and the exact npm tarball to the tag
 and revision. Publication verifies both remote channels before creating the
 GitHub Release. Compatibility checks are pinned, hostless where possible, and
 no-network/no-secret.
+Project release, portable installer, and OpenCode compatibility use separate
+authorities. User documentation follows stable channels, while automation,
+lockfiles, generated commands, and release artifacts retain checked exact values.

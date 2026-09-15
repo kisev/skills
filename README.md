@@ -2,233 +2,70 @@
 
 [Русский](README.ru.md)
 
-Portable Agent Skills for Codex and OpenCode, plus an optional OpenCode-specific
-npm integration.
+Portable Agent Skills for Codex and OpenCode, plus `skills-opencode`, a
+first-class OpenCode integration. The two components are independent: use either
+one on its own or install both for the complete OpenCode experience.
 
-## Two Independent Layers
+## Project Components
 
-| Layer                         | Global location                                   | Project location                                            |
-| ----------------------------- | ------------------------------------------------- | ----------------------------------------------------------- |
-| Portable skills               | `~/.agents/skills`                                | `.agents/skills`                                            |
-| Optional OpenCode integration | npm project and assets under `~/.config/opencode` | package in project `node_modules`, assets under `.opencode` |
+| Component                | What it provides                                                                          | Lifecycle                                                                                     |
+| ------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Portable Agent Skills    | 29 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills`     |
+| `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
-The layers have independent install, update, and removal lifecycles. Portable
-skills contain the workflows and work without the npm package. The package adds
-OpenCode commands, agents, tools, routing, and optional plugin wrappers; it does
-not contain or install portable skills.
+Portable skills do not require the npm package. The npm package does not contain,
+install, update, or remove portable skills.
 
-## Global Quick Start
+## Portable Skills
 
-Install the current stable `v2.2.3` portable distribution for both hosts:
-
-```shell
-npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
-```
-
-This creates one canonical copy in `~/.agents/skills` for both hosts.
-
-## Codex and OpenCode
-
-- Codex only: use `--agent codex`.
-- OpenCode only: use `--agent opencode`.
-- Both hosts: use `--agent opencode --agent codex`; `--copy` keeps one canonical
-  copy for the selected scope.
-
-Omit `--global` for a project installation. The canonical project copy is
-`.agents/skills`:
+Install the current stable portable distribution globally for Codex and
+OpenCode:
 
 ```shell
-npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
-For OpenCode, use this mandatory integration flow when the package is needed:
-install it persistently in the owning npm project, run
-`skills-opencode install --dry-run`, execute the exact confirmation command,
-add the package to the user-owned `plugin` entry, and restart OpenCode. Only
-then run reconcile. Install or upgrade the package before every reconcile. The
-package must remain installed in project `node_modules` or in the npm project at
-`~/.config/opencode`; follow the
-[OpenCode integration guide](packages/opencode/README.md). Its installer neither
-installs portable skills nor edits `opencode.json`.
+The stable channel exposes current release metadata and digest-bound archives.
+Start with the [guided installation](docs/tutorials/getting-started.md), use the
+[portable skills how-to](docs/how-to/portable-skills.md) for project installs,
+updates, cleanup, and troubleshooting, or browse the
+[skill catalog](docs/reference/skill-catalog.md).
 
-The installer wizard preserves four independent groups: Skill command adapters,
-Package command adapters, Fixed agents, and Selectable plugins. Adapter choices
-select package command assets, not portable skills. Install portable skills only
-with the pinned `npx --yes skills@1.5.23` command above.
+## skills-opencode
 
-## Published Distribution and Source Provenance
+`@kisev/skills-opencode` extends OpenCode with:
 
-The supported portable source is the GitHub Pages stable channel at
-`https://kisev.github.io/skills`. At this release its metadata identifies
-version `2.2.3` and the commit tagged `v2.2.3`. List the catalog without writing:
+- slash-command adapters for installed skills and package tools;
+- six fixed agent roles and profile management;
+- capability routing, installation, reconcile, and doctor tooling;
+- opt-in `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
+
+Install the package persistently in the npm project that owns the integration,
+then preview its managed assets:
 
 ```shell
-npx --yes skills@1.5.23 add https://kisev.github.io/skills --list
+npm install --save-exact @kisev/skills-opencode
+npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 ```
 
-The Pages URL is a moving stable-release channel, not an immutable tag URL. Git
-tags provide source provenance, while the Pages index binds every autonomous
-archive to a SHA-256 digest. Install one skill by replacing `'*'` with its exact
-current name. The authored repository is intentionally not an install source.
+This only starts the mandatory flow. Apply the exact confirmation command from
+the preview, add the package to the user-owned OpenCode `plugin` entry, and
+restart OpenCode. Follow the complete
+[OpenCode integration guide](docs/how-to/opencode-integration.md).
 
-## Update
+## Documentation
 
-An installation from Pages follows later stable archive digests:
-
-```shell
-npx --yes skills@1.5.23 update --global --yes
-```
-
-Omit `--global` for project scope. Installations previously created from a Git
-repository or tag remain bound to that source; repeat `add` with the Pages URL
-and the same scope and agents to rebind them. `update` refreshes tracked skills
-but does not prune names renamed or deleted upstream.
-
-Update the OpenCode integration independently: install the exact npm version in
-its owning npm project, run a new `install --dry-run`, execute the exact
-confirmation command from that preview, and restart OpenCode. See the
-[package update flow](packages/opencode/README.md#update).
-
-## Cleanup
-
-The current migration inventory has exactly eight retired portable names:
-
-| Retired                                    | Replacement                                                                                      |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `attempt`, `schedule`, `usage`, `overview` | None                                                                                             |
-| `project-spec`                             | `spec-manage`                                                                                    |
-| `skill-improver`                           | `skill-improve`                                                                                  |
-| `walkthrough`                              | `code-explain`                                                                                   |
-| `team-workflow`                            | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
-
-For a Codex-only global installation, remove the names explicitly:
-
-```shell
-npx --yes skills@1.5.23 remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent codex --global --yes
-```
-
-For an OpenCode installation or a canonical copy shared by both hosts, either
-remove them explicitly from the selected agents:
-
-```shell
-npx --yes skills@1.5.23 remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent opencode --agent codex --global --yes
-```
-
-Do not use package install or reconcile to update or remove portable skills. Omit
-`--global` for project scope. Avoid `remove --all` unless every portable skill in
-that scope should be removed. Package reconcile has a separate lifecycle for
-package-owned assets; conflicts, worktrees, and runtime state are preserved.
-There is no archive restore or purge command.
-
-## Doctor
-
-List installed portable skills:
-
-```shell
-npx --yes skills@1.5.23 list --global
-```
-
-If a new skill is not visible, check `~/.agents/skills` or `.agents/skills` and
-restart the host. After a tag change, repeat `add` for renamed additions and run
-the explicit cleanup above for retired names.
-
-Run the integration doctor through the npm project where the package is installed:
-
-```shell
-npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope global
-npm --prefix "$HOME/.config/opencode" exec -- skills-opencode doctor --scope global --json
-```
-
-`doctor` is read-only. Exit status `0` is clean, `1` reports findings, and `2`
-reports invalid input or an incomplete probe failure. Inspect conflicts instead
-of overwriting them.
-
-## Team Profiles
-
-The team skills resolve a default private profile from
-`${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts/`. On first use they can
-build one from user answers and explicit files, URLs, repositories, or connector
-evidence, ask only for missing fields, and save it after a confirmation-bound
-preview. Requests to remember a member, project, source, or visual preference
-update that private profile rather than the public skill.
-
-The versioned public schema and sanitized example ship with every team skill as
-`references/team-context.schema.json` and
-`references/team-context.example.json`. Profiles remain outside this repository;
-do not put credentials or personal notes in them.
-
-## Current Catalog
-
-| Skill                    | Purpose                                                                                                    |
-| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `agents-md`              | Create or review repository-scoped `AGENTS.md` instructions.                                               |
-| `askme`                  | Clarify an incomplete task or design through a bounded interview.                                          |
-| `ast-grep`               | Run structural search or a confirmed AST rewrite through ast-grep.                                         |
-| `code-explain`           | Build a read-only guided map of current WIP, a Git range, branch, or MR history.                           |
-| `code-review`            | Review a GitLab MR or local WIP for defects and risks.                                                     |
-| `commit-msg`             | Produce one concise English commit message from local changes.                                             |
-| `docs-prepare`           | Prepare one evidence-based user document and private preview.                                              |
-| `docs-review`            | Review user documentation for accuracy and usability.                                                      |
-| `doit`                   | Implement an engineering task with preview, bounded writes, and checks.                                    |
-| `goal`                   | Produce a read-only structured Markdown goal of at most 4000 characters.                                   |
-| `humanize`               | Edit technical prose into direct, natural language.                                                        |
-| `lsp-report`             | Report host-neutral LSP applicability, configuration, binary, and runtime states without starting servers. |
-| `mattermost`             | Read and analyze a bounded Mattermost post, thread, channel, or chat.                                      |
-| `mr-prepare`             | Prepare metadata and a local publication plan for a GitLab MR.                                             |
-| `release-prepare`        | Prepare a release MR, inventory, announcement, and publication plan.                                       |
-| `release-review`         | Review a release MR for completeness and compatibility.                                                    |
-| `rtk`                    | Use RTK selectively to compress verbose command output.                                                    |
-| `skill-improve`          | Check and improve one Agent Skill through an iterative loop.                                               |
-| `slides-prompts-prepare` | Combine a chosen presentation theme with factual team and technology references.                           |
-| `spec-manage`            | Initialize, onboard, update, or audit canonical project specifications.                                    |
-| `stopit`                 | Write a sanitized handoff for the next session.                                                            |
-| `summary`                | Turn transcripts, notes, or research into a structured factual summary.                                    |
-| `task-prepare`           | Prepare a storage-neutral, self-contained work item without publication.                                   |
-| `task-review`            | Review a storage-neutral work item without changing external state.                                        |
-| `task-triage`            | Triage explicit storage-neutral work-item material read-only.                                              |
-| `team-retro`             | Prepare an evidence-based retrospective or delivery presentation from a private profile.                   |
-| `team-roadmap`           | Review or update an evidence-based roadmap from a private profile.                                         |
-| `team-sprint-close`      | Close one sprint cycle from a private profile or explicit context.                                         |
-| `team-sprint-start`      | Start one sprint cycle from a private profile or explicit context.                                         |
-
-The exact active and retired inventory is in the
-[Migration Inventory](docs/migration-inventory.md).
+The [documentation index](docs/README.md) organizes tutorials, how-to guides,
+reference material, and explanations using Diataxis. Architecture, verification,
+migration, compatibility, and both installation lifecycles are linked there.
 
 ## Development
-
-Install the pinned toolchain and run the complete quality gate:
 
 ```shell
 mise install
 task check
 ```
 
-Useful focused commands:
-
-```shell
-task eval:check
-task generate:check
-task dependency:audit
-lefthook install
-```
-
-`task generate` creates ignored build outputs without changing authored skills.
-Portable entrypoints use `SKILL.source.md`; the build writes `SKILL.md` and
-injects canonical files from `shared/references/` only in `.build/skills`. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for the check structure.
-
-## Reference and Limits
-
-- Stable portable distribution: `https://kisev.github.io/skills` (`2.2.3`).
-- Source provenance: `https://github.com/kisev/skills/tree/v2.2.3`.
-- Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.2.3`, Node.js 22+, OpenCode
-  `>=1.18.29 <1.19.0`.
-- Portable runners use Python 3.12+ standard library only when a runner is needed.
-- `ast-grep` and `rtk` require their external CLI; skills do not install them.
-- Skills and integration assets do not replace repository policy, review, secret
-  scanning, or access control.
-
-Behavioral coverage is described in [Verification](docs/verification.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for source boundaries and focused checks.
 Security reporting is in [SECURITY.md](SECURITY.md), release history in
-[CHANGELOG.md](CHANGELOG.md), and the license in [LICENSE](LICENSE).
+[CHANGELOG.md](CHANGELOG.md), and licensing in [LICENSE](LICENSE).

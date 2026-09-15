@@ -19,6 +19,11 @@ import { renderDoctor } from "../dist/cli-output.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
 const ROOT = resolve(PACKAGE, "../..");
+const PACKAGE_VERSION = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8")).version;
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), "skills-opencode-doctor-"));
@@ -119,7 +124,15 @@ test("doctor never serializes config secrets and classifies collisions as proble
     assert.equal(report.mutations, false);
     assert.ok(report.checks.some((check) => check.status === "fail"));
     assert.equal(report.status, "problems");
-    assert.equal(renderDoctor(report).includes("doctor-secret"), false);
+    const rendered = renderDoctor(report);
+    assert.equal(rendered.includes("doctor-secret"), false);
+    assert.match(
+      rendered,
+      new RegExp(
+        `npx --yes ${escapeRegExp(`@kisev/skills-opencode@${PACKAGE_VERSION}`)} install --scope project --dry-run`,
+      ),
+    );
+    assert.doesNotMatch(rendered, /npm exec -- skills-opencode/);
   } finally {
     rmSync(item.root, { recursive: true, force: true });
   }

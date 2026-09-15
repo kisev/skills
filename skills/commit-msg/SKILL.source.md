@@ -8,7 +8,6 @@ description: >-
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
-  version: "2.0.0"
 ---
 
 # commit-msg

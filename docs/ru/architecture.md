@@ -1,6 +1,6 @@
 # Архитектура
 
-[English](../architecture.md) | [Русский](architecture.md)
+[English](../architecture.md)
 
 ## Источник истины
 
@@ -9,7 +9,8 @@ Portable definitions находятся в `skills/<name>/` с authored entrypoi
 контрактов и runtime, а не зависимость установленного skill. Декларативный
 `shared/manifest.json` отображает exact shared files в build paths.
 `scripts/build_skills.py` создаёт полные skills только в `.build/skills` и не
-записывает generated copies в authored tree.
+записывает generated copies в authored tree. Metadata authored и built skill не
+содержит version.
 
 Для `askme`, `task-prepare`, `task-review` и read-only `goal` canonical
 `shared/references/work-item-contract.schema.json`, описание контракта и
@@ -27,9 +28,10 @@ CLI `skills-opencode` только для OpenCode integration. Maintainer scrip
 distribution. `scripts/build_distribution.py` собирает GitHub Pages payload в
 `.build/packages/skills`: standard well-known index, release metadata и по одному
 content-addressed SHA-256 archive с root `SKILL.md` на skill. Единый tag workflow
-выполняет полный gate, фиксирует hashes каждого Pages file и exact npm tarball,
-публикует оба канала, проверяет remote bytes и npm provenance и затем создаёт
-GitHub Release.
+Release identity задают distribution metadata и digest каждого archive, а не
+skill metadata. Единый tag workflow выполняет полный gate, фиксирует hashes
+каждого Pages file и exact npm tarball, публикует оба канала, проверяет remote
+bytes и npm provenance и затем создаёт GitHub Release.
 
 ## Интеграция с host
 
@@ -92,6 +94,7 @@ forbidden paths, steps, checks, явные VCS operations и отдельные 
   minimal Python runtime для автономных runner-ов.
 - Authored skill trees содержат `SKILL.source.md` и не содержат generated
   destinations.
+- Frontmatter authored и built skill не содержит version field.
 - `--check` проверяет source parity и artifacts без изменения authored files.
 - Supported installer читает well-known Pages index и проверяет digest каждого
   archive перед installation.

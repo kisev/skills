@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 TRACE = ROOT / "specs" / "traceability.json"
 INVENTORY = ROOT / "evals" / "contracts" / "public-surfaces.json"
 CONFIG = ROOT / "scripts" / "spec_gate_config.json"
+PORTABLE_PACKAGE = ROOT / "packages" / "skills" / "package.json"
 REQ_RE = re.compile(r"^### (REQ-[FIQC]-\d{3})\s*(?:-|$)", re.MULTILINE)
 HEADING_RE = re.compile(r"^#{1,6} \S", re.MULTILINE)
 KNOWN_SURFACES = {
@@ -140,7 +141,8 @@ def check_inventory() -> dict[str, Any]:
 def check_evidence(
     trace: dict[str, Any], blocks: dict[str, tuple[Path, str]], inventory: dict[str, Any]
 ) -> None:
-    if trace.get("schema") != "traceability/v1" or trace.get("target") != "2.2.3":
+    target = read_json(PORTABLE_PACKAGE).get("version")
+    if trace.get("schema") != "traceability/v1" or trace.get("target") != target:
         raise SpecError("traceability_schema")
     revision = trace.get("source_revision")
     if (

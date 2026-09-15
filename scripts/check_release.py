@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PORTABLE_PACKAGE = ROOT / "packages" / "skills" / "package.json"
 OPENCODE_PACKAGE = ROOT / "packages" / "opencode" / "package.json"
 OPENCODE_LOCK = ROOT / "packages" / "opencode" / "package-lock.json"
-CATALOG = ROOT / "packages" / "opencode" / "src" / "catalog.ts"
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
 CHANGELOG = ROOT / "CHANGELOG.md"
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -43,13 +42,6 @@ def git(*arguments: str) -> str:
     return result.stdout.strip()
 
 
-def catalog_version() -> str:
-    match = re.search(r'\bversion:\s*"([^"]+)"', CATALOG.read_text(encoding="utf-8"))
-    if not match:
-        raise ReleaseError("OpenCode catalog version is missing")
-    return match.group(1)
-
-
 def validate(tag: str | None = None) -> dict[str, str]:
     portable = read_json(PORTABLE_PACKAGE).get("version")
     opencode = read_json(OPENCODE_PACKAGE).get("version")
@@ -62,7 +54,6 @@ def validate(tag: str | None = None) -> dict[str, str]:
         "opencode": opencode,
         "opencode_lock_document": lock.get("version"),
         "opencode_lock": lock_root[""].get("version"),
-        "catalog": catalog_version(),
     }
     if not all(isinstance(value, str) for value in versions.values()):
         raise ReleaseError("release versions must be strings")

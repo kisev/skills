@@ -40,5 +40,5 @@ The command shall invoke package tool `capabilities` and return its versioned ca
 
 ## Example
 
-`/capabilities` returns the `2.2.3` public inventory.
+`/capabilities` returns the current public inventory.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

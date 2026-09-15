@@ -2,12 +2,12 @@
 
 [Русская версия](ru/verification.md)
 
-## Release 2.2.3
+## Current Release
 
 The supported portable source is the GitHub Pages stable channel at
 `https://kisev.github.io/skills`; the optional package is
-`@kisev/skills-opencode@2.2.3`. Portable installation pins
-`npx --yes skills@1.5.23`. The package requires Node.js 22+ and declares OpenCode
+`@kisev/skills-opencode`. Portable installation follows
+`npx --yes skills@latest`. The package requires Node.js 22+ and declares OpenCode
 `>=1.18.29 <1.19.0`.
 
 ## Portable Installation
@@ -15,11 +15,11 @@ The supported portable source is the GitHub Pages stable channel at
 The global contract for both supported hosts is:
 
 ```shell
-npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
 It produces one canonical copy in `~/.agents/skills`. Without `--global`, the
-project copy is `.agents/skills`. The release tag provides source provenance;
+project copy is `.agents/skills`. Release metadata provides source provenance;
 the authored repository is not an installation source.
 
 The Pages URL is a moving stable-release channel. `update` verifies the current
@@ -86,7 +86,7 @@ credentials.
 Shared runtime copies exist only in ignored build outputs and are checked for
 parity. In a clean temporary checkout, build and check must leave `git status`
 unchanged. Distribution tests serve the complete Pages layout from a local HTTP
-fixture, install it through pinned `skills@1.5.23`, remove the fixture, and then
+fixture, install it through stable `skills@latest`, remove the fixture, and then
 run the installed runners. Release CI additionally checks the tag, version,
 source revision, every deployed Pages byte, the exact npm tarball, package
 imports and CLI, registry signatures, SLSA provenance, and cross-channel digests

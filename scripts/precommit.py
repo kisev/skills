@@ -182,6 +182,8 @@ def run(files: Sequence[str], *, deleted_files: Sequence[str] = (), dry_run: boo
     all_files = sorted(set(files) | set(deleted_files))
     all_groups = classify(all_files)
     runner = _Runner(dry_run=dry_run, env=_base_env())
+    if all_files:
+        runner.call("versions", ["task", "version:check"])
     if any(
         path.startswith(("skills/", "shared/", "packages/opencode/", "packages/skills/", "specs/"))
         for path in all_files

@@ -19,6 +19,11 @@ tasks:
     cmds:
       - uv run --locked python scripts/check_specs.py
 
+  version:check:
+    desc: Validate release, installer, compatibility, and documentation version authorities
+    cmds:
+      - uv run --locked python scripts/check_versions.py
+
   spec:skill:
     desc: Print a read-only canonical report for one skill
     cmds:
@@ -257,6 +262,7 @@ tasks:
     desc: Run repository formatting, specification, lint, and Python type checks
     cmds:
       - task: format:repository:check
+      - task: version:check
       - task: spec:check
       - task: lint:repository
       - task: typecheck:python

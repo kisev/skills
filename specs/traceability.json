@@ -42,7 +42,7 @@
     },
     "commands": {
       "kind": "automated",
-      "test_selector": "packages/opencode/test/package.test.mjs::installer wizard names both command adapter groups and keeps defaults",
+      "test_selector": "packages/opencode/test/package.test.mjs::installer wizard uses shared multi-select groups and keeps defaults",
       "eval_ids": ["stage20.command.spec-manage.contract", "stage20.command.capabilities.contract"]
     },
     "goal_command": {
@@ -126,6 +126,32 @@
       "test_selector": "tests/test_stage20_verification.py::test_stage20_compatibility_inventory_is_explicit_and_hostless",
       "eval_ids": ["skill.core-contracts.trigger.en"],
       "contract_path": "evals/contracts/opencode-compatibility.json"
+    },
+    "cli_invocation": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::global CLI is cwd-independent and prints pinned npx confirmation",
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
+    "cli_help": {
+      "kind": "automated",
+      "test_selectors": [
+        "packages/opencode/test/stage19.test.mjs::CLI help is structured and explains commands options workflow and scope",
+        "packages/opencode/test/stage19.test.mjs::CLI exposes contextual help for every command and group"
+      ],
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
+    "interactive_selectors": {
+      "kind": "automated",
+      "test_selectors": [
+        "packages/opencode/test/agent-profiles.test.mjs::single and multi selectors share visual controls and deterministic selection",
+        "packages/opencode/test/package.test.mjs::installer wizard uses shared multi-select groups and keeps defaults"
+      ],
+      "eval_ids": ["stage20.infrastructure.core.contract"]
+    },
+    "version_authorities": {
+      "kind": "automated",
+      "test_selector": "tests/test_version_contract.py::test_repository_version_contract_is_centralized",
+      "eval_ids": ["stage20.infrastructure.core.contract"]
     }
   },
   "manual_evidence": {
@@ -202,13 +228,13 @@
     "REQ-I-001": {
       "surface": "skills",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "fa1bd36803a323f7c5e6ff9653d5f1fc659f7fff14c3f8826fae04800744f17c",
+      "block_sha256": "83274c6520001e2b0193ea2352fc12de713c02cce1486f45fcf4517caac94898",
       "evidence_profile": "skills"
     },
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "a3e6b232de5b3d0d8e8f0a77343089027da7a75049cd782920651160e6074be4",
+      "block_sha256": "f9704226c0ea66e278a1981c8d78b1564d7d62a47a2150c3332ee6ab9ce40db6",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {
@@ -234,6 +260,24 @@
       "source": "specs/requirements/interfaces/README.md",
       "block_sha256": "06bee0dffc1b77088e4f9401d3578b86fb321cb28e352b1e2aa9a16537490e89",
       "evidence_profile": "compatibility"
+    },
+    "REQ-I-007": {
+      "surface": "scope",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "681841b34fdd001d3be978bb512722238c5d104daf854d9b68d7ff9372a20793",
+      "evidence_profile": "cli_invocation"
+    },
+    "REQ-I-008": {
+      "surface": "commands",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "d2fcd0a25e8f16f31bd8cf51d1c25553cc32a4054104faa72afc78e8128b8416",
+      "evidence_profile": "cli_help"
+    },
+    "REQ-I-009": {
+      "surface": "commands",
+      "source": "specs/requirements/interfaces/README.md",
+      "block_sha256": "45a6fd66e465c0d618958d343c75f7fe0cf79075789b4e7a6972791e8d851fdb",
+      "evidence_profile": "interactive_selectors"
     },
     "REQ-Q-001": {
       "surface": "verification",
@@ -292,7 +336,7 @@
     "REQ-C-002": {
       "surface": "distribution",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "69ebf18e2ebe25545dbaee29ac75f50c31f84856c832b27ad108a79c8d348594",
+      "block_sha256": "e34d26ff2045de14b8691fbb0781f7fc13babbf6b55758d9dad171e8a0347a5c",
       "evidence_profile": "distribution",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
@@ -311,7 +355,7 @@
     "REQ-C-005": {
       "surface": "scope",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "d1180292e0030c4243751abc907eb8c8d9ca8767c0472b87aee8f84c441ed43a",
+      "block_sha256": "9a65529b12a4f271a588d926a2589ac783f7e31d75c2ab565ea47cb2eb4e3b56",
       "evidence_profile": "quality"
     },
     "REQ-C-006": {
@@ -319,6 +363,12 @@
       "source": "specs/requirements/constraints/README.md",
       "block_sha256": "4cf01ac05d8d421f4752c6b08c3b52f1c755056926f08c57a8129296dc93f917",
       "evidence_profile": "quality"
+    },
+    "REQ-C-007": {
+      "surface": "compatibility",
+      "source": "specs/requirements/constraints/README.md",
+      "block_sha256": "4722175013d8ffd02518dd789b7661a93cf729396b43249c7efc4a7be5e1f3dd",
+      "evidence_profile": "version_authorities"
     },
     "REQ-F-101": {
       "surface": "skill:agents-md",

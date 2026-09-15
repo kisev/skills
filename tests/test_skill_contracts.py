@@ -20,6 +20,7 @@ def test_every_skill_has_required_frontmatter() -> None:
         assert "\nname:" in frontmatter, skill
         assert "\ndescription:" in frontmatter, skill
         assert "\nlicense:" in frontmatter, skill
+        assert not re.search(r"^\s*version\s*:", frontmatter, re.MULTILINE), skill
 
 
 def test_built_skill_files_match_canonical_sources() -> None:

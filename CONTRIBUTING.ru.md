@@ -1,6 +1,6 @@
 # Вклад в Agent Skills
 
-[English](CONTRIBUTING.md) | [Русский](CONTRIBUTING.ru.md)
+[English](CONTRIBUTING.md)
 
 ## Область изменений
 
@@ -92,7 +92,8 @@ lifecycle один раз (без отдельного дублирующего 
 ## Качество и review
 
 - Сохраняйте frontmatter и ограничения формата agentskills.io для каждого
-  `SKILL.source.md`; built name - `SKILL.md`.
+  `SKILL.source.md`; built name - `SKILL.md`, а metadata authored и built skill не
+  содержит version.
 - Добавляйте тест для публичного контракта или существенного риска регрессии, а
   не для деталей реализации.
 - Не включайте в изменения credentials, tokens, внутренние endpoints, локальные
@@ -107,9 +108,11 @@ lifecycle один раз (без отдельного дублирующего 
 
 ## Выпуски
 
-Версии portable skills фиксируются в их metadata. Pages distribution, версия
-`@kisev/skills-opencode`, tag и GitHub Release должны относиться к одному commit.
-Не изменяйте опубликованную версию: исправление выпускается новой patch-версией.
+Portable skills не содержат version. Release identity задают metadata Pages
+distribution и digest каждого content-addressed archive. Pages distribution,
+версия `@kisev/skills-opencode`, tag и GitHub Release должны относиться к одному
+commit. Не изменяйте опубликованную версию: исправление выпускается новой
+patch-версией.
 Push tag запускает единый release workflow `.github/workflows/publish.yml`. Он
 сначала выполняет полный quality gate, собирает один exact npm tarball и manifest
 digest-ов обоих каналов, затем публикует и проверяет Pages и npm и только после

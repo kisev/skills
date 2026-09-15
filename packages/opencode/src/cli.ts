@@ -35,8 +35,9 @@ import {
   type InstallerSelection,
 } from "./installer.js";
 import { LifecycleError, type Scope } from "./lifecycle.js";
+import { skillsInstallerSpec } from "./package-metadata.js";
 import { applyReconcile, previewReconcile } from "./reconcile.js";
-import { promptText, selectOption } from "./terminal-wizard.js";
+import { promptText, selectOption, selectOptions } from "./terminal-wizard.js";
 
 type Options = {
   scope?: Scope;
@@ -127,16 +128,530 @@ function parseOptions(values: string[], requireScope = true): Options {
   return options;
 }
 
-function help(): string {
+function helpRows(rows: readonly (readonly [string, string])[]): string[] {
+  const width = Math.max(...rows.map(([label]) => label.length));
+  return rows.map(([label, description]) => `  ${label.padEnd(width)}  ${description}`);
+}
+
+function rootHelp(): string {
   return [
-    "Usage: skills-opencode <command> [options]",
+    `skills-opencode ${CATALOG.version}`,
     "",
-    "Commands: install, uninstall, doctor, capabilities, reconcile, agent list|configure|model-set|reconcile, critic add|remove",
-    "Mutations: use --dry-run for preview, then --confirm <digest>.",
-    "Install selection: --commands, --package-commands, --agents, --plugins (comma-separated or none).",
-    "Read-only: --json is stable machine-readable output; --help and --version need no scope.",
+    "Manage OpenCode integration assets, agents, diagnostics, and migration state.",
+    `Portable Agent Skills are installed separately with npx --yes ${skillsInstallerSpec()}.`,
+    "",
+    "Usage:",
+    "  skills-opencode <command> [options]",
+    "  Add --help after any command or command group for focused guidance.",
+    "",
+    "Commands:",
+    ...helpRows([
+      ["install", "Select and deploy package-owned commands, agents, and plugin wrappers."],
+      [
+        "uninstall",
+        "Archive and remove exact-owned assets while preserving conflicts and user files.",
+      ],
+      ["doctor", "Inspect versions, ownership, drift, config, archives, tools, and LSP."],
+      ["capabilities", "Print the versioned commands, agents, plugins, and tools catalog as JSON."],
+      ["reconcile", "Classify current and retired assets; archive exact-owned retired entries."],
+      ["agent list", "List profiles, models, ownership, collisions, and drift."],
+      ["agent configure", "Choose an agent model interactively or with explicit options."],
+      ["agent model-set", "Set one agent model directly without the interactive wizard."],
+      ["agent reconcile", "Re-render package-managed agents from saved profile configuration."],
+      ["critic add", "Add a named critic with a selected model."],
+      ["critic remove", "Remove a package-managed additional critic."],
+    ]),
+    "",
+    "Common options:",
+    ...helpRows([
+      ["--scope <project|global>", "Required by every command except capabilities."],
+      ["--dry-run", "Preview a mutation and issue a one-time confirmation digest."],
+      ["--confirm <digest>", "Apply the exact unexpired preview after final revalidation."],
+      ["--json", "Emit stable machine-readable output when supported."],
+      ["--help", "Show this help and exit."],
+      ["--version", "Show the package version and exit."],
+    ]),
+    "",
+    "Install selection:",
+    ...helpRows([
+      ["--commands <list|none>", "Select command adapters from both command groups."],
+      ["--skill-commands <list|none>", "Select adapters for installed portable skills."],
+      ["--package-commands <list|none>", "Select adapters for package tools."],
+      ["--agents <list|none>", "Select fixed agents."],
+      ["--plugins <list|none>", "Select optional plugin wrappers."],
+    ]),
+    "  Lists are comma-separated. Outside a TTY, provide command selection, --agents, and --plugins.",
+    "",
+    "Agent model options:",
+    ...helpRows([
+      ["--provider <id>", "Provider for a model name that is not provider/model."],
+      ["--model <id>", "Exact provider/model or a model paired with --provider."],
+      ["--variant <id>", "Set an optional model variant."],
+      ["--clear-variant", "Remove the configured variant during agent model-set."],
+    ]),
+    "  Used by agent configure, agent model-set, and critic add.",
+    "",
+    "Safe mutation workflow:",
+    "  1. Run the command with --dry-run.",
+    "  2. Review the target, operations, conflicts, restart requirement, and expiry.",
+    "  3. Run the exact Apply command printed by the preview before it expires.",
+    "  4. Restart OpenCode when the applied plan requires it.",
+    "  The installer never edits opencode.json or installs portable skills.",
+    "",
+    "Scope behavior:",
+    ...helpRows([
+      ["project", "Targets .opencode under the current directory; run from the project root."],
+      ["global", "Targets ~/.config/opencode and can run from any directory."],
+    ]),
+    "",
+    "Examples:",
+    `  ${shellCommand(["capabilities", "--json"])}`,
+    `  ${shellCommand(["install", "--scope", "global", "--dry-run"])}`,
+    `  ${shellCommand(["doctor", "--scope", "global"])}`,
+    `  ${shellCommand([
+      "agent",
+      "model-set",
+      "worker",
+      "--scope",
+      "global",
+      "--model",
+      "openai/gpt-5",
+      "--variant",
+      "high",
+      "--dry-run",
+    ])}`,
+    "",
+    "Documentation:",
+    "  https://github.com/kisev/skills/blob/main/docs/how-to/opencode-integration.md",
     "",
   ].join("\n");
+}
+
+function commandHelp(
+  topic: string,
+  summary: string,
+  usage: readonly string[],
+  options: readonly (readonly [string, string])[],
+  behavior: readonly string[],
+  examples: readonly string[],
+): string {
+  return [
+    `skills-opencode ${CATALOG.version} - ${topic}`,
+    "",
+    summary,
+    "",
+    "Usage:",
+    ...usage.map((line) => `  ${line}`),
+    "",
+    "Options:",
+    ...helpRows(options),
+    "",
+    "Behavior:",
+    ...behavior.map((line) => `  ${line}`),
+    "",
+    "Examples:",
+    ...examples.map((line) => `  ${line}`),
+    "",
+  ].join("\n");
+}
+
+function groupHelp(
+  topic: string,
+  summary: string,
+  usage: string,
+  commands: readonly (readonly [string, string])[],
+  behavior: readonly string[],
+  examples: readonly string[],
+): string {
+  return [
+    `skills-opencode ${CATALOG.version} - ${topic}`,
+    "",
+    summary,
+    "",
+    "Usage:",
+    `  ${usage}`,
+    "",
+    "Commands:",
+    ...helpRows(commands),
+    "",
+    "Behavior:",
+    ...behavior.map((line) => `  ${line}`),
+    "",
+    "Examples:",
+    ...examples.map((line) => `  ${line}`),
+    "",
+  ].join("\n");
+}
+
+function contextualHelp(arguments_: readonly string[]): string | undefined {
+  const [domain, operation] = arguments_.filter((value) => value !== "--help");
+  if (domain === "install")
+    return commandHelp(
+      "install",
+      "Select and deploy package-owned OpenCode integration assets.",
+      [
+        "skills-opencode install --scope <project|global> --dry-run [selection options]",
+        "skills-opencode install --scope <project|global> --confirm <digest> [selection options]",
+      ],
+      [
+        ["--scope <project|global>", "Choose the deployment scope."],
+        ["--dry-run", "Preview operations and issue a one-time confirmation digest."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--commands <list|none>", "Select adapters from both command groups."],
+        ["--skill-commands <list|none>", "Select installed-skill adapters."],
+        ["--package-commands <list|none>", "Select package-tool adapters."],
+        ["--agents <list|none>", "Select fixed agents."],
+        ["--plugins <list|none>", "Select optional plugin wrappers."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Without selection flags, a TTY opens command, agent, and plugin selectors.",
+        "Use Up/Down to move, Space to toggle, A/N for all/none, and Enter to confirm.",
+        "Outside a TTY, provide command selection, --agents, and --plugins.",
+        "Writes occur only after confirmation; the installer never edits opencode.json.",
+        "Portable skills are installed separately; restart OpenCode after asset changes.",
+      ],
+      [
+        shellCommand(["install", "--scope", "global", "--dry-run"]),
+        shellCommand([
+          "install",
+          "--scope",
+          "project",
+          "--commands",
+          "doctor,reconcile,agent-profiles",
+          "--agents",
+          "manager,architect,mapper,worker,review,critic",
+          "--plugins",
+          "none",
+          "--dry-run",
+        ]),
+      ],
+    );
+  if (domain === "uninstall")
+    return commandHelp(
+      "uninstall",
+      "Remove package-owned integration assets safely.",
+      [
+        "skills-opencode uninstall --scope <project|global> --dry-run",
+        "skills-opencode uninstall --scope <project|global> --confirm <digest>",
+      ],
+      [
+        ["--scope <project|global>", "Choose the deployment scope."],
+        ["--dry-run", "Preview removals, archives, and conflicts."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Archives and removes only exact manifest-owned assets after confirmation.",
+        "Preserves modified and user-owned files, worktrees, runtime state, and portable skills.",
+        "Remove the plugin config entry and npm dependency only after managed assets.",
+      ],
+      [
+        shellCommand(["uninstall", "--scope", "global", "--dry-run"]),
+        shellCommand(["uninstall", "--scope", "project", "--dry-run"]),
+      ],
+    );
+  if (domain === "doctor")
+    return commandHelp(
+      "doctor",
+      "Inspect integration health without changing state.",
+      ["skills-opencode doctor --scope <project|global> [--json]"],
+      [
+        ["--scope <project|global>", "Choose the scope to inspect."],
+        ["--json", "Emit the complete stable machine-readable report."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Creates no receipts and starts no recovery, plugin factories, or LSP servers.",
+        "Reports versions, ownership, drift, collisions, config, archives, tools, and LSP facts.",
+        "Exit status: 0 clean, 1 findings, 2 invalid input or incomplete probing.",
+      ],
+      [
+        shellCommand(["doctor", "--scope", "global"]),
+        shellCommand(["doctor", "--scope", "global", "--json"]),
+      ],
+    );
+  if (domain === "capabilities")
+    return commandHelp(
+      "capabilities",
+      "Print the versioned package capability catalog.",
+      ["skills-opencode capabilities [--json]"],
+      [
+        ["--json", "Explicitly request stable JSON output; JSON is the default."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Requires no scope and performs no mutation.",
+        "Lists exact skills, commands, agents, plugins, and package tools.",
+      ],
+      [shellCommand(["capabilities", "--json"])],
+    );
+  if (domain === "reconcile")
+    return commandHelp(
+      "reconcile",
+      "Classify current and historical assets and retire exact-owned entries.",
+      [
+        "skills-opencode reconcile --scope <project|global> --dry-run",
+        "skills-opencode reconcile --scope <project|global> --confirm <digest>",
+      ],
+      [
+        ["--scope <project|global>", "Choose the scope to reconcile."],
+        ["--dry-run", "Preview classifications, archives, and blockers."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Preview is read-only and blocks Apply on modified managed files or ownership conflicts.",
+        "Confirmed reconcile archives only exact-owned retired assets.",
+        "Never installs, updates, or removes portable skills.",
+      ],
+      [
+        shellCommand(["reconcile", "--scope", "global", "--dry-run"]),
+        shellCommand(["reconcile", "--scope", "project", "--dry-run", "--json"]),
+      ],
+    );
+  if (domain === "agent" && operation === "list")
+    return commandHelp(
+      "agent list",
+      "List agent profiles, models, ownership, collisions, and drift.",
+      ["skills-opencode agent list --scope <project|global> [--json]"],
+      [
+        ["--scope <project|global>", "Choose the profile scope."],
+        ["--json", "Emit stable machine-readable inventory."],
+        ["--help", "Show this command help and exit."],
+      ],
+      ["Read-only inventory; creates no receipts and changes no files or configuration."],
+      [
+        shellCommand(["agent", "list", "--scope", "global"]),
+        shellCommand(["agent", "list", "--scope", "project", "--json"]),
+      ],
+    );
+  if (domain === "agent" && operation === "configure")
+    return commandHelp(
+      "agent configure",
+      "Choose an agent model interactively or with explicit options.",
+      [
+        "skills-opencode agent configure [name] --scope <project|global> --dry-run",
+        "skills-opencode agent configure <name> --scope <project|global> --model <provider/model> [--variant <id>] --dry-run",
+        "skills-opencode agent configure <name> --scope <project|global> --model <provider/model> [--variant <id>] --confirm <digest>",
+      ],
+      [
+        ["--scope <project|global>", "Choose the profile scope."],
+        ["--provider <id>", "Provider when --model is not provider/model."],
+        ["--model <id>", "Exact provider/model or model paired with --provider."],
+        ["--variant <id>", "Set an optional model variant."],
+        ["--clear-variant", "Remove the configured variant."],
+        ["--dry-run", "Preview the profile change."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Opens a TTY wizard unless the agent and model are explicit.",
+        "Uses the cached OpenCode model catalog and makes no LLM call.",
+        "The preview normally prints an agent model-set Apply command.",
+      ],
+      [
+        shellCommand(["agent", "configure", "manager", "--scope", "global", "--dry-run"]),
+        shellCommand([
+          "agent",
+          "configure",
+          "worker",
+          "--scope",
+          "global",
+          "--model",
+          "openai/gpt-5",
+          "--variant",
+          "high",
+          "--dry-run",
+        ]),
+      ],
+    );
+  if (domain === "agent" && operation === "model-set")
+    return commandHelp(
+      "agent model-set",
+      "Set one agent model and optional variant directly.",
+      [
+        "skills-opencode agent model-set <name> --scope <project|global> --model <provider/model> [--variant <id>] --dry-run",
+        "skills-opencode agent model-set <name> --scope <project|global> --model <provider/model> [--variant <id>] --confirm <digest>",
+      ],
+      [
+        ["--scope <project|global>", "Choose the profile scope."],
+        ["--provider <id>", "Provider when --model is not provider/model."],
+        ["--model <id>", "Exact provider/model or model paired with --provider."],
+        ["--variant <id>", "Set an optional model variant."],
+        ["--clear-variant", "Remove the configured variant."],
+        ["--dry-run", "Preview the profile change."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Accepts exact provider/model or a provider and model pair.",
+        "Keeps fixed prompts and permissions unchanged and makes no LLM call.",
+        "Writes only after exact confirmation.",
+      ],
+      [
+        shellCommand([
+          "agent",
+          "model-set",
+          "worker",
+          "--scope",
+          "global",
+          "--model",
+          "openai/gpt-5",
+          "--variant",
+          "high",
+          "--dry-run",
+        ]),
+        shellCommand([
+          "agent",
+          "model-set",
+          "manager",
+          "--scope",
+          "global",
+          "--model",
+          "openai/gpt-5",
+          "--clear-variant",
+          "--dry-run",
+        ]),
+      ],
+    );
+  if (domain === "agent" && operation === "reconcile")
+    return commandHelp(
+      "agent reconcile",
+      "Re-render managed agent files from saved profile configuration.",
+      [
+        "skills-opencode agent reconcile --scope <project|global> --dry-run",
+        "skills-opencode agent reconcile --scope <project|global> --confirm <digest>",
+      ],
+      [
+        ["--scope <project|global>", "Choose the profile scope."],
+        ["--dry-run", "Preview rendered agent changes and conflicts."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Uses saved models and variants while preserving package prompts and permissions.",
+        "Preserves user-owned files and collisions; writes only after confirmation.",
+      ],
+      [
+        shellCommand(["agent", "reconcile", "--scope", "global", "--dry-run"]),
+        shellCommand(["agent", "reconcile", "--scope", "project", "--dry-run", "--json"]),
+      ],
+    );
+  if (domain === "agent")
+    return groupHelp(
+      "agent",
+      "Inspect and manage fixed agents and additional critics.",
+      "skills-opencode agent <command> [options]",
+      [
+        ["list", "List profiles, models, ownership, collisions, and drift."],
+        ["configure", "Choose an agent model interactively or with explicit options."],
+        ["model-set", "Set one agent model directly without the interactive wizard."],
+        ["reconcile", "Re-render package-managed agents from saved profile configuration."],
+      ],
+      [
+        "Prompts and permissions remain package-owned.",
+        "Profile configuration changes models, variants, and additional critics.",
+        "Mutations use preview and exact confirmation.",
+      ],
+      [
+        shellCommand(["agent", "list", "--scope", "global"]),
+        shellCommand(["agent", "model-set", "--help"]),
+      ],
+    );
+  if (domain === "critic" && operation === "add")
+    return commandHelp(
+      "critic add",
+      "Add an additional named critic with a selected model.",
+      [
+        "skills-opencode critic add [name] --scope <project|global> --dry-run",
+        "skills-opencode critic add <name> --scope <project|global> --model <provider/model> [--variant <id>] --dry-run",
+        "skills-opencode critic add <name> --scope <project|global> --model <provider/model> [--variant <id>] --confirm <digest>",
+      ],
+      [
+        ["--scope <project|global>", "Choose the profile scope."],
+        ["--provider <id>", "Provider when --model is not provider/model."],
+        ["--model <id>", "Exact provider/model or model paired with --provider."],
+        ["--variant <id>", "Set an optional model variant."],
+        ["--dry-run", "Preview critic creation and pool changes."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Prefixes names with critic- when needed.",
+        "Uses TTY model selection when the model is omitted and makes no LLM call.",
+        "Updates manager and review critic pools after confirmation.",
+      ],
+      [
+        shellCommand([
+          "critic",
+          "add",
+          "security",
+          "--scope",
+          "global",
+          "--model",
+          "anthropic/claude-sonnet-4-6",
+          "--dry-run",
+        ]),
+        shellCommand(["critic", "add", "performance", "--scope", "global", "--dry-run"]),
+      ],
+    );
+  if (domain === "critic" && operation === "remove")
+    return commandHelp(
+      "critic remove",
+      "Remove a package-managed additional critic.",
+      [
+        "skills-opencode critic remove <name> --scope <project|global> --dry-run",
+        "skills-opencode critic remove <name> --scope <project|global> --confirm <digest>",
+      ],
+      [
+        ["--scope <project|global>", "Choose the profile scope."],
+        ["--dry-run", "Preview critic removal and pool changes."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "Accepts the name with or without the critic- prefix.",
+        "Preserves the fixed critic and user-owned files.",
+        "Updates manager and review critic pools after confirmation.",
+      ],
+      [
+        shellCommand(["critic", "remove", "security", "--scope", "global", "--dry-run"]),
+        shellCommand(["critic", "remove", "security", "--scope", "project", "--dry-run"]),
+      ],
+    );
+  if (domain === "critic")
+    return groupHelp(
+      "critic",
+      "Manage additional package-owned critic profiles.",
+      "skills-opencode critic <command> [options]",
+      [
+        ["add", "Add a named critic with a selected model."],
+        ["remove", "Remove a package-managed additional critic."],
+      ],
+      [
+        "Names use critic-<safe-suffix>.",
+        "Manager and review critic pools update with profile configuration.",
+        "Mutations use preview and exact confirmation.",
+      ],
+      [
+        shellCommand(["critic", "add", "security", "--help"]),
+        shellCommand(["critic", "remove", "security", "--help"]),
+      ],
+    );
+  return undefined;
+}
+
+function help(arguments_: readonly string[] = []): string {
+  return contextualHelp(arguments_) ?? rootHelp();
 }
 
 async function interactiveInstallerSelection(): Promise<InstallerSelection> {
@@ -158,25 +673,25 @@ async function interactiveInstallerSelection(): Promise<InstallerSelection> {
   const group = async (
     label: string,
     names: readonly string[],
-    initial: number,
+    initialSelected: readonly string[],
   ): Promise<string[]> => {
-    const choices = ["Select all", "Select none", ...names];
-    const selected = await selectOption(label, choices, process.stdin, process.stderr, initial);
+    const selected = await selectOptions(
+      label,
+      names,
+      initialSelected,
+      process.stdin,
+      process.stderr,
+    );
     if (selected === null) throw new InstallerError("cancelled", "Wizard cancelled");
-    if (selected === 0) return [...names];
-    if (selected === 1) return [];
-    return [names[selected - 2]];
+    return selected;
   };
+  const defaults = defaultSelection();
   const commands = [
-    ...(await group("Skill command adapters", SKILL_COMMANDS, 0)),
-    ...(await group("Package command adapters", PACKAGE_COMMANDS, 0)),
+    ...(await group("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS)),
+    ...(await group("Package command adapters", PACKAGE_COMMANDS, PACKAGE_COMMANDS)),
   ];
-  const agents = await group("Fixed agents", defaultSelection().agents, 0);
-  const plugins = await group(
-    "Selectable plugins (none selected by default)",
-    SELECTABLE_PLUGINS,
-    1,
-  );
+  const agents = await group("Fixed agents", defaults.agents, defaults.agents);
+  const plugins = await group("Selectable plugins", SELECTABLE_PLUGINS, []);
   return normalizeSelection({
     commands,
     agents: agents as InstallerSelection["agents"],
@@ -413,7 +928,7 @@ function profileConfirmationArguments(
 
 async function run(arguments_: string[]): Promise<void> {
   if (arguments_.includes("--help") || arguments_.length === 0) {
-    process.stdout.write(help());
+    process.stdout.write(help(arguments_));
     return;
   }
   if (arguments_.includes("--version")) {

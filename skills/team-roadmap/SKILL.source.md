@@ -5,7 +5,6 @@ description: >-
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
-  version: "2.1.0"
 ---
 
 # team-roadmap

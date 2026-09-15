@@ -188,14 +188,6 @@ WORKFLOW_CONTRACTS = {
     ),
 }
 CYRILLIC = re.compile(r"[А-Яа-яЁё]")
-VERSION_2_1_SKILLS = {
-    "mattermost",
-    "slides-prompts-prepare",
-    "team-retro",
-    "team-roadmap",
-    "team-sprint-close",
-    "team-sprint-start",
-}
 RUNNERS = {
     "ast-grep": "scripts/ast_grep.py",
     "rtk": "scripts/rtk.py",
@@ -248,12 +240,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(lines[1], f"name: {name}")
                 self.assertIn("license: MIT", lines)
                 self.assertIn('  author: "Kirill Sevriugin"', lines)
-                expected_version = "2.1.0" if name in VERSION_2_1_SKILLS else "2.0.0"
-                self.assertIn(f'  version: "{expected_version}"', lines)
+                self.assertFalse(any(re.match(r"\s*version\s*:", line) for line in lines[1:end]))
                 metadata_start = lines.index("metadata:") + 1
                 self.assertEqual(
                     lines[metadata_start:end],
-                    ['  author: "Kirill Sevriugin"', f'  version: "{expected_version}"'],
+                    ['  author: "Kirill Sevriugin"'],
                 )
 
     def test_portable_workflows_preserve_source_contracts(self) -> None:

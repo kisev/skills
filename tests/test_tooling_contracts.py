@@ -200,6 +200,7 @@ def test_precommit_deletions_trigger_broad_non_file_checks(
     )
     output = capsys.readouterr().out
     assert result == 0
+    assert "task version:check" in output
     assert "scripts/check_specs.py" in output
     assert "pytest tests/test_json_schemas.py" in output
     assert "uv run --locked pytest" in output

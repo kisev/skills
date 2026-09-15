@@ -17,6 +17,7 @@ import {
   type Scope,
 } from "./lifecycle.js";
 import { inspectReconcile, type ReconcilePlan } from "./reconcile.js";
+import { readPackageVersion } from "./package-metadata.js";
 import { stateRoot } from "./runtime/state.js";
 
 const run = promisify(execFile);
@@ -138,17 +139,6 @@ function json(raw: Buffer): JsonObject | undefined {
       : undefined;
   } catch {
     return undefined;
-  }
-}
-
-function packageVersion(): string | null {
-  try {
-    const value = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as {
-      version?: unknown;
-    };
-    return typeof value.version === "string" ? value.version : null;
-  } catch {
-    return null;
   }
 }
 
@@ -524,7 +514,7 @@ export async function collectDoctorFacts(
   const partial: string[] = [];
   const unavailable: string[] = [];
   let installedRaw: Buffer | undefined;
-  const packageVersionValue = packageVersion();
+  const packageVersionValue = readPackageVersion();
   checks.push(
     check(
       "package.version",

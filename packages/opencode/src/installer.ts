@@ -32,6 +32,7 @@ import {
 } from "./lifecycle.js";
 import { CATALOG } from "./catalog.js";
 import { FIXED_AGENT_ROLES, type FixedAgentRole } from "./agent-profiles.js";
+import { readPackageVersion } from "./package-metadata.js";
 
 export type { Scope } from "./lifecycle.js";
 
@@ -149,12 +150,9 @@ export function normalizeSelection(value: Partial<InstallerSelection> = {}): Ins
 export class InstallerError extends LifecycleError {}
 
 function packageVersion(): string {
-  const metadata = JSON.parse(readFileSync(resolve(packageRoot, "package.json"), "utf8")) as {
-    version?: unknown;
-  };
-  if (typeof metadata.version !== "string" || !metadata.version)
-    throw new InstallerError("invalid_package", "Package version is unavailable");
-  return metadata.version;
+  const version = readPackageVersion();
+  if (!version) throw new InstallerError("invalid_package", "Package version is unavailable");
+  return version;
 }
 
 async function assets(selection: InstallerSelection): Promise<Asset[]> {

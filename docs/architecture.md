@@ -9,7 +9,8 @@ Portable definitions live in `skills/<name>/` with authored
 source for common contracts and runtime, not an installed dependency. The
 declarative `shared/manifest.json` maps exact shared files into build paths.
 `scripts/build_skills.py` creates complete skills only under `.build/skills` and
-never writes generated copies into the authored tree.
+never writes generated copies into the authored tree. Authored and built skill
+metadata carries no version.
 
 The repository has no user CLI and is intentionally not a portable installation
 source. Maintainer scripts use Python standard library only, while every built
@@ -25,9 +26,10 @@ skills never read `shared/`.
 distribution. `scripts/build_distribution.py` produces the GitHub Pages payload
 under `.build/packages/skills`: a standard well-known index, release metadata,
 and one content-addressed SHA-256 archive with root `SKILL.md` per skill. The
-single tag workflow runs the complete gate, records hashes for every Pages file
-and the exact npm tarball, publishes both channels, verifies their remote bytes
-and npm provenance, then creates the GitHub Release.
+distribution metadata and each archive digest define release identity instead of
+skill metadata. The single tag workflow runs the complete gate, records hashes
+for every Pages file and the exact npm tarball, publishes both channels, verifies
+their remote bytes and npm provenance, then creates the GitHub Release.
 
 ## Host Integration
 
@@ -74,6 +76,7 @@ separate execution, publication, and history-rewrite confirmations.
 
 - The JSON manifest maps canonical shared inputs to build-only paths.
 - Authored skill trees contain `SKILL.source.md` and no generated destination.
+- Authored and built skill frontmatter has no version field.
 - `--check` reports source and artifact drift without changing authored files.
 - The supported installer reads the well-known Pages index and verifies each
   archive digest before installation.
