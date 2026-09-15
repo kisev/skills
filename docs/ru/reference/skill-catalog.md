@@ -32,7 +32,7 @@ version. Их workflows автономны и могут быть установ
 | `slides-prompts-prepare` | Соединить выбранную тему презентации с фактическими отсылками к команде и технологиям.                  |
 | `spec-manage`            | Инициализировать, изучить, обновить или проверить canonical project specs.                              |
 | `stopit`                 | Записать обезличенный handoff для следующей session.                                                    |
-| `summary`                | Превратить transcripts, notes или research в structured factual summary.                                |
+| `briefing`               | Превратить transcripts, notes или research в structured factual summary.                                |
 | `task-prepare`           | Подготовить storage-neutral self-contained work item без публикации.                                    |
 | `task-review`            | Проверить storage-neutral work item без изменения external state.                                       |
 | `task-triage`            | Разобрать explicit storage-neutral work-item material без записи.                                       |

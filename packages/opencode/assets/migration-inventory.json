@@ -31,7 +31,7 @@
     "slides-prompts-prepare",
     "spec-manage",
     "stopit",
-    "summary",
+    "briefing",
     "task-prepare",
     "task-review",
     "task-triage",
@@ -62,7 +62,7 @@
     "slides-prompts-prepare",
     "spec-manage",
     "stopit",
-    "summary",
+    "briefing",
     "task-prepare",
     "task-review",
     "task-triage",
@@ -182,6 +182,7 @@
   "renamed": {
     "project-spec": "spec-manage",
     "skill-improver": "skill-improve",
+    "summary": "briefing",
     "walkthrough": "code-explain"
   },
   "replacements": {

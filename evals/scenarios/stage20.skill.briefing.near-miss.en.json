@@ -4,30 +4,30 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "8b008b92ab9c19c30e7a882df4168ccc1aa9c8463756afd671b4a7f42ea9d4f7",
+  "digest": "62693652862aa89325bdd2eba52063b656d8e1d777f2449e2b027dd929c163f7",
   "expected": {
     "mutation_boundary": "no-writes",
-    "not_selected": ["skill:summary"],
+    "not_selected": ["skill:briefing"],
     "selected": [],
     "structured_outcome": "safe-escalation"
   },
   "host": "any",
-  "id": "stage20.skill.summary.near-miss.en",
+  "id": "stage20.skill.briefing.near-miss.en",
   "input": {
     "fixture": {
       "selected": []
     },
-    "prompt": "English: this is intentionally unrelated to summary; do not route it to that skill."
+    "prompt": "English: this is intentionally unrelated to briefing; do not route it to that skill."
   },
   "invariants": [
     {
-      "id": "stage20.skill.summary.near-miss.source",
-      "path": ".build/skills/summary/SKILL.md"
+      "id": "stage20.skill.briefing.near-miss.source",
+      "path": ".build/skills/briefing/SKILL.md"
     }
   ],
   "kind": "near-miss",
   "locale": "en",
-  "pair_id": "stage20.skill.summary.near-miss",
+  "pair_id": "stage20.skill.briefing.near-miss",
   "revision": 1,
   "sandbox": {
     "network": false,

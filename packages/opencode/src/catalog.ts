@@ -23,7 +23,7 @@ export const CATALOG = {
     "slides-prompts-prepare",
     "spec-manage",
     "stopit",
-    "summary",
+    "briefing",
     "task-prepare",
     "task-review",
     "task-triage",

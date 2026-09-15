@@ -38,7 +38,7 @@ PORTABLE_SKILLS = (
     "slides-prompts-prepare",
     "spec-manage",
     "stopit",
-    "summary",
+    "briefing",
     "task-prepare",
     "task-review",
     "task-triage",
@@ -119,7 +119,7 @@ WORKFLOW_CONTRACTS = {
         "exact quotations, code, commands, command output",
         "do not replace the author's role with the reviewer's role",
     ),
-    "summary": (
+    "briefing": (
         "do not add facts absent from the source data",
         "strictly distinguish the current situation, a proposal, an accepted decision",
     ),

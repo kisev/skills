@@ -508,8 +508,8 @@
       "evidence_profile": "skills"
     },
     "REQ-F-122": {
-      "surface": "skill:summary",
-      "source": "specs/capabilities/skills/summary.md",
+      "surface": "skill:briefing",
+      "source": "specs/capabilities/skills/briefing.md",
       "block_sha256": "719ee8007104edd04a5bf74e91909daa59765b236ee8f79fc66bb96e97c7e725",
       "evidence_profile": "skills"
     },
@@ -766,9 +766,9 @@
       "evidence_profile": "commands"
     },
     "REQ-I-222": {
-      "surface": "command:summary",
-      "source": "specs/capabilities/commands/summary.md",
-      "block_sha256": "2c07a99bb7257994edc07eae70e90c0c1665adae50bd30c78063cab545577e9e",
+      "surface": "command:briefing",
+      "source": "specs/capabilities/commands/briefing.md",
+      "block_sha256": "c55150ee7e5b94e79a1576a66dba564afd0bf0dd644bea1e3293cad68754c8a2",
       "evidence_profile": "commands"
     },
     "REQ-I-223": {

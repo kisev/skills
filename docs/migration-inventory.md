@@ -17,7 +17,7 @@ There are exactly 29 active portable skills:
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
 `docs-prepare`, `docs-review`, `doit`, `goal`, `humanize`, `lsp-report`,
 `mattermost`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
-`skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `summary`,
+`skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
 `task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
 `team-sprint-close`, and `team-sprint-start`.
 

@@ -4,30 +4,30 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "0e4eb360d8d41f646bfb63cc6d2ad8220fc7b65c9408dbfa61b5f4295276139c",
+  "digest": "b9e2ab34449c6f69c4496f3d4a0ef5b6d205380dfd674519683ec84abe08bc7d",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
-    "selected": ["skill:summary"],
+    "selected": ["skill:briefing"],
     "structured_outcome": "contract-passed"
   },
   "host": "any",
-  "id": "stage20.skill.summary.trigger.en",
+  "id": "stage20.skill.briefing.trigger.en",
   "input": {
     "fixture": {
-      "selected": ["skill:summary"]
+      "selected": ["skill:briefing"]
     },
-    "prompt": "Select the summary skill for its exact contract scenario."
+    "prompt": "Select the briefing skill for its exact contract scenario."
   },
   "invariants": [
     {
-      "id": "stage20.skill.summary.trigger.source",
-      "path": ".build/skills/summary/SKILL.md"
+      "id": "stage20.skill.briefing.trigger.source",
+      "path": ".build/skills/briefing/SKILL.md"
     }
   ],
   "kind": "trigger",
   "locale": "en",
-  "pair_id": "stage20.skill.summary.trigger",
+  "pair_id": "stage20.skill.briefing.trigger",
   "revision": 1,
   "sandbox": {
     "network": false,

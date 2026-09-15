@@ -13,7 +13,7 @@
   },
   "expected": {
     "selected": ["skill:doit", "skill:askme", "skill:docs-prepare"],
-    "not_selected": ["skill:summary", "skill:stopit"]
+    "not_selected": ["skill:briefing", "skill:stopit"]
   },
   "invariants": [
     {
@@ -34,5 +34,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "35b00ed2ccb0e49eaa77e69df844472123d8c2631896adabeadb884ce9784cf7"
+  "digest": "e76d20008bbbef5aed357f50e6d8e28a5202daca10e73fe686cf35811903db53"
 }

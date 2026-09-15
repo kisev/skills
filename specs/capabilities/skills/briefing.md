@@ -1,4 +1,4 @@
-# `summary`
+# `briefing`
 
 ## Purpose
 
@@ -40,5 +40,5 @@ The skill shall distinguish facts, conclusions, decisions, tasks, risks, and unc
 
 ## Example
 
-`summary` marks an unconfirmed deadline as an ambiguity rather than a task.
+`briefing` marks an unconfirmed deadline as an ambiguity rather than a task.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

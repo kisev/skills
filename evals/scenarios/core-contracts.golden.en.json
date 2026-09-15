@@ -11,7 +11,7 @@
     "prompt": "Run the core skill workflow with complete evidence, a bounded plan, and risk-specific confirmations.",
     "fixture": { "selected": ["skill:doit"] }
   },
-  "expected": { "selected": ["skill:doit"], "not_selected": ["skill:summary", "skill:stopit"] },
+  "expected": { "selected": ["skill:doit"], "not_selected": ["skill:briefing", "skill:stopit"] },
   "invariants": [
     {
       "id": "plan-bound",
@@ -31,5 +31,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "8a518be1e9aa63b064a99606042697c4b19740b541b58a9fe151ed420e123099"
+  "digest": "3a10c035983e8cd84a179141e1db4e02779d870117db39432c9c981f468ac3b4"
 }

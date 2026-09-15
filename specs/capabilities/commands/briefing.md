@@ -1,4 +1,4 @@
-# `/summary`
+# `/briefing`
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Select, pass, extract, classify, structure, report.
 
 ## Dependencies
 
-`summary` only.
+`briefing` only.
 
 ## Remote/Local Effects
 
@@ -34,11 +34,11 @@ Protected tokens remain exact.
 
 ## Requirement
 
-### REQ-I-222 - Route the summary command
+### REQ-I-222 - Route the briefing command
 
-The command shall load exactly `summary` and preserve fact/assumption separation.
+The command shall load exactly `briefing` and preserve fact/assumption separation.
 
 ## Example
 
-`/summary` structures supplied meeting notes.
+`/briefing` structures supplied meeting notes.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).
