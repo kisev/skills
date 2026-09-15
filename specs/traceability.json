@@ -1,7 +1,7 @@
 {
   "schema": "traceability/v1",
-  "target": "2.4.0",
-  "source_revision": "0cc0dbeec2bf01a690c875c07afe78b91495bb81",
+  "target": "2.4.1",
+  "source_revision": "109e176ef79afd0da115d5fe67abab906127c3b7",
   "hash": {
     "algorithm": "sha256",
     "canonical_block": "trimmed Markdown from the REQ heading through the paragraph before the next section heading"

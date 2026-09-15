@@ -6,6 +6,15 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
+## [2.4.1] - 2026-09-16
+
+### Fixed
+
+- Public documentation now provides structurally aligned English and Russian
+  versions with natural localized prose and separate changelog and security files.
+- Locale validation now detects mismatched Markdown blocks, and portable cleanup
+  guidance includes the `summary` to `briefing` rename.
+
 ## [2.4.0] - 2026-09-16
 
 ### Added
