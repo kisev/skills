@@ -82,7 +82,7 @@ if endpoint.startswith("projects/group%%2Fproject"):
 elif endpoint.startswith("projects/19/labels"):
     value = [{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}, {"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}]
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
+    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
     value = {"changes": [{"old_path": changed_path, "new_path": changed_path}] if changed_path else [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
@@ -912,6 +912,7 @@ print(json.dumps(value))
                 "FAKE_HEAD_SHA": head_sha,
                 "FAKE_CHANGED_PATH": "review.txt",
                 "FAKE_DISCUSSION": "1",
+                "FAKE_MR_STATE": "merged",
             }
             target = "https://gitlab.example/group/project/-/merge_requests/7"
             batch = self.run_runner(
@@ -1036,6 +1037,34 @@ print(json.dumps(value))
                         "summary": "The change is small and preserves the reviewed contract.",
                         "architecture_assessment": "The responsibility remains with its existing owner.",
                         "semver_impact": "patch",
+                        "semver_rationale": "The fix changes behavior without changing the public API.",
+                        "mr_metadata_assessment": {
+                            "title": {
+                                "status": "needs_change",
+                                "rationale": "The title does not identify the affected behavior.",
+                                "recommendation": "Name the affected retry behavior.",
+                            },
+                            "description": {
+                                "status": "ok",
+                                "rationale": "The description states the intended behavior.",
+                                "recommendation": None,
+                            },
+                            "labels": {
+                                "status": "needs_change",
+                                "rationale": "The MR has no labels.",
+                                "recommendation": "Apply the project-required labels.",
+                            },
+                            "workflow_state": {
+                                "status": "ok",
+                                "rationale": "The MR is already merged and remains commentable.",
+                                "recommendation": None,
+                            },
+                            "overall": {
+                                "status": "needs_change",
+                                "rationale": "Title and labels need clearer release metadata.",
+                                "recommendation": "Correct metadata independently of code findings.",
+                            },
+                        },
                         "checks": ["Compared the exact base and head revisions."],
                         "findings": [primary_finding],
                         "thread_decisions": [
@@ -1072,6 +1101,17 @@ print(json.dumps(value))
             markdown = Path(plan_result["markdown_path"]).read_text(encoding="utf-8")
             self.assertIn("Retry can repeat the external operation", markdown)
             self.assertIn(f"{target}#note_42", markdown)
+            self.assertIn("MR metadata assessment", markdown)
+            self.assertIn("The fix changes behavior without changing the public API.", markdown)
+            self.assertIn("MR state: `merged`", markdown)
+            self.assertEqual(len(plan_result["publication_body_paths"]), 1)
+            body_path = Path(plan_result["publication_body_paths"][0])
+            self.assertTrue(body_path.is_absolute())
+            self.assertTrue(body_path.is_file())
+            self.assertIn("--method POST", plan_result["publication_commands"][0])
+            self.assertIn(f"body=@{body_path}", plan_result["publication_commands"][0])
+            self.assertIn("--method GET", plan_result["publication_commands"][0])
+            self.assertIn("sha256sum --check --status", plan_result["publication_commands"][0])
             environment["FAKE_CURRENT_USER"] = "author"
             stale_plan = self.run_runner(
                 "code-review",
