@@ -2,11 +2,11 @@
 
 [Русская версия](ru/verification.md)
 
-## Release 2.2.2
+## Release 2.2.3
 
 The supported portable source is the GitHub Pages stable channel at
 `https://kisev.github.io/skills`; the optional package is
-`@kisev/skills-opencode@2.2.2`. Portable installation pins
+`@kisev/skills-opencode@2.2.3`. Portable installation pins
 `npx --yes skills@1.5.23`. The package requires Node.js 22+ and declares OpenCode
 `>=1.18.29 <1.19.0`.
 

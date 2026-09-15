@@ -24,7 +24,7 @@ DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
 def test_current_release_metadata_is_aligned() -> None:
     assert build_distribution.build(DISTRIBUTION, False) == 0
     result = check_release.validate()
-    assert result["version"] == "2.2.2"
+    assert result["version"] == "2.2.3"
     assert (
         result["revision"]
         == subprocess.run(
@@ -50,7 +50,7 @@ def test_release_check_rejects_distribution_revision_drift(
     distribution = tmp_path / "distribution"
     distribution.mkdir()
     (distribution / "index.json").write_text(
-        json.dumps({"version": "2.2.2", "source_revision": "0" * 40}), encoding="utf-8"
+        json.dumps({"version": "2.2.3", "source_revision": "0" * 40}), encoding="utf-8"
     )
     monkeypatch.setattr(check_release, "DISTRIBUTION", distribution)
 
@@ -69,8 +69,8 @@ def test_release_artifact_hashes_use_registry_integrity_format() -> None:
 
 
 def test_release_notes_are_taken_from_the_exact_changelog_section() -> None:
-    notes = create_github_release.changelog("2.2.2")
-    assert "attestations endpoint" in notes
+    notes = create_github_release.changelog("2.2.3")
+    assert "plain absolute artifact paths" in notes
     assert "## [2.2.1]" not in notes
 
 
@@ -135,15 +135,15 @@ def test_registry_smoke_installs_the_optional_runtime_peer(
     def command(*arguments: str, **_kwargs: object) -> str:
         calls.append(arguments)
         if arguments[-1:] == ("--version",):
-            return "2.2.2\n"
+            return "2.2.3\n"
         if arguments[-2:] == ("capabilities", "--json"):
-            return '{"status":"ok","version":"2.2.2"}\n'
+            return '{"status":"ok","version":"2.2.3"}\n'
         return ""
 
     monkeypatch.setattr(publish_npm_release, "command", command)
-    publish_npm_release.registry_smoke("@kisev/skills-opencode", "2.2.2")
+    publish_npm_release.registry_smoke("@kisev/skills-opencode", "2.2.3")
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
-    assert "@kisev/skills-opencode@2.2.2" in install
+    assert "@kisev/skills-opencode@2.2.3" in install
     assert "@opencode-ai/plugin@1.18.29" in install
     assert ("npm", "audit", "signatures", "--json") in calls
 
@@ -217,15 +217,15 @@ def test_github_release_creation_binds_tag_revision_and_notes(
 
     monkeypatch.setenv("GH_TOKEN", "test-token")
     monkeypatch.setenv("GITHUB_REPOSITORY", "kisev/skills")
-    monkeypatch.setenv("RELEASE_TAG", "v2.2.2")
+    monkeypatch.setenv("RELEASE_TAG", "v2.2.3")
     monkeypatch.setenv("RELEASE_REVISION", "a" * 40)
     monkeypatch.setattr(create_github_release, "api", api)
     assert create_github_release.create()["html_url"] == "https://github.example/release"
     payload = calls[-1][2]
     assert payload is not None
-    assert payload["tag_name"] == "v2.2.2"
+    assert payload["tag_name"] == "v2.2.3"
     assert payload["target_commitish"] == "a" * 40
-    assert "attestations endpoint" in str(payload["body"])
+    assert "plain absolute artifact paths" in str(payload["body"])
 
 
 def test_release_environment_revision_must_match_head(monkeypatch: pytest.MonkeyPatch) -> None:

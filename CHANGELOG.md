@@ -4,6 +4,17 @@
 [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
 [Semantic Versioning](https://semver.org/lang/ru/).
 
+## [2.2.3] - 2026-09-15
+
+### Fixed
+
+- Code review output now includes plain absolute artifact paths, explicit MR
+  metadata and SemVer assessments, and one immutable manual publication command
+  per finding even for merged or closed merge requests.
+- Review publication commands revalidate MR state, exact head SHA, and body
+  digest before posting while remaining preview-only and never executing GitLab
+  mutations automatically.
+
 ## [2.2.2] - 2026-09-14
 
 ### Fixed

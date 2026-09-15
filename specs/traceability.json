@@ -1,6 +1,6 @@
 {
   "schema": "traceability/v1",
-  "target": "2.2.2",
+  "target": "2.2.3",
   "source_revision": "d4336eb24006eebbcf9a62a997c358b0a88c0816",
   "hash": {
     "algorithm": "sha256",
@@ -311,7 +311,7 @@
     "REQ-C-005": {
       "surface": "scope",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "3edba3e22b424f981b654f81078ff50c2eb71afa01ca96da3ba91ae11854c611",
+      "block_sha256": "d1180292e0030c4243751abc907eb8c8d9ca8767c0472b87aee8f84c441ed43a",
       "evidence_profile": "quality"
     },
     "REQ-C-006": {

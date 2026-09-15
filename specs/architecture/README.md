@@ -1,7 +1,7 @@
 # Architecture
 
 This architecture uses the repository's 12 arc42 viewpoints as a compact model
-of the current `2.2.2` system. Portable definitions are deduplicated, CI publishes
+of the current `2.2.3` system. Portable definitions are deduplicated, CI publishes
 self-contained well-known archives through GitHub Pages, and the OpenCode core
 plugin owns routing, package tools, and lifecycle boundaries.
 
