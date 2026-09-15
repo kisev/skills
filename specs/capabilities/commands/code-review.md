@@ -36,7 +36,9 @@ Command cannot turn review into mutation.
 
 ### REQ-I-205 - Route the code-review command
 
-The command shall load exactly `code-review` and preserve independent evidence checks.
+The command shall load exactly `code-review`, pass its arguments as untrusted
+input, and contain no target parsing, remote/local selection, runner invocation,
+state transition, or review logic.
 
 ## Example
 

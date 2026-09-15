@@ -50,6 +50,16 @@
       "test_selector": "packages/opencode/test/package.test.mjs::installer wizard uses shared multi-select groups and keeps defaults",
       "eval_ids": ["stage20.command.spec-manage.contract", "stage20.command.capabilities.contract"]
     },
+    "code_review": {
+      "kind": "automated",
+      "test_selector": "tests/test_skill_contracts.py::test_code_review_requires_compact_incremental_manual_publication_contract",
+      "eval_ids": ["gitlab.code-review-routing", "gitlab.evidence-contract"]
+    },
+    "code_review_command": {
+      "kind": "automated",
+      "test_selector": "packages/opencode/test/package.test.mjs::code-review command is one logic-free skill adapter",
+      "eval_ids": ["stage20.command.code-review.contract"]
+    },
     "goal_command": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
@@ -408,8 +418,8 @@
     "REQ-F-105": {
       "surface": "skill:code-review",
       "source": "specs/capabilities/skills/code-review.md",
-      "block_sha256": "a7ede385ddaa38ec11e6fcbed2588fe0388072bda18bf2aefd7cf0fe3bbdcc47",
-      "evidence_profile": "skills"
+      "block_sha256": "02bbb21cf03a6738e7f11081e09ae3816a0340d86f1ee59eaea701171b3572ee",
+      "evidence_profile": "code_review"
     },
     "REQ-F-106": {
       "surface": "skill:commit-msg",
@@ -666,8 +676,8 @@
     "REQ-I-205": {
       "surface": "command:code-review",
       "source": "specs/capabilities/commands/code-review.md",
-      "block_sha256": "dbf75cd5fcbe091767d6e62a11556318325c9512cec513c67764aa8719eccf3a",
-      "evidence_profile": "commands"
+      "block_sha256": "ff908c80d6adfb6a64d9f7817587b7fe1cffe9d3f4aa4ba0506ec5ed2a5b4aa4",
+      "evidence_profile": "code_review_command"
     },
     "REQ-I-206": {
       "surface": "command:commit-msg",

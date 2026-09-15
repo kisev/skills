@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: >-
-  Review one GitLab merge request or local WIP for concrete risks, exact-SHA evidence, thread decisions, architecture, and minimum fixes. Russian discovery terms: ревью кода.
+  Review one GitLab merge request or local WIP for concrete risks, role-aware publication actions, incremental GitLab follow-ups, architecture, and minimum fixes. Russian discovery terms: ревью кода.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

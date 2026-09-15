@@ -151,7 +151,32 @@
     },
     "thread_decision": {
       "type": "object",
-      "required": ["id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"],
+      "anyOf": [
+        {
+          "required": [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response"
+          ]
+        },
+        {
+          "required": [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response",
+            "last_note_id",
+            "last_note_body_sha256"
+          ]
+        }
+      ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "url": { "type": "string", "minLength": 1 },
@@ -168,8 +193,12 @@
           ]
         },
         "rationale": { "type": "string", "minLength": 1 },
-        "outcome": { "enum": ["no_publication", "local_fix"] },
-        "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+        "outcome": {
+          "enum": ["no_publication", "local_fix", "reply", "resolve", "reopen"]
+        },
+        "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "last_note_id": {},
+        "last_note_body_sha256": { "$ref": "#/$defs/digest" }
       },
       "additionalProperties": false
     },
@@ -215,9 +244,15 @@
     },
     "publication_body": {
       "type": "object",
-      "required": ["finding_id", "path", "sha256", "content"],
+      "anyOf": [
+        { "required": ["finding_id", "path", "sha256", "content"] },
+        { "required": ["publication_id", "revision", "kind", "path", "sha256", "content"] }
+      ],
       "properties": {
         "finding_id": { "type": "string", "minLength": 1 },
+        "publication_id": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "kind": { "enum": ["finding", "thread", "issue"] },
         "path": { "type": "string", "minLength": 1 },
         "sha256": { "$ref": "#/$defs/digest" },
         "content": { "type": "string", "minLength": 1 }
@@ -226,22 +261,415 @@
     },
     "publication_command": {
       "type": "object",
-      "required": ["finding_id", "command"],
+      "anyOf": [
+        { "required": ["finding_id", "command"] },
+        {
+          "required": [
+            "publication_id",
+            "revision",
+            "kind",
+            "outcome",
+            "command",
+            "recovery_command"
+          ]
+        }
+      ],
       "properties": {
         "finding_id": { "type": "string", "minLength": 1 },
-        "command": { "type": "string", "minLength": 1 }
+        "publication_id": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "kind": { "enum": ["finding", "thread", "issue"] },
+        "outcome": {
+          "enum": [
+            "create_general",
+            "create_line",
+            "create_issue",
+            "update_issue",
+            "reply",
+            "resolve",
+            "reopen"
+          ]
+        },
+        "command": { "type": "string", "minLength": 1 },
+        "recovery_command": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        }
       },
       "additionalProperties": false
     },
     "review_publication_preview": {
       "type": "object",
-      "required": ["mr_state", "warning", "preflight_command", "body_files", "commands"],
+      "anyOf": [
+        { "required": ["mr_state", "warning", "preflight_command", "body_files", "commands"] },
+        {
+          "required": [
+            "mr_state",
+            "warning",
+            "preflight_path",
+            "preflight_sha256",
+            "preflight_command",
+            "body_files",
+            "commands"
+          ]
+        }
+      ],
       "properties": {
         "mr_state": { "type": "string", "minLength": 1 },
         "warning": { "type": "string", "minLength": 1 },
+        "preflight_path": { "type": "string", "minLength": 1 },
+        "preflight_sha256": { "$ref": "#/$defs/digest" },
         "preflight_command": { "type": "string", "minLength": 1 },
         "body_files": { "type": "array", "items": { "$ref": "#/$defs/publication_body" } },
         "commands": { "type": "array", "items": { "$ref": "#/$defs/publication_command" } }
+      },
+      "additionalProperties": false
+    },
+    "publication_marker": {
+      "type": "object",
+      "required": [
+        "id",
+        "revision",
+        "kind",
+        "note_id",
+        "note_url",
+        "discussion_id",
+        "author_username",
+        "body_sha256",
+        "resource_type",
+        "is_root",
+        "position",
+        "root_note_id",
+        "target",
+        "resource_title",
+        "resource_body"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "kind": { "enum": ["finding", "thread", "issue"] },
+        "note_id": {},
+        "note_url": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "discussion_id": {},
+        "author_username": { "type": "string", "minLength": 1 },
+        "body_sha256": { "$ref": "#/$defs/digest" },
+        "resource_type": { "enum": ["note", "issue"] },
+        "is_root": { "type": "boolean" },
+        "position": { "anyOf": [{ "type": "object" }, { "type": "null" }] },
+        "root_note_id": {},
+        "target": { "type": "string", "pattern": "^[a-f0-9]{16}$" },
+        "resource_title": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        },
+        "resource_body": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        }
+      },
+      "additionalProperties": false
+    },
+    "incremental_delta": {
+      "type": "object",
+      "required": [
+        "from_head",
+        "to_head",
+        "changed_paths",
+        "changed_thread_ids",
+        "unchanged_thread_ids",
+        "changed_note_ids",
+        "unchanged_note_ids",
+        "metadata_fields",
+        "pipelines_changed"
+      ],
+      "properties": {
+        "from_head": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+        "to_head": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+        "changed_paths": { "type": "array", "items": { "type": "string" } },
+        "changed_thread_ids": { "type": "array", "items": { "type": "string" } },
+        "unchanged_thread_ids": { "type": "array", "items": { "type": "string" } },
+        "changed_note_ids": { "type": "array", "items": { "type": "string" } },
+        "unchanged_note_ids": { "type": "array", "items": { "type": "string" } },
+        "metadata_fields": { "type": "array", "items": { "type": "string" } },
+        "pipelines_changed": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "incremental_baseline": {
+      "type": "object",
+      "required": ["plan_path", "plan_digest", "state_digest"],
+      "properties": {
+        "plan_path": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "plan_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "state_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] }
+      },
+      "additionalProperties": false
+    },
+    "finding_publication": {
+      "type": "object",
+      "required": ["finding_id", "revision", "type", "path", "line", "old_line", "body"],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "type": { "enum": ["general", "line", "local_fix"] },
+        "path": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "line": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
+        "old_line": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
+        "body": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "previous_finding_assessment": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "status",
+        "previous_status",
+        "current_status",
+        "rationale",
+        "action",
+        "publication_action",
+        "publication_body",
+        "critic_required"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["finding", "issue"] },
+        "status": { "enum": ["active", "fixed", "withdrawn", "changed", "unverified"] },
+        "previous_status": { "type": "string", "minLength": 1 },
+        "current_status": { "type": "string", "minLength": 1 },
+        "rationale": { "type": "string", "minLength": 1 },
+        "action": { "type": "string", "minLength": 1 },
+        "publication_action": {
+          "enum": ["no_publication", "reply", "resolve", "reopen", "update_issue"]
+        },
+        "publication_body": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        },
+        "critic_required": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "rejected_candidate": {
+      "type": "object",
+      "required": [
+        "id",
+        "source",
+        "finding",
+        "reason",
+        "paths",
+        "thread_ids",
+        "metadata_fields",
+        "ci"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["primary", "critic"] },
+        "finding": { "$ref": "#/$defs/finding" },
+        "reason": { "type": "string", "minLength": 1 },
+        "paths": { "type": "array", "items": { "type": "string" } },
+        "thread_ids": { "type": "array", "items": { "type": "string" } },
+        "metadata_fields": { "type": "array", "items": { "type": "string" } },
+        "ci": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "rejected_candidate_assessment": {
+      "type": "object",
+      "required": ["id", "decision", "reason"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "decision": { "enum": ["still_rejected", "promoted"] },
+        "reason": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "recommended_issue": {
+      "type": "object",
+      "required": [
+        "id",
+        "revision",
+        "title",
+        "problem",
+        "risk",
+        "evidence",
+        "reason_out_of_scope",
+        "minimum_fix",
+        "body"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "revision": { "type": "integer", "minimum": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "problem": { "type": "string", "minLength": 1 },
+        "risk": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "reason_out_of_scope": { "type": "string", "minLength": 1 },
+        "minimum_fix": { "type": "string", "minLength": 1 },
+        "body": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "finding_ledger_entry": {
+      "type": "object",
+      "required": ["id", "kind", "status", "revision", "record"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["finding", "issue"] },
+        "status": { "enum": ["active", "fixed", "withdrawn", "changed", "unverified"] },
+        "revision": { "type": "integer", "minimum": 1 },
+        "record": {
+          "type": "object",
+          "properties": {
+            "finding": { "$ref": "#/$defs/finding" },
+            "publication": { "$ref": "#/$defs/finding_publication" },
+            "issue": { "$ref": "#/$defs/recommended_issue" }
+          },
+          "additionalProperties": false,
+          "anyOf": [{ "required": ["finding", "publication"] }, { "required": ["issue"] }]
+        }
+      },
+      "additionalProperties": false
+    },
+    "review_presentation": {
+      "type": "object",
+      "required": [
+        "title",
+        "incremental_notice",
+        "target_label",
+        "role_label",
+        "role_value",
+        "verdict_label",
+        "verdict_value",
+        "metadata_heading",
+        "previous_findings_heading",
+        "open_threads_heading",
+        "closed_threads_heading",
+        "local_fixes_heading",
+        "new_findings_heading",
+        "recommended_issues_heading",
+        "checked_heading",
+        "architecture_heading",
+        "semver_heading",
+        "checks_heading",
+        "publication_heading",
+        "no_items",
+        "publication_warning",
+        "previous_table_headers",
+        "evidence_label",
+        "relation_label",
+        "severity_labels",
+        "recovery_label"
+      ],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "incremental_notice": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        },
+        "target_label": { "type": "string", "minLength": 1 },
+        "role_label": { "type": "string", "minLength": 1 },
+        "role_value": { "type": "string", "minLength": 1 },
+        "verdict_label": { "type": "string", "minLength": 1 },
+        "verdict_value": { "type": "string", "minLength": 1 },
+        "metadata_heading": { "type": "string", "minLength": 1 },
+        "previous_findings_heading": { "type": "string", "minLength": 1 },
+        "open_threads_heading": { "type": "string", "minLength": 1 },
+        "closed_threads_heading": { "type": "string", "minLength": 1 },
+        "local_fixes_heading": { "type": "string", "minLength": 1 },
+        "new_findings_heading": { "type": "string", "minLength": 1 },
+        "recommended_issues_heading": { "type": "string", "minLength": 1 },
+        "checked_heading": { "type": "string", "minLength": 1 },
+        "architecture_heading": { "type": "string", "minLength": 1 },
+        "semver_heading": { "type": "string", "minLength": 1 },
+        "checks_heading": { "type": "string", "minLength": 1 },
+        "publication_heading": { "type": "string", "minLength": 1 },
+        "no_items": { "type": "string", "minLength": 1 },
+        "publication_warning": { "type": "string", "minLength": 1 },
+        "evidence_label": { "type": "string", "minLength": 1 },
+        "relation_label": { "type": "string", "minLength": 1 },
+        "severity_labels": {
+          "type": "object",
+          "required": ["critical", "high", "medium", "low"],
+          "properties": {
+            "critical": { "type": "string", "minLength": 1 },
+            "high": { "type": "string", "minLength": 1 },
+            "medium": { "type": "string", "minLength": 1 },
+            "low": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "recovery_label": { "type": "string", "minLength": 1 },
+        "previous_table_headers": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "incremental_review": {
+      "type": "object",
+      "required": [
+        "contract_version",
+        "requested",
+        "mode",
+        "reason",
+        "incremental_baseline",
+        "previous_findings",
+        "previous_finding_publications",
+        "previous_recommended_issues",
+        "previous_finding_ledger",
+        "previous_publication_ledger",
+        "previous_thread_decisions",
+        "previous_rejected_candidates",
+        "reconsidered_rejected_candidates",
+        "incremental_delta",
+        "incremental_delta_digest",
+        "critic_required",
+        "fallback_reasons"
+      ],
+      "properties": {
+        "contract_version": { "const": 1 },
+        "requested": { "enum": ["auto", "off"] },
+        "mode": { "enum": ["full", "incremental", "unchanged"] },
+        "reason": { "type": "string", "minLength": 1 },
+        "incremental_baseline": { "$ref": "#/$defs/incremental_baseline" },
+        "previous_findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+        "previous_finding_publications": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding_publication" }
+        },
+        "previous_recommended_issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/recommended_issue" }
+        },
+        "previous_finding_ledger": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding_ledger_entry" }
+        },
+        "previous_publication_ledger": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/publication_marker" }
+        },
+        "previous_thread_decisions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/thread_decision" }
+        },
+        "previous_rejected_candidates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rejected_candidate" }
+        },
+        "reconsidered_rejected_candidates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/rejected_candidate" }
+        },
+        "incremental_delta": { "$ref": "#/$defs/incremental_delta" },
+        "incremental_delta_digest": { "$ref": "#/$defs/digest" },
+        "critic_required": { "type": "boolean" },
+        "fallback_reasons": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
     },
@@ -529,23 +957,49 @@
             "kind": { "const": "review_context" },
             "payload": {
               "type": "object",
-              "required": [
-                "schema_version",
-                "profile",
-                "external_mutations",
-                "evidence_digest",
-                "target",
-                "role",
-                "current_user_username",
-                "mr_author_username",
-                "discussions",
-                "notes",
-                "counts",
-                "exact_git",
-                "complete",
-                "errors",
-                "artifact_root",
-                "prepared_at"
+              "anyOf": [
+                {
+                  "required": [
+                    "schema_version",
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "target",
+                    "role",
+                    "current_user_username",
+                    "mr_author_username",
+                    "discussions",
+                    "notes",
+                    "counts",
+                    "exact_git",
+                    "complete",
+                    "errors",
+                    "artifact_root",
+                    "prepared_at"
+                  ]
+                },
+                {
+                  "required": [
+                    "schema_version",
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "target",
+                    "role",
+                    "current_user_username",
+                    "mr_author_username",
+                    "discussions",
+                    "notes",
+                    "publication_markers",
+                    "counts",
+                    "exact_git",
+                    "incremental",
+                    "complete",
+                    "errors",
+                    "artifact_root",
+                    "prepared_at"
+                  ]
+                }
               ],
               "additionalProperties": false,
               "properties": {
@@ -559,8 +1013,13 @@
                 "mr_author_username": { "type": "string", "minLength": 1 },
                 "discussions": { "type": "array" },
                 "notes": { "type": "array" },
+                "publication_markers": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/publication_marker" }
+                },
                 "counts": { "$ref": "#/$defs/review_counts" },
                 "exact_git": { "$ref": "#/$defs/exact_git" },
+                "incremental": { "$ref": "#/$defs/incremental_review" },
                 "complete": { "type": "boolean" },
                 "errors": { "type": "array", "items": { "type": "string" } },
                 "artifact_root": { "type": "string", "minLength": 1 },
@@ -617,35 +1076,100 @@
             "kind": { "const": "review_plan" },
             "payload": {
               "type": "object",
-              "required": [
-                "profile",
-                "external_mutations",
-                "evidence_digest",
-                "context_digest",
-                "decision_digest",
-                "target",
-                "role",
-                "mode",
-                "verdict",
-                "complete",
-                "summary",
-                "architecture_assessment",
-                "semver_impact",
-                "checks",
-                "findings",
-                "thread_decisions",
-                "markdown"
+              "anyOf": [
+                {
+                  "required": [
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "context_digest",
+                    "decision_digest",
+                    "target",
+                    "role",
+                    "mode",
+                    "verdict",
+                    "complete",
+                    "summary",
+                    "architecture_assessment",
+                    "semver_impact",
+                    "checks",
+                    "findings",
+                    "thread_decisions",
+                    "markdown"
+                  ]
+                },
+                {
+                  "required": [
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "context_digest",
+                    "decision_digest",
+                    "target",
+                    "role",
+                    "mode",
+                    "verdict",
+                    "complete",
+                    "summary",
+                    "architecture_assessment",
+                    "semver_impact",
+                    "semver_rationale",
+                    "mr_metadata_assessment",
+                    "publication_preview",
+                    "checks",
+                    "findings",
+                    "thread_decisions",
+                    "markdown"
+                  ]
+                },
+                {
+                  "required": [
+                    "profile",
+                    "review_contract_version",
+                    "external_mutations",
+                    "evidence_digest",
+                    "context_digest",
+                    "decision_digest",
+                    "target",
+                    "role",
+                    "mode",
+                    "incremental",
+                    "verdict",
+                    "complete",
+                    "summary",
+                    "architecture_assessment",
+                    "semver_impact",
+                    "semver_rationale",
+                    "mr_metadata_assessment",
+                    "publication_preview",
+                    "presentation",
+                    "checks",
+                    "findings",
+                    "finding_publications",
+                    "previous_finding_assessments",
+                    "recommended_issues",
+                    "finding_ledger",
+                    "publication_ledger",
+                    "rejected_candidates",
+                    "rejected_candidate_assessments",
+                    "rejected_candidate_ledger",
+                    "thread_decisions",
+                    "markdown"
+                  ]
+                }
               ],
               "additionalProperties": false,
               "properties": {
                 "profile": { "const": "code-review" },
+                "review_contract_version": { "const": 1 },
                 "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
                 "decision_digest": { "$ref": "#/$defs/digest" },
                 "target": { "type": "object" },
                 "role": { "enum": ["author", "reviewer"] },
-                "mode": { "enum": ["fast", "normal", "deep"] },
+                "mode": { "enum": ["fast", "normal", "deep", "incremental"] },
+                "incremental": { "$ref": "#/$defs/incremental_review" },
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
                 "complete": { "type": "boolean" },
                 "summary": { "type": "string", "minLength": 1 },
@@ -656,8 +1180,41 @@
                 "semver_rationale": { "type": "string", "minLength": 1 },
                 "mr_metadata_assessment": { "$ref": "#/$defs/mr_metadata_assessment" },
                 "publication_preview": { "$ref": "#/$defs/review_publication_preview" },
+                "presentation": { "$ref": "#/$defs/review_presentation" },
                 "checks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+                "finding_publications": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/finding_publication" }
+                },
+                "previous_finding_assessments": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/previous_finding_assessment" }
+                },
+                "recommended_issues": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/recommended_issue" }
+                },
+                "finding_ledger": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/finding_ledger_entry" }
+                },
+                "publication_ledger": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/publication_marker" }
+                },
+                "rejected_candidates": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/rejected_candidate" }
+                },
+                "rejected_candidate_assessments": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/rejected_candidate_assessment" }
+                },
+                "rejected_candidate_ledger": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/rejected_candidate" }
+                },
                 "thread_decisions": {
                   "type": "array",
                   "items": { "$ref": "#/$defs/thread_decision" }
@@ -692,6 +1249,11 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },
+                "scope_digest": { "$ref": "#/$defs/digest" },
+                "target_finding_ids": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                },
                 "external_mutations": { "const": false },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
               }
@@ -723,6 +1285,11 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },
+                "scope_digest": { "$ref": "#/$defs/digest" },
+                "target_finding_ids": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                },
                 "external_mutations": { "const": false },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
               }
@@ -759,7 +1326,7 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "finalize_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
-                "mode": { "enum": ["fast", "normal", "deep"] },
+                "mode": { "enum": ["fast", "normal", "deep", "incremental"] },
                 "external_mutations": { "const": false },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },
@@ -767,6 +1334,18 @@
                 "low_risk": { "type": "boolean" },
                 "blocking_findings": { "type": "boolean" },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+                "critic_findings": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/finding" }
+                },
+                "accepted_findings": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/finding" }
+                },
+                "critic_target_finding_ids": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                },
                 "unresolved_threads": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
                 "responses": { "type": "array", "items": { "$ref": "#/$defs/response" } }
               }

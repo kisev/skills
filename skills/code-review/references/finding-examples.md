@@ -1,6 +1,6 @@
 # Finding examples
 
-Use these examples to calibrate evidence and minimum fixes. Do not copy claims without verifying the reviewed project and SHA.
+Use these examples to calibrate evidence and minimum fixes. Do not copy claims without verifying the reviewed project and private exact-revision evidence. Keep raw SHAs out of user-facing prose.
 
 ## Evidence-backed finding
 
@@ -8,7 +8,7 @@ Use these examples to calibrate evidence and minimum fixes. Do not copy claims w
 ### High: Retry can submit the same payment twice
 
 - Risk: a client retry after a lost response can charge the user twice.
-- Evidence: `CreatePayment` stores the operation ID after the provider call, while the retry path invokes it again with the same request ID. The timeout integration test creates two provider records. Link both locations at the full reviewed SHA.
+- Evidence: `CreatePayment` stores the operation ID after the provider call, while the retry path invokes it again with the same request ID. The timeout integration test creates two provider records. Link both locations to immutable revisions without displaying raw SHAs.
 - Consequence: duplicate external side effects and manual reconciliation.
 - Relation to change: the MR adds the automatic retry but does not establish idempotency before the external call.
 - Minimum fix: reserve the operation ID before the provider call and return the stored result for a repeated request.
@@ -33,6 +33,18 @@ Use these examples to calibrate evidence and minimum fixes. Do not copy claims w
 | -------------------------------------------------------------------------- | ----- | ---------- | ----------------------------------------------------------------- | ---------------- |
 | [note_42](https://gitlab.example/group/project/-/merge_requests/7#note_42) | open  | accepted   | The exact reviewed path still retries without an idempotency key. | local_fix        |
 ```
+
+Valid outcomes are `no_publication`, `local_fix`, `reply`, `resolve`, and
+`reopen`. A publishable response is natural prose followed by a runner-owned
+hidden marker; do not put severity or internal evidence labels in that prose.
+
+## Recommended issue
+
+Use a recommended issue only for a confirmed real problem that the MR neither
+introduces, worsens, moves, nor depends on for safe operation. Include a stable
+ID, title, problem, risk, evidence, why it is outside this MR, a minimum fix, and
+a complete natural issue body. It does not block the MR and is never created
+automatically.
 
 ## Author mode
 

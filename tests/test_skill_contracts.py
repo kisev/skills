@@ -221,18 +221,43 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
         assert required.search(workflow), name
 
 
-def test_code_review_requires_plain_paths_metadata_semver_and_manual_commands() -> None:
+def test_code_review_requires_compact_incremental_manual_publication_contract() -> None:
     workflow = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
     for marker in (
+        "--incremental auto",
+        "--incremental off",
+        '"full review" alone is not an opt-out',
+        "previous_finding_assessments",
+        "recommended_issues",
+        "review-publication.md",
         "complete absolute filesystem paths",
-        "never as Markdown links",
-        "semver_rationale",
-        "mr_metadata_assessment",
-        "regardless of whether the MR is open, closed, or merged",
-        "glab api --method POST",
         "Do not add an apply subcommand or execute publication commands",
     ):
         assert marker in workflow
+    output = (ROOT / "skills/code-review/references/output-format.md").read_text(encoding="utf-8")
+    incremental = (ROOT / "skills/code-review/references/incremental-review.md").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "For another author's MR, do not expose finding titles",
+        "use a `file://` link",
+        "<!-- code-review:id=<stable-id>",
+        "selected response language",
+    ):
+        assert marker in output
+    for marker in (
+        "Local WIP always receives",
+        "delta-triggered scope",
+        "Revalidate every previously accepted finding",
+        "independent critic",
+    ):
+        assert marker in incremental
+    author_snapshot = (
+        (ROOT / "tests/fixtures/code-review/author-chat.snapshot.md")
+        .read_text(encoding="utf-8")
+        .strip()
+    )
+    assert author_snapshot in output
 
 
 def test_stage_16_shared_contracts_cover_completeness_ownership_and_risk_boundaries() -> None:

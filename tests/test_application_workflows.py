@@ -95,9 +95,9 @@ elif "/repository/tags/" in endpoint:
 elif endpoint == "user":
     value = {"username": os.environ.get("FAKE_CURRENT_USER", "reviewer")}
 elif endpoint.startswith("projects/19/merge_requests/7/discussions"):
-    value = [{"id": "discussion-42", "notes": [{"id": 42, "system": False, "resolvable": True, "resolved": False, "author": {"username": "other-reviewer"}, "body": "Retry needs an idempotency key", "position": {"head_sha": head_sha, "new_path": changed_path, "new_line": 2}}]}] if os.environ.get("FAKE_DISCUSSION") else []
+    value = json.loads(os.environ["FAKE_DISCUSSIONS_JSON"]) if os.environ.get("FAKE_DISCUSSIONS_JSON") else ([{"id": "discussion-42", "notes": [{"id": 42, "system": False, "resolvable": True, "resolved": False, "author": {"username": "other-reviewer"}, "body": "Retry needs an idempotency key", "position": {"head_sha": head_sha, "new_path": changed_path, "new_line": 2}}]}] if os.environ.get("FAKE_DISCUSSION") else [])
 elif endpoint.startswith("projects/19/merge_requests/7/notes"):
-    value = []
+    value = json.loads(os.environ["FAKE_NOTES_JSON"]) if os.environ.get("FAKE_NOTES_JSON") else []
 else:
     value = []
 print(json.dumps(value))
@@ -116,6 +116,99 @@ print(json.dumps(value))
                 result = self.run_runner(skill, "--capabilities")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(json.loads(result.stdout)["schema_version"], 1)
+
+    def test_mutable_gitlab_state_rejects_symlink_target(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_state"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            outside = root / "outside.json"
+            outside.write_text('{"safe":true}\n', encoding="utf-8")
+            target = root / "state.json"
+            target.symlink_to(outside)
+            with self.assertRaises(module.WorkflowError):
+                module.write_json(target, {"safe": False})
+            self.assertEqual(outside.read_text(encoding="utf-8"), '{"safe":true}\n')
+
+    def test_review_state_publication_rolls_back_markdown_and_baseline(self) -> None:
+        scripts = BUILT_SKILLS / "code-review" / "scripts"
+        previous_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "portable_runtime" or name.startswith("portable_runtime.")
+        }
+        sys.path.insert(0, str(scripts))
+        try:
+            module = load_module(scripts / "review_context.py", "built_review_context_rollback")
+        finally:
+            sys.path.remove(str(scripts))
+            for name in list(sys.modules):
+                if name == "portable_runtime" or name.startswith("portable_runtime."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous_modules)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            root.chmod(0o700)
+            markdown = root / "review-publication.md"
+            baseline = root / "review-baseline.json"
+            markdown.write_text("old review\n", encoding="utf-8")
+            baseline.write_text('{"old":true}\n', encoding="utf-8")
+            baseline_digest = hashlib.sha256(baseline.read_bytes()).hexdigest()
+            real_fsync = os.fsync
+            calls = 0
+
+            def fail_after_pointer(descriptor: int) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 4:
+                    raise OSError("injected directory fsync failure")
+                real_fsync(descriptor)
+
+            with patch.object(module.os, "fsync", side_effect=fail_after_pointer):
+                with self.assertRaises(OSError):
+                    module.publish_review_state(
+                        root,
+                        "new review\n",
+                        root / "artifacts" / "review_plan" / f"{'a' * 64}.json",
+                        "a" * 64,
+                        {"url": "https://gitlab.example/group/project/-/merge_requests/7"},
+                        baseline_digest,
+                    )
+            self.assertEqual(markdown.read_text(encoding="utf-8"), "old review\n")
+            self.assertEqual(baseline.read_text(encoding="utf-8"), '{"old":true}\n')
+
+    def test_line_finding_requires_exactly_one_suggestion(self) -> None:
+        scripts = BUILT_SKILLS / "code-review" / "scripts"
+        previous_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "portable_runtime" or name.startswith("portable_runtime.")
+        }
+        sys.path.insert(0, str(scripts))
+        try:
+            module = load_module(scripts / "review_context.py", "built_review_context_suggestion")
+        finally:
+            sys.path.remove(str(scripts))
+            for name in list(sys.modules):
+                if name == "portable_runtime" or name.startswith("portable_runtime."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous_modules)
+        invalid = {
+            "finding_id": "finding-1",
+            "type": "line",
+            "path": "src/example.py",
+            "line": 7,
+            "old_line": None,
+            "body": "Replace this line.",
+        }
+        with self.assertRaises(module.portable.WorkflowError):
+            module.validate_finding_publications([invalid], {"finding-1"})
+        valid = {
+            **invalid,
+            "body": "Use the bounded value.\n\n```suggestion\nvalue = bounded\n```",
+        }
+        self.assertEqual(module.validate_finding_publications([valid], {"finding-1"})[0], valid)
 
     def test_invalid_target_is_rejected_before_external_collection(self) -> None:
         for skill in GITLAB_RUNNERS:
@@ -833,6 +926,13 @@ print(json.dumps(value))
         }
         module.validate_critic(receipt, "evidence")
         with self.assertRaises(module.WorkflowError):
+            module.validate_critic(receipt, "evidence", "b" * 64)
+        module.validate_critic(
+            {**receipt, "scope_digest": "b" * 64, "target_finding_ids": []},
+            "evidence",
+            "b" * 64,
+        )
+        with self.assertRaises(module.WorkflowError):
             module.validate_critic({**receipt, "evidence_digest": "other"}, "evidence")
         with self.assertRaises(module.WorkflowError):
             module.validate_critic(
@@ -957,7 +1057,7 @@ print(json.dumps(value))
                 "severity": "high",
                 "summary": "Retry can repeat the external operation",
                 "risk": "A retry can execute the operation twice.",
-                "evidence": [f"{target}#note_42 at {head_sha}"],
+                "evidence": ["The current retry path calls the provider before reserving an ID."],
                 "consequence": "Users can observe duplicate side effects.",
                 "relation_to_change": "The reviewed change adds the retry path.",
                 "minimum_fix": "Persist an idempotency key before the external call.",
@@ -1003,7 +1103,11 @@ print(json.dumps(value))
                         "unresolved_threads": [{"id": "42"}],
                         "responses": [
                             {"id": "primary-1", "decision": "accept", "reason": "confirmed"},
-                            {"id": "critic-1", "decision": "accept", "reason": "confirmed"},
+                            {
+                                "id": "critic-1",
+                                "decision": "reject",
+                                "reason": "outside the changed contract",
+                            },
                             {"id": "42", "decision": "accept", "reason": "still open"},
                         ],
                     }
@@ -1034,6 +1138,45 @@ print(json.dumps(value))
             review_content.write_text(
                 json.dumps(
                     {
+                        "presentation": {
+                            "title": "Code review publication plan",
+                            "incremental_notice": None,
+                            "target_label": "Target",
+                            "role_label": "Role",
+                            "role_value": "reviewer",
+                            "verdict_label": "Verdict",
+                            "verdict_value": "changes required",
+                            "metadata_heading": "MR metadata",
+                            "previous_findings_heading": "Previous findings",
+                            "open_threads_heading": "Open threads",
+                            "closed_threads_heading": "Closed threads",
+                            "local_fixes_heading": "Local fixes",
+                            "new_findings_heading": "New findings",
+                            "recommended_issues_heading": "Recommended issues",
+                            "checked_heading": "Reviewed without publication",
+                            "architecture_heading": "Architecture assessment",
+                            "semver_heading": "SemVer impact",
+                            "checks_heading": "Checks",
+                            "publication_heading": "Manual publication preflight",
+                            "no_items": "None.",
+                            "publication_warning": "No command was executed.",
+                            "evidence_label": "Evidence",
+                            "relation_label": "Relation to change",
+                            "severity_labels": {
+                                "critical": "Critical",
+                                "high": "High",
+                                "medium": "Medium",
+                                "low": "Low",
+                            },
+                            "recovery_label": "If the response succeeds but the state change fails, run only:",
+                            "previous_table_headers": [
+                                "ID",
+                                "Previous status",
+                                "Current status",
+                                "Rationale",
+                                "Action",
+                            ],
+                        },
                         "summary": "The change is small and preserves the reviewed contract.",
                         "architecture_assessment": "The responsibility remains with its existing owner.",
                         "semver_impact": "patch",
@@ -1067,15 +1210,55 @@ print(json.dumps(value))
                         },
                         "checks": ["Compared the exact base and head revisions."],
                         "findings": [primary_finding],
+                        "finding_publications": [
+                            {
+                                "finding_id": "primary-1",
+                                "type": "general",
+                                "path": None,
+                                "line": None,
+                                "old_line": None,
+                                "body": "A retry needs an idempotency key before the external call.",
+                            }
+                        ],
+                        "previous_finding_assessments": [],
+                        "recommended_issues": [
+                            {
+                                "id": "issue-1",
+                                "title": "Track retry exhaustion observability",
+                                "problem": "The broader retry subsystem lacks a terminal signal.",
+                                "risk": "Operators cannot distinguish retry exhaustion.",
+                                "evidence": ["The existing subsystem has no terminal metric."],
+                                "reason_out_of_scope": "The subsystem is not changed by this MR.",
+                                "minimum_fix": "Add the existing terminal retry metric separately.",
+                                "body": "Track a terminal metric for retry exhaustion in the broader subsystem.",
+                            }
+                        ],
+                        "rejected_candidates": [
+                            {
+                                "id": "critic-1",
+                                "source": "critic",
+                                "finding": critic_finding,
+                                "reason": "The broader observability gap is outside this MR.",
+                                "paths": ["review.txt"],
+                                "thread_ids": [],
+                                "metadata_fields": [],
+                                "ci": False,
+                            }
+                        ],
+                        "rejected_candidate_assessments": [],
                         "thread_decisions": [
                             {
                                 "id": "42",
                                 "url": f"{target}#note_42",
                                 "state": "open",
-                                "assessment": "accepted",
-                                "rationale": "The issue remains present at the exact head SHA.",
-                                "outcome": "no_publication",
-                                "proposed_response": "The retry needs an idempotency key before the call.",
+                                "assessment": "fixed",
+                                "rationale": "The existing thread can be acknowledged and resolved.",
+                                "outcome": "resolve",
+                                "proposed_response": "The follow-up is tracked by the current finding. Closing.",
+                                "last_note_id": 42,
+                                "last_note_body_sha256": hashlib.sha256(
+                                    b"Retry needs an idempotency key"
+                                ).hexdigest(),
                             }
                         ],
                     }
@@ -1099,19 +1282,159 @@ print(json.dumps(value))
             plan_result = json.loads(review_plan.stdout)
             self.assertTrue(Path(plan_result["markdown_path"]).is_file())
             markdown = Path(plan_result["markdown_path"]).read_text(encoding="utf-8")
+            outline = "\n".join(
+                line for line in markdown.splitlines() if line.startswith(("# ", "## "))
+            )
+            self.assertEqual(
+                outline,
+                (ROOT / "tests/fixtures/code-review/reviewer-plan.outline")
+                .read_text(encoding="utf-8")
+                .strip(),
+            )
+            self.assertEqual(Path(plan_result["markdown_path"]).name, "review-publication.md")
             self.assertIn("Retry can repeat the external operation", markdown)
+            self.assertIn(
+                "The current retry path calls the provider before reserving an ID.", markdown
+            )
+            self.assertIn("The reviewed change adds the retry path.", markdown)
             self.assertIn(f"{target}#note_42", markdown)
-            self.assertIn("MR metadata assessment", markdown)
+            self.assertIn("MR metadata", markdown)
             self.assertIn("The fix changes behavior without changing the public API.", markdown)
-            self.assertIn("MR state: `merged`", markdown)
-            self.assertEqual(len(plan_result["publication_body_paths"]), 1)
+            self.assertNotIn(base_sha, markdown)
+            self.assertNotIn(head_sha, markdown)
+            self.assertEqual(len(plan_result["publication_body_paths"]), 3)
             body_path = Path(plan_result["publication_body_paths"][0])
             self.assertTrue(body_path.is_absolute())
             self.assertTrue(body_path.is_file())
-            self.assertIn("--method POST", plan_result["publication_commands"][0])
-            self.assertIn(f"body=@{body_path}", plan_result["publication_commands"][0])
-            self.assertIn("--method GET", plan_result["publication_commands"][0])
-            self.assertIn("sha256sum --check --status", plan_result["publication_commands"][0])
+            bodies = [
+                Path(value).read_text(encoding="utf-8")
+                for value in plan_result["publication_body_paths"]
+            ]
+            self.assertTrue(all("<!-- code-review:id=" in value for value in bodies))
+            commands = plan_result["publication_commands"]
+            self.assertTrue(all("--method POST" in value for value in commands))
+            self.assertTrue(all("--method GET" in value for value in commands))
+            self.assertTrue(all("sha256sum --check --status" in value for value in commands))
+            self.assertTrue(any("/discussions/" in value for value in commands))
+            self.assertTrue(any("/issues" in value for value in commands))
+            plan_document = json.loads(
+                Path(plan_result["artifact_path"]).read_text(encoding="utf-8")
+            )
+            thread_command = next(
+                item
+                for item in plan_document["payload"]["publication_preview"]["commands"]
+                if item["kind"] == "thread"
+            )
+            self.assertIsNotNone(thread_command["recovery_command"])
+            self.assertIn("resolved=true", thread_command["recovery_command"])
+            self.assertIn(".notes[0].resolved", thread_command["recovery_command"])
+            self.assertIn("last | .body", thread_command["recovery_command"])
+            self.assertTrue((Path(artifact_root) / "review-baseline.json").is_file())
+            unchanged_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                evidence,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(unchanged_context.returncode, 0, unchanged_context.stderr)
+            unchanged = json.loads(unchanged_context.stdout)["incremental"]
+            self.assertEqual(unchanged["mode"], "unchanged")
+            self.assertFalse(unchanged["critic_required"])
+            full_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                evidence,
+                "--repo-root",
+                str(repository),
+                "--incremental",
+                "off",
+                env=environment,
+            )
+            self.assertEqual(full_context.returncode, 0, full_context.stderr)
+            self.assertEqual(json.loads(full_context.stdout)["incremental"]["mode"], "full")
+            finding_body = next(value for value in bodies if "id=primary-1" in value)
+            published_discussions = [
+                {
+                    "id": "discussion-42",
+                    "notes": [
+                        {
+                            "id": 42,
+                            "system": False,
+                            "resolvable": True,
+                            "resolved": False,
+                            "author": {"username": "other-reviewer"},
+                            "body": "Retry needs an idempotency key",
+                            "position": {
+                                "head_sha": head_sha,
+                                "new_path": "review.txt",
+                                "new_line": 2,
+                            },
+                        }
+                    ],
+                },
+                {
+                    "id": "published-primary-1",
+                    "notes": [
+                        {
+                            "id": 99,
+                            "system": False,
+                            "resolvable": False,
+                            "resolved": False,
+                            "author": {"username": "reviewer"},
+                            "body": finding_body,
+                        }
+                    ],
+                },
+            ]
+            published_discussions_json = json.dumps(published_discussions)
+            environment["FAKE_DISCUSSIONS_JSON"] = published_discussions_json
+            marked_prepared = self.run_runner(
+                "code-review", "prepare", "--url", target, env=environment
+            )
+            self.assertEqual(marked_prepared.returncode, 0, marked_prepared.stderr)
+            marked_evidence = json.loads(marked_prepared.stdout)["items"][0]["artifact_path"]
+            marked_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                marked_evidence,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(marked_context.returncode, 0, marked_context.stderr)
+            marked = json.loads(marked_context.stdout)
+            self.assertEqual(marked["incremental"]["mode"], "incremental")
+            context_document = json.loads(Path(marked["artifact_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(
+                context_document["payload"]["publication_markers"][0]["id"], "primary-1"
+            )
+            forged_discussions = json.loads(published_discussions_json)
+            forged_discussions[1]["notes"][0]["author"]["username"] = "other-reviewer"
+            environment["FAKE_DISCUSSIONS_JSON"] = json.dumps(forged_discussions)
+            forged_prepared = self.run_runner(
+                "code-review", "prepare", "--url", target, env=environment
+            )
+            self.assertEqual(forged_prepared.returncode, 0, forged_prepared.stderr)
+            forged_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                json.loads(forged_prepared.stdout)["items"][0]["artifact_path"],
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(forged_context.returncode, 0, forged_context.stderr)
+            forged_document = json.loads(
+                Path(json.loads(forged_context.stdout)["artifact_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(forged_document["payload"]["publication_markers"], [])
+            environment["FAKE_DISCUSSIONS_JSON"] = published_discussions_json
             environment["FAKE_CURRENT_USER"] = "author"
             stale_plan = self.run_runner(
                 "code-review",
@@ -1199,6 +1522,343 @@ print(json.dumps(value))
             calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
             self.assertTrue(calls)
             self.assertTrue(all("GET" in call and "api" in call for call in calls))
+            state.write_text("fresh", encoding="utf-8")
+            environment["FAKE_DISCUSSIONS_JSON"] = published_discussions_json
+            source.write_text("base\nreviewed change\nfollow-up\n", encoding="utf-8")
+            subprocess.run(["git", "commit", "-qam", "follow-up"], cwd=repository, check=True)
+            next_head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            environment["FAKE_HEAD_SHA"] = next_head
+            prepared_incremental = self.run_runner(
+                "code-review", "prepare", "--url", target, env=environment
+            )
+            self.assertEqual(prepared_incremental.returncode, 0, prepared_incremental.stderr)
+            incremental_evidence = json.loads(prepared_incremental.stdout)["items"][0][
+                "artifact_path"
+            ]
+            incremental_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                incremental_evidence,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(incremental_context.returncode, 0, incremental_context.stderr)
+            incremental_context_result = json.loads(incremental_context.stdout)
+            incremental = incremental_context_result["incremental"]
+            incremental_private = json.loads(
+                Path(incremental_context_result["artifact_path"]).read_text(encoding="utf-8")
+            )["payload"]["incremental"]
+            self.assertEqual(incremental["mode"], "incremental")
+            self.assertEqual(incremental["changed_paths"], ["review.txt"])
+            self.assertTrue(incremental["critic_required"])
+            self.assertEqual(
+                [item["id"] for item in incremental_private["previous_findings"]],
+                ["primary-1"],
+            )
+            self.assertEqual(
+                [item["id"] for item in incremental_private["previous_recommended_issues"]],
+                ["issue-1"],
+            )
+            incremental_evidence_digest = hashlib.sha256(
+                Path(incremental_evidence).read_bytes()
+            ).hexdigest()
+            incremental_finalized = self.run_runner(
+                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(incremental_finalized.returncode, 0, incremental_finalized.stderr)
+            incremental_finalize = json.loads(incremental_finalized.stdout)
+            incremental_finding = {
+                **primary_finding,
+                "evidence": [
+                    "The current retry path still calls the provider before reserving an ID."
+                ],
+            }
+            incremental_critic_finding = {
+                **critic_finding,
+                "evidence": ["The changed retry path still emits no terminal signal."],
+            }
+            incremental_receipt = root / "incremental-receipt.json"
+            incremental_receipt.write_text(
+                json.dumps(
+                    {
+                        "schema": "portable-gitlab/critic-receipt/v2",
+                        "external_mutations": False,
+                        "evidence_digest": incremental_evidence_digest,
+                        "scope_digest": incremental_private["incremental_delta_digest"],
+                        "target_finding_ids": ["primary-1"],
+                        "run_id": "incremental-critic-run",
+                        "session_id": "incremental-critic-session",
+                        "findings": [incremental_critic_finding],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            incremental_decision = root / "incremental-decision.json"
+            incremental_decision.write_text(
+                json.dumps(
+                    {
+                        "schema": "portable-gitlab/review-decision/v2",
+                        "mode": "incremental",
+                        "external_mutations": False,
+                        "evidence_digest": incremental_evidence_digest,
+                        "finalize_digest": incremental_finalize["digest"],
+                        "context_digest": incremental_context_result["digest"],
+                        "verdict": "not_ready",
+                        "run_id": "incremental-primary-run",
+                        "session_id": "incremental-primary-session",
+                        "findings": [incremental_finding],
+                        "unresolved_threads": [{"id": "42"}],
+                        "responses": [
+                            {"id": "primary-1", "decision": "accept", "reason": "still active"},
+                            {
+                                "id": "critic-1",
+                                "decision": "reject",
+                                "reason": "still outside the changed contract",
+                            },
+                            {"id": "42", "decision": "accept", "reason": "reply required"},
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            incremental_reviewed = self.run_runner(
+                "code-review",
+                "finalize-review",
+                "--evidence",
+                incremental_evidence,
+                "--report",
+                str(incremental_decision),
+                "--context",
+                incremental_context_result["artifact_path"],
+                "--critic-receipt",
+                str(incremental_receipt),
+                "--finalize-report",
+                incremental_finalize["artifact_path"],
+                "--mode",
+                "incremental",
+                env=environment,
+            )
+            self.assertEqual(incremental_reviewed.returncode, 0, incremental_reviewed.stderr)
+            incremental_content = root / "incremental-content.json"
+            incremental_content.write_text(
+                json.dumps(
+                    {
+                        "presentation": {
+                            "title": "План публикации ревью",
+                            "incremental_notice": "Проведено инкрементальное ревью.",
+                            "target_label": "MR",
+                            "role_label": "Роль",
+                            "role_value": "ревьюер",
+                            "verdict_label": "Итог",
+                            "verdict_value": "нужны изменения",
+                            "metadata_heading": "Оформление MR",
+                            "previous_findings_heading": "Сверка предыдущих обнаружений",
+                            "open_threads_heading": "Открытые треды",
+                            "closed_threads_heading": "Закрытые треды",
+                            "local_fixes_heading": "Локальные исправления",
+                            "new_findings_heading": "Новые обнаружения",
+                            "recommended_issues_heading": "Рекомендуемые задачи",
+                            "checked_heading": "Проверено без публикации",
+                            "architecture_heading": "Архитектурная оценка",
+                            "semver_heading": "Влияние на SemVer",
+                            "checks_heading": "Проверки",
+                            "publication_heading": "Ручная публикация",
+                            "no_items": "Нет.",
+                            "publication_warning": "Команды не выполнялись.",
+                            "evidence_label": "Доказательство",
+                            "relation_label": "Связь с изменением",
+                            "severity_labels": {
+                                "critical": "Критическая",
+                                "high": "Высокая",
+                                "medium": "Средняя",
+                                "low": "Низкая",
+                            },
+                            "recovery_label": "Если ответ опубликован, а состояние не изменилось, выполни только:",
+                            "previous_table_headers": [
+                                "ID",
+                                "Было",
+                                "Стало",
+                                "Основание",
+                                "Действие",
+                            ],
+                        },
+                        "summary": "The follow-up keeps the original retry risk active.",
+                        "architecture_assessment": "The responsibility remains with its owner.",
+                        "semver_impact": "patch",
+                        "semver_rationale": "No public API changes.",
+                        "mr_metadata_assessment": {
+                            field: {
+                                "status": "ok",
+                                "rationale": f"The {field} metadata remains sufficient.",
+                                "recommendation": None,
+                            }
+                            for field in (
+                                "title",
+                                "description",
+                                "labels",
+                                "workflow_state",
+                                "overall",
+                            )
+                        },
+                        "checks": ["Checked the retry delta and affected provider path."],
+                        "findings": [incremental_finding],
+                        "finding_publications": [
+                            {
+                                "finding_id": "primary-1",
+                                "type": "general",
+                                "path": None,
+                                "line": None,
+                                "old_line": None,
+                                "body": "Риск повторного вызова сохраняется.",
+                            }
+                        ],
+                        "previous_finding_assessments": [
+                            {
+                                "id": "primary-1",
+                                "kind": "finding",
+                                "status": "changed",
+                                "previous_status": "Актуально",
+                                "current_status": "Изменено",
+                                "rationale": "Изменение не резервирует идентификатор операции.",
+                                "action": "Обновить существующий тред.",
+                                "publication_action": "reply",
+                                "publication_body": "Риск повторного вызова сохраняется.",
+                                "critic_required": True,
+                            },
+                            {
+                                "id": "issue-1",
+                                "kind": "issue",
+                                "status": "active",
+                                "previous_status": "Рекомендовано",
+                                "current_status": "Рекомендовано",
+                                "rationale": "Связанная подсистема не изменилась.",
+                                "action": "Сохранить рекомендацию задачи.",
+                                "publication_action": "no_publication",
+                                "publication_body": None,
+                                "critic_required": False,
+                            },
+                        ],
+                        "recommended_issues": [
+                            {
+                                "id": "issue-1",
+                                "title": "Track retry exhaustion observability",
+                                "problem": "The broader retry subsystem lacks a terminal signal.",
+                                "risk": "Operators cannot distinguish retry exhaustion.",
+                                "evidence": ["The existing subsystem has no terminal metric."],
+                                "reason_out_of_scope": "The subsystem is not changed by this MR.",
+                                "minimum_fix": "Add the existing terminal retry metric separately.",
+                                "body": "Track a terminal metric for retry exhaustion in the broader subsystem.",
+                            }
+                        ],
+                        "rejected_candidates": [
+                            {
+                                "id": "critic-1",
+                                "source": "critic",
+                                "finding": incremental_critic_finding,
+                                "reason": "The broader observability gap remains outside this MR.",
+                                "paths": ["review.txt"],
+                                "thread_ids": [],
+                                "metadata_fields": [],
+                                "ci": False,
+                            }
+                        ],
+                        "rejected_candidate_assessments": [
+                            {
+                                "id": "critic-1",
+                                "decision": "still_rejected",
+                                "reason": "The delta does not move the broader gap into MR scope.",
+                            }
+                        ],
+                        "thread_decisions": [
+                            {
+                                "id": "42",
+                                "url": f"{target}#note_42",
+                                "state": "open",
+                                "assessment": "accepted",
+                                "rationale": "The thread remains actionable.",
+                                "outcome": "reply",
+                                "proposed_response": "The retry still needs an idempotency key.",
+                                "last_note_id": 42,
+                                "last_note_body_sha256": hashlib.sha256(
+                                    b"Retry needs an idempotency key"
+                                ).hexdigest(),
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            incremental_plan = self.run_runner(
+                "code-review",
+                "scaffold-review",
+                "--evidence",
+                incremental_evidence,
+                "--context",
+                incremental_context_result["artifact_path"],
+                "--decision",
+                json.loads(incremental_reviewed.stdout)["artifact_path"],
+                "--content",
+                str(incremental_content),
+                env=environment,
+            )
+            self.assertEqual(incremental_plan.returncode, 0, incremental_plan.stderr)
+            incremental_markdown = Path(
+                json.loads(incremental_plan.stdout)["markdown_path"]
+            ).read_text(encoding="utf-8")
+            incremental_outline = "\n".join(
+                line for line in incremental_markdown.splitlines() if line.startswith(("# ", "## "))
+            )
+            self.assertEqual(
+                incremental_outline,
+                (ROOT / "tests/fixtures/code-review/incremental-plan.ru.outline")
+                .read_text(encoding="utf-8")
+                .strip(),
+            )
+            self.assertIn("Проведено инкрементальное ревью.", incremental_markdown)
+            self.assertIn("Высокая", incremental_markdown)
+            self.assertNotIn("`high`", incremental_markdown)
+            self.assertIn("| primary-1 | Актуально | Изменено |", incremental_markdown)
+            self.assertNotIn(next_head, incremental_markdown)
+            retained_marker_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                incremental_evidence,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(retained_marker_context.returncode, 0, retained_marker_context.stderr)
+            retained_result = json.loads(retained_marker_context.stdout)
+            self.assertEqual(retained_result["incremental"]["mode"], "unchanged")
+            retained_document = json.loads(
+                Path(retained_result["artifact_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                retained_document["payload"]["publication_markers"][0]["id"],
+                "primary-1",
+            )
+            environment["FAKE_BASE_SHA"] = head_sha
+            environment["FAKE_START_SHA"] = head_sha
+            rebased = self.run_runner("code-review", "prepare", "--url", target, env=environment)
+            self.assertEqual(rebased.returncode, 0, rebased.stderr)
+            rebased_context = self.run_runner(
+                "code-review",
+                "context",
+                "--evidence",
+                json.loads(rebased.stdout)["items"][0]["artifact_path"],
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(rebased_context.returncode, 0, rebased_context.stderr)
+            fallback = json.loads(rebased_context.stdout)["incremental"]
+            self.assertEqual(fallback["mode"], "full")
+            self.assertIn("base_sha changed", fallback["fallback_reasons"])
 
     def test_release_ready_requires_all_bound_gates_and_fresh_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
