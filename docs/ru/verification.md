@@ -4,61 +4,67 @@
 
 ## Текущий выпуск
 
-Поддерживаемый portable source - stable channel GitHub Pages:
-`https://kisev.github.io/skills`; optional package:
-`@kisev/skills-opencode`. Portable installation использует
-`npx --yes skills@latest`. Package требует Node.js 22+ и объявляет OpenCode
-`>=1.18.29 <1.19.0`.
+Поддерживаемый источник переносимых навыков - стабильный канал GitHub Pages:
+`https://kisev.github.io/skills`; необязательный пакет -
+`@kisev/skills-opencode`. Для установки переносимых навыков используется
+`npx --yes skills@latest`. Пакет требует Node.js 22+ и объявляет совместимость с
+OpenCode `>=1.18.29 <1.19.0`.
 
-## Установка portable skills
+## Установка переносимых навыков
 
-Global contract для обоих поддерживаемых host:
+Для обеих поддерживаемых сред действует такая команда глобальной установки:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
-Команда создаёт одну canonical copy в `~/.agents/skills`. Без `--global` project
-copy находится в `.agents/skills`. Release metadata задаёт source provenance;
-authored repository не является installation source.
+Команда создаёт один основной экземпляр в `~/.agents/skills`. Без `--global`
+экземпляр проекта находится в `.agents/skills`. Метаданные выпуска указывают
+происхождение исходников; исходный репозиторий не используется для установки.
 
-URL Pages является moving stable-release channel. `update` проверяет текущий
-well-known digest и загружает только изменённые archives; renamed или deleted
-skills не удаляются. Existing Git-based installations должны повторить `add` с
-URL Pages, тем же scope и agents, чтобы перепривязать source. Cleanup остаётся
-ограничен восемью names из текущего [инвентаря миграции](migration-inventory.md).
+URL Pages служит обновляемым каналом стабильных выпусков. `update` проверяет
+текущую эталонную контрольную сумму и загружает только изменённые архивы; при
+этом переименованные или удалённые навыки не удаляются. Для существующих
+установок из Git нужно повторить `add` с URL Pages, той же областью и теми же
+агентами, чтобы сменить источник. Очистка ограничена девятью именами из текущего
+[инвентаря миграции](migration-inventory.md).
 
 ## Интеграция OpenCode
 
-Portable skills не зависят от npm package, а npm package не устанавливает
-portable skills. Project integration постоянно хранится в project `node_modules`,
-global integration - в npm project `~/.config/opencode`.
+Переносимые навыки не зависят от npm-пакета, а npm-пакет не устанавливает
+переносимые навыки. Интеграция проекта постоянно хранится в его `node_modules`, а
+глобальная интеграция - в npm-проекте `~/.config/opencode`.
 
-Installer требует explicit scope и preview/confirmation. Он записывает только
-выбранные managed assets после confirmation и никогда не создаёт и не меняет
-`opencode.json`; core entry `plugin` остаётся user-owned. Update состоит из exact
-npm install, install preview, exact confirmation и перезапуска OpenCode.
+Установщику необходимо явно указать область и выполнить предварительный просмотр
+с подтверждением. После подтверждения он записывает только выбранные управляемые
+компоненты и никогда не создаёт и не меняет `opencode.json`; запись основного
+плагина в массиве `plugin` остаётся под управлением пользователя. Обновление состоит из установки
+точной версии через npm, предварительного просмотра `install`, точного
+подтверждения и перезапуска OpenCode.
 
-Порядок uninstall: preview и confirmation удаления assets, удаление user-owned
-plugin entry, npm uninstall в owning project, затем restart. Reconcile и
-uninstall архивируют exact-owned assets. Conflicts, worktrees и runtime state
-сохраняются; archive commands restore или purge отсутствуют.
+Порядок удаления: предварительный просмотр и подтверждение удаления компонентов,
+удаление пользовательской записи плагина, `npm uninstall` в npm-проекте, которому
+принадлежит зависимость, затем перезапуск. `reconcile` и `uninstall` архивируют
+компоненты с точно подтверждённой принадлежностью. Конфликты, рабочие деревья и
+состояние выполнения сохраняются; команд `restore` или `purge` для архива нет.
 
-## Текущая поверхность
+## Текущий состав
 
-Текущий inventory охватывает 29 portable skills, 33 command adapters, 6 fixed
-agents, 3 selectable plugin wrappers, 5 package tools и core plugin. У package
-tool `route` нет slash command.
+Текущий состав охватывает 29 переносимых навыков, 33 адаптера команд, 6 агентов с
+фиксированными ролями, 3 обёртки плагинов на выбор, 5 инструментов пакета и
+основной плагин. У инструмента пакета `route` нет слеш-команды.
 
-Описания catalog проверяются по текущим skill contracts: `goal` возвращает
-read-only structured Markdown не длиннее 4000 символов; `lsp-report` работает
-host-neutral; task workflows storage-neutral; `code-explain` принимает current
-WIP, exact range, branch или exact HTTPS MR link и показывает history без review
-verdict.
+Описания каталога проверяются по текущим контрактам навыков: `goal` возвращает в
+режиме только чтения структурированный Markdown объёмом не более 4000 символов;
+`lsp-report` не зависит от среды; процессы работы с задачами не привязаны к
+системе хранения; `code-explain` принимает текущие незавершённые изменения,
+точный диапазон, ветку или точную HTTPS-ссылку на MR и показывает историю без
+итогового заключения проверки.
 
 ## Детерминированное покрытие
 
-Обычный quality gate не вызывает model, provider или credential:
+Обычная проверка качества не обращается к модели или провайдеру и не требует
+учётных данных:
 
 ```shell
 task eval:check
@@ -66,26 +72,29 @@ task check
 task dependency:audit
 ```
 
-Committed corpus содержит English trigger, English near-miss, Russian trigger и
-Russian near-miss для каждого active skill. Deterministic checks покрывают
-registration, configuration, installer ownership, archive/reconcile behavior,
-agent discovery, negative inputs, path escapes, malformed results, incomplete
-budgets и secret leakage.
+Зафиксированный набор сценариев содержит срабатывание и близкий отрицательный
+пример на английском, а также срабатывание и близкий отрицательный пример на
+русском для каждого активного навыка. Детерминированные проверки охватывают
+регистрацию, конфигурацию, принадлежность файлов установщику, поведение архива и
+`reconcile`, обнаружение агентов, недопустимые входные данные, выход за
+разрешённые пути, некорректные результаты, неполные бюджеты и утечки секретов.
 
-Compatibility checks проверяют OpenCode `1.18.29` и `1.18.30` внутри
-`>=1.18.29 <1.19.0` без credentials.
+Проверки совместимости запускаются для OpenCode `1.18.29` и `1.18.30` в диапазоне
+`>=1.18.29 <1.19.0` без учётных данных.
 
-## Live evaluation и clean checkout
+## Оценка на реальной модели и чистая рабочая копия
 
-Live evaluation не входит в `task check`. Для него явно нужны trusted-live mode,
-host, model, timeout, token и cost budgets и output path. Default model или
-baseline нет, untrusted CI не получает credentials.
+Оценка на реальной модели не входит в `task check`. Для неё нужно явно указать
+режим `trusted-live`, среду, модель, тайм-аут, ограничения по токенам и стоимости,
+а также путь для результатов. Модель и эталон по умолчанию не заданы,
+недоверенная среда CI не получает учётные данные.
 
-Shared runtime copies существуют только в ignored build outputs и проверяются на
-parity. В clean temporary checkout build и check должны оставить `git status`
-неизменным. Distribution tests отдают полный Pages layout из local HTTP fixture,
-устанавливают его через stable `skills@latest`, удаляют fixture и затем запускают
-installed runners. Release CI дополнительно проверяет tag, version, source
-revision, каждый deployed Pages byte, exact npm tarball, package imports и CLI,
-registry signatures, SLSA provenance и cross-channel digests до создания GitHub
-Release.
+Общие копии среды выполнения существуют только в игнорируемых результатах сборки
+и проверяются на идентичность. В чистой временной рабочей копии сборка и проверки
+должны оставить `git status` неизменным. Тесты дистрибутива отдают полную структуру
+Pages из локальной HTTP-фикстуры, устанавливают её через стабильную версию
+`skills@latest`, удаляют фикстуру и затем запускают установленные скрипты. Перед
+созданием GitHub Release среда CI выпуска дополнительно проверяет тег, версию,
+ревизию исходников, каждый байт, опубликованный на Pages, точный tar-архив npm,
+импорт пакета и CLI, подписи реестра, данные о происхождении по SLSA и контрольные суммы
+разных каналов.

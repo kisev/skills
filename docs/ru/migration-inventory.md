@@ -4,33 +4,32 @@
 
 ## Текущий выпуск
 
-Текущий portable source - stable channel GitHub Pages:
-`https://kisev.github.io/skills`. Его release metadata указывает release и source
-revision, а `https://github.com/kisev/skills/releases/latest` открывает текущий
-GitHub Release. Optional integration package: `@kisev/skills-opencode`.
+Текущий источник переносимых навыков - стабильный канал GitHub Pages:
+`https://kisev.github.io/skills`. Его метаданные указывают выпуск и ревизию
+исходников, а `https://github.com/kisev/skills/releases/latest` открывает текущий
+GitHub Release. Необязательный пакет интеграции - `@kisev/skills-opencode`.
 
-## Активные portable skills
+## Активные переносимые навыки
 
-Активны ровно 29 portable skills:
+Активны ровно 29 переносимых навыков:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
 `docs-prepare`, `docs-review`, `doit`, `goal`, `humanize`, `lsp-report`,
 `mattermost`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
 `task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
-`team-sprint-close`, `team-sprint-start`.
+`team-sprint-close` и `team-sprint-start`.
 
-Authored inventory содержит deduplicated definitions; build и distribution
-inventories содержат те же 29 self-contained skills. Shared files объявлены в
-`shared/manifest.json`, добавляются только в `.build/skills` и проверяются
-byte-for-byte.
+Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
+те же 29 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+добавляются только в `.build/skills` и проверяются побайтово.
 
-## Portable cleanup records
+## Сведения об очистке переносимых навыков
 
-Текущий migration inventory содержит ровно эти восемь portable records. Portable
-record `multi-run` в нём отсутствует.
+Текущий инвентарь миграции содержит ровно эти девять устаревших имён переносимых
+навыков. Имени `multi-run` в нём нет.
 
-| Retired name     | Current replacement                                                                              |
+| Устаревшее имя   | Текущая замена                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------ |
 | `attempt`        | Нет                                                                                              |
 | `schedule`       | Нет                                                                                              |
@@ -40,34 +39,38 @@ record `multi-run` в нём отсутствует.
 | `skill-improver` | `skill-improve`                                                                                  |
 | `walkthrough`    | `code-explain`                                                                                   |
 | `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
+| `summary`        | `briefing`                                                                                       |
 
-Операция `update` в CLI `skills` не удаляет renamed или deleted skills. Cleanup
-удаляет эти exact names явно через stable `skills@latest` с теми же agents и scope,
-что и installation. Package installation и reconcile не заменяют portable source
-rebind или cleanup flow.
+Операция `update` в CLI `skills` не удаляет переименованные или удалённые навыки.
+При очистке эти точные имена удаляются явно через стабильный установщик
+`skills@latest` с теми же агентами и областью, что и при установке. Установка
+пакета и `reconcile` не заменяют смену источника или очистку переносимых навыков.
 
-## Текущая поверхность OpenCode
+## Текущий состав интеграции OpenCode
 
-Текущий package inventory содержит 33 commands: по одной для каждого active
-skill, а также `/capabilities`, `/doctor`, `/reconcile` и `/agent-profiles`.
-Package tool `route` доступен без slash command.
+Текущий состав пакета содержит 33 команды: по одной для каждого активного навыка,
+а также `/capabilities`, `/doctor`, `/reconcile` и `/agent-profiles`. Инструмент
+пакета `route` доступен без слеш-команды.
 
-Шесть fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`,
-`critic`. Selectable plugin wrappers: `rules-injector`, `rtk`, `zed-bell`.
-Package tools: `capabilities`, `route`, `doctor`, `agent_profiles`, `reconcile`.
+Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,
+`review`, `critic`. Доступные обёртки плагинов: `rules-injector`, `rtk`,
+`zed-bell`. Инструменты пакета: `capabilities`, `route`, `doctor`,
+`agent_profiles`, `reconcile`.
 
-## Ownership и archive
+## Принадлежность и архив
 
-Confirmed reconcile и uninstall архивируют только exact-owned assets перед
-удалением deployed copies. Modified, user-owned, unknown, unsafe и ambiguous
-entries остаются без изменений как findings или conflicts. Worktrees и runtime
-state сохраняются. Archive поддерживает transactional rollback и read-only
-просмотр через `doctor`; команд restore или purge нет.
+После подтверждения `reconcile` и `uninstall` архивируют только компоненты с
+точно подтверждённой принадлежностью, прежде чем удалить развёрнутые копии.
+Элементы со статусами `modified`, `user-owned`, `unknown`, `unsafe` или
+`ambiguous` остаются без изменений и отображаются как `findings` или `conflicts`.
+Рабочие деревья и состояние выполнения сохраняются. Архив поддерживает
+транзакционный откат и доступен для просмотра через `doctor`; команд `restore`
+или `purge` нет.
 
-## Machine-readable sources
+## Машиночитаемые источники
 
-Точные имена, replacements, historical hashes и source metadata находятся в
-`packages/opencode/assets/migration-inventory.json`. Active package surfaces
-находятся в `packages/opencode/src/catalog.ts`, portable release metadata - в
-`packages/skills/package.json`, а build-only shared-file declarations - в
-`shared/manifest.json`.
+Точные имена, замены, прежние контрольные суммы и метаданные источников находятся
+в `packages/opencode/assets/migration-inventory.json`. Активный состав пакета
+описан в `packages/opencode/src/catalog.ts`, метаданные выпуска переносимых
+навыков - в `packages/skills/package.json`, а объявления общих файлов только для
+сборки - в `shared/manifest.json`.

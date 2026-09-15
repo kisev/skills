@@ -1,10 +1,10 @@
-# Дистрибуция portable skills
+# Дистрибутив переносимых навыков
 
 [English](README.md)
 
-Этот private manifest задаёт версию portable distribution, которую CI собирает
-и развёртывает на GitHub Pages. `task distribution:build` создаёт standard
-well-known discovery index, integrity metadata и отдельный self-contained
-archive для каждого public skill. Skills не содержат version; release identity
-задают distribution metadata и content digest каждого archive. Этот каталог не
-публикуется в npm.
+Этот непубликуемый манифест задает версию дистрибутива переносимых навыков, который
+CI собирает и размещает на GitHub Pages. `task distribution:build` создает
+стандартный индекс обнаружения в `.well-known`, метаданные целостности и
+отдельный самодостаточный архив для каждого общедоступного навыка. У самих
+навыков нет версий; выпуск определяется метаданными дистрибутива и контрольной
+суммой содержимого каждого архива. Этот каталог не публикуется в npm.

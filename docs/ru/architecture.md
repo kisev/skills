@@ -4,111 +4,115 @@
 
 ## Источник истины
 
-Portable definitions находятся в `skills/<name>/` с authored entrypoints
-`SKILL.source.md` и уникальными resources. `shared/` - единственный source общих
-контрактов и runtime, а не зависимость установленного skill. Декларативный
-`shared/manifest.json` отображает exact shared files в build paths.
-`scripts/build_skills.py` создаёт полные skills только в `.build/skills` и не
-записывает generated copies в authored tree. Metadata authored и built skill не
-содержит version.
+Переносимые определения и ресурсы, относящиеся к конкретным навыкам, находятся в
+`skills/<name>/`; исходной точкой входа служит `SKILL.source.md`.
+`shared/references/` является каноническим источником повторно используемых
+контрактов и кода среды выполнения, а `shared/manifest.json` сопоставляет каждый
+общий файл с точным путём сборки. `scripts/build_skills.py` подготавливает
+самодостаточные навыки в `.build/skills`, не записывая созданные копии в дерево
+исходников. В метаданных исходных и собранных навыков нет поля версии.
 
-Для `askme`, `task-prepare`, `task-review` и read-only `goal` canonical
-`shared/references/work-item-contract.schema.json`, описание контракта и
-stdlib-only `work_item.py` добавляются в каждый built skill. Установленный skill
-использует только свою копию. Validator отдельно возвращает machine findings и
-structured semantic assessment, затем детерминированно вычисляет verdict
-`ready`, `needs_clarification` или `blocked`.
+Семейство рабочих задач показывает границу такого копирования.
+`work-item-contract.md` и `work_item.py` копируются в `askme`, `goal`,
+`task-prepare`, `task-review` и `task-triage`, а
+`work-item-contract.schema.json` - в тот же набор, кроме `task-triage`. Каждый
+установленный навык использует собственные копии. Общий валидатор возвращает
+строго один из вердиктов: `ready`, `needs_clarification` или `blocked`.
 
-В корне репозитория нет пользовательского CLI. Отдельный npm package предоставляет
-CLI `skills-opencode` только для OpenCode integration. Maintainer scripts могут
-использовать только Python stdlib; Python runners, если они нужны skill, находятся
-внутри этого skill.
+Репозиторий с исходниками не является источником для установки переносимых
+навыков и не поставляет для них интерфейс командной строки. Навыки устанавливаются
+из дистрибутива GitHub Pages с помощью независимо версионируемого интерфейса
+`skills`. Необязательный пакет npm `@kisev/skills-opencode` предоставляет
+`skills-opencode` для интеграции с OpenCode, но не устанавливает, не обновляет и
+не удаляет переносимые навыки.
 
-`packages/skills/package.json` является private version manifest portable
-distribution. `scripts/build_distribution.py` собирает GitHub Pages payload в
-`.build/packages/skills`: standard well-known index, release metadata и по одному
-content-addressed SHA-256 archive с root `SKILL.md` на skill. Единый tag workflow
-Release identity задают distribution metadata и digest каждого archive, а не
-skill metadata. Единый tag workflow выполняет полный gate, фиксирует hashes
-каждого Pages file и exact npm tarball, публикует оба канала, проверяет remote
-bytes и npm provenance и затем создаёт GitHub Release.
+`packages/skills/package.json` является внутренним источником версии переносимого
+дистрибутива. `scripts/build_distribution.py` создаёт содержимое Pages в
+`.build/packages/skills`: стандартные индексы обнаружения, метаданные и файлы
+фиксации выпуска, а также по одному адресуемому по SHA-256 архиву с корневым
+`SKILL.md` для каждого навыка. Манифест выпуска связывает каждый файл Pages и
+точный архив npm с тегом и ревизией исходников. Конвейер по тегу выполняет полную
+проверку, публикует и проверяет Pages и npm, а затем создаёт GitHub Release.
 
-## Интеграция с host
+## Интеграция с хостами
 
-Переносимые skills описывают задачу и не требуют конкретного host. Host может
-предоставить штатный инструмент интерактивных вопросов; если его нет, agent
-задаёт вопрос в чате. OpenCode-only adapters, agents, commands, plugins и
-capability router относятся к необязательному package `packages/opencode/` и не
-нужны для установки или работы portable skill. Package не содержит копий skills.
-OpenCode commands, LSP catalog и authored agent/plugin assets materialize-ятся в
-`packages/opencode/dist/assets/` перед `npm pack`. Его явный installer применяет
-эти build assets после dry-run и matching digest;
-upgrade/uninstall сохраняют user drift через ownership manifests. Canonical agent
-assets содержат prompts/permissions, отдельная profile configuration -
-models/variants и additional critics, а semantic manifest - rendered hashes и
-package version. Stateful plugins являются opt-in и при отключении не создают
-state, timers, sessions или mutations.
+Переносимые навыки не зависят от конкретного хоста, а каждый опубликованный архив
+самодостаточен. `packages/opencode/` является необязательным адаптером OpenCode и
+не содержит копий навыков. Перед `npm pack` команды пакета, каталог LSP, а также
+исходные ресурсы агентов и плагинов переносятся в
+`packages/opencode/dist/assets/`.
 
-## OpenCode runtime
+Установщик изменяет только выбранные ресурсы команд, агентов и плагинов после
+предварительного просмотра и проверки совпадающего `confirmation_digest`.
+Манифесты владения обнаруживают конфликты и сохраняют пользовательские изменения.
+Канонические ресурсы агентов задают инструкции и разрешения; отдельная
+конфигурация профилей задаёт модели, варианты и дополнительных критиков, а
+семантический манифест хранит контрольные суммы полученных файлов и версию
+пакета. Подключаемые плагины включаются только явно.
 
-Шесть specialized skills с Python runner устанавливаются как обычные self-contained Agent Skills; `goal` является read-only prompt-only adapter.
-Их Python runner materialize-ит общий stdlib runtime внутрь skill и использует
-только XDG/OpenCode user-owned config/state. Package runtime не ссылается на
-checkout и экспортирует семь независимых plugin factories. `capabilities`,
-`route` и `doctor` являются package tools для catalog/routing/health. Doctor
-использует общий versioned read-only facts API direct CLI и package tool: он не
-вызывает plugin factories, lifecycle recovery, receipts, journals или LSP
-servers. Host-only resolved config и `lsp.status` при наличии SDK добавляются как
-allowlisted facts, иначе получают `unavailable/incomplete`. `/doctor` остаётся
-thin adapter, отдельного portable skill `doctor` нет. Routing
-receipt одноразово связывает выбранного agent с canonical task text, exact
-requirements, execution-card digest/revision, matrix revision и TTL; переходы
-отклоняют stale, replay, изменённый task/card и просроченный receipt.
-`agent_profiles` - optional adapter над package-domain planner; основной интерфейс
-управления agents - прямой CLI без LLM. Все mutations используют private receipt,
-lifecycle lock, final revalidation и journaled rollback/recovery.
-Stateful runtime records используют те же private 0600 atomic writes и lock;
-при повторной загрузке незавершённые background attempts переходят в
-`orphaned`, а недопустимые status transitions отклоняются.
+## Среда выполнения OpenCode
 
-### Routing и контракты этапа 18
+Пакет экспортирует один основной инфраструктурный плагин и ровно три
+подключаемых модуля: `rules-injector`, `rtk` и `zed-bell`. Основной плагин
+регистрирует ровно пять инструментов пакета: `capabilities`, `route`, `doctor`,
+`agent_profiles` и `reconcile`. Ни одна из этих частей пакета не становится
+зависимостью среды выполнения переносимых навыков.
 
-`doit` - единственный владелец lifecycle evidence -> plan -> confirmation ->
-execution -> checks -> report. OpenCode `manager` только адаптирует его к Task и
-не создаёт второй lifecycle. Package route имеет четыре назначения:
-exploration -> `mapper`, architecture -> `architect`, implementation -> `worker`,
-review -> `review` или один выбранный `critic`; documentation и quick остаются у
-`doit`.
+Интерфейс командной строки и инструмент пакета используют общий версионируемый
+интерфейс фактов `doctor`, доступный только для чтения. Он проверяет конфигурацию,
+LSP, владение и состояние жизненного цикла, не загружая фабрики плагинов, не
+восстанавливая состояние и не запуская серверы LSP. Недоступные сведения хоста
+помечаются как `unavailable` или `incomplete`. Канонический
+`shared/references/lsp-catalog.json` переносится и в `lsp-report`, и в пакет
+OpenCode.
 
-Inventory routing разрешается только из host config. Caller не может передать
-agents, capabilities, tools, models или availability. Versioned receipt одноразово
-и с TTL связывает task, requirements, destination, agent, execution card и
-revision host inventory. Versioned cards и mapper/worker/review/critic reports
-проверяются на реальных Task dispatch/result hooks. Card фиксирует write и
-forbidden paths, steps, checks, явные VCS operations и отдельные confirmations
-для execution, publication и history rewrite.
+Операции записи пакета ограничены глобальным каталогом или каталогом проекта и
+используют блокировки с доступом только для владельца, квитанции подтверждения,
+итоговую повторную проверку,
+атомарную замену файлов и журналируемый откат. Устаревшие, просроченные,
+заменённые или повторно использованные подтверждения отклоняются до изменения
+файлов; пользовательские файлы и несвязанное долговременное состояние остаются
+вне владения пакета.
 
-## Инварианты build
+## Контракты маршрутизации
 
-- JSON manifest отображает canonical shared inputs только в build paths, включая
-  minimal Python runtime для автономных runner-ов.
-- Authored skill trees содержат `SKILL.source.md` и не содержат generated
-  destinations.
-- Frontmatter authored и built skill не содержит version field.
-- `--check` проверяет source parity и artifacts без изменения authored files.
-- Supported installer читает well-known Pages index и проверяет digest каждого
-  archive перед installation.
-- Пути относительные, нормализованные и ограничены соответственно каталогами
-  `shared/references/` и isolated build output.
-- Symlinks в исходных и конечных путях отклоняются.
-- Source tree не меняется; build output заменяется только после полной подготовки.
-- `--check` сравнивает существующий artifact с clean staging и сообщает о drift.
-- Release checks связывают Pages version и source revision с exact tag.
-- Release publication продвигает только прошедшие preflight artifacts и проверяет
-  оба remote channel до создания GitHub Release.
-- Проверка work item сортирует findings по стабильному ключу и связывает report с
-  digest item/evidence, поэтому неизменный повторный check даёт тот же verdict.
-- LSP applicability использует один machine-readable catalog, добавляемый в built
-  `lsp-report` вместе со stdlib-only runtime и в package staging. Portable report
-  не имеет npm runtime dependency; package doctor дополняет только host
-  config/status facts.
+`doit` единолично управляет циклом сбор сведений -> план -> подтверждение ->
+выполнение -> проверки -> отчёт. Агент OpenCode `manager` только адаптирует этот цикл к
+штатным вызовам Task. Инструмент `route` поддерживает четыре категории:
+`exploration` направляется в `mapper`, `architecture` - в `architect`,
+`implementation` - в `worker`, а `review` - в `review` или одного выбранного
+`critic`. Документация и быстрые запросы остаются в `doit`.
+
+Состав доступных агентов берётся из результирующей конфигурации среды; вызывающая
+сторона не может подменить агентов, возможности, инструменты, модели или
+доступность. Решение о маршрутизации фиксирует ревизии матрицы и состава агентов
+хоста. Одноразовая маршрутная квитанция с ограниченным сроком действия связывает
+задачу, требования, назначение, агента, карточку исполнения и срок действия.
+Обработчики отправки и результата штатной Task проверяют квитанцию, карточку
+исполнения и структурированный отчёт `mapper`, `worker`, `review` или `critic`.
+Карточки исполнения фиксируют разрешённые для записи и запрещённые пути, проверки, явные
+операции VCS и отдельные подтверждения исполнения, публикации и переписывания
+истории.
+
+## Инварианты сборки
+
+- Манифест JSON сопоставляет канонические общие входные файлы только с
+  объявленными путями сборки.
+- Деревья исходников навыков содержат `SKILL.source.md`, не содержат созданный
+  `SKILL.md` и зафиксированные в Git файлы по путям назначения из манифеста.
+- В метаданных исходных и собранных навыков нет поля версии.
+- `--check` проверяет изолированную подготовительную область и сообщает о
+  расхождениях артефактов, не меняя исходные файлы.
+- Поддерживаемый установщик читает индекс обнаружения Pages, проверяет
+  контрольную сумму каждого архива и не запускает сборку на машине пользователя.
+- Пути манифеста нормализованы, относительны и ограничены
+  `shared/references/` и существующим навыком; символические ссылки в источниках,
+  назначениях и исходных каталогах навыков отклоняются.
+- Исходники не меняются, а результат сборки заменяется только после полной
+  подготовки и проверки.
+- Проверки выпуска связывают версию Pages и ревизию исходников с точным тегом;
+  публикация продвигает только прошедшие предварительную проверку артефакты и
+  проверяет оба удалённых канала до создания GitHub Release.
+- Результаты проверки рабочих задач имеют стабильный порядок, а отчёты связаны
+  с контрольными суммами задачи и доказательств, поэтому повторная проверка без
+  изменений возвращает тот же вердикт.

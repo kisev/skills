@@ -18,6 +18,8 @@ COMMAND = re.compile(
     r"^\s*((?:npx|npm|uv|python3?|task|mise|lefthook|git|node)\b[^\n]*)", re.MULTILINE
 )
 PATH = re.compile(r"(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+")
+LIST_ITEM = re.compile(r"^\s*(?:[-+*]|\d+[.)])\s+")
+TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
 
 
 class LocaleError(Exception):
@@ -94,6 +96,85 @@ def _headings(text: str) -> list[int]:
     return [len(match.group(1)) for match in HEADING.finditer(text)]
 
 
+def _block_signature(text: str) -> list[str]:
+    """Describe translatable Markdown structure without comparing prose or wrapping."""
+    signature: list[str] = []
+    paragraph = False
+    quote = False
+    table_rows = 0
+    table_columns: int | None = None
+    fence: str | None = None
+    list_item = False
+
+    def flush() -> None:
+        nonlocal paragraph, quote, table_rows, table_columns
+        if paragraph:
+            signature.append("paragraph")
+            paragraph = False
+        if quote:
+            signature.append("quote")
+            quote = False
+        if table_rows:
+            signature.append(f"table:{table_rows}:{table_columns}")
+            table_rows = 0
+            table_columns = None
+
+    for line in text.splitlines():
+        stripped = line.strip()
+        fence_match = re.fullmatch(r"```([^`]*)", stripped)
+        if fence_match:
+            flush()
+            if fence is None:
+                fence = fence_match.group(1)
+                signature.append(f"fence:{fence}")
+            else:
+                fence = None
+            continue
+        if fence is not None:
+            continue
+        heading = re.match(r"^(#{1,6})\s+", line)
+        if heading:
+            flush()
+            signature.append(f"heading:{len(heading.group(1))}")
+            continue
+        if TABLE_ROW.fullmatch(line):
+            if paragraph or quote:
+                flush()
+            columns = len([cell for cell in stripped.strip("|").split("|")])
+            if table_columns is None:
+                table_columns = columns
+            elif table_columns != columns:
+                signature.append("table:invalid")
+            table_rows += 1
+            continue
+        if table_rows:
+            flush()
+        if LIST_ITEM.match(line):
+            if paragraph or quote:
+                flush()
+            marker = "ordered-item" if re.match(r"^\s*\d+[.)]\s+", line) else "unordered-item"
+            signature.append(marker)
+            list_item = True
+            continue
+        if list_item and line[:1].isspace() and stripped:
+            continue
+        list_item = False
+        if stripped.startswith(">"):
+            if paragraph:
+                flush()
+            quote = True
+            continue
+        if not stripped:
+            list_item = False
+            flush()
+            continue
+        paragraph = True
+    flush()
+    if fence is not None:
+        signature.append("fence:unclosed")
+    return signature
+
+
 def _public_documents(root: Path) -> set[str]:
     public = {
         path
@@ -152,6 +233,8 @@ def validate(root: Path = ROOT, built: Path | None = None) -> int:
             raise LocaleError(f"machine tokens differ: {english}, {russian}")
         if _headings(en_text) != _headings(ru_text):
             raise LocaleError(f"section structure differs: {english}, {russian}")
+        if _block_signature(en_text) != _block_signature(ru_text):
+            raise LocaleError(f"block structure differs: {english}, {russian}")
         en_links = _links(root, english, en_text)
         ru_links = _links(root, russian, ru_text)
         if russian in ru_links:

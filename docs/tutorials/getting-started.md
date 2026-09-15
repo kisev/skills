@@ -23,7 +23,7 @@ This installs the current stable distribution into `~/.agents/skills`. `--copy`
 keeps one canonical copy for both selected hosts. Release metadata and archive
 digests identify the installed distribution.
 
-If you use only one host, keep only its agent option:
+If you use only one host, keep only its `--agent` option:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --agent codex --skill '*' --copy --global --yes

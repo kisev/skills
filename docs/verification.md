@@ -26,7 +26,7 @@ The Pages URL is a moving stable-release channel. `update` verifies the current
 well-known digest and downloads only changed archives; it does not prune renamed
 or deleted skills. Existing Git-based installations must repeat `add` with the
 Pages URL and the same scope and agents to rebind their source. Cleanup remains
-limited to the eight names in the current [Migration Inventory](migration-inventory.md).
+limited to the nine names in the current [Migration Inventory](migration-inventory.md).
 
 ## OpenCode Integration
 
@@ -41,7 +41,7 @@ npm install followed by install preview, exact confirmation, and OpenCode
 restart.
 
 Uninstall order is asset preview and confirmation, user-owned plugin-entry
-removal, npm uninstall in the owning project, then restart. Reconcile and
+removal, `npm uninstall` in the owning project, then restart. Reconcile and
 uninstall archive exact-owned assets. Conflicts, worktrees, and runtime state are
 preserved; no archive restore or purge command is exposed.
 

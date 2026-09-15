@@ -2,63 +2,63 @@
 
 [English](README.md)
 
-Переносимые Agent Skills для Codex и OpenCode вместе с `skills-opencode` -
-полноценной интеграцией для OpenCode. Эти два компонента независимы: можно
-использовать любой из них отдельно или установить оба для полной работы с
-OpenCode.
+Переносимые навыки для агентов Codex и OpenCode, а также `skills-opencode` -
+полноценная интеграция с OpenCode. Компоненты независимы: каждый можно
+использовать отдельно или установить оба для полной работы с OpenCode.
 
 ## Компоненты проекта
 
-| Компонент                | Что предоставляет                                                                      | Lifecycle                                                                                           |
-| ------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Portable Agent Skills    | 29 автономных workflows для разработки, документации, delivery и командной работы      | Устанавливаются стабильным CLI `skills@latest` в `~/.agents/skills` или `.agents/skills`            |
-| `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, диагностика и optional plugin wrappers | Устанавливается как npm dependency; managed assets находятся в `~/.config/opencode` или `.opencode` |
+| Компонент                | Назначение                                                                                                              | Жизненный цикл                                                                                          |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Portable Agent Skills    | 29 автономных сценариев для разработки, документации, выпуска и командной работы                                        | Стабильный CLI `skills@latest` устанавливает их в `~/.agents/skills` или `.agents/skills`               |
+| `@kisev/skills-opencode` | Команды OpenCode, агенты с фиксированными ролями, средства маршрутизации, диагностика и необязательные обёртки плагинов | Устанавливается как зависимость npm; управляемые файлы находятся в `~/.config/opencode` или `.opencode` |
 
-Portable skills не требуют npm package. npm package не содержит, не
-устанавливает, не обновляет и не удаляет portable skills.
+Переносимые навыки не требуют npm-пакета. Сам npm-пакет не содержит, не
+устанавливает, не обновляет и не удаляет переносимые навыки.
 
-## Portable skills
+## Переносимые навыки
 
-Установите текущую стабильную portable distribution глобально для Codex и
-OpenCode:
+Установите актуальную стабильную версию переносимых навыков глобально для Codex
+и OpenCode:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
-Stable channel публикует текущую release metadata и digest-bound archives.
-Начните с [пошаговой установки](docs/ru/tutorials/getting-started.md), используйте
-[how-to по portable skills](docs/ru/how-to/portable-skills.md) для project
-installation, обновления, очистки и диагностики или откройте
-[каталог skills](docs/ru/reference/skill-catalog.md).
+Стабильный канал публикует актуальные метаданные релиза и архивы, привязанные к
+контрольным суммам. Начните с [пошаговой установки](docs/ru/tutorials/getting-started.md),
+используйте [инструкцию по переносимым навыкам](docs/ru/how-to/portable-skills.md)
+для установки в проект, обновления, очистки и устранения неполадок или откройте
+[каталог навыков](docs/ru/reference/skill-catalog.md).
 
 ## skills-opencode
 
 `@kisev/skills-opencode` добавляет в OpenCode:
 
-- slash-command adapters для установленных skills и package tools;
-- шесть fixed agent roles и управление profiles;
-- capability routing, установку, reconcile и doctor tooling;
-- opt-in plugin wrappers `rules-injector`, `rtk` и `zed-bell`.
+- адаптеры слеш-команд для установленных навыков и инструментов пакета;
+- шесть агентов с фиксированными ролями и управление профилями;
+- маршрутизацию по возможностям, установку и инструменты `reconcile` и `doctor`;
+- обёртки плагинов `rules-injector`, `rtk` и `zed-bell`, подключаемые только по
+  явному выбору.
 
-Установите package постоянно в npm project, которому принадлежит integration,
-затем покажите preview managed assets:
+Установите пакет как постоянную зависимость в npm-проекте интеграции, затем
+предварительно просмотрите управляемые файлы:
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
 npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 ```
 
-Это только начало обязательного flow. Выполните exact confirmation command из
-preview, добавьте package в user-owned entry `plugin` OpenCode и перезапустите
-OpenCode. Следуйте полной
-[инструкции по интеграции OpenCode](docs/ru/how-to/opencode-integration.md).
+Это только начало обязательной последовательности действий. Выполните точную
+команду подтверждения из предварительного просмотра, добавьте пакет в запись
+`plugin` пользовательской конфигурации OpenCode и перезапустите OpenCode. Следуйте
+полной [инструкции по интеграции OpenCode](docs/ru/how-to/opencode-integration.md).
 
 ## Документация
 
-[Индекс документации](docs/ru/README.md) организует tutorials, how-to guides,
-reference и explanations по Diataxis. Там находятся ссылки на архитектуру,
-проверку, миграцию, совместимость и оба installation lifecycle.
+[Индекс документации](docs/ru/README.md) организует учебные материалы,
+практические инструкции, справочник и поясняющие материалы по Diataxis. Там есть
+ссылки на архитектуру, проверку, миграцию, совместимость и оба жизненных цикла.
 
 ## Разработка
 
@@ -67,7 +67,10 @@ mise install
 task check
 ```
 
-Границы исходников и отдельные checks описаны в
-[CONTRIBUTING.ru.md](CONTRIBUTING.ru.md). Порядок сообщения об уязвимостях
-находится в [SECURITY.md](SECURITY.md), история выпусков - в
-[CHANGELOG.md](CHANGELOG.md), лицензия - в [LICENSE](LICENSE).
+Дополнительные сведения:
+
+- [CONTRIBUTING.ru.md](CONTRIBUTING.ru.md) - правила работы с исходным кодом и
+  проверки для отдельных изменений.
+- [SECURITY.ru.md](SECURITY.ru.md) - порядок сообщения об уязвимостях.
+- [CHANGELOG.ru.md](CHANGELOG.ru.md) - история выпусков.
+- [LICENSE](LICENSE) - условия лицензии.

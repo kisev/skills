@@ -61,18 +61,18 @@ in the [OpenCode integration guide](opencode-integration.md#update).
 
 ## Remove Retired Names
 
-The current [migration inventory](../migration-inventory.md) defines eight
+The current [migration inventory](../migration-inventory.md) defines nine
 retired names. For a global installation shared by OpenCode and Codex, remove
 them explicitly:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent opencode --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary --agent opencode --agent codex --global --yes
 ```
 
 For Codex only, use:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary --agent codex --global --yes
 ```
 
 Use the same agents and scope as the installation. Omit `--global` for project

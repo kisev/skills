@@ -2,31 +2,31 @@
 
 [English](../../how-to/opencode-integration.md)
 
-`@kisev/skills-opencode` - optional OpenCode-specific слой. У portable
-skills отдельный lifecycle: их нужно установить независимо через
-[инструкцию по portable skills](portable-skills.md).
+`@kisev/skills-opencode` - необязательный слой для OpenCode. У переносимых
+навыков отдельный жизненный цикл: их нужно устанавливать независимо по
+[инструкции для переносимых навыков](portable-skills.md).
 
-## Требования и ownership
+## Требования и принадлежность
 
-Package требует Node.js 22+ и OpenCode `>=1.18.29 <1.19.0`.
+Пакет требует Node.js 22+ и OpenCode `>=1.18.29 <1.19.0`.
 
-| Component          | Project scope                | Global scope                                      |
-| ------------------ | ---------------------------- | ------------------------------------------------- |
-| npm package        | project `node_modules`       | `node_modules` в npm project `~/.config/opencode` |
-| Commands           | `.opencode/commands`         | `~/.config/opencode/commands`                     |
-| Agents             | `.opencode/agents`           | `~/.config/opencode/agents`                       |
-| Optional wrappers  | `.opencode/plugins`          | `~/.config/opencode/plugins`                      |
-| Ownership metadata | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode`             |
+| Компонент                 | Область проекта              | Глобальная область                                |
+| ------------------------- | ---------------------------- | ------------------------------------------------- |
+| npm-пакет                 | `node_modules` проекта       | `node_modules` в npm-проекте `~/.config/opencode` |
+| Команды                   | `.opencode/commands`         | `~/.config/opencode/commands`                     |
+| Агенты                    | `.opencode/agents`           | `~/.config/opencode/agents`                       |
+| Необязательные обёртки    | `.opencode/plugins`          | `~/.config/opencode/plugins`                      |
+| Метаданные принадлежности | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode`             |
 
-Package и generated wrappers должны оставаться доступными после завершения
-installer. Import, plugin loading и npm lifecycle scripts не устанавливают
-assets или portable skills и не меняют OpenCode configuration.
+Пакет и созданные обёртки должны оставаться доступными после завершения работы
+установщика. Импорт, загрузка плагина и сценарии жизненного цикла npm не
+устанавливают компоненты или переносимые навыки и не меняют конфигурацию OpenCode.
 
-## Постоянная установка package
+## Постоянная установка пакета
 
-### Project scope
+### Область проекта
 
-Установите package в npm project репозитория и запускайте CLI из его корня:
+Установите пакет в npm-проект репозитория и запускайте CLI из его корня:
 
 ```shell
 cd /path/to/project
@@ -34,12 +34,12 @@ npm install --save-exact @kisev/skills-opencode
 npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 ```
 
-Package остаётся в project `node_modules`, confirmed assets размещаются в
-`.opencode`.
+Пакет остаётся в каталоге `node_modules` проекта, а подтверждённые компоненты
+размещаются в `.opencode`.
 
-### Global scope
+### Глобальная область
 
-Используйте `~/.config/opencode` как постоянный npm project:
+Используйте `~/.config/opencode` как постоянный npm-проект:
 
 ```shell
 mkdir -p "$HOME/.config/opencode"
@@ -48,27 +48,28 @@ test -f package.json || npm init --yes
 npm install --save-exact @kisev/skills-opencode
 ```
 
-Сохраните dependency в `package.json` и lock file этого npm project. Confirmed
-assets размещаются в `~/.config/opencode`. После persistent install запускайте
-CLI-команды global scope из любого каталога:
+Сохраните зависимость в `package.json` и файле блокировки этого npm-проекта.
+Подтверждённые компоненты размещаются в `~/.config/opencode`. После постоянной
+установки запускайте команды CLI для глобальной области из любого каталога:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest install --scope global --dry-run
 ```
 
-## Выбор assets
+## Выбор компонентов
 
 В TTY команда `install` открывает четыре группы: Skill command adapters, Package
-command adapters, Fixed agents и Selectable plugins. Две command-группы и шесть
-fixed agents изначально выбраны, optional plugins - нет. Skill command adapters
-это OpenCode slash-команды, загружающие уже установленный одноимённый portable
-skill. Package command adapters вызывают package tools. Выбор adapter не выбирает
-и не устанавливает skill. В каждой группе можно выбрать произвольный набор:
-Up/Down перемещает курсор, Space переключает item, A выбирает всё, N снимает
-выбор, Enter подтверждает, Escape отменяет.
+command adapters, Fixed agents и Selectable plugins. Две группы команд и шесть
+агентов с фиксированными ролями изначально выбраны, необязательные плагины - нет.
+Skill command adapters - это слеш-команды OpenCode, которые загружают уже
+установленный одноимённый переносимый навык. Package command adapters вызывают
+инструменты пакета. Выбор адаптера не выбирает и не устанавливает навык. В каждой
+группе можно выбрать произвольный набор: Up/Down перемещает курсор, Space
+переключает элемент, A выбирает всё, N снимает выбор, Enter подтверждает, Escape
+отменяет.
 
-Вне TTY передайте все три selection group. Этот пример выбирает три commands,
-всех fixed agents и ни одного wrapper:
+Вне TTY передайте параметры для всех трёх групп выбора. В этом примере выбраны
+три команды, все агенты с фиксированными ролями и ни одна обёртка:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest install --scope project \
@@ -77,20 +78,20 @@ npx --yes @kisev/skills-opencode@latest install --scope project \
   --plugins none --dry-run
 ```
 
-Если вне TTY передан любой selection flag, обязательны `--commands`, `--agents`
-и `--plugins`. Точные текущие имена показывает команда:
+Если вне TTY передан любой параметр выбора, обязательны `--commands`, `--agents`
+и `--plugins`. Точные текущие имена можно получить командой:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest capabilities --json
 ```
 
-Selectable wrappers: `rules-injector`, `rtk`, `zed-bell`.
+Доступные обёртки: `rules-injector`, `rtk`, `zed-bell`.
 
-## Активация core plugin
+## Активация основного плагина
 
-Installer записывает, нужна ли selection core integration, но никогда не создаёт
-и не меняет `opencode.json`. Добавьте package в user-owned массив `plugin` для
-того же scope, сохранив существующие entries:
+Установщик фиксирует, нужна ли выбранным компонентам основная интеграция, но
+никогда не создаёт и не меняет `opencode.json`. Добавьте пакет в пользовательский
+массив `plugin` для той же области, сохранив существующие элементы:
 
 ```json
 {
@@ -99,76 +100,84 @@ Installer записывает, нужна ли selection core integration, но
 }
 ```
 
-Для project scope храните package в project `node_modules`, а configuration - в
-project. Для global scope храните npm project и user configuration в
-`~/.config/opencode`. После activation или изменения assets перезапустите
-OpenCode.
+Для области проекта храните пакет в каталоге `node_modules` проекта, а
+конфигурацию - в самом проекте. Для глобальной области храните npm-проект и
+пользовательскую конфигурацию в `~/.config/opencode`. После активации или
+изменения компонентов перезапустите OpenCode.
 
-## Preview и confirm
+## Предварительный просмотр и подтверждение
 
-Каждая mutation начинается с `--dry-run`. Preview показывает operations,
-conflicts, необходимость restart, срок действия receipt, отдельные plan и
-confirmation digests и точную confirmation command. Если reconcile показывает
-modified managed files или ownership conflicts, он блокируется: receipt и Apply
-command не создаются. Сначала установите или обновите текущий package,
-примените его exact installer confirmation, затем повторите reconcile; ownership
-conflicts нужно разрешить вручную.
+Каждое изменение начинается с `--dry-run`. Предварительный просмотр показывает
+операции, конфликты, необходимость перезапуска, срок действия квитанции, отдельные
+контрольные суммы плана и подтверждения, а также точную команду подтверждения.
+Если `reconcile` обнаруживает изменённые управляемые файлы или конфликты
+принадлежности, продолжение блокируется: квитанция и команда Apply не выдаются.
+Сначала установите или обновите текущий пакет, примените точную команду
+подтверждения установщика, затем повторите `reconcile`; конфликты принадлежности
+нужно разрешить вручную.
 
 ```shell
 npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 ```
 
-Обязательный OpenCode flow: persistent npm install, `install --dry-run`, exact
-confirmation command из preview, добавление package в user-owned `plugin` и
-перезапуск OpenCode. Persistent npm project в `~/.config/opencode` сохраняет
-доступность global plugin; stable npx-команды с `--scope global` можно запускать
-из любого каталога. Перед каждым reconcile установите или обновите package и
-примените его installer plan.
+Обязательная последовательность для OpenCode: постоянная установка через npm,
+`install --dry-run`, точная команда подтверждения из предварительного просмотра,
+добавление пакета в пользовательский массив `plugin` и перезапуск OpenCode.
+Постоянный npm-проект в `~/.config/opencode` сохраняет доступность глобального
+плагина; стабильные команды npx с `--scope global` можно запускать из любого
+каталога. Перед каждым `reconcile` установите или обновите пакет и примените план
+установщика.
 
-Preview имеет deterministic `plan_digest` и unique `confirmation_digest`. Новый
-dry-run в том же scope supersede-ит любой старый unconsumed preview, включая
-preview другой package или agent operation; старая confirmation отклоняется.
+Предварительный просмотр содержит детерминированный `plan_digest` и уникальный
+`confirmation_digest`. Новый запуск с `--dry-run` в той же области отменяет любой
+прежний неиспользованный предварительный просмотр, в том числе созданный другой
+операцией пакета или операцией с агентом; прежнее подтверждение отклоняется.
 
-Выполните команду из preview со всеми selection flags. Receipts приватны,
-действуют 10 минут, применяются один раз и связаны с action, scope, root и
-текущим inventory. Apply отклоняет stale state и unsafe conflicts.
+Выполните команду из предварительного просмотра со всеми параметрами выбора.
+Квитанции конфиденциальны, действуют 10 минут, используются один раз и связаны с
+действием, областью, корневым каталогом и текущим составом. Apply отклоняет
+устаревшее состояние и небезопасные конфликты.
 
-## Doctor
+## `doctor`
 
-`doctor` читает integration facts без создания receipts, recovery journals,
-запуска plugins или LSP servers:
+`doctor` считывает сведения об интеграции, не создавая квитанции, не выполняя
+восстановление по журналам и не запуская плагины или LSP-серверы:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest doctor --scope project
 npx --yes @kisev/skills-opencode@latest doctor --scope project --json
 ```
 
-Report содержит versions, ownership, drift, collisions, archive counts, redacted
-configuration projections, runtime summaries и LSP facts. Raw configuration,
-environment values, receipts, credentials и secrets не сериализуются. Exit
-status `0` означает чистое состояние, `1` - findings, `2` - invalid input или
-incomplete probe failure.
+Отчёт содержит версии, принадлежность, отклонения, коллизии, количество архивов,
+представления конфигурации со скрытыми значениями, сводки состояния выполнения и
+сведения о LSP. Исходная конфигурация, значения окружения, квитанции, учётные
+данные и секреты не сериализуются. Код завершения `0` означает отсутствие
+проблем, `1` - наличие замечаний, а `2` - недопустимые входные данные или
+неполную проверку.
 
 ## Обновление
 
-В npm project, которому принадлежит dependency, установите текущий stable package
-и сохраните exact resolved version, покажите и подтвердите `install` с тем же
-scope и нужной selection, затем перезапустите OpenCode:
+В npm-проекте, которому принадлежит зависимость, установите текущую стабильную
+версию пакета и зафиксируйте точную установленную версию. Затем выполните
+предварительный просмотр и подтвердите `install` с той же областью и нужным
+набором компонентов, после чего перезапустите OpenCode:
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
 npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 ```
 
-Используйте полную confirmation command из preview. Installer обновляет только
-files с совпадающими recorded ownership и SHA-256. User-owned или modified
-managed files остаются conflicts. Package update не сбрасывает выбранные agent
-models, variants, additional critics или retained profile configuration.
+Используйте полную команду подтверждения из предварительного просмотра.
+Установщик обновляет только файлы, для которых совпадают сохранённые сведения о
+принадлежности и контрольная сумма SHA-256. Пользовательские или изменённые
+управляемые файлы остаются конфликтами. Обновление пакета не сбрасывает выбранные
+модели и варианты агентов, дополнительных критиков или сохранённую конфигурацию
+профилей.
 
-## Reconcile
+## `reconcile`
 
-`reconcile` классифицирует current и historical portable skills, package
-commands, plugins, agents и installation metadata одного scope:
+`reconcile` классифицирует текущие и прежние переносимые навыки, команды пакета,
+плагины, агенты и метаданные установки в одной области:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest reconcile --scope project --dry-run
@@ -176,20 +185,23 @@ npx --yes @kisev/skills-opencode@latest reconcile --scope project --confirm <dig
 npx --yes @kisev/skills-opencode@latest reconcile --scope global --dry-run --json
 ```
 
-Перед reconcile сначала обновите package в принадлежащем ему npm project и
-примените exact installer plan. Reconcile не устанавливает, не обновляет и не
-удаляет portable skills; для них используйте только stable
+Перед `reconcile` сначала обновите пакет в принадлежащем ему npm-проекте и
+примените точный план установщика. `reconcile` не устанавливает, не обновляет и не
+удаляет переносимые навыки; для них используйте только стабильную команду
 `npx --yes skills@latest` с `https://kisev.github.io/skills`.
 
-Confirmed reconcile архивирует exact-owned retired assets в private
-content-addressed XDG archive и удаляет их deployed copies. Modified, user-owned,
-unknown, symlink, unsafe и ambiguous entries остаются без изменений как findings
-или conflicts. Worktrees и runtime state сохраняются. Archive доступен для
-просмотра через `doctor`; команд restore или purge нет.
+После подтверждения `reconcile` помещает устаревшие компоненты с точно
+установленной принадлежностью в XDG-архив с ограниченным доступом и адресацией по содержимому и
+удаляет их развёрнутые копии. Элементы со статусами `modified`, `user-owned`,
+`unknown`, `symlink`, `unsafe` или `ambiguous` остаются без изменений и
+отображаются как `findings` или `conflicts`. Рабочие деревья и состояние
+выполнения сохраняются. Архив можно просматривать через `doctor`; команд
+`restore` или `purge` нет.
 
-## Управление agents
+## Управление агентами
 
-Direct CLI управляет models fixed agents и additional critics без LLM call:
+CLI напрямую управляет моделями агентов с фиксированными ролями и дополнительными
+критиками без обращения к LLM:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest agent list --scope global
@@ -199,17 +211,18 @@ npx --yes @kisev/skills-opencode@latest critic add security --scope global --mod
 npx --yes @kisev/skills-opencode@latest agent reconcile --scope global --dry-run
 ```
 
-Fixed roles сохраняют имена, prompts и permissions; меняются только model и
-variant. Additional critics используют `critic-<safe-suffix>`. Каждая mutation
-использует тот же contract preview и one-time confirmation.
+Фиксированные роли сохраняют имена, инструкции и разрешения; меняются только
+`model` и `variant`. Дополнительные критики используют
+`critic-<safe-suffix>`. Для каждого изменения действует тот же контракт
+предварительного просмотра и одноразового подтверждения.
 
-## Uninstall
+## `uninstall`
 
-Package должен оставаться доступным до удаления его assets:
+Пакет должен оставаться доступным до удаления его компонентов:
 
-1. Покажите preview и подтвердите удаление package-owned assets.
-2. Удалите `@kisev/skills-opencode` из user-owned массива `plugin`.
-3. Удалите dependency из того же npm project.
+1. Просмотрите и подтвердите удаление принадлежащих пакету компонентов.
+2. Удалите `@kisev/skills-opencode` из пользовательского массива `plugin`.
+3. Удалите зависимость из того же npm-проекта.
 4. Перезапустите OpenCode.
 
 ```shell
@@ -218,24 +231,26 @@ npx --yes @kisev/skills-opencode@latest uninstall --scope project --confirm <dig
 npm uninstall @kisev/skills-opencode
 ```
 
-Для global scope запустите stable npx-команду из любого каталога с
-`--scope global`, затем удалите dependency из persistent npm project в
-`~/.config/opencode`. Uninstall архивирует exact manifest-owned assets и
-сохраняет modified files как conflicts вместе с worktrees, runtime state и
-retained profile configuration. Он не удаляет portable skills и не меняет
-`opencode.json`. Команд restore или purge для archive нет.
+Для глобальной области запустите стабильную команду npx из любого каталога с
+`--scope global`, затем удалите зависимость из постоянного npm-проекта в
+`~/.config/opencode`. `uninstall` архивирует компоненты, чья принадлежность точно
+подтверждена манифестом, и сохраняет изменённые файлы как конфликты вместе с
+рабочими деревьями, состоянием выполнения и сохранённой конфигурацией профилей.
+Команда не удаляет переносимые навыки и не меняет `opencode.json`. Команд
+`restore` или `purge` для архива нет.
 
 ## Границы
 
-- Portable skills и package assets устанавливаются, обновляются и удаляются
+- Переносимые навыки и компоненты пакета устанавливаются, обновляются и удаляются
   независимо.
-- Commands, соответствующие skills, являются thin adapters; portable skill
-  остаётся authoritative и устанавливается отдельно.
-- Package tools: `capabilities`, `route`, `doctor`, `agent_profiles`, `reconcile`;
-  у `route` нет slash command.
-- Global scope не зависит от cwd; project scope использует `.opencode` в текущем
-  каталоге.
-- Installer владеет только files с доказанными manifests и exact hashes.
-- Package распространяется по лицензии MIT. Текущий inventory и checks описаны в
+- Команды, соответствующие навыкам, являются простыми адаптерами; поведение
+  определяет переносимый навык, который устанавливается отдельно.
+- Инструменты пакета: `capabilities`, `route`, `doctor`, `agent_profiles`,
+  `reconcile`; у `route` нет слеш-команды.
+- Глобальная область не зависит от текущего рабочего каталога; область проекта
+  использует `.opencode` в текущем каталоге.
+- Установщик считает своими только файлы, для которых принадлежность подтверждена
+  манифестами и точными контрольными суммами.
+- Пакет распространяется по лицензии MIT. Текущий состав и проверки описаны в
   [инвентаре миграции](../migration-inventory.md) и
   [документе проверки](../verification.md).

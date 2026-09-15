@@ -1,39 +1,43 @@
-# Интеграция OpenCode
+# Интеграция с OpenCode
 
 [English](README.md)
 
-`@kisev/skills-opencode` - полноценный OpenCode-specific компонент Agent
-Skills. Он дополняет portable skills, но имеет собственный lifecycle установки,
+`@kisev/skills-opencode` - полноценный компонент Agent Skills для OpenCode. Он
+дополняет переносимые навыки, но имеет собственный жизненный цикл установки,
 обновления и удаления.
 
-## Что добавляет package
+## Что добавляет пакет
 
-- OpenCode slash-command adapters для установленных portable skills и package tools.
-- Шесть fixed agents: `manager`, `architect`, `mapper`, `worker`, `review` и
-  `critic`.
-- Capability routing, doctor, reconcile и управление agent profiles.
-- Optional plugin wrappers `rules-injector`, `rtk` и `zed-bell`.
+- Адаптеры слеш-команд OpenCode для установленных переносимых навыков и
+  инструментов пакета.
+- Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,
+  `review` и `critic`.
+- Маршрутизация по возможностям, `doctor`, `reconcile` и управление профилями
+  агентов.
+- Необязательные обертки плагинов `rules-injector`, `rtk` и `zed-bell`.
 
-Package не содержит, не устанавливает, не обновляет и не удаляет portable skills.
+Пакет не содержит, не устанавливает, не обновляет и не удаляет переносимые
+навыки.
 
 ## Требования
 
 - Node.js 22 или новее.
 - OpenCode `>=1.18.29 <1.19.0`.
-- Постоянный npm project, которому принадлежит dependency.
+- Постоянный npm-проект, которому принадлежит зависимость.
 
-## Project installation
+## Установка в проект
 
-Установите package в npm project репозитория и покажите preview managed assets:
+Установите пакет в npm-проект репозитория и предварительно просмотрите
+управляемые файлы:
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
 npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 ```
 
-Выполните exact confirmation command из preview. Если выбранным assets нужна core
-integration, добавьте package в user-owned configuration OpenCode, сохранив
-существующие entries:
+Выполните точную команду подтверждения, которую выведет предварительный просмотр.
+Если для выбранных файлов нужна основная интеграция, добавьте пакет в
+пользовательскую конфигурацию OpenCode, сохранив существующие записи:
 
 ```json
 {
@@ -42,16 +46,18 @@ integration, добавьте package в user-owned configuration OpenCode, со
 }
 ```
 
-После activation или изменения assets перезапустите OpenCode. Installer не
-меняет `opencode.json`, а выбор command adapters не устанавливает portable skills.
+Перезапустите OpenCode после активации или изменения файлов. Установщик не
+редактирует `opencode.json`, а выбор адаптеров команд не устанавливает переносимые
+навыки.
 
 ## Документация
 
-Каноническая документация находится в `docs/`, а не в исходниках package:
+Каноническая документация находится в `docs/`, а не в исходном коде пакета:
 
 - [Полная инструкция по интеграции OpenCode](https://github.com/kisev/skills/blob/main/docs/ru/how-to/opencode-integration.md)
-- [Инструкция по portable skills](https://github.com/kisev/skills/blob/main/docs/ru/how-to/portable-skills.md)
+- [Инструкция по переносимым навыкам](https://github.com/kisev/skills/blob/main/docs/ru/how-to/portable-skills.md)
 - [Индекс документации](https://github.com/kisev/skills/blob/main/docs/ru/README.md)
 
-Полная инструкция описывает global installation, выбор assets, confirmation,
-activation, doctor, update, reconcile, agent profiles, ownership и uninstall.
+Полная инструкция описывает глобальную установку, выбор файлов, подтверждение,
+активацию, `doctor`, обновление, `reconcile`, профили агентов, владение файлами и
+удаление.

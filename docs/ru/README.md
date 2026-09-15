@@ -2,38 +2,40 @@
 
 [English](../README.md)
 
-Выберите раздел по задаче, которую нужно решить. У Portable Agent Skills и
-`skills-opencode` разные installation и update lifecycle; инструкции явно
-сохраняют эту границу.
+Выберите раздел в зависимости от задачи. У переносимых Agent Skills и
+`skills-opencode` разные процессы установки и обновления; в инструкциях эта
+граница указана явно.
 
-## Tutorials
+## Учебные материалы
 
-- [Начало работы с portable skills](tutorials/getting-started.md) - установка
-  stable distribution для Codex и OpenCode и проверка результата.
+- [Начало работы с переносимыми навыками](tutorials/getting-started.md) -
+  установка стабильного дистрибутива для Codex и OpenCode и проверка результата.
 
-## How-to guides
+## Практические руководства
 
-- [Управление portable skills](how-to/portable-skills.md) - установка по scope или
-  host, обновление, смена старого source, очистка retired names и диагностика.
+- [Управление переносимыми навыками](how-to/portable-skills.md) - установка в
+  нужной области и среде, обновление, смена прежнего источника, удаление
+  устаревших имён и диагностика.
 - [Установка и управление skills-opencode](how-to/opencode-integration.md) -
-  установка package, выбор assets, активация plugin, обновление, reconcile,
-  диагностика, настройка agents и безопасное удаление.
-- [Участие в разработке](../../CONTRIBUTING.ru.md) - изменение authored sources и
-  запуск обязательных checks.
+  установка пакета, выбор компонентов, активация плагина, обновление, сверка,
+  диагностика, настройка агентов и безопасное удаление.
+- [Участие в разработке](../../CONTRIBUTING.ru.md) - изменение исходных файлов и
+  запуск обязательных проверок.
 
-## Reference
+## Справочник
 
-- [Каталог skills](reference/skill-catalog.md) - active skills, требования,
-  командные profiles и границы external tools.
-- [Инвентарь миграции](migration-inventory.md) - active и retired names,
-  replacements, package surfaces и ownership records.
-- [Проверка](verification.md) - проверяемые release contracts и quality gates.
-- [Политика безопасности](../../SECURITY.md) - порядок сообщения об уязвимостях.
-- [История выпусков](../../CHANGELOG.md) - опубликованные изменения по версиям.
+- [Каталог навыков](reference/skill-catalog.md) - активные навыки, требования,
+  командные профили и границы внешних инструментов.
+- [Инвентарь миграции](migration-inventory.md) - активные и устаревшие имена,
+  замены, состав пакета и сведения о принадлежности.
+- [Проверка](verification.md) - контракты выпуска, покрытые тестами, и проверки
+  качества.
+- [Политика безопасности](../../SECURITY.ru.md) - порядок сообщения об уязвимостях.
+- [История выпусков](../../CHANGELOG.ru.md) - опубликованные изменения по версиям.
 
-## Explanation
+## Объяснение
 
-- [Архитектура](architecture.md) - границы source of truth, build и distribution,
-  host integration, runtime behavior и инварианты.
+- [Архитектура](architecture.md) - границы источников истины, сборка и
+  распространение, интеграция со средами, выполнение и инварианты.
 - [Каноническая спецификация](../../specs/README.md) - нормативные требования,
-  architecture decisions и capability contracts для maintainers.
+  архитектурные решения и контракты возможностей для сопровождающих.

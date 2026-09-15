@@ -1,15 +1,17 @@
-# История изменений
+# Changelog
 
-Все заметные изменения проекта фиксируются в этом файле. Формат основан на
-[Keep a Changelog](https://keepachangelog.com/ru/1.1.0/) и проект использует
-[Semantic Versioning](https://semver.org/lang/ru/).
+All notable changes to this project are documented in this file. Entries follow
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); release numbers follow
+[Semantic Versioning](https://semver.org/).
+
+[Русская версия](CHANGELOG.ru.md)
 
 ## [2.4.0] - 2026-09-16
 
 ### Added
 
-- Code review now restores incremental review workflows with persisted evidence,
-  reviewer plans, and structured output for follow-up review rounds.
+- Code review once again supports incremental workflows with persisted evidence,
+  reviewer plans, and structured output for follow-up rounds.
 - Specification management preserves decision history and provides explicit
   traceability for its lifecycle requirements.
 
@@ -40,12 +42,12 @@
 
 ### Changed
 
-- User documentation now follows stable npm channels, while generated OpenCode
+- User documentation now points to stable npm channels, while generated OpenCode
   confirmation commands retain exact package versions and global CLI execution is
   independent of the current directory.
 - Project release, portable installer, and OpenCode compatibility versions now
-  have centralized checked authorities; per-skill metadata versions were removed
-  in favor of distribution metadata and content-addressed archive digests.
+  come from centralized, validated sources of truth; per-skill metadata versions
+  were removed in favor of distribution metadata and content-addressed archive digests.
 
 ## [2.2.3] - 2026-09-15
 
@@ -102,7 +104,7 @@
 
 ### Changed
 
-- Portable installation now uses the moving stable source
+- Portable installation now uses the continuously updated stable source
   `https://kisev.github.io/skills` instead of Git repository selectors.
 - Authored entrypoints are named `SKILL.source.md`; shared contracts and runtimes
   are injected only into ignored `.build/skills` output, removing 126 committed
@@ -184,165 +186,168 @@
 
 ## [2.0.3] - 2026-09-11
 
-### Исправлено
+### Fixed
 
-- Installer wizard теперь явно различает skill command adapters и package command
-  adapters и сообщает, что portable skills устанавливаются отдельно.
-- Human reconcile preview блокируется при modified managed assets или ownership
-  conflicts, перечисляет все blocking paths и показывает remediation вместо Apply.
-- Новый dry-run в одном scope supersede-ит старый unconsumed preview across
-  installer, reconcile, agent и critic operations; plan и confirmation digests
-  разделены, а superseded confirmation отклоняется.
-- Blocked reconcile не создаёт новый receipt и не раскрывает confirmation details.
-- Документация закрепляет persistent npm install, installer confirmation, plugin
-  activation и restart до reconcile.
+- The installer wizard now explicitly distinguishes skill command adapters from
+  package command adapters and explains that portable skills are installed separately.
+- The human-readable reconcile preview is blocked by modified managed assets or ownership
+  conflicts, lists every blocking path, and shows remediation instead of Apply.
+- A new dry run in one scope supersedes an older unconsumed preview across installer,
+  reconcile, agent, and critic operations; plan and confirmation digests are separate,
+  and a superseded confirmation is rejected.
+- A blocked reconcile creates no new receipt and does not disclose confirmation details.
+- Documentation now records persistent npm installation, installer confirmation,
+  plugin activation, and restart before reconcile.
 
-### Не изменено
+### Unchanged
 
-- Portable skill metadata остаётся `2.0.0`; inventory, runtime, agents, plugins и
-  manifest schema не изменялись.
+- Portable skill metadata remains `2.0.0`; inventory, runtime, agents, plugins, and
+  manifest schema are unchanged.
 
 ## [2.0.2] - 2026-09-10
 
-### Исправлено
+### Fixed
 
-- CI specification-impact helper теперь корректно разрешает annotated tag push:
-  tag-object из `event.after` сверяется с commit из `GITHUB_SHA`, после чего
-  range строится от первого parent release commit.
-- Добавлен regression test для ошибки `v2.0.0` с zero-before и failed run
+- The CI specification-impact helper now handles an annotated tag push correctly:
+  it compares the tag object from `event.after` with the commit from `GITHUB_SHA`, then
+  builds the range from the first parent of the release commit.
+- A regression test covers the `v2.0.0` failure with a zero-before value and failed run
   `https://github.com/kisev/skills/actions/runs/34496801895`.
 
-### Не изменено
+### Unchanged
 
-- Runtime, skills, public inventory и behavioral contracts не изменялись.
+- Runtime, skills, public inventory, and behavioral contracts are unchanged.
 
 ## [2.0.1] - 2026-09-10
 
-### Исправлено
+### Fixed
 
-- CI specification-impact gate теперь детерминированно разрешает ranges для pull
-  request, обычного branch push, первого branch push и tag push.
-- Tag push больше не передаёт zero SHA в Git: release commit проверяется как
-  достижимый из `origin/main`, а impact range строится от его первого parent.
-- Некорректные, отсутствующие и недостижимые event SHAs завершают gate fail closed.
+- The CI specification-impact gate now resolves ranges deterministically for pull
+  requests, regular branch pushes, first branch pushes, and tag pushes.
+- A tag push no longer passes a zero SHA to Git: the gate verifies that the release
+  commit is reachable from `origin/main`, then builds the impact range from its
+  first parent.
+- Invalid, missing, and unreachable event SHAs cause the gate to fail closed.
 
-### Не изменено
+### Unchanged
 
-- Это CI-only исправление: runtime, skills, public inventory и behavioral contracts
-  не изменялись. Portable skill metadata остаётся `2.0.0`.
+- This is a CI-only fix: runtime, skills, public inventory, and behavioral contracts
+  are unchanged. Portable skill metadata remains `2.0.0`.
 
 ## [2.0.0] - 2026-09-10
 
-### Несовместимые изменения
+### Breaking changes
 
-- Удалены skills `attempt`, `schedule`, `usage` и `overview` без replacement.
-- `project-spec`, `skill-improver` и `walkthrough` переименованы в `spec-manage`,
-  `skill-improve` и `code-explain` соответственно.
-- `team-workflow` заменён пятью fixed skills: `team-sprint-start`,
-  `team-sprint-close`, `team-retro`, `team-roadmap` и `slides-prompts-prepare`.
-- Удалены старые skill/command/plugin surfaces, включая slash-команду `/route`;
-  package tool `route` остаётся доступен без slash-команды.
-- Action и mode aliases удалены: публичная поверхность использует только точные
-  имена из catalog.
+- Skills `attempt`, `schedule`, `usage`, and `overview` are removed without a
+  replacement.
+- `project-spec`, `skill-improver`, and `walkthrough` are renamed to `spec-manage`,
+  `skill-improve`, and `code-explain`, respectively.
+- `team-workflow` is replaced by five fixed skills: `team-sprint-start`,
+  `team-sprint-close`, `team-retro`, `team-roadmap`, and `slides-prompts-prepare`.
+- Legacy skill, command, and plugin surfaces are removed, including the `/route` slash
+  command; the `route` package tool remains available without a slash command.
+- Action and mode aliases are removed: the public surface uses only exact names from
+  the catalog.
 
-### Установка и миграция
+### Installation and migration
 
-- Portable skills устанавливаются напрямую из GitHub tag с pinned executable
-  (для Codex замените `opencode` на `codex`):
+- Portable skills install directly from the GitHub tag with a pinned executable
+  (replace `opencode` with `codex` for Codex):
 
   ```shell
   npx --yes skills@1.5.23 add https://github.com/kisev/skills/tree/v2.0.0 \
     --agent opencode --skill '*' --copy --yes
   ```
 
-- Exact migration с `v1.2.0` использует migration inventory и сохраняет
-  ownership/hash evidence; renamed skills требуют ручной проверки нового имени.
-- Reconcile переводит retired exact-owned assets в private content-addressed
-  archive со статусом `archive-pending`; modified, user-owned и unknown assets
-  остаются conflicts. Archive, restore и purge в этот выпуск не входят.
+- An exact migration from `v1.2.0` uses the migration inventory and preserves
+  ownership and hash evidence; renamed skills require manual verification of the
+  new name.
+- Reconcile moves retired exact-owned assets into a private content-addressed archive
+  with `archive-pending` status; modified, user-owned, and unknown assets remain
+  conflicts. Archive, restore, and purge are not included in this release.
 
 ### OpenCode
 
-- `@kisev/skills-opencode@2.0.0` совместим с OpenCode `>=1.18.29 <1.19.0` и
-  требует Node.js 22+.
-- Portable skills и optional OpenCode integration устанавливаются независимо;
-  integration не включает skills и не изменяет `opencode.json`.
+- `@kisev/skills-opencode@2.0.0` is compatible with OpenCode `>=1.18.29 <1.19.0`
+  and requires Node.js 22+.
+- Portable skills and the optional OpenCode integration are installed independently;
+  the integration does not include skills or modify `opencode.json`.
 
-### Известные ограничения
+### Known limitations
 
-- Mattermost ещё не имеет полной parity с заявленными сценариями.
-- Runtime state и `doctor` требуют дополнительного hardening.
-- Stateful plugins остаются opt-in, scheduler и связанные wrappers
-  disabled-by-default; `ast-grep` и `rtk` требуют заранее установленные CLI.
-- Live evaluation не входит в обычный quality gate и запускается только явно в
-  доверенном окружении.
+- Mattermost does not yet have full parity with the stated scenarios.
+- Runtime state and `doctor` require further hardening.
+- Stateful plugins remain opt-in; the scheduler and related wrappers are disabled by
+  default; `ast-grep` and `rtk` require preinstalled CLIs.
+- Live evaluation is not part of the ordinary quality gate and runs only explicitly in
+  a trusted environment.
 
 ## [1.2.0] - 2026-09-07
 
-### Добавлено
+### Added
 
-- Единый versioned `work-item/v1` contract для `askme`, `task-prepare`,
-  `task-review` и `goal` с canonical schema, materialized validator и
+- A unified versioned `work-item/v1` contract for `askme`, `task-prepare`,
+  `task-review`, and `goal`, with a canonical schema, materialized validator, and
   deterministic structured reports.
-- Optional independent premortem для сложных work items с явными решениями
-  основного агента.
+- An optional independent premortem for complex work items with explicit decisions
+  by the primary agent.
 
-### Изменено
+### Changed
 
-- `goal` стал read-only portable формирователем `work-item/v1`; lifecycle и
-  auto-continuation удалены. Historical state оставлен для будущей классификации.
+- `goal` became a read-only portable `work-item/v1` generator; lifecycle and
+  auto-continuation are removed. Historical state remains for future classification.
 
 ## [1.1.1] - 2026-09-06
 
-### Изменено
+### Changed
 
-- Installer CLI по умолчанию показывает короткий человекочитаемый plan и таблицу
-  agent inventory; полный стабильный JSON доступен только с `--json`.
-- Preview печатает готовую confirm-команду и сворачивает длинные группы paths, не
-  скрывая conflicts, digest, TTL и restart flag.
+- The installer CLI now shows a concise human-readable plan and agent inventory table
+  by default; complete stable JSON is available only with `--json`.
+- Preview prints a ready-to-run confirm command and collapses long path groups without
+  hiding conflicts, digest, TTL, or the restart flag.
 
 ## [1.1.0] - 2026-09-06
 
-### Добавлено
+### Added
 
-- Прямой CLI для inventory и настройки models/variants fixed agents, явного
-  reconcile и безопасного добавления или удаления additional critics.
-- Package tool `agent_profiles` и четыре optional thin slash-команды без
-  отдельного skill.
-- Отдельные profile configuration и semantic deployment manifest с exact critic
-  pool, rendered hashes и сохранением настроек при package update.
+- A direct CLI for inventory, configuring models and variants of fixed agents, explicit
+  reconcile, and safely adding or removing additional critics.
+- The `agent_profiles` package tool and four optional thin slash commands without a
+  dedicated skill.
+- Separate profile configuration and a semantic deployment manifest with an exact
+  critic pool, rendered hashes, and preserved settings during a package update.
 
-### Изменено
+### Changed
 
-- Исправлены полные manager, critic и review contracts: fresh card/approval,
-  запрет direct worker remediation и exact allowlists без prefix wildcard.
-- Ownership fixed agents перенесён из generic installer в profile domain;
-  commands и plugins остаются под generic ownership.
-- Все installer и profile mutations используют private receipts с TTL,
-  lifecycle lock, final inventory validation и journaled all-or-rollback
-  transaction с recovery.
+- The complete manager, critic, and review contracts now require a fresh card and
+  approval, prohibit direct worker remediation, and use exact allowlists without
+  prefix wildcards.
+- Ownership of fixed agents moves from the generic installer into the profile domain;
+  commands and plugins remain under generic ownership.
+- All installer and profile mutations use private receipts with a TTL, lifecycle lock,
+  final inventory validation, and a journaled all-or-rollback transaction with recovery.
 
-### Безопасность
+### Security
 
-- Exact-name user-owned collision блокирует apply, unknown agents не изменяются,
-  а миграция `1.0.0` требует точного manifest и SHA-256 совпадения.
-- State primitives запрещают symlink targets и parents, используют private modes,
-  atomic writes и безопасный append.
+- An exact-name user-owned collision blocks apply, unknown agents are not changed, and
+  a `1.0.0` migration requires an exact manifest and SHA-256 match.
+- State primitives prohibit symlink targets and parents, use private modes and atomic
+  writes, and append safely.
 
 ## [1.0.0] - 2026-09-05
 
-### Добавлено
+### Added
 
-- Первый публичный стабильный выпуск переносимых Agent Skills.
-- Независимый npm package `@kisev/skills-opencode` с opt-in OpenCode installer,
-  agents, commands и plugin factories.
-- Документация по установке skills, подключению OpenCode, обновлению, удалению и
+- The first public stable release of portable Agent Skills.
+- The independent `@kisev/skills-opencode` npm package with an opt-in OpenCode
+  installer, agents, commands, and plugin factories.
+- Documentation for installing skills, enabling OpenCode, updating, uninstalling, and
   security boundaries.
 
-### Безопасность
+### Security
 
-- Write-capable skills и installer используют preview с явным подтверждением.
-- OpenCode installer сохраняет ownership manifest и не перезаписывает чужие либо
-  изменённые пользователем files.
-- После bootstrap v1.0.0 публикация npm package выполняется из GitHub Actions
-  через OIDC trusted publishing без long-lived publish token.
+- Write-capable skills and the installer use preview with explicit confirmation.
+- The OpenCode installer retains an ownership manifest and does not overwrite other
+  or user-modified files.
+- After the v1.0.0 bootstrap, the npm package is published from GitHub Actions through
+  OIDC trusted publishing without a long-lived publish token.

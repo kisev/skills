@@ -11,7 +11,7 @@ update, and removal lifecycle.
 - OpenCode slash-command adapters for installed portable skills and package tools.
 - Six fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`, and
   `critic`.
-- Capability routing, doctor, reconcile, and agent-profile tooling.
+- Capability routing, `doctor`, `reconcile`, and agent-profile tooling.
 - Optional `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
 
 The package does not contain, install, update, or remove portable skills.
@@ -55,4 +55,5 @@ The canonical documentation lives in `docs/`, not in the package source:
 - [Documentation index](https://github.com/kisev/skills/blob/main/docs/README.md)
 
 The complete guide covers global installation, asset selection, confirmation,
-activation, doctor, update, reconcile, agent profiles, ownership, and uninstall.
+activation, `doctor`, update, `reconcile`, agent profiles, ownership, and
+uninstall.

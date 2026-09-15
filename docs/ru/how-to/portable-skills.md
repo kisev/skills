@@ -1,110 +1,112 @@
-# Управление portable skills
+# Управление переносимыми навыками
 
 [English](../../how-to/portable-skills.md)
 
-Используйте эту инструкцию для установки, обновления, смены source, очистки или
-диагностики portable skills. Эти операции не зависят от
-`@kisev/skills-opencode`.
+Используйте эту инструкцию, чтобы устанавливать, обновлять, привязывать к новому
+источнику, очищать и диагностировать переносимые навыки. Эти операции не зависят
+от `@kisev/skills-opencode`.
 
-## Выберите scope и host
+## Выберите область и среду
 
-| Выбор           | Option                                  | Canonical location                    |
-| --------------- | --------------------------------------- | ------------------------------------- |
-| Global scope    | Добавьте `--global`                     | `~/.agents/skills`                    |
-| Project scope   | Не передавайте `--global`               | `.agents/skills`                      |
-| Только Codex    | `--agent codex`                         | Выбранный scope                       |
-| Только OpenCode | `--agent opencode`                      | Выбранный scope                       |
-| Оба host        | `--agent opencode --agent codex --copy` | Одна canonical copy в выбранном scope |
+| Выбор              | Параметр                                | Основное расположение                  |
+| ------------------ | --------------------------------------- | -------------------------------------- |
+| Глобальная область | Добавьте `--global`                     | `~/.agents/skills`                     |
+| Область проекта    | Не передавайте `--global`               | `.agents/skills`                       |
+| Только Codex       | `--agent codex`                         | Выбранная область                      |
+| Только OpenCode    | `--agent opencode`                      | Выбранная область                      |
+| Обе среды          | `--agent opencode --agent codex --copy` | Один основной экземпляр в этой области |
 
 ## Установка
 
-Установите все skills глобально для обоих host:
+Установите все навыки глобально для обеих сред:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
-Установите все skills в текущем project:
+Установите все навыки в текущем проекте:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --yes
 ```
 
-Чтобы установить один skill, замените `'*'` его точным именем из
-[каталога skills](../reference/skill-catalog.md). Посмотреть опубликованный catalog
-без записи:
+Чтобы установить один навык, замените `'*'` его точным именем из
+[каталога навыков](../reference/skill-catalog.md). Посмотреть опубликованный
+каталог без изменений на диске можно так:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --list
 ```
 
-URL GitHub Pages - поддерживаемый moving stable-release channel. Его release
-metadata указывает release и source revision, а Pages index связывает каждый
-archive с SHA-256 digest. Текущий GitHub Release доступен по адресу
-`https://github.com/kisev/skills/releases/latest`. Authored repository намеренно
-не является install source.
+URL GitHub Pages - поддерживаемый обновляемый канал стабильных выпусков. Его
+метаданные указывают выпуск и ревизию исходников, а индекс Pages связывает каждый
+архив с контрольной суммой SHA-256. Текущий GitHub Release доступен по адресу
+`https://github.com/kisev/skills/releases/latest`. Исходный репозиторий намеренно
+не используется для установки.
 
 ## Обновление
 
-Обновите отслеживаемые global skills, установленные из Pages:
+Обновите отслеживаемые навыки, глобально установленные из Pages:
 
 ```shell
 npx --yes skills@latest update --global --yes
 ```
 
-Для project scope не передавайте `--global`. Installation, созданная из Git
-repository или tag, остаётся привязанной к этому source. Повторите подходящую
-команду `add` с URL Pages, тем же scope и теми же agents, чтобы сменить source.
+Для области проекта не передавайте `--global`. Установка из репозитория Git или
+тега остаётся привязанной к этому источнику. Чтобы сменить источник, повторите
+подходящую команду `add` с URL Pages, той же областью и теми же агентами.
 
-`update` обновляет отслеживаемые skills, но не удаляет имена, переименованные или
-удалённые upstream. У OpenCode package assets отдельный update lifecycle,
+`update` обновляет отслеживаемые навыки, но не удаляет имена, переименованные или
+удалённые в источнике. У компонентов пакета OpenCode отдельный цикл обновления,
 описанный в [инструкции по интеграции
 OpenCode](opencode-integration.md#обновление).
 
-## Удаление retired names
+## Удаление устаревших имён
 
-Текущий [инвентарь миграции](../migration-inventory.md) определяет восемь retired
-names. Для global installation, общей для OpenCode и Codex, удалите их явно:
+Текущий [инвентарь миграции](../migration-inventory.md) определяет девять
+устаревших имён. Для глобальной установки, общей для OpenCode и Codex, удалите их
+явно:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent opencode --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary --agent opencode --agent codex --global --yes
 ```
 
 Только для Codex используйте:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary --agent codex --global --yes
 ```
 
-Используйте те же agents и scope, что при installation. Для project scope не
-передавайте `--global`. Не применяйте `remove --all`, если не хотите удалить
-каждый portable skill в этом scope.
+Используйте те же агенты и область, что при установке. Для области проекта не
+передавайте `--global`. Не применяйте `remove --all`, если не хотите удалить все
+переносимые навыки в этой области.
 
-Не используйте package install или reconcile для обновления или удаления
-portable skills. Package reconcile управляет только package-owned assets и
-сохраняет conflicts, worktrees и runtime state.
+Не используйте установку пакета или `reconcile` для обновления или удаления
+переносимых навыков. `reconcile` управляет только принадлежащими пакету
+компонентами и сохраняет конфликты, рабочие деревья и состояние выполнения.
 
-## Диагностика обнаружения
+## Устранение проблем с обнаружением
 
-Посмотрите установленные global skills:
+Посмотрите навыки, установленные глобально:
 
 ```shell
 npx --yes skills@latest list --global
 ```
 
-Для project scope не передавайте `--global`. Если новый установленный skill не
-виден, проверьте `~/.agents/skills` или `.agents/skills` и перезапустите host.
-После переименования skill в новом выпуске повторите `add` для additions и явно
-удалите retired names.
+Для области проекта не передавайте `--global`. Если новый установленный навык не
+виден, проверьте `~/.agents/skills` или `.agents/skills` и перезапустите среду.
+После переименования навыка в новом выпуске повторите `add`, чтобы добавить новые
+имена, и явно удалите устаревшие.
 
 ## Границы
 
-- Portable skills автономны и после установки не зависят от repository или
-  OpenCode npm package.
-- Поддерживаемая distribution - `https://kisev.github.io/skills`; source
-  provenance записан в её release metadata и доступен через
+- Переносимые навыки автономны и после установки не зависят от репозитория или
+  npm-пакета OpenCode.
+- Поддерживаемый дистрибутив находится по адресу
+  `https://kisev.github.io/skills`; сведения о происхождении исходников записаны
+  в его метаданных выпуска и доступны через
   `https://github.com/kisev/skills/releases/latest`.
-- Stable portable installer - `npx --yes skills@latest`.
-- Updates не удаляют retired names автоматически.
-- Skills не заменяют repository policy, review, secret scanning или access
-  control.
+- Стабильный установщик переносимых навыков - `npx --yes skills@latest`.
+- Обновления не удаляют устаревшие имена автоматически.
+- Навыки не заменяют правила репозитория, проверку кода, поиск секретов и
+  управление доступом.

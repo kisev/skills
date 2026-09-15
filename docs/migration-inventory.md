@@ -28,7 +28,7 @@ byte-for-byte.
 
 ## Portable Cleanup Records
 
-The current migration inventory has exactly these eight portable records. It
+The current migration inventory names exactly these nine retired portable skills. It
 does not contain a portable `multi-run` record.
 
 | Retired name     | Current replacement                                                                              |
@@ -41,6 +41,7 @@ does not contain a portable `multi-run` record.
 | `skill-improver` | `skill-improve`                                                                                  |
 | `walkthrough`    | `code-explain`                                                                                   |
 | `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
+| `summary`        | `briefing`                                                                                       |
 
 The `skills` CLI `update` operation does not prune renamed or deleted skills.
 Cleanup removes these exact names explicitly with stable `skills@latest` and the

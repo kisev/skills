@@ -1,33 +1,36 @@
-# Политика безопасности
+# Security Policy
 
-## Сообщение об уязвимости
+[Русский](SECURITY.ru.md)
 
-Не публикуйте потенциальную уязвимость, credentials или proof of concept в
-Issues, Discussions или pull request. Откройте private security advisory через
-раздел Security репозитория и укажите затронутую версию, условия воспроизведения,
-ожидаемое и фактическое поведение, а также возможное влияние. Если GitHub не
-предлагает private reporting, не раскрывайте детали публично: сначала запросите
-закрытый канал у сопровождающего через профиль владельца репозитория.
+## Reporting a Vulnerability
 
-Не включайте в сообщение реальные tokens, пароли, MFA-коды, персональные данные
-или данные production-систем. Используйте отозванные либо синтетические значения.
+Do not post a potential vulnerability, credentials, or proof of concept in
+Issues, Discussions, or a pull request. Open a private security advisory from
+the repository's Security tab and include the affected version, reproduction
+conditions, expected and actual behavior, and possible impact. If GitHub does
+not offer private reporting, do not disclose details publicly. First request a
+private channel from a maintainer through the repository owner's profile.
 
-## Границы проекта
+Do not include real tokens, passwords, MFA codes, personal data, or production
+system data. Use revoked or synthetic values.
 
-- Portable skills не должны читать файлы за собственным корнем после установки.
-- Python runners используют только standard library и не устанавливают зависимости.
-- Write-capable flows требуют preview и подтверждение; OpenCode installer принимает
-  только digest ранее показанного плана.
-- Installer не меняет `opencode.json`, не имеет npm lifecycle hooks и не
-  перезаписывает unmanaged или изменённые пользователем files.
-- Stateful plugins выключены по умолчанию. Внешняя аутентификация остаётся в
-  user-owned конфигурации и никогда не должна передаваться через prompt, argv или
-  логи.
+## Project Boundaries
 
-## Поддерживаемые версии
+- Portable skill assets must not depend on files outside their installed skill
+  root.
+- Python runners use only the standard library and install no dependencies.
+- Write-capable flows require a preview and confirmation; the OpenCode installer
+  accepts only the digest of a previously shown plan.
+- The installer does not modify `opencode.json`, has no npm lifecycle hooks, and
+  does not overwrite unmanaged or user-modified files.
+- Optional plugin wrappers are unselected by default. External authentication
+  remains in user-owned configuration and must never pass through a prompt,
+  `argv`, or logs.
 
-Поддерживается последняя опубликованная stable-версия portable skills и npm
-package. Stable Pages index продвигается только новым release tag и связывает
-каждый content-addressed archive с SHA-256 digest; mismatch завершается без
-установки. Исправления безопасности выпускаются новой patch-версией;
-существующие tags и опубликованные archive bytes не переписываются.
+## Supported Versions
+
+The latest published stable releases of the portable skills and npm package are
+supported. The stable GitHub Pages index advances only on a new release tag and
+binds each content-addressed archive to a SHA-256 digest; a mismatch aborts
+without installation. Security fixes are published as a new patch release;
+existing tags and published archive contents are not rewritten.

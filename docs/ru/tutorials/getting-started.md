@@ -1,17 +1,18 @@
-# Начало работы с portable skills
+# Начало работы с переносимыми навыками
 
 [English](../../tutorials/getting-started.md)
 
-Этот tutorial устанавливает текущую stable distribution portable skills для
-Codex и OpenCode. Одна canonical global copy будет доступна обоим host.
+В этом учебном руководстве вы установите текущий стабильный дистрибутив
+переносимых навыков для Codex и OpenCode. Будет создан один основной глобальный
+экземпляр, доступный обеим средам.
 
 ## Перед началом
 
-Нужен Codex, OpenCode или оба host, а также окружение с доступным `npx`. Команда
-использует stable channel installer и читает поддерживаемую distribution GitHub
-Pages, а не authored repository.
+Нужны Codex, OpenCode или обе среды, а также окружение с доступным `npx`. Команда
+использует стабильный канал установщика и получает поддерживаемый дистрибутив из
+GitHub Pages, а не из исходного репозитория.
 
-## 1. Установите skills
+## 1. Установите навыки
 
 Запустите:
 
@@ -19,11 +20,12 @@ Pages, а не authored repository.
 npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
 ```
 
-Команда устанавливает текущую stable distribution в `~/.agents/skills`.
-`--copy` сохраняет одну canonical copy для обоих выбранных host. Установленную
-distribution идентифицируют release metadata и archive digests.
+Команда устанавливает текущий стабильный дистрибутив в `~/.agents/skills`.
+`--copy` сохраняет один основной экземпляр для обеих выбранных сред. Метаданные
+выпуска и контрольные суммы архивов позволяют определить установленный
+дистрибутив.
 
-Если вы используете только один host, оставьте только его agent option:
+Если вы используете только одну среду, оставьте только её параметр `--agent`:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --agent codex --skill '*' --copy --global --yes
@@ -37,23 +39,24 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --sk
 
 ## 2. Проверьте установку
 
-Выведите список установленных global skills:
+Выведите список навыков, установленных глобально:
 
 ```shell
 npx --yes skills@latest list --global
 ```
 
-Если выбранный host работал во время установки, перезапустите его. После этого
-установленные skills должны быть доступны из `~/.agents/skills`.
+Если выбранная среда работала во время установки, перезапустите её. После этого
+установленные навыки должны быть доступны из `~/.agents/skills`.
 
 ## 3. Решите, нужен ли вам skills-opencode
 
-Portable skills уже работают в OpenCode. Устанавливайте
-`@kisev/skills-opencode`, только если также нужны OpenCode-specific commands,
-fixed agents, routing tools, диагностика или optional plugin wrappers. У package
-отдельный lifecycle, и он не устанавливает portable skills.
+Переносимые навыки уже работают в OpenCode. Устанавливайте
+`@kisev/skills-opencode`, только если также нужны специальные команды OpenCode,
+агенты с фиксированными ролями, средства маршрутизации, диагностика или
+необязательные обёртки плагинов. У пакета отдельный жизненный цикл, и переносимые
+навыки он не устанавливает.
 
-Для этого optional layer следуйте [инструкции по интеграции
-OpenCode](../how-to/opencode-integration.md). Для project-scoped installation,
-обновления или очистки используйте [how-to по portable
-skills](../how-to/portable-skills.md).
+Для этого дополнительного слоя следуйте [инструкции по интеграции
+OpenCode](../how-to/opencode-integration.md). Для установки в проект, обновления
+или очистки используйте [руководство по переносимым
+навыкам](../how-to/portable-skills.md).

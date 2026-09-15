@@ -16,6 +16,30 @@ def test_locale_manifest_validates_english_default_pairs() -> None:
     assert check_locales.validate() >= 26
 
 
+def test_changelog_has_separate_english_and_russian_versions() -> None:
+    english = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    russian = (ROOT / "CHANGELOG.ru.md").read_text(encoding="utf-8")
+
+    assert english.startswith("# Changelog\n")
+    assert russian.startswith("# История изменений\n")
+    assert "[Русская версия](CHANGELOG.ru.md)" in english
+    assert "[English version](CHANGELOG.md)" in russian
+    assert "[Keep a Changelog](https://keepachangelog.com/en/1.1.0/)" in english
+    assert "[Semantic Versioning](https://semver.org/)" in english
+    assert "### Добавлено" not in english
+    assert "### Added" not in russian
+
+
+def test_security_policy_has_separate_english_and_russian_versions() -> None:
+    english = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+    russian = (ROOT / "SECURITY.ru.md").read_text(encoding="utf-8")
+
+    assert english.startswith("# Security Policy\n")
+    assert russian.startswith("# Политика безопасности\n")
+    assert "[Русский](SECURITY.ru.md)" in english
+    assert "[English](SECURITY.md)" in russian
+
+
 def test_project_spec_russian_templates_match_all_default_templates() -> None:
     templates = ROOT / "skills/spec-manage/templates"
     default_templates = [path for path in templates.rglob("*.md") if "/ru/" not in path.as_posix()]
@@ -42,11 +66,19 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
     for document in (english_root, russian_root):
         assert "skills-opencode" in document
         assert "docs/" in document
-    for document in (english_index, russian_index):
-        assert all(
-            heading in document
-            for heading in ("## Tutorials", "## How-to", "## Reference", "## Explanation")
+    assert all(
+        heading in english_index
+        for heading in ("## Tutorials", "## How-to Guides", "## Reference", "## Explanation")
+    )
+    assert all(
+        heading in russian_index
+        for heading in (
+            "## Учебные материалы",
+            "## Практические руководства",
+            "## Справочник",
+            "## Объяснение",
         )
+    )
 
 
 def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
@@ -106,6 +138,28 @@ def test_current_user_documentation_uses_stable_cli_channels() -> None:
         assert "npx --yes skills@latest" in path.read_text(encoding="utf-8"), path
 
 
+def test_portable_cleanup_docs_cover_every_retired_skill_name() -> None:
+    inventory = json.loads(
+        (ROOT / "packages/opencode/assets/migration-inventory.json").read_text(encoding="utf-8")
+    )
+    retired = {
+        *inventory["removed"],
+        *inventory["renamed"],
+        *inventory["replacements"],
+    }
+    assert len(retired) == 9
+
+    for relative in (
+        "docs/migration-inventory.md",
+        "docs/ru/migration-inventory.md",
+        "docs/how-to/portable-skills.md",
+        "docs/ru/how-to/portable-skills.md",
+    ):
+        text = (ROOT / relative).read_text(encoding="utf-8")
+        for name in retired:
+            assert name in text, f"{relative} omits retired skill {name}"
+
+
 def test_locale_checker_rejects_duplicate_neutral_path(tmp_path: Path) -> None:
     (tmp_path / "shared").mkdir()
     (tmp_path / "shared/locale-manifest.json").write_text(
@@ -154,6 +208,26 @@ def test_locale_checker_rejects_language_link_with_wrong_target(tmp_path: Path) 
         encoding="utf-8",
     )
     with pytest.raises(check_locales.LocaleError, match="reciprocal language link"):
+        check_locales.validate(tmp_path)
+
+
+def test_locale_checker_rejects_different_markdown_blocks(tmp_path: Path) -> None:
+    (tmp_path / "shared").mkdir()
+    (tmp_path / "en.md").write_text(
+        "# English\n\n[Русский](ru.md)\n\n- First.\n- Second.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "ru.md").write_text(
+        "# Русский\n\n[English](en.md)\n\nОдин абзац.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "shared/locale-manifest.json").write_text(
+        json.dumps(
+            {"version": 1, "pairs": [{"en": "en.md", "ru": "ru.md"}], "patterns": [], "neutral": []}
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(check_locales.LocaleError, match="block structure"):
         check_locales.validate(tmp_path)
 
 

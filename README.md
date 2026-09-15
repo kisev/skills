@@ -37,7 +37,7 @@ updates, cleanup, and troubleshooting, or browse the
 
 - slash-command adapters for installed skills and package tools;
 - six fixed agent roles and profile management;
-- capability routing, installation, reconcile, and doctor tooling;
+- capability routing, installation, `reconcile`, and `doctor` tooling;
 - opt-in `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
 
 Install the package persistently in the npm project that owns the integration,
@@ -66,6 +66,9 @@ mise install
 task check
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for source boundaries and focused checks.
-Security reporting is in [SECURITY.md](SECURITY.md), release history in
-[CHANGELOG.md](CHANGELOG.md), and licensing in [LICENSE](LICENSE).
+Further information:
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) - source boundaries and focused checks.
+- [SECURITY.md](SECURITY.md) - vulnerability reporting.
+- [CHANGELOG.md](CHANGELOG.md) - release history.
+- [LICENSE](LICENSE) - license terms.

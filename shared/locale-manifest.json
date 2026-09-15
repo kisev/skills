@@ -2,7 +2,9 @@
   "version": 1,
   "pairs": [
     { "en": "README.md", "ru": "README.ru.md" },
+    { "en": "CHANGELOG.md", "ru": "CHANGELOG.ru.md" },
     { "en": "CONTRIBUTING.md", "ru": "CONTRIBUTING.ru.md" },
+    { "en": "SECURITY.md", "ru": "SECURITY.ru.md" },
     { "en": "docs/README.md", "ru": "docs/ru/README.md" },
     {
       "en": "docs/tutorials/getting-started.md",
@@ -38,5 +40,5 @@
       "language_link_exception": "Template pairs are embedded source material and do not publish standalone language navigation."
     }
   ],
-  "neutral": ["CHANGELOG.md", "LICENSE", "SECURITY.md"]
+  "neutral": ["LICENSE"]
 }
