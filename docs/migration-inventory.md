@@ -5,9 +5,9 @@
 ## Current Release
 
 The current portable source is the GitHub Pages stable channel at
-`https://kisev.github.io/skills`. Its release metadata identifies `2.2.2` and
-the commit tagged `v2.2.2`. The optional integration package is
-`@kisev/skills-opencode@2.2.2`.
+`https://kisev.github.io/skills`. Its release metadata identifies `2.2.3` and
+the commit tagged `v2.2.3`. The optional integration package is
+`@kisev/skills-opencode@2.2.3`.
 
 ## Active Portable Skills
 

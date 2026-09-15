@@ -34,7 +34,7 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
     release = json.loads((OUTPUT / "index.json").read_text(encoding="utf-8"))
     inventory = json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())
     assert index["$schema"] == "https://schemas.agentskills.io/discovery/0.2.0/schema.json"
-    assert release["version"] == "2.2.2"
+    assert release["version"] == "2.2.3"
     assert (
         release["source_revision"]
         == run(

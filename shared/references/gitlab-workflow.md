@@ -24,6 +24,8 @@ Finalize returns `stale` after changed facts. Release `ready` requires complete
 evidence, exact range/head SHA, and closed SemVer, compatibility, migration,
 rollback, and CI gates. v1 can be read/finalize but not migrated or overwritten.
 
-A publication artifact is a machine-readable envelope plus local Markdown. It
-never performs or suggests `publish`, `resolve`, `approve`, `merge`, or `push`.
-stdout has a compact summary, artifact path, digest, and `external_mutations=false`.
+A publication artifact is a machine-readable envelope plus local Markdown. A
+profile may include immutable body files and exact manual commands after an
+explicit freshness preflight, but the runner never executes `publish`, `resolve`,
+`approve`, `merge`, or `push` and exposes no apply subcommand. stdout has a compact
+summary, artifact path, digest, and `external_mutations=false`.

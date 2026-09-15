@@ -527,6 +527,83 @@ def thread_decisions_are_valid(value: object) -> bool:
     )
 
 
+def metadata_assessment_item_is_valid(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"status", "rationale", "recommendation"}
+        and value.get("status") in {"ok", "needs_change", "unverified"}
+        and nonempty_string(value.get("rationale"))
+        and (value.get("recommendation") is None or nonempty_string(value.get("recommendation")))
+    )
+
+
+def mr_metadata_assessment_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {"observed", "assessment"}:
+        return False
+    observed, assessment = value["observed"], value["assessment"]
+    fields = {"title", "description", "labels", "workflow_state"}
+    assessment_fields = fields | {"overall"}
+    return (
+        isinstance(observed, dict)
+        and set(observed) == fields
+        and isinstance(observed.get("title"), str)
+        and (observed.get("description") is None or isinstance(observed.get("description"), str))
+        and isinstance(observed.get("labels"), list)
+        and all(isinstance(item, str) for item in observed["labels"])
+        and nonempty_string(observed.get("workflow_state"))
+        and isinstance(assessment, dict)
+        and set(assessment) == assessment_fields
+        and all(metadata_assessment_item_is_valid(assessment[field]) for field in assessment_fields)
+    )
+
+
+def review_publication_preview_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {
+        "mr_state",
+        "warning",
+        "preflight_command",
+        "body_files",
+        "commands",
+    }:
+        return False
+    body_files, commands = value["body_files"], value["commands"]
+    if (
+        not all(
+            nonempty_string(value.get(key)) for key in ("mr_state", "warning", "preflight_command")
+        )
+        or not isinstance(body_files, list)
+        or not isinstance(commands, list)
+    ):
+        return False
+    if not all(
+        isinstance(item, dict)
+        and set(item) == {"finding_id", "path", "sha256", "content"}
+        and nonempty_string(item.get("finding_id"))
+        and nonempty_string(item.get("path"))
+        and Path(item["path"]).is_absolute()
+        and is_digest(item.get("sha256"))
+        and nonempty_string(item.get("content"))
+        and hashlib.sha256(item["content"].encode()).hexdigest() == item["sha256"]
+        for item in body_files
+    ):
+        return False
+    if not all(
+        isinstance(item, dict)
+        and set(item) == {"finding_id", "command"}
+        and nonempty_string(item.get("finding_id"))
+        and nonempty_string(item.get("command"))
+        for item in commands
+    ):
+        return False
+    body_ids = [item["finding_id"] for item in cast(list[dict[str, Any]], body_files)]
+    command_ids = [item["finding_id"] for item in cast(list[dict[str, Any]], commands)]
+    return (
+        len(body_ids) == len(set(body_ids))
+        and len(command_ids) == len(set(command_ids))
+        and body_ids == command_ids
+    )
+
+
 def semantic_token(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
@@ -1181,9 +1258,12 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "thread_decisions",
             "markdown",
         }
-        exact_keys(payload, required, "review plan payload")
+        extended = {"semver_rationale", "mr_metadata_assessment", "publication_preview"}
+        actual_keys = set(payload)
+        extended_contract = actual_keys == (required | extended)
         if (
-            payload["profile"] != "code-review"
+            (actual_keys != required and not extended_contract)
+            or payload["profile"] != "code-review"
             or payload["external_mutations"] is not False
             or not all(
                 is_digest(payload[key])
@@ -1204,6 +1284,17 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not detailed_findings_are_valid(payload["findings"])
             or not thread_decisions_are_valid(payload["thread_decisions"])
             or not isinstance(payload["markdown"], str)
+            or (
+                extended_contract
+                and (
+                    payload["semver_impact"] == "unknown"
+                    or not nonempty_string(payload["semver_rationale"])
+                    or not mr_metadata_assessment_is_valid(payload["mr_metadata_assessment"])
+                    or not review_publication_preview_is_valid(payload["publication_preview"])
+                    or [item["finding_id"] for item in payload["publication_preview"]["body_files"]]
+                    != [item["id"] for item in payload["findings"]]
+                )
+            )
         ):
             raise WorkflowError("review plan payload is schema-invalid")
     elif kind in {"analysis_report", "critic_receipt"}:

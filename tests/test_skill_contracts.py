@@ -199,6 +199,20 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
         assert required.search(workflow), name
 
 
+def test_code_review_requires_plain_paths_metadata_semver_and_manual_commands() -> None:
+    workflow = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
+    for marker in (
+        "complete absolute filesystem paths",
+        "never as Markdown links",
+        "semver_rationale",
+        "mr_metadata_assessment",
+        "regardless of whether the MR is open, closed, or merged",
+        "glab api --method POST",
+        "Do not add an apply subcommand or execute publication commands",
+    ):
+        assert marker in workflow
+
+
 def test_stage_16_shared_contracts_cover_completeness_ownership_and_risk_boundaries() -> None:
     interaction = (ROOT / "shared/references/interaction-contract.md").read_text(encoding="utf-8")
     language = (ROOT / "shared/references/language-policy.md").read_text(encoding="utf-8")

@@ -19,7 +19,7 @@ not contain or install portable skills.
 
 ## Global Quick Start
 
-Install the current stable `v2.2.2` portable distribution for both hosts:
+Install the current stable `v2.2.3` portable distribution for both hosts:
 
 ```shell
 npx --yes skills@1.5.23 add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
@@ -60,7 +60,7 @@ with the pinned `npx --yes skills@1.5.23` command above.
 
 The supported portable source is the GitHub Pages stable channel at
 `https://kisev.github.io/skills`. At this release its metadata identifies
-version `2.2.2` and the commit tagged `v2.2.2`. List the catalog without writing:
+version `2.2.3` and the commit tagged `v2.2.3`. List the catalog without writing:
 
 ```shell
 npx --yes skills@1.5.23 add https://kisev.github.io/skills --list
@@ -219,10 +219,10 @@ injects canonical files from `shared/references/` only in `.build/skills`. See
 
 ## Reference and Limits
 
-- Stable portable distribution: `https://kisev.github.io/skills` (`2.2.2`).
-- Source provenance: `https://github.com/kisev/skills/tree/v2.2.2`.
+- Stable portable distribution: `https://kisev.github.io/skills` (`2.2.3`).
+- Source provenance: `https://github.com/kisev/skills/tree/v2.2.3`.
 - Portable installer: `npx --yes skills@1.5.23`.
-- OpenCode integration: `@kisev/skills-opencode@2.2.2`, Node.js 22+, OpenCode
+- OpenCode integration: `@kisev/skills-opencode@2.2.3`, Node.js 22+, OpenCode
   `>=1.18.29 <1.19.0`.
 - Portable runners use Python 3.12+ standard library only when a runner is needed.
 - `ast-grep` and `rtk` require their external CLI; skills do not install them.

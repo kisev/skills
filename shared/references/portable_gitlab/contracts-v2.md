@@ -24,6 +24,10 @@ delta. Concrete label names are catalog results, never policy constants.
 New code-review findings record severity, risk, exact evidence, consequence,
 relation to the reviewed change, and a minimum fix. Legacy ID-only findings
 remain readable for existing v2 artifacts but cannot create a new review plan.
+New review plans also contain an evidence-derived MR metadata assessment, a
+closed SemVer impact with rationale, and one immutable body plus an unexecuted
+manual publication command for every finding. MR state is recorded but does not
+suppress commands for merged or closed MRs.
 
 `finalize_report` contains exact evidence digest and fingerprint. MR preparation
 also binds it to the exact publication plan digest. The plan has a private,

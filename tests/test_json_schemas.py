@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -74,6 +75,8 @@ def artifact_instances() -> list[dict[str, Any]]:
         "relation_to_change": "The schema is part of the maintained contract.",
         "minimum_fix": "Keep the producer and schema aligned.",
     }
+    body_content = "Finding body\n"
+    body_digest = hashlib.sha256(body_content.encode()).hexdigest()
     gate = {"status": "passed", "evidence": ["task check"], "range": identity()}
     evidence = envelope(
         "evidence_snapshot",
@@ -220,6 +223,42 @@ def artifact_instances() -> list[dict[str, Any]]:
             "summary": "The concrete contract example is valid.",
             "architecture_assessment": "The existing ownership boundary is preserved.",
             "semver_impact": "patch",
+            "semver_rationale": "The fix changes behavior without changing the public API.",
+            "mr_metadata_assessment": {
+                "observed": {
+                    "title": "Fix schema drift",
+                    "description": "Align the producer and schema.",
+                    "labels": ["type::bug"],
+                    "workflow_state": "merged",
+                },
+                "assessment": {
+                    field: {
+                        "status": "ok",
+                        "rationale": f"The {field} metadata is sufficient.",
+                        "recommendation": None,
+                    }
+                    for field in ("title", "description", "labels", "workflow_state", "overall")
+                },
+            },
+            "publication_preview": {
+                "mr_state": "merged",
+                "warning": "Commands are prepared but were not executed.",
+                "preflight_command": "glab api --method GET projects/1/merge_requests/1",
+                "body_files": [
+                    {
+                        "finding_id": "finding-1",
+                        "path": "/tmp/portable-artifacts/finding-1.md",
+                        "sha256": body_digest,
+                        "content": body_content,
+                    }
+                ],
+                "commands": [
+                    {
+                        "finding_id": "finding-1",
+                        "command": "glab api --method POST projects/1/merge_requests/1/notes",
+                    }
+                ],
+            },
             "checks": ["task check"],
             "findings": [finding],
             "thread_decisions": [],

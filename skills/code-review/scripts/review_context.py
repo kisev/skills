@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import shlex
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -363,12 +364,139 @@ def markdown_cell(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def metadata_assessment(evidence: dict[str, Any], assessment: object) -> dict[str, Any]:
+    object_value = evidence.get("object")
+    if not isinstance(object_value, dict):
+        raise portable.WorkflowError("MR metadata is unavailable")
+    title = object_value.get("title")
+    description = object_value.get("description")
+    labels = object_value.get("labels")
+    state = object_value.get("state")
+    if (
+        not isinstance(title, str)
+        or description is not None
+        and not isinstance(description, str)
+        or not isinstance(labels, list)
+        or not all(isinstance(item, str) for item in labels)
+        or not portable.nonempty_string(state)
+    ):
+        raise portable.WorkflowError("MR title, description, labels, or workflow state is invalid")
+    result = {
+        "observed": {
+            "title": title,
+            "description": description,
+            "labels": labels,
+            "workflow_state": state,
+        },
+        "assessment": assessment,
+    }
+    if not portable.mr_metadata_assessment_is_valid(result):
+        raise portable.WorkflowError("MR metadata assessment is invalid")
+    return result
+
+
+def finding_body(finding: dict[str, Any]) -> str:
+    return (
+        "\n".join(
+            [
+                f"### {finding['severity'].title()}: {finding['summary']}",
+                "",
+                f"- Finding ID: `{finding['id']}`",
+                f"- Risk: {finding['risk']}",
+                "- Evidence:",
+                *[f"  - {value}" for value in finding["evidence"]],
+                f"- Consequence: {finding['consequence']}",
+                f"- Relation to change: {finding['relation_to_change']}",
+                f"- Minimum fix: {finding['minimum_fix']}",
+            ]
+        )
+        + "\n"
+    )
+
+
+def publication_preview(
+    evidence: dict[str, Any], root: Path, findings: list[dict[str, Any]]
+) -> dict[str, Any]:
+    project = evidence.get("project")
+    target = evidence.get("target")
+    object_value = evidence.get("object")
+    head_sha = evidence.get("head_sha")
+    if (
+        not isinstance(project, dict)
+        or not isinstance(project.get("id"), int)
+        or not portable.nonempty_string(project.get("hostname"))
+        or not isinstance(target, dict)
+        or not isinstance(target.get("iid"), int)
+        or not isinstance(object_value, dict)
+        or not portable.nonempty_string(object_value.get("state"))
+        or not portable.is_sha(head_sha)
+    ):
+        raise portable.WorkflowError("MR identity is incomplete for publication preview")
+    hostname = cast(str, project["hostname"])
+    state = cast(str, object_value["state"])
+    endpoint = f"projects/{project['id']}/merge_requests/{target['iid']}"
+    endpoint_argument = shlex.quote(endpoint)
+    preflight = (
+        f"glab api --hostname {shlex.quote(hostname)} --method GET {endpoint_argument} "
+        f"| jq -e --arg expected_state {shlex.quote(state)} --arg expected_head {shlex.quote(cast(str, head_sha))} "
+        + shlex.quote(".state == $expected_state and .diff_refs.head_sha == $expected_head")
+    )
+    body_directory = portable.private_directory(root / "artifacts" / "review_plan" / "bodies")
+    body_files: list[dict[str, str]] = []
+    commands: list[dict[str, str]] = []
+    for finding in findings:
+        body = finding_body(finding)
+        body_digest = hashlib.sha256(body.encode()).hexdigest()
+        identity_digest = hashlib.sha256(finding["id"].encode()).hexdigest()[:12]
+        body_path, actual_digest = portable.write_companion(
+            body_directory / f"{identity_digest}-{body_digest}.md", body
+        )
+        body_files.append(
+            {
+                "finding_id": finding["id"],
+                "path": str(body_path),
+                "sha256": actual_digest,
+                "content": body,
+            }
+        )
+        commands.append(
+            {
+                "finding_id": finding["id"],
+                "command": (
+                    f"{preflight} && "
+                    f"printf '%s  %s\\n' {shlex.quote(actual_digest)} {shlex.quote(str(body_path))} "
+                    "| sha256sum --check --status && "
+                    f"glab api --hostname {shlex.quote(hostname)} --method POST "
+                    f"{shlex.quote(f'{endpoint}/notes')} "
+                    f"-F {shlex.quote(f'body=@{body_path}')}"
+                ),
+            }
+        )
+    result = {
+        "mr_state": state,
+        "warning": (
+            f"Commands are prepared for manual execution for an MR in state {state}; "
+            "they were not executed by code-review."
+        ),
+        "preflight_command": preflight,
+        "body_files": body_files,
+        "commands": commands,
+    }
+    if not portable.review_publication_preview_is_valid(result):
+        raise portable.WorkflowError("review publication preview is invalid")
+    return result
+
+
 def review_markdown(
     evidence: dict[str, Any],
     context: dict[str, Any],
     decision: dict[str, Any],
     content: dict[str, Any],
+    metadata: dict[str, Any],
+    publication: dict[str, Any],
 ) -> str:
+    observed = cast(dict[str, Any], metadata["observed"])
+    assessment = cast(dict[str, dict[str, Any]], metadata["assessment"])
     lines = [
         "# Verified code review",
         "",
@@ -384,6 +512,32 @@ def review_markdown(
         "## Summary",
         "",
         content["summary"],
+        "",
+        "## MR metadata assessment",
+        "",
+        f"- Current title: {observed['title']}",
+        f"- Current labels: {markdown_cell(observed['labels'])}",
+        f"- Current workflow state: `{observed['workflow_state']}`",
+        "",
+        "### Current description",
+        "",
+        portable.marked_preview("CURRENT MR DESCRIPTION", observed["description"] or ""),
+        "",
+        "| Field | Status | Rationale | Recommendation |",
+        "|---|---|---|---|",
+        *[
+            "| "
+            + " | ".join(
+                [
+                    field,
+                    markdown_cell(assessment[field]["status"]),
+                    markdown_cell(assessment[field]["rationale"]),
+                    markdown_cell(assessment[field]["recommendation"] or "none"),
+                ]
+            )
+            + " |"
+            for field in ("title", "description", "labels", "workflow_state", "overall")
+        ],
         "",
         "## Findings",
         "",
@@ -453,11 +607,48 @@ def review_markdown(
             "",
             f"`{content['semver_impact']}`",
             "",
+            content["semver_rationale"],
+            "",
             "## Checks",
             "",
             *[f"- {value}" for value in content["checks"]],
+            "",
+            "## Manual publication preview",
+            "",
+            f"- MR state: `{publication['mr_state']}`",
+            f"- Warning: {publication['warning']}",
+            "",
+            "### Preflight",
+            "",
+            "```shell",
+            publication["preflight_command"],
+            "```",
         ]
     )
+    body_by_id = {
+        item["finding_id"]: item for item in cast(list[dict[str, str]], publication["body_files"])
+    }
+    commands = cast(list[dict[str, str]], publication["commands"])
+    if not commands:
+        lines.extend(["", "No findings require publication commands."])
+    for item in commands:
+        body = body_by_id[item["finding_id"]]
+        lines.extend(
+            [
+                "",
+                f"### Finding {item['finding_id']}",
+                "",
+                f"- Body path: `{body['path']}`",
+                f"- Body SHA-256: `{body['sha256']}`",
+                "",
+                portable.marked_preview(f"FINDING {item['finding_id']} BODY", body["content"]),
+                "",
+                "```shell",
+                f"# Publish finding {item['finding_id']} after the preflight succeeds.",
+                item["command"],
+                "```",
+            ]
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -496,6 +687,8 @@ def scaffold_review(
             "summary",
             "architecture_assessment",
             "semver_impact",
+            "semver_rationale",
+            "mr_metadata_assessment",
             "checks",
             "findings",
             "thread_decisions",
@@ -505,8 +698,8 @@ def scaffold_review(
     if (
         not portable.nonempty_string(content["summary"])
         or not portable.nonempty_string(content["architecture_assessment"])
-        or content["semver_impact"]
-        not in {"major", "minor", "patch", "none", "not_applicable", "unknown"}
+        or content["semver_impact"] not in {"major", "minor", "patch", "none", "not_applicable"}
+        or not portable.nonempty_string(content["semver_rationale"])
         or not isinstance(content["checks"], list)
         or not all(portable.nonempty_string(value) for value in content["checks"])
         or not portable.detailed_findings_are_valid(content["findings"])
@@ -515,6 +708,9 @@ def scaffold_review(
         raise portable.WorkflowError("review plan content is invalid")
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings = cast(list[dict[str, Any]], content["findings"])
+    finding_ids = [finding["id"] for finding in findings]
+    if len(finding_ids) != len(set(finding_ids)):
+        raise portable.WorkflowError("review finding IDs must be unique")
     if findings != sorted(findings, key=lambda item: severity_order[item["severity"]]):
         raise portable.WorkflowError("review findings must be ordered by severity")
     if decision.get("findings") != findings:
@@ -543,7 +739,9 @@ def scaffold_review(
         item["outcome"] == "local_fix" for item in thread_decisions
     ):
         raise portable.WorkflowError("reviewer thread decisions cannot promise local fixes")
-    markdown = review_markdown(evidence, context, decision, content)
+    metadata = metadata_assessment(evidence, content["mr_metadata_assessment"])
+    publication = publication_preview(evidence, root, findings)
+    markdown = review_markdown(evidence, context, decision, content, metadata, publication)
     payload = {
         "profile": "code-review",
         "external_mutations": False,
@@ -558,6 +756,9 @@ def scaffold_review(
         "summary": content["summary"],
         "architecture_assessment": content["architecture_assessment"],
         "semver_impact": content["semver_impact"],
+        "semver_rationale": content["semver_rationale"],
+        "mr_metadata_assessment": metadata,
+        "publication_preview": publication,
         "checks": content["checks"],
         "findings": findings,
         "thread_decisions": thread_decisions,
@@ -577,5 +778,7 @@ def scaffold_review(
         "digest": plan_digest,
         "markdown_path": str(markdown_path),
         "markdown_digest": markdown_digest,
+        "publication_body_paths": [item["path"] for item in publication["body_files"]],
+        "publication_commands": [item["command"] for item in publication["commands"]],
         "external_mutations": False,
     }

@@ -173,6 +173,78 @@
       },
       "additionalProperties": false
     },
+    "metadata_assessment_item": {
+      "type": "object",
+      "required": ["status", "rationale", "recommendation"],
+      "properties": {
+        "status": { "enum": ["ok", "needs_change", "unverified"] },
+        "rationale": { "type": "string", "minLength": 1 },
+        "recommendation": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+      },
+      "additionalProperties": false
+    },
+    "mr_metadata_assessment": {
+      "type": "object",
+      "required": ["observed", "assessment"],
+      "properties": {
+        "observed": {
+          "type": "object",
+          "required": ["title", "description", "labels", "workflow_state"],
+          "properties": {
+            "title": { "type": "string" },
+            "description": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+            "labels": { "type": "array", "items": { "type": "string" } },
+            "workflow_state": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "assessment": {
+          "type": "object",
+          "required": ["title", "description", "labels", "workflow_state", "overall"],
+          "properties": {
+            "title": { "$ref": "#/$defs/metadata_assessment_item" },
+            "description": { "$ref": "#/$defs/metadata_assessment_item" },
+            "labels": { "$ref": "#/$defs/metadata_assessment_item" },
+            "workflow_state": { "$ref": "#/$defs/metadata_assessment_item" },
+            "overall": { "$ref": "#/$defs/metadata_assessment_item" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "publication_body": {
+      "type": "object",
+      "required": ["finding_id", "path", "sha256", "content"],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/digest" },
+        "content": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "publication_command": {
+      "type": "object",
+      "required": ["finding_id", "command"],
+      "properties": {
+        "finding_id": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "review_publication_preview": {
+      "type": "object",
+      "required": ["mr_state", "warning", "preflight_command", "body_files", "commands"],
+      "properties": {
+        "mr_state": { "type": "string", "minLength": 1 },
+        "warning": { "type": "string", "minLength": 1 },
+        "preflight_command": { "type": "string", "minLength": 1 },
+        "body_files": { "type": "array", "items": { "$ref": "#/$defs/publication_body" } },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/publication_command" } }
+      },
+      "additionalProperties": false
+    },
     "response": {
       "type": "object",
       "required": ["id", "decision", "reason"],
@@ -581,6 +653,9 @@
                 "semver_impact": {
                   "enum": ["major", "minor", "patch", "none", "not_applicable", "unknown"]
                 },
+                "semver_rationale": { "type": "string", "minLength": 1 },
+                "mr_metadata_assessment": { "$ref": "#/$defs/mr_metadata_assessment" },
+                "publication_preview": { "$ref": "#/$defs/review_publication_preview" },
                 "checks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
                 "thread_decisions": {
