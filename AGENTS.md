@@ -46,8 +46,8 @@
 - Run `mise install` from the repository root before making changes.
 - Treat `taskfile.yml` as the only task graph; workflows and hooks must call its public tasks instead of duplicating tool commands.
 - Add focused contract or regression tests for observable behavior.
-- Run `task format` after maintained-source formatting changes and `task check` before submitting a change.
-- Run `task dependency:audit` when dependency metadata changes and before pushing through Lefthook.
+- Run `task format` after maintained-source formatting changes; run `task check` before a non-push handoff, while Lefthook `pre-push` owns complete local verification for pushes.
+- Treat `task pre-push` as the single local push gate: it runs `task check` and `task dependency:audit` concurrently; do not run either immediately before a push unless diagnosing a failure.
 - Preserve agentskills.io frontmatter constraints and keep every built skill self-contained.
 - Keep Python runners shipped in portable skills compatible with Python 3.12+ and standard-library-only.
 - Validate every committed `*.schema.json` with a concrete valid instance and add it to the exhaustive mapping in `tests/test_json_schemas.py`.
@@ -57,4 +57,4 @@
 - Update `specs/` and `specs/traceability.json` for material behavior, compatibility, or security-boundary changes.
 - For engineering-only commits with no specification impact, add `Spec-Impact: none - <reason>` to the commit message.
 - Never rewrite published tags or package versions; use a new patch version for release-only corrections.
-- Keep the portable version manifest, OpenCode package and lockfile, catalog, changelog heading, annotated `vX.Y.Z` tag, Pages distribution, npm artifact, and GitHub Release on one commit; `.github/workflows/publish.yml` owns preflight, publication, verification, and release creation.
+- Keep the portable version manifest, OpenCode package and lockfile, catalog, changelog heading, annotated `vX.Y.Z` tag, Pages distribution, npm artifact, and GitHub Release on one commit; after confirmation, atomically push the release branch and tag without a duplicate local `task release:prepare`, because `.github/workflows/publish.yml` owns exact preflight, publication, verification, and release creation.

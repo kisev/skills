@@ -2,8 +2,9 @@
 ---
 pre-commit:
   commands:
-    task:
+    staged-checks:
       run: task pre-commit
+      fail_text: "Fast staged checks failed; the complete gate still runs at pre-push"
 
 commit-msg:
   commands:
@@ -13,5 +14,6 @@ commit-msg:
 
 pre-push:
   commands:
-    task:
+    single-local-gate:
       run: task pre-push
+      fail_text: "The single complete local push gate failed"

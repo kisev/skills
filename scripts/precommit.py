@@ -231,7 +231,7 @@ def run(files: Sequence[str], *, deleted_files: Sequence[str] = (), dry_run: boo
             ["uv", "run", "--locked", "pytest", "tests/test_skill_contracts.py"],
         )
     if all_groups["package"]:
-        runner.call("package", ["task", "package:check"])
+        runner.call("package", ["task", "package:quick-check"])
     if any(path in {"pyproject.toml", "uv.lock"} for path in all_files):
         runner.call("python:lock", ["uv", "lock", "--check"])
     if any(path.endswith(".toml") for path in all_groups["toolchain"]):

@@ -222,15 +222,20 @@ tasks:
       - uv run --locked python scripts/build_skills.py --check
       - uv run --locked python scripts/check_locales.py --built .build/skills
 
-  package:check:
-    desc: Verify the complete OpenCode package lifecycle and tarball
-    deps: [build:skills]
+  package:quick-check:
+    desc: Run fast non-mutating OpenCode package checks for staged changes
+    deps: [package:install]
     dir: packages/opencode
     cmds:
-      - npm ci
       - npm run format:check
       - npm run lint
       - npm run typecheck
+
+  package:check:
+    desc: Verify the complete OpenCode package lifecycle and tarball
+    deps: [build:skills, package:quick-check]
+    dir: packages/opencode
+    cmds:
       - npm run generate-assets:check
       - npm test
       - npm run smoke
@@ -300,10 +305,8 @@ tasks:
       - uv run --locked python scripts/precommit.py
 
   pre-push:
-    desc: Run the complete quality gate before push
-    cmds:
-      - task: check
-      - task: dependency:audit
+    desc: Run the single complete local gate before push
+    deps: [check, dependency:audit]
 
   package:format:
     internal: true

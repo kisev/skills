@@ -35,6 +35,7 @@ PUBLIC_TASKS = {
     "locale:check",
     "skills:validate",
     "package:check",
+    "package:quick-check",
     "dependency:audit",
     "eval:live",
     "ci:portable",
@@ -151,6 +152,20 @@ def test_precommit_skips_package_for_docs_only_change() -> None:
     assert groups["package"] == []
     assert groups["python"] == []
     assert groups["workflow"] == []
+
+
+def test_precommit_uses_the_quick_package_gate(capsys: pytest.CaptureFixture[str]) -> None:
+    result = _load_precommit().run(["packages/opencode/src/index.ts"], dry_run=True)
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "task package:quick-check" in output
+    assert "task package:check" not in output
+
+
+def test_prepush_parallelizes_the_complete_gate_and_dependency_audit() -> None:
+    taskfile = (ROOT / "taskfile.yml").read_text(encoding="utf-8")
+    assert "deps: [build:skills, package:quick-check]" in taskfile
+    assert "deps: [check, dependency:audit]" in taskfile
 
 
 def test_precommit_matches_root_level_and_nested_files() -> None:
