@@ -6,6 +6,23 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
+## [3.1.0] - 2026-09-16
+
+### Added
+
+- Code review prepares one validated fix artifact for every actionable finding,
+  thread correction, and author-local fix: an exact GitLab suggestion when the
+  diff position supports it, or a content-addressed unified patch otherwise.
+- Publication plans show fix mode, operation, position, patch digest, full diff,
+  and manual `git apply --check` and `git apply` commands.
+
+### Changed
+
+- The publication helper reports bounded redacted request diagnostics and
+  distinguishes definitive GitLab rejection from uncertain mutation outcomes.
+- Structured contract-2 plans remain executable, while older baselines fall back
+  to a full review before producing contract-3 fix artifacts.
+
 ## [3.0.0] - 2026-09-16
 
 ### Added
