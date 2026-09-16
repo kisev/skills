@@ -6,6 +6,15 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
+## [3.1.1] - 2026-09-16
+
+### Release
+
+- Republishes the 3.1.0 code-review fix artifacts and diagnostics under a new
+  immutable tag because npm recorded 3.1.0 without a downloadable tarball.
+- Runtime, schemas, documentation, and compatibility behavior are unchanged from
+  3.1.0; release verification now tolerates bounded registry propagation delay.
+
 ## [3.1.0] - 2026-09-16
 
 ### Added
