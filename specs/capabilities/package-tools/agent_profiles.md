@@ -10,7 +10,8 @@ Trigger for profile management; near-miss: direct config editing.
 
 ## Inputs/Outputs
 
-Input is action, scope, profile values, and confirmation digest; output is inventory/plan/result.
+Input is action, optional scope defaulting to project, profile values, and
+confirmation digest; output is inventory/plan/result.
 
 ## Workflow Stages
 

@@ -48,7 +48,16 @@ export type FileMutation =
       mode: number;
       expected: FileExpectation;
     }
-  | { path: string; root?: string; operation: "remove"; expected: FileExpectation };
+  | { path: string; root?: string; operation: "remove"; expected: FileExpectation }
+  | {
+      path: string;
+      root?: string;
+      operation: "external-write";
+      content: Buffer;
+      mode: number;
+      expected: FileExpectation;
+    }
+  | { path: string; root?: string; operation: "external-remove"; expected: FileExpectation };
 
 type JournalSnapshot = { path: string; root: string; content: string | null; mode: number | null };
 type Journal = {
@@ -57,7 +66,7 @@ type Journal = {
   operations: Array<{
     path: string;
     root?: string;
-    operation: "write" | "remove";
+    operation: "write" | "remove" | "external-write" | "external-remove";
     content?: string;
     mode?: number;
     expected: FileExpectation;
@@ -66,6 +75,7 @@ type Journal = {
   created_directories: Array<{ path: string; device: number; inode: number }>;
   published: number;
   applying: number | null;
+  external_started?: boolean;
 };
 
 type Receipt = {
@@ -195,8 +205,15 @@ async function ensureDirectory(path: string, mode: number): Promise<string[]> {
         throw new LifecycleError("unsafe_path", `Unsafe directory: ${current}`);
       continue;
     }
-    await mkdir(current, { mode });
-    created.push(current);
+    try {
+      await mkdir(current, { mode });
+      created.push(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const raced = await lstat(current);
+      if (!raced.isDirectory() || raced.isSymbolicLink())
+        throw new LifecycleError("unsafe_path", `Unsafe directory: ${current}`);
+    }
   }
   return created;
 }
@@ -252,7 +269,8 @@ export function archiveRoot(scope: Scope, cwd = process.cwd(), home = homedir())
     process.env.XDG_DATA_HOME && home === homedir()
       ? resolve(process.env.XDG_DATA_HOME)
       : resolve(home, ".local", "share");
-  return join(base, "opencode", "skills-opencode", "archive", scope);
+  const suffix = scope === "global" ? "global" : join("project", sha256(resolve(cwd)));
+  return join(base, "opencode", "skills-opencode", "archive", suffix);
 }
 
 async function processAlive(pid: number): Promise<boolean> {
@@ -632,11 +650,19 @@ async function restore(root: string, journal: Journal): Promise<void> {
       item.content === null ? undefined : sha256(Buffer.from(item.content, "base64"));
     const beforeMode = item.mode ?? undefined;
     const intendedHash =
-      operation.operation === "write" && operation.content
+      (operation.operation === "write" || operation.operation === "external-write") &&
+      operation.content
         ? sha256(Buffer.from(operation.content, "base64"))
         : undefined;
-    const intendedMode = operation.operation === "write" ? operation.mode : undefined;
-    const touched = index < journal.published || index === journal.applying;
+    const intendedMode =
+      operation.operation === "write" || operation.operation === "external-write"
+        ? operation.mode
+        : undefined;
+    const external =
+      operation.operation === "external-write" || operation.operation === "external-remove";
+    const touched = external
+      ? journal.external_started === true
+      : index < journal.published || index === journal.applying;
     if (!touched) {
       if (currentHash !== beforeHash || currentMode !== beforeMode) conflicts.push(item.path);
       continue;
@@ -677,7 +703,7 @@ async function restore(root: string, journal: Journal): Promise<void> {
     );
 }
 
-function parseJournal(raw: Buffer, expectedRoot: string): Journal {
+function parseJournal(raw: Buffer, expectedRoot: string, allowedRoots: readonly string[]): Journal {
   let value: unknown;
   try {
     value = JSON.parse(raw.toString("utf8"));
@@ -685,6 +711,7 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
     throw new LifecycleError("invalid_journal", "Transaction journal is not valid JSON");
   }
   const journal = value as Partial<Journal>;
+  const roots = new Set([expectedRoot, ...allowedRoots].map((value) => resolve(value)));
   if (
     journal.schema_version !== 1 ||
     journal.root !== expectedRoot ||
@@ -696,6 +723,7 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
     !Number.isSafeInteger(journal.published) ||
     journal.published < 0 ||
     journal.published > journal.operations.length ||
+    (journal.external_started !== undefined && typeof journal.external_started !== "boolean") ||
     (journal.applying !== null &&
       (typeof journal.applying !== "number" ||
         !Number.isSafeInteger(journal.applying) ||
@@ -707,8 +735,8 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
   }
   for (const item of journal.snapshots) {
     assertSafeRelative(item.path);
-    if (item.root !== undefined && !isAbsolute(item.root))
-      throw new LifecycleError("invalid_journal", "Transaction snapshot root must be absolute");
+    if (item.root !== undefined && (!isAbsolute(item.root) || !roots.has(resolve(item.root))))
+      throw new LifecycleError("invalid_journal", "Transaction snapshot root is not allowed");
   }
   for (const item of journal.snapshots) {
     if (
@@ -728,15 +756,20 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
   }
   for (const item of journal.operations) {
     assertSafeRelative(item.path);
-    if (item.root !== undefined && !isAbsolute(item.root))
-      throw new LifecycleError("invalid_journal", "Transaction operation root must be absolute");
-    if (item.operation !== "write" && item.operation !== "remove")
+    if (item.root !== undefined && (!isAbsolute(item.root) || !roots.has(resolve(item.root))))
+      throw new LifecycleError("invalid_journal", "Transaction operation root is not allowed");
+    if (
+      item.operation !== "write" &&
+      item.operation !== "remove" &&
+      item.operation !== "external-write" &&
+      item.operation !== "external-remove"
+    )
       throw new LifecycleError(
         "invalid_journal",
         "Transaction journal contains an invalid operation",
       );
     if (
-      item.operation === "write" &&
+      (item.operation === "write" || item.operation === "external-write") &&
       (typeof item.content !== "string" ||
         !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(item.content) ||
         typeof item.mode !== "number" ||
@@ -749,15 +782,25 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
         "Transaction journal contains invalid write content",
       );
   }
+  for (let index = 0; index < journal.operations.length; index += 1) {
+    const operation = journal.operations[index];
+    const snapshot = journal.snapshots[index];
+    if (
+      operation.path !== snapshot.path ||
+      resolve(operation.root ?? expectedRoot) !== resolve(snapshot.root ?? expectedRoot)
+    )
+      throw new LifecycleError(
+        "invalid_journal",
+        "Transaction journal operation and snapshot targets differ",
+      );
+  }
   if (
     !journal.created_directories.every(
       (item) =>
         item &&
         typeof item.path === "string" &&
         (inside(resolve(expectedRoot), resolve(item.path)) ||
-          (journal.operations ?? []).some(
-            (operation) => operation.root && inside(resolve(operation.root), resolve(item.path)),
-          )) &&
+          [...roots].some((root) => inside(root, resolve(item.path)))) &&
         Number.isSafeInteger(item.device) &&
         item.device >= 0 &&
         Number.isSafeInteger(item.inode) &&
@@ -775,10 +818,14 @@ function parseJournal(raw: Buffer, expectedRoot: string): Journal {
   } as Journal;
 }
 
-export async function recoverTransaction(root: string, stateRoot: string): Promise<boolean> {
+export async function recoverTransaction(
+  root: string,
+  stateRoot: string,
+  allowedRoots: readonly string[] = [],
+): Promise<boolean> {
   const raw = await readRegular(journalPath(stateRoot));
   if (!raw) return false;
-  const journal = parseJournal(raw, resolve(root));
+  const journal = parseJournal(raw, resolve(root), allowedRoots);
   await restore(root, journal);
   await unlink(journalPath(stateRoot));
   return true;
@@ -787,6 +834,7 @@ export async function recoverTransaction(root: string, stateRoot: string): Promi
 export type TransactionOptions = {
   beforePublish?: (index: number) => void;
   afterPublish?: (published: number) => "continue" | "fail" | "interrupt";
+  applyExternal?: () => Promise<void>;
   validateFinal?: () => Promise<void>;
 };
 
@@ -841,21 +889,31 @@ export async function applyTransaction(
       "recovery_required",
       "An interrupted transaction must be recovered before apply",
     );
+  const ordered = [
+    ...mutations.filter(
+      (mutation) =>
+        mutation.operation !== "external-write" && mutation.operation !== "external-remove",
+    ),
+    ...mutations.filter(
+      (mutation) =>
+        mutation.operation === "external-write" || mutation.operation === "external-remove",
+    ),
+  ];
   const unique = new Set<string>();
-  for (const mutation of mutations) {
+  for (const mutation of ordered) {
     assertSafeRelative(mutation.path);
-    const key = `${mutationRoot(root, mutation)}:${mutation.path}`;
+    const key = destination(mutationRoot(root, mutation), mutation.path);
     if (unique.has(key))
       throw new LifecycleError("invalid_plan", `Duplicate transaction target: ${mutation.path}`);
     unique.add(key);
     await validateExpectation(root, mutation);
   }
-  const snapshots = await Promise.all(mutations.map((mutation) => snapshot(root, mutation)));
+  const snapshots = await Promise.all(ordered.map((mutation) => snapshot(root, mutation)));
   const journal: Journal = {
     schema_version: 1,
     root: resolve(root),
-    operations: mutations.map((mutation) =>
-      mutation.operation === "write"
+    operations: ordered.map((mutation) =>
+      mutation.operation === "write" || mutation.operation === "external-write"
         ? {
             path: mutation.path,
             ...(mutation.root ? { root: resolve(mutation.root) } : {}),
@@ -875,10 +933,16 @@ export async function applyTransaction(
     created_directories: [],
     published: 0,
     applying: null,
+    external_started: false,
   };
   await writeJournal(stateRoot, journal);
   try {
-    for (const mutation of mutations) {
+    const native = ordered.filter(
+      (mutation) =>
+        mutation.operation !== "external-write" && mutation.operation !== "external-remove",
+    );
+    const external = ordered.slice(native.length);
+    for (const mutation of native) {
       journal.applying = journal.published;
       await writeJournal(stateRoot, journal);
       options.beforePublish?.(journal.published);
@@ -898,12 +962,19 @@ export async function applyTransaction(
       if (injected === "fail")
         throw new LifecycleError("test_failure", "Injected transaction failure");
     }
-    for (const mutation of mutations) {
+    if (external.length) {
+      for (const mutation of external) await validateExpectation(root, mutation);
+      journal.external_started = true;
+      await writeJournal(stateRoot, journal);
+      await options.applyExternal?.();
+    }
+    for (const mutation of ordered) {
       const target = destination(mutationRoot(root, mutation), mutation.path);
       const current = await readRegular(target);
       if (
-        (mutation.operation === "remove" && current) ||
-        (mutation.operation === "write" &&
+        ((mutation.operation === "remove" || mutation.operation === "external-remove") &&
+          current) ||
+        ((mutation.operation === "write" || mutation.operation === "external-write") &&
           (!current ||
             !current.equals(mutation.content) ||
             ((await stat(target)).mode & 0o777) !== mutation.mode))

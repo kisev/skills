@@ -203,7 +203,7 @@ test("CLI help is structured and explains commands options workflow and scope", 
   assert.match(help.stdout, /^  agent configure\s{2,}Choose an agent model interactively/m);
   assert.match(help.stdout, /^  critic remove\s{2,}Remove a package-managed additional critic/m);
   for (const option of [
-    "--scope <project|global>",
+    "--global",
     "--dry-run",
     "--confirm <digest>",
     "--commands <list|none>",
@@ -211,11 +211,15 @@ test("CLI help is structured and explains commands options workflow and scope", 
   ]) {
     assert.ok(help.stdout.includes(option), option);
   }
-  assert.match(help.stdout, /^  project\s{2,}Targets \.opencode under the current directory/m);
-  assert.match(help.stdout, /^  global\s{2,}Targets ~\/\.config\/opencode/m);
   assert.match(
     help.stdout,
-    new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --scope global --dry-run`),
+    /^  default\s{2,}Targets \.opencode under the current directory; run from the project root/m,
+  );
+  assert.match(help.stdout, /^  --global\s{2,}Targets ~\/\.config\/opencode/m);
+  assert.doesNotMatch(help.stdout, /--scope/);
+  assert.match(
+    help.stdout,
+    new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --global --dry-run`),
   );
   assert.ok(
     help.stdout.includes(
@@ -223,6 +227,48 @@ test("CLI help is structured and explains commands options workflow and scope", 
     ),
   );
   assert.doesNotMatch(help.stdout, /Commands: install, uninstall/);
+});
+
+test("CLI rejects removed scope syntax and irrelevant command options", () => {
+  for (const arguments_ of [
+    ["doctor", "--scope", "project"],
+    ["doctor", "--scope", "project", "--help"],
+    ["doctor", "--scope=project", "--version"],
+    ["doctor", "--global", "--global"],
+    ["doctor", "--global", "--global", "--help"],
+    ["doctor", "--dry-run"],
+    ["doctor", "--dry-run", "--help"],
+    ["capabilities", "--global"],
+    ["capabilities", "--global", "--help"],
+    ["capabilities", "--dry-run"],
+    ["capabilities", "--dry-run", "--version"],
+    ["capabilities", "unexpected"],
+    ["reconcile", "--model", "x/y"],
+    ["uninstall", "--commands", "none"],
+    ["agent", "list", "--dry-run"],
+    ["agent", "configure", "manager", "--commands", "none"],
+    ["agent", "model-set", "manager", "--commands", "none"],
+    ["agent", "reconcile", "--model", "x/y"],
+    ["critic", "add", "security", "--clear-variant"],
+    ["critic", "remove", "security", "--model", "x/y"],
+    ["agent", "nonsense", "--version"],
+    ["unknown", "--help"],
+  ]) {
+    const result = spawnSync(
+      process.execPath,
+      [join(PACKAGE, "dist", "cli.js"), ...arguments_, "--json"],
+      { encoding: "utf8" },
+    );
+    assert.equal(result.status, 2, `${arguments_.join(" ")}\n${result.stdout}\n${result.stderr}`);
+    assert.equal(JSON.parse(result.stdout).error.code, "invalid_input");
+  }
+  const capabilities = spawnSync(
+    process.execPath,
+    [join(PACKAGE, "dist", "cli.js"), "capabilities", "--json"],
+    { encoding: "utf8" },
+  );
+  assert.equal(capabilities.status, 0, capabilities.stderr);
+  assert.equal(JSON.parse(capabilities.stdout).status, "ok");
 });
 
 test("CLI exposes contextual help for every command and group", () => {
@@ -313,15 +359,7 @@ test("non-TTY install requires explicit complete selection and creates no receip
   try {
     const result = spawnSync(
       process.execPath,
-      [
-        join(PACKAGE, "dist", "cli.js"),
-        "install",
-        "--scope",
-        "project",
-        "--commands",
-        "agents-md",
-        "--json",
-      ],
+      [join(PACKAGE, "dist", "cli.js"), "install", "--commands", "agents-md", "--json"],
       {
         cwd: project,
         env: { ...process.env, HOME: home, XDG_STATE_HOME: join(home, ".state") },

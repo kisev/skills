@@ -13,8 +13,10 @@
 | Portable Agent Skills    | 29 автономных сценариев для разработки, документации, выпуска и командной работы                                        | Стабильный CLI `skills@latest` устанавливает их в `~/.agents/skills` или `.agents/skills`               |
 | `@kisev/skills-opencode` | Команды OpenCode, агенты с фиксированными ролями, средства маршрутизации, диагностика и необязательные обёртки плагинов | Устанавливается как зависимость npm; управляемые файлы находятся в `~/.config/opencode` или `.opencode` |
 
-Переносимые навыки не требуют npm-пакета. Сам npm-пакет не содержит, не
-устанавливает, не обновляет и не удаляет переносимые навыки.
+Переносимые навыки не требуют npm-пакета. Пакет не содержит, не устанавливает и
+не обновляет их; после подтверждения `reconcile` может напрямую вызвать
+закреплённую версию `skills` и удалить помеченный устаревший навык из OpenCode и
+Codex.
 
 ## Переносимые навыки
 
@@ -46,7 +48,7 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --ag
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Это только начало обязательной последовательности действий. Выполните точную

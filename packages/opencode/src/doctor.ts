@@ -437,7 +437,6 @@ function reconcileProjection(plan: ReconcilePlan): {
     "current",
     "renamed",
     "retired",
-    "archive-pending",
     "modified_managed",
     "user_owned",
     "unknown",

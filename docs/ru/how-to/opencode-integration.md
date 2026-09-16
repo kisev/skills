@@ -31,7 +31,7 @@
 ```shell
 cd /path/to/project
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Пакет остаётся в каталоге `node_modules` проекта, а подтверждённые компоненты
@@ -53,7 +53,7 @@ npm install --save-exact @kisev/skills-opencode
 установки запускайте команды CLI для глобальной области из любого каталога:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --scope global --dry-run
+npx --yes @kisev/skills-opencode@latest install --global --dry-run
 ```
 
 ## Выбор компонентов
@@ -72,7 +72,7 @@ Skill command adapters - это слеш-команды OpenCode, которые
 три команды, все агенты с фиксированными ролями и ни одна обёртка:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --scope project \
+npx --yes @kisev/skills-opencode@latest install \
   --commands doctor,reconcile,agent-profiles \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
@@ -117,16 +117,16 @@ npx --yes @kisev/skills-opencode@latest capabilities --json
 нужно разрешить вручную.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Обязательная последовательность для OpenCode: постоянная установка через npm,
 `install --dry-run`, точная команда подтверждения из предварительного просмотра,
 добавление пакета в пользовательский массив `plugin` и перезапуск OpenCode.
 Постоянный npm-проект в `~/.config/opencode` сохраняет доступность глобального
-плагина; стабильные команды npx с `--scope global` можно запускать из любого
-каталога. Перед каждым `reconcile` установите или обновите пакет и примените план
-установщика.
+плагина. Команды с областью по умолчанию работают с текущим каталогом; добавьте
+`--global` один раз для глобального состояния. Удалённый параметр `--scope` не
+поддерживается. Перед каждым `reconcile` обновите пакет и примените план установщика.
 
 Предварительный просмотр содержит детерминированный `plan_digest` и уникальный
 `confirmation_digest`. Новый запуск с `--dry-run` в той же области отменяет любой
@@ -144,8 +144,8 @@ npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 восстановление по журналам и не запуская плагины или LSP-серверы:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest doctor --scope project
-npx --yes @kisev/skills-opencode@latest doctor --scope project --json
+npx --yes @kisev/skills-opencode@latest doctor
+npx --yes @kisev/skills-opencode@latest doctor --json
 ```
 
 Отчёт содержит версии, принадлежность, отклонения, коллизии, количество архивов,
@@ -164,7 +164,7 @@ npx --yes @kisev/skills-opencode@latest doctor --scope project --json
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Используйте полную команду подтверждения из предварительного просмотра.
@@ -180,23 +180,27 @@ npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
 плагины, агенты и метаданные установки в одной области:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest reconcile --scope project --dry-run
-npx --yes @kisev/skills-opencode@latest reconcile --scope project --confirm <digest>
-npx --yes @kisev/skills-opencode@latest reconcile --scope global --dry-run --json
+npx --yes @kisev/skills-opencode@latest reconcile --dry-run
+npx --yes @kisev/skills-opencode@latest reconcile --confirm <digest>
+npx --yes @kisev/skills-opencode@latest reconcile --global --dry-run --json
 ```
 
-Перед `reconcile` сначала обновите пакет в принадлежащем ему npm-проекте и
-примените точный план установщика. `reconcile` не устанавливает, не обновляет и не
-удаляет переносимые навыки; для них используйте только стабильную команду
-`npx --yes skills@latest` с `https://kisev.github.io/skills`.
+Перед `reconcile` обновите пакет и переносимые навыки через принадлежащие им
+установщики. `reconcile` не устанавливает и не обновляет переносимые навыки. Он
+может удалить устаревший навык только при точном маркере проекта
+`metadata.source: "https://kisev.github.io/skills"` в `SKILL.md`.
 
-После подтверждения `reconcile` помещает устаревшие компоненты с точно
-установленной принадлежностью в XDG-архив с ограниченным доступом и адресацией по содержимому и
-удаляет их развёрнутые копии. Элементы со статусами `modified`, `user-owned`,
-`unknown`, `symlink`, `unsafe` или `ambiguous` остаются без изменений и
-отображаются как `findings` или `conflicts`. Рабочие деревья и состояние
-выполнения сохраняются. Архив можно просматривать через `doctor`; команд
-`restore` или `purge` нет.
+После подтверждения `reconcile` сохраняет текущие байты в закрытом XDG-архиве с
+адресацией по содержимому. Компоненты пакета удаляются транзакционно. Для
+помеченных переносимых навыков точная версия `skills`, указанная в пакете,
+напрямую удаляет копии OpenCode и Codex. Журнал восстанавливает файлы и lock-state,
+связанные с preview; защита незапланированных конкурентных изменений остаётся
+best-effort. Навыки без маркера, пользовательские и
+неизвестные элементы, а также симлинки и небезопасные пути остаются без изменений.
+Пустой план не выдаёт digest подтверждения. Рабочие деревья и runtime state
+сохраняются. Архив можно просматривать через `doctor`; команд `restore` и `purge`
+нет. Для ручной очистки навыков без маркера используйте
+`npx --yes skills@latest remove`.
 
 ## Управление агентами
 
@@ -204,11 +208,11 @@ CLI напрямую управляет моделями агентов с фи�
 критиками без обращения к LLM:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest agent list --scope global
-npx --yes @kisev/skills-opencode@latest agent configure manager --scope global --dry-run
-npx --yes @kisev/skills-opencode@latest agent model-set worker --scope global --model openai/gpt-5 --variant high --dry-run
-npx --yes @kisev/skills-opencode@latest critic add security --scope global --model anthropic/claude-sonnet-4-6 --dry-run
-npx --yes @kisev/skills-opencode@latest agent reconcile --scope global --dry-run
+npx --yes @kisev/skills-opencode@latest agent list --global
+npx --yes @kisev/skills-opencode@latest agent configure manager --global --dry-run
+npx --yes @kisev/skills-opencode@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
+npx --yes @kisev/skills-opencode@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
+npx --yes @kisev/skills-opencode@latest agent reconcile --global --dry-run
 ```
 
 Фиксированные роли сохраняют имена, инструкции и разрешения; меняются только
@@ -226,13 +230,13 @@ npx --yes @kisev/skills-opencode@latest agent reconcile --scope global --dry-run
 4. Перезапустите OpenCode.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest uninstall --scope project --dry-run
-npx --yes @kisev/skills-opencode@latest uninstall --scope project --confirm <digest>
+npx --yes @kisev/skills-opencode@latest uninstall --dry-run
+npx --yes @kisev/skills-opencode@latest uninstall --confirm <digest>
 npm uninstall @kisev/skills-opencode
 ```
 
 Для глобальной области запустите стабильную команду npx из любого каталога с
-`--scope global`, затем удалите зависимость из постоянного npm-проекта в
+`--global`, затем удалите зависимость из постоянного npm-проекта в
 `~/.config/opencode`. `uninstall` архивирует компоненты, чья принадлежность точно
 подтверждена манифестом, и сохраняет изменённые файлы как конфликты вместе с
 рабочими деревьями, состоянием выполнения и сохранённой конфигурацией профилей.

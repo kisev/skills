@@ -3,6 +3,7 @@ import { CATALOG } from "./catalog.js";
 import type { Plan as InstallerPlan } from "./installer.js";
 import type { ReconcilePlan } from "./reconcile.js";
 import type { DoctorReport } from "./doctor.js";
+import type { Scope } from "./lifecycle.js";
 
 type DisplayPlan = InstallerPlan | AgentProfilePlan;
 type DisplayOperation = DisplayPlan["operations"][number];
@@ -192,11 +193,19 @@ export function renderInventory(inventory: AgentInventory): string {
 }
 
 export function shellCommand(arguments_: readonly string[]): string {
-  return ["npx", "--yes", `@kisev/skills-opencode@${CATALOG.version}`, ...arguments_]
+  return commandLine(["npx", "--yes", `@kisev/skills-opencode@${CATALOG.version}`, ...arguments_]);
+}
+
+function commandLine(arguments_: readonly string[]): string {
+  return arguments_
     .map((value) =>
       /^[A-Za-z0-9_./:@=-]+$/.test(value) ? value : `'${value.replaceAll("'", `'"'"'`)}'`,
     )
     .join(" ");
+}
+
+export function scopeArguments(scope: Scope): [] | ["--global"] {
+  return scope === "global" ? ["--global"] : [];
 }
 
 export function renderReconcile(
@@ -216,12 +225,45 @@ export function renderReconcile(
     `  unknown: ${plan.unknown.length}`,
     `  conflicts: ${plan.conflicts.length}`,
     `  diagnostic-state-only: ${plan.diagnostic_state_only.length}`,
+    `  operations: ${plan.operations.length}`,
   ];
   if (plan.retired.length)
     lines.push(
       "",
       "Retired:",
       ...plan.retired.slice(0, 20).map((entry) => `  ${terminalSafe(entry.path)}`),
+    );
+  if (plan.renamed.length)
+    lines.push(
+      "",
+      "Renamed:",
+      ...plan.renamed.map(
+        (entry) =>
+          `  ${terminalSafe(entry.path)} -> ${terminalSafe(entry.replacement ?? "unknown")}`,
+      ),
+    );
+  if (plan.unknown.length)
+    lines.push(
+      "",
+      "Unknown (preserved):",
+      ...plan.unknown.map(
+        (entry) => `  ${terminalSafe(entry.path)} (${terminalSafe(entry.reason)})`,
+      ),
+    );
+  if (plan.operations.length)
+    lines.push(
+      "",
+      "Operations:",
+      ...plan.operations.map(
+        (entry) =>
+          `  ${entry.operation}: ${terminalSafe(entry.path)}${entry.via ? ` via ${entry.via}` : ""}`,
+      ),
+    );
+  if (plan.portable_cleanup)
+    lines.push(
+      "",
+      "Direct portable cleanup after confirmation:",
+      `  ${commandLine(plan.portable_cleanup.command)}`,
     );
   if (plan.conflicts.length)
     lines.push(
@@ -245,11 +287,13 @@ export function renderReconcile(
       lines.push("", "Blocked:");
       if (plan.modified_managed.length)
         lines.push(
-          `  Update managed assets first: ${shellCommand(["install", "--scope", plan.scope, "--dry-run"])}`,
+          `  Update managed assets first: ${shellCommand(["install", ...scopeArguments(plan.scope), "--dry-run"])}`,
           "  Apply the exact confirmation command from that installer preview, then build a new reconcile preview.",
         );
       if (plan.conflicts.length)
         lines.push("  Manually resolve every ownership conflict listed above before reconciling.");
+    } else if (!plan.confirmable) {
+      lines.push("", "No reconciliation changes are required.");
     } else if (options.confirmationCommand) {
       if (plan.superseded_plan)
         lines.push(
@@ -279,10 +323,10 @@ export function renderDoctor(report: DoctorReport): string {
   );
   const next = new Set(actionable.flatMap((item) => item.remediation ?? []));
   if (report.conflicts.length) {
-    next.add(shellCommand(["reconcile", "--scope", report.scope, "--dry-run"]));
+    next.add(shellCommand(["reconcile", ...scopeArguments(report.scope), "--dry-run"]));
   }
   if (actionable.some((item) => item.id.startsWith("assets."))) {
-    next.add(shellCommand(["install", "--scope", report.scope, "--dry-run"]));
+    next.add(shellCommand(["install", ...scopeArguments(report.scope), "--dry-run"]));
   }
   const lines = [
     `Doctor TLDR: ${report.status} (${report.scope})`,

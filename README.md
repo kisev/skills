@@ -13,8 +13,9 @@ one on its own or install both for the complete OpenCode experience.
 | Portable Agent Skills    | 29 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills`     |
 | `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
-Portable skills do not require the npm package. The npm package does not contain,
-install, update, or remove portable skills.
+Portable skills do not require the npm package. The package does not contain,
+install, or update them; confirmed reconcile can invoke the pinned `skills` CLI
+directly to remove a marked retired skill from OpenCode and Codex.
 
 ## Portable Skills
 
@@ -45,7 +46,7 @@ then preview its managed assets:
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 This only starts the mandatory flow. Apply the exact confirmation command from

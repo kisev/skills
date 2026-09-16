@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
-import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -123,13 +123,10 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
     assert.equal(await readFile(receiptPath, "utf8"), receiptBefore);
     const output = renderReconcile(plan, {
       applied: false,
-      confirmationCommand: shellCommand(["reconcile", "--scope", "project", "--confirm", "digest"]),
+      confirmationCommand: shellCommand(["reconcile", "--confirm", "digest"]),
     });
     assert.match(output, /Blocked:/);
-    assert.match(
-      output,
-      new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --scope project --dry-run`),
-    );
+    assert.match(output, new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --dry-run`));
     assert.match(output, /Apply the exact confirmation command/);
     assert.doesNotMatch(output, /\nApply:\n/);
   } finally {
@@ -153,8 +150,6 @@ test("blocked reconcile confirmation exits with code two", async () => {
       [
         join(PACKAGE, "dist", "cli.js"),
         "install",
-        "--scope",
-        "project",
         "--commands",
         "agents-md",
         "--agents",
@@ -173,8 +168,6 @@ test("blocked reconcile confirmation exits with code two", async () => {
       [
         join(PACKAGE, "dist", "cli.js"),
         "install",
-        "--scope",
-        "project",
         "--commands",
         "agents-md",
         "--agents",
@@ -191,7 +184,7 @@ test("blocked reconcile confirmation exits with code two", async () => {
 
     const reconcilePreview = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--dry-run", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run", "--json"],
       { cwd: project, env: environment, encoding: "utf8" },
     );
     assert.equal(reconcilePreview.status, 0, reconcilePreview.stderr);
@@ -207,7 +200,7 @@ test("blocked reconcile confirmation exits with code two", async () => {
   }
 });
 
-test("clean reconcile preview keeps exact Apply contract", async () => {
+test("clean reconcile preview reports a no-op without a receipt", async () => {
   const base = temporary();
   const project = join(base, "project");
   const home = join(base, "home");
@@ -216,23 +209,12 @@ test("clean reconcile preview keeps exact Apply contract", async () => {
     const plan = await previewReconcile("project", project, home);
     assert.equal(plan.modified_managed.length, 0);
     assert.equal(plan.conflicts.length, 0);
-    const output = renderReconcile(plan, {
-      applied: false,
-      confirmationCommand: shellCommand([
-        "reconcile",
-        "--scope",
-        "project",
-        "--confirm",
-        plan.digest,
-      ]),
-    });
-    assert.match(output, /Digest:/);
-    assert.match(
-      output,
-      new RegExp(
-        `\\nApply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} reconcile --scope project --confirm `,
-      ),
-    );
+    assert.equal(plan.diagnostic_state_only.length, 0);
+    assert.equal(plan.confirmable, false);
+    const output = renderReconcile(plan, { applied: false });
+    assert.match(output, /No reconciliation changes are required\./);
+    assert.doesNotMatch(output, /Digest:/);
+    assert.doesNotMatch(output, /\nApply:\n/);
     assert.doesNotMatch(output, /Blocked:/);
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -346,6 +328,11 @@ test("registry generates exactly thirty-three thin command assets", () => {
     assert.match(rendered, entry.packageTool ? /package tool/ : /native Skill tool/);
     assert.match(rendered, /untrusted input/);
     assert.match(rendered, /\$ARGUMENTS/);
+    if (entry.packageTool) {
+      assert.ok(rendered.includes(`Call package tool \`${entry.packageTool}\` exactly once`));
+      assert.ok(rendered.includes(`\`${entry.argumentSchema}\``));
+      if (entry.packageTool === "doctor") assert.doesNotMatch(rendered, /apply requires/);
+    }
     if (entry.skill) {
       assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
       assert.ok(
@@ -407,8 +394,6 @@ test("non-TTY install accepts explicit subsets for both command adapter groups",
       [
         join(PACKAGE, "dist", "cli.js"),
         "install",
-        "--scope",
-        "project",
         "--skill-commands",
         "agents-md",
         "--package-commands",
@@ -1527,7 +1512,7 @@ test("published package metadata and tarball expose only the OpenCode integratio
     { encoding: "utf8" },
   );
   assert.equal(invalid.status, 2);
-  assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
+  assert.equal(JSON.parse(invalid.stdout).error.code, "terminal_required");
   const humanInvalid = spawnSync(
     process.execPath,
     [join(PACKAGE, "dist", "cli.js"), "install", "--dry-run"],
@@ -1535,7 +1520,7 @@ test("published package metadata and tarball expose only the OpenCode integratio
   );
   assert.equal(humanInvalid.status, 2);
   assert.equal(humanInvalid.stdout, "");
-  assert.match(humanInvalid.stderr, /^Error \[invalid_input\]:/);
+  assert.match(humanInvalid.stderr, /^Error \[terminal_required\]:/);
   const hostileArgument = "bad\u001b[31m\u0085\u061c\u2028\u2029\u202e\ufeff";
   const hostileInvalid = spawnSync(
     process.execPath,
@@ -1592,7 +1577,43 @@ test("published package metadata and tarball expose only the OpenCode integratio
   }
 });
 
-test("reconcile archives exact-owned retired assets", async () => {
+async function writeMarkedSummary(project) {
+  const root = join(project, ".agents", "skills", "summary");
+  await mkdir(root, { recursive: true });
+  await writeFile(
+    join(root, "SKILL.md"),
+    '---\nname: summary\ndescription: Summary\nlicense: MIT\nmetadata:\n  author: "Kirill Sevriugin"\n  source: "https://kisev.github.io/skills"\n---\n\n# summary\n',
+  );
+  await mkdir(join(root, "references"));
+  await writeFile(join(root, "references", "workflow.md"), "retired workflow\n");
+  await writeFile(join(root, "references", "copy.md"), "retired workflow\n");
+  return root;
+}
+
+const successfulPortableRemove = async (_command, cwd) => {
+  await rm(join(cwd, ".agents", "skills", "summary"), { recursive: true, force: true });
+  const lockPath = join(cwd, "skills-lock.json");
+  try {
+    const lock = JSON.parse(await readFile(lockPath, "utf8"));
+    delete lock.skills.summary;
+    lock.skills = Object.fromEntries(
+      Object.entries(lock.skills).sort(([left], [right]) => left.localeCompare(right)),
+    );
+    await writeFile(lockPath, `${JSON.stringify(lock, null, 2)}\n`);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  return {
+    code: 0,
+    signal: null,
+    stdout: "removed summary\n",
+    stderr: "",
+    stdout_truncated: false,
+    stderr_truncated: false,
+  };
+};
+
+test("reconcile preserves pre-marker retired portable skills", async () => {
   const directory = temporary();
   try {
     const project = join(directory, "project");
@@ -1607,10 +1628,426 @@ test("reconcile archives exact-owned retired assets", async () => {
     await mkdir(root, { recursive: true });
     await writeFile(join(root, "SKILL.md"), retired);
     const plan = await previewReconcile("project", project, home);
-    assert.equal(plan.operations.length > 0, true);
-    assert.equal(plan["archive-pending"].length, 1);
-    await applyReconcile("project", plan.digest, project, home);
-    await assert.rejects(lstat(join(root, "SKILL.md")), { code: "ENOENT" });
+    assert.equal(plan.operations.length, 0);
+    assert.equal(
+      plan.unknown.some((item) => item.path === ".agents/skills/attempt"),
+      true,
+    );
+    assert.equal(plan.confirmable, false);
+    assert.equal((await lstat(join(root, "SKILL.md"))).isFile(), true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile classifies active and external portable skills without deleting them", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    for (const [name, metadata] of [
+      ["briefing", '  author: "Kirill Sevriugin"'],
+      ["glab", '  source: "https://example.invalid/skills"'],
+      ["future-skill", '  source: "https://kisev.github.io/skills"'],
+    ]) {
+      const root = join(project, ".agents", "skills", name);
+      await mkdir(root, { recursive: true });
+      await writeFile(
+        join(root, "SKILL.md"),
+        `---\nname: ${name}\ndescription: Test\nlicense: MIT\nmetadata:\n${metadata}\n---\n`,
+      );
+    }
+    const external = join(directory, "external-skill");
+    await mkdir(external);
+    symlinkSync(external, join(project, ".agents", "skills", "external-link"));
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(
+      plan.current.some((item) => item.path === ".agents/skills/briefing"),
+      true,
+    );
+    assert.equal(
+      plan.unknown.some((item) => item.path === ".agents/skills/glab"),
+      true,
+    );
+    assert.equal(
+      plan.unknown.some((item) => item.path === ".agents/skills/future-skill"),
+      true,
+    );
+    assert.equal(
+      plan.unknown.some((item) => item.path === ".agents/skills/external-link"),
+      true,
+    );
+    assert.equal(plan.conflicts.length, 0);
+    assert.equal(plan.operations.length, 0);
+    assert.equal(plan.confirmable, false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile blocks option-like portable names before command construction", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    const root = join(project, ".agents", "skills", "--all");
+    await Promise.all([mkdir(root, { recursive: true }), mkdir(home)]);
+    await writeFile(
+      join(root, "SKILL.md"),
+      '---\nname: --all\ndescription: Unsafe\nlicense: MIT\nmetadata:\n  source: "https://kisev.github.io/skills"\n---\n',
+    );
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(
+      plan.conflicts.some((item) => item.path.endsWith("/--all")),
+      true,
+    );
+    assert.equal(plan.portable_cleanup, undefined);
+    assert.equal(plan.confirmable, false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile rejects malformed ownership scalars and oversized marked trees", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    const malformed = join(project, ".agents", "skills", "summary");
+    await mkdir(malformed, { recursive: true });
+    await writeFile(
+      join(malformed, "SKILL.md"),
+      "---\nname: 'summary\"\ndescription: Unsafe\nlicense: MIT\nmetadata:\n  source: 'https://kisev.github.io/skills\"\n---\n",
+    );
+    const malformedPlan = await previewReconcile("project", project, home);
+    assert.equal(
+      malformedPlan.unknown.some((item) => item.path.endsWith("/summary")),
+      true,
+    );
+    assert.equal(malformedPlan.portable_cleanup, undefined);
+
+    await writeFile(
+      join(malformed, "SKILL.md"),
+      '---\nname: summary\ndescription: [\nlicense: MIT\nmetadata:\n  source: "https://kisev.github.io/skills"\n---\n',
+    );
+    const invalidYamlPlan = await previewReconcile("project", project, home);
+    assert.equal(
+      invalidYamlPlan.unknown.some((item) => item.path.endsWith("/summary")),
+      true,
+    );
+    assert.equal(invalidYamlPlan.portable_cleanup, undefined);
+
+    await rm(malformed, { recursive: true, force: true });
+    const oversized = await writeMarkedSummary(project);
+    await writeFile(join(oversized, "large.bin"), Buffer.alloc(4 * 1024 * 1024 + 1));
+    const oversizedPlan = await previewReconcile("project", project, home);
+    assert.equal(
+      oversizedPlan.conflicts.some((item) => item.path.endsWith("/summary")),
+      true,
+    );
+    assert.equal(oversizedPlan.confirmable, false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile archives marked renamed skills and delegates direct removal", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    const root = await writeMarkedSummary(project);
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(plan.schema_version, 2);
+    assert.equal(plan.renamed.length, 1);
+    assert.equal(plan.renamed[0].replacement, "briefing");
+    assert.deepEqual(plan.portable_cleanup.names, ["summary"]);
+    assert.deepEqual(plan.portable_cleanup.command, [
+      "npx",
+      "--yes",
+      SKILLS_INSTALLER_SPEC,
+      "remove",
+      "summary",
+      "--agent",
+      "opencode",
+      "--agent",
+      "codex",
+      "--yes",
+    ]);
+    const applied = await applyReconcile("project", plan.digest, project, home, {
+      runPortableRemove: successfulPortableRemove,
+    });
+    assert.equal(applied.portable_remove.stdout, "removed summary\n");
+    assert.equal(applied.portable_remove.stdout_truncated, false);
+    await assert.rejects(lstat(root), { code: "ENOENT" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("global reconcile binds canonical OpenCode and Codex copies", async () => {
+  const directory = temporary();
+  try {
+    const home = join(directory, "home");
+    const invocation = join(directory, "invocation");
+    await Promise.all([mkdir(home), mkdir(invocation)]);
+    const canonical = await writeMarkedSummary(home);
+    const targets = [
+      canonical,
+      join(home, ".config", "opencode", "skills", "summary"),
+      join(home, ".codex", "skills", "summary"),
+    ];
+    for (const target of targets.slice(1)) {
+      await mkdir(join(target, "references"), { recursive: true });
+      await writeFile(join(target, "SKILL.md"), await readFile(join(canonical, "SKILL.md")));
+      await writeFile(
+        join(target, "references", "workflow.md"),
+        await readFile(join(canonical, "references", "workflow.md")),
+      );
+      await writeFile(
+        join(target, "references", "copy.md"),
+        await readFile(join(canonical, "references", "copy.md")),
+      );
+    }
+    const lockPath = join(home, ".agents", ".skill-lock.json");
+    await writeFile(
+      lockPath,
+      JSON.stringify(
+        { version: 3, skills: { summary: { source: "test" } }, dismissed: {} },
+        null,
+        2,
+      ),
+    );
+    const plan = await previewReconcile("global", invocation, home);
+    assert.equal(plan.portable_cleanup.trees.length, 3);
+    assert.equal(plan.portable_cleanup.locks.length, 1);
+    assert.equal(plan.portable_cleanup.command.includes("--global"), true);
+    await applyReconcile("global", plan.digest, invocation, home, {
+      runPortableRemove: async (command, cwd, environment) => {
+        assert.deepEqual(command, plan.portable_cleanup.command);
+        assert.equal(cwd, home);
+        assert.equal(environment.HOME, home);
+        assert.equal(environment.XDG_CONFIG_HOME, join(home, ".config"));
+        assert.equal(environment.CODEX_HOME, join(home, ".codex"));
+        assert.equal(environment.XDG_STATE_HOME, undefined);
+        for (const target of targets) await rm(target, { recursive: true, force: true });
+        await writeFile(
+          lockPath,
+          JSON.stringify({ version: 3, skills: {}, dismissed: {} }, null, 2),
+        );
+        return {
+          code: 0,
+          signal: null,
+          stdout: "removed summary\n",
+          stderr: "",
+          stdout_truncated: false,
+          stderr_truncated: false,
+        };
+      },
+    });
+    for (const target of targets) await assert.rejects(lstat(target), { code: "ENOENT" });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("global reconcile blocks an unsupported portable lock version", async () => {
+  const directory = temporary();
+  try {
+    const home = join(directory, "home");
+    const invocation = join(directory, "invocation");
+    await Promise.all([mkdir(home), mkdir(invocation)]);
+    await writeMarkedSummary(home);
+    await writeFile(
+      join(home, ".agents", ".skill-lock.json"),
+      JSON.stringify({ version: 2, skills: { summary: { source: "test" } } }, null, 2),
+    );
+    const plan = await previewReconcile("global", invocation, home);
+    assert.equal(
+      plan.conflicts.some((item) => item.reason.includes("lock")),
+      true,
+    );
+    assert.equal(plan.confirmable, false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile rolls back known paths when the direct remover fails", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    const root = await writeMarkedSummary(project);
+    const before = await readFile(join(root, "SKILL.md"));
+    const lockPath = join(project, "skills-lock.json");
+    const lockBefore = Buffer.from(
+      `${JSON.stringify({ version: 3, skills: { summary: { source: "test" }, briefing: { source: "test" } } })}\n`,
+    );
+    await writeFile(lockPath, lockBefore);
+    const plan = await previewReconcile("project", project, home);
+    await assert.rejects(
+      applyReconcile("project", plan.digest, project, home, {
+        runPortableRemove: async (...arguments_) => {
+          await successfulPortableRemove(...arguments_);
+          return {
+            code: 1,
+            signal: null,
+            stdout: "",
+            stderr: "failed\n",
+            stdout_truncated: false,
+            stderr_truncated: false,
+          };
+        },
+      }),
+      (error) => error instanceof ReconcileError && error.code === "rolled_back",
+    );
+    assert.deepEqual(await readFile(join(root, "SKILL.md")), before);
+    assert.deepEqual(await readFile(lockPath), lockBefore);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile rolls back its local transaction before direct removal", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    const root = await writeMarkedSummary(project);
+    const before = await readFile(join(root, "SKILL.md"));
+    const plan = await previewReconcile("project", project, home);
+    await assert.rejects(
+      applyReconcile("project", plan.digest, project, home, {
+        runPortableRemove: successfulPortableRemove,
+        afterPublish: () => "fail",
+      }),
+      (error) => error instanceof ReconcileError && error.code === "rolled_back",
+    );
+    assert.deepEqual(await readFile(join(root, "SKILL.md")), before);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile rolls back incomplete direct lock cleanup", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    const root = await writeMarkedSummary(project);
+    await writeFile(
+      join(project, "skills-lock.json"),
+      `${JSON.stringify({ version: 3, skills: { summary: { source: "test" } } })}\n`,
+    );
+    const plan = await previewReconcile("project", project, home);
+    await assert.rejects(
+      applyReconcile("project", plan.digest, project, home, {
+        runPortableRemove: async (_command, cwd) => {
+          await rm(join(cwd, ".agents", "skills", "summary"), {
+            recursive: true,
+            force: true,
+          });
+          return {
+            code: 0,
+            signal: null,
+            stdout: "",
+            stderr: "",
+            stdout_truncated: false,
+            stderr_truncated: false,
+          };
+        },
+      }),
+      (error) => error instanceof ReconcileError && error.code === "rolled_back",
+    );
+    assert.equal((await lstat(join(root, "SKILL.md"))).isFile(), true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile preserves a file added after preview", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    const root = await writeMarkedSummary(project);
+    const late = join(root, "late.txt");
+    const plan = await previewReconcile("project", project, home);
+    await assert.rejects(
+      applyReconcile("project", plan.digest, project, home, {
+        runPortableRemove: async (...arguments_) => {
+          const result = await successfulPortableRemove(...arguments_);
+          await mkdir(root, { recursive: true });
+          await writeFile(late, "late user file\n");
+          return result;
+        },
+      }),
+      (error) => error instanceof ReconcileError && error.code === "rolled_back",
+    );
+    assert.equal(await readFile(late, "utf8"), "late user file\n");
+    assert.equal((await lstat(join(root, "SKILL.md"))).isFile(), true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("project reconciles isolate archive updates", async () => {
+  const directory = temporary();
+  try {
+    const home = join(directory, "home");
+    const projects = [join(directory, "one"), join(directory, "two")];
+    await mkdir(home);
+    for (const project of projects) {
+      await mkdir(project);
+      await writeMarkedSummary(project);
+    }
+    const plans = [];
+    for (const project of projects) plans.push(await previewReconcile("project", project, home));
+    await Promise.all(
+      projects.map((project, index) =>
+        applyReconcile("project", plans[index].digest, project, home, {
+          runPortableRemove: successfulPortableRemove,
+        }),
+      ),
+    );
+    for (const project of projects)
+      await assert.rejects(lstat(join(project, ".agents", "skills", "summary")), {
+        code: "ENOENT",
+      });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("reconcile confirmation binds the portable installer lock", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    await writeMarkedSummary(project);
+    const lockPath = join(project, "skills-lock.json");
+    await writeFile(
+      lockPath,
+      `${JSON.stringify({ version: 1, skills: { summary: { source: "test" } } }, null, 2)}\n`,
+    );
+    const plan = await previewReconcile("project", project, home);
+    await writeFile(
+      lockPath,
+      `${JSON.stringify({ version: 1, skills: { summary: { source: "test" }, other: { source: "test" } } }, null, 2)}\n`,
+    );
+    await assert.rejects(
+      applyReconcile("project", plan.digest, project, home),
+      (error) => error instanceof ReconcileError && error.code === "stale_plan",
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -1654,7 +2091,7 @@ test("reconcile leaves historical goal and multi-run state byte-for-byte unchang
     );
     const plan = await previewReconcile("project", project, home);
     assert.equal(plan.diagnostic_state_only.length, 2);
-    assert.equal(plan["archive-pending"].length, 1);
+    assert.equal(plan.retired.length, 1);
     await applyReconcile("project", plan.digest, project, home);
     await assert.rejects(lstat(join(root, "commands", "goal-start.md")), { code: "ENOENT" });
     for (const [path, content] of stateFiles) assert.deepEqual(await readFile(path), content);
@@ -1663,7 +2100,7 @@ test("reconcile leaves historical goal and multi-run state byte-for-byte unchang
   }
 });
 
-test("reconcile CLI returns stable JSON and a ready confirmation command", () => {
+test("reconcile CLI returns stable JSON and an explicit no-op", () => {
   const directory = temporary();
   try {
     const project = join(directory, "project");
@@ -1678,7 +2115,7 @@ test("reconcile CLI returns stable JSON and a ready confirmation command", () =>
     };
     const json = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--dry-run", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run", "--json"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(json.status, 0);
@@ -1686,25 +2123,20 @@ test("reconcile CLI returns stable JSON and a ready confirmation command", () =>
     assert.equal(parsed.status, "ok");
     assert.equal(parsed.applied, false);
     assert.equal(parsed.plan.domain, "reconcile");
+    assert.equal(parsed.plan.confirmable, false);
     const human = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--scope", "project", "--dry-run"],
+      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(human.status, 0);
-    assert.match(
-      human.stdout,
-      new RegExp(
-        `npx --yes ${escapeRegExp(PACKAGE_SPEC)} reconcile --scope project --confirm [a-f0-9]{64}`,
-      ),
-    );
+    assert.match(human.stdout, /No reconciliation changes are required\./);
+    assert.doesNotMatch(human.stdout, /\nApply:\n/);
     const invalid = spawnSync(
       process.execPath,
       [
         join(PACKAGE, "dist", "cli.js"),
         "reconcile",
-        "--scope",
-        "project",
         "--dry-run",
         "--confirm",
         "0".repeat(64),
@@ -1731,8 +2163,7 @@ test("global CLI is cwd-independent and prints pinned npx confirmation", () => {
       [
         join(PACKAGE, "dist", "cli.js"),
         "install",
-        "--scope",
-        "global",
+        "--global",
         "--commands",
         "none",
         "--agents",
@@ -1751,10 +2182,7 @@ test("global CLI is cwd-independent and prints pinned npx confirmation", () => {
     assert.match(result.stdout, new RegExp(`^Target: ${join(home, ".config", "opencode")}$`, "m"));
     assert.match(
       result.stdout,
-      new RegExp(
-        `^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --scope global `,
-        "m",
-      ),
+      new RegExp(`^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --global `, "m"),
     );
     assert.doesNotMatch(result.stdout, /npm exec -- skills-opencode/);
   } finally {
@@ -1770,12 +2198,9 @@ test("reconcile receipts reject stale, tampered, expired, and replayed confirmat
     const home = join(directory, "home");
     await mkdir(project);
     await mkdir(home);
+    const staleRoot = await writeMarkedSummary(project);
     const stale = await previewReconcile("project", project, home);
-    await mkdir(join(project, ".agents", "skills", "unknown"), { recursive: true });
-    await writeFile(
-      join(project, ".agents", "skills", "unknown", "SKILL.md"),
-      "changed after preview\n",
-    );
+    await writeFile(join(staleRoot, "references", "workflow.md"), "changed after preview\n");
     await assert.rejects(
       applyReconcile("project", stale.digest, project, home),
       (error) => error instanceof ReconcileError && error.code === "stale_plan",
@@ -1783,6 +2208,7 @@ test("reconcile receipts reject stale, tampered, expired, and replayed confirmat
 
     const tamperedProject = join(directory, "tampered-project");
     await mkdir(tamperedProject);
+    await writeMarkedSummary(tamperedProject);
     const tampered = await previewReconcile("project", tamperedProject, home);
     const receiptPath = join(lifecycleRoot("project", tamperedProject, home), "receipt.json");
     const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
@@ -1795,6 +2221,7 @@ test("reconcile receipts reject stale, tampered, expired, and replayed confirmat
 
     const expiredProject = join(directory, "expired-project");
     await mkdir(expiredProject);
+    await writeMarkedSummary(expiredProject);
     Date.now = () => 0;
     const expired = await previewReconcile("project", expiredProject, home);
     Date.now = originalNow;
@@ -1805,8 +2232,11 @@ test("reconcile receipts reject stale, tampered, expired, and replayed confirmat
 
     const replayProject = join(directory, "replay-project");
     await mkdir(replayProject);
+    await writeMarkedSummary(replayProject);
     const replay = await previewReconcile("project", replayProject, home);
-    await applyReconcile("project", replay.digest, replayProject, home);
+    await applyReconcile("project", replay.digest, replayProject, home, {
+      runPortableRemove: successfulPortableRemove,
+    });
     await assert.rejects(
       applyReconcile("project", replay.digest, replayProject, home),
       (error) => error instanceof ReconcileError && error.code === "confirmation_consumed",

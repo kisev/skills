@@ -17,6 +17,7 @@ import {
   renderInventory,
   renderPlan,
   renderReconcile,
+  scopeArguments,
   shellCommand,
   terminalSafe,
 } from "./cli-output.js";
@@ -40,7 +41,8 @@ import { applyReconcile, previewReconcile } from "./reconcile.js";
 import { promptText, selectOption, selectOptions } from "./terminal-wizard.js";
 
 type Options = {
-  scope?: Scope;
+  scope: Scope;
+  global: boolean;
   dryRun: boolean;
   json: boolean;
   confirm?: string;
@@ -54,19 +56,24 @@ type Options = {
   selectionFlag: boolean;
 };
 
-function parseOptions(values: string[], requireScope = true): Options {
-  const options: Options = { dryRun: false, json: false, selectionFlag: false };
+function parseOptions(values: string[]): Options {
+  const options: Options = {
+    scope: "project",
+    global: false,
+    dryRun: false,
+    json: false,
+    selectionFlag: false,
+  };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (!value.startsWith("--")) {
       if (options.name) throw new InstallerError("invalid_input", `Unexpected argument: ${value}`);
       options.name = value;
-    } else if (value === "--scope") {
-      const scope = values[++index];
-      if (scope !== "global" && scope !== "project")
-        throw new InstallerError("invalid_input", "--scope must be global or project");
-      if (options.scope) throw new InstallerError("invalid_input", "--scope may be supplied once");
-      options.scope = scope;
+    } else if (value === "--global") {
+      if (options.global)
+        throw new InstallerError("invalid_input", "--global may be supplied once");
+      options.global = true;
+      options.scope = "global";
     } else if (value === "--dry-run") {
       if (options.dryRun)
         throw new InstallerError("invalid_input", "--dry-run may be supplied once");
@@ -123,8 +130,6 @@ function parseOptions(values: string[], requireScope = true): Options {
       throw new InstallerError("invalid_input", `Unknown argument: ${value}`);
     }
   }
-  if (requireScope && !options.scope)
-    throw new InstallerError("invalid_input", "--scope is required");
   return options;
 }
 
@@ -164,7 +169,7 @@ function rootHelp(): string {
     "",
     "Common options:",
     ...helpRows([
-      ["--scope <project|global>", "Required by every command except capabilities."],
+      ["--global", "Use global scope; project scope is the default."],
       ["--dry-run", "Preview a mutation and issue a one-time confirmation digest."],
       ["--confirm <digest>", "Apply the exact unexpired preview after final revalidation."],
       ["--json", "Emit stable machine-readable output when supported."],
@@ -200,20 +205,19 @@ function rootHelp(): string {
     "",
     "Scope behavior:",
     ...helpRows([
-      ["project", "Targets .opencode under the current directory; run from the project root."],
-      ["global", "Targets ~/.config/opencode and can run from any directory."],
+      ["default", "Targets .opencode under the current directory; run from the project root."],
+      ["--global", "Targets ~/.config/opencode and can run from any directory."],
     ]),
     "",
     "Examples:",
     `  ${shellCommand(["capabilities", "--json"])}`,
-    `  ${shellCommand(["install", "--scope", "global", "--dry-run"])}`,
-    `  ${shellCommand(["doctor", "--scope", "global"])}`,
+    `  ${shellCommand(["install", "--global", "--dry-run"])}`,
+    `  ${shellCommand(["doctor", "--global"])}`,
     `  ${shellCommand([
       "agent",
       "model-set",
       "worker",
-      "--scope",
-      "global",
+      "--global",
       "--model",
       "openai/gpt-5",
       "--variant",
@@ -290,11 +294,11 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "install",
       "Select and deploy package-owned OpenCode integration assets.",
       [
-        "skills-opencode install --scope <project|global> --dry-run [selection options]",
-        "skills-opencode install --scope <project|global> --confirm <digest> [selection options]",
+        "skills-opencode install [--global] --dry-run [selection options]",
+        "skills-opencode install [--global] --confirm <digest> [selection options]",
       ],
       [
-        ["--scope <project|global>", "Choose the deployment scope."],
+        ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview operations and issue a one-time confirmation digest."],
         ["--confirm <digest>", "Apply the exact unexpired preview."],
         ["--commands <list|none>", "Select adapters from both command groups."],
@@ -313,11 +317,9 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Portable skills are installed separately; restart OpenCode after asset changes.",
       ],
       [
-        shellCommand(["install", "--scope", "global", "--dry-run"]),
+        shellCommand(["install", "--global", "--dry-run"]),
         shellCommand([
           "install",
-          "--scope",
-          "project",
           "--commands",
           "doctor,reconcile,agent-profiles",
           "--agents",
@@ -333,11 +335,11 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "uninstall",
       "Remove package-owned integration assets safely.",
       [
-        "skills-opencode uninstall --scope <project|global> --dry-run",
-        "skills-opencode uninstall --scope <project|global> --confirm <digest>",
+        "skills-opencode uninstall [--global] --dry-run",
+        "skills-opencode uninstall [--global] --confirm <digest>",
       ],
       [
-        ["--scope <project|global>", "Choose the deployment scope."],
+        ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview removals, archives, and conflicts."],
         ["--confirm <digest>", "Apply the exact unexpired preview."],
         ["--json", "Emit stable machine-readable output."],
@@ -349,17 +351,17 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Remove the plugin config entry and npm dependency only after managed assets.",
       ],
       [
-        shellCommand(["uninstall", "--scope", "global", "--dry-run"]),
-        shellCommand(["uninstall", "--scope", "project", "--dry-run"]),
+        shellCommand(["uninstall", "--global", "--dry-run"]),
+        shellCommand(["uninstall", "--dry-run"]),
       ],
     );
   if (domain === "doctor")
     return commandHelp(
       "doctor",
       "Inspect integration health without changing state.",
-      ["skills-opencode doctor --scope <project|global> [--json]"],
+      ["skills-opencode doctor [--global] [--json]"],
       [
-        ["--scope <project|global>", "Choose the scope to inspect."],
+        ["--global", "Inspect global scope; project scope is the default."],
         ["--json", "Emit the complete stable machine-readable report."],
         ["--help", "Show this command help and exit."],
       ],
@@ -368,10 +370,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Reports versions, ownership, drift, collisions, config, archives, tools, and LSP facts.",
         "Exit status: 0 clean, 1 findings, 2 invalid input or incomplete probing.",
       ],
-      [
-        shellCommand(["doctor", "--scope", "global"]),
-        shellCommand(["doctor", "--scope", "global", "--json"]),
-      ],
+      [shellCommand(["doctor"]), shellCommand(["doctor", "--global", "--json"])],
     );
   if (domain === "capabilities")
     return commandHelp(
@@ -393,11 +392,11 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "reconcile",
       "Classify current and historical assets and retire exact-owned entries.",
       [
-        "skills-opencode reconcile --scope <project|global> --dry-run",
-        "skills-opencode reconcile --scope <project|global> --confirm <digest>",
+        "skills-opencode reconcile [--global] --dry-run",
+        "skills-opencode reconcile [--global] --confirm <digest>",
       ],
       [
-        ["--scope <project|global>", "Choose the scope to reconcile."],
+        ["--global", "Reconcile global scope; project scope is the default."],
         ["--dry-run", "Preview classifications, archives, and blockers."],
         ["--confirm <digest>", "Apply the exact unexpired preview."],
         ["--json", "Emit stable machine-readable output."],
@@ -405,41 +404,38 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       ],
       [
         "Preview is read-only and blocks Apply on modified managed files or ownership conflicts.",
-        "Confirmed reconcile archives only exact-owned retired assets.",
-        "Never installs, updates, or removes portable skills.",
+        "Confirmed reconcile archives exact-owned retired package assets.",
+        "Marked retired portable skills are removed by the pinned skills CLI.",
       ],
       [
-        shellCommand(["reconcile", "--scope", "global", "--dry-run"]),
-        shellCommand(["reconcile", "--scope", "project", "--dry-run", "--json"]),
+        shellCommand(["reconcile", "--global", "--dry-run"]),
+        shellCommand(["reconcile", "--dry-run", "--json"]),
       ],
     );
   if (domain === "agent" && operation === "list")
     return commandHelp(
       "agent list",
       "List agent profiles, models, ownership, collisions, and drift.",
-      ["skills-opencode agent list --scope <project|global> [--json]"],
+      ["skills-opencode agent list [--global] [--json]"],
       [
-        ["--scope <project|global>", "Choose the profile scope."],
+        ["--global", "Inspect global scope; project scope is the default."],
         ["--json", "Emit stable machine-readable inventory."],
         ["--help", "Show this command help and exit."],
       ],
       ["Read-only inventory; creates no receipts and changes no files or configuration."],
-      [
-        shellCommand(["agent", "list", "--scope", "global"]),
-        shellCommand(["agent", "list", "--scope", "project", "--json"]),
-      ],
+      [shellCommand(["agent", "list", "--global"]), shellCommand(["agent", "list", "--json"])],
     );
   if (domain === "agent" && operation === "configure")
     return commandHelp(
       "agent configure",
       "Choose an agent model interactively or with explicit options.",
       [
-        "skills-opencode agent configure [name] --scope <project|global> --dry-run",
-        "skills-opencode agent configure <name> --scope <project|global> --model <provider/model> [--variant <id>] --dry-run",
-        "skills-opencode agent configure <name> --scope <project|global> --model <provider/model> [--variant <id>] --confirm <digest>",
+        "skills-opencode agent configure [name] [--global] --dry-run",
+        "skills-opencode agent configure <name> [--global] --model <provider/model> [--variant <id>] --dry-run",
+        "skills-opencode agent configure <name> [--global] --model <provider/model> [--variant <id>] --confirm <digest>",
       ],
       [
-        ["--scope <project|global>", "Choose the profile scope."],
+        ["--global", "Use global scope; project scope is the default."],
         ["--provider <id>", "Provider when --model is not provider/model."],
         ["--model <id>", "Exact provider/model or model paired with --provider."],
         ["--variant <id>", "Set an optional model variant."],
@@ -455,13 +451,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "The preview normally prints an agent model-set Apply command.",
       ],
       [
-        shellCommand(["agent", "configure", "manager", "--scope", "global", "--dry-run"]),
+        shellCommand(["agent", "configure", "manager", "--global", "--dry-run"]),
         shellCommand([
           "agent",
           "configure",
           "worker",
-          "--scope",
-          "global",
+          "--global",
           "--model",
           "openai/gpt-5",
           "--variant",
@@ -475,11 +470,11 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "agent model-set",
       "Set one agent model and optional variant directly.",
       [
-        "skills-opencode agent model-set <name> --scope <project|global> --model <provider/model> [--variant <id>] --dry-run",
-        "skills-opencode agent model-set <name> --scope <project|global> --model <provider/model> [--variant <id>] --confirm <digest>",
+        "skills-opencode agent model-set <name> [--global] --model <provider/model> [--variant <id>] --dry-run",
+        "skills-opencode agent model-set <name> [--global] --model <provider/model> [--variant <id>] --confirm <digest>",
       ],
       [
-        ["--scope <project|global>", "Choose the profile scope."],
+        ["--global", "Use global scope; project scope is the default."],
         ["--provider <id>", "Provider when --model is not provider/model."],
         ["--model <id>", "Exact provider/model or model paired with --provider."],
         ["--variant <id>", "Set an optional model variant."],
@@ -499,8 +494,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
           "agent",
           "model-set",
           "worker",
-          "--scope",
-          "global",
+          "--global",
           "--model",
           "openai/gpt-5",
           "--variant",
@@ -511,8 +505,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
           "agent",
           "model-set",
           "manager",
-          "--scope",
-          "global",
+          "--global",
           "--model",
           "openai/gpt-5",
           "--clear-variant",
@@ -525,11 +518,11 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "agent reconcile",
       "Re-render managed agent files from saved profile configuration.",
       [
-        "skills-opencode agent reconcile --scope <project|global> --dry-run",
-        "skills-opencode agent reconcile --scope <project|global> --confirm <digest>",
+        "skills-opencode agent reconcile [--global] --dry-run",
+        "skills-opencode agent reconcile [--global] --confirm <digest>",
       ],
       [
-        ["--scope <project|global>", "Choose the profile scope."],
+        ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview rendered agent changes and conflicts."],
         ["--confirm <digest>", "Apply the exact unexpired preview."],
         ["--json", "Emit stable machine-readable output."],
@@ -540,8 +533,8 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Preserves user-owned files and collisions; writes only after confirmation.",
       ],
       [
-        shellCommand(["agent", "reconcile", "--scope", "global", "--dry-run"]),
-        shellCommand(["agent", "reconcile", "--scope", "project", "--dry-run", "--json"]),
+        shellCommand(["agent", "reconcile", "--global", "--dry-run"]),
+        shellCommand(["agent", "reconcile", "--dry-run", "--json"]),
       ],
     );
   if (domain === "agent")
@@ -560,22 +553,19 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Profile configuration changes models, variants, and additional critics.",
         "Mutations use preview and exact confirmation.",
       ],
-      [
-        shellCommand(["agent", "list", "--scope", "global"]),
-        shellCommand(["agent", "model-set", "--help"]),
-      ],
+      [shellCommand(["agent", "list", "--global"]), shellCommand(["agent", "model-set", "--help"])],
     );
   if (domain === "critic" && operation === "add")
     return commandHelp(
       "critic add",
       "Add an additional named critic with a selected model.",
       [
-        "skills-opencode critic add [name] --scope <project|global> --dry-run",
-        "skills-opencode critic add <name> --scope <project|global> --model <provider/model> [--variant <id>] --dry-run",
-        "skills-opencode critic add <name> --scope <project|global> --model <provider/model> [--variant <id>] --confirm <digest>",
+        "skills-opencode critic add [name] [--global] --dry-run",
+        "skills-opencode critic add <name> [--global] --model <provider/model> [--variant <id>] --dry-run",
+        "skills-opencode critic add <name> [--global] --model <provider/model> [--variant <id>] --confirm <digest>",
       ],
       [
-        ["--scope <project|global>", "Choose the profile scope."],
+        ["--global", "Use global scope; project scope is the default."],
         ["--provider <id>", "Provider when --model is not provider/model."],
         ["--model <id>", "Exact provider/model or model paired with --provider."],
         ["--variant <id>", "Set an optional model variant."],
@@ -594,13 +584,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
           "critic",
           "add",
           "security",
-          "--scope",
-          "global",
+          "--global",
           "--model",
           "anthropic/claude-sonnet-4-6",
           "--dry-run",
         ]),
-        shellCommand(["critic", "add", "performance", "--scope", "global", "--dry-run"]),
+        shellCommand(["critic", "add", "performance", "--global", "--dry-run"]),
       ],
     );
   if (domain === "critic" && operation === "remove")
@@ -608,11 +597,11 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "critic remove",
       "Remove a package-managed additional critic.",
       [
-        "skills-opencode critic remove <name> --scope <project|global> --dry-run",
-        "skills-opencode critic remove <name> --scope <project|global> --confirm <digest>",
+        "skills-opencode critic remove <name> [--global] --dry-run",
+        "skills-opencode critic remove <name> [--global] --confirm <digest>",
       ],
       [
-        ["--scope <project|global>", "Choose the profile scope."],
+        ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview critic removal and pool changes."],
         ["--confirm <digest>", "Apply the exact unexpired preview."],
         ["--json", "Emit stable machine-readable output."],
@@ -624,8 +613,8 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Updates manager and review critic pools after confirmation.",
       ],
       [
-        shellCommand(["critic", "remove", "security", "--scope", "global", "--dry-run"]),
-        shellCommand(["critic", "remove", "security", "--scope", "project", "--dry-run"]),
+        shellCommand(["critic", "remove", "security", "--global", "--dry-run"]),
+        shellCommand(["critic", "remove", "security", "--dry-run"]),
       ],
     );
   if (domain === "critic")
@@ -648,10 +637,6 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       ],
     );
   return undefined;
-}
-
-function help(arguments_: readonly string[] = []): string {
-  return contextualHelp(arguments_) ?? rootHelp();
 }
 
 async function interactiveInstallerSelection(): Promise<InstallerSelection> {
@@ -912,14 +897,14 @@ function profileConfirmationArguments(
   digest: string,
 ): string[] {
   if (request.action === "reconcile")
-    return ["agent", "reconcile", "--scope", scope, "--confirm", digest];
+    return ["agent", "reconcile", ...scopeArguments(scope), "--confirm", digest];
   if (request.action === "critic-remove")
-    return ["critic", "remove", request.name!, "--scope", scope, "--confirm", digest];
+    return ["critic", "remove", request.name!, ...scopeArguments(scope), "--confirm", digest];
   const command =
     request.action === "critic-add"
       ? ["critic", "add", request.name!]
       : ["agent", "model-set", request.name!];
-  command.push("--scope", scope, "--model", request.model!);
+  command.push(...scopeArguments(scope), "--model", request.model!);
   if (request.variant) command.push("--variant", request.variant);
   else if (request.action === "model-set") command.push("--clear-variant");
   command.push("--confirm", digest);
@@ -927,11 +912,43 @@ function profileConfirmationArguments(
 }
 
 async function run(arguments_: string[]): Promise<void> {
-  if (arguments_.includes("--help") || arguments_.length === 0) {
-    process.stdout.write(help(arguments_));
+  const removedScope = arguments_.find(
+    (value) => value === "--scope" || value.startsWith("--scope="),
+  );
+  if (removedScope)
+    throw new InstallerError(
+      "invalid_input",
+      "--scope has been removed; omit it for project scope or use --global",
+    );
+  if (arguments_.filter((value) => value === "--global").length > 1)
+    throw new InstallerError("invalid_input", "--global may be supplied once");
+  if (arguments_[0] === "capabilities" && arguments_.includes("--global"))
+    throw new InstallerError("invalid_input", "capabilities accepts only --json");
+  if (arguments_.includes("--help")) {
+    const [domain, operation] = arguments_.filter((value) => !value.startsWith("--"));
+    if (
+      (domain === "agent" &&
+        operation &&
+        !["list", "configure", "model-set", "reconcile"].includes(operation)) ||
+      (domain === "critic" && operation && !["add", "remove"].includes(operation))
+    )
+      throw new InstallerError("invalid_input", `Unknown command: ${domain} ${operation}`);
+    const page = contextualHelp(arguments_);
+    if (!page && arguments_[0] !== "--help")
+      throw new InstallerError("invalid_input", `Unknown command: ${arguments_[0]}`);
+    for (const value of arguments_.filter((item) => item.startsWith("--") && item !== "--help"))
+      if (!(page ?? rootHelp()).includes(value))
+        throw new InstallerError("invalid_input", `Unknown argument: ${value}`);
+    process.stdout.write(page ?? rootHelp());
+    return;
+  }
+  if (arguments_.length === 0) {
+    process.stdout.write(rootHelp());
     return;
   }
   if (arguments_.includes("--version")) {
+    if (arguments_.some((value) => value !== "--version" && value !== "--json"))
+      throw new InstallerError("invalid_input", "--version accepts only --json");
     process.stdout.write(
       arguments_.includes("--json")
         ? `${JSON.stringify({ status: "ok", version: CATALOG.version })}\n`
@@ -949,9 +966,10 @@ async function run(arguments_: string[]): Promise<void> {
       options.name ||
       options.provider ||
       options.model ||
-      options.variant !== undefined
+      options.variant !== undefined ||
+      options.selectionFlag
     )
-      throw new InstallerError("invalid_input", "doctor accepts only --scope and --json");
+      throw new InstallerError("invalid_input", "doctor accepts only --global and --json");
     const report = await collectDoctorFacts(options.scope!);
     if (options.json) process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     else process.stdout.write(renderDoctor(report));
@@ -959,7 +977,8 @@ async function run(arguments_: string[]): Promise<void> {
     return;
   }
   if (domain === "capabilities") {
-    const options = parseOptions(rest, false);
+    if (operation) rest.unshift(operation);
+    const options = parseOptions(rest);
     if (
       options.dryRun ||
       options.confirm ||
@@ -967,9 +986,10 @@ async function run(arguments_: string[]): Promise<void> {
       options.provider ||
       options.model ||
       options.variant !== undefined ||
+      options.global ||
       options.selectionFlag
     )
-      throw new InstallerError("invalid_input", "capabilities accepts only --scope and --json");
+      throw new InstallerError("invalid_input", "capabilities accepts only --json");
     process.stdout.write(
       `${JSON.stringify({ schema_version: 1, status: "ok", ...CATALOG }, null, 2)}\n`,
     );
@@ -978,10 +998,16 @@ async function run(arguments_: string[]): Promise<void> {
   if (domain === "reconcile") {
     if (operation) rest.unshift(operation);
     const options = parseOptions(rest);
-    if (options.name || options.provider || options.model || options.variant !== undefined)
+    if (
+      options.name ||
+      options.provider ||
+      options.model ||
+      options.variant !== undefined ||
+      options.selectionFlag
+    )
       throw new InstallerError(
         "invalid_input",
-        "reconcile accepts only scope and confirmation options",
+        "reconcile accepts only --global, --dry-run, --confirm, and --json",
       );
     requireConfirmationMode(options);
     if (options.dryRun) {
@@ -997,8 +1023,7 @@ async function run(arguments_: string[]): Promise<void> {
             confirmationCommand: plan.confirmable
               ? shellCommand([
                   "reconcile",
-                  "--scope",
-                  options.scope!,
+                  ...scopeArguments(options.scope),
                   "--confirm",
                   plan.confirmation_digest ?? plan.digest!,
                 ])
@@ -1017,12 +1042,20 @@ async function run(arguments_: string[]): Promise<void> {
       rest.unshift(...(operation ? [operation] : []));
     else throw new InstallerError("invalid_input", `Unexpected argument: ${operation}`);
     const options = parseOptions(rest);
-    if (options.name || options.provider || options.model || options.variant !== undefined)
+    const action = domain as Action;
+    if (
+      options.name ||
+      options.provider ||
+      options.model ||
+      options.variant !== undefined ||
+      (action === "uninstall" && options.selectionFlag)
+    )
       throw new InstallerError(
         "invalid_input",
-        "Installer accepts only scope and confirmation options",
+        action === "install"
+          ? "install does not accept model options or positional arguments"
+          : "uninstall accepts only --global, --dry-run, --confirm, and --json",
       );
-    const action = domain as Action;
     if (
       action === "install" &&
       options.selectionFlag &&
@@ -1053,8 +1086,7 @@ async function run(arguments_: string[]): Promise<void> {
             applied: false,
             confirmationCommand: shellCommand([
               action,
-              "--scope",
-              options.scope!,
+              ...scopeArguments(options.scope),
               ...selectionArguments(plan.selection),
               "--confirm",
               plan.digest,
@@ -1087,9 +1119,10 @@ async function run(arguments_: string[]): Promise<void> {
       options.name ||
       options.provider ||
       options.model ||
-      options.variant !== undefined
+      options.variant !== undefined ||
+      options.selectionFlag
     )
-      throw new InstallerError("invalid_input", "agent list accepts only --scope");
+      throw new InstallerError("invalid_input", "agent list accepts only --global and --json");
     const inventory = await listAgentProfiles(options.scope!);
     if (options.json)
       process.stdout.write(`${JSON.stringify({ status: "ok", inventory }, null, 2)}\n`);
@@ -1098,6 +1131,11 @@ async function run(arguments_: string[]): Promise<void> {
   }
   if (domain === "agent" && operation === "configure") {
     const options = parseOptions(rest);
+    if (options.selectionFlag)
+      throw new InstallerError(
+        "invalid_input",
+        "agent configure does not accept selection options",
+      );
     requireConfirmationMode(options);
     const selected =
       options.provider && options.model && options.name
@@ -1117,6 +1155,11 @@ async function run(arguments_: string[]): Promise<void> {
   }
   if (domain === "agent" && operation === "model-set") {
     const options = parseOptions(rest);
+    if (options.selectionFlag)
+      throw new InstallerError(
+        "invalid_input",
+        "agent model-set does not accept selection options",
+      );
     const name = validateAgentName(options.name ?? "");
     const model = exactModel(options);
     if (!model)
@@ -1132,21 +1175,34 @@ async function run(arguments_: string[]): Promise<void> {
   }
   if (domain === "agent" && operation === "reconcile") {
     const options = parseOptions(rest);
-    if (options.name || options.provider || options.model || options.variant !== undefined)
+    if (
+      options.name ||
+      options.provider ||
+      options.model ||
+      options.variant !== undefined ||
+      options.selectionFlag
+    )
       throw new InstallerError(
         "invalid_input",
-        "agent reconcile accepts only scope and confirmation options",
+        "agent reconcile accepts only --global, --dry-run, --confirm, and --json",
       );
     await runProfile({ action: "reconcile" }, options);
     return;
   }
   if (domain === "critic" && (operation === "add" || operation === "remove")) {
     const options = parseOptions(rest);
+    if (options.selectionFlag)
+      throw new InstallerError(
+        "invalid_input",
+        `critic ${operation} does not accept selection options`,
+      );
     const name =
       options.name === "critic" || options.name?.startsWith("critic-")
         ? options.name
         : `critic-${options.name ?? ""}`;
     if (operation === "add") {
+      if (options.variant === null)
+        throw new InstallerError("invalid_input", "critic add does not accept --clear-variant");
       const model = exactModel(options);
       if (!model) {
         const selected = await interactiveSelection(options, "critic-add");
@@ -1166,7 +1222,12 @@ async function run(arguments_: string[]): Promise<void> {
         );
       }
     } else {
-      if (options.provider || options.model || options.variant !== undefined)
+      if (
+        options.provider ||
+        options.model ||
+        options.variant !== undefined ||
+        options.selectionFlag
+      )
         throw new InstallerError("invalid_input", "critic remove does not accept model options");
       await runProfile({ action: "critic-remove", name }, options);
     }
@@ -1174,7 +1235,7 @@ async function run(arguments_: string[]): Promise<void> {
   }
   throw new InstallerError(
     "invalid_input",
-    "Use install, uninstall, agent list|configure|model-set|reconcile, or critic add|remove",
+    "Use install, uninstall, doctor, capabilities, reconcile, agent list|configure|model-set|reconcile, or critic add|remove",
   );
 }
 

@@ -16,8 +16,9 @@
   агентов.
 - Необязательные обертки плагинов `rules-injector`, `rtk` и `zed-bell`.
 
-Пакет не содержит, не устанавливает, не обновляет и не удаляет переносимые
-навыки.
+Пакет не содержит, не устанавливает и не обновляет переносимые навыки. После
+подтверждения `reconcile` может напрямую вызвать закреплённую версию `skills` и
+удалить помеченный устаревший навык из OpenCode и Codex.
 
 ## Требования
 
@@ -32,7 +33,7 @@
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Выполните точную команду подтверждения, которую выведет предварительный просмотр.

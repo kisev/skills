@@ -31,7 +31,7 @@ Install in the repository's npm project and run the CLI from that project root:
 ```shell
 cd /path/to/project
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 The package remains in project `node_modules`; confirmed assets go under
@@ -53,7 +53,7 @@ Confirmed assets go under `~/.config/opencode`. After the persistent install,
 run global-scope CLI commands from any directory:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --scope global --dry-run
+npx --yes @kisev/skills-opencode@latest install --global --dry-run
 ```
 
 ## Select Assets
@@ -71,7 +71,7 @@ Outside a TTY, pass all three selection groups. This example selects three
 commands, all fixed agents, and no wrapper:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --scope project \
+npx --yes @kisev/skills-opencode@latest install \
   --commands doctor,reconcile,agent-profiles \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
@@ -114,14 +114,16 @@ installer confirmation, then repeat reconcile; resolve ownership conflicts
 manually.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 The mandatory OpenCode flow is: persistent npm install, `install --dry-run`, the
 exact confirmation command printed by that preview, add the package to the
 user-owned `plugin` entry, and restart OpenCode. The persistent npm project at
-`~/.config/opencode` keeps the global plugin resolvable; stable npx commands with
-`--scope global` can run from any directory. Install or upgrade the package and
+`~/.config/opencode` keeps the global plugin resolvable. Scope-aware commands
+target the current directory by default. Add `--global` once
+to target global state from any directory. The removed `--scope` option is not
+accepted. Install or upgrade the package and
 apply its installer plan before every reconcile.
 
 The preview has a deterministic `plan_digest` and a unique
@@ -139,8 +141,8 @@ root, and current inventory. Apply rejects stale state and unsafe conflicts.
 starting plugins, or starting LSP servers:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest doctor --scope project
-npx --yes @kisev/skills-opencode@latest doctor --scope project --json
+npx --yes @kisev/skills-opencode@latest doctor
+npx --yes @kisev/skills-opencode@latest doctor --json
 ```
 
 The report includes versions, ownership, drift, collisions, archive counts,
@@ -157,7 +159,7 @@ same scope and desired selection, then restart OpenCode:
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Use the complete confirmation command printed by the preview. The installer
@@ -171,21 +173,26 @@ model choices, variants, additional critics, or retained profile configuration.
 plugins, agents, and installation metadata for one scope:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest reconcile --scope project --dry-run
-npx --yes @kisev/skills-opencode@latest reconcile --scope project --confirm <digest>
-npx --yes @kisev/skills-opencode@latest reconcile --scope global --dry-run --json
+npx --yes @kisev/skills-opencode@latest reconcile --dry-run
+npx --yes @kisev/skills-opencode@latest reconcile --confirm <digest>
+npx --yes @kisev/skills-opencode@latest reconcile --global --dry-run --json
 ```
 
-Before reconcile, first update the package in its owning npm project and apply
-the exact installer plan. Reconcile does not install, update, or remove portable
-skills; use only stable `npx --yes skills@latest` with
-`https://kisev.github.io/skills` for those skills.
+Before reconcile, first update the package and portable skills through their
+owning installers. Reconcile never installs or updates a portable skill. It can
+clean up a retired portable skill only when its `SKILL.md` carries the exact
+project marker `metadata.source: "https://kisev.github.io/skills"`.
 
-Confirmed reconcile archives exact-owned retired assets in a private
-content-addressed XDG archive and removes their deployed copies. Modified,
-user-owned, unknown, symlink, unsafe, or ambiguous entries remain unchanged as
-findings or conflicts. Worktrees and runtime state are preserved. The archive is
-inspectable through `doctor`; no archive restore or purge command is provided.
+Confirmed reconcile archives the current bytes in a private content-addressed
+XDG archive. Package assets are then removed transactionally. For marked portable
+skills, the package-configured exact `skills` CLI removes OpenCode and Codex
+copies directly. The journal restores preview-bound files and lock state after a
+failure; files created concurrently outside that snapshot have only best-effort
+protection. Pre-marker, modified-marker, user-owned, unknown, symlink, unsafe, or
+ambiguous entries remain unchanged as findings or conflicts. A no-op preview has
+no confirmation digest. Worktrees and runtime state are preserved. The archive
+is inspectable through `doctor`; no archive restore or purge command is provided.
+Use `npx --yes skills@latest remove` for pre-marker manual cleanup.
 
 ## Manage Agents
 
@@ -193,11 +200,11 @@ The direct CLI manages fixed-agent models and additional critics without an LLM
 call:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest agent list --scope global
-npx --yes @kisev/skills-opencode@latest agent configure manager --scope global --dry-run
-npx --yes @kisev/skills-opencode@latest agent model-set worker --scope global --model openai/gpt-5 --variant high --dry-run
-npx --yes @kisev/skills-opencode@latest critic add security --scope global --model anthropic/claude-sonnet-4-6 --dry-run
-npx --yes @kisev/skills-opencode@latest agent reconcile --scope global --dry-run
+npx --yes @kisev/skills-opencode@latest agent list --global
+npx --yes @kisev/skills-opencode@latest agent configure manager --global --dry-run
+npx --yes @kisev/skills-opencode@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
+npx --yes @kisev/skills-opencode@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
+npx --yes @kisev/skills-opencode@latest agent reconcile --global --dry-run
 ```
 
 Fixed roles keep their names, prompts, and permissions; only model and variant
@@ -214,13 +221,13 @@ Keep the package resolvable until its assets are removed:
 4. Restart OpenCode.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest uninstall --scope project --dry-run
-npx --yes @kisev/skills-opencode@latest uninstall --scope project --confirm <digest>
+npx --yes @kisev/skills-opencode@latest uninstall --dry-run
+npx --yes @kisev/skills-opencode@latest uninstall --confirm <digest>
 npm uninstall @kisev/skills-opencode
 ```
 
 For global scope, run the stable npx command from any directory with
-`--scope global`, then uninstall the dependency from the persistent npm project
+`--global`, then uninstall the dependency from the persistent npm project
 at `~/.config/opencode`. Uninstall archives exact manifest-owned assets and
 preserves modified files as conflicts, along with worktrees, runtime state, and
 retained profile configuration. It does not remove portable skills or edit

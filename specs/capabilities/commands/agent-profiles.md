@@ -10,7 +10,8 @@ Trigger for profile lifecycle; near-miss: direct `opencode.json` editing.
 
 ## Inputs/Outputs
 
-Input is action, scope, and optional confirmed digest; output is structured plan/result.
+Input is action, optional scope defaulting to project, and optional confirmed
+digest; output is structured plan/result.
 
 ## Workflow Stages
 
@@ -36,7 +37,9 @@ Package does not edit `opencode.json` directly.
 
 ### REQ-I-233 - Route the agent-profiles package command
 
-The command shall invoke package tool `agent_profiles` and require preview plus confirmation for mutation.
+The command shall expose the exact package-tool argument schema, default omitted
+scope to project, invoke package tool `agent_profiles`, and require preview plus
+confirmation for mutation.
 
 ## Example
 

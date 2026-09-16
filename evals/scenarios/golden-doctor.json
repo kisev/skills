@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
   "id": "golden.doctor.read-only-redaction",
-  "revision": 1,
+  "revision": 2,
   "kind": "golden",
   "surface": "command",
   "host": "opencode",
   "input": {
-    "prompt": "/doctor --scope project --json Проверь только проект и верни JSON.",
+    "prompt": "/doctor Проверь только проект по умолчанию и верни JSON.",
     "fixture": {
       "selected": ["command:doctor"]
     }
@@ -25,6 +25,11 @@
       "id": "doctor-redaction",
       "path": "packages/opencode/src/doctor.ts",
       "contains": "redact"
+    },
+    {
+      "id": "doctor-default-scope",
+      "path": "packages/opencode/src/index.ts",
+      "contains": "const scope = args.scope ?? \"project\""
     }
   ],
   "sandbox": {
@@ -37,7 +42,7 @@
     "max_tokens": 1500,
     "max_cost": 1
   },
-  "digest": "d0208a65739ce25865045e02bec10ada6db4efb6342fd4ff631f771acfc30bac",
+  "digest": "1cf88e4fc46034348b59dbd46f730a54698db2941a3cd0df29792142927a2c56",
   "locale": "ru",
   "pair_id": "golden.doctor.read-only-redaction"
 }

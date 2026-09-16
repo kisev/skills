@@ -139,7 +139,8 @@ const plugin = (async (input: PluginInput) => {
     description:
       "Read package health and opt-in defaults without installing or repairing anything.",
     args: { scope: tool.schema.enum(["global", "project"]).default("project") },
-    async execute(args: { scope: "global" | "project" }, context: { directory: string }) {
+    async execute(args: { scope?: "global" | "project" }, context: { directory: string }) {
+      const scope = args.scope ?? "project";
       const host: DoctorHost | undefined = input.client
         ? {
             config: async () =>
@@ -148,9 +149,7 @@ const plugin = (async (input: PluginInput) => {
               (await input.client.lsp.status({ query: { directory: context.directory } })).data,
           }
         : undefined;
-      return JSON.stringify(
-        await collectDoctorFacts(args.scope ?? "project", context.directory, undefined, host),
-      );
+      return JSON.stringify(await collectDoctorFacts(scope, context.directory, undefined, host));
     },
   });
   const agentProfiles = tool({
@@ -159,22 +158,26 @@ const plugin = (async (input: PluginInput) => {
     args: {
       action: tool.schema.enum(["list", "model_set", "critic_add", "critic_remove"]),
       phase: tool.schema.enum(["preview", "apply"]).optional(),
-      scope: tool.schema.enum(["global", "project"]),
+      scope: tool.schema.enum(["global", "project"]).default("project"),
       name: tool.schema.string().optional(),
       model: tool.schema.string().optional(),
       variant: tool.schema.string().nullable().optional(),
       confirmation_digest: tool.schema.string().optional(),
     },
-    async execute(args: {
-      action: "list" | "model_set" | "critic_add" | "critic_remove";
-      phase?: "preview" | "apply";
-      scope: "global" | "project";
-      name?: string;
-      model?: string;
-      variant?: string | null;
-      confirmation_digest?: string;
-    }) {
-      const cwd = input.directory ?? process.cwd();
+    async execute(
+      args: {
+        action: "list" | "model_set" | "critic_add" | "critic_remove";
+        phase?: "preview" | "apply";
+        scope?: "global" | "project";
+        name?: string;
+        model?: string;
+        variant?: string | null;
+        confirmation_digest?: string;
+      },
+      context: { directory?: string },
+    ) {
+      const cwd = context.directory ?? input.directory ?? process.cwd();
+      const scope = args.scope ?? "project";
       if (args.action === "list") {
         if (
           args.phase ||
@@ -186,7 +189,7 @@ const plugin = (async (input: PluginInput) => {
           throw new Error("agent_profiles list accepts only scope");
         return JSON.stringify({
           status: "ok",
-          inventory: await listAgentProfiles(args.scope, cwd),
+          inventory: await listAgentProfiles(scope, cwd),
         });
       }
       if (!args.phase) throw new Error("agent_profiles mutation requires preview or apply phase");
@@ -208,12 +211,12 @@ const plugin = (async (input: PluginInput) => {
           status: "ok",
           applied: false,
           requires_restart: false,
-          plan: await previewAgentProfileChange(request, args.scope, cwd),
+          plan: await previewAgentProfileChange(request, scope, cwd),
         });
       if (!args.confirmation_digest)
         throw new Error("agent_profiles apply requires confirmation_digest");
       return JSON.stringify(
-        await applyAgentProfileChange(request, args.scope, args.confirmation_digest, cwd),
+        await applyAgentProfileChange(request, scope, args.confirmation_digest, cwd),
       );
     },
   });
@@ -222,24 +225,28 @@ const plugin = (async (input: PluginInput) => {
       "Preview or apply scope-isolated removal of retired public assets without touching unknown sources or runtime state.",
     args: {
       phase: tool.schema.enum(["preview", "apply"]),
-      scope: tool.schema.enum(["global", "project"]),
+      scope: tool.schema.enum(["global", "project"]).default("project"),
       confirmation_digest: tool.schema.string().optional(),
     },
-    async execute(args: {
-      phase: "preview" | "apply";
-      scope: "global" | "project";
-      confirmation_digest?: string;
-    }) {
-      const cwd = input.directory ?? process.cwd();
+    async execute(
+      args: {
+        phase: "preview" | "apply";
+        scope?: "global" | "project";
+        confirmation_digest?: string;
+      },
+      context: { directory?: string },
+    ) {
+      const cwd = context.directory ?? input.directory ?? process.cwd();
+      const scope = args.scope ?? "project";
       if (args.phase === "preview")
         return JSON.stringify({
           status: "ok",
           applied: false,
-          plan: await previewReconcile(args.scope, cwd),
+          plan: await previewReconcile(scope, cwd),
         });
       if (!args.confirmation_digest)
         throw new Error("reconcile apply requires confirmation_digest");
-      return JSON.stringify(await applyReconcile(args.scope, args.confirmation_digest, cwd));
+      return JSON.stringify(await applyReconcile(scope, args.confirmation_digest, cwd));
     },
   });
   return {

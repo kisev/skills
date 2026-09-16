@@ -36,7 +36,8 @@ No install, config, or state mutation.
 
 ### REQ-I-230 - Route the capabilities package command
 
-The command shall invoke package tool `capabilities` and return its versioned catalog.
+The command shall expose the exact empty argument schema, invoke package tool
+`capabilities`, and return its versioned catalog.
 
 ## Example
 

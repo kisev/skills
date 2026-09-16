@@ -79,9 +79,12 @@ Use the same agents and scope as the installation. Omit `--global` for project
 scope. Avoid `remove --all` unless every portable skill in that scope should be
 removed.
 
-Do not use package install or reconcile to update or remove portable skills.
-Package reconcile manages only package-owned assets and preserves conflicts,
-worktrees, and runtime state.
+Package install never installs or updates portable skills. A confirmed package
+reconcile may archive a marked retired skill and invoke the pinned `skills` CLI
+directly for OpenCode and Codex cleanup. Rollback covers preview-bound paths;
+concurrent unplanned changes are best-effort.
+Pre-marker and unknown skills remain manual cleanup. Conflicts, worktrees, and
+runtime state are preserved.
 
 ## Troubleshoot Discovery
 

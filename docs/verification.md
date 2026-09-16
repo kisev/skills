@@ -34,15 +34,19 @@ Portable skills do not depend on the npm package, and the npm package does not
 install portable skills. Project integration persists in project `node_modules`;
 global integration persists in the npm project at `~/.config/opencode`.
 
-The installer requires explicit scope and preview/confirmation. It writes only
-selected managed assets after confirmation and never creates or edits
+Scope-aware direct commands default to the current directory and accept one
+`--global` flag for global state; `--scope` is unsupported. The installer
+requires preview/confirmation. It writes only selected managed assets after confirmation and never creates or edits
 `opencode.json`; the core `plugin` entry remains user-owned. Update is an exact
 npm install followed by install preview, exact confirmation, and OpenCode
 restart.
 
 Uninstall order is asset preview and confirmation, user-owned plugin-entry
 removal, `npm uninstall` in the owning project, then restart. Reconcile and
-uninstall archive exact-owned assets. Conflicts, worktrees, and runtime state are
+uninstall archive exact-owned assets. Reconcile invokes the package-configured
+exact `skills` CLI directly for marked retired OpenCode/Codex cleanup and rolls
+preview-bound paths back on failure. Concurrent unplanned changes are best-effort.
+Conflicts, worktrees, and runtime state are
 preserved; no archive restore or purge command is exposed.
 
 ## Current Surface

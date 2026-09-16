@@ -10,7 +10,8 @@ Trigger for diagnostics; near-miss: configuration mutation.
 
 ## Inputs/Outputs
 
-Input is global/project scope; output is structured health facts.
+Input is optional global/project scope defaulting to project; output is
+structured health facts.
 
 ## Workflow Stages
 
@@ -36,7 +37,8 @@ No repair or install.
 
 ### REQ-I-231 - Route the doctor package command
 
-The command shall invoke package tool `doctor` and remain observational.
+The command shall expose the exact package-tool argument schema, default omitted
+scope to project, invoke package tool `doctor`, and remain observational.
 
 ## Example
 

@@ -350,14 +350,25 @@ export async function archiveMutations(
     entries.map((entry) => `${String(entry.original_path)}:${String(entry.digest)}`),
   );
   const mutations: FileMutation[] = [];
+  const queuedObjects = new Set<string>();
   const now = new Date(0).toISOString();
   for (const candidate of candidates) {
     const digestValue = sha256(candidate.content);
     const key = `${candidate.path}:${digestValue}`;
-    if (known.has(key)) continue;
     const objectPath = `objects/${digestValue}`;
     const object = await readRegular(destination(root, objectPath));
-    if (!object) {
+    if (known.has(key)) {
+      if (
+        (!object && !queuedObjects.has(digestValue)) ||
+        (object && sha256(object) !== digestValue)
+      )
+        throw new InstallerError(
+          "invalid_archive",
+          `Archive index references an invalid object: ${digestValue}`,
+        );
+      continue;
+    }
+    if (!object && !queuedObjects.has(digestValue)) {
       mutations.push({
         root,
         path: objectPath,
@@ -366,7 +377,8 @@ export async function archiveMutations(
         mode: candidate.record.mode,
         expected: { absent: true },
       });
-    } else if (sha256(object) !== digestValue) {
+      queuedObjects.add(digestValue);
+    } else if (object && sha256(object) !== digestValue) {
       throw new InstallerError("archive_collision", `Archive object collision: ${digestValue}`);
     }
     entries.push({
@@ -812,7 +824,7 @@ export async function preview(
   const root = deploymentRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot))
+      if (await recoverTransaction(root, stateRoot, [archiveRoot(scope, cwd, home)]))
         throw new InstallerError(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
@@ -856,7 +868,7 @@ export async function apply(
   const root = deploymentRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot))
+      if (await recoverTransaction(root, stateRoot, [archiveRoot(scope, cwd, home)]))
         throw new InstallerError(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",

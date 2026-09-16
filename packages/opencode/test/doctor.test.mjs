@@ -47,11 +47,11 @@ test("doctor JSON is versioned, read-only, partial tolerant, and has stable exit
   const item = fixture();
   try {
     const before = readdirSync(item.root).sort();
-    const result = spawnSync(
-      process.execPath,
-      [join(PACKAGE, "dist/cli.js"), "doctor", "--scope", "project", "--json"],
-      { cwd: item.project, env: environment(item.home), encoding: "utf8" },
-    );
+    const result = spawnSync(process.execPath, [join(PACKAGE, "dist/cli.js"), "doctor", "--json"], {
+      cwd: item.project,
+      env: environment(item.home),
+      encoding: "utf8",
+    });
     assert.equal(result.status, 1);
     const report = JSON.parse(result.stdout);
     assert.equal(report.schema_version, 1);
@@ -71,12 +71,12 @@ test("doctor JSON is versioned, read-only, partial tolerant, and has stable exit
   }
 });
 
-test("doctor distinguishes invalid input with exit code two", () => {
+test("doctor rejects removed scope syntax with exit code two", () => {
   const item = fixture();
   try {
     const result = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist/cli.js"), "doctor", "--scope", "invalid", "--json"],
+      [join(PACKAGE, "dist/cli.js"), "doctor", "--scope", "project", "--json"],
       { cwd: item.project, env: environment(item.home), encoding: "utf8" },
     );
     assert.equal(result.status, 2);
@@ -129,7 +129,7 @@ test("doctor never serializes config secrets and classifies collisions as proble
     assert.match(
       rendered,
       new RegExp(
-        `npx --yes ${escapeRegExp(`@kisev/skills-opencode@${PACKAGE_VERSION}`)} install --scope project --dry-run`,
+        `npx --yes ${escapeRegExp(`@kisev/skills-opencode@${PACKAGE_VERSION}`)} install --dry-run`,
       ),
     );
     assert.doesNotMatch(rendered, /npm exec -- skills-opencode/);
@@ -180,13 +180,13 @@ test("package tool and direct CLI share core doctor findings", async () => {
     process.env.XDG_STATE_HOME = join(item.home, ".state");
     const hooks = await plugin({ directory: item.project });
     const packageReport = JSON.parse(
-      await hooks.tool.doctor.execute({ scope: "project" }, { directory: item.project }),
+      await hooks.tool.doctor.execute({}, { directory: item.project }),
     );
-    const cli = spawnSync(
-      process.execPath,
-      [join(PACKAGE, "dist/cli.js"), "doctor", "--scope", "project", "--json"],
-      { cwd: item.project, env: environment(item.home), encoding: "utf8" },
-    );
+    const cli = spawnSync(process.execPath, [join(PACKAGE, "dist/cli.js"), "doctor", "--json"], {
+      cwd: item.project,
+      env: environment(item.home),
+      encoding: "utf8",
+    });
     const directReport = JSON.parse(cli.stdout);
     assert.equal(packageReport.schema_version, directReport.schema_version);
     assert.equal(packageReport.mutations, directReport.mutations);

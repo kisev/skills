@@ -1,11 +1,13 @@
 import { readFileSync } from "node:fs";
-import { lstat, readdir, readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { lstat, opendir, readdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
   applyTransaction,
+  archiveRoot,
   assertSafePath,
   consumeReceipt,
   destination,
@@ -24,10 +26,19 @@ import {
   type TransactionOptions,
 } from "./lifecycle.js";
 import { archiveMutations, type ArchiveCandidate } from "./installer.js";
+import { skillsInstallerSpec } from "./package-metadata.js";
 
 const PACKAGE_NAME = "@kisev/skills-opencode";
 const GENERIC_MANIFEST = ".skills-opencode-manifest.json";
 const SEMANTIC_MANIFEST = ".skills-opencode/agent-profiles.manifest.json";
+const PORTABLE_SOURCE = "https://kisev.github.io/skills" as const;
+const PROCESS_OUTPUT_LIMIT = 64 * 1024;
+const PROCESS_TIMEOUT_MS = 120_000;
+const PORTABLE_FILE_LIMIT = 4 * 1024 * 1024;
+const PORTABLE_TREE_FILE_LIMIT = 256;
+const PORTABLE_TREE_BYTE_LIMIT = 16 * 1024 * 1024;
+const PORTABLE_TREE_ENTRY_LIMIT = 1_024;
+const PORTABLE_TREE_DEPTH_LIMIT = 32;
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsRoot = resolve(packageRoot, "dist", "assets");
 const inventoryPath = resolve(assetsRoot, "migration-inventory.json");
@@ -55,6 +66,9 @@ type Inventory = {
   schema_version: 2;
   inventory_version: string;
   active_portable_skills: string[];
+  removed: string[];
+  renamed: Record<string, string>;
+  replacements: Record<string, string[]>;
   retired_command_hashes?: Record<string, string>;
   records: InventoryRecord[];
 };
@@ -62,7 +76,6 @@ type Inventory = {
 export type ReconcileStatus =
   | "current"
   | "retired"
-  | "archive-pending"
   | "renamed"
   | "modified-managed"
   | "user-owned"
@@ -79,21 +92,39 @@ export type ReconcileItem = {
 };
 
 export type ReconcilePlan = {
-  schema_version: 1;
+  schema_version: 2;
   domain: "reconcile";
   scope: Scope;
   root: string;
   inventory_version: string;
   current: ReconcileItem[];
   retired: ReconcileItem[];
-  "archive-pending": ReconcileItem[];
   renamed: ReconcileItem[];
   modified_managed: ReconcileItem[];
   user_owned: ReconcileItem[];
   unknown: ReconcileItem[];
   conflicts: ReconcileItem[];
   diagnostic_state_only: ReconcileItem[];
-  operations: Array<{ path: string; operation: "remove" | "write"; sha256?: string }>;
+  operations: Array<{
+    path: string;
+    operation: "archive" | "execute" | "remove" | "write";
+    sha256?: string;
+    via?: "skills-cli" | "transaction";
+  }>;
+  portable_cleanup?: {
+    source: typeof PORTABLE_SOURCE;
+    names: string[];
+    command: string[];
+    cwd: string;
+    environment: {
+      HOME: string;
+      XDG_CONFIG_HOME: string;
+      XDG_STATE_HOME?: string;
+      CODEX_HOME: string;
+    };
+    locks: Array<{ path: string; before_sha256: string; after_sha256: string }>;
+    trees: Array<{ name: string; path: string; tree_sha256: string; files: number }>;
+  };
   plan_digest: string;
   confirmation_digest?: string;
   superseded_plan?: SupersededPlan;
@@ -102,7 +133,30 @@ export type ReconcilePlan = {
   receipt_expires_at?: string;
 };
 
-export type ReconcileResult = { status: "ok"; applied: true; plan: ReconcilePlan };
+export type ReconcileResult = {
+  status: "ok";
+  applied: true;
+  plan: ReconcilePlan;
+  portable_remove?: PortableRemoveResult;
+};
+
+export type PortableRemoveResult = {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  stdout: string;
+  stderr: string;
+  stdout_truncated: boolean;
+  stderr_truncated: boolean;
+  timed_out?: boolean;
+};
+
+export type ReconcileOptions = TransactionOptions & {
+  runPortableRemove?: (
+    command: readonly string[],
+    cwd: string,
+    environment: NodeJS.ProcessEnv,
+  ) => Promise<PortableRemoveResult>;
+};
 
 export class ReconcileError extends LifecycleError {}
 
@@ -112,6 +166,13 @@ function loadInventory(): Inventory {
     value.schema_version !== 2 ||
     typeof value.inventory_version !== "string" ||
     !Array.isArray(value.active_portable_skills) ||
+    !Array.isArray(value.removed) ||
+    !value.renamed ||
+    typeof value.renamed !== "object" ||
+    Array.isArray(value.renamed) ||
+    !value.replacements ||
+    typeof value.replacements !== "object" ||
+    Array.isArray(value.replacements) ||
     !Array.isArray(value.records)
   ) {
     throw new ReconcileError("invalid_inventory", "Migration inventory has an unsupported schema");
@@ -123,8 +184,51 @@ function scopeRoot(scope: Scope, cwd: string, home: string): string {
   return scope === "global" ? resolve(home) : resolve(cwd);
 }
 
-function portableRoot(scope: Scope, cwd: string, home: string): string {
-  return resolve(scopeRoot(scope, cwd, home), ".agents", "skills");
+function environmentRoot(name: string, home: string, fallback: string): string {
+  const configured = home === homedir() ? process.env[name]?.trim() : undefined;
+  return resolve(configured || resolve(home, fallback));
+}
+
+function portableEnvironment(home: string) {
+  const xdgState = home === homedir() ? process.env.XDG_STATE_HOME?.trim() : undefined;
+  return {
+    HOME: resolve(home),
+    XDG_CONFIG_HOME: environmentRoot("XDG_CONFIG_HOME", home, ".config"),
+    ...(xdgState ? { XDG_STATE_HOME: resolve(xdgState) } : {}),
+    CODEX_HOME: environmentRoot("CODEX_HOME", home, ".codex"),
+  };
+}
+
+function portableRoots(scope: Scope, cwd: string, home: string): string[] {
+  if (scope === "project") return [resolve(cwd, ".agents", "skills")];
+  const environment = portableEnvironment(home);
+  return [
+    resolve(home, ".agents", "skills"),
+    resolve(environment.XDG_CONFIG_HOME, "opencode", "skills"),
+    resolve(environment.CODEX_HOME, "skills"),
+  ].filter((value, index, values) => values.indexOf(value) === index);
+}
+
+function reconcileAllowedRoots(scope: Scope, cwd: string, home: string): string[] {
+  const environment = portableEnvironment(home);
+  const lock =
+    scope === "global"
+      ? environment.XDG_STATE_HOME
+        ? resolve(environment.XDG_STATE_HOME, "skills")
+        : resolve(home, ".agents")
+      : resolve(cwd);
+  return [archiveRoot(scope, cwd, home), ...portableRoots(scope, cwd, home), lock];
+}
+
+function displayPath(root: string, target: string): string {
+  const value = relative(resolve(root), resolve(target));
+  return !value.startsWith(`..${sep}`) && value !== ".." && !value.startsWith(sep)
+    ? value.split(sep).join("/")
+    : resolve(target);
+}
+
+function safePortableName(name: string): boolean {
+  return name.length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name);
 }
 
 function relativePath(root: string, target: string): string {
@@ -169,35 +273,151 @@ async function regular(
 
 async function filesUnder(
   root: string,
-): Promise<Array<{ relative: string; absolute: string; content?: Buffer; unsafe?: true }>> {
+): Promise<
+  Array<{ relative: string; absolute: string; content?: Buffer; mode?: number; unsafe?: true }>
+> {
   const info = await metadata(root);
   if (!info) return [];
   if (info.isSymbolicLink() || !info.isDirectory())
     return [{ relative: "", absolute: root, unsafe: true }];
-  const result: Array<{ relative: string; absolute: string; content?: Buffer; unsafe?: true }> = [];
-  async function visit(directory: string): Promise<void> {
-    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((left, right) =>
-      left.name.localeCompare(right.name),
-    )) {
+  const result: Array<{
+    relative: string;
+    absolute: string;
+    content?: Buffer;
+    mode?: number;
+    unsafe?: true;
+  }> = [];
+  let fileCount = 0;
+  let totalBytes = 0;
+  let entryCount = 0;
+  let exceeded = false;
+  const exceed = (absolute: string) => {
+    if (!exceeded) result.push({ relative: relativePath(root, absolute), absolute, unsafe: true });
+    exceeded = true;
+  };
+  async function visit(directory: string, depth: number): Promise<void> {
+    if (exceeded) return;
+    if (depth > PORTABLE_TREE_DEPTH_LIMIT) {
+      exceed(directory);
+      return;
+    }
+    const entries = [];
+    const handle = await opendir(directory);
+    for await (const entry of handle) {
+      entryCount += 1;
+      if (entryCount > PORTABLE_TREE_ENTRY_LIMIT) {
+        exceed(directory);
+        return;
+      }
+      entries.push(entry);
+    }
+    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (exceeded) return;
       const absolute = join(directory, entry.name);
       const child = await metadata(absolute);
       if (!child || child.isSymbolicLink()) {
         result.push({ relative: relativePath(root, absolute), absolute, unsafe: true });
       } else if (child.isDirectory()) {
-        await visit(absolute);
+        await visit(absolute, depth + 1);
       } else if (child.isFile() && child.nlink === 1) {
+        fileCount += 1;
+        totalBytes += Number(child.size);
+        if (
+          fileCount > PORTABLE_TREE_FILE_LIMIT ||
+          Number(child.size) > PORTABLE_FILE_LIMIT ||
+          totalBytes > PORTABLE_TREE_BYTE_LIMIT
+        ) {
+          exceed(absolute);
+          return;
+        }
         result.push({
           relative: relativePath(root, absolute),
           absolute,
           content: await readFile(absolute),
+          mode: Number(child.mode) & 0o777,
         });
       } else {
         result.push({ relative: relativePath(root, absolute), absolute, unsafe: true });
       }
     }
   }
-  await visit(root);
+  await visit(root, 0);
   return result;
+}
+
+function portableIdentity(content: Buffer): { name: string; source?: string } | undefined {
+  const text = content.toString("utf8");
+  if (!text.startsWith("---\n")) return undefined;
+  const end = text.indexOf("\n---\n", 4);
+  if (end < 0) return undefined;
+  const lines = text.slice(4, end).split("\n");
+  const scalar = (value: string): string | undefined => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.startsWith("[") || trimmed.startsWith("{")) return undefined;
+    const first = trimmed[0];
+    const last = trimmed.at(-1);
+    if (first === "'" || first === '"') {
+      if (last !== first || trimmed.length < 2) return undefined;
+      const inner = trimmed.slice(1, -1);
+      return inner.includes(first) ? undefined : inner;
+    }
+    return last === "'" || last === '"' ? undefined : trimmed;
+  };
+  const allowed = new Set([
+    "name",
+    "description",
+    "license",
+    "compatibility",
+    "metadata",
+    "allowed-tools",
+  ]);
+  const fields = new Map<string, string>();
+  const metadata = new Map<string, string>();
+  let current = "";
+  let block = false;
+  for (const line of lines) {
+    if (!line) continue;
+    if (!line.startsWith(" ")) {
+      const match = /^([a-z][a-z0-9-]*):\s*(.*)$/.exec(line);
+      if (!match || !allowed.has(match[1]) || fields.has(match[1])) return undefined;
+      current = match[1];
+      const value = match[2];
+      block = value === ">-" || value === "|" || value === "|-";
+      if (current === "metadata") {
+        if (value || block) return undefined;
+      } else if (!block && scalar(value) === undefined) return undefined;
+      fields.set(current, value);
+      continue;
+    }
+    if (current === "metadata") {
+      const match = /^  ([a-z][a-z0-9-]*):\s*(.*)$/.exec(line);
+      if (!match || metadata.has(match[1])) return undefined;
+      const value = scalar(match[2]);
+      if (value === undefined) return undefined;
+      metadata.set(match[1], value);
+      continue;
+    }
+    if (!block || !/^  \S/.test(line)) return undefined;
+  }
+  if (!["name", "description", "license", "metadata"].every((key) => fields.has(key)))
+    return undefined;
+  const name = scalar(fields.get("name")!);
+  const source = metadata.get("source");
+  return name ? { name, ...(source ? { source } : {}) } : undefined;
+}
+
+function treeDigest(
+  files: readonly { relative: string; content?: Buffer; mode?: number; unsafe?: true }[],
+): string {
+  return digest({
+    schema_version: 1,
+    files: files.map((file) => ({
+      path: file.relative,
+      mode: file.mode,
+      size: file.content?.length,
+      sha256: file.content ? sha256(file.content) : undefined,
+    })),
+  });
 }
 
 function item(
@@ -285,31 +505,148 @@ function retiredRecords(inventory: Inventory, scope: Scope): InventoryRecord[] {
   );
 }
 
-function diagnostic(scope: Scope, cwd: string, home: string): ReconcileItem[] {
-  const state = lifecycleRoot(scope, cwd, home);
+async function diagnostic(home: string): Promise<ReconcileItem[]> {
+  const base =
+    process.env.XDG_STATE_HOME && home === homedir()
+      ? resolve(process.env.XDG_STATE_HOME)
+      : resolve(home, ".local", "state");
+  const result: ReconcileItem[] = [];
+  for (const name of ["goal", "multi-run"]) {
+    const path = resolve(base, "opencode", "skills", name);
+    if (await metadata(path))
+      result.push(
+        item(path, "diagnostic-state-only", "runtime state is not inspected or migrated"),
+      );
+  }
+  return result;
+}
+
+type Built = {
+  plan: ReconcilePlan;
+  mutations: FileMutation[];
+};
+
+function portableRemoveCommand(scope: Scope, names: readonly string[]): string[] {
   return [
-    item(`${state}/goal`, "diagnostic-state-only", "runtime state is not inspected or migrated"),
-    item(
-      `${state}/multi-run`,
-      "diagnostic-state-only",
-      "runtime state is not inspected or migrated",
-    ),
+    "npx",
+    "--yes",
+    skillsInstallerSpec(),
+    "remove",
+    ...names,
+    "--agent",
+    "opencode",
+    "--agent",
+    "codex",
+    ...(scope === "global" ? ["--global"] : []),
+    "--yes",
   ];
 }
 
-type Built = { plan: ReconcilePlan; mutations: FileMutation[] };
+function boundedAppend(current: Buffer, chunk: Buffer): { value: Buffer; truncated: boolean } {
+  if (current.length >= PROCESS_OUTPUT_LIMIT) return { value: current, truncated: true };
+  const remaining = PROCESS_OUTPUT_LIMIT - current.length;
+  return {
+    value: Buffer.concat([current, chunk.subarray(0, remaining)]),
+    truncated: chunk.length > remaining,
+  };
+}
+
+async function runPortableRemove(
+  command: readonly string[],
+  cwd: string,
+  environment: NodeJS.ProcessEnv,
+): Promise<PortableRemoveResult> {
+  return new Promise((resolvePromise, reject) => {
+    const windows = process.platform === "win32";
+    if (windows && command.some((value) => !/^[A-Za-z0-9_./:@=-]+$/.test(value))) {
+      reject(new ReconcileError("invalid_plan", "Portable remover has an unsafe Windows argument"));
+      return;
+    }
+    const executable = windows ? (process.env.ComSpec ?? "cmd.exe") : command[0];
+    const arguments_ = windows
+      ? ["/d", "/s", "/c", `npx.cmd ${command.slice(1).join(" ")}`]
+      : command.slice(1);
+    const child = spawn(executable, arguments_, {
+      cwd,
+      env: environment,
+      shell: false,
+      detached: !windows,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = Buffer.alloc(0);
+    let stderr = Buffer.alloc(0);
+    let stdoutTruncated = false;
+    let stderrTruncated = false;
+    let timedOut = false;
+    let forceTimeout: NodeJS.Timeout | undefined;
+    const terminate = (signal: NodeJS.Signals) => {
+      if (!windows && child.pid) {
+        try {
+          process.kill(-child.pid, signal);
+          return;
+        } catch {}
+      }
+      if (windows && child.pid) {
+        const killer = spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        killer.on("error", () => undefined);
+      }
+      child.kill(signal);
+    };
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      terminate("SIGTERM");
+      forceTimeout = setTimeout(() => terminate("SIGKILL"), 5_000);
+    }, PROCESS_TIMEOUT_MS);
+    child.stdout.on("data", (chunk: Buffer) => {
+      const next = boundedAppend(stdout, chunk);
+      stdout = next.value;
+      stdoutTruncated ||= next.truncated;
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      const next = boundedAppend(stderr, chunk);
+      stderr = next.value;
+      stderrTruncated ||= next.truncated;
+    });
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      if (forceTimeout) clearTimeout(forceTimeout);
+      reject(error);
+    });
+    child.once("close", (code, signal) => {
+      clearTimeout(timeout);
+      if (forceTimeout) clearTimeout(forceTimeout);
+      resolvePromise({
+        code,
+        signal,
+        stdout: stdout.toString("utf8"),
+        stderr: stderr.toString("utf8"),
+        stdout_truncated: stdoutTruncated,
+        stderr_truncated: stderrTruncated,
+        timed_out: timedOut,
+      });
+    });
+  });
+}
 
 async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promise<Built> {
   const inventory = loadInventory();
+  const retiredPortableNames = new Set([
+    ...inventory.removed,
+    ...Object.keys(inventory.renamed),
+    ...Object.keys(inventory.replacements),
+  ]);
   const root = scopeRoot(scope, cwd, home);
   const deployment = resolve(root, scope === "global" ? ".config/opencode" : ".opencode");
-  const portable = portableRoot(scope, cwd, home);
+  const portableLocations = portableRoots(scope, cwd, home);
+  const portableEnv = portableEnvironment(home);
   const currentAssets = await packageAssets();
   const retired = retiredRecords(inventory, scope);
   const groups: Record<ReconcileStatus, ReconcileItem[]> = {
     current: [],
     retired: [],
-    "archive-pending": [],
     renamed: [],
     "modified-managed": [],
     "user-owned": [],
@@ -318,7 +655,15 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     "diagnostic-state-only": [],
   };
   const mutations: FileMutation[] = [];
+  const portableMutationTargets = new Set<string>();
   const archiveCandidates: ArchiveCandidate[] = [];
+  const portableTrees: Array<{
+    name: string;
+    path: string;
+    root: string;
+    tree_sha256: string;
+    files: number;
+  }> = [];
   const managed = new Map<string, { sha256: string }>();
   const manifestPath = join(deployment, GENERIC_MANIFEST);
   const manifestValue = await regular(manifestPath);
@@ -387,14 +732,15 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
       record.sha256 === sha256(value.content) &&
       (!manifestRecord || manifestRecord.sha256 === sha256(value.content))
     ) {
+      const status = record.replacement ? "renamed" : "retired";
       add(
         groups,
         item(
           relativePath(root, target),
-          "archive-pending",
+          status,
           record.replacement
-            ? "exact historical SHA-256 proves renamed ownership; archive lifecycle is pending"
-            : "exact historical SHA-256 proves retired public ownership; archive lifecycle is pending",
+            ? "exact historical SHA-256 proves renamed package ownership"
+            : "exact historical SHA-256 proves retired package ownership",
           value.content,
           record.replacement,
         ),
@@ -418,12 +764,13 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
         expected: { sha256: sha256(value.content) },
       });
     } else if (!value && manifestRecord && record.sha256 === manifestRecord.sha256) {
+      const status = record.replacement ? "renamed" : "retired";
       add(
         groups,
         item(
           relativePath(root, target),
-          "archive-pending",
-          "stale exact ownership record; archive lifecycle is pending",
+          status,
+          "stale exact package ownership record",
           undefined,
           record.replacement,
         ),
@@ -671,58 +1018,209 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     }
   }
 
-  for (const record of retired.filter((value) => value.kind === "portable-skill")) {
-    const directory = resolve(portable, record.installed_path.replace(/^skills\//, ""));
-    const files = await filesUnder(directory);
-    const expected = record.files ?? {};
-    const safe =
-      files.length === Object.keys(expected).length &&
-      files.every((file) => !file.unsafe && expected[file.relative] === sha256(file.content!));
-    if (files.some((file) => file.unsafe)) {
+  const installed = new Map<string, Array<{ directory: string; portableRoot: string }>>();
+  for (const portableRoot of portableLocations) {
+    const portableInfo = await metadata(portableRoot);
+    if (portableInfo?.isSymbolicLink() || (portableInfo && !portableInfo.isDirectory())) {
       add(
         groups,
         item(
-          relativePath(root, directory),
+          displayPath(root, portableRoot),
           "conflict",
-          "retired skill contains a symlink or unsafe file",
+          "portable skill root is a symlink or non-directory",
         ),
       );
-    } else if (safe) {
-      for (const file of files) {
-        const target = relativePath(root, file.absolute);
+      continue;
+    }
+    for (const entry of portableInfo?.isDirectory() ? (await readdir(portableRoot)).sort() : []) {
+      const directory = resolve(portableRoot, entry);
+      const directoryInfo = await metadata(directory);
+      if (!directoryInfo?.isDirectory() || directoryInfo.isSymbolicLink()) {
         add(
           groups,
           item(
-            target,
-            "archive-pending",
-            "exact historical SHA-256 proves retired portable ownership; archive lifecycle is pending",
-            file.content,
+            displayPath(root, directory),
+            "unknown",
+            "portable skill entry is an external symlink or non-directory",
           ),
         );
+        continue;
+      }
+      const values = installed.get(entry) ?? [];
+      values.push({ directory, portableRoot });
+      installed.set(entry, values);
+    }
+  }
+
+  for (const [entry, locations] of [...installed].sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    if (inventory.active_portable_skills.includes(entry)) {
+      for (const { directory } of locations)
+        add(groups, item(displayPath(root, directory), "current", "current portable skill source"));
+      continue;
+    }
+    if (!safePortableName(entry)) {
+      for (const { directory } of locations)
+        add(
+          groups,
+          item(
+            displayPath(root, directory),
+            "conflict",
+            "portable skill name is unsafe for delegated removal",
+          ),
+        );
+      continue;
+    }
+    const candidates: Array<{
+      directory: string;
+      portableRoot: string;
+      files: Awaited<ReturnType<typeof filesUnder>>;
+    }> = [];
+    let blocked = false;
+    for (const { directory, portableRoot } of locations) {
+      const path = displayPath(root, directory);
+      const skill = await regular(resolve(directory, "SKILL.md"));
+      if (!skill || "unsafe" in skill) {
+        add(groups, item(path, "unknown", "portable skill has no safe SKILL.md ownership marker"));
+        blocked = true;
+        continue;
+      }
+      const identity = portableIdentity(skill.content);
+      if (identity?.name !== entry || identity.source !== PORTABLE_SOURCE) {
+        add(
+          groups,
+          item(path, "unknown", "portable skill is outside the marked project inventory"),
+        );
+        blocked = true;
+        continue;
+      }
+      const files = await filesUnder(directory);
+      if (
+        !files.length ||
+        files.some((file) => file.unsafe || !file.content || file.mode === undefined)
+      ) {
+        add(groups, item(path, "conflict", "marked portable skill contains an unsafe file"));
+        blocked = true;
+        continue;
+      }
+      candidates.push({ directory, portableRoot, files });
+    }
+    if (blocked) continue;
+    if (!retiredPortableNames.has(entry)) {
+      for (const candidate of candidates)
+        add(
+          groups,
+          item(
+            displayPath(root, candidate.directory),
+            "unknown",
+            "marked portable skill is not declared retired by this package inventory",
+          ),
+        );
+      continue;
+    }
+    const replacement = inventory.renamed[entry];
+    const status: ReconcileStatus = replacement ? "renamed" : "retired";
+    for (const candidate of candidates) {
+      const path = displayPath(root, candidate.directory);
+      add(
+        groups,
+        item(
+          path,
+          status,
+          replacement
+            ? "project source marker proves renamed portable ownership"
+            : "project source marker proves retired portable ownership",
+          undefined,
+          replacement,
+        ),
+      );
+      portableTrees.push({
+        name: entry,
+        path,
+        root: candidate.portableRoot,
+        tree_sha256: treeDigest(candidate.files),
+        files: candidate.files.length,
+      });
+      for (const file of candidate.files) {
+        const target = `${entry}/${file.relative}`;
         archiveCandidates.push({
-          path: relativePath(root, file.absolute),
-          record: { sha256: sha256(file.content!), mode: 0o644, kind: "state" },
+          path: displayPath(root, file.absolute),
+          record: {
+            sha256: sha256(file.content!),
+            mode: file.mode!,
+            kind: "state",
+          },
           content: file.content!,
-          reason: "retired portable skill",
+          reason: `${status} portable skill`,
           kind: "state",
         });
         mutations.push({
-          path: relativePath(root, file.absolute),
-          operation: "remove",
+          root: candidate.portableRoot,
+          path: target,
+          operation: "external-remove",
           expected: { sha256: sha256(file.content!) },
         });
+        portableMutationTargets.add(file.absolute);
       }
-    } else if (files.length) {
-      for (const file of files)
-        add(
-          groups,
-          item(
-            relativePath(root, file.absolute),
-            "conflict",
-            "retired skill is modified or ownership is ambiguous",
-            file.content,
-          ),
-        );
+    }
+  }
+
+  const portableNames = [...new Set(portableTrees.map((tree) => tree.name))].sort();
+  const locks: Array<{ path: string; before_sha256: string; after_sha256: string }> = [];
+  if (portableNames.length) {
+    const lockPath =
+      scope === "global"
+        ? portableEnv.XDG_STATE_HOME
+          ? resolve(portableEnv.XDG_STATE_HOME, "skills", ".skill-lock.json")
+          : resolve(home, ".agents", ".skill-lock.json")
+        : resolve(root, "skills-lock.json");
+    const lock = await regular(lockPath);
+    if (lock && "unsafe" in lock) {
+      add(groups, item(lockPath, "conflict", "portable installer lock is unsafe"));
+    } else if (lock) {
+      try {
+        const parsed = JSON.parse(lock.content.toString("utf8")) as {
+          version?: unknown;
+          skills?: Record<string, unknown>;
+          [key: string]: unknown;
+        };
+        if (typeof parsed.version !== "number" || !parsed.skills || Array.isArray(parsed.skills))
+          throw new Error("unsupported lock");
+        if (
+          (scope === "global" && parsed.version < 3) ||
+          (scope === "project" && parsed.version < 1)
+        )
+          throw new Error("unsupported lock version");
+        const tracked = portableNames.filter((name) => Object.hasOwn(parsed.skills!, name));
+        if (tracked.length) {
+          const remaining = Object.fromEntries(
+            Object.entries(parsed.skills).filter(([name]) => !portableNames.includes(name)),
+          );
+          const next = Buffer.from(
+            scope === "global"
+              ? JSON.stringify({ ...parsed, skills: remaining }, null, 2)
+              : `${JSON.stringify({ version: parsed.version, skills: Object.fromEntries(Object.entries(remaining).sort(([left], [right]) => left.localeCompare(right))) }, null, 2)}\n`,
+          );
+          const lockRoot = resolve(dirname(lockPath));
+          mutations.push({
+            root: lockRoot,
+            path: lockPath.slice(lockRoot.length + 1),
+            operation: "external-write",
+            content: next,
+            mode: (await lstat(lockPath)).mode & 0o777,
+            expected: { sha256: sha256(lock.content) },
+          });
+          portableMutationTargets.add(lockPath);
+          locks.push({
+            path: lockPath,
+            before_sha256: sha256(lock.content),
+            after_sha256: sha256(next),
+          });
+        }
+      } catch {
+        add(groups, item(lockPath, "conflict", "portable installer lock is not valid JSON"));
+      }
     }
   }
 
@@ -733,66 +1231,59 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     }
     const value = JSON.parse(manifestRaw.toString("utf8")) as Record<string, unknown>;
     const next = Buffer.from(`${stable({ ...value, files: manifestFiles })}\n`);
-    mutations.push({
-      path: relativePath(root, manifestPath),
-      operation: "write",
-      content: next,
-      mode: 0o600,
-      expected: { sha256: sha256(manifestRaw) },
-    });
+    if (!next.equals(manifestRaw))
+      mutations.push({
+        path: relativePath(root, manifestPath),
+        operation: "write",
+        content: next,
+        mode: 0o600,
+        expected: { sha256: sha256(manifestRaw) },
+      });
   }
   mutations.push(
     ...(await archiveMutations(archiveCandidates, scope, cwd, home, inventory.inventory_version)),
   );
 
-  const portableInfo = await metadata(portable);
-  if (portableInfo?.isSymbolicLink() || (portableInfo && !portableInfo.isDirectory())) {
-    add(
-      groups,
-      item(
-        relativePath(root, portable),
-        "conflict",
-        "portable skill root is a symlink or non-directory",
-      ),
-    );
-  }
-  for (const entry of portableInfo?.isDirectory() ? await readdir(portable) : []) {
-    const directory = resolve(portable, entry);
-    if (
-      retired.some(
-        (record) => record.kind === "portable-skill" && record.installed_path === `skills/${entry}`,
-      )
+  const command = portableRemoveCommand(scope, portableNames);
+  const operations: ReconcilePlan["operations"] = mutations
+    .filter(
+      (mutation) =>
+        !portableMutationTargets.has(destination(resolve(mutation.root ?? root), mutation.path)),
     )
-      continue;
-    const path = relativePath(root, directory);
-    add(
-      groups,
-      item(
-        path,
-        inventory.active_portable_skills.includes(entry) ? "current" : "unknown",
-        inventory.active_portable_skills.includes(entry)
-          ? "current portable skill source"
-          : "portable skill is outside the canonical inventory",
-      ),
-    );
+    .map((mutation) => ({
+      path: mutation.root ? resolve(mutation.root, mutation.path) : mutation.path,
+      operation: mutation.root
+        ? ("archive" as const)
+        : mutation.operation === "external-write"
+          ? ("write" as const)
+          : mutation.operation === "external-remove"
+            ? ("remove" as const)
+            : mutation.operation,
+      ...(mutation.operation === "write" || mutation.operation === "external-write"
+        ? { sha256: sha256(mutation.content) }
+        : {}),
+    }));
+  for (const tree of portableTrees) {
+    operations.push({ path: tree.path, operation: "archive", sha256: tree.tree_sha256 });
+    operations.push({ path: tree.path, operation: "remove", via: "skills-cli" });
   }
-
-  const operations = mutations.map((mutation) => ({
-    path: mutation.path,
-    operation: mutation.operation,
-    ...(mutation.operation === "write" ? { sha256: sha256(mutation.content) } : {}),
-  }));
+  for (const lock of locks)
+    operations.push({
+      path: lock.path,
+      operation: "write",
+      sha256: lock.after_sha256,
+      via: "skills-cli",
+    });
+  if (portableNames.length)
+    operations.push({ path: command[0], operation: "execute", via: "skills-cli" });
   const base = {
-    schema_version: 1 as const,
+    schema_version: 2 as const,
     domain: "reconcile" as const,
     scope,
     root,
     inventory_version: inventory.inventory_version,
     current: groups.current.sort((left, right) => left.path.localeCompare(right.path)),
     retired: groups.retired.sort((left, right) => left.path.localeCompare(right.path)),
-    "archive-pending": groups["archive-pending"].sort((left, right) =>
-      left.path.localeCompare(right.path),
-    ),
     renamed: groups.renamed.sort((left, right) => left.path.localeCompare(right.path)),
     modified_managed: groups["modified-managed"].sort((left, right) =>
       left.path.localeCompare(right.path),
@@ -800,12 +1291,31 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     user_owned: groups["user-owned"].sort((left, right) => left.path.localeCompare(right.path)),
     unknown: groups.unknown.sort((left, right) => left.path.localeCompare(right.path)),
     conflicts: groups.conflict.sort((left, right) => left.path.localeCompare(right.path)),
-    diagnostic_state_only: diagnostic(scope, cwd, home),
+    diagnostic_state_only: await diagnostic(home),
     operations: operations.sort((left, right) => left.path.localeCompare(right.path)),
+    ...(portableNames.length
+      ? {
+          portable_cleanup: {
+            source: PORTABLE_SOURCE,
+            names: portableNames,
+            command,
+            cwd: root,
+            environment: portableEnv,
+            locks,
+            trees: portableTrees
+              .map(({ root: _root, ...tree }) => tree)
+              .sort((left, right) => left.path.localeCompare(right.path)),
+          },
+        }
+      : {}),
   };
   const planDigest = digest(base);
+  const confirmable =
+    operations.length > 0 &&
+    groups["modified-managed"].length === 0 &&
+    groups.conflict.length === 0;
   return {
-    plan: { ...base, plan_digest: planDigest, confirmable: true, digest: planDigest },
+    plan: { ...base, plan_digest: planDigest, confirmable, digest: planDigest },
     mutations,
   };
 }
@@ -819,14 +1329,15 @@ export async function previewReconcile(
   const root = scopeRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot))
+      if (await recoverTransaction(root, stateRoot, reconcileAllowedRoots(scope, cwd, home)))
         throw new ReconcileError(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
         );
       const built = await build(scope, cwd, home);
       const blocked = built.plan.modified_managed.length > 0 || built.plan.conflicts.length > 0;
-      if (blocked) {
+      const actionable = built.plan.operations.length > 0;
+      if (blocked || !actionable) {
         await supersedeReceipt(stateRoot);
         const { digest: _digest, ...withoutReceipt } = built.plan;
         return { ...withoutReceipt, confirmable: false };
@@ -873,13 +1384,13 @@ export async function applyReconcile(
   confirmationDigest: string,
   cwd = process.cwd(),
   home = homedir(),
-  options: TransactionOptions = {},
+  options: ReconcileOptions = {},
 ): Promise<ReconcileResult> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = scopeRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot))
+      if (await recoverTransaction(root, stateRoot, reconcileAllowedRoots(scope, cwd, home)))
         throw new ReconcileError(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
@@ -895,14 +1406,53 @@ export async function applyReconcile(
         throw new ReconcileError("stale_plan", "Reconcile inventory changed after preview");
       if (built.plan.conflicts.length || built.plan.modified_managed.length)
         throw new ReconcileError("conflict", "Reconcile contains unsafe ownership conflicts");
+      const cleanup = built.plan.portable_cleanup;
+      let portableRemove: PortableRemoveResult | undefined;
       await applyTransaction(root, stateRoot, built.mutations, {
         ...options,
+        applyExternal: async () => {
+          await options.applyExternal?.();
+          if (!cleanup) return;
+          const environment: NodeJS.ProcessEnv = {
+            ...process.env,
+            ...cleanup.environment,
+            DO_NOT_TRACK: "1",
+          };
+          if (!cleanup.environment.XDG_STATE_HOME) delete environment.XDG_STATE_HOME;
+          const result = await (options.runPortableRemove ?? runPortableRemove)(
+            cleanup.command,
+            cleanup.cwd,
+            environment,
+          );
+          portableRemove = result;
+          if (result.code !== 0 || result.signal || result.timed_out)
+            throw new ReconcileError(
+              "portable_remove_failed",
+              `skills remove failed with ${result.signal ?? `exit ${result.code}`}`,
+            );
+        },
         validateFinal: async () => {
           await options.validateFinal?.();
+          if (cleanup) {
+            for (const tree of cleanup.trees)
+              if (await metadata(resolve(root, tree.path)))
+                throw new ReconcileError(
+                  "final_validation_failed",
+                  `skills remove retained portable skill: ${tree.path}`,
+                );
+            for (const expected of cleanup.locks) {
+              const lock = await regular(expected.path);
+              if (!lock || "unsafe" in lock || sha256(lock.content) !== expected.after_sha256)
+                throw new ReconcileError(
+                  "final_validation_failed",
+                  `skills remove left an invalid lock: ${expected.path}`,
+                );
+            }
+          }
           const final = await build(scope, cwd, home);
           if (
             final.plan.retired.length ||
-            final.plan["archive-pending"].length ||
+            final.plan.renamed.length ||
             final.plan.operations.length
           )
             throw new ReconcileError(
@@ -911,7 +1461,12 @@ export async function applyReconcile(
             );
         },
       });
-      return { status: "ok", applied: true, plan: { ...built.plan, digest: confirmationDigest } };
+      return {
+        status: "ok",
+        applied: true,
+        plan: { ...built.plan, digest: confirmationDigest },
+        ...(portableRemove ? { portable_remove: portableRemove } : {}),
+      };
     });
   } catch (error) {
     if (error instanceof ReconcileError) throw error;

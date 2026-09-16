@@ -10,7 +10,8 @@ Trigger for exact-owned cleanup; near-miss: arbitrary file deletion.
 
 ## Inputs/Outputs
 
-Input is phase, scope, and confirmation digest; output is plan or receipt.
+Input is phase, optional scope defaulting to project, and confirmation digest;
+output is a plan or receipt.
 
 ## Workflow Stages
 
@@ -22,7 +23,8 @@ Core reconcile tool, semantic manifest, and archive.
 
 ## Remote/Local Effects
 
-Bounded local mutation on confirmed apply; no remote effects.
+Bounded local mutation on confirmed apply; marked portable cleanup invokes the
+configured exact external `skills` CLI for OpenCode and Codex.
 
 ## Errors/Partial/Escalation
 
@@ -30,13 +32,15 @@ Stale, tampered, expired, or replayed confirmations fail safely.
 
 ## Unique Constraints
 
-Unknown sources, runtime state, and user-owned files are untouched.
+Unknown or pre-marker sources, runtime state, and user-owned files are untouched.
 
 ## Requirement
 
 ### REQ-I-232 - Route the reconcile package command
 
-The command shall invoke package tool `reconcile` and require a fresh confirmation digest for apply.
+The command shall expose the exact package-tool argument schema, default omitted
+scope to project, invoke package tool `reconcile`, and require a fresh
+confirmation digest for apply.
 
 ## Example
 

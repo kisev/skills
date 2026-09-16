@@ -45,8 +45,11 @@ does not contain a portable `multi-run` record.
 
 The `skills` CLI `update` operation does not prune renamed or deleted skills.
 Cleanup removes these exact names explicitly with stable `skills@latest` and the
-same agents and scope as the installation. Package installation and reconcile do
-not replace the portable source rebind or cleanup flow.
+same agents and scope as the installation. Newly published skills carry
+`metadata.source: "https://kisev.github.io/skills"`. Package reconcile may archive
+marked retired names, validate cleanup with its configured exact `skills` version
+directly for OpenCode and Codex, and roll preview-bound paths back on failure;
+pre-marker installations still require explicit cleanup.
 
 ## Current OpenCode Surface
 
@@ -62,10 +65,12 @@ and `reconcile`.
 ## Ownership and Archive
 
 Confirmed reconcile and uninstall archive only exact-owned assets before
-removing deployed copies. Modified, user-owned, unknown, unsafe, and ambiguous
-entries remain unchanged as findings or conflicts. Worktrees and runtime state
-are preserved. The archive supports transactional rollback and read-only
-inspection through `doctor`; no archive restore or purge command is provided.
+removing deployed copies. For a marked portable skill, the source marker proves
+cleanup ownership and current bytes are archived before transactional removal.
+User-owned, unknown, unsafe, and ambiguous entries remain unchanged as findings
+or conflicts. Worktrees and runtime state are preserved. The archive supports
+transactional rollback and read-only inspection through `doctor`; no archive
+restore or purge command is provided.
 
 ## Machine-Readable Sources
 

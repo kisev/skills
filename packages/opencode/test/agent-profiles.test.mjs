@@ -188,15 +188,7 @@ test("incomplete non-TTY configure exits with JSON guidance and leaves no receip
   const context = await roots();
   const result = spawnSync(
     process.execPath,
-    [
-      join(PACKAGE, "dist", "cli.js"),
-      "agent",
-      "configure",
-      "--scope",
-      "project",
-      "--dry-run",
-      "--json",
-    ],
+    [join(PACKAGE, "dist", "cli.js"), "agent", "configure", "--dry-run", "--json"],
     {
       cwd: context.project,
       env: { ...process.env, HOME: context.home, XDG_STATE_HOME: join(context.home, ".state") },
@@ -1091,8 +1083,6 @@ test("CLI defaults to a concise human plan and table", async () => {
   try {
     const previewResult = invoke([
       "install",
-      "--scope",
-      "project",
       "--commands",
       "none",
       "--agents",
@@ -1125,8 +1115,6 @@ test("CLI defaults to a concise human plan and table", async () => {
 
     const applied = invoke([
       "install",
-      "--scope",
-      "project",
       "--commands",
       "none",
       "--agents",
@@ -1146,7 +1134,7 @@ test("CLI defaults to a concise human plan and table", async () => {
     ];
     const hostileName = `evil\n\t${hostileCodes.map((code) => String.fromCodePoint(code)).join("")}[31m.md`;
     await writeFile(join(context.root, "agents", hostileName), "user-owned\n");
-    const listed = invoke(["agent", "list", "--scope", "project"]);
+    const listed = invoke(["agent", "list"]);
     assert.equal(listed.status, 0, listed.stderr);
     assert.match(listed.stdout, /^NAME\s+MODEL\s+VARIANT\s+OWNER\s+STATE$/m);
     assert.match(listed.stdout, /^manager\s+default\s+-\s+package-owned\s+current$/m);
@@ -1185,8 +1173,6 @@ test("CLI human plan explains exact-name conflicts", async () => {
       [
         executable,
         "install",
-        "--scope",
-        "project",
         "--commands",
         "none",
         "--agents",
@@ -1232,8 +1218,6 @@ test("CLI human plan never truncates conflicts", async () => {
       [
         executable,
         "install",
-        "--scope",
-        "project",
         "--commands",
         commands.map((name) => name.slice(0, -3)).join(","),
         "--agents",
@@ -1285,8 +1269,6 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
   try {
     let plan = run([
       "install",
-      "--scope",
-      "project",
       "--commands",
       "none",
       "--agents",
@@ -1298,8 +1280,6 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
     assert.equal(
       run([
         "install",
-        "--scope",
-        "project",
         "--commands",
         "none",
         "--agents",
@@ -1315,8 +1295,6 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
       "agent",
       "configure",
       "manager",
-      "--scope",
-      "project",
       "--provider",
       "openai",
       "--model",
@@ -1329,8 +1307,6 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
       "agent",
       "configure",
       "manager",
-      "--scope",
-      "project",
       "--provider",
       "openai",
       "--model",
@@ -1341,20 +1317,32 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
       plan.digest,
     ]);
     assert.equal(
-      run(["agent", "list", "--scope", "project"]).inventory.profiles.find(
-        (item) => item.name === "manager",
-      ).variant,
+      run(["agent", "list"]).inventory.profiles.find((item) => item.name === "manager").variant,
       "high",
     );
 
     process.env.HOME = context.home;
     process.env.XDG_STATE_HOME = join(context.home, ".state");
     const hooks = await plugin({ directory: context.project });
-    const listed = JSON.parse(
+    const otherProject = join(context.directory, "other-project");
+    await mkdir(otherProject);
+    const contextual = JSON.parse(
       await hooks.tool.agent_profiles.execute(
-        { action: "list", scope: "project" },
-        { sessionID: "profile" },
+        { action: "list" },
+        { sessionID: "profile", directory: otherProject },
       ),
+    );
+    assert.equal(contextual.inventory.root, join(otherProject, ".opencode"));
+    const reconciled = JSON.parse(
+      await hooks.tool.reconcile.execute(
+        { phase: "preview" },
+        { sessionID: "profile", directory: otherProject },
+      ),
+    );
+    assert.equal(reconciled.plan.root, otherProject);
+    assert.equal(reconciled.plan.scope, "project");
+    const listed = JSON.parse(
+      await hooks.tool.agent_profiles.execute({ action: "list" }, { sessionID: "profile" }),
     );
     assert.equal(
       listed.inventory.profiles.find((item) => item.name === "manager").model,
@@ -1363,7 +1351,6 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
     const request = {
       action: "critic_add",
       phase: "preview",
-      scope: "project",
       name: "critic-tool",
       model: "anthropic/claude",
     };

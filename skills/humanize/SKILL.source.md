@@ -10,6 +10,7 @@ description: >-
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
+  source: "https://kisev.github.io/skills"
 ---
 
 # humanize

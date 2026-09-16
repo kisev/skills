@@ -22,7 +22,9 @@ The authored repository is not a portable installation source and does not ship
 a portable-skills CLI. Portable skills are installed from the GitHub Pages
 distribution with the separately versioned `skills` CLI. The optional npm
 package `@kisev/skills-opencode` provides the `skills-opencode` CLI for OpenCode
-integration, but does not install, update, or remove portable skills.
+integration. It does not install or update portable skills. Reconcile can archive
+a retired skill carrying the exact Pages source marker and invoke the
+package-configured `skills` CLI directly for OpenCode and Codex cleanup.
 
 `packages/skills/package.json` is the private version authority for the portable
 distribution. `scripts/build_distribution.py` creates the Pages payload under
@@ -65,7 +67,12 @@ Package writes use bounded global or project roots, private locks and
 confirmation receipts, final revalidation, atomic file replacement, and a
 journaled rollback path. Stale, expired, superseded, or replayed confirmations
 fail before mutation; user-owned files and unrelated durable state remain
-outside package ownership.
+outside package ownership. Scope-aware direct commands default to the current
+directory; one `--global` flag selects global state. Package tools use the same
+project default. Portable cleanup snapshots preview-bound paths before invoking
+the pinned external CLI directly; rollback for concurrent unplanned paths is
+best-effort. Global archive state is shared globally; project archives are
+isolated by project-root digest.
 
 ## Routing Contracts
 

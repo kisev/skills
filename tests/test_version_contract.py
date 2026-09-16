@@ -72,7 +72,7 @@ def test_version_contract_rejects_release_mirror_drift(tmp_path: Path) -> None:
 def test_version_contract_rejects_numeric_public_documentation_pin(tmp_path: Path) -> None:
     root = version_root(tmp_path)
     (root / "README.md").write_text(
-        "Run `npx --yes @kisev/skills-opencode@2.2.3 doctor --scope global`.\n",
+        "Run `npx --yes @kisev/skills-opencode@2.2.3 doctor --global`.\n",
         encoding="utf-8",
     )
     with pytest.raises(check_versions.VersionError, match="public documentation"):

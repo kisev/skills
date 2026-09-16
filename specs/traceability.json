@@ -101,7 +101,12 @@
     },
     "reconcile": {
       "kind": "automated",
-      "test_selector": "packages/opencode/test/package.test.mjs::modified managed reconcile preview is blocked without Apply",
+      "test_selectors": [
+        "packages/opencode/test/package.test.mjs::modified managed reconcile preview is blocked without Apply",
+        "packages/opencode/test/package.test.mjs::reconcile archives marked renamed skills and delegates direct removal",
+        "packages/opencode/test/package.test.mjs::reconcile rolls back known paths when the direct remover fails",
+        "packages/opencode/test/package.test.mjs::reconcile preserves a file added after preview"
+      ],
       "eval_ids": ["stage20.command.reconcile.contract"]
     },
     "distribution": {
@@ -144,14 +149,19 @@
     },
     "cli_invocation": {
       "kind": "automated",
-      "test_selector": "packages/opencode/test/package.test.mjs::global CLI is cwd-independent and prints pinned npx confirmation",
+      "test_selectors": [
+        "packages/opencode/test/package.test.mjs::global CLI is cwd-independent and prints pinned npx confirmation",
+        "packages/opencode/test/agent-profiles.test.mjs::CLI defaults to a concise human plan and table",
+        "packages/opencode/test/stage19.test.mjs::CLI rejects removed scope syntax and irrelevant command options"
+      ],
       "eval_ids": ["stage20.infrastructure.core.contract"]
     },
     "cli_help": {
       "kind": "automated",
       "test_selectors": [
         "packages/opencode/test/stage19.test.mjs::CLI help is structured and explains commands options workflow and scope",
-        "packages/opencode/test/stage19.test.mjs::CLI exposes contextual help for every command and group"
+        "packages/opencode/test/stage19.test.mjs::CLI exposes contextual help for every command and group",
+        "packages/opencode/test/stage19.test.mjs::CLI rejects removed scope syntax and irrelevant command options"
       ],
       "eval_ids": ["stage20.infrastructure.core.contract"]
     },
@@ -218,7 +228,7 @@
     "REQ-F-005": {
       "surface": "archive",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "64d58fae8f43caf6175343c450ba2c56c64ecd65367c24f6727b19b22068dade",
+      "block_sha256": "ef3888243e91b876a988651684e7949ffabb9d9ab97422135e7cff37ea9967f3",
       "evidence_profile": "reconcile",
       "manual_evidence_ids": ["ME-ARCH-004"]
     },
@@ -243,19 +253,19 @@
     "REQ-I-001": {
       "surface": "skills",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "83274c6520001e2b0193ea2352fc12de713c02cce1486f45fcf4517caac94898",
+      "block_sha256": "c9b5d6c1ba74b839517dd9d1919d01fd3b8a33ae821334b29df673b98ffbf70a",
       "evidence_profile": "skills"
     },
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "f9704226c0ea66e278a1981c8d78b1564d7d62a47a2150c3332ee6ab9ce40db6",
+      "block_sha256": "c03d7c5e0b1ab3cbebd33574e274d89dc24a9e5e39c8cd273636707364774122",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {
       "surface": "package-tools",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "600e978939568aba214d29d71bdd61c49ffd8f95701c86d456894fe3829eb6b8",
+      "block_sha256": "1278dec9acc5536bb6be47393c53d809347aebb2e93dce7ca96433d971c4660c",
       "evidence_profile": "inventory"
     },
     "REQ-I-004": {
@@ -279,13 +289,13 @@
     "REQ-I-007": {
       "surface": "scope",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "681841b34fdd001d3be978bb512722238c5d104daf854d9b68d7ff9372a20793",
+      "block_sha256": "03c1f945bbd168b4bfd937376aaa9ac5186c82fbc12dca5d771b1b574061a052",
       "evidence_profile": "cli_invocation"
     },
     "REQ-I-008": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "d2fcd0a25e8f16f31bd8cf51d1c25553cc32a4054104faa72afc78e8128b8416",
+      "block_sha256": "75e6033f2d376f15c2c44936d290f265b0f0241b6721312857369c0284d52356",
       "evidence_profile": "cli_help"
     },
     "REQ-I-009": {
@@ -351,14 +361,14 @@
     "REQ-C-002": {
       "surface": "distribution",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "e34d26ff2045de14b8691fbb0781f7fc13babbf6b55758d9dad171e8a0347a5c",
+      "block_sha256": "1d8dbf6378d49a145e514c1bb304e7d82b3450025bfab850fd4d9e46ca9a9484",
       "evidence_profile": "distribution",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
     "REQ-C-003": {
       "surface": "ownership",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "228e88dadd6cbfc047e10e1790d40d8e134b1651f5f1e0612eccd0ba8a010a79",
+      "block_sha256": "9593bf81ac3befdad0af34e2d65474cd2a71fd546ba85852ec8a82c8db73cffc",
       "evidence_profile": "profiles"
     },
     "REQ-C-004": {
@@ -646,7 +656,7 @@
     "REQ-F-505": {
       "surface": "tool:reconcile",
       "source": "specs/capabilities/package-tools/reconcile.md",
-      "block_sha256": "e117cb558bcb1927cd710c459e2978f5a7f98dea27790396412f9ff2664b1932",
+      "block_sha256": "5f49b433e29709b4bb303499a9bdc407faccbbaad9df4e5f9690696fdcf8890f",
       "evidence_profile": "reconcile"
     },
     "REQ-I-201": {
@@ -826,25 +836,25 @@
     "REQ-I-230": {
       "surface": "command:capabilities",
       "source": "specs/capabilities/commands/capabilities.md",
-      "block_sha256": "167a70a276ba66aecdf04b62419290cbd8a3530dba4e38decfa7b068c72c0793",
+      "block_sha256": "4a293417aa2791e5bb0df35ed44db401726a6054c335b6e4a7db2433f7d631dc",
       "evidence_profile": "commands"
     },
     "REQ-I-231": {
       "surface": "command:doctor",
       "source": "specs/capabilities/commands/doctor.md",
-      "block_sha256": "6e5d3bc2677e6626ff343cdfcf2ea374c225da4cbf9647f4131f0523b59ad714",
+      "block_sha256": "490b20a4709672c7468d9cf53bdd912155e1398f38fa8f900ef24471f353a16f",
       "evidence_profile": "commands"
     },
     "REQ-I-232": {
       "surface": "command:reconcile",
       "source": "specs/capabilities/commands/reconcile.md",
-      "block_sha256": "5ce8d72d32e62bf47dcd6c097a88e27543d27c7681cb4a61c7911f10abb68717",
+      "block_sha256": "4392899de98c84d9637ea161590c20efe1b685354106bf15baf93b75b4fb97be",
       "evidence_profile": "commands"
     },
     "REQ-I-233": {
       "surface": "command:agent-profiles",
       "source": "specs/capabilities/commands/agent-profiles.md",
-      "block_sha256": "bbb9c5b4351d8c076bffd396246c2c7aa3905b5fa7acb1b3e80bc565fdee3943",
+      "block_sha256": "ebf7dd66b646ba0a4757f2fd271938f3535c9712fe89807ed4ffe65388774f4a",
       "evidence_profile": "commands"
     }
   }

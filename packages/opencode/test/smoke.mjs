@@ -48,15 +48,14 @@ try {
   };
   const cli = (arguments_) =>
     JSON.parse(run(executable, [...arguments_, "--json"], { cwd: project, env: environment }));
-  const dryRun = cli(["install", "--scope", "global", ...selection, "--dry-run"]);
+  const dryRun = cli(["install", "--global", ...selection, "--dry-run"]);
   assert.equal(dryRun.applied, false);
   assert.equal(dryRun.plan.requires_restart, true);
   assert.equal(
-    cli(["install", "--scope", "global", ...selection, "--confirm", dryRun.plan.digest])
-      .requires_restart,
+    cli(["install", "--global", ...selection, "--confirm", dryRun.plan.digest]).requires_restart,
     true,
   );
-  const doctor = spawnSync(executable, ["doctor", "--scope", "global", "--json"], {
+  const doctor = spawnSync(executable, ["doctor", "--global", "--json"], {
     cwd: project,
     env: environment,
     encoding: "utf8",
@@ -68,8 +67,7 @@ try {
     "agent",
     "model-set",
     "manager",
-    "--scope",
-    "global",
+    "--global",
     "--model",
     "opencode/gpt-5-nano",
     "--variant",
@@ -81,8 +79,7 @@ try {
       "agent",
       "model-set",
       "manager",
-      "--scope",
-      "global",
+      "--global",
       "--model",
       "opencode/gpt-5-nano",
       "--variant",
@@ -96,8 +93,7 @@ try {
     "critic",
     "add",
     "smoke",
-    "--scope",
-    "global",
+    "--global",
     "--model",
     "opencode/gpt-5-nano",
     "--dry-run",
@@ -106,14 +102,13 @@ try {
     "critic",
     "add",
     "smoke",
-    "--scope",
-    "global",
+    "--global",
     "--model",
     "opencode/gpt-5-nano",
     "--confirm",
     criticPlan.plan.digest,
   ]);
-  const inventory = cli(["agent", "list", "--scope", "global"]).inventory;
+  const inventory = cli(["agent", "list", "--global"]).inventory;
   assert.equal(inventory.profiles.find((item) => item.name === "manager").variant, "high");
   assert.equal(
     inventory.profiles.find((item) => item.name === "critic-smoke").ownership,

@@ -38,10 +38,17 @@ tag, and a rerun shall accept only identical previously published bytes.
 
 When exact-owned retired assets are reconciled, the system shall archive them
 content-addressably and preserve unrelated user-owned files and durable state.
+An inactive portable skill shall be cleanup-owned only when regular `SKILL.md`
+frontmatter has an exact directory-matching name and the exact Pages source
+marker. Confirmed apply shall invoke the configured exact `skills` CLI directly
+for OpenCode and Codex after archiving and snapshotting every planned file and
+lock path. Failures and failed postconditions shall roll those known paths back;
+concurrent unplanned files are outside the best-effort rollback guarantee.
 Human reconcile preview shall be blocked, without an Apply command, when
 `modified_managed` or `conflicts` is non-empty; it shall list every blocking path
-and provide remediation. Clean preview shall retain the digest and exact Apply
-command contract. Every new dry-run in one project or global scope shall
+and provide remediation. An actionable clean preview shall retain the digest and
+exact Apply command contract; a no-op preview shall issue no receipt or Apply
+command. Every new dry-run in one project or global scope shall
 supersede the previous unconsumed receipt across installer, reconcile, profile,
 and critic domains; deterministic plan and unique confirmation digests are
 separate, and superseded confirmation fails closed.

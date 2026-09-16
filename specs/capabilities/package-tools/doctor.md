@@ -10,7 +10,8 @@ Trigger for diagnostics; near-miss: automatic repair.
 
 ## Inputs/Outputs
 
-Input is global/project scope; output is structured, redacted facts.
+Input is optional global/project scope defaulting to project; output is
+structured, redacted facts.
 
 ## Workflow Stages
 

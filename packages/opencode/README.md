@@ -14,7 +14,9 @@ update, and removal lifecycle.
 - Capability routing, `doctor`, `reconcile`, and agent-profile tooling.
 - Optional `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
 
-The package does not contain, install, update, or remove portable skills.
+The package does not contain, install, or update portable skills. Confirmed
+reconcile can invoke the pinned `skills` CLI directly to remove a marked retired
+skill from OpenCode and Codex.
 
 ## Requirements
 
@@ -29,7 +31,7 @@ assets:
 
 ```shell
 npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --scope project --dry-run
+npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Run the exact confirmation command printed by the preview. If the selected

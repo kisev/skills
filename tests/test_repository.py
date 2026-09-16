@@ -240,11 +240,15 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(lines[1], f"name: {name}")
                 self.assertIn("license: MIT", lines)
                 self.assertIn('  author: "Kirill Sevriugin"', lines)
+                self.assertIn('  source: "https://kisev.github.io/skills"', lines)
                 self.assertFalse(any(re.match(r"\s*version\s*:", line) for line in lines[1:end]))
                 metadata_start = lines.index("metadata:") + 1
                 self.assertEqual(
                     lines[metadata_start:end],
-                    ['  author: "Kirill Sevriugin"'],
+                    [
+                        '  author: "Kirill Sevriugin"',
+                        '  source: "https://kisev.github.io/skills"',
+                    ],
                 )
 
     def test_portable_workflows_preserve_source_contracts(self) -> None:
