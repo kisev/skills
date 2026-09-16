@@ -38,12 +38,10 @@ tag, and a rerun shall accept only identical previously published bytes.
 
 When exact-owned retired assets are reconciled, the system shall archive them
 content-addressably and preserve unrelated user-owned files and durable state.
-An inactive portable skill shall be cleanup-owned only when regular `SKILL.md`
-frontmatter has an exact directory-matching name and the exact Pages source
-marker. Confirmed apply shall invoke the configured exact `skills` CLI directly
-for OpenCode and Codex after archiving and snapshotting every planned file and
-lock path. Failures and failed postconditions shall roll those known paths back;
-concurrent unplanned files are outside the best-effort rollback guarantee.
+Reconcile shall inspect and mutate only package-owned OpenCode assets; portable
+skill trees and installer lock files shall not affect its classifications, plan,
+digest, conflicts, or operations. Portable skill updates and removals remain
+owned by the `skills` CLI.
 Human reconcile preview shall be blocked, without an Apply command, when
 `modified_managed` or `conflicts` is non-empty; it shall list every blocking path
 and provide remediation. An actionable clean preview shall retain the digest and

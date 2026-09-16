@@ -27,8 +27,8 @@ Core reconcile tool, semantic manifest, and archive.
 
 ## Remote/Local Effects
 
-Bounded local mutation on confirmed apply; marked portable cleanup invokes the
-configured exact external `skills` CLI for OpenCode and Codex.
+Bounded local mutation on confirmed apply for package-owned OpenCode assets.
+Portable skills remain under the separate `skills` CLI lifecycle.
 
 ## Errors/Partial/Escalation
 

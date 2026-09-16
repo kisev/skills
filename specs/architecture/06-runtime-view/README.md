@@ -11,10 +11,9 @@ review, or triage it; they present chat output by default and never publish.
 Routing resolves host inventory, creates a receipt, consumes it once for a
 matching Task, validates the structured result, and expires the receipt.
 Installation and reconciliation validate ownership and digests before
-publishing or archiving. Reconcile treats the exact portable source marker as
-future cleanup authorization, snapshots bounded local state, archives current
-bytes, invokes the configured exact `skills remove` against the selected
-OpenCode/Codex paths, and validates its bounded postconditions.
+publishing or archiving package assets. Reconcile ignores portable skill trees
+and installer lock files; their update and removal lifecycle belongs to the
+`skills` CLI.
 
 Portable installation resolves the Pages well-known index, verifies an archive
 SHA-256 digest, extracts root `SKILL.md` plus local resources, and records the

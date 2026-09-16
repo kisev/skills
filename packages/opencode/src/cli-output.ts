@@ -254,16 +254,7 @@ export function renderReconcile(
     lines.push(
       "",
       "Operations:",
-      ...plan.operations.map(
-        (entry) =>
-          `  ${entry.operation}: ${terminalSafe(entry.path)}${entry.via ? ` via ${entry.via}` : ""}`,
-      ),
-    );
-  if (plan.portable_cleanup)
-    lines.push(
-      "",
-      "Direct portable cleanup after confirmation:",
-      `  ${commandLine(plan.portable_cleanup.command)}`,
+      ...plan.operations.map((entry) => `  ${entry.operation}: ${terminalSafe(entry.path)}`),
     );
   if (plan.conflicts.length)
     lines.push(

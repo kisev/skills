@@ -11,21 +11,20 @@ Supported portable installation automation shall use the configured exact `skill
 CLI version against the GitHub Pages well-known endpoint. User documentation may
 follow the stable npm channel. Authored Git sources shall remain deduplicated, while
 every published archive is self-contained and requires no OpenCode package.
-Reconcile may invoke that exact CLI version only for confirmed cleanup, never for
-installation or update. Rollback is guaranteed for preview-bound paths and is
-best-effort for concurrent unplanned external changes.
+The OpenCode package shall not invoke the `skills` CLI or inspect its installed
+trees and lock files during reconciliation.
 
 ### REQ-C-003 - Explicit ownership boundaries
 
 Portable skills, package assets, user configuration, runtime state, and archives
 shall have distinct owners; a workflow shall not infer ownership from its caller.
-Portable cleanup ownership requires the exact published source marker and a
-directory-matching frontmatter name; missing or malformed markers fail closed.
+The `skills` CLI owns portable skill installation, update, and removal; the
+OpenCode package owns only its integration assets and archive.
 
 ### REQ-C-004 - No destructive cleanup
 
-Retired or stale assets shall not be destructively removed when content-addressed
-archival can preserve recovery and auditability.
+Retired or stale package assets shall not be destructively removed when
+content-addressed archival can preserve recovery and auditability.
 
 ### REQ-C-005 - Bounded distribution change in this target
 

@@ -23,14 +23,12 @@ Resolve scope, compare semantic ownership, preview, confirm, archive, verify, re
 
 ## Dependencies
 
-Lifecycle manifest, portable source marker, configured exact `skills` CLI,
-digest archive, and local state boundaries.
+Lifecycle manifest, digest archive, and local state boundaries.
 
 ## Remote/Local Effects
 
-Bounded local archive and cleanup writes. Confirmed portable cleanup may resolve
-the configured pinned CLI through `npx`; npm cache and network effects are outside
-the rollback boundary.
+Bounded local archive and cleanup writes for package-owned OpenCode assets.
+Portable skill trees and installer lock files are outside this boundary.
 
 ## Errors/Partial/Escalation
 
@@ -39,7 +37,7 @@ failure or a failed postcondition rolls bounded local state back.
 
 ## Unique Constraints
 
-Historical goal/multi-run state, pre-marker skills, and unknown/user-owned files
+Historical goal/multi-run state, portable skills, and unknown/user-owned files
 remain unchanged.
 
 ## Requirement
@@ -48,13 +46,12 @@ remain unchanged.
 
 Status: withdrawn on 2026-09-16 because reconciliation is now CLI-only.
 
-Former requirement: the tool shall archive exact-owned retired assets content-addressably, invoke the
-configured exact `skills` CLI directly for marked portable cleanup, validate
-bounded postconditions, roll known planned paths back on failure, and preserve
-unrelated state on a best-effort basis under concurrent external changes.
+Former requirement: the tool shall archive exact-owned retired package assets
+content-addressably, validate bounded postconditions, roll known planned paths
+back on failure, and preserve unrelated state.
 
 ## Example
 
-`reconcile` archives a marked renamed skill, removes it through `skills`, and
-leaves an unmarked external skill unchanged.
+`reconcile` archives an exact-owned retired package command and leaves portable
+skills unchanged.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

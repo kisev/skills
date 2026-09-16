@@ -396,7 +396,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       [
         "Preview is read-only and blocks Apply on modified managed files or ownership conflicts.",
         "Confirmed reconcile archives exact-owned retired package assets.",
-        "Marked retired portable skills are removed by the pinned skills CLI.",
+        "Portable skills are managed separately by the skills CLI.",
       ],
       [
         shellCommand(["reconcile", "--global", "--dry-run"]),

@@ -11,10 +11,9 @@ later content and synthetic continuation cannot expand authorization or clear a
 pending gate. A pending gate is bound to its exact action and boundary and checked
 before success without blocking unrelated frozen-objective actions. Bounded path
 ownership, symlink and traversal rejection, secret redaction, and atomic rollback
-or recovery remain mandatory. External portable cleanup runs without a shell,
-uses a pinned CLI and bounded output/timeout, and has a rollback boundary limited
-to planned local paths; npm cache and network effects are explicitly outside that
-boundary. Read-only tools do not repair or install.
+or recovery remain mandatory. Package reconciliation is bounded to package-owned
+OpenCode assets and does not inspect or invoke the portable skill lifecycle.
+Read-only tools do not repair or install.
 
 The code-review publication helper accepts no caller-provided endpoint, method,
 body, environment override, batch, or force option. It binds paths beneath one

@@ -99,9 +99,9 @@
       "kind": "automated",
       "test_selectors": [
         "packages/opencode/test/package.test.mjs::modified managed reconcile preview is blocked without Apply",
-        "packages/opencode/test/package.test.mjs::reconcile archives marked renamed skills and delegates direct removal",
-        "packages/opencode/test/package.test.mjs::reconcile rolls back known paths when the direct remover fails",
-        "packages/opencode/test/package.test.mjs::reconcile preserves a file added after preview"
+        "packages/opencode/test/package.test.mjs::reconcile ignores portable skill trees and locks",
+        "packages/opencode/test/package.test.mjs::reconcile leaves historical goal and multi-run state byte-for-byte unchanged",
+        "packages/opencode/test/package.test.mjs::reconcile receipts reject stale, tampered, expired, and replayed confirmations"
       ],
       "eval_ids": ["stage20.infrastructure.core.contract"]
     },
@@ -224,7 +224,7 @@
     "REQ-F-005": {
       "surface": "archive",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "ef3888243e91b876a988651684e7949ffabb9d9ab97422135e7cff37ea9967f3",
+      "block_sha256": "f55b1869e17eb3c599ba3e2b59bdb3d4ad23a12b49a936c48ab14c71b054e814",
       "evidence_profile": "reconcile",
       "manual_evidence_ids": ["ME-ARCH-004"]
     },
@@ -357,20 +357,20 @@
     "REQ-C-002": {
       "surface": "distribution",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "1d8dbf6378d49a145e514c1bb304e7d82b3450025bfab850fd4d9e46ca9a9484",
+      "block_sha256": "ef72a631ddbf80d4f3bb864929cc6654db1c81d96efa9d0aa7aa86c0e149d3d9",
       "evidence_profile": "distribution",
       "manual_evidence_ids": ["ME-ARCH-002"]
     },
     "REQ-C-003": {
       "surface": "ownership",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "9593bf81ac3befdad0af34e2d65474cd2a71fd546ba85852ec8a82c8db73cffc",
+      "block_sha256": "02286d5087ad9ee86e120ed70e59310a2bb3d32b2d100a5ab9947adb3a66349f",
       "evidence_profile": "profiles"
     },
     "REQ-C-004": {
       "surface": "archive",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "2007c78e6eea749c1a6f5c214e1140cf060c42121d01d590b2784ffb210ea8c7",
+      "block_sha256": "e84636eff09a2246c91d5b89031f0e8ecc650af46e41cf111addd2cfa72e4ec4",
       "evidence_profile": "reconcile"
     },
     "REQ-C-005": {
@@ -652,7 +652,7 @@
     "REQ-F-505": {
       "surface": "package-tools",
       "source": "specs/capabilities/package-tools/reconcile.md",
-      "block_sha256": "373ad6c4253eda23a5874d41fe6245ed85c9e3dbb7ddc3e7b018eb66b03b804d",
+      "block_sha256": "28c83ecf00cc5d9f4dcbfe3082038fac2be1040acbfb35c247b7b6cc7c6d4ba0",
       "evidence_profile": "inventory"
     },
     "REQ-I-201": {
