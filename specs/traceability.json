@@ -424,7 +424,7 @@
     "REQ-F-105": {
       "surface": "skill:code-review",
       "source": "specs/capabilities/skills/code-review.md",
-      "block_sha256": "7091887b54efd1ab8e5a49ffad6c95236b0a7bcaf5b1ebbce825fc31d904cdb8",
+      "block_sha256": "70fbb5d85af56b5e5399c082087d59ec39948eef3dd0068f7f8ded33897eceec",
       "evidence_profile": "code_review"
     },
     "REQ-F-106": {

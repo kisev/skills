@@ -4286,6 +4286,8 @@ def scaffold_review(
         for finding_id in finding_ids
     ):
         raise portable.WorkflowError("review finding IDs must be unique")
+    if portable.duplicate_detailed_finding_ids(findings):
+        raise portable.WorkflowError("review findings must be structurally distinct")
     if findings != sorted(findings, key=lambda item: severity_order[item["severity"]]):
         raise portable.WorkflowError("review findings must be ordered by severity")
     accepted_findings = cast(

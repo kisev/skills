@@ -515,6 +515,16 @@ def detailed_findings_are_valid(value: object) -> bool:
     )
 
 
+def duplicate_detailed_finding_ids(value: object) -> list[list[str]]:
+    if not detailed_findings_are_valid(value):
+        return []
+    groups: dict[str, list[str]] = {}
+    for finding in cast(list[dict[str, Any]], value):
+        content = {key: item for key, item in finding.items() if key != "id"}
+        groups.setdefault(digest(content), []).append(cast(str, finding["id"]))
+    return [item_ids for item_ids in groups.values() if len(item_ids) > 1]
+
+
 def thread_decisions_are_valid(value: object) -> bool:
     legacy = {"id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"}
     current = legacy | {"last_note_id", "last_note_body_sha256"}
@@ -3302,6 +3312,16 @@ def validate_decision(
         raise WorkflowError(
             "review decision does not account for every finding and unresolved thread"
         )
+    response_by_id = {
+        cast(str, item["id"]): item for item in cast(list[dict[str, Any]], response_values)
+    }
+    accepted_findings = [
+        item
+        for item in finding_subjects
+        if response_by_id[cast(str, item["id"])]["decision"] == "accept"
+    ]
+    if duplicate_detailed_finding_ids(accepted_findings):
+        raise WorkflowError("review decision accepts structurally duplicate findings")
     if mode in {"normal", "deep", "incremental"} and receipt is None:
         raise WorkflowError(
             "normal, deep, and incremental review require an independent critic receipt"

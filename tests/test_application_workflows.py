@@ -1242,6 +1242,37 @@ print(json.dumps(value))
                 "evidence",
             )
         module.validate_decision(report, "evidence", receipt, "deep")
+        duplicate_finding = {
+            "id": "primary-duplicate",
+            "severity": "low",
+            "summary": "Documentation contradicts behavior",
+            "risk": "Readers rely on the wrong behavior.",
+            "evidence": ["docs/example.md:7 contradicts src/example.py:12."],
+            "consequence": "Invalid configuration is harder to diagnose.",
+            "relation_to_change": "The change adds the contradictory text.",
+            "minimum_fix": "Describe the actual behavior.",
+        }
+        duplicate_receipt = {
+            **receipt,
+            "findings": [{**duplicate_finding, "id": "critic-duplicate"}],
+        }
+        duplicate_report = {
+            **report,
+            "findings": [duplicate_finding],
+            "unresolved_threads": [],
+            "responses": [
+                {"id": "primary-duplicate", "decision": "accept", "reason": "confirmed"},
+                {"id": "critic-duplicate", "decision": "accept", "reason": "confirmed"},
+            ],
+        }
+        with self.assertRaisesRegex(module.WorkflowError, "structurally duplicate"):
+            module.validate_decision(duplicate_report, "evidence", duplicate_receipt, "deep")
+        duplicate_report["responses"][1] = {
+            "id": "critic-duplicate",
+            "decision": "reject",
+            "reason": "duplicates the accepted primary finding",
+        }
+        module.validate_decision(duplicate_report, "evidence", duplicate_receipt, "deep")
         collision = {
             **report,
             "context_digest": "b" * 64,

@@ -383,6 +383,8 @@ def load_plan(plan_value: str) -> tuple[Path, dict[str, Any], str, Path]:
         or payload.get("external_mutations") is not False
     ):
         raise portable.WorkflowError("review plan is incomplete or not executable")
+    if portable.duplicate_detailed_finding_ids(payload.get("findings")):
+        raise portable.WorkflowError("review plan contains structurally duplicate findings")
     validate_active_plan(plan_path, payload, cast(str, plan_digest), root, pointer)
     return plan_path, payload, cast(str, plan_digest), root
 
@@ -466,7 +468,9 @@ class GlabClient:
         ]
         input_value: bytes | None = None
         if payload is not None:
-            argv.extend(["--input", "-"])
+            argv.extend(
+                ["--header", "Content-Type: application/json; charset=utf-8", "--input", "-"]
+            )
             input_value = json.dumps(
                 payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
             ).encode()

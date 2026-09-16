@@ -82,6 +82,13 @@ def test_glab_request_reports_redacted_definitive_rejection(
     assert "stderr-secret" not in message
     assert "bearer-secret" not in message
     assert "--include" in observed["argv"]
+    assert [
+        "--header",
+        "Content-Type: application/json; charset=utf-8",
+        "--input",
+        "-",
+    ] == observed["argv"][-5:-1]
+    assert json.loads(observed["kwargs"]["input"]) == {"title": "safe"}
     assert observed["kwargs"]["shell"] is False
     assert "env" not in observed["kwargs"]
 
@@ -395,4 +402,44 @@ def test_load_plan_rejects_incomplete_contract_3_envelope(tmp_path: Path) -> Non
     path.write_bytes(content)
 
     with pytest.raises(CONTRACT.WorkflowError):
+        PUBLISH.load_plan(str(path))
+
+
+def test_load_plan_rejects_structurally_duplicate_findings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    finding = {
+        "id": "primary-1",
+        "severity": "low",
+        "summary": "Documentation contradicts behavior",
+        "risk": "Readers rely on the wrong behavior.",
+        "evidence": ["docs/example.md:7 contradicts src/example.py:12."],
+        "consequence": "Invalid configuration is harder to diagnose.",
+        "relation_to_change": "The change adds the contradictory text.",
+        "minimum_fix": "Describe the actual behavior.",
+    }
+    payload = {
+        "profile": "code-review",
+        "review_contract_version": 4,
+        "complete": True,
+        "external_mutations": False,
+        "findings": [finding, {**finding, "id": "critic-1"}],
+    }
+    envelope = {
+        "schema": "portable-gitlab/review_plan/v2",
+        "schema_version": 2,
+        "kind": "review_plan",
+        "created_at": "2026-09-16T00:00:00+00:00",
+        "payload": payload,
+    }
+    content = json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    digest = hashlib.sha256(content).hexdigest()
+    artifact_directory = tmp_path / "artifacts" / "review_plan"
+    artifact_directory.mkdir(parents=True)
+    path = artifact_directory / f"{digest}.json"
+    path.write_bytes(content)
+    monkeypatch.setattr(PUBLISH.portable, "artifact_payload", lambda *_args: (envelope, payload))
+    monkeypatch.setattr(PUBLISH, "validate_active_plan", lambda *_args: None)
+
+    with pytest.raises(CONTRACT.WorkflowError, match="structurally duplicate"):
         PUBLISH.load_plan(str(path))

@@ -108,7 +108,7 @@ machine from prepared evidence through a recorded independent critic when the
 selected mode requires one, fresh finalize report, bound decision, contract-4
 plan, baseline, Markdown, and final chat rendering. It shall generate model-ready critic, decision, and content
 templates with exact artifact, label, thread, latest-note, and pipeline bindings;
-reject out-of-order, incomplete, or stale stages; keep reviewer finding details
+reject out-of-order, incomplete, stale, or structurally duplicate accepted findings and plans; keep reviewer finding details
 out of chat; treat low findings as non-blocking; and render a failed exact-head
 pipeline without another blocking finding as owner decision required.
 

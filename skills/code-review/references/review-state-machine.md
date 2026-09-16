@@ -52,7 +52,9 @@ again.
    generated private draft, and run its exact `finalize-review` action. The
    template prebinds evidence, context, finalize, critic findings, open thread
    IDs as `thread:ROOT_NOTE_ID`, and the exact-head pipeline state. Add every
-   primary finding and its disposition before finalization.
+   primary finding and its disposition before finalization. If a critic finding
+   duplicates an accepted primary finding, reject the critic candidate with that
+   reason; accepted findings must remain structurally distinct.
 7. When `content_missing`, run `template-review --kind content`. The generated
    draft prebinds accepted findings, every exact catalog label, every non-system
    thread and latest-note digest, previous findings, and rejected candidates.
