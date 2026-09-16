@@ -14,9 +14,8 @@ update, and removal lifecycle.
 - Capability routing plus direct CLI diagnostics, reconciliation, and profiles.
 - Optional `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
 
-The package does not contain, install, or update portable skills. Confirmed
-reconcile can invoke the pinned `skills` CLI directly to remove a marked retired
-skill from OpenCode and Codex.
+The package does not contain, install, update, inspect, or remove portable skills.
+Their lifecycle is owned by the `skills` CLI.
 
 ## Requirements
 

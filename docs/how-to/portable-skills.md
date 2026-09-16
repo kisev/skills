@@ -55,15 +55,16 @@ Omit `--global` for project scope. An installation created from a Git repository
 or tag remains bound to that source. Repeat the matching `add` command with the
 Pages URL, the same scope, and the same agents to rebind it.
 
-`update` refreshes tracked skills but does not remove names renamed or deleted
-upstream. OpenCode package assets also have a separate update lifecycle described
-in the [OpenCode integration guide](opencode-integration.md#update).
+`update` refreshes tracked skills, detects names deleted upstream, and offers to
+remove their local copies. OpenCode package assets have a separate update
+lifecycle described in the [OpenCode integration guide](opencode-integration.md#update).
 
 ## Remove Retired Names
 
 The current [migration inventory](../migration-inventory.md) defines eleven
-retired names. For a global installation shared by OpenCode and Codex, remove
-them explicitly:
+retired names. Normally, accept their removal when `skills update` reports them.
+To remove them explicitly from a global installation shared by OpenCode and
+Codex, run:
 
 ```shell
 npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --agent opencode --agent codex --global --yes
@@ -79,12 +80,8 @@ Use the same agents and scope as the installation. Omit `--global` for project
 scope. Avoid `remove --all` unless every portable skill in that scope should be
 removed.
 
-Package install never installs or updates portable skills. A confirmed package
-reconcile may archive a marked retired skill and invoke the pinned `skills` CLI
-directly for OpenCode and Codex cleanup. Rollback covers preview-bound paths;
-concurrent unplanned changes are best-effort.
-Pre-marker and unknown skills remain manual cleanup. Conflicts, worktrees, and
-runtime state are preserved.
+The OpenCode package never installs, updates, inspects, or removes portable
+skills. Use `skills update` or `skills remove` for their complete lifecycle.
 
 ## Troubleshoot Discovery
 

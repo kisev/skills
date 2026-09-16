@@ -94,10 +94,10 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "npm install --save-exact @kisev/skills-opencode" in document
         assert "npx --yes @kisev/skills-opencode@latest" in document
         assert "npm exec -- skills-opencode" not in document
-    assert "never installs or updates a portable skill" in english
-    assert "не устанавливает и не обновляет переносимые навыки" in russian
-    for document in (english, russian):
-        assert 'metadata.source: "https://kisev.github.io/skills"' in document
+    assert "Manage\nportable skills separately" in english
+    assert "Переносимыми навыками\nуправляйте отдельно" in russian
+    assert "lock files do not affect the\nreconcile plan" in english
+    assert "lock-файлы не влияют на план" in russian
 
     package_english = (ROOT / "packages/opencode/README.md").read_text(encoding="utf-8")
     package_russian = (ROOT / "packages/opencode/README.ru.md").read_text(encoding="utf-8")

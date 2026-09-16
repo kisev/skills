@@ -23,10 +23,10 @@ project copy is `.agents/skills`. Release metadata provides source provenance;
 the authored repository is not an installation source.
 
 The Pages URL is a moving stable-release channel. `update` verifies the current
-well-known digest and downloads only changed archives; it does not prune renamed
-or deleted skills. Existing Git-based installations must repeat `add` with the
-Pages URL and the same scope and agents to rebind their source. Cleanup remains
-limited to the nine names in the current [Migration Inventory](migration-inventory.md).
+well-known digest, downloads changed archives, and offers to remove tracked names
+deleted upstream. Existing Git-based installations must repeat `add` with the
+Pages URL and the same scope and agents to rebind their source. Explicit cleanup
+is limited to the retired names in the current [Migration Inventory](migration-inventory.md).
 
 ## OpenCode Integration
 
@@ -43,11 +43,10 @@ restart.
 
 Uninstall order is asset preview and confirmation, user-owned plugin-entry
 removal, `npm uninstall` in the owning project, then restart. Reconcile and
-uninstall archive exact-owned assets. Reconcile invokes the package-configured
-exact `skills` CLI directly for marked retired OpenCode/Codex cleanup and rolls
-preview-bound paths back on failure. Concurrent unplanned changes are best-effort.
-Conflicts, worktrees, and runtime state are
-preserved; no archive restore or purge command is exposed.
+uninstall archive exact-owned package assets. Reconcile ignores portable skill
+trees and installer lock files; `skills update/remove` owns that lifecycle.
+Conflicts, worktrees, and runtime state are preserved; no archive restore or
+purge command is exposed.
 
 ## Current Surface
 

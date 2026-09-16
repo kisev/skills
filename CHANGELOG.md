@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
+## Unreleased
+
+### Changed
+
+- `skills-opencode reconcile` no longer inspects or removes portable skills or
+  their lock files. Deleted upstream skills are handled by `skills update/remove`.
+
 ## [3.1.1] - 2026-09-16
 
 ### Release

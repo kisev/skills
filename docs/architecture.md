@@ -22,9 +22,8 @@ The authored repository is not a portable installation source and does not ship
 a portable-skills CLI. Portable skills are installed from the GitHub Pages
 distribution with the separately versioned `skills` CLI. The optional npm
 package `@kisev/skills-opencode` provides the `skills-opencode` CLI for OpenCode
-integration. It does not install or update portable skills. Reconcile can archive
-a retired skill carrying the exact Pages source marker and invoke the
-package-configured `skills` CLI directly for OpenCode and Codex cleanup.
+integration. It does not install, update, inspect, or remove portable skills;
+their lifecycle belongs to the separate `skills` CLI.
 
 `packages/skills/package.json` is the private version authority for the portable
 distribution. `scripts/build_distribution.py` creates the Pages payload under

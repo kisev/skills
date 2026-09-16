@@ -168,8 +168,8 @@ model choices, variants, additional critics, or retained profile configuration.
 
 ## Reconcile
 
-`reconcile` classifies current and historical portable skills, package commands,
-plugins, agents, and installation metadata for one scope:
+`reconcile` classifies current and historical package commands, plugins, agents,
+and installation metadata for one scope:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest reconcile --dry-run
@@ -177,21 +177,17 @@ npx --yes @kisev/skills-opencode@latest reconcile --confirm <digest>
 npx --yes @kisev/skills-opencode@latest reconcile --global --dry-run --json
 ```
 
-Before reconcile, first update the package and portable skills through their
-owning installers. Reconcile never installs or updates a portable skill. It can
-clean up a retired portable skill only when its `SKILL.md` carries the exact
-project marker `metadata.source: "https://kisev.github.io/skills"`.
+Before reconcile, update the package through its owning installer. Manage
+portable skills separately with `npx --yes skills@latest update` or
+`npx --yes skills@latest remove`; their trees and lock files do not affect the
+reconcile plan, digest, conflicts, or operations.
 
 Confirmed reconcile archives the current bytes in a private content-addressed
-XDG archive. Package assets are then removed transactionally. For marked portable
-skills, the package-configured exact `skills` CLI removes OpenCode and Codex
-copies directly. The journal restores preview-bound files and lock state after a
-failure; files created concurrently outside that snapshot have only best-effort
-protection. Pre-marker, modified-marker, user-owned, unknown, symlink, unsafe, or
-ambiguous entries remain unchanged as findings or conflicts. A no-op preview has
-no confirmation digest. Worktrees and runtime state are preserved. The archive
+XDG archive. Package assets are then removed transactionally. User-owned,
+unknown, symlink, unsafe, or ambiguous package entries remain unchanged as
+findings or conflicts. A no-op preview has no confirmation digest. Portable
+skills, their lock files, worktrees, and runtime state are preserved. The archive
 is inspectable through `doctor`; no archive restore or purge command is provided.
-Use `npx --yes skills@latest remove` for pre-marker manual cleanup.
 
 ## Manage Agents
 

@@ -14,8 +14,8 @@ one on its own or install both for the complete OpenCode experience.
 | `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
 Portable skills do not require the npm package. The package does not contain,
-install, or update them; confirmed reconcile can invoke the pinned `skills` CLI
-directly to remove a marked retired skill from OpenCode and Codex.
+install, update, inspect, or remove them. Their lifecycle is owned by the
+`skills` CLI.
 
 ## Portable Skills
 
