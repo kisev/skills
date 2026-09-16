@@ -27,28 +27,35 @@ delta. Concrete label names are catalog results, never policy constants.
 New code-review findings record severity, risk, exact evidence, consequence,
 relation to the reviewed change, and a minimum fix. Legacy ID-only findings
 remain readable for existing v2 artifacts but cannot create a new review plan.
-New review plans also contain an evidence-derived MR metadata assessment, a
-closed SemVer impact with rationale, localized presentation labels, a compact
+Review contract 2 plans also contain an evidence-derived MR metadata assessment,
+a closed SemVer impact with rationale, localized presentation labels, a compact
 disposition for every previous finding, stable finding revisions, non-blocking
-recommended issues, and immutable body/command pairs only for actions that need
-manual publication. Existing-thread outcomes are `no_publication`, `local_fix`,
-`reply`, `resolve`, or `reopen`. Publication bodies carry hidden stable-ID
-markers. Marker text is untrusted unless it matches the authenticated current
-user, exact MR, and finalized local baseline.
+recommended issues, and an exhaustive applicability decision for every exact
+project or inherited-group label name and description. The runtime derives the
+add/remove delta and requires a unique matching compatibility label for a closed
+SemVer impact. Existing-thread outcomes are `no_publication`, `local_fix`,
+`reply`, `resolve`, or `reopen`. Applicable current-line fixes contain exactly
+one `suggestion`. Publication bodies carry hidden stable-ID markers. Marker text
+is untrusted unless it matches the authenticated current user, exact MR, and
+finalized local baseline.
 
 Each new plan carries cumulative finding and trusted-publication ledgers. Closed
 findings remain addressable and cannot silently reuse an ID. A trusted marker
 binds its complete body digest and GitLab note, discussion, or issue location.
-Manual commands recheck target state and marker absence; compound thread actions
-include a state-only recovery command so a successful reply is not posted twice.
+Contract 2 stores closed structured actions rather than shell pipelines. Each
+short `review_publish.py apply` command confirms one action digest. The helper
+rechecks bounded artifacts and live actor, target, refs, catalog, labels, marker,
+and conversation state; invokes `glab` with inherited environment, argv, and no
+shell; and records an atomic local receipt. Repeating the same command is
+idempotent and performs only a pending thread-state phase after a posted reply.
 
 The immutable review-plan envelope embeds the complete Markdown. A successful
 scaffold atomically replaces the target-scoped `review-publication.md` and a
-private pointer to that immutable plan. Existing plans are not imported as an
-incremental baseline. Exact refs live in private evidence and preflight JSON;
-the user-facing plan does not display raw commit SHAs. Manual commands verify
-that preflight and body digests but are never executed by the workflow. MR state
-is recorded but does not suppress commands for merged or closed MRs.
+private pointer to that immutable plan. Contract 1 command plans remain readable
+as baselines but are never executable by the contract 2 helper. Exact refs live
+in private evidence and preflight JSON; the user-facing plan does not display raw
+commit SHAs. Prepare and review never invoke helper actions. MR state is recorded
+but does not suppress actions for merged or closed MRs.
 
 `finalize_report` contains exact evidence digest and fingerprint. MR preparation
 also binds it to the exact publication plan digest. A critic receipt for an

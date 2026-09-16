@@ -16,3 +16,11 @@ publishing or archiving.
 Portable installation resolves the Pages well-known index, verifies an archive
 SHA-256 digest, extracts root `SKILL.md` plus local resources, and records the
 Pages source for later updates. No build command runs on the user's machine.
+
+Code review preparation collects complete GitLab evidence and label catalogs,
+creates immutable body files and closed publication actions, and atomically
+publishes a non-mutating plan. Each optional publication command starts a
+separate lifecycle for exactly one action: confirm its digest, reload the
+immutable plan, revalidate bounded files and live GitLab state, invoke `glab`
+without a shell, verify the postcondition, and record an atomic receipt. Review
+preparation never invokes that helper, and no command applies a batch.

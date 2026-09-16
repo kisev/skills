@@ -25,7 +25,12 @@ evidence, exact range/head SHA, and closed SemVer, compatibility, migration,
 rollback, and CI gates. v1 can be read/finalize but not migrated or overwritten.
 
 A publication artifact is a machine-readable envelope plus local Markdown. A
-profile may include immutable body files and exact manual commands after an
-explicit freshness preflight, but the runner never executes `publish`, `resolve`,
-`approve`, `merge`, or `push` and exposes no apply subcommand. stdout has a compact
-summary, artifact path, digest, and `external_mutations=false`.
+profile may include immutable body files and closed structured actions after an
+explicit freshness preflight. Prepare and review runners never execute them and
+return `external_mutations=false`. A profile-specific Python helper may expose a
+separate apply lifecycle for one exact action: the command supplies its digest as
+Confirmation, revalidates actor, target, refs, conversations, labels, catalog,
+markers, and body immediately before writing, then verifies the postcondition.
+It invokes `glab` with argv and no shell, inherits the caller environment without
+persisting it, and rejects batch, force, stale state, changed digests, and path
+escapes. `approve`, `merge`, and `push` remain outside this helper boundary.

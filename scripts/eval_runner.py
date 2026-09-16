@@ -712,7 +712,7 @@ elif endpoint == "projects/19/merge_requests/7/changes":
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
     value = [{"id": review_sha}]
 elif endpoint == "user":
-    value = {"username": "reviewer"}
+    value = {"id": 23, "username": "reviewer"}
 else:
     value = []
 print(json.dumps(value))

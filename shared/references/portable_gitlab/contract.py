@@ -518,9 +518,10 @@ def detailed_findings_are_valid(value: object) -> bool:
 def thread_decisions_are_valid(value: object) -> bool:
     legacy = {"id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"}
     current = legacy | {"last_note_id", "last_note_body_sha256"}
+    structured = current | {"suggestion_applicable"}
     return isinstance(value, list) and all(
         isinstance(item, dict)
-        and set(item) in (legacy, current)
+        and set(item) in (legacy, current, structured)
         and all(nonempty_string(item.get(key)) for key in ("id", "url", "rationale"))
         and item.get("state") in {"open", "resolved", "plain"}
         and item.get("assessment")
@@ -542,6 +543,7 @@ def thread_decisions_are_valid(value: object) -> bool:
             or item.get("last_note_id") is not None
             and is_digest(item.get("last_note_body_sha256"))
         )
+        and (set(item) != structured or isinstance(item.get("suggestion_applicable"), bool))
         for item in value
     )
 
@@ -585,7 +587,149 @@ def review_publication_preview_is_valid(value: object) -> bool:
         "commands",
     }
     current_keys = legacy_keys | {"preflight_path", "preflight_sha256"}
-    if not isinstance(value, dict) or (set(value) != legacy_keys and set(value) != current_keys):
+    structured_keys = {
+        "mr_state",
+        "warning",
+        "preflight_path",
+        "preflight_sha256",
+        "helper_path",
+        "body_files",
+        "actions",
+    }
+    if not isinstance(value, dict):
+        return False
+    if set(value) == structured_keys:
+        body_files, actions = value["body_files"], value["actions"]
+        if (
+            not all(
+                nonempty_string(value.get(key)) for key in ("mr_state", "warning", "preflight_path")
+            )
+            or not Path(value["preflight_path"]).is_absolute()
+            or not is_digest(value.get("preflight_sha256"))
+            or not nonempty_string(value.get("helper_path"))
+            or not Path(value["helper_path"]).is_absolute()
+            or not isinstance(body_files, list)
+            or not isinstance(actions, list)
+        ):
+            return False
+        if not all(
+            isinstance(item, dict)
+            and set(item) == {"publication_id", "revision", "kind", "path", "sha256", "content"}
+            and nonempty_string(item.get("publication_id"))
+            and isinstance(item.get("revision"), int)
+            and not isinstance(item.get("revision"), bool)
+            and item["revision"] >= 1
+            and item.get("kind") in {"finding", "thread", "issue"}
+            and nonempty_string(item.get("path"))
+            and Path(item["path"]).is_absolute()
+            and is_digest(item.get("sha256"))
+            and nonempty_string(item.get("content"))
+            and hashlib.sha256(item["content"].encode()).hexdigest() == item["sha256"]
+            for item in body_files
+        ):
+            return False
+        operations = {
+            "create_general",
+            "create_line",
+            "create_issue",
+            "update_issue",
+            "reply",
+            "resolve",
+            "reopen",
+            "update_labels",
+        }
+        if not all(
+            isinstance(item, dict)
+            and set(item)
+            == {
+                "id",
+                "sha256",
+                "kind",
+                "publication_id",
+                "revision",
+                "operation",
+                "command",
+                "spec",
+            }
+            and nonempty_string(item.get("id"))
+            and is_digest(item.get("sha256"))
+            and item.get("kind") in {"finding", "thread", "issue", "labels"}
+            and item.get("operation") in operations
+            and nonempty_string(item.get("command"))
+            and isinstance(item.get("spec"), dict)
+            and item["sha256"] == digest(item["spec"])
+            and set(item["spec"])
+            == {
+                "schema",
+                "preflight_sha256",
+                "operation",
+                "publication",
+                "body",
+                "expected",
+                "mutation",
+            }
+            and item["spec"].get("schema") == "code-review/publication-action/v1"
+            and item["spec"].get("preflight_sha256") == value["preflight_sha256"]
+            and item["spec"].get("operation") == item["operation"]
+            and isinstance(item["spec"].get("expected"), dict)
+            and set(item["spec"]["expected"]) == {"thread", "note", "prior_marker", "issue"}
+            and isinstance(item["spec"].get("mutation"), dict)
+            and (
+                item["kind"] == "labels"
+                and item["publication_id"] is None
+                and item["revision"] is None
+                and item["operation"] == "update_labels"
+                and item["spec"].get("publication") is None
+                and item["spec"].get("body") is None
+                and set(item["spec"]["mutation"]) == {"add", "remove", "proposed"}
+                and all(
+                    isinstance(item["spec"]["mutation"].get(key), list)
+                    and all(isinstance(label, str) for label in item["spec"]["mutation"][key])
+                    for key in ("add", "remove", "proposed")
+                )
+                and not set(item["spec"]["mutation"]["add"])
+                & set(item["spec"]["mutation"]["remove"])
+                or item["kind"] in {"finding", "thread", "issue"}
+                and nonempty_string(item.get("publication_id"))
+                and isinstance(item.get("revision"), int)
+                and item["revision"] >= 1
+                and isinstance(item["spec"].get("publication"), dict)
+                and item["spec"]["publication"]
+                == {
+                    "id": item["publication_id"],
+                    "revision": item["revision"],
+                    "kind": item["kind"],
+                }
+                and isinstance(item["spec"].get("body"), dict)
+                and set(item["spec"]["body"]) == {"path", "sha256"}
+                and Path(item["spec"]["body"]["path"]).is_absolute()
+                and is_digest(item["spec"]["body"]["sha256"])
+            )
+            for item in actions
+        ):
+            return False
+        action_ids = [item["id"] for item in cast(list[dict[str, Any]], actions)]
+        body_identities = {
+            (item["publication_id"], item["revision"], item["kind"], item["path"], item["sha256"])
+            for item in cast(list[dict[str, Any]], body_files)
+        }
+        action_identities = {
+            (
+                item["publication_id"],
+                item["revision"],
+                item["kind"],
+                item["spec"]["body"]["path"],
+                item["spec"]["body"]["sha256"],
+            )
+            for item in cast(list[dict[str, Any]], actions)
+            if item["kind"] != "labels"
+        }
+        return (
+            len(action_ids) == len(set(action_ids))
+            and sum(item["kind"] == "labels" for item in actions) <= 1
+            and body_identities == action_identities
+        )
+    if set(value) != legacy_keys and set(value) != current_keys:
         return False
     legacy = set(value) == legacy_keys
     body_files, commands = value["body_files"], value["commands"]
@@ -1014,6 +1158,86 @@ def label_review_is_valid(value: object) -> bool:
     )
 
 
+def code_review_label_review_is_valid(value: object) -> bool:
+    required = {
+        "complete",
+        "catalog_sha256",
+        "catalog",
+        "assessments",
+        "current",
+        "add",
+        "remove",
+        "proposed",
+        "unresolved",
+        "semver",
+    }
+    if not isinstance(value, dict) or set(value) != required:
+        return False
+    if (
+        value.get("complete") is not True
+        or not is_digest(value.get("catalog_sha256"))
+        or not isinstance(value.get("catalog"), list)
+        or not isinstance(value.get("assessments"), list)
+        or not all(
+            isinstance(value.get(key), list)
+            and len(value[key]) == len(set(value[key]))
+            and all(isinstance(item, str) for item in value[key])
+            for key in ("current", "add", "remove", "proposed", "unresolved")
+        )
+        or not isinstance(value.get("semver"), dict)
+        or set(value["semver"]) != {"impact", "candidates", "selected"}
+        or value["semver"].get("impact")
+        not in {"major", "minor", "patch", "none", "not_applicable"}
+        or not isinstance(value["semver"].get("candidates"), list)
+        or not all(isinstance(item, str) for item in value["semver"]["candidates"])
+        or (
+            value["semver"].get("selected") is not None
+            and not isinstance(value["semver"].get("selected"), str)
+        )
+    ):
+        return False
+    catalog = cast(list[object], value["catalog"])
+    assessments = cast(list[object], value["assessments"])
+    if not all(
+        isinstance(item, dict)
+        and set(item) == {"name", "description"}
+        and nonempty_string(item.get("name"))
+        and (item.get("description") is None or isinstance(item.get("description"), str))
+        for item in catalog
+    ) or not all(
+        isinstance(item, dict)
+        and set(item) == {"name", "description", "status", "rationale", "current"}
+        and nonempty_string(item.get("name"))
+        and (item.get("description") is None or isinstance(item.get("description"), str))
+        and item.get("status") in {"applicable", "inapplicable", "unresolved"}
+        and nonempty_string(item.get("rationale"))
+        and isinstance(item.get("current"), bool)
+        for item in assessments
+    ):
+        return False
+    catalog_names = [cast(dict[str, Any], item)["name"] for item in catalog]
+    assessment_by_name = {
+        cast(dict[str, Any], item)["name"]: cast(dict[str, Any], item) for item in assessments
+    }
+    current = cast(list[str], value["current"])
+    add = cast(list[str], value["add"])
+    remove = cast(list[str], value["remove"])
+    proposed = sorted((set(current) - set(remove)) | set(add), key=str.casefold)
+    return (
+        value["catalog_sha256"] == digest(value["catalog"])
+        and len(catalog_names) == len(set(catalog_names)) == len(assessment_by_name)
+        and set(catalog_names) == set(assessment_by_name)
+        and set(current).issubset(catalog_names)
+        and set(add).issubset(catalog_names)
+        and set(remove).issubset(current)
+        and not set(add) & set(remove)
+        and proposed == value["proposed"]
+        and set(value["unresolved"])
+        == {name for name, item in assessment_by_name.items() if item["status"] == "unresolved"}
+        and all((name in current) is item["current"] for name, item in assessment_by_name.items())
+    )
+
+
 def companions_are_valid(value: object) -> bool:
     if not isinstance(value, list):
         return False
@@ -1330,9 +1554,11 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "prepared_at",
         }
         current_required = legacy_required | {"publication_markers", "incremental"}
-        if set(payload) not in (legacy_required, current_required):
+        structured_required = current_required | {"current_user_id"}
+        if set(payload) not in (legacy_required, current_required, structured_required):
             raise WorkflowError("review context payload has unknown or missing fields")
         legacy_context = set(payload) == legacy_required
+        structured_context = set(payload) == structured_required
         counts = payload["counts"]
         exact_git = payload["exact_git"]
         if (
@@ -1342,6 +1568,12 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or not isinstance(payload["target"], dict)
             or payload["role"] not in {"author", "reviewer"}
+            or structured_context
+            and (
+                not isinstance(payload["current_user_id"], int)
+                or isinstance(payload["current_user_id"], bool)
+                or payload["current_user_id"] < 1
+            )
             or not all(
                 nonempty_string(payload[key])
                 for key in (
@@ -1484,15 +1716,22 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "rejected_candidate_assessments",
             "rejected_candidate_ledger",
         }
+        structured_required = current_required | {"label_review"}
         actual_keys = set(payload)
-        if actual_keys not in (minimal_required, legacy_required, current_required):
+        if actual_keys not in (
+            minimal_required,
+            legacy_required,
+            current_required,
+            structured_required,
+        ):
             raise WorkflowError("review plan payload has unknown or missing fields")
-        legacy_plan = actual_keys != current_required
+        legacy_plan = actual_keys not in (current_required, structured_required)
+        structured_plan = actual_keys == structured_required
         minimal_plan = actual_keys == minimal_required
         if (
             payload["profile"] != "code-review"
             or not legacy_plan
-            and payload["review_contract_version"] != 1
+            and payload["review_contract_version"] != (2 if structured_plan else 1)
             or payload["external_mutations"] is not False
             or not all(
                 is_digest(payload[key])
@@ -1523,6 +1762,14 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 else detailed_findings_are_valid(payload["findings"])
             )
             or not thread_decisions_are_valid(payload["thread_decisions"])
+            or structured_plan
+            and (
+                not code_review_label_review_is_valid(payload["label_review"])
+                or not all(
+                    isinstance(item, dict) and "suggestion_applicable" in item
+                    for item in payload["thread_decisions"]
+                )
+            )
             or not legacy_plan
             and not all(
                 isinstance(payload[key], list)

@@ -5,6 +5,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -78,11 +79,11 @@ base_sha = os.environ.get("FAKE_BASE_SHA", "a")
 start_sha = os.environ.get("FAKE_START_SHA", "b")
 changed_path = os.environ.get("FAKE_CHANGED_PATH")
 if endpoint.startswith("projects/group%%2Fproject"):
-    value = {"id": 19}
+    value = {"id": 19, "path_with_namespace": "group/project"}
 elif endpoint.startswith("projects/19/labels"):
-    value = [{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}, {"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}]
+    value = [{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}, {"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}, {"name": "semver::major", "description": "Breaking compatibility"}, {"name": "semver::patch", "description": "Backward-compatible fix"}]
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "updated_at": "changed" if changed else "fresh", "labels": [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
+    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "updated_at": "changed" if changed else "fresh", "labels": json.loads(os.environ.get("FAKE_MR_LABELS", "[]")), "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
     value = {"changes": [{"old_path": changed_path, "new_path": changed_path}] if changed_path else [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
@@ -93,7 +94,7 @@ elif "/repository/commits/" in endpoint and "/merge_requests?" in endpoint:
 elif "/repository/tags/" in endpoint:
     value = {"name": endpoint.rsplit("/", 1)[-1], "created_at": "2026-01-01T00:00:00Z", "commit": {"created_at": "2026-01-01T00:00:00Z"}}
 elif endpoint == "user":
-    value = {"username": os.environ.get("FAKE_CURRENT_USER", "reviewer")}
+    value = {"id": 23, "username": os.environ.get("FAKE_CURRENT_USER", "reviewer")}
 elif endpoint.startswith("projects/19/merge_requests/7/discussions"):
     value = json.loads(os.environ["FAKE_DISCUSSIONS_JSON"]) if os.environ.get("FAKE_DISCUSSIONS_JSON") else ([{"id": "discussion-42", "notes": [{"id": 42, "system": False, "resolvable": True, "resolved": False, "author": {"username": "other-reviewer"}, "body": "Retry needs an idempotency key", "position": {"head_sha": head_sha, "new_path": changed_path, "new_line": 2}}]}] if os.environ.get("FAKE_DISCUSSION") else [])
 elif endpoint.startswith("projects/19/merge_requests/7/notes"):
@@ -107,6 +108,73 @@ print(json.dumps(value))
         )
         executable.chmod(0o755)
         return executable, state
+
+    def fake_publish_glab(self, directory: Path) -> tuple[Path, Path, Path]:
+        state = directory / "fake-publish-state.json"
+        state.write_text(
+            json.dumps({"labels": [], "discussions": [], "notes": [], "issues": []}),
+            encoding="utf-8",
+        )
+        log = directory / "fake-publish.log"
+        executable = directory / "glab"
+        executable.write_text(
+            """#!%s
+import json
+import os
+import sys
+from pathlib import Path
+
+arguments = sys.argv[1:]
+method = arguments[arguments.index("--method") + 1]
+endpoint = arguments[-1]
+payload = json.load(sys.stdin) if "--input" in arguments else None
+state_path = Path(os.environ["FAKE_PUBLISH_STATE"])
+state = json.loads(state_path.read_text(encoding="utf-8"))
+Path(os.environ["FAKE_PUBLISH_LOG"]).open("a", encoding="utf-8").write(json.dumps({"argv": arguments, "inherited": os.environ.get("FAKE_INHERITED_OPTION")}) + "\\n")
+catalog = json.loads(os.environ["FAKE_LABEL_CATALOG"])
+base_sha = os.environ["FAKE_BASE_SHA"]
+start_sha = os.environ["FAKE_START_SHA"]
+head_sha = os.environ["FAKE_HEAD_SHA"]
+if endpoint == "user":
+    value = {"id": 23, "username": "reviewer"}
+elif endpoint == "projects/group%%2Fproject":
+    value = {"id": 19, "path_with_namespace": "group/project"}
+elif endpoint.startswith("projects/19/labels"):
+    value = catalog
+elif endpoint == "projects/19/merge_requests/7" and method == "GET":
+    value = {"iid": 7, "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "state": "merged", "labels": state["labels"], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
+elif endpoint == "projects/19/merge_requests/7" and method == "PUT":
+    add = [item for item in payload.get("add_labels", "").split(",") if item]
+    remove = {item for item in payload.get("remove_labels", "").split(",") if item}
+    state["labels"] = sorted((set(state["labels"]) - remove) | set(add), key=str.casefold)
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    value = {"iid": 7, "labels": state["labels"]}
+elif endpoint.startswith("projects/19/merge_requests/7/discussions?"):
+    value = state["discussions"]
+elif endpoint.startswith("projects/19/merge_requests/7/notes?"):
+    value = state["notes"]
+elif endpoint == "projects/19/merge_requests/7/discussions/discussion-42/notes" and method == "POST":
+    note = {"id": 100, "system": False, "resolvable": False, "resolved": False, "author": {"id": 23, "username": "reviewer"}, "body": payload["body"]}
+    state["discussions"][0]["notes"].append(note)
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    value = note
+elif endpoint == "projects/19/merge_requests/7/discussions/discussion-42" and method == "PUT":
+    state["discussions"][0]["notes"][0]["resolved"] = payload["resolved"]
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    value = state["discussions"][0]
+elif endpoint == "projects/19/merge_requests/7/discussions/discussion-42" and method == "GET":
+    value = state["discussions"][0]
+elif endpoint.startswith("projects/19/issues?"):
+    value = state["issues"]
+else:
+    value = []
+print(json.dumps(value))
+"""
+            % sys.executable,
+            encoding="utf-8",
+        )
+        executable.chmod(0o755)
+        return executable, state, log
 
     def test_gitlab_runners_support_foreign_cwd_help_and_capabilities(self) -> None:
         for skill in GITLAB_RUNNERS:
@@ -209,6 +277,57 @@ print(json.dumps(value))
             "body": "Use the bounded value.\n\n```suggestion\nvalue = bounded\n```",
         }
         self.assertEqual(module.validate_finding_publications([valid], {"finding-1"})[0], valid)
+
+    def test_code_review_maps_major_semver_across_complete_label_catalog(self) -> None:
+        scripts = BUILT_SKILLS / "code-review" / "scripts"
+        previous_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "portable_runtime" or name.startswith("portable_runtime.")
+        }
+        sys.path.insert(0, str(scripts))
+        try:
+            module = load_module(scripts / "review_context.py", "built_review_context_labels")
+        finally:
+            sys.path.remove(str(scripts))
+            for name in list(sys.modules):
+                if name == "portable_runtime" or name.startswith("portable_runtime."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous_modules)
+        evidence = {
+            "labels": {
+                "complete": True,
+                "items": [
+                    {"name": "semver::major", "description": "Breaking compatibility"},
+                    {"name": "semver::minor", "description": "Compatible feature"},
+                    {"name": "team-owned", "description": "Routing label"},
+                ],
+            },
+            "object": {"labels": ["semver::minor", "team-owned"]},
+        }
+        assessments = [
+            {
+                "name": "semver::major",
+                "status": "applicable",
+                "rationale": "The public contract breaks.",
+            },
+            {
+                "name": "semver::minor",
+                "status": "inapplicable",
+                "rationale": "Minor understates the compatibility impact.",
+            },
+            {
+                "name": "team-owned",
+                "status": "applicable",
+                "rationale": "The existing team still owns the change.",
+            },
+        ]
+        result = module.validate_label_assessments(evidence, assessments, "major")
+        self.assertEqual(result["add"], ["semver::major"])
+        self.assertEqual(result["remove"], ["semver::minor"])
+        self.assertEqual(result["semver"]["selected"], "semver::major")
+        with self.assertRaises(module.portable.WorkflowError):
+            module.validate_label_assessments(evidence, assessments[:-1], "major")
 
     def test_invalid_target_is_rejected_before_external_collection(self) -> None:
         for skill in GITLAB_RUNNERS:
@@ -1147,6 +1266,7 @@ print(json.dumps(value))
                             "verdict_label": "Verdict",
                             "verdict_value": "changes required",
                             "metadata_heading": "MR metadata",
+                            "labels_heading": "Project labels",
                             "previous_findings_heading": "Previous findings",
                             "open_threads_heading": "Open threads",
                             "closed_threads_heading": "Closed threads",
@@ -1208,6 +1328,28 @@ print(json.dumps(value))
                                 "recommendation": "Correct metadata independently of code findings.",
                             },
                         },
+                        "label_assessments": [
+                            {
+                                "name": "next-compatible",
+                                "status": "inapplicable",
+                                "rationale": "The change is a patch, not a minor release.",
+                            },
+                            {
+                                "name": "semver::major",
+                                "status": "inapplicable",
+                                "rationale": "The change is backward compatible.",
+                            },
+                            {
+                                "name": "semver::patch",
+                                "status": "applicable",
+                                "rationale": "The reviewed fix has patch SemVer impact.",
+                            },
+                            {
+                                "name": "ship-ready",
+                                "status": "inapplicable",
+                                "rationale": "This MR is not a release publication.",
+                            },
+                        ],
                         "checks": ["Compared the exact base and head revisions."],
                         "findings": [primary_finding],
                         "finding_publications": [
@@ -1217,7 +1359,7 @@ print(json.dumps(value))
                                 "path": None,
                                 "line": None,
                                 "old_line": None,
-                                "body": "A retry needs an idempotency key before the external call.",
+                                "body": "You need to reserve an idempotency key before the external call.",
                             }
                         ],
                         "previous_finding_assessments": [],
@@ -1254,7 +1396,8 @@ print(json.dumps(value))
                                 "assessment": "fixed",
                                 "rationale": "The existing thread can be acknowledged and resolved.",
                                 "outcome": "resolve",
-                                "proposed_response": "The follow-up is tracked by the current finding. Closing.",
+                                "proposed_response": "I tracked the remaining risk in the current finding. Closing.",
+                                "suggestion_applicable": False,
                                 "last_note_id": 42,
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"
@@ -1312,23 +1455,137 @@ print(json.dumps(value))
             ]
             self.assertTrue(all("<!-- code-review:id=" in value for value in bodies))
             commands = plan_result["publication_commands"]
-            self.assertTrue(all("--method POST" in value for value in commands))
-            self.assertTrue(all("--method GET" in value for value in commands))
-            self.assertTrue(all("sha256sum --check --status" in value for value in commands))
-            self.assertTrue(any("/discussions/" in value for value in commands))
-            self.assertTrue(any("/issues" in value for value in commands))
+            self.assertEqual(len(commands), 4)
+            self.assertTrue(all("review_publish.py apply" in value for value in commands))
+            self.assertTrue(all("--confirm" in value for value in commands))
+            self.assertTrue(all("glab" not in value for value in commands))
             plan_document = json.loads(
                 Path(plan_result["artifact_path"]).read_text(encoding="utf-8")
             )
-            thread_command = next(
-                item
-                for item in plan_document["payload"]["publication_preview"]["commands"]
-                if item["kind"] == "thread"
+            preview = plan_document["payload"]["publication_preview"]
+            thread_action = next(item for item in preview["actions"] if item["kind"] == "thread")
+            self.assertEqual(thread_action["operation"], "resolve")
+            self.assertTrue(thread_action["spec"]["mutation"]["desired_resolved"])
+            label_action = next(item for item in preview["actions"] if item["kind"] == "labels")
+            self.assertIsNone(label_action["spec"]["body"])
+            self.assertEqual(label_action["spec"]["mutation"]["add"], ["semver::patch"])
+            self.assertEqual(
+                plan_document["payload"]["label_review"]["semver"]["selected"], "semver::patch"
             )
-            self.assertIsNotNone(thread_command["recovery_command"])
-            self.assertIn("resolved=true", thread_command["recovery_command"])
-            self.assertIn(".notes[0].resolved", thread_command["recovery_command"])
-            self.assertIn("last | .body", thread_command["recovery_command"])
+            publish_directory = root / "publish-bin"
+            publish_directory.mkdir()
+            _publish_glab, publish_state, publish_log = self.fake_publish_glab(publish_directory)
+            publish_environment = {
+                **environment,
+                "PATH": f"{publish_directory}:{os.environ['PATH']}",
+                "FAKE_PUBLISH_STATE": str(publish_state),
+                "FAKE_PUBLISH_LOG": str(publish_log),
+                "FAKE_INHERITED_OPTION": "custom-glab-config",
+                "FAKE_LABEL_CATALOG": json.dumps(
+                    plan_document["payload"]["label_review"]["catalog"]
+                ),
+            }
+            action_command = shlex.split(label_action["command"])
+            wrong_command = list(action_command)
+            wrong_command[wrong_command.index("--confirm") + 1] = "0" * 64
+            wrong_confirmation = subprocess.run(
+                wrong_command,
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(wrong_confirmation.returncode, 2, wrong_confirmation.stdout)
+            self.assertFalse(publish_log.exists())
+            applied = subprocess.run(
+                action_command,
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+            self.assertEqual(json.loads(applied.stdout)["status"], "applied")
+            self.assertEqual(
+                json.loads(publish_state.read_text(encoding="utf-8"))["labels"],
+                ["semver::patch"],
+            )
+            repeated = subprocess.run(
+                action_command,
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(repeated.returncode, 0, repeated.stdout + repeated.stderr)
+            self.assertEqual(json.loads(repeated.stdout)["status"], "already_applied")
+            publish_state_value = json.loads(publish_state.read_text(encoding="utf-8"))
+            publish_state_value["discussions"] = [
+                {
+                    "id": "discussion-42",
+                    "notes": [
+                        {
+                            "id": 42,
+                            "system": False,
+                            "resolvable": True,
+                            "resolved": False,
+                            "author": {"username": "other-reviewer"},
+                            "body": "Retry needs an idempotency key",
+                            "position": {
+                                "base_sha": base_sha,
+                                "start_sha": base_sha,
+                                "head_sha": head_sha,
+                                "new_path": "review.txt",
+                                "new_line": 2,
+                            },
+                        }
+                    ],
+                }
+            ]
+            publish_state.write_text(json.dumps(publish_state_value), encoding="utf-8")
+            thread_command = shlex.split(thread_action["command"])
+            resolved = subprocess.run(
+                thread_command,
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(resolved.returncode, 0, resolved.stdout + resolved.stderr)
+            self.assertEqual(json.loads(resolved.stdout)["status"], "applied")
+            resolved_state = json.loads(publish_state.read_text(encoding="utf-8"))
+            self.assertTrue(resolved_state["discussions"][0]["notes"][0]["resolved"])
+            self.assertIn(
+                "<!-- code-review:id=thread-42",
+                resolved_state["discussions"][0]["notes"][-1]["body"],
+            )
+            resolved_again = subprocess.run(
+                thread_command,
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(json.loads(resolved_again.stdout)["status"], "already_applied")
+            publish_calls = [
+                json.loads(line) for line in publish_log.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertTrue(publish_calls)
+            self.assertTrue(
+                all(item["inherited"] == "custom-glab-config" for item in publish_calls)
+            )
+            self.assertEqual(
+                sum(
+                    item["argv"][item["argv"].index("--method") + 1] == "PUT"
+                    for item in publish_calls
+                ),
+                2,
+            )
             self.assertTrue((Path(artifact_root) / "review-baseline.json").is_file())
             unchanged_context = self.run_runner(
                 "code-review",
@@ -1523,13 +1780,15 @@ print(json.dumps(value))
             self.assertTrue(calls)
             self.assertTrue(all("GET" in call and "api" in call for call in calls))
             state.write_text("fresh", encoding="utf-8")
-            environment["FAKE_DISCUSSIONS_JSON"] = published_discussions_json
             source.write_text("base\nreviewed change\nfollow-up\n", encoding="utf-8")
             subprocess.run(["git", "commit", "-qam", "follow-up"], cwd=repository, check=True)
             next_head = subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=repository, text=True
             ).strip()
             environment["FAKE_HEAD_SHA"] = next_head
+            incremental_discussions = json.loads(published_discussions_json)
+            incremental_discussions[0]["notes"][0]["position"]["head_sha"] = next_head
+            environment["FAKE_DISCUSSIONS_JSON"] = json.dumps(incremental_discussions)
             prepared_incremental = self.run_runner(
                 "code-review", "prepare", "--url", target, env=environment
             )
@@ -1656,6 +1915,7 @@ print(json.dumps(value))
                             "verdict_label": "Итог",
                             "verdict_value": "нужны изменения",
                             "metadata_heading": "Оформление MR",
+                            "labels_heading": "Лейблы проекта",
                             "previous_findings_heading": "Сверка предыдущих обнаружений",
                             "open_threads_heading": "Открытые треды",
                             "closed_threads_heading": "Закрытые треды",
@@ -1704,6 +1964,28 @@ print(json.dumps(value))
                                 "overall",
                             )
                         },
+                        "label_assessments": [
+                            {
+                                "name": "next-compatible",
+                                "status": "inapplicable",
+                                "rationale": "Изменение имеет patch, а не minor влияние.",
+                            },
+                            {
+                                "name": "semver::major",
+                                "status": "inapplicable",
+                                "rationale": "Изменение обратно совместимо.",
+                            },
+                            {
+                                "name": "semver::patch",
+                                "status": "applicable",
+                                "rationale": "Исправление имеет patch влияние на SemVer.",
+                            },
+                            {
+                                "name": "ship-ready",
+                                "status": "inapplicable",
+                                "rationale": "Это не публикация релиза.",
+                            },
+                        ],
                         "checks": ["Checked the retry delta and affected provider path."],
                         "findings": [incremental_finding],
                         "finding_publications": [
@@ -1781,7 +2063,8 @@ print(json.dumps(value))
                                 "assessment": "accepted",
                                 "rationale": "The thread remains actionable.",
                                 "outcome": "reply",
-                                "proposed_response": "The retry still needs an idempotency key.",
+                                "proposed_response": "Тебе всё ещё нужно резервировать ключ идемпотентности до вызова.\n\n```suggestion\nreviewed change\n```",
+                                "suggestion_applicable": True,
                                 "last_note_id": 42,
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"

@@ -130,6 +130,68 @@
       },
       "additionalProperties": false
     },
+    "code_review_label_review": {
+      "type": "object",
+      "required": [
+        "complete",
+        "catalog_sha256",
+        "catalog",
+        "assessments",
+        "current",
+        "add",
+        "remove",
+        "proposed",
+        "unresolved",
+        "semver"
+      ],
+      "properties": {
+        "complete": { "const": true },
+        "catalog_sha256": { "$ref": "#/$defs/digest" },
+        "catalog": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "description": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "assessments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "description", "status", "rationale", "current"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "description": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+              "status": { "enum": ["applicable", "inapplicable", "unresolved"] },
+              "rationale": { "type": "string", "minLength": 1 },
+              "current": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "current": { "type": "array", "items": { "type": "string" } },
+        "add": { "type": "array", "items": { "type": "string" } },
+        "remove": { "type": "array", "items": { "type": "string" } },
+        "proposed": { "type": "array", "items": { "type": "string" } },
+        "unresolved": { "type": "array", "items": { "type": "string" } },
+        "semver": {
+          "type": "object",
+          "required": ["impact", "candidates", "selected"],
+          "properties": {
+            "impact": { "enum": ["major", "minor", "patch", "none", "not_applicable"] },
+            "candidates": { "type": "array", "items": { "type": "string" } },
+            "selected": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "finding": {
       "type": "object",
       "required": ["id"],
@@ -175,6 +237,20 @@
             "last_note_id",
             "last_note_body_sha256"
           ]
+        },
+        {
+          "required": [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response",
+            "suggestion_applicable",
+            "last_note_id",
+            "last_note_body_sha256"
+          ]
         }
       ],
       "properties": {
@@ -197,6 +273,7 @@
           "enum": ["no_publication", "local_fix", "reply", "resolve", "reopen"]
         },
         "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "suggestion_applicable": { "type": "boolean" },
         "last_note_id": {},
         "last_note_body_sha256": { "$ref": "#/$defs/digest" }
       },
@@ -297,6 +374,77 @@
       },
       "additionalProperties": false
     },
+    "review_publication_action": {
+      "type": "object",
+      "required": [
+        "id",
+        "sha256",
+        "kind",
+        "publication_id",
+        "revision",
+        "operation",
+        "command",
+        "spec"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/digest" },
+        "kind": { "enum": ["finding", "thread", "issue", "labels"] },
+        "publication_id": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        },
+        "revision": {
+          "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }]
+        },
+        "operation": {
+          "enum": [
+            "create_general",
+            "create_line",
+            "create_issue",
+            "update_issue",
+            "reply",
+            "resolve",
+            "reopen",
+            "update_labels"
+          ]
+        },
+        "command": { "type": "string", "minLength": 1 },
+        "spec": {
+          "type": "object",
+          "required": [
+            "schema",
+            "preflight_sha256",
+            "operation",
+            "publication",
+            "body",
+            "expected",
+            "mutation"
+          ],
+          "properties": {
+            "schema": { "const": "code-review/publication-action/v1" },
+            "preflight_sha256": { "$ref": "#/$defs/digest" },
+            "operation": {
+              "enum": [
+                "create_general",
+                "create_line",
+                "create_issue",
+                "update_issue",
+                "reply",
+                "resolve",
+                "reopen",
+                "update_labels"
+              ]
+            },
+            "publication": { "anyOf": [{ "type": "object" }, { "type": "null" }] },
+            "body": { "anyOf": [{ "type": "object" }, { "type": "null" }] },
+            "expected": { "type": "object" },
+            "mutation": { "type": "object" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "review_publication_preview": {
       "type": "object",
       "anyOf": [
@@ -311,6 +459,17 @@
             "body_files",
             "commands"
           ]
+        },
+        {
+          "required": [
+            "mr_state",
+            "warning",
+            "preflight_path",
+            "preflight_sha256",
+            "helper_path",
+            "body_files",
+            "actions"
+          ]
         }
       ],
       "properties": {
@@ -319,8 +478,13 @@
         "preflight_path": { "type": "string", "minLength": 1 },
         "preflight_sha256": { "$ref": "#/$defs/digest" },
         "preflight_command": { "type": "string", "minLength": 1 },
+        "helper_path": { "type": "string", "minLength": 1 },
         "body_files": { "type": "array", "items": { "$ref": "#/$defs/publication_body" } },
-        "commands": { "type": "array", "items": { "$ref": "#/$defs/publication_command" } }
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/publication_command" } },
+        "actions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/review_publication_action" }
+        }
       },
       "additionalProperties": false
     },
@@ -574,6 +738,7 @@
         "verdict_label": { "type": "string", "minLength": 1 },
         "verdict_value": { "type": "string", "minLength": 1 },
         "metadata_heading": { "type": "string", "minLength": 1 },
+        "labels_heading": { "type": "string", "minLength": 1 },
         "previous_findings_heading": { "type": "string", "minLength": 1 },
         "open_threads_heading": { "type": "string", "minLength": 1 },
         "closed_threads_heading": { "type": "string", "minLength": 1 },
@@ -999,6 +1164,29 @@
                     "artifact_root",
                     "prepared_at"
                   ]
+                },
+                {
+                  "required": [
+                    "schema_version",
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "target",
+                    "role",
+                    "current_user_id",
+                    "current_user_username",
+                    "mr_author_username",
+                    "discussions",
+                    "notes",
+                    "publication_markers",
+                    "counts",
+                    "exact_git",
+                    "incremental",
+                    "complete",
+                    "errors",
+                    "artifact_root",
+                    "prepared_at"
+                  ]
                 }
               ],
               "additionalProperties": false,
@@ -1009,6 +1197,7 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "target": { "type": "object" },
                 "role": { "enum": ["author", "reviewer"] },
+                "current_user_id": { "type": "integer", "minimum": 1 },
                 "current_user_username": { "type": "string", "minLength": 1 },
                 "mr_author_username": { "type": "string", "minLength": 1 },
                 "discussions": { "type": "array" },
@@ -1161,7 +1350,7 @@
               "additionalProperties": false,
               "properties": {
                 "profile": { "const": "code-review" },
-                "review_contract_version": { "const": 1 },
+                "review_contract_version": { "enum": [1, 2] },
                 "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
@@ -1179,6 +1368,7 @@
                 },
                 "semver_rationale": { "type": "string", "minLength": 1 },
                 "mr_metadata_assessment": { "$ref": "#/$defs/mr_metadata_assessment" },
+                "label_review": { "$ref": "#/$defs/code_review_label_review" },
                 "publication_preview": { "$ref": "#/$defs/review_publication_preview" },
                 "presentation": { "$ref": "#/$defs/review_presentation" },
                 "checks": { "type": "array", "items": { "type": "string", "minLength": 1 } },

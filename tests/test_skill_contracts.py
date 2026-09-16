@@ -221,7 +221,7 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
         assert required.search(workflow), name
 
 
-def test_code_review_requires_compact_incremental_manual_publication_contract() -> None:
+def test_code_review_requires_compact_incremental_confirmed_publication_contract() -> None:
     workflow = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
     for marker in (
         "--incremental auto",
@@ -231,7 +231,11 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "recommended_issues",
         "review-publication.md",
         "complete absolute filesystem paths",
-        "Do not add an apply subcommand or execute publication commands",
+        "label_assessments",
+        "scripts/review_publish.py apply",
+        "Each command confirms exactly one action digest",
+        "inherits the caller's environment",
+        "suggestion_applicable=true",
     ):
         assert marker in workflow
     output = (ROOT / "skills/code-review/references/output-format.md").read_text(encoding="utf-8")
@@ -243,6 +247,10 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "use a `file://` link",
         "<!-- code-review:id=<stable-id>",
         "selected response language",
+        "authenticated user's",
+        "factual role",
+        "informal second-person",
+        "exhaustive one-entry-per-catalog-label assessment",
     ):
         assert marker in output
     for marker in (

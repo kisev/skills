@@ -37,6 +37,21 @@ Use these examples to calibrate evidence and minimum fixes. Do not copy claims w
 Valid outcomes are `no_publication`, `local_fix`, `reply`, `resolve`, and
 `reopen`. A publishable response is natural prose followed by a runner-owned
 hidden marker; do not put severity or internal evidence labels in that prose.
+Write it from the authenticated user's factual role and use natural informal
+second person when addressing the participant.
+
+For an actionable current new-line position, prepare exactly one suggestion:
+
+````markdown
+You need to reserve the idempotency key before the provider call.
+
+```suggestion
+operation = reserve_operation(request.id)
+```
+````
+
+For a general, deleted, or outdated position, omit `suggestion` and provide a
+concrete patch or replacement in prose instead.
 
 ## Recommended issue
 

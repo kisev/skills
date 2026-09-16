@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.mutation-near-miss",
-  "revision": 2,
+  "revision": 3,
   "kind": "near-miss",
   "surface": "skill",
   "host": "any",
@@ -19,7 +19,7 @@
     {
       "id": "mutation-forbidden",
       "path": "shared/references/gitlab-workflow.md",
-      "contains": "exposes no apply subcommand"
+      "contains": "`approve`, `merge`, and `push` remain outside this helper boundary"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "b730ebab010c0c380ca207b4809be9c5409c8ccd7aa2310f831ebc38a9e4a20e",
+  "digest": "41ef43a23c6617900b950072f8da75460ba3ea0428759c169f7fd671fa3eeceb",
   "locale": "ru",
   "pair_id": "gitlab.mutation-near-miss"
 }

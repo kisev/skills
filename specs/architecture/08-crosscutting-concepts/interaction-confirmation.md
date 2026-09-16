@@ -21,3 +21,9 @@ normalize source content to `work-item/v1` before semantic processing. Their
 default result is returned in chat. Optional file output is a local mutation and
 requires an exact preview and digest confirmation; these workflows have no
 external publication adapter.
+
+A code-review publication plan is still read-only. Each generated helper command
+is a separate mutation boundary and supplies one immutable action digest as
+Confirmation. That digest cannot authorize another action, a batch, changed
+content, or changed recovery. Safe retry of the same action may observe an exact
+existing marker or complete only a pending thread-state phase.

@@ -36,9 +36,10 @@ incompatible contracts, removed baseline discussions or notes, and incomplete
 evidence select a full review. This is a normal safe fallback, not permission to
 reuse part of an incompatible result.
 
-If code is unchanged but discussions, standalone notes, metadata, or CI changed,
-run an incremental review of those changes. If nothing changed, return a short
-no-op result without a critic or a new review plan.
+If code is unchanged but discussions, standalone notes, metadata, the complete
+project/inherited label catalog, or CI changed, run an incremental review of
+those changes. If nothing changed, return a short no-op result without a critic
+or a new review plan.
 
 ## Scope
 
@@ -89,9 +90,10 @@ CI dependencies. When the incremental delta touches a dependency, assess the
 candidate as `still_rejected` or `promoted`; a promoted candidate must appear in
 the accepted finding set.
 
-Do not inherit a previous verdict, approval, thread decision, or publication
-body. Recalculate the overall necessity, relevance, architecture, SemVer,
-metadata assessment, and verdict from the baseline plus current evidence.
+Do not inherit a previous verdict, approval, thread decision, publication body,
+or label decision. Recalculate the overall necessity, relevance, architecture,
+SemVer, exhaustive label applicability and delta, metadata assessment, and
+verdict from the baseline plus current evidence.
 
 ## Critic
 
@@ -118,3 +120,5 @@ text is not adopted automatically.
 
 The baseline pointer, exact refs, delta, previous findings, markers, and digests
 remain private technical JSON. User-facing reports omit raw SHAs.
+Every regenerated structured action receives an exact digest; confirmation of a
+previous action never authorizes a changed publication or label delta.

@@ -56,6 +56,14 @@ def envelope(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def canonical_digest(value: object) -> str:
+    return hashlib.sha256(
+        (
+            json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode()
+    ).hexdigest()
+
+
 def component() -> dict[str, Any]:
     return {"items": [], "complete": True, "errors": [], "pages": 1, "truncated": False}
 
@@ -135,6 +143,7 @@ def artifact_instances() -> list[dict[str, Any]]:
         "verdict_label": "Verdict",
         "verdict_value": "ready",
         "metadata_heading": "MR metadata",
+        "labels_heading": "Project labels",
         "previous_findings_heading": "Previous findings",
         "open_threads_heading": "Open threads",
         "closed_threads_heading": "Closed threads",
@@ -256,6 +265,7 @@ def artifact_instances() -> list[dict[str, Any]]:
             "evidence_digest": DIGEST,
             "target": {},
             "role": "reviewer",
+            "current_user_id": 23,
             "current_user_username": "reviewer",
             "mr_author_username": "author",
             "discussions": [],
@@ -315,11 +325,38 @@ def artifact_instances() -> list[dict[str, Any]]:
             "plan_name": "publication",
         },
     )
+    finding_action_spec = {
+        "schema": "code-review/publication-action/v1",
+        "preflight_sha256": DIGEST,
+        "operation": "create_general",
+        "publication": {"id": "finding-1", "revision": 1, "kind": "finding"},
+        "body": {"path": "/tmp/portable-artifacts/finding-1.md", "sha256": body_digest},
+        "expected": {"thread": None, "note": None, "prior_marker": None, "issue": None},
+        "mutation": {"path": None, "line": None, "old_line": None},
+    }
+    issue_action_spec = {
+        "schema": "code-review/publication-action/v1",
+        "preflight_sha256": DIGEST,
+        "operation": "create_issue",
+        "publication": {"id": "issue-1", "revision": 1, "kind": "issue"},
+        "body": {"path": "/tmp/portable-artifacts/issue-1.md", "sha256": issue_digest},
+        "expected": {"thread": None, "note": None, "prior_marker": None, "issue": None},
+        "mutation": {"title": "Track broader schema cleanup"},
+    }
+    label_action_spec = {
+        "schema": "code-review/publication-action/v1",
+        "preflight_sha256": DIGEST,
+        "operation": "update_labels",
+        "publication": None,
+        "body": None,
+        "expected": {"thread": None, "note": None, "prior_marker": None, "issue": None},
+        "mutation": {"add": ["semver::patch"], "remove": [], "proposed": ["semver::patch"]},
+    }
     review_plan = envelope(
         "review_plan",
         {
             "profile": "code-review",
-            "review_contract_version": 1,
+            "review_contract_version": 2,
             "external_mutations": False,
             "evidence_digest": DIGEST,
             "context_digest": DIGEST,
@@ -350,12 +387,38 @@ def artifact_instances() -> list[dict[str, Any]]:
                     for field in ("title", "description", "labels", "workflow_state", "overall")
                 },
             },
+            "label_review": {
+                "complete": True,
+                "catalog_sha256": canonical_digest(
+                    [{"name": "semver::patch", "description": "Backward-compatible fix"}]
+                ),
+                "catalog": [{"name": "semver::patch", "description": "Backward-compatible fix"}],
+                "assessments": [
+                    {
+                        "name": "semver::patch",
+                        "description": "Backward-compatible fix",
+                        "status": "applicable",
+                        "rationale": "The fix has patch SemVer impact.",
+                        "current": False,
+                    }
+                ],
+                "current": [],
+                "add": ["semver::patch"],
+                "remove": [],
+                "proposed": ["semver::patch"],
+                "unresolved": [],
+                "semver": {
+                    "impact": "patch",
+                    "candidates": ["semver::patch"],
+                    "selected": "semver::patch",
+                },
+            },
             "publication_preview": {
                 "mr_state": "merged",
-                "warning": "Commands are prepared but were not executed.",
+                "warning": "Actions are prepared but were not executed.",
                 "preflight_path": "/tmp/portable-artifacts/preflight.json",
                 "preflight_sha256": DIGEST,
-                "preflight_command": "glab api --method GET projects/1/merge_requests/1",
+                "helper_path": "/tmp/portable-skills/code-review/scripts/review_publish.py",
                 "body_files": [
                     {
                         "publication_id": "finding-1",
@@ -374,22 +437,36 @@ def artifact_instances() -> list[dict[str, Any]]:
                         "content": issue_content,
                     },
                 ],
-                "commands": [
+                "actions": [
                     {
+                        "id": "finding:finding-1:r1:create_general",
+                        "sha256": canonical_digest(finding_action_spec),
+                        "kind": "finding",
                         "publication_id": "finding-1",
                         "revision": 1,
-                        "kind": "finding",
-                        "outcome": "create_general",
-                        "command": "glab api --method POST projects/1/merge_requests/1/notes",
-                        "recovery_command": None,
+                        "operation": "create_general",
+                        "command": "python3 review_publish.py apply --action finding-1",
+                        "spec": finding_action_spec,
                     },
                     {
+                        "id": "issue:issue-1:r1:create_issue",
+                        "sha256": canonical_digest(issue_action_spec),
+                        "kind": "issue",
                         "publication_id": "issue-1",
                         "revision": 1,
-                        "kind": "issue",
-                        "outcome": "create_issue",
-                        "command": "glab api --method POST projects/1/issues",
-                        "recovery_command": None,
+                        "operation": "create_issue",
+                        "command": "python3 review_publish.py apply --action issue-1",
+                        "spec": issue_action_spec,
+                    },
+                    {
+                        "id": "labels:update",
+                        "sha256": canonical_digest(label_action_spec),
+                        "kind": "labels",
+                        "publication_id": None,
+                        "revision": None,
+                        "operation": "update_labels",
+                        "command": "python3 review_publish.py apply --action labels:update",
+                        "spec": label_action_spec,
                     },
                 ],
             },
@@ -682,6 +759,7 @@ def validate_schema_runtime_rejections() -> None:
     legacy_context = copy.deepcopy(artifacts["review_context"])
     legacy_context["payload"].pop("incremental")
     legacy_context["payload"].pop("publication_markers")
+    legacy_context["payload"].pop("current_user_id")
     artifact_validator.validate(legacy_context)
     validate_v2_artifact(legacy_context, "review_context")
     legacy_plan = copy.deepcopy(artifacts["review_plan"])
@@ -697,24 +775,29 @@ def validate_schema_runtime_rejections() -> None:
         "rejected_candidates",
         "rejected_candidate_assessments",
         "rejected_candidate_ledger",
+        "label_review",
     ):
         legacy_plan["payload"].pop(key)
-    preview = legacy_plan["payload"]["publication_preview"]
-    preview.pop("preflight_path")
-    preview.pop("preflight_sha256")
-    preview["body_files"] = [
-        {
-            "finding_id": item["publication_id"],
-            "path": item["path"],
-            "sha256": item["sha256"],
-            "content": item["content"],
-        }
-        for item in preview["body_files"]
-    ]
-    preview["commands"] = [
-        {"finding_id": item["publication_id"], "command": item["command"]}
-        for item in preview["commands"]
-    ]
+    structured_preview = legacy_plan["payload"]["publication_preview"]
+    legacy_plan["payload"]["publication_preview"] = {
+        "mr_state": structured_preview["mr_state"],
+        "warning": structured_preview["warning"],
+        "preflight_command": "glab api --method GET projects/1/merge_requests/1",
+        "body_files": [
+            {
+                "finding_id": item["publication_id"],
+                "path": item["path"],
+                "sha256": item["sha256"],
+                "content": item["content"],
+            }
+            for item in structured_preview["body_files"]
+        ],
+        "commands": [
+            {"finding_id": item["publication_id"], "command": item["command"]}
+            for item in structured_preview["actions"]
+            if item["publication_id"] is not None
+        ],
+    }
     artifact_validator.validate(legacy_plan)
     validate_v2_artifact(legacy_plan, "review_plan")
     minimal_legacy_plan = copy.deepcopy(legacy_plan)

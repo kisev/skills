@@ -22,6 +22,7 @@ else:
 
 
 INCREMENTAL_CONTRACT_VERSION = 1
+REVIEW_CONTRACT_VERSION = 2
 BASELINE_NAME = "review-baseline.json"
 PUBLICATION_MARKER_RE = re.compile(
     r"<!-- code-review:id=(?P<id>[A-Za-z0-9][A-Za-z0-9._-]{0,63});"
@@ -232,7 +233,7 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
         raise portable.WorkflowError("code-review baseline plan digest changed")
     if (
         plan.get("complete") is not True
-        or plan.get("review_contract_version") != INCREMENTAL_CONTRACT_VERSION
+        or plan.get("review_contract_version") not in {1, REVIEW_CONTRACT_VERSION}
         or plan.get("target") != pointer.get("target")
     ):
         raise portable.WorkflowError("code-review baseline is incomplete or incompatible")
@@ -279,11 +280,23 @@ def trusted_publication_markers(
         for item in bodies
         if isinstance(item, dict)
     }
-    planned_commands = {
-        (item.get("publication_id"), item.get("revision"), item.get("kind")): item.get("outcome")
-        for item in cast(list[object], preview.get("commands", []))
-        if isinstance(item, dict)
-    }
+    action_values = preview.get("actions")
+    if isinstance(action_values, list):
+        planned_commands = {
+            (item.get("publication_id"), item.get("revision"), item.get("kind")): item.get(
+                "operation"
+            )
+            for item in action_values
+            if isinstance(item, dict) and item.get("publication_id") is not None
+        }
+    else:
+        planned_commands = {
+            (item.get("publication_id"), item.get("revision"), item.get("kind")): item.get(
+                "outcome"
+            )
+            for item in cast(list[object], preview.get("commands", []))
+            if isinstance(item, dict)
+        }
     finding_publications = {
         (item.get("finding_id"), item.get("revision")): item
         for item in cast(list[object], plan.get("finding_publications", []))
@@ -668,6 +681,9 @@ def incremental_context(
         metadata_fields = [
             key for key in metadata_keys if old_object.get(key) != current_object.get(key)
         ]
+        if old_evidence.get("labels") != evidence.get("labels"):
+            metadata_fields.append("label_catalog")
+            metadata_fields.sort()
         pipelines_changed = old_evidence.get("pipelines") != evidence.get("pipelines")
         changed = bool(
             changed_paths
@@ -886,8 +902,14 @@ def collect_context(
         raise portable.WorkflowError("MR author or web URL is unavailable")
     current_user = portable.glab_json(project["hostname"], "user")
     current_username = username(current_user)
-    if not current_username:
-        raise portable.WorkflowError("current GitLab username is unavailable")
+    current_user_id = current_user.get("id") if isinstance(current_user, dict) else None
+    if (
+        not current_username
+        or not isinstance(current_user_id, int)
+        or isinstance(current_user_id, bool)
+        or current_user_id < 1
+    ):
+        raise portable.WorkflowError("current GitLab identity is unavailable")
     role = "author" if current_username == author_username else "reviewer"
     notes_component = portable.paginated(
         project["hostname"],
@@ -950,6 +972,7 @@ def collect_context(
         "evidence_digest": evidence_digest,
         "target": target,
         "role": role,
+        "current_user_id": current_user_id,
         "current_user_username": current_username,
         "mr_author_username": author_username,
         "discussions": discussions,
@@ -1158,6 +1181,133 @@ def metadata_assessment(evidence: dict[str, Any], assessment: object) -> dict[st
     return result
 
 
+def label_catalog(evidence: dict[str, Any]) -> list[dict[str, str | None]]:
+    component = evidence.get("labels")
+    if not isinstance(component, dict) or component.get("complete") is not True:
+        raise portable.WorkflowError("project label catalog is incomplete")
+    catalog: list[dict[str, str | None]] = []
+    names: set[str] = set()
+    folded: set[str] = set()
+    for value in cast(list[object], component.get("items", [])):
+        if not isinstance(value, dict) or not portable.nonempty_string(value.get("name")):
+            raise portable.WorkflowError("project label catalog entry is invalid")
+        name = cast(str, value["name"])
+        description = value.get("description")
+        if description is not None and not isinstance(description, str):
+            raise portable.WorkflowError("project label description is invalid")
+        if name in names or name.casefold() in folded:
+            raise portable.WorkflowError("project label catalog contains duplicate names")
+        names.add(name)
+        folded.add(name.casefold())
+        catalog.append({"name": name, "description": description})
+    return sorted(catalog, key=lambda item: (cast(str, item["name"]).casefold(), item["name"]))
+
+
+def validate_label_assessments(
+    evidence: dict[str, Any], value: object, semver_impact: str
+) -> dict[str, Any]:
+    catalog = label_catalog(evidence)
+    catalog_by_name = {cast(str, item["name"]): item for item in catalog}
+    if not isinstance(value, list):
+        raise portable.WorkflowError("label assessments must be an array")
+    assessments: dict[str, dict[str, Any]] = {}
+    for item in value:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"name", "status", "rationale"}
+            or not portable.nonempty_string(item.get("name"))
+            or item.get("status") not in {"applicable", "inapplicable", "unresolved"}
+            or not portable.nonempty_string(item.get("rationale"))
+            or item["name"] in assessments
+        ):
+            raise portable.WorkflowError("label assessment is invalid")
+        assessments[cast(str, item["name"])] = cast(dict[str, Any], item)
+    if set(assessments) != set(catalog_by_name):
+        raise portable.WorkflowError("label assessments must cover the complete project catalog")
+
+    compatibility: dict[str, list[str]] = {"major": [], "minor": [], "patch": []}
+    for item in cast(list[dict[str, Any]], evidence["labels"]["items"]):
+        semantics = portable.label_semantics(item)
+        if semantics is not None and semantics[0] == "compatibility":
+            compatibility[semantics[1]].append(cast(str, item["name"]))
+    selected: str | None = None
+    if semver_impact in compatibility:
+        candidates = sorted(compatibility[semver_impact], key=str.casefold)
+        if len(candidates) == 1:
+            selected = candidates[0]
+            if assessments[selected]["status"] != "applicable":
+                raise portable.WorkflowError(
+                    "SemVer impact requires the matching compatibility label"
+                )
+        elif len(candidates) > 1 and any(
+            assessments[name]["status"] != "unresolved" for name in candidates
+        ):
+            raise portable.WorkflowError(
+                "ambiguous SemVer compatibility labels must remain unresolved"
+            )
+        for impact, names in compatibility.items():
+            if impact == semver_impact:
+                continue
+            if any(assessments[name]["status"] == "applicable" for name in names):
+                raise portable.WorkflowError(
+                    "an incompatible SemVer label cannot be assessed as applicable"
+                )
+
+    object_value = evidence.get("object")
+    current_value = object_value.get("labels") if isinstance(object_value, dict) else None
+    if not isinstance(current_value, list) or not all(
+        isinstance(item, str) for item in current_value
+    ):
+        raise portable.WorkflowError("current MR labels are unavailable")
+    current = sorted(set(cast(list[str], current_value)), key=str.casefold)
+    if len(current) != len(current_value) or not set(current).issubset(catalog_by_name):
+        raise portable.WorkflowError("current MR labels do not match the complete catalog")
+
+    entries = [
+        {
+            **assessments[cast(str, item["name"])],
+            "description": item["description"],
+            "current": item["name"] in current,
+        }
+        for item in catalog
+    ]
+    add = sorted(
+        [
+            cast(str, item["name"])
+            for item in entries
+            if item["status"] == "applicable" and item["name"] not in current
+        ],
+        key=str.casefold,
+    )
+    remove = sorted(
+        [
+            cast(str, item["name"])
+            for item in entries
+            if item["status"] == "inapplicable" and item["name"] in current
+        ],
+        key=str.casefold,
+    )
+    proposed = sorted((set(current) - set(remove)) | set(add), key=str.casefold)
+    return {
+        "complete": True,
+        "catalog_sha256": portable.digest(catalog),
+        "catalog": catalog,
+        "assessments": entries,
+        "current": current,
+        "add": add,
+        "remove": remove,
+        "proposed": proposed,
+        "unresolved": [
+            cast(str, item["name"]) for item in entries if item["status"] == "unresolved"
+        ],
+        "semver": {
+            "impact": semver_impact,
+            "candidates": sorted(compatibility.get(semver_impact, []), key=str.casefold),
+            "selected": selected,
+        },
+    }
+
+
 PRESENTATION_KEYS = {
     "title",
     "incremental_notice",
@@ -1167,6 +1317,7 @@ PRESENTATION_KEYS = {
     "verdict_label",
     "verdict_value",
     "metadata_heading",
+    "labels_heading",
     "previous_findings_heading",
     "open_threads_heading",
     "closed_threads_heading",
@@ -2192,6 +2343,458 @@ def publication_preview(
     return result, enriched_findings, enriched_issues
 
 
+def structured_publication_preflight(
+    evidence: dict[str, Any], context: dict[str, Any], root: Path, labels: dict[str, Any]
+) -> dict[str, str]:
+    project = evidence.get("project")
+    target = evidence.get("target")
+    object_value = evidence.get("object")
+    if (
+        not isinstance(project, dict)
+        or not isinstance(project.get("id"), int)
+        or not portable.nonempty_string(project.get("hostname"))
+        or not portable.nonempty_string(project.get("path"))
+        or not isinstance(target, dict)
+        or not isinstance(target.get("iid"), int)
+        or not isinstance(object_value, dict)
+        or not portable.nonempty_string(object_value.get("state"))
+        or not portable.nonempty_string(object_value.get("web_url"))
+        or not isinstance(object_value.get("diff_refs"), dict)
+    ):
+        raise portable.WorkflowError("MR identity is incomplete for publication preflight")
+    refs = cast(dict[str, Any], object_value["diff_refs"])
+    if any(not portable.is_sha(refs.get(key)) for key in ("base_sha", "start_sha", "head_sha")):
+        raise portable.WorkflowError("MR refs are incomplete for publication preflight")
+    payload = {
+        "schema": "code-review/publication-preflight/v1",
+        "actor": {
+            "id": context["current_user_id"],
+            "username": context["current_user_username"],
+        },
+        "target": {
+            "hostname": project["hostname"],
+            "project_id": project["id"],
+            "project_path": project["path"],
+            "mr_iid": target["iid"],
+            "mr_url": object_value["web_url"],
+        },
+        "mr": {
+            "state": object_value["state"],
+            "diff_refs": {key: refs[key] for key in ("base_sha", "start_sha", "head_sha")},
+        },
+        "labels": {
+            "catalog_sha256": labels["catalog_sha256"],
+            "catalog": labels["catalog"],
+            "current": labels["current"],
+            "proposed": labels["proposed"],
+        },
+    }
+    content = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+    digest = hashlib.sha256(content.encode()).hexdigest()
+    directory = portable.private_directory(root / "artifacts" / "review_plan" / "preflight")
+    path, actual_digest = portable.write_companion(directory / f"{digest}.json", content)
+    return {"path": str(path), "sha256": actual_digest}
+
+
+def structured_publication_preview(
+    evidence: dict[str, Any],
+    context: dict[str, Any],
+    root: Path,
+    findings: list[dict[str, Any]],
+    finding_specs: list[dict[str, Any]],
+    assessments: list[dict[str, Any]],
+    thread_decisions: list[dict[str, Any]],
+    recommended_issues: list[dict[str, Any]],
+    label_review: dict[str, Any],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    preflight = structured_publication_preflight(evidence, context, root, label_review)
+    target_marker = portable.digest(context["target"])[:16]
+    body_directory = portable.private_directory(root / "artifacts" / "review_plan" / "bodies")
+    helper_path = Path(__file__).resolve().with_name("review_publish.py")
+    baseline_path = root / BASELINE_NAME
+    body_files: list[dict[str, Any]] = []
+    actions: list[dict[str, Any]] = []
+    markers = marker_index(context)
+    incremental = cast(dict[str, Any], context["incremental"])
+    previous = previous_revisions(incremental)
+    previous_allowed = set(previous)
+    assessment_by_id = {str(item["id"]): item for item in assessments}
+    finding_ids = {str(item["id"]) for item in findings}
+    revisions = finding_revisions(incremental, assessments, finding_ids, markers)
+    discussion_by_id = {
+        str(item["id"]): item for item in cast(list[dict[str, Any]], context["discussions"])
+    }
+    discussion_by_root = {
+        str(item["root_note_id"]): item
+        for item in cast(list[dict[str, Any]], context["discussions"])
+        if item.get("root_system") is False
+    }
+    note_by_id = {
+        str(item["id"]): item
+        for item in cast(list[dict[str, Any]], context["notes"])
+        if item.get("system") is not True
+    }
+
+    def thread_expectation(source: dict[str, Any]) -> dict[str, Any]:
+        meaningful = [
+            note
+            for note in cast(list[dict[str, Any]], source.get("notes", []))
+            if note.get("system") is not True and isinstance(note.get("body"), str)
+        ]
+        if not meaningful:
+            raise portable.WorkflowError("publication thread has no meaningful note")
+        latest = meaningful[-1]
+        return {
+            "discussion_id": source["id"],
+            "root_note_id": source["root_note_id"],
+            "resolvable": source.get("root_resolvable") is True,
+            "resolved": source.get("root_resolved") is True,
+            "last_note_id": latest.get("id"),
+            "last_note_body_sha256": hashlib.sha256(cast(str, latest["body"]).encode()).hexdigest(),
+        }
+
+    def note_expectation(source: dict[str, Any]) -> dict[str, Any]:
+        body = source.get("body")
+        if not isinstance(body, str):
+            raise portable.WorkflowError("publication note body is invalid")
+        return {"note_id": source["id"], "body_sha256": hashlib.sha256(body.encode()).hexdigest()}
+
+    def marker_expectation(marker: dict[str, Any] | None) -> dict[str, Any] | None:
+        if marker is None:
+            return None
+        return {
+            key: marker.get(key)
+            for key in (
+                "id",
+                "revision",
+                "kind",
+                "note_id",
+                "discussion_id",
+                "author_username",
+                "body_sha256",
+                "resource_type",
+                "root_note_id",
+            )
+        }
+
+    def add_body_action(
+        publication_id: str,
+        revision: int,
+        kind: str,
+        operation: str,
+        raw_body: str,
+        *,
+        mutation: dict[str, Any] | None = None,
+        thread: dict[str, Any] | None = None,
+        note: dict[str, Any] | None = None,
+        prior_marker: dict[str, Any] | None = None,
+        issue: dict[str, Any] | None = None,
+    ) -> None:
+        body = marked_body(raw_body, publication_id, revision, kind, target_marker)
+        body_digest = hashlib.sha256(body.encode()).hexdigest()
+        identity_digest = hashlib.sha256(publication_id.encode()).hexdigest()[:12]
+        body_path, actual_digest = portable.write_companion(
+            body_directory / f"{identity_digest}-{body_digest}.md", body
+        )
+        body_record = {
+            "publication_id": publication_id,
+            "revision": revision,
+            "kind": kind,
+            "path": str(body_path),
+            "sha256": actual_digest,
+            "content": body,
+        }
+        body_files.append(body_record)
+        spec = {
+            "schema": "code-review/publication-action/v1",
+            "preflight_sha256": preflight["sha256"],
+            "operation": operation,
+            "publication": {"id": publication_id, "revision": revision, "kind": kind},
+            "body": {"path": str(body_path), "sha256": actual_digest},
+            "expected": {
+                "thread": thread,
+                "note": note,
+                "prior_marker": marker_expectation(prior_marker),
+                "issue": issue,
+            },
+            "mutation": mutation or {},
+        }
+        action_digest = portable.digest(spec)
+        action_id = f"{kind}:{publication_id}:r{revision}:{operation}"
+        command = (
+            f"python3 {shlex.quote(str(helper_path))} apply "
+            f"--plan {shlex.quote(str(baseline_path))} "
+            f"--action {shlex.quote(action_id)} --confirm {action_digest}"
+        )
+        actions.append(
+            {
+                "id": action_id,
+                "sha256": action_digest,
+                "kind": kind,
+                "publication_id": publication_id,
+                "revision": revision,
+                "operation": operation,
+                "command": command,
+                "spec": spec,
+            }
+        )
+
+    enriched_findings: list[dict[str, Any]] = []
+    spec_by_id = {str(item["finding_id"]): item for item in finding_specs}
+    for finding in findings:
+        finding_id = str(finding["id"])
+        revision = revisions[finding_id]
+        publication_spec = spec_by_id.get(finding_id)
+        if publication_spec is None:
+            enriched_findings.append(
+                {
+                    "finding_id": finding_id,
+                    "revision": revision,
+                    "type": "local_fix",
+                    "path": None,
+                    "line": None,
+                    "old_line": None,
+                    "body": finding["minimum_fix"],
+                }
+            )
+            continue
+        enriched = {**publication_spec, "revision": revision}
+        enriched_findings.append(enriched)
+        marker = markers.get(finding_id) if finding_id in previous_allowed else None
+        if marker is not None and marker.get("kind") != "finding":
+            raise portable.WorkflowError("finding publication marker kind is invalid")
+        assessment = assessment_by_id.get(finding_id)
+        if marker is not None:
+            if assessment is None:
+                raise portable.WorkflowError("published baseline finding lacks an assessment")
+            operation = cast(str, assessment["publication_action"])
+            if operation == "no_publication":
+                continue
+            next_revision = max(revision, cast(int, marker["revision"]) + 1)
+            discussion = (
+                discussion_by_id.get(str(marker["discussion_id"]))
+                if marker.get("discussion_id") is not None
+                else None
+            )
+            if operation in {"resolve", "reopen"} and discussion is None:
+                raise portable.WorkflowError("a standalone finding cannot change thread state")
+            source_note = note_by_id.get(str(marker["note_id"])) if discussion is None else None
+            add_body_action(
+                finding_id,
+                next_revision,
+                "finding",
+                operation,
+                cast(str, assessment["publication_body"]),
+                mutation={
+                    "desired_resolved": True
+                    if operation == "resolve"
+                    else False
+                    if operation == "reopen"
+                    else None
+                },
+                thread=thread_expectation(discussion) if discussion is not None else None,
+                note=note_expectation(source_note) if source_note is not None else None,
+                prior_marker=marker,
+            )
+            continue
+        if context["role"] == "author":
+            continue
+        operation = "create_general" if publication_spec["type"] == "general" else "create_line"
+        add_body_action(
+            finding_id,
+            revision,
+            "finding",
+            operation,
+            cast(str, publication_spec["body"]),
+            mutation={
+                "path": publication_spec["path"],
+                "line": publication_spec["line"],
+                "old_line": publication_spec["old_line"],
+            },
+        )
+
+    previous_issue_by_id = {
+        str(item.get("id")): item
+        for item in cast(list[dict[str, Any]], incremental.get("previous_recommended_issues", []))
+    }
+    enriched_issues: list[dict[str, Any]] = []
+    for issue_value in recommended_issues:
+        issue_id = str(issue_value["id"])
+        prior = previous_issue_by_id.get(issue_id)
+        assessment = assessment_by_id.get(issue_id)
+        marker = markers.get(issue_id) if issue_id in previous_allowed else None
+        previous_revision = max(
+            int(prior["revision"]) if prior is not None else 0,
+            int(marker["revision"]) if marker is not None else 0,
+            previous.get(issue_id, 0),
+        )
+        revision = (
+            1
+            if previous_revision == 0
+            else previous_revision + (1 if assessment and assessment["status"] == "changed" else 0)
+        )
+        enriched = {**issue_value, "revision": revision}
+        enriched_issues.append(enriched)
+        if marker is not None and marker.get("kind") != "issue":
+            raise portable.WorkflowError("recommended issue marker kind is invalid")
+        if marker is not None:
+            if assessment is None:
+                continue
+            pending_update = previous.get(issue_id, 0) > int(marker["revision"])
+            if assessment["publication_action"] == "no_publication" and not pending_update:
+                continue
+            if assessment["publication_action"] != "update_issue" and not pending_update:
+                raise portable.WorkflowError("published recommended issue requires update_issue")
+            operation = "update_issue"
+            expected_issue = {
+                "iid": marker["note_id"],
+                "title_sha256": hashlib.sha256(
+                    cast(str, marker["resource_title"]).encode()
+                ).hexdigest(),
+                "description_sha256": hashlib.sha256(
+                    cast(str, marker["resource_body"]).encode()
+                ).hexdigest(),
+            }
+        else:
+            if assessment is not None and assessment["publication_action"] == "update_issue":
+                raise portable.WorkflowError("an unpublished recommended issue cannot be updated")
+            operation = "create_issue"
+            expected_issue = None
+        add_body_action(
+            issue_id,
+            revision,
+            "issue",
+            operation,
+            cast(str, issue_value["body"]),
+            mutation={"title": issue_value["title"]},
+            prior_marker=marker,
+            issue=expected_issue,
+        )
+
+    for assessment in assessments:
+        assessment_id = str(assessment["id"])
+        if assessment["kind"] != "finding" or assessment_id in finding_ids:
+            continue
+        marker = markers.get(assessment_id)
+        operation = cast(str, assessment["publication_action"])
+        if marker is None or operation == "no_publication":
+            continue
+        if marker.get("kind") != "finding":
+            raise portable.WorkflowError("previous finding marker kind is invalid")
+        discussion = (
+            discussion_by_id.get(str(marker["discussion_id"]))
+            if marker.get("discussion_id") is not None
+            else None
+        )
+        if operation in {"resolve", "reopen"} and discussion is None:
+            raise portable.WorkflowError("a standalone finding cannot change thread state")
+        source_note = note_by_id.get(str(marker["note_id"])) if discussion is None else None
+        revision = max(previous.get(assessment_id, 0), int(marker["revision"])) + 1
+        add_body_action(
+            assessment_id,
+            revision,
+            "finding",
+            operation,
+            cast(str, assessment["publication_body"]),
+            mutation={
+                "desired_resolved": True
+                if operation == "resolve"
+                else False
+                if operation == "reopen"
+                else None
+            },
+            thread=thread_expectation(discussion) if discussion is not None else None,
+            note=note_expectation(source_note) if source_note is not None else None,
+            prior_marker=marker,
+        )
+
+    for decision in thread_decisions:
+        operation = cast(str, decision["outcome"])
+        if operation in {"no_publication", "local_fix"}:
+            continue
+        root_note_id = str(decision["id"])
+        publication_id = f"thread-{root_note_id}"
+        marker = markers.get(publication_id)
+        if marker is not None and marker.get("kind") != "thread":
+            raise portable.WorkflowError("thread publication marker kind is invalid")
+        revision = (int(marker["revision"]) if marker is not None else 0) + 1
+        discussion = discussion_by_root.get(root_note_id)
+        source_note = note_by_id.get(root_note_id) if discussion is None else None
+        if operation in {"resolve", "reopen"} and discussion is None:
+            raise portable.WorkflowError("a plain note cannot change thread state")
+        add_body_action(
+            publication_id,
+            revision,
+            "thread",
+            operation,
+            cast(str, decision["proposed_response"]),
+            mutation={
+                "desired_resolved": True
+                if operation == "resolve"
+                else False
+                if operation == "reopen"
+                else None
+            },
+            thread=thread_expectation(discussion) if discussion is not None else None,
+            note=note_expectation(source_note) if source_note is not None else None,
+            prior_marker=marker,
+        )
+
+    if label_review["add"] or label_review["remove"]:
+        label_spec = {
+            "schema": "code-review/publication-action/v1",
+            "preflight_sha256": preflight["sha256"],
+            "operation": "update_labels",
+            "publication": None,
+            "body": None,
+            "expected": {
+                "thread": None,
+                "note": None,
+                "prior_marker": None,
+                "issue": None,
+            },
+            "mutation": {
+                "add": label_review["add"],
+                "remove": label_review["remove"],
+                "proposed": label_review["proposed"],
+            },
+        }
+        action_digest = portable.digest(label_spec)
+        action_id = "labels:update"
+        actions.append(
+            {
+                "id": action_id,
+                "sha256": action_digest,
+                "kind": "labels",
+                "publication_id": None,
+                "revision": None,
+                "operation": "update_labels",
+                "command": (
+                    f"python3 {shlex.quote(str(helper_path))} apply "
+                    f"--plan {shlex.quote(str(baseline_path))} "
+                    f"--action {shlex.quote(action_id)} --confirm {action_digest}"
+                ),
+                "spec": label_spec,
+            }
+        )
+
+    identities = [item["id"] for item in actions]
+    if len(identities) != len(set(identities)):
+        raise portable.WorkflowError("publication action IDs must be unique")
+    result = {
+        "mr_state": cast(dict[str, Any], evidence["object"])["state"],
+        "warning": "manual digest-confirmed publication; no action was executed",
+        "preflight_path": preflight["path"],
+        "preflight_sha256": preflight["sha256"],
+        "helper_path": str(helper_path),
+        "body_files": body_files,
+        "actions": actions,
+    }
+    if not portable.review_publication_preview_is_valid(result):
+        raise portable.WorkflowError("structured review publication preview is invalid")
+    return result, enriched_findings, enriched_issues
+
+
 def review_markdown(
     evidence: dict[str, Any],
     context: dict[str, Any],
@@ -2212,8 +2815,11 @@ def review_markdown(
         item["publication_id"]: item
         for item in cast(list[dict[str, Any]], publication["body_files"])
     }
-    commands = {
-        item["publication_id"]: item for item in cast(list[dict[str, Any]], publication["commands"])
+    publication_actions = cast(list[dict[str, Any]], publication["actions"])
+    actions_by_publication = {
+        item["publication_id"]: item
+        for item in publication_actions
+        if item["publication_id"] is not None
     }
     lines = [
         f"# {presentation['title']}",
@@ -2235,6 +2841,28 @@ def review_markdown(
         if item["recommendation"]:
             lines.extend(["", cast(str, item["recommendation"])])
         lines.append("")
+
+    label_review = cast(dict[str, Any], content["label_review"])
+    label_assessments = {
+        item["name"]: item for item in cast(list[dict[str, Any]], label_review["assessments"])
+    }
+    lines.extend([f"## {presentation['labels_heading']}", ""])
+    for field in ("current", "add", "remove", "unresolved"):
+        values = cast(list[str], label_review[field])
+        rendered = (
+            ", ".join(f"`{value}`" for value in values) if values else presentation["no_items"]
+        )
+        lines.extend([f"- `{field}`: {rendered}"])
+    relevant = sorted(
+        set(cast(list[str], label_review["add"]))
+        | set(cast(list[str], label_review["remove"]))
+        | set(cast(list[str], label_review["unresolved"])),
+        key=str.casefold,
+    )
+    if relevant:
+        lines.append("")
+        lines.extend(f"- `{name}`: {label_assessments[name]['rationale']}" for name in relevant)
+    lines.append("")
 
     lines.extend([f"## {presentation['previous_findings_heading']}", ""])
     if not previous:
@@ -2266,39 +2894,48 @@ def review_markdown(
 
     shown_actions: set[str] = set()
 
-    def add_publication_action(publication_id: str) -> None:
-        body = bodies.get(publication_id)
-        command = commands.get(publication_id)
-        if body is None or command is None:
-            return
-        shown_actions.add(publication_id)
+    def add_action(action: dict[str, Any]) -> None:
+        publication_id = action["publication_id"]
+        body = bodies.get(publication_id) if publication_id is not None else None
+        shown_actions.add(cast(str, action["id"]))
         lines.extend(
             [
-                f"### `{publication_id}`",
+                f"### `{action['id']}`",
                 "",
-                f"`{body['path']}` (`{body['sha256']}`)",
+                f"`action-sha256:{action['sha256']}`",
                 "",
-                portable.marked_preview(
-                    f"PUBLICATION {publication_id} BODY", cast(str, body["content"])
-                ),
-                "",
-                "```shell",
-                cast(str, command["command"]),
-                "```",
             ]
         )
-        if command["recovery_command"]:
+        if body is not None:
+            lines.extend(
+                [
+                    f"`{body['path']}` (`{body['sha256']}`)",
+                    "",
+                    portable.marked_preview(
+                        f"PUBLICATION {publication_id} BODY", cast(str, body["content"])
+                    ),
+                    "",
+                ]
+            )
+        lines.extend(["```shell", cast(str, action["command"]), "```"])
+        if action["operation"] in {"resolve", "reopen"}:
             lines.extend(
                 [
                     "",
                     presentation["recovery_label"],
                     "",
                     "```shell",
-                    cast(str, command["recovery_command"]),
+                    cast(str, action["command"]),
                     "```",
                 ]
             )
         lines.append("")
+
+    def add_publication_action(publication_id: str) -> None:
+        action = actions_by_publication.get(publication_id)
+        if action is None:
+            return
+        add_action(action)
 
     for item in previous:
         if item["publication_action"] != "no_publication":
@@ -2461,14 +3098,14 @@ def review_markdown(
             "",
             f"`{publication['preflight_path']}` (`{publication['preflight_sha256']}`)",
             "",
-            "```shell",
-            publication["preflight_command"],
-            "```",
+            f"`{publication['helper_path']}`",
         ]
     )
-    for publication_id in sorted(set(commands) - shown_actions):
+    for action in publication_actions:
+        if action["id"] in shown_actions:
+            continue
         lines.append("")
-        add_publication_action(publication_id)
+        add_action(action)
     return "\n".join(lines) + "\n"
 
 
@@ -2740,6 +3377,7 @@ def scaffold_review(
             "semver_impact",
             "semver_rationale",
             "mr_metadata_assessment",
+            "label_assessments",
             "checks",
             "findings",
             "finding_publications",
@@ -2785,6 +3423,9 @@ def scaffold_review(
     if (incremental_mode == "incremental") != (decision.get("mode") == "incremental"):
         raise portable.WorkflowError("review decision mode does not match incremental context")
     presentation = validate_presentation(content["presentation"], incremental_mode)
+    label_review = validate_label_assessments(
+        evidence, content["label_assessments"], cast(str, content["semver_impact"])
+    )
     previous_findings = cast(list[dict[str, Any]], incremental["previous_findings"])
     previous_issues = cast(list[dict[str, Any]], incremental["previous_recommended_issues"])
     previous_assessments = validate_previous_assessments(
@@ -2982,6 +3623,7 @@ def scaffold_review(
                 "rationale",
                 "outcome",
                 "proposed_response",
+                "suggestion_applicable",
                 "last_note_id",
                 "last_note_body_sha256",
             }
@@ -2990,6 +3632,30 @@ def scaffold_review(
         ):
             raise portable.WorkflowError("thread decision does not bind the latest note")
         source = expected_threads[thread_id]
+        suggestion_applicable = item["suggestion_applicable"]
+        if not isinstance(suggestion_applicable, bool):
+            raise portable.WorkflowError("thread suggestion applicability must be explicit")
+        response = item["proposed_response"]
+        suggestion_count = len(SUGGESTION_RE.findall(response)) if isinstance(response, str) else 0
+        position = source.get("root_position")
+        current_new_line = (
+            isinstance(position, dict)
+            and isinstance(position.get("new_path"), str)
+            and isinstance(position.get("new_line"), int)
+            and position.get("head_sha") == evidence.get("head_sha")
+        )
+        if suggestion_applicable and (
+            item["outcome"] in {"no_publication", "local_fix"}
+            or not current_new_line
+            or suggestion_count != 1
+        ):
+            raise portable.WorkflowError(
+                "an applicable current-line thread fix requires exactly one suggestion block"
+            )
+        if not suggestion_applicable and suggestion_count:
+            raise portable.WorkflowError(
+                "a thread response cannot use suggestion when replacement is not applicable"
+            )
         if item["outcome"] == "resolve" and (
             source.get("root_resolvable") is not True or source.get("root_resolved") is True
         ):
@@ -3016,7 +3682,7 @@ def scaffold_review(
     ):
         raise portable.WorkflowError("reviewer thread decisions cannot promise local fixes")
     metadata = metadata_assessment(evidence, content["mr_metadata_assessment"])
-    publication, enriched_publications, enriched_issues = publication_preview(
+    publication, enriched_publications, enriched_issues = structured_publication_preview(
         evidence,
         context,
         root,
@@ -3025,10 +3691,12 @@ def scaffold_review(
         previous_assessments,
         thread_decisions,
         recommended_issues,
+        label_review,
     )
     render_content = {
         **content,
         "presentation": presentation,
+        "label_review": label_review,
         "finding_publications": enriched_publications,
         "previous_finding_assessments": previous_assessments,
         "recommended_issues": enriched_issues,
@@ -3054,7 +3722,7 @@ def scaffold_review(
     )
     payload = {
         "profile": "code-review",
-        "review_contract_version": INCREMENTAL_CONTRACT_VERSION,
+        "review_contract_version": REVIEW_CONTRACT_VERSION,
         "external_mutations": False,
         "evidence_digest": evidence_digest,
         "context_digest": context_digest,
@@ -3070,6 +3738,7 @@ def scaffold_review(
         "semver_impact": content["semver_impact"],
         "semver_rationale": content["semver_rationale"],
         "mr_metadata_assessment": metadata,
+        "label_review": label_review,
         "publication_preview": publication,
         "presentation": presentation,
         "checks": content["checks"],
@@ -3107,6 +3776,9 @@ def scaffold_review(
         "markdown_path": str(markdown_path),
         "markdown_digest": markdown_digest,
         "publication_body_paths": [item["path"] for item in publication["body_files"]],
-        "publication_commands": [item["command"] for item in publication["commands"]],
+        "publication_commands": [item["command"] for item in publication["actions"]],
+        "publication_actions": [
+            {"id": item["id"], "sha256": item["sha256"]} for item in publication["actions"]
+        ],
         "external_mutations": False,
     }

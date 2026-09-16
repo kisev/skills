@@ -12,3 +12,13 @@ pending gate. A pending gate is bound to its exact action and boundary and check
 before success without blocking unrelated frozen-objective actions. Bounded path
 ownership, symlink and traversal rejection, secret redaction, and atomic rollback
 or recovery remain mandatory. Read-only tools do not repair or install.
+
+The code-review publication helper accepts no caller-provided endpoint, method,
+body, environment override, batch, or force option. It binds paths beneath one
+private artifact root, rejects symlinks and changed digests, revalidates actor,
+target, refs, labels, catalog, thread or issue state immediately before writing,
+and invokes `glab` with argv and no shell. The parent environment is inherited so
+user-owned authentication and configuration continue to work, but credentials
+and environment values are never serialized into plans, argv, prompts, or logs.
+External comments are not deleted as rollback; exact markers, postconditions,
+and an atomic local receipt bound safe recovery.

@@ -10,7 +10,8 @@ Routes exact code review; near-miss: MR preparation.
 
 ## Inputs/Outputs
 
-Untrusted scope arguments become review input; output is ranked findings.
+Untrusted scope arguments become review input; output is the skill's compact
+assessment and publication-plan paths.
 
 ## Workflow Stages
 
@@ -22,7 +23,9 @@ Select, pass, review, critic-check, report.
 
 ## Remote/Local Effects
 
-Read-only effects inherited from the skill.
+The command adapter only loads the skill and has no direct effects. Review
+preparation and any separately confirmed helper effects remain owned by the
+portable skill.
 
 ## Errors/Partial/Escalation
 
@@ -30,7 +33,8 @@ Missing exact head or critic evidence blocks verdict.
 
 ## Unique Constraints
 
-Command cannot turn review into mutation.
+The command cannot implement or invoke publication, label analysis, confirmation
+digests, helper actions, runner selection, or environment handling.
 
 ## Requirement
 
@@ -38,7 +42,8 @@ Command cannot turn review into mutation.
 
 The command shall load exactly `code-review`, pass its arguments as untrusted
 input, and contain no target parsing, remote/local selection, runner invocation,
-state transition, or review logic.
+state transition, publication-helper invocation, confirmation, label analysis,
+environment handling, or review logic.
 
 ## Example
 

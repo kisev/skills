@@ -65,6 +65,9 @@ SHA-256 digest, structured errors, and a non-zero exit code for failure.
 
 Every durable state has one explicit owner. A portable skill may read or update
 its declared state only; it must not create a hidden shared lifecycle, infer
-ownership from a caller, or mutate another workflow's state. Do not publish or
-change external state in GitLab prepare/review workflows. Do not change
-user-owned configuration without Confirmation. Stop after `report`.
+ownership from a caller, or mutate another workflow's state. GitLab prepare and
+review runners never publish. A separately invoked write helper may apply only
+one previously previewed action whose exact digest is supplied as Confirmation;
+it must revalidate immediately before writing and report the result. One digest
+cannot authorize a batch, another action, or recovery with changed content. Do
+not change user-owned configuration without Confirmation. Stop after `report`.

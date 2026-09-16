@@ -21,6 +21,10 @@ system data. Use revoked or synthetic values.
 - Python runners use only the standard library and install no dependencies.
 - Write-capable flows require a preview and confirmation; the OpenCode installer
   accepts only the digest of a previously shown plan.
+- The code-review publication helper accepts one previously shown action digest,
+  revalidates live GitLab state, and never supports batch or force. It inherits
+  user-owned `glab` environment configuration at execution without serializing
+  credentials or environment values into plans, argv, prompts, or logs.
 - The installer does not modify `opencode.json`, has no npm lifecycle hooks, and
   does not overwrite unmanaged or user-modified files.
 - Optional plugin wrappers are unselected by default. External authentication

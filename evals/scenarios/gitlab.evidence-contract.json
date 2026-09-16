@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 4,
+  "revision": 5,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Validate exact SHA, completeness, critic and stale finalize contracts.",
+    "prompt": "Validate exact SHA, completeness, critic, exhaustive labels, suggestions, role-authored prose, confirmed helper actions, inherited glab environment, and stale finalize contracts.",
     "fixture": {
       "selected": ["skill:code-review"]
     },
@@ -41,6 +41,31 @@
       "id": "stale",
       "path": "shared/references/portable_gitlab/contract.py",
       "contains": "\"stale\""
+    },
+    {
+      "id": "labels",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "Analyze every label in the complete project and inherited-group catalog"
+    },
+    {
+      "id": "suggestion",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "suggestion_applicable=true"
+    },
+    {
+      "id": "role-authored",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "authenticated user's factual role"
+    },
+    {
+      "id": "confirmed-action",
+      "path": "skills/code-review/scripts/review_publish.py",
+      "contains": "publication action confirmation digest does not match"
+    },
+    {
+      "id": "inherited-environment",
+      "path": "skills/code-review/scripts/review_publish.py",
+      "contains": "shell=False"
     }
   ],
   "sandbox": {
@@ -53,7 +78,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "93d45b3d86d9f8c32da8115a37086a7dac95e4223bcc05f977631a5180f5218f",
+  "digest": "f5e2df4c5476ab45fd6a98f6bc491611c72c42c8538a7167e48f09f6de84ebf1",
   "locale": "neutral",
   "pair_id": null
 }
