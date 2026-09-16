@@ -8,10 +8,27 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## [3.2.0] - 2026-09-16
+
+### Added
+
+- Code review now has a resumable runner-owned state machine with `status`,
+  `next`, generated critic/decision/content templates, and final chat rendered
+  only from a fresh contract-4 publication plan.
+
 ### Changed
 
 - `skills-opencode reconcile` no longer inspects or removes portable skills or
   their lock files. Deleted upstream skills are handled by `skills update/remove`.
+- Portable lifecycle documentation now directs installation, updates, listing,
+  and removal through the official skills CLI.
+
+### Security
+
+- Code review fails closed on incomplete, out-of-order, or stale evidence,
+  critic, decision, plan, Markdown, and baseline bindings. Review activation and
+  confirmed publication share one lock, preventing superseded plans from being
+  reported or executed.
 
 ## [3.1.1] - 2026-09-16
 
