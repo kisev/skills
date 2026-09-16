@@ -25,5 +25,8 @@ external publication adapter.
 A code-review publication plan is still read-only. Each generated helper command
 is a separate mutation boundary and supplies one immutable action digest as
 Confirmation. That digest cannot authorize another action, a batch, changed
-content, or changed recovery. Safe retry of the same action may observe an exact
-existing marker or complete only a pending thread-state phase.
+content, or changed recovery. A suggestion or patch is frozen into that action
+before confirmation. Safe retry of the same action may observe an exact existing
+marker, repeat after a recorded definitive non-mutating rejection and fresh
+absence check, or complete only a pending idempotent thread-state phase. An
+uncertain publication result cannot authorize replay or alternate fix content.

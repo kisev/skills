@@ -9,9 +9,11 @@ import os
 import re
 import shlex
 import fcntl
+import subprocess
+import tempfile
 from contextlib import contextmanager
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Iterator, cast
 from urllib.parse import quote
 
@@ -22,7 +24,7 @@ else:
 
 
 INCREMENTAL_CONTRACT_VERSION = 1
-REVIEW_CONTRACT_VERSION = 2
+REVIEW_CONTRACT_VERSION = 3
 BASELINE_NAME = "review-baseline.json"
 PUBLICATION_MARKER_RE = re.compile(
     r"<!-- code-review:id=(?P<id>[A-Za-z0-9][A-Za-z0-9._-]{0,63});"
@@ -30,7 +32,12 @@ PUBLICATION_MARKER_RE = re.compile(
     r"target=(?P<target>[a-f0-9]{16}) -->"
 )
 PUBLICATION_MARKER_PREFIX = "<!-- code-review:"
-SUGGESTION_RE = re.compile(r"```suggestion(?:\r?\n).*?```", re.DOTALL)
+SUGGESTION_RE = re.compile(
+    r"^```suggestion(?::-(?P<before>[0-9]+)\+(?P<after>[0-9]+))?\r?\n"
+    r"(?P<replacement>.*?)^```[ \t]*$",
+    re.DOTALL | re.MULTILINE,
+)
+SUGGESTION_OPENER_RE = re.compile(r"^```suggestion[^\r\n]*$", re.MULTILINE)
 PREVIOUS_FINDING_STATUSES = {"active", "fixed", "withdrawn", "changed", "unverified"}
 
 
@@ -233,7 +240,7 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
         raise portable.WorkflowError("code-review baseline plan digest changed")
     if (
         plan.get("complete") is not True
-        or plan.get("review_contract_version") not in {1, REVIEW_CONTRACT_VERSION}
+        or plan.get("review_contract_version") not in {1, 2, REVIEW_CONTRACT_VERSION}
         or plan.get("target") != pointer.get("target")
     ):
         raise portable.WorkflowError("code-review baseline is incomplete or incompatible")
@@ -550,6 +557,8 @@ def incremental_context(
         )
         _, old_context = artifact_for_digest(root, "review_context", plan.get("context_digest"))
         failures: list[str] = []
+        if plan.get("review_contract_version") != REVIEW_CONTRACT_VERSION:
+            failures.append("baseline review contract predates validated fix artifacts")
         if (
             old_context.get("evidence_digest") != plan.get("evidence_digest")
             or old_context.get("target") != plan.get("target")
@@ -1372,8 +1381,368 @@ def validate_presentation(value: object, incremental_mode: str) -> dict[str, Any
     return cast(dict[str, Any], value)
 
 
+def suggestion_blocks(body: str) -> list[re.Match[str]]:
+    matches = list(SUGGESTION_RE.finditer(body))
+    if len(SUGGESTION_OPENER_RE.findall(body)) != len(matches):
+        raise portable.WorkflowError("GitLab suggestion syntax is malformed")
+    return matches
+
+
+def validate_suggestion(
+    body: str,
+    *,
+    repo_root: Path | None = None,
+    head_sha: str | None = None,
+    path: str | None = None,
+    line: int | None = None,
+) -> None:
+    matches = suggestion_blocks(body)
+    if len(matches) != 1:
+        raise portable.WorkflowError("suggestion fix requires exactly one suggestion block")
+    match = matches[0]
+    before = int(match.group("before") or 0)
+    after = int(match.group("after") or 0)
+    if before > 100 or after > 100 or before + after + 1 > 201:
+        raise portable.WorkflowError("GitLab suggestion range exceeds the supported limit")
+    if repo_root is None or head_sha is None or path is None or line is None:
+        return
+    try:
+        source = portable.git_read(repo_root, "show", f"{head_sha}:{path}")
+    except portable.WorkflowError as exc:
+        raise portable.WorkflowError("suggestion path is unavailable at the reviewed head") from exc
+    line_count = len(str(source).splitlines())
+    if line - before < 1 or line + after > line_count:
+        raise portable.WorkflowError("GitLab suggestion range escapes the reviewed file")
+
+
+def patch_paths(patch: str) -> list[str]:
+    if (
+        not patch.endswith("\n")
+        or len(patch.encode()) > portable.MAX_BYTES
+        or "\x00" in patch
+        or "GIT binary patch" in patch
+        or "Binary files " in patch
+        or re.search(r"^index ", patch, re.MULTILINE)
+        or re.search(
+            r"^(?:old mode|new mode|new file mode|deleted file mode) (?:120000|160000)$",
+            patch,
+            re.MULTILINE,
+        )
+    ):
+        raise portable.WorkflowError("Git patch is unsafe or exceeds the size limit")
+
+    def tokens(value: str) -> list[str]:
+        result: list[str] = []
+        index = 0
+        while index < len(value):
+            while index < len(value) and value[index].isspace():
+                index += 1
+            if index == len(value):
+                break
+            if value[index] != '"':
+                end = index
+                while end < len(value) and not value[end].isspace():
+                    end += 1
+                result.append(value[index:end])
+                index = end
+                continue
+            index += 1
+            decoded = bytearray()
+            while index < len(value) and value[index] != '"':
+                if value[index] != "\\":
+                    decoded.extend(value[index].encode())
+                    index += 1
+                    continue
+                index += 1
+                if index == len(value):
+                    raise portable.WorkflowError("Git patch has an invalid quoted path")
+                if value[index] in "01234567":
+                    end = index
+                    while end < min(index + 3, len(value)) and value[end] in "01234567":
+                        end += 1
+                    octet = int(value[index:end], 8)
+                    if octet == 0 or octet > 0o377:
+                        raise portable.WorkflowError("Git patch quoted path is unsafe")
+                    decoded.append(octet)
+                    index = end
+                    continue
+                escapes = {
+                    "a": 7,
+                    "b": 8,
+                    "t": 9,
+                    "n": 10,
+                    "v": 11,
+                    "f": 12,
+                    "r": 13,
+                    '"': 34,
+                    "\\": 92,
+                }
+                if value[index] not in escapes:
+                    raise portable.WorkflowError("Git patch has an invalid quoted path")
+                decoded.append(escapes[value[index]])
+                index += 1
+            if index == len(value):
+                raise portable.WorkflowError("Git patch has an unterminated quoted path")
+            index += 1
+            try:
+                result.append(decoded.decode())
+            except UnicodeDecodeError as exc:
+                raise portable.WorkflowError("Git patch path is not UTF-8") from exc
+        return result
+
+    def relative_path(value: str, prefix: str) -> str:
+        if not value.startswith(prefix):
+            raise portable.WorkflowError("Git patch has an invalid file header")
+        relative = PurePosixPath(value[len(prefix) :])
+        if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+            raise portable.WorkflowError("Git patch path escapes the repository")
+        return relative.as_posix()
+
+    paths: list[str] = []
+    current: tuple[str, str] | None = None
+    old_header: str | None = None
+    new_header: str | None = None
+
+    def finish_diff() -> None:
+        if current is None:
+            return
+        if old_header is None or new_header is None:
+            raise portable.WorkflowError("Git patch file headers are incomplete")
+        old_path, new_path = current
+        if old_header not in {"/dev/null", f"a/{old_path}"} or new_header not in {
+            "/dev/null",
+            f"b/{new_path}",
+        }:
+            raise portable.WorkflowError("Git patch file headers disagree")
+
+    for raw_line in patch.splitlines():
+        if raw_line.startswith(("rename from ", "rename to ", "copy from ", "copy to ")):
+            raise portable.WorkflowError("Git patch renames and copies are unsupported")
+        if raw_line.startswith(("--- ", "+++ ")):
+            values = tokens(raw_line[4:])
+            if (
+                len(values) != 1
+                or values[0] != "/dev/null"
+                and not values[0].startswith("a/" if raw_line.startswith("--- ") else "b/")
+            ):
+                raise portable.WorkflowError("Git patch file path escapes the repository")
+            if raw_line.startswith("--- "):
+                old_header = values[0]
+            else:
+                new_header = values[0]
+        if not raw_line.startswith("diff --git "):
+            continue
+        finish_diff()
+        parts = tokens(raw_line[len("diff --git ") :])
+        if len(parts) != 2:
+            raise portable.WorkflowError("Git patch has an invalid diff header")
+        old_path = relative_path(parts[0], "a/")
+        new_path = relative_path(parts[1], "b/")
+        if old_path != new_path:
+            raise portable.WorkflowError("Git patch renames are unsupported")
+        current = (old_path, new_path)
+        old_header = None
+        new_header = None
+        paths.append(old_path)
+    finish_diff()
+    if not paths:
+        raise portable.WorkflowError("Git patch contains no file diff")
+    return sorted(set(paths))
+
+
+def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
+    paths = patch_paths(patch)
+    for path in paths:
+        tree_entry = str(portable.git_read(repo_root, "ls-tree", head_sha, "--", path)).strip()
+        if tree_entry.startswith(("120000 ", "160000 ")):
+            raise portable.WorkflowError("Git patch cannot modify symlinks or submodules")
+    with tempfile.TemporaryDirectory(prefix="code-review-patch-") as temporary:
+        environment = {**os.environ, "GIT_INDEX_FILE": str(Path(temporary) / "index")}
+        try:
+            read_tree = subprocess.run(
+                ["git", "-C", str(repo_root), "read-tree", head_sha],
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=45,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise portable.WorkflowError(
+                "reviewed head cannot initialize Git patch validation"
+            ) from exc
+        if read_tree.returncode:
+            raise portable.WorkflowError("reviewed head cannot initialize Git patch validation")
+        apply_command = [
+            "git",
+            "-C",
+            str(repo_root),
+            "apply",
+            "--cached",
+            "--whitespace=nowarn",
+            "-",
+        ]
+        try:
+            checked = subprocess.run(
+                [
+                    *apply_command[:-1],
+                    "--check",
+                    "-",
+                ],
+                env=environment,
+                input=patch.encode(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=45,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise portable.WorkflowError("Git patch validation could not be completed") from exc
+        if checked.returncode:
+            raise portable.WorkflowError("Git patch does not apply to the exact reviewed head")
+        try:
+            applied = subprocess.run(
+                apply_command,
+                env=environment,
+                input=patch.encode(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=45,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise portable.WorkflowError("Git patch cannot be inspected safely") from exc
+        if applied.returncode:
+            raise portable.WorkflowError("Git patch cannot be inspected safely")
+        try:
+            inspected = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo_root),
+                    "diff-index",
+                    "--cached",
+                    "--raw",
+                    "-z",
+                    head_sha,
+                    "--",
+                ],
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+                timeout=45,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise portable.WorkflowError("Git patch effective paths cannot be inspected") from exc
+        if inspected.returncode:
+            raise portable.WorkflowError("Git patch effective paths cannot be inspected")
+    values = inspected.stdout.split(b"\0")
+    effective_paths: list[str] = []
+    index = 0
+    while index < len(values) and values[index]:
+        metadata = values[index].split()
+        if len(metadata) != 5 or not metadata[0].startswith(b":"):
+            raise portable.WorkflowError("Git patch effective diff is invalid")
+        old_mode, new_mode, status = metadata[0][1:], metadata[1], metadata[4]
+        if old_mode in {b"120000", b"160000"} or new_mode in {b"120000", b"160000"}:
+            raise portable.WorkflowError("Git patch cannot modify symlinks or submodules")
+        if status.startswith((b"R", b"C")):
+            raise portable.WorkflowError("Git patch renames and copies are unsupported")
+        index += 1
+        if index >= len(values) or not values[index]:
+            raise portable.WorkflowError("Git patch effective path is unavailable")
+        try:
+            effective_path = values[index].decode()
+        except UnicodeDecodeError as exc:
+            raise portable.WorkflowError("Git patch effective path is not UTF-8") from exc
+        relative = PurePosixPath(effective_path)
+        if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+            raise portable.WorkflowError("Git patch effective path escapes the repository")
+        effective_paths.append(relative.as_posix())
+        index += 1
+    if sorted(set(effective_paths)) != paths:
+        raise portable.WorkflowError("Git patch declared and effective paths disagree")
+    return paths
+
+
+def changed_diff_lines(
+    repo_root: Path, base_sha: str, head_sha: str, path: str
+) -> tuple[set[int], set[int]]:
+    diff = str(portable.git_read(repo_root, "diff", "--unified=0", base_sha, head_sha, "--", path))
+    old_lines: set[int] = set()
+    new_lines: set[int] = set()
+    pattern = re.compile(
+        r"^@@ -(?P<old>[0-9]+)(?:,(?P<old_count>[0-9]+))? "
+        r"\+(?P<new>[0-9]+)(?:,(?P<new_count>[0-9]+))? @@",
+        re.MULTILINE,
+    )
+    for match in pattern.finditer(diff):
+        old_start = int(match.group("old"))
+        new_start = int(match.group("new"))
+        old_count = int(match.group("old_count") or 1)
+        new_count = int(match.group("new_count") or 1)
+        old_lines.update(range(old_start, old_start + old_count))
+        new_lines.update(range(new_start, new_start + new_count))
+    return old_lines, new_lines
+
+
+def validate_thread_fix(
+    item: dict[str, Any],
+    source: dict[str, Any],
+    repo_root: Path,
+    head_sha: str,
+) -> None:
+    fix_mode = item.get("fix_mode")
+    if fix_mode not in {"suggestion", "patch", "not_required"}:
+        raise portable.WorkflowError("thread fix mode is invalid")
+    response = item.get("proposed_response")
+    suggestion_count = len(suggestion_blocks(response)) if isinstance(response, str) else 0
+    position = source.get("root_position")
+    current_new_line = (
+        isinstance(position, dict)
+        and isinstance(position.get("new_path"), str)
+        and isinstance(position.get("new_line"), int)
+        and position.get("head_sha") == head_sha
+    )
+    if fix_mode == "suggestion" and (
+        item.get("outcome") in {"no_publication", "local_fix"}
+        or not current_new_line
+        or suggestion_count != 1
+        or item.get("patch") is not None
+    ):
+        raise portable.WorkflowError(
+            "an applicable current-line thread fix requires exactly one suggestion block"
+        )
+    if fix_mode == "suggestion":
+        exact_position = cast(dict[str, Any], position)
+        validate_suggestion(
+            cast(str, response),
+            repo_root=repo_root,
+            head_sha=head_sha,
+            path=cast(str, exact_position["new_path"]),
+            line=cast(int, exact_position["new_line"]),
+        )
+    if fix_mode == "patch" and (
+        item.get("outcome") == "no_publication"
+        or not portable.nonempty_string(item.get("patch"))
+        or suggestion_count
+    ):
+        raise portable.WorkflowError("thread patch fix is invalid")
+    if fix_mode == "patch":
+        validate_git_patch(repo_root, head_sha, cast(str, item["patch"]))
+    if fix_mode == "not_required" and (item.get("patch") is not None or suggestion_count):
+        raise portable.WorkflowError(
+            "a thread without a code fix cannot contain suggestion or patch"
+        )
+    if item.get("outcome") == "no_publication" and fix_mode != "not_required":
+        raise portable.WorkflowError("a non-published thread cannot claim a code fix")
+    if item.get("outcome") == "local_fix" and fix_mode != "patch":
+        raise portable.WorkflowError("a local thread fix requires a Git patch")
+
+
 def validate_finding_publications(value: object, finding_ids: set[str]) -> list[dict[str, Any]]:
-    keys = {"finding_id", "type", "path", "line", "old_line", "body"}
+    keys = {"finding_id", "type", "path", "line", "old_line", "body", "fix_mode", "patch"}
     if not isinstance(value, list):
         raise portable.WorkflowError("finding publications must be an array")
     result: list[dict[str, Any]] = []
@@ -1388,15 +1757,25 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             not portable.nonempty_string(finding_id)
             or finding_id not in finding_ids
             or finding_id in seen
-            or publication_type not in {"general", "line"}
+            or publication_type not in {"general", "line", "local_fix"}
             or not portable.nonempty_string(item.get("body"))
+            or item.get("fix_mode") not in {"suggestion", "patch"}
         ):
             raise portable.WorkflowError("finding publication identity or body is invalid")
-        if publication_type == "general":
+        fix_mode = cast(str, item["fix_mode"])
+        patch = item.get("patch")
+        suggestion_count = len(suggestion_blocks(cast(str, item["body"])))
+        if fix_mode == "patch":
+            if not portable.nonempty_string(patch) or suggestion_count:
+                raise portable.WorkflowError("patch fix requires a patch and forbids suggestion")
+            patch_paths(cast(str, patch))
+        elif patch is not None or suggestion_count != 1:
+            raise portable.WorkflowError("suggestion fix requires one suggestion and no patch")
+        if publication_type in {"general", "local_fix"}:
             if path is not None or line is not None or old_line is not None:
-                raise portable.WorkflowError("general finding publication cannot have a line")
-            if SUGGESTION_RE.search(cast(str, item["body"])):
-                raise portable.WorkflowError("general finding publication cannot use suggestion")
+                raise portable.WorkflowError("non-line finding fix cannot have a line")
+            if fix_mode != "patch":
+                raise portable.WorkflowError("general and local finding fixes require a Git patch")
         elif (
             not portable.nonempty_string(path)
             or (line is None) == (old_line is None)
@@ -1407,10 +1786,10 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             )
         ):
             raise portable.WorkflowError("line finding publication position is invalid")
-        elif line is not None and len(SUGGESTION_RE.findall(cast(str, item["body"]))) != 1:
-            raise portable.WorkflowError(
-                "new-line finding publication requires exactly one suggestion block"
-            )
+        elif old_line is not None and fix_mode != "patch":
+            raise portable.WorkflowError("deleted-line finding fixes require a Git patch")
+        elif fix_mode == "suggestion":
+            validate_suggestion(cast(str, item["body"]))
         seen.add(cast(str, finding_id))
         result.append(cast(dict[str, Any], item))
     return result
@@ -2406,10 +2785,11 @@ def structured_publication_preview(
     thread_decisions: list[dict[str, Any]],
     recommended_issues: list[dict[str, Any]],
     label_review: dict[str, Any],
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     preflight = structured_publication_preflight(evidence, context, root, label_review)
     target_marker = portable.digest(context["target"])[:16]
     body_directory = portable.private_directory(root / "artifacts" / "review_plan" / "bodies")
+    patch_directory = portable.private_directory(root / "artifacts" / "review_plan" / "patches")
     helper_path = Path(__file__).resolve().with_name("review_publish.py")
     baseline_path = root / BASELINE_NAME
     body_files: list[dict[str, Any]] = []
@@ -2435,6 +2815,27 @@ def structured_publication_preview(
         if item.get("system") is not True
     }
 
+    def enrich_fix(owner_kind: str, owner_id: str, item: dict[str, Any]) -> dict[str, Any]:
+        patch = item.get("patch")
+        if item.get("fix_mode") != "patch":
+            return {**item, "patch_path": None, "patch_sha256": None}
+        if not isinstance(patch, str):
+            raise portable.WorkflowError("patch fix content is unavailable")
+        identity = hashlib.sha256(f"{owner_kind}:{owner_id}".encode()).hexdigest()[:12]
+        patch_digest = hashlib.sha256(patch.encode()).hexdigest()
+        patch_path, actual_digest = portable.write_companion(
+            patch_directory / f"{identity}-{patch_digest}.patch", patch
+        )
+        return {**item, "patch_path": str(patch_path), "patch_sha256": actual_digest}
+
+    def body_with_fix(body: str, fix: dict[str, Any]) -> str:
+        if fix.get("fix_mode") != "patch":
+            return body
+        patch = cast(str, fix["patch"])
+        return f"{body.rstrip()}\n\n```diff\n{patch.rstrip()}\n```"
+
+    enriched_threads = [enrich_fix("thread", str(item["id"]), item) for item in thread_decisions]
+
     def thread_expectation(source: dict[str, Any]) -> dict[str, Any]:
         meaningful = [
             note
@@ -2444,6 +2845,7 @@ def structured_publication_preview(
         if not meaningful:
             raise portable.WorkflowError("publication thread has no meaningful note")
         latest = meaningful[-1]
+        position = source.get("root_position")
         return {
             "discussion_id": source["id"],
             "root_note_id": source["root_note_id"],
@@ -2451,6 +2853,12 @@ def structured_publication_preview(
             "resolved": source.get("root_resolved") is True,
             "last_note_id": latest.get("id"),
             "last_note_body_sha256": hashlib.sha256(cast(str, latest["body"]).encode()).hexdigest(),
+            "path": position.get("new_path") or position.get("old_path")
+            if isinstance(position, dict)
+            else None,
+            "line": position.get("new_line") or position.get("old_line")
+            if isinstance(position, dict)
+            else None,
         }
 
     def note_expectation(source: dict[str, Any]) -> dict[str, Any]:
@@ -2540,24 +2948,16 @@ def structured_publication_preview(
         )
 
     enriched_findings: list[dict[str, Any]] = []
-    spec_by_id = {str(item["finding_id"]): item for item in finding_specs}
+    spec_by_id = {
+        str(item["finding_id"]): enrich_fix("finding", str(item["finding_id"]), item)
+        for item in finding_specs
+    }
     for finding in findings:
         finding_id = str(finding["id"])
         revision = revisions[finding_id]
         publication_spec = spec_by_id.get(finding_id)
         if publication_spec is None:
-            enriched_findings.append(
-                {
-                    "finding_id": finding_id,
-                    "revision": revision,
-                    "type": "local_fix",
-                    "path": None,
-                    "line": None,
-                    "old_line": None,
-                    "body": finding["minimum_fix"],
-                }
-            )
-            continue
+            raise portable.WorkflowError("every actionable finding requires a concrete fix")
         enriched = {**publication_spec, "revision": revision}
         enriched_findings.append(enriched)
         marker = markers.get(finding_id) if finding_id in previous_allowed else None
@@ -2584,7 +2984,7 @@ def structured_publication_preview(
                 next_revision,
                 "finding",
                 operation,
-                cast(str, assessment["publication_body"]),
+                body_with_fix(cast(str, assessment["publication_body"]), publication_spec),
                 mutation={
                     "desired_resolved": True
                     if operation == "resolve"
@@ -2605,7 +3005,7 @@ def structured_publication_preview(
             revision,
             "finding",
             operation,
-            cast(str, publication_spec["body"]),
+            body_with_fix(cast(str, publication_spec["body"]), publication_spec),
             mutation={
                 "path": publication_spec["path"],
                 "line": publication_spec["line"],
@@ -2708,7 +3108,7 @@ def structured_publication_preview(
             prior_marker=marker,
         )
 
-    for decision in thread_decisions:
+    for decision in enriched_threads:
         operation = cast(str, decision["outcome"])
         if operation in {"no_publication", "local_fix"}:
             continue
@@ -2727,7 +3127,7 @@ def structured_publication_preview(
             revision,
             "thread",
             operation,
-            cast(str, decision["proposed_response"]),
+            body_with_fix(cast(str, decision["proposed_response"]), decision),
             mutation={
                 "desired_resolved": True
                 if operation == "resolve"
@@ -2792,7 +3192,7 @@ def structured_publication_preview(
     }
     if not portable.review_publication_preview_is_valid(result):
         raise portable.WorkflowError("structured review publication preview is invalid")
-    return result, enriched_findings, enriched_issues
+    return result, enriched_findings, enriched_issues, enriched_threads
 
 
 def review_markdown(
@@ -2894,6 +3294,35 @@ def review_markdown(
 
     shown_actions: set[str] = set()
 
+    def add_fix(fix: dict[str, Any]) -> None:
+        lines.extend([f"`fix_mode:{fix['fix_mode']}`", ""])
+        if fix["fix_mode"] == "suggestion":
+            lines.extend(["`suggestion:validated`", ""])
+            return
+        if fix["fix_mode"] != "patch":
+            return
+        patch_path = cast(str, fix["patch_path"])
+        lines.extend(
+            [
+                f"`{patch_path}` (`{fix['patch_sha256']}`)",
+                "",
+                "<details>",
+                "<summary>Git patch</summary>",
+                "",
+                "```diff",
+                cast(str, fix["patch"]).rstrip(),
+                "```",
+                "",
+                "</details>",
+                "",
+                "```shell",
+                f"git apply --check {shlex.quote(patch_path)}",
+                f"git apply {shlex.quote(patch_path)}",
+                "```",
+                "",
+            ]
+        )
+
     def add_action(action: dict[str, Any]) -> None:
         publication_id = action["publication_id"]
         body = bodies.get(publication_id) if publication_id is not None else None
@@ -2904,8 +3333,17 @@ def review_markdown(
                 "",
                 f"`action-sha256:{action['sha256']}`",
                 "",
+                f"`operation:{action['operation']}`",
+                "",
             ]
         )
+        mutation = cast(dict[str, Any], action["spec"]["mutation"])
+        expected_thread = cast(dict[str, Any] | None, action["spec"]["expected"]["thread"])
+        if portable.nonempty_string(mutation.get("path")):
+            anchor = mutation.get("line") or mutation.get("old_line")
+            lines.extend([f"`position:{mutation['path']}:{anchor}`", ""])
+        elif expected_thread is not None and portable.nonempty_string(expected_thread.get("path")):
+            lines.extend([f"`position:{expected_thread['path']}:{expected_thread['line']}`", ""])
         if body is not None:
             lines.extend(
                 [
@@ -2950,6 +3388,7 @@ def review_markdown(
             return
         for item in items:
             lines.extend([f"### [{item['id']}]({item['url']})", "", item["rationale"], ""])
+            add_fix(item)
             add_publication_action(f"thread-{item['id']}")
 
     add_thread_section(
@@ -2987,8 +3426,10 @@ def review_markdown(
                 "",
             ]
         )
+        add_fix(item)
     if context["role"] == "author":
         for finding in findings:
+            publication_spec = finding_publications[finding["id"]]
             lines.extend(
                 [
                     f"### {finding['summary']}",
@@ -3001,13 +3442,14 @@ def review_markdown(
                     "",
                 ]
             )
+            add_fix(publication_spec)
 
     lines.extend([f"## {presentation['new_findings_heading']}", ""])
     reviewer_findings = findings if context["role"] == "reviewer" else []
     if not reviewer_findings:
         lines.extend([presentation["no_items"], ""])
     for finding in reviewer_findings:
-        publication_spec = finding_publications.get(finding["id"])
+        reviewer_publication = finding_publications.get(finding["id"])
         lines.extend(
             [
                 f"### {finding['summary']}",
@@ -3030,9 +3472,11 @@ def review_markdown(
                 "",
             ]
         )
-        if publication_spec is not None and publication_spec["type"] == "line":
-            line = publication_spec["line"] or publication_spec["old_line"]
-            lines.extend([f"`{publication_spec['path']}:{line}`", ""])
+        if reviewer_publication is not None and reviewer_publication["type"] == "line":
+            line = reviewer_publication["line"] or reviewer_publication["old_line"]
+            lines.extend([f"`{reviewer_publication['path']}:{line}`", ""])
+        if reviewer_publication is not None:
+            add_fix(reviewer_publication)
         if finding["id"] in finding_publications:
             add_publication_action(cast(str, finding["id"]))
 
@@ -3072,7 +3516,8 @@ def review_markdown(
         lines.extend([presentation["no_items"], ""])
     else:
         lines.extend(
-            f"- [{item['id']}]({item['url']}): {item['rationale']}" for item in without_publication
+            f"- [{item['id']}]({item['url']}): {item['rationale']} (`fix_mode:{item['fix_mode']}`)"
+            for item in without_publication
         )
         lines.append("")
 
@@ -3502,8 +3947,30 @@ def scaffold_review(
     finding_publications = validate_finding_publications(
         content["finding_publications"], current_finding_ids
     )
+    exact_git = cast(dict[str, Any], context["exact_git"])
+    repo_root = Path(cast(str, exact_git["repo_root"]))
+    head_sha = cast(str, evidence["head_sha"])
+    base_sha = cast(str, evidence["base_sha"])
+    for item in finding_publications:
+        if item["type"] == "line":
+            old_lines, new_lines = changed_diff_lines(
+                repo_root, base_sha, head_sha, cast(str, item["path"])
+            )
+            if item["line"] is not None and item["line"] not in new_lines:
+                raise portable.WorkflowError("finding new-line position is not in the exact diff")
+            if item["old_line"] is not None and item["old_line"] not in old_lines:
+                raise portable.WorkflowError("finding old-line position is not in the exact diff")
+        if item["fix_mode"] == "patch":
+            validate_git_patch(repo_root, head_sha, cast(str, item["patch"]))
+        else:
+            validate_suggestion(
+                cast(str, item["body"]),
+                repo_root=repo_root,
+                head_sha=head_sha,
+                path=cast(str, item["path"]),
+                line=cast(int, item["line"]),
+            )
     current_publication_by_id = {str(item["finding_id"]): item for item in finding_publications}
-    current_finding_by_id = {str(item["id"]): item for item in findings}
     current_issue_by_id = {str(item["id"]): item for item in recommended_issues}
     for item_id, old in previous_ledger_by_id.items():
         if item_id in current_finding_ids and old["kind"] != "finding":
@@ -3516,14 +3983,9 @@ def scaffold_review(
         if old["kind"] == "finding" and item_id in current_finding_ids:
             old_publication = dict(cast(dict[str, Any], old["record"])["publication"])
             old_publication.pop("revision", None)
-            current_publication = current_publication_by_id.get(item_id) or {
-                "finding_id": item_id,
-                "type": "local_fix",
-                "path": None,
-                "line": None,
-                "old_line": None,
-                "body": current_finding_by_id[item_id]["minimum_fix"],
-            }
+            old_publication.pop("patch_path", None)
+            old_publication.pop("patch_sha256", None)
+            current_publication = current_publication_by_id[item_id]
             if old_publication != current_publication:
                 raise portable.WorkflowError(
                     "a changed finding publication must use changed status"
@@ -3544,13 +4006,16 @@ def scaffold_review(
             raise portable.WorkflowError(
                 "finding publication and previous-finding action bodies disagree"
             )
-    if (
-        context["role"] == "reviewer"
-        and {item["finding_id"] for item in finding_publications} != current_finding_ids
+    if {item["finding_id"] for item in finding_publications} != current_finding_ids:
+        raise portable.WorkflowError("every actionable finding requires one concrete fix")
+    if context["role"] == "reviewer" and any(
+        item["type"] == "local_fix" for item in finding_publications
     ):
-        raise portable.WorkflowError("every reviewer finding requires one publication body")
-    if context["role"] == "author" and finding_publications:
-        raise portable.WorkflowError("author findings must remain local read-only fixes")
+        raise portable.WorkflowError("reviewer findings require GitLab publication positions")
+    if context["role"] == "author" and any(
+        item["type"] != "local_fix" for item in finding_publications
+    ):
+        raise portable.WorkflowError("author findings require read-only local fix patches")
     discussions = cast(list[dict[str, Any]], context["discussions"])
     expected_threads: dict[str, dict[str, Any]] = {}
     for item in discussions:
@@ -3623,7 +4088,8 @@ def scaffold_review(
                 "rationale",
                 "outcome",
                 "proposed_response",
-                "suggestion_applicable",
+                "fix_mode",
+                "patch",
                 "last_note_id",
                 "last_note_body_sha256",
             }
@@ -3632,30 +4098,7 @@ def scaffold_review(
         ):
             raise portable.WorkflowError("thread decision does not bind the latest note")
         source = expected_threads[thread_id]
-        suggestion_applicable = item["suggestion_applicable"]
-        if not isinstance(suggestion_applicable, bool):
-            raise portable.WorkflowError("thread suggestion applicability must be explicit")
-        response = item["proposed_response"]
-        suggestion_count = len(SUGGESTION_RE.findall(response)) if isinstance(response, str) else 0
-        position = source.get("root_position")
-        current_new_line = (
-            isinstance(position, dict)
-            and isinstance(position.get("new_path"), str)
-            and isinstance(position.get("new_line"), int)
-            and position.get("head_sha") == evidence.get("head_sha")
-        )
-        if suggestion_applicable and (
-            item["outcome"] in {"no_publication", "local_fix"}
-            or not current_new_line
-            or suggestion_count != 1
-        ):
-            raise portable.WorkflowError(
-                "an applicable current-line thread fix requires exactly one suggestion block"
-            )
-        if not suggestion_applicable and suggestion_count:
-            raise portable.WorkflowError(
-                "a thread response cannot use suggestion when replacement is not applicable"
-            )
+        validate_thread_fix(item, source, repo_root, head_sha)
         if item["outcome"] == "resolve" and (
             source.get("root_resolvable") is not True or source.get("root_resolved") is True
         ):
@@ -3682,16 +4125,18 @@ def scaffold_review(
     ):
         raise portable.WorkflowError("reviewer thread decisions cannot promise local fixes")
     metadata = metadata_assessment(evidence, content["mr_metadata_assessment"])
-    publication, enriched_publications, enriched_issues = structured_publication_preview(
-        evidence,
-        context,
-        root,
-        findings,
-        finding_publications,
-        previous_assessments,
-        thread_decisions,
-        recommended_issues,
-        label_review,
+    publication, enriched_publications, enriched_issues, enriched_threads = (
+        structured_publication_preview(
+            evidence,
+            context,
+            root,
+            findings,
+            finding_publications,
+            previous_assessments,
+            thread_decisions,
+            recommended_issues,
+            label_review,
+        )
     )
     render_content = {
         **content,
@@ -3700,6 +4145,7 @@ def scaffold_review(
         "finding_publications": enriched_publications,
         "previous_finding_assessments": previous_assessments,
         "recommended_issues": enriched_issues,
+        "thread_decisions": enriched_threads,
     }
     markdown = review_markdown(evidence, context, decision, render_content, metadata, publication)
     reject_visible_raw_refs(markdown, evidence)
@@ -3751,7 +4197,7 @@ def scaffold_review(
         "rejected_candidates": rejected_candidates,
         "rejected_candidate_assessments": rejected_candidate_assessments,
         "rejected_candidate_ledger": rejected_candidate_ledger,
-        "thread_decisions": thread_decisions,
+        "thread_decisions": enriched_threads,
         "markdown": markdown,
     }
     path, plan_digest = portable.write_artifact(root, "review_plan", payload)
@@ -3776,6 +4222,11 @@ def scaffold_review(
         "markdown_path": str(markdown_path),
         "markdown_digest": markdown_digest,
         "publication_body_paths": [item["path"] for item in publication["body_files"]],
+        "patch_paths": [
+            item["patch_path"]
+            for item in [*enriched_publications, *enriched_threads]
+            if item["fix_mode"] == "patch"
+        ],
         "publication_commands": [item["command"] for item in publication["actions"]],
         "publication_actions": [
             {"id": item["id"], "sha256": item["sha256"]} for item in publication["actions"]

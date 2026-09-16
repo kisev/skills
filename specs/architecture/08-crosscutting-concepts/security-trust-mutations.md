@@ -24,4 +24,8 @@ and invokes `glab` with argv and no shell. The parent environment is inherited s
 user-owned authentication and configuration continue to work, but credentials
 and environment values are never serialized into plans, argv, prompts, or logs.
 External comments are not deleted as rollback; exact markers, postconditions,
-and an atomic local receipt bound safe recovery.
+and an atomic local receipt bound safe recovery. Prepared Git patches are textual,
+content-addressed, path-bounded, and checked against the exact reviewed head in a
+temporary index; binary, symlink, rename, traversal, and oversized patches are
+rejected without changing the checkout. Publication diagnostics are bounded and
+redacted before reaching stderr or structured output.

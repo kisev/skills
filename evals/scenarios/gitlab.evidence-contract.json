@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 5,
+  "revision": 6,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Validate exact SHA, completeness, critic, exhaustive labels, suggestions, role-authored prose, confirmed helper actions, inherited glab environment, and stale finalize contracts.",
+    "prompt": "Validate exact SHA, completeness, critic, exhaustive labels, suggestion or patch fixes, role-authored prose, confirmed helper actions, inherited glab environment, publication diagnostics, and stale finalize contracts.",
     "fixture": {
       "selected": ["skill:code-review"]
     },
@@ -50,7 +50,7 @@
     {
       "id": "suggestion",
       "path": "skills/code-review/references/workflow.md",
-      "contains": "suggestion_applicable=true"
+      "contains": "fix_mode=patch"
     },
     {
       "id": "role-authored",
@@ -66,6 +66,11 @@
       "id": "inherited-environment",
       "path": "skills/code-review/scripts/review_publish.py",
       "contains": "shell=False"
+    },
+    {
+      "id": "publication-diagnostics",
+      "path": "skills/code-review/scripts/review_publish.py",
+      "contains": "http_status="
     }
   ],
   "sandbox": {
@@ -78,7 +83,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "f5e2df4c5476ab45fd6a98f6bc491611c72c42c8538a7167e48f09f6de84ebf1",
+  "digest": "113aed369e3b4551ffbc05e0f577a4abc0f12a77eeaa0f57861a70da20674526",
   "locale": "neutral",
   "pair_id": null
 }

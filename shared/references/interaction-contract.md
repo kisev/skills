@@ -70,4 +70,10 @@ review runners never publish. A separately invoked write helper may apply only
 one previously previewed action whose exact digest is supplied as Confirmation;
 it must revalidate immediately before writing and report the result. One digest
 cannot authorize a batch, another action, or recovery with changed content. Do
-not change user-owned configuration without Confirmation. Stop after `report`.
+not change user-owned configuration without Confirmation. A precomputed
+suggestion or patch is part of the exact confirmed action; generating or changing
+a fix after confirmation requires a new plan and digest. A definitive rejection
+may reuse the same action only when bounded evidence proves no mutation and fresh
+revalidation confirms the postcondition is absent. An uncertain result never
+authorizes fallback content or replay. Do not change user-owned configuration
+without Confirmation. Stop after `report`.

@@ -519,9 +519,11 @@ def thread_decisions_are_valid(value: object) -> bool:
     legacy = {"id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"}
     current = legacy | {"last_note_id", "last_note_body_sha256"}
     structured = current | {"suggestion_applicable"}
+    fix = current | {"fix_mode", "patch"}
+    materialized_fix = fix | {"patch_path", "patch_sha256"}
     return isinstance(value, list) and all(
         isinstance(item, dict)
-        and set(item) in (legacy, current, structured)
+        and set(item) in (legacy, current, structured, fix, materialized_fix)
         and all(nonempty_string(item.get(key)) for key in ("id", "url", "rationale"))
         and item.get("state") in {"open", "resolved", "plain"}
         and item.get("assessment")
@@ -544,6 +546,59 @@ def thread_decisions_are_valid(value: object) -> bool:
             and is_digest(item.get("last_note_body_sha256"))
         )
         and (set(item) != structured or isinstance(item.get("suggestion_applicable"), bool))
+        and (
+            set(item) not in (fix, materialized_fix)
+            or item.get("fix_mode") in {"suggestion", "patch", "not_required"}
+            and (
+                item.get("fix_mode") == "patch"
+                and nonempty_string(item.get("patch"))
+                or item.get("fix_mode") != "patch"
+                and item.get("patch") is None
+            )
+        )
+        and (
+            set(item) != materialized_fix
+            or item.get("fix_mode") == "patch"
+            and nonempty_string(item.get("patch_path"))
+            and Path(item["patch_path"]).is_absolute()
+            and is_digest(item.get("patch_sha256"))
+            and hashlib.sha256(item["patch"].encode()).hexdigest() == item["patch_sha256"]
+            or item.get("fix_mode") != "patch"
+            and item.get("patch_path") is None
+            and item.get("patch_sha256") is None
+        )
+        for item in value
+    )
+
+
+def finding_publications_are_valid(value: object, *, require_fixes: bool = False) -> bool:
+    legacy = {"finding_id", "revision", "type", "path", "line", "old_line", "body"}
+    fixed = legacy | {"fix_mode", "patch", "patch_path", "patch_sha256"}
+    return isinstance(value, list) and all(
+        isinstance(item, dict)
+        and set(item) in ((fixed,) if require_fixes else (legacy, fixed))
+        and nonempty_string(item.get("finding_id"))
+        and isinstance(item.get("revision"), int)
+        and not isinstance(item.get("revision"), bool)
+        and item["revision"] >= 1
+        and item.get("type") in {"general", "line", "local_fix"}
+        and nonempty_string(item.get("body"))
+        and (
+            set(item) == legacy
+            or item.get("fix_mode") in {"suggestion", "patch"}
+            and (
+                item.get("fix_mode") == "patch"
+                and nonempty_string(item.get("patch"))
+                and nonempty_string(item.get("patch_path"))
+                and Path(item["patch_path"]).is_absolute()
+                and is_digest(item.get("patch_sha256"))
+                and hashlib.sha256(item["patch"].encode()).hexdigest() == item["patch_sha256"]
+                or item.get("fix_mode") == "suggestion"
+                and item.get("patch") is None
+                and item.get("patch_path") is None
+                and item.get("patch_sha256") is None
+            )
+        )
         for item in value
     )
 
@@ -1282,6 +1337,14 @@ def schema_valid(schema: dict[str, Any], value: object, root: dict[str, Any]) ->
             return False
         definition = root.get("$defs", {}).get(reference.removeprefix(prefix))
         return isinstance(definition, dict) and schema_valid(definition, value, root)
+    negated = schema.get("not")
+    if isinstance(negated, dict) and schema_valid(negated, value, root):
+        return False
+    condition = schema.get("if")
+    if isinstance(condition, dict):
+        branch = schema.get("then") if schema_valid(condition, value, root) else schema.get("else")
+        if isinstance(branch, dict) and not schema_valid(branch, value, root):
+            return False
     if "allOf" in schema and not all(
         isinstance(item, dict) and schema_valid(item, value, root) for item in schema["allOf"]
     ):
@@ -1731,7 +1794,11 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         if (
             payload["profile"] != "code-review"
             or not legacy_plan
-            and payload["review_contract_version"] != (2 if structured_plan else 1)
+            and (
+                payload["review_contract_version"] not in {2, 3}
+                if structured_plan
+                else payload["review_contract_version"] != 1
+            )
             or payload["external_mutations"] is not False
             or not all(
                 is_digest(payload[key])
@@ -1765,9 +1832,21 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or structured_plan
             and (
                 not code_review_label_review_is_valid(payload["label_review"])
-                or not all(
+                or payload["review_contract_version"] == 2
+                and not all(
                     isinstance(item, dict) and "suggestion_applicable" in item
                     for item in payload["thread_decisions"]
+                )
+                or payload["review_contract_version"] == 3
+                and (
+                    not finding_publications_are_valid(
+                        payload["finding_publications"], require_fixes=True
+                    )
+                    or not all(
+                        isinstance(item, dict)
+                        and {"fix_mode", "patch", "patch_path", "patch_sha256"}.issubset(item)
+                        for item in payload["thread_decisions"]
+                    )
                 )
             )
             or not legacy_plan

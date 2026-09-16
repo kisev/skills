@@ -251,6 +251,23 @@
             "last_note_id",
             "last_note_body_sha256"
           ]
+        },
+        {
+          "required": [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response",
+            "fix_mode",
+            "patch",
+            "patch_path",
+            "patch_sha256",
+            "last_note_id",
+            "last_note_body_sha256"
+          ]
         }
       ],
       "properties": {
@@ -274,9 +291,37 @@
         },
         "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "suggestion_applicable": { "type": "boolean" },
+        "fix_mode": { "enum": ["suggestion", "patch", "not_required"] },
+        "patch": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "patch_path": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        },
+        "patch_sha256": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
         "last_note_id": {},
         "last_note_body_sha256": { "$ref": "#/$defs/digest" }
       },
+      "allOf": [
+        {
+          "if": {
+            "required": ["fix_mode"],
+            "properties": { "fix_mode": { "const": "patch" } }
+          },
+          "then": {
+            "properties": {
+              "patch": { "type": "string", "minLength": 1 },
+              "patch_path": { "type": "string", "minLength": 1 },
+              "patch_sha256": { "$ref": "#/$defs/digest" }
+            }
+          },
+          "else": {
+            "properties": {
+              "patch": { "type": "null" },
+              "patch_path": { "type": "null" },
+              "patch_sha256": { "type": "null" }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "metadata_assessment_item": {
@@ -568,7 +613,24 @@
     },
     "finding_publication": {
       "type": "object",
-      "required": ["finding_id", "revision", "type", "path", "line", "old_line", "body"],
+      "anyOf": [
+        { "required": ["finding_id", "revision", "type", "path", "line", "old_line", "body"] },
+        {
+          "required": [
+            "finding_id",
+            "revision",
+            "type",
+            "path",
+            "line",
+            "old_line",
+            "body",
+            "fix_mode",
+            "patch",
+            "patch_path",
+            "patch_sha256"
+          ]
+        }
+      ],
       "properties": {
         "finding_id": { "type": "string", "minLength": 1 },
         "revision": { "type": "integer", "minimum": 1 },
@@ -576,8 +638,36 @@
         "path": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
         "line": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
         "old_line": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
-        "body": { "type": "string", "minLength": 1 }
+        "body": { "type": "string", "minLength": 1 },
+        "fix_mode": { "enum": ["suggestion", "patch"] },
+        "patch": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "patch_path": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        },
+        "patch_sha256": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] }
       },
+      "allOf": [
+        {
+          "if": {
+            "required": ["fix_mode"],
+            "properties": { "fix_mode": { "const": "patch" } }
+          },
+          "then": {
+            "properties": {
+              "patch": { "type": "string", "minLength": 1 },
+              "patch_path": { "type": "string", "minLength": 1 },
+              "patch_sha256": { "$ref": "#/$defs/digest" }
+            }
+          },
+          "else": {
+            "properties": {
+              "patch": { "type": "null" },
+              "patch_path": { "type": "null" },
+              "patch_sha256": { "type": "null" }
+            }
+          }
+        }
+      ],
       "additionalProperties": false
     },
     "previous_finding_assessment": {
@@ -1350,7 +1440,7 @@
               "additionalProperties": false,
               "properties": {
                 "profile": { "const": "code-review" },
-                "review_contract_version": { "enum": [1, 2] },
+                "review_contract_version": { "enum": [1, 2, 3] },
                 "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
@@ -1410,7 +1500,30 @@
                   "items": { "$ref": "#/$defs/thread_decision" }
                 },
                 "markdown": { "type": "string" }
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "required": ["review_contract_version"],
+                    "properties": { "review_contract_version": { "const": 3 } }
+                  },
+                  "then": {
+                    "properties": {
+                      "finding_publications": {
+                        "items": {
+                          "required": ["fix_mode", "patch", "patch_path", "patch_sha256"]
+                        }
+                      },
+                      "thread_decisions": {
+                        "items": {
+                          "required": ["fix_mode", "patch", "patch_path", "patch_sha256"],
+                          "not": { "required": ["suggestion_applicable"] }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
             }
           }
         }

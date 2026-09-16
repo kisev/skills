@@ -33,4 +33,11 @@ Confirmation, revalidates actor, target, refs, conversations, labels, catalog,
 markers, and body immediately before writing, then verifies the postcondition.
 It invokes `glab` with argv and no shell, inherits the caller environment without
 persisting it, and rejects batch, force, stale state, changed digests, and path
-escapes. `approve`, `merge`, and `push` remain outside this helper boundary.
+escapes. A code-review action binds its validated suggestion or patch before
+confirmation. The helper reports bounded redacted request diagnostics, treats a
+definitive non-mutating 4xx rejection as explicitly retryable after fresh
+revalidation, and treats timeout, 5xx, malformed response, and unknown outcomes
+as uncertain. It never substitutes another fix or repeats an uncertain
+publication; an already posted reply may continue only its pending idempotent
+thread-state transition.
+`approve`, `merge`, and `push` remain outside this helper boundary.

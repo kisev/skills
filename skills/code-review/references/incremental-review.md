@@ -109,9 +109,9 @@ baseline. A no-op review needs no critic.
 ## Stable IDs and publication
 
 New findings and recommended issues start at revision 1. An unchanged active
-finding keeps its revision; a changed publication advances it. Thread replies
-use a stable ID derived from the root note and advance the revision for each new
-prepared reply.
+finding keeps its revision; changing `fix_mode`, suggestion content, patch
+content, or publication prose advances it. Thread replies use a stable ID
+derived from the root note and advance the revision for each new prepared reply.
 
 If a prior finding was not published, revalidate it and include its current body
 in the new plan. If a trusted marker shows that it was published, update the
@@ -122,3 +122,7 @@ The baseline pointer, exact refs, delta, previous findings, markers, and digests
 remain private technical JSON. User-facing reports omit raw SHAs.
 Every regenerated structured action receives an exact digest; confirmation of a
 previous action never authorizes a changed publication or label delta.
+Review-contract 1 and 2 plans remain readable, and structured contract-2 actions
+remain executable by the helper. They cannot be reused incrementally as a
+contract-3 baseline because they do not bind validated fix artifacts; context
+selection falls back to a full review instead.

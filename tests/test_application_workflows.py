@@ -151,6 +151,12 @@ elif endpoint == "projects/19/merge_requests/7" and method == "PUT":
     value = {"iid": 7, "labels": state["labels"]}
 elif endpoint.startswith("projects/19/merge_requests/7/discussions?"):
     value = state["discussions"]
+elif endpoint == "projects/19/merge_requests/7/discussions" and method == "POST":
+    note = {"id": 101, "system": False, "resolvable": False, "resolved": False, "author": {"id": 23, "username": "reviewer"}, "body": payload["body"], "position": payload.get("position")}
+    discussion = {"id": "finding-101", "notes": [note]}
+    state["discussions"].append(discussion)
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    value = discussion
 elif endpoint.startswith("projects/19/merge_requests/7/notes?"):
     value = state["notes"]
 elif endpoint == "projects/19/merge_requests/7/discussions/discussion-42/notes" and method == "POST":
@@ -269,14 +275,172 @@ print(json.dumps(value))
             "line": 7,
             "old_line": None,
             "body": "Replace this line.",
+            "fix_mode": "suggestion",
+            "patch": None,
         }
         with self.assertRaises(module.portable.WorkflowError):
             module.validate_finding_publications([invalid], {"finding-1"})
         valid = {
             **invalid,
-            "body": "Use the bounded value.\n\n```suggestion\nvalue = bounded\n```",
+            "body": "Use the bounded value.\n\n```suggestion:-1+1\nvalue = bounded\n```",
         }
         self.assertEqual(module.validate_finding_publications([valid], {"finding-1"})[0], valid)
+
+        general = {
+            **invalid,
+            "type": "general",
+            "path": None,
+            "line": None,
+            "body": "Apply the complete fix.",
+            "fix_mode": "patch",
+            "patch": (
+                "diff --git a/src/example.py b/src/example.py\n"
+                "--- a/src/example.py\n"
+                "+++ b/src/example.py\n"
+                "@@ -1 +1 @@\n"
+                "-old\n"
+                "+new\n"
+            ),
+        }
+        self.assertEqual(module.validate_finding_publications([general], {"finding-1"})[0], general)
+        local_fix = {**general, "type": "local_fix", "body": "Apply this local correction."}
+        self.assertEqual(
+            module.validate_finding_publications([local_fix], {"finding-1"})[0], local_fix
+        )
+
+    def test_git_patch_validation_is_exact_head_bounded_and_multi_file(self) -> None:
+        scripts = BUILT_SKILLS / "code-review" / "scripts"
+        previous_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "portable_runtime" or name.startswith("portable_runtime.")
+        }
+        sys.path.insert(0, str(scripts))
+        try:
+            module = load_module(scripts / "review_context.py", "built_review_context_patch")
+        finally:
+            sys.path.remove(str(scripts))
+            for name in list(sys.modules):
+                if name == "portable_runtime" or name.startswith("portable_runtime."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous_modules)
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "reviewer@example.invalid"],
+                cwd=repository,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Example Reviewer"],
+                cwd=repository,
+                check=True,
+            )
+            (repository / "one.txt").write_text("one\n", encoding="utf-8")
+            (repository / "two.txt").write_text("two\n", encoding="utf-8")
+            (repository / "three.txt").write_text("first\nsecond\nthird\n", encoding="utf-8")
+            (repository / "é.txt").write_text("accent\n", encoding="utf-8")
+            (repository / "link").symlink_to("one.txt")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
+            head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            patch_text = (
+                "diff --git a/one.txt b/one.txt\n"
+                "--- a/one.txt\n"
+                "+++ b/one.txt\n"
+                "@@ -1 +1 @@\n"
+                "-one\n"
+                "+first\n"
+                "diff --git a/two.txt b/two.txt\n"
+                "--- a/two.txt\n"
+                "+++ b/two.txt\n"
+                "@@ -1 +1 @@\n"
+                "-two\n"
+                "+second\n"
+            )
+            self.assertEqual(
+                module.validate_git_patch(repository, head, patch_text), ["one.txt", "two.txt"]
+            )
+            quoted_patch = (
+                'diff --git "a/\\303\\251.txt" "b/\\303\\251.txt"\n'
+                '--- "a/\\303\\251.txt"\n'
+                '+++ "b/\\303\\251.txt"\n'
+                "@@ -1 +1 @@\n"
+                "-accent\n"
+                "+changed accent\n"
+            )
+            self.assertEqual(module.validate_git_patch(repository, head, quoted_patch), ["é.txt"])
+            thread_fix = {
+                "outcome": "local_fix",
+                "proposed_response": "Apply this local correction.",
+                "fix_mode": "patch",
+                "patch": patch_text,
+            }
+            module.validate_thread_fix(thread_fix, {}, repository, head)
+            (repository / "three.txt").write_text(
+                "first\nchanged second\nthird\n", encoding="utf-8"
+            )
+            subprocess.run(["git", "commit", "-qam", "change middle"], cwd=repository, check=True)
+            changed_head = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            self.assertEqual(
+                module.changed_diff_lines(repository, head, changed_head, "three.txt"),
+                ({2}, {2}),
+            )
+            module.validate_suggestion(
+                "Use the replacement.\n\n```suggestion:-1+1\nreplacement\n```",
+                repo_root=repository,
+                head_sha=changed_head,
+                path="three.txt",
+                line=2,
+            )
+            with self.assertRaises(module.portable.WorkflowError):
+                module.validate_suggestion(
+                    "Out of bounds.\n\n```suggestion:-2+1\nreplacement\n```",
+                    repo_root=repository,
+                    head_sha=changed_head,
+                    path="three.txt",
+                    line=2,
+                )
+            with self.assertRaises(module.portable.WorkflowError):
+                module.validate_thread_fix(
+                    {**thread_fix, "fix_mode": "not_required", "patch": None},
+                    {},
+                    repository,
+                    head,
+                )
+            self.assertEqual((repository / "one.txt").read_text(encoding="utf-8"), "one\n")
+            for invalid in (
+                patch_text.replace("-one", "-missing", 1),
+                "diff --git a/../secret b/../secret\n--- a/../secret\n+++ b/../secret\n",
+                "diff --git a/one.txt b/one.txt\n--- /etc/passwd\n+++ /etc/passwd\n",
+                "diff --git a/link b/link\nnew file mode 120000\n--- /dev/null\n+++ b/link\n",
+                (
+                    "diff --git a/link b/link\n"
+                    "--- a/link\n"
+                    "+++ b/link\n"
+                    "@@ -1 +1 @@\n"
+                    "-one.txt\n"
+                    "+two.txt\n"
+                ),
+                (
+                    "diff --git a/safe b/safe\n"
+                    "--- a/link\n"
+                    "+++ b/link\n"
+                    "@@ -1 +1 @@\n"
+                    "-one.txt\n"
+                    "+two.txt\n"
+                ),
+                'diff --git "a/\\400" "b/\\400"\n--- "a/\\400"\n+++ "b/\\400"\n',
+                'diff --git "a/\\000" "b/\\000"\n--- "a/\\000"\n+++ "b/\\000"\n',
+                "diff --git a/image.png b/image.png\nGIT binary patch\n",
+            ):
+                with self.assertRaises(module.portable.WorkflowError):
+                    module.validate_git_patch(repository, head, invalid)
 
     def test_code_review_maps_major_semver_across_complete_label_catalog(self) -> None:
         scripts = BUILT_SKILLS / "code-review" / "scripts"
@@ -1360,6 +1524,16 @@ print(json.dumps(value))
                                 "line": None,
                                 "old_line": None,
                                 "body": "You need to reserve an idempotency key before the external call.",
+                                "fix_mode": "patch",
+                                "patch": (
+                                    "diff --git a/review.txt b/review.txt\n"
+                                    "--- a/review.txt\n"
+                                    "+++ b/review.txt\n"
+                                    "@@ -1,2 +1,3 @@\n"
+                                    " base\n"
+                                    " reviewed change\n"
+                                    "+reserve idempotency key\n"
+                                ),
                             }
                         ],
                         "previous_finding_assessments": [],
@@ -1397,7 +1571,8 @@ print(json.dumps(value))
                                 "rationale": "The existing thread can be acknowledged and resolved.",
                                 "outcome": "resolve",
                                 "proposed_response": "I tracked the remaining risk in the current finding. Closing.",
-                                "suggestion_applicable": False,
+                                "fix_mode": "not_required",
+                                "patch": None,
                                 "last_note_id": 42,
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"
@@ -1443,6 +1618,9 @@ print(json.dumps(value))
             self.assertIn(f"{target}#note_42", markdown)
             self.assertIn("MR metadata", markdown)
             self.assertIn("The fix changes behavior without changing the public API.", markdown)
+            self.assertIn("`fix_mode:patch`", markdown)
+            self.assertIn("<summary>Git patch</summary>", markdown)
+            self.assertIn("git apply --check", markdown)
             self.assertNotIn(base_sha, markdown)
             self.assertNotIn(head_sha, markdown)
             self.assertEqual(len(plan_result["publication_body_paths"]), 3)
@@ -1464,6 +1642,7 @@ print(json.dumps(value))
             )
             preview = plan_document["payload"]["publication_preview"]
             thread_action = next(item for item in preview["actions"] if item["kind"] == "thread")
+            finding_action = next(item for item in preview["actions"] if item["kind"] == "finding")
             self.assertEqual(thread_action["operation"], "resolve")
             self.assertTrue(thread_action["spec"]["mutation"]["desired_resolved"])
             label_action = next(item for item in preview["actions"] if item["kind"] == "labels")
@@ -1472,6 +1651,35 @@ print(json.dumps(value))
             self.assertEqual(
                 plan_document["payload"]["label_review"]["semver"]["selected"], "semver::patch"
             )
+            contract_two_plan = json.loads(json.dumps(plan_document))
+            contract_two_payload = contract_two_plan["payload"]
+            contract_two_payload["review_contract_version"] = 2
+            for publication in contract_two_payload["finding_publications"]:
+                for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
+                    publication.pop(key)
+            for entry in contract_two_payload["finding_ledger"]:
+                publication = entry["record"].get("publication")
+                if publication is not None:
+                    for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
+                        publication.pop(key)
+            for thread in contract_two_payload["thread_decisions"]:
+                thread["suggestion_applicable"] = thread.pop("fix_mode") == "suggestion"
+                for key in ("patch", "patch_path", "patch_sha256"):
+                    thread.pop(key)
+            contract_two_content = (
+                json.dumps(
+                    contract_two_plan,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                + "\n"
+            )
+            contract_two_digest = hashlib.sha256(contract_two_content.encode()).hexdigest()
+            contract_two_path = (
+                Path(artifact_root) / "artifacts" / "review_plan" / f"{contract_two_digest}.json"
+            )
+            contract_two_path.write_text(contract_two_content, encoding="utf-8")
             publish_directory = root / "publish-bin"
             publish_directory.mkdir()
             _publish_glab, publish_state, publish_log = self.fake_publish_glab(publish_directory)
@@ -1485,7 +1693,9 @@ print(json.dumps(value))
                     plan_document["payload"]["label_review"]["catalog"]
                 ),
             }
-            action_command = shlex.split(label_action["command"])
+            contract_three_command = shlex.split(label_action["command"])
+            action_command = list(contract_three_command)
+            action_command[action_command.index("--plan") + 1] = str(contract_two_path)
             wrong_command = list(action_command)
             wrong_command[wrong_command.index("--confirm") + 1] = "0" * 64
             wrong_confirmation = subprocess.run(
@@ -1513,7 +1723,7 @@ print(json.dumps(value))
                 ["semver::patch"],
             )
             repeated = subprocess.run(
-                action_command,
+                contract_three_command,
                 cwd=root,
                 env=publish_environment,
                 capture_output=True,
@@ -1522,6 +1732,33 @@ print(json.dumps(value))
             )
             self.assertEqual(repeated.returncode, 0, repeated.stdout + repeated.stderr)
             self.assertEqual(json.loads(repeated.stdout)["status"], "already_applied")
+            contract_two_finding_command = shlex.split(finding_action["command"])
+            contract_two_finding_command[contract_two_finding_command.index("--plan") + 1] = str(
+                contract_two_path
+            )
+            published_finding = subprocess.run(
+                contract_two_finding_command,
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(
+                published_finding.returncode,
+                0,
+                published_finding.stdout + published_finding.stderr,
+            )
+            self.assertEqual(json.loads(published_finding.stdout)["status"], "applied")
+            repeated_finding = subprocess.run(
+                shlex.split(finding_action["command"]),
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(json.loads(repeated_finding.stdout)["status"], "already_applied")
             publish_state_value = json.loads(publish_state.read_text(encoding="utf-8"))
             publish_state_value["discussions"] = [
                 {
@@ -1996,6 +2233,17 @@ print(json.dumps(value))
                                 "line": None,
                                 "old_line": None,
                                 "body": "Риск повторного вызова сохраняется.",
+                                "fix_mode": "patch",
+                                "patch": (
+                                    "diff --git a/review.txt b/review.txt\n"
+                                    "--- a/review.txt\n"
+                                    "+++ b/review.txt\n"
+                                    "@@ -1,3 +1,4 @@\n"
+                                    " base\n"
+                                    " reviewed change\n"
+                                    " follow-up\n"
+                                    "+reserve idempotency key\n"
+                                ),
                             }
                         ],
                         "previous_finding_assessments": [
@@ -2064,7 +2312,8 @@ print(json.dumps(value))
                                 "rationale": "The thread remains actionable.",
                                 "outcome": "reply",
                                 "proposed_response": "Тебе всё ещё нужно резервировать ключ идемпотентности до вызова.\n\n```suggestion\nreviewed change\n```",
-                                "suggestion_applicable": True,
+                                "fix_mode": "suggestion",
+                                "patch": None,
                                 "last_note_id": 42,
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"

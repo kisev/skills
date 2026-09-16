@@ -32,6 +32,22 @@ MARKER_RE = re.compile(
 )
 MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 20
+MAX_DIAGNOSTIC_CHARS = 2048
+HTTP_HEADER_RE = re.compile(rb"\AHTTP/\d(?:\.\d)?\s+([1-5][0-9]{2})(?:\s|$)")
+HTTP_ERROR_RE = re.compile(rb"\(HTTP ([1-5][0-9]{2})\)[ \t]*(?:\r?\n|$)")
+ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+AUTHORIZATION_RE = re.compile(r"(?i)\b(authorization\s*[:=]\s*)(?:(?:bearer|basic)\s+)?[^\s,]+")
+AUTH_RE = re.compile(r"(?i)\b(bearer\s+|basic\s+)[^\s,]+")
+JSON_SECRET_RE = re.compile(
+    r"(?i)(['\"](?:access[_-]?token|authorization|job[_-]?token|password|"
+    r"private[_-]?token|secret|token)['\"]\s*:\s*['\"])[^'\"]*(['\"])"
+)
+URL_SECRET_RE = re.compile(
+    r"(?i)([?&](?:access_token|authorization|job_token|password|private_token|secret|token)=)"
+    r"[^&\s]+"
+)
+URL_PASSWORD_RE = re.compile(r"(?i)(https?://[^/@:\s]+:)[^/@\s]+@")
+GITLAB_TOKEN_RE = re.compile(r"\bgl(?:pat|ptt|rt|cbt|imt|soat)-[A-Za-z0-9_-]+\b")
 
 
 class BlockedError(Exception):
@@ -40,6 +56,174 @@ class BlockedError(Exception):
 
 class MutationError(Exception):
     """A mutation result is uncertain and requires remote observation."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        method: str | None = None,
+        endpoint: str | None = None,
+        exit_code: int | None = None,
+        http_status: int | None = None,
+        stdout: bytes | str | None = None,
+        stderr: bytes | str | None = None,
+    ) -> None:
+        self.method = method
+        self.endpoint = endpoint
+        self.exit_code = exit_code
+        self.http_status = http_status
+        super().__init__(
+            request_error_message(
+                message,
+                method=method,
+                endpoint=endpoint,
+                exit_code=exit_code,
+                http_status=http_status,
+                stdout=stdout,
+                stderr=stderr,
+            )
+        )
+
+
+class MutationRejectedError(BlockedError):
+    """GitLab definitively rejected a mutation without applying it."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        method: str,
+        endpoint: str,
+        exit_code: int,
+        http_status: int,
+        stdout: bytes | str | None,
+        stderr: bytes | str | None,
+    ) -> None:
+        self.method = method
+        self.endpoint = endpoint
+        self.exit_code = exit_code
+        self.http_status = http_status
+        super().__init__(
+            request_error_message(
+                message,
+                method=method,
+                endpoint=endpoint,
+                exit_code=exit_code,
+                http_status=http_status,
+                stdout=stdout,
+                stderr=stderr,
+            )
+        )
+
+
+def redacted(value: bytes | str | None) -> str:
+    if value is None:
+        return ""
+    text = value.decode(errors="replace") if isinstance(value, bytes) else value
+    text = ANSI_RE.sub("", text)
+    text = URL_PASSWORD_RE.sub(r"\1[REDACTED]@", text)
+    text = URL_SECRET_RE.sub(r"\1[REDACTED]", text)
+    text = JSON_SECRET_RE.sub(r"\1[REDACTED]\2", text)
+    text = AUTHORIZATION_RE.sub(lambda match: f"{match.group(1)}[REDACTED]", text)
+    text = AUTH_RE.sub(lambda match: f"{match.group(1)}[REDACTED]", text)
+    text = GITLAB_TOKEN_RE.sub("[REDACTED]", text)
+    return portable.redact(text)
+
+
+def bounded_diagnostic(value: bytes | str | None) -> str:
+    text = " ".join(redacted(value).split())
+    if len(text) > MAX_DIAGNOSTIC_CHARS:
+        return text[:MAX_DIAGNOSTIC_CHARS] + "...[truncated]"
+    return text or "<empty>"
+
+
+def request_error_message(
+    message: str,
+    *,
+    method: str | None,
+    endpoint: str | None,
+    exit_code: int | None,
+    http_status: int | None,
+    stdout: bytes | str | None,
+    stderr: bytes | str | None,
+) -> str:
+    if method is None or endpoint is None:
+        return redacted(message)
+    return (
+        f"{redacted(message)}: method={method} endpoint={bounded_diagnostic(endpoint)} "
+        f"exit_code={exit_code if exit_code is not None else 'unknown'} "
+        f"http_status={http_status if http_status is not None else 'unknown'} "
+        f"stderr={bounded_diagnostic(stderr)!r} stdout={bounded_diagnostic(stdout)!r}"
+    )
+
+
+def progress(stage: str) -> None:
+    print(f"review-publish: {redacted(stage)}", file=sys.stderr)
+
+
+def split_response(value: bytes) -> tuple[int | None, bytes]:
+    match = HTTP_HEADER_RE.search(value)
+    if match is None:
+        return None, value
+    separator = b"\r\n\r\n" if b"\r\n\r\n" in value else b"\n\n"
+    if separator not in value:
+        return int(match.group(1)), b""
+    return int(match.group(1)), value.split(separator, 1)[1]
+
+
+def reliable_http_status(stdout: bytes, stderr: bytes) -> tuple[int | None, bytes]:
+    status, body = split_response(stdout)
+    if status is not None:
+        return status, body
+    matches = HTTP_ERROR_RE.findall(stderr)
+    return (int(matches[-1]) if matches else None), stdout
+
+
+def definitive_http_rejection(status: int | None) -> bool:
+    return status is not None and 400 <= status < 500 and status not in {408, 499}
+
+
+def request_failure(
+    message: str,
+    *,
+    method: str,
+    endpoint: str,
+    exit_code: int | None,
+    http_status: int | None,
+    stdout: bytes | str | None,
+    stderr: bytes | str | None,
+) -> Exception:
+    if method == "GET":
+        return BlockedError(
+            request_error_message(
+                message,
+                method=method,
+                endpoint=endpoint,
+                exit_code=exit_code,
+                http_status=http_status,
+                stdout=stdout,
+                stderr=stderr,
+            )
+        )
+    if definitive_http_rejection(http_status) and exit_code is not None:
+        return MutationRejectedError(
+            message,
+            method=method,
+            endpoint=endpoint,
+            exit_code=exit_code,
+            http_status=cast(int, http_status),
+            stdout=stdout,
+            stderr=stderr,
+        )
+    return MutationError(
+        message,
+        method=method,
+        endpoint=endpoint,
+        exit_code=exit_code,
+        http_status=http_status,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -146,7 +330,7 @@ def load_plan(plan_value: str) -> tuple[Path, dict[str, Any], str, Path]:
         raise portable.WorkflowError("review baseline target does not match the immutable plan")
     if (
         payload.get("profile") != "code-review"
-        or payload.get("review_contract_version") != 2
+        or payload.get("review_contract_version") not in {2, 3}
         or payload.get("complete") is not True
         or payload.get("external_mutations") is not False
     ):
@@ -229,6 +413,7 @@ class GlabClient:
             self.hostname,
             "--method",
             method,
+            "--include",
         ]
         input_value: bytes | None = None
         if payload is not None:
@@ -247,24 +432,63 @@ class GlabClient:
                 shell=False,
                 timeout=45,
             )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            if method == "GET":
-                raise BlockedError("GitLab revalidation could not be completed") from exc
-            raise MutationError("GitLab mutation result is unknown") from exc
+        except subprocess.TimeoutExpired as exc:
+            raise request_failure(
+                "GitLab request timed out",
+                method=method,
+                endpoint=endpoint,
+                exit_code=None,
+                http_status=None,
+                stdout=exc.stdout,
+                stderr=exc.stderr,
+            ) from exc
+        except OSError as exc:
+            raise request_failure(
+                "GitLab request could not be started",
+                method=method,
+                endpoint=endpoint,
+                exit_code=None,
+                http_status=None,
+                stdout=None,
+                stderr=str(exc),
+            ) from exc
+        http_status, response_body = reliable_http_status(completed.stdout, completed.stderr)
         if len(completed.stdout) > MAX_OUTPUT_BYTES or len(completed.stderr) > MAX_OUTPUT_BYTES:
-            raise BlockedError("GitLab response exceeds the size limit")
-        if completed.returncode:
-            if method == "GET":
-                raise BlockedError("GitLab revalidation failed")
-            raise MutationError("GitLab mutation returned a non-zero status")
-        if not completed.stdout.strip():
+            raise request_failure(
+                "GitLab response exceeds the size limit",
+                method=method,
+                endpoint=endpoint,
+                exit_code=completed.returncode,
+                http_status=http_status,
+                stdout=completed.stdout,
+                stderr=completed.stderr,
+            )
+        if completed.returncode or http_status is not None and not 200 <= http_status < 300:
+            raise request_failure(
+                "GitLab request was rejected"
+                if http_status is not None and 400 <= http_status < 500
+                else "GitLab request failed",
+                method=method,
+                endpoint=endpoint,
+                exit_code=completed.returncode,
+                http_status=http_status,
+                stdout=response_body,
+                stderr=completed.stderr,
+            )
+        if not response_body.strip():
             return None
         try:
-            return json.loads(completed.stdout, object_pairs_hook=reject_duplicate_keys)
+            return json.loads(response_body, object_pairs_hook=reject_duplicate_keys)
         except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-            if method == "GET":
-                raise BlockedError("GitLab revalidation returned invalid JSON") from exc
-            raise MutationError("GitLab mutation returned invalid JSON") from exc
+            raise request_failure(
+                "GitLab response was not valid JSON",
+                method=method,
+                endpoint=endpoint,
+                exit_code=completed.returncode,
+                http_status=http_status,
+                stdout=response_body,
+                stderr=completed.stderr,
+            ) from exc
 
     def paginated(self, endpoint: str) -> list[object]:
         result: list[object] = []
@@ -442,37 +666,62 @@ def observe_body(
     issues: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     body_digest = sha256(body_text.encode())
-    matches: list[dict[str, Any]] = []
+    marker = MARKER_RE.search(body_text)
+    if marker is None:
+        raise portable.WorkflowError("publication body marker is unavailable")
+    marker_identity = (marker.group("id"), marker.group("revision"), marker.group("kind"))
+    candidates: list[tuple[str, dict[str, Any]]] = []
+
+    def authored(value: dict[str, Any]) -> bool:
+        author = value.get("author")
+        return isinstance(author, dict) and cast(dict[str, Any], author).get(
+            "username"
+        ) == actor.get("username")
+
+    def has_marker_identity(value: str) -> bool:
+        return any(
+            (match.group("id"), match.group("revision"), match.group("kind")) == marker_identity
+            for match in MARKER_RE.finditer(value)
+        )
+
     if action["kind"] == "issue":
         for issue in issues:
+            description = issue.get("description")
             if (
-                isinstance(issue.get("description"), str)
-                and sha256(cast(str, issue["description"]).encode()) == body_digest
-                and isinstance(issue.get("author"), dict)
-                and cast(dict[str, Any], issue["author"]).get("username") == actor.get("username")
+                isinstance(description, str)
+                and authored(issue)
+                and has_marker_identity(description)
             ):
-                matches.append({"issue": issue})
-        return matches
-    discussion_note_ids: set[str] = set()
-    for discussion in discussions:
-        for index, note in enumerate(meaningful_notes(discussion)):
-            discussion_note_ids.add(str(note.get("id")))
+                candidates.append((description, {"issue": issue}))
+    else:
+        discussion_note_ids: set[str] = set()
+        for discussion in discussions:
+            for index, note in enumerate(meaningful_notes(discussion)):
+                discussion_note_ids.add(str(note.get("id")))
+                if authored(note) and has_marker_identity(cast(str, note["body"])):
+                    candidates.append(
+                        (
+                            cast(str, note["body"]),
+                            {"discussion": discussion, "note": note, "root": index == 0},
+                        )
+                    )
+        for note in notes:
+            body = note.get("body")
             if (
-                sha256(cast(str, note["body"]).encode()) == body_digest
-                and isinstance(note.get("author"), dict)
-                and cast(dict[str, Any], note["author"]).get("username") == actor.get("username")
+                str(note.get("id")) not in discussion_note_ids
+                and isinstance(body, str)
+                and authored(note)
+                and has_marker_identity(body)
             ):
-                matches.append({"discussion": discussion, "note": note, "root": index == 0})
-    for note in notes:
-        if str(note.get("id")) in discussion_note_ids or not isinstance(note.get("body"), str):
-            continue
-        if (
-            sha256(cast(str, note["body"]).encode()) == body_digest
-            and isinstance(note.get("author"), dict)
-            and cast(dict[str, Any], note["author"]).get("username") == actor.get("username")
-        ):
-            matches.append({"note": note, "root": True})
-    return matches
+                candidates.append((body, {"note": note, "root": True}))
+    if len(candidates) > 1:
+        raise BlockedError("publication marker appears more than once")
+    if not candidates:
+        return []
+    observed_body, observed = candidates[0]
+    if sha256(observed_body.encode()) != body_digest:
+        raise BlockedError("publication marker body changed after publication")
+    return [observed]
 
 
 def validate_observed_location(
@@ -649,6 +898,41 @@ def load_state(root: Path, digest: str) -> dict[str, Any] | None:
     return read_json(path, "publication state", boundary=root)
 
 
+def journal_phase(journal: dict[str, Any] | None) -> str | None:
+    if journal is None:
+        return None
+    phase = journal.get("phase")
+    if phase not in {
+        "attempting",
+        "attempting_body",
+        "attempting_state",
+        "unknown",
+        "partial",
+        "complete",
+    }:
+        raise portable.WorkflowError("publication state has an invalid phase")
+    return cast(str, phase)
+
+
+def write_definitive_rejection(
+    root: Path, action_digest: str, error: MutationRejectedError
+) -> Path:
+    return write_state(
+        root,
+        action_digest,
+        {
+            "phase": "unknown",
+            "retryable": True,
+            "definitive_rejection": {
+                "method": error.method,
+                "endpoint": error.endpoint,
+                "exit_code": error.exit_code,
+                "http_status": error.http_status,
+            },
+        },
+    )
+
+
 def apply_action(
     plan_path: Path,
     plan_digest: str,
@@ -663,32 +947,67 @@ def apply_action(
     state_path: Path | None = None
     with publication_lock(root):
         journal = load_state(root, cast(str, action["sha256"]))
+        phase = journal_phase(journal)
+        progress("revalidating remote state")
         live = collect_live(client, preflight)
         operation = cast(str, spec["operation"])
         mutation = cast(dict[str, Any], spec["mutation"])
         if operation == "update_labels":
+            method, endpoint, payload = mutation_payload(spec, None, preflight)
             if live["labels"] == mutation["proposed"]:
                 status = "already_applied"
             elif live["labels"] != cast(dict[str, Any], preflight["labels"])["current"]:
                 raise BlockedError("label action no longer has its exact expected state")
             else:
-                if journal is not None and journal.get("phase") in {"attempting", "unknown"}:
-                    raise BlockedError(
+                if phase == "complete":
+                    raise BlockedError("a completed label action cannot be repeated")
+                if phase in {"attempting", "attempting_body", "attempting_state", "partial"}:
+                    raise MutationError(
                         "a previous label mutation is unresolved and cannot be repeated safely"
                     )
+                if phase == "unknown":
+                    if journal is not None and journal.get("uncertain") is True:
+                        raise MutationError(
+                            "a previous label mutation is unresolved and cannot be repeated safely"
+                        )
+                    progress(
+                        "recovering an unknown label attempt after exact live-state revalidation"
+                    )
                 write_state(root, cast(str, action["sha256"]), {"phase": "attempting"})
-                method, endpoint, payload = mutation_payload(spec, None, preflight)
+                progress("submitting confirmed mutation")
                 try:
                     client.request(method, endpoint, payload)
-                except MutationError:
-                    live = collect_live(client, preflight)
+                except MutationRejectedError as exc:
+                    state_path = write_definitive_rejection(root, cast(str, action["sha256"]), exc)
+                    raise
+                except MutationError as exc:
+                    state_path = write_state(
+                        root,
+                        cast(str, action["sha256"]),
+                        {"phase": "unknown", "uncertain": True},
+                    )
+                    try:
+                        live = collect_live(client, preflight)
+                    except BlockedError:
+                        raise exc
                     if live["labels"] != mutation["proposed"]:
-                        state_path = write_state(
-                            root, cast(str, action["sha256"]), {"phase": "unknown"}
-                        )
-                        raise
-                live = collect_live(client, preflight)
+                        raise exc
+                progress("verifying mutation postcondition")
+                try:
+                    live = collect_live(client, preflight)
+                except BlockedError as exc:
+                    state_path = write_state(
+                        root,
+                        cast(str, action["sha256"]),
+                        {"phase": "unknown", "uncertain": True},
+                    )
+                    raise MutationError(f"label mutation could not be verified: {exc}") from exc
                 if live["labels"] != mutation["proposed"]:
+                    state_path = write_state(
+                        root,
+                        cast(str, action["sha256"]),
+                        {"phase": "unknown", "uncertain": True},
+                    )
                     raise MutationError("label mutation postcondition failed")
                 status = "applied"
         else:
@@ -707,14 +1026,24 @@ def apply_action(
             if len(observed) == 1:
                 validate_observed_location(observed[0], spec, preflight)
             if not observed:
-                if journal is not None and journal.get("phase") in {
+                method, endpoint, payload = mutation_payload(spec, body, preflight)
+                if phase == "complete":
+                    raise BlockedError("a completed publication action cannot be repeated")
+                if phase in {
+                    "attempting",
                     "attempting_body",
-                    "unknown",
+                    "attempting_state",
                     "partial",
                 }:
-                    raise BlockedError(
+                    raise MutationError(
                         "a previous publication attempt is unresolved and cannot be repeated safely"
                     )
+                if phase == "unknown":
+                    if journal is not None and journal.get("uncertain") is True:
+                        raise MutationError(
+                            "a previous publication attempt is unresolved and cannot be repeated safely"
+                        )
+                    progress("recovering an unknown publication attempt after exact marker absence")
                 _selected, discussions, notes = validate_expected_source(client, live, spec)
                 validate_prior_marker(
                     cast(
@@ -726,10 +1055,48 @@ def apply_action(
                     issue_values,
                 )
                 write_state(root, cast(str, action["sha256"]), {"phase": "attempting_body"})
-                method, endpoint, payload = mutation_payload(spec, body, preflight)
+                progress("submitting confirmed mutation")
                 try:
                     client.request(method, endpoint, payload)
-                except MutationError:
+                except MutationRejectedError as exc:
+                    state_path = write_definitive_rejection(root, cast(str, action["sha256"]), exc)
+                    raise
+                except MutationError as exc:
+                    state_path = write_state(
+                        root,
+                        cast(str, action["sha256"]),
+                        {"phase": "unknown", "uncertain": True},
+                    )
+                    try:
+                        live = collect_live(client, preflight)
+                        discussions = load_discussions(client, cast(str, live["endpoint"]))
+                        notes = load_notes(client, cast(str, live["endpoint"]))
+                        issue_values = (
+                            issues(client, cast(int, target["project_id"]))
+                            if action["kind"] == "issue"
+                            else []
+                        )
+                        observed = observe_body(
+                            action,
+                            body,
+                            cast(dict[str, Any], live["actor"]),
+                            discussions,
+                            notes,
+                            issue_values,
+                        )
+                    except BlockedError:
+                        raise exc
+                    if len(observed) != 1:
+                        raise exc
+                    try:
+                        validate_observed_location(observed[0], spec, preflight)
+                    except BlockedError as observation_error:
+                        raise MutationError(
+                            f"publication mutation was observed in an invalid location: "
+                            f"{observation_error}"
+                        ) from observation_error
+                progress("verifying mutation postcondition")
+                try:
                     live = collect_live(client, preflight)
                     discussions = load_discussions(client, cast(str, live["endpoint"]))
                     notes = load_notes(client, cast(str, live["endpoint"]))
@@ -746,31 +1113,33 @@ def apply_action(
                         notes,
                         issue_values,
                     )
-                    if len(observed) != 1:
-                        state_path = write_state(
-                            root, cast(str, action["sha256"]), {"phase": "unknown"}
-                        )
-                        raise
-                    validate_observed_location(observed[0], spec, preflight)
-                live = collect_live(client, preflight)
-                discussions = load_discussions(client, cast(str, live["endpoint"]))
-                notes = load_notes(client, cast(str, live["endpoint"]))
-                issue_values = (
-                    issues(client, cast(int, target["project_id"]))
-                    if action["kind"] == "issue"
-                    else []
-                )
-                observed = observe_body(
-                    action,
-                    body,
-                    cast(dict[str, Any], live["actor"]),
-                    discussions,
-                    notes,
-                    issue_values,
-                )
+                except BlockedError as exc:
+                    state_path = write_state(
+                        root,
+                        cast(str, action["sha256"]),
+                        {"phase": "unknown", "uncertain": True},
+                    )
+                    raise MutationError(
+                        f"publication mutation could not be verified: {exc}"
+                    ) from exc
                 if len(observed) != 1:
+                    state_path = write_state(
+                        root,
+                        cast(str, action["sha256"]),
+                        {"phase": "unknown", "uncertain": True},
+                    )
                     raise MutationError("publication body postcondition failed")
-                validate_observed_location(observed[0], spec, preflight)
+                try:
+                    validate_observed_location(observed[0], spec, preflight)
+                except BlockedError as exc:
+                    state_path = write_state(
+                        root,
+                        cast(str, action["sha256"]),
+                        {"phase": "unknown", "uncertain": True},
+                    )
+                    raise MutationError(
+                        f"publication body postcondition is invalid: {exc}"
+                    ) from exc
                 status = "applied"
             else:
                 status = "already_applied"
@@ -785,42 +1154,98 @@ def apply_action(
                     None,
                 )
                 if discussion is None:
-                    raise BlockedError("publication discussion disappeared during recovery")
-                values = meaningful_notes(discussion)
+                    error_type = MutationError if status == "applied" else BlockedError
+                    raise error_type("publication discussion disappeared during recovery")
+                try:
+                    values = meaningful_notes(discussion)
+                except BlockedError as exc:
+                    if status == "applied":
+                        raise MutationError(
+                            f"publication body was applied, but thread-state recovery failed: {exc}"
+                        ) from exc
+                    raise
                 if not values or sha256(cast(str, values[-1]["body"]).encode()) != sha256(
                     body.encode()
                 ):
-                    raise BlockedError("an intervening reply blocks thread-state recovery")
+                    error_type = MutationError if status == "applied" else BlockedError
+                    raise error_type("an intervening reply blocks thread-state recovery")
                 desired = mutation["desired_resolved"]
                 if values[0].get("resolved") is not desired:
+                    if phase == "complete":
+                        raise BlockedError("a completed thread-state action cannot be repeated")
                     write_state(root, cast(str, action["sha256"]), {"phase": "attempting_state"})
+                    state_endpoint = f"{live['endpoint']}/discussions/{thread['discussion_id']}"
+                    progress("submitting confirmed thread-state mutation")
                     try:
-                        client.request(
-                            "PUT",
-                            f"{live['endpoint']}/discussions/{thread['discussion_id']}",
-                            {"resolved": desired},
-                        )
-                    except MutationError:
-                        refreshed = client.request(
-                            "GET", f"{live['endpoint']}/discussions/{thread['discussion_id']}"
-                        )
-                        if (
-                            not isinstance(refreshed, dict)
-                            or not meaningful_notes(refreshed)
-                            or meaningful_notes(refreshed)[0].get("resolved") is not desired
-                        ):
+                        client.request("PUT", state_endpoint, {"resolved": desired})
+                    except MutationRejectedError as exc:
+                        if status == "applied":
                             state_path = write_state(
-                                root, cast(str, action["sha256"]), {"phase": "partial"}
+                                root,
+                                cast(str, action["sha256"]),
+                                {
+                                    "phase": "partial",
+                                    "definitive_rejection": {
+                                        "method": exc.method,
+                                        "endpoint": exc.endpoint,
+                                        "exit_code": exc.exit_code,
+                                        "http_status": exc.http_status,
+                                    },
+                                },
                             )
-                            raise
-                    refreshed = client.request(
-                        "GET", f"{live['endpoint']}/discussions/{thread['discussion_id']}"
-                    )
-                    if (
-                        not isinstance(refreshed, dict)
-                        or not meaningful_notes(refreshed)
-                        or meaningful_notes(refreshed)[0].get("resolved") is not desired
-                    ):
+                            raise MutationError(
+                                f"publication body was applied, but thread-state mutation was rejected: "
+                                f"{exc}"
+                            ) from exc
+                        state_path = write_definitive_rejection(
+                            root, cast(str, action["sha256"]), exc
+                        )
+                        raise
+                    except MutationError as exc:
+                        state_path = write_state(
+                            root, cast(str, action["sha256"]), {"phase": "partial"}
+                        )
+                        try:
+                            refreshed = client.request("GET", state_endpoint)
+                        except BlockedError:
+                            raise exc
+                        try:
+                            state_matches = (
+                                isinstance(refreshed, dict)
+                                and bool(meaningful_notes(refreshed))
+                                and meaningful_notes(refreshed)[0].get("resolved") is desired
+                            )
+                        except BlockedError:
+                            raise exc
+                        if not state_matches:
+                            raise exc
+                    progress("verifying thread-state postcondition")
+                    try:
+                        refreshed = client.request("GET", state_endpoint)
+                    except BlockedError as exc:
+                        state_path = write_state(
+                            root, cast(str, action["sha256"]), {"phase": "partial"}
+                        )
+                        raise MutationError(
+                            f"thread-state mutation could not be verified: {exc}"
+                        ) from exc
+                    try:
+                        state_matches = (
+                            isinstance(refreshed, dict)
+                            and bool(meaningful_notes(refreshed))
+                            and meaningful_notes(refreshed)[0].get("resolved") is desired
+                        )
+                    except BlockedError as exc:
+                        state_path = write_state(
+                            root, cast(str, action["sha256"]), {"phase": "partial"}
+                        )
+                        raise MutationError(
+                            f"thread-state mutation returned an invalid postcondition: {exc}"
+                        ) from exc
+                    if not state_matches:
+                        state_path = write_state(
+                            root, cast(str, action["sha256"]), {"phase": "partial"}
+                        )
                         raise MutationError("thread-state postcondition failed")
                     status = "applied" if status == "applied" else "recovered"
         state_path = write_state(
@@ -835,6 +1260,7 @@ def apply_action(
                 "action_sha256": action["sha256"],
             },
         )
+        progress("publication complete")
     return {
         "status": status,
         "action_id": action["id"],
@@ -877,33 +1303,41 @@ def main(argv: list[str] | None = None) -> int:
     if args.command != "apply":
         parser.error("the apply subcommand is required")
     try:
+        progress("loading confirmed plan")
         plan_path, plan, plan_digest, root = load_plan(args.plan)
+        progress("validating confirmed action")
         action, preflight, body = select_action(plan, args.action, args.confirm, root)
         emit(apply_action(plan_path, plan_digest, root, action, preflight, body))
         return 0
     except MutationError as exc:
+        error = redacted(str(exc))
+        print(f"review-publish: partial: {bounded_diagnostic(error)}", file=sys.stderr)
         emit(
             {
                 "status": "partial",
-                "error": str(exc),
+                "error": error,
                 "external_mutations": True,
             }
         )
         return 5
     except BlockedError as exc:
+        error = redacted(str(exc))
+        print(f"review-publish: blocked: {bounded_diagnostic(error)}", file=sys.stderr)
         emit(
             {
                 "status": "blocked",
-                "error": str(exc),
+                "error": error,
                 "external_mutations": False,
             }
         )
         return 4
     except portable.WorkflowError as exc:
+        error = redacted(str(exc))
+        print(f"review-publish: error: {bounded_diagnostic(error)}", file=sys.stderr)
         emit(
             {
                 "status": "error",
-                "error": str(exc),
+                "error": error,
                 "external_mutations": False,
             }
         )

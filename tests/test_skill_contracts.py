@@ -231,7 +231,9 @@ def test_code_review_requires_compact_incremental_confirmed_publication_contract
         "scripts/review_publish.py apply",
         "Each command confirms exactly one action digest",
         "inherits the caller's environment",
-        "suggestion_applicable=true",
+        "fix_mode=patch",
+        "temporary index",
+        "bounded redacted diagnostics",
     ):
         assert marker in workflow
     output = (ROOT / "skills/code-review/references/output-format.md").read_text(encoding="utf-8")

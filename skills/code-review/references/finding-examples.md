@@ -40,18 +40,36 @@ hidden marker; do not put severity or internal evidence labels in that prose.
 Write it from the authenticated user's factual role and use natural informal
 second person when addressing the participant.
 
-For an actionable current new-line position, prepare exactly one suggestion:
+For an actionable current new-line position, prepare exactly one suggestion.
+Use a bounded range opener for a contiguous multi-line replacement:
 
 ````markdown
 You need to reserve the idempotency key before the provider call.
 
-```suggestion
+```suggestion:-1+1
 operation = reserve_operation(request.id)
+result = provider.submit(operation)
 ```
 ````
 
-For a general, deleted, or outdated position, omit `suggestion` and provide a
-concrete patch or replacement in prose instead.
+For a general, deleted, outdated, non-contiguous, or otherwise unanchorable fix,
+set `fix_mode=patch` and provide one applicable textual unified patch:
+
+```diff
+diff --git a/src/payment.py b/src/payment.py
+--- a/src/payment.py
++++ b/src/payment.py
+@@ -18 +18,2 @@
++operation = reserve_operation(request.id)
+ result = provider.submit(request)
+```
+
+The runner checks the patch against the exact reviewed head without changing the
+checkout and writes it as an immutable `.patch` file. Do not combine unrelated
+findings in one patch. Multiple suggestion blocks, suggestion on a deleted line,
+binary or symlink patches, and rewritten fix content after confirmation are
+invalid. Omit `index` lines so private revision identifiers do not enter the
+publication plan.
 
 ## Recommended issue
 
@@ -63,7 +81,9 @@ automatically.
 
 ## Author mode
 
-For the author's own MR, report the same risk and minimum fix as a local correction. Do not create a new review thread or describe the author as an independent reviewer.
+For the author's own MR, report the same risk and minimum fix as a `local_fix`
+with `fix_mode=patch`. Do not create a new review thread, edit the checkout, or
+describe the author as an independent reviewer.
 
 ## Weak formulations
 

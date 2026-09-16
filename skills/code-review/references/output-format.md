@@ -41,9 +41,10 @@ evidence, thread contents, proposed responses, fixes, commands, or detailed
 check tables in chat. Put them in `review-publication.md`.
 
 For the user's own MR, append a concise list of local fixes after the assessment.
-Do not create review threads for those findings, edit the checkout, or ask to
-apply the changes. The user can pass the review result to a separate
-implementation session.
+Each actionable local fix has one validated Git patch in the private publication
+plan. Do not create review threads for those findings, edit the checkout, or ask
+to apply the changes. The user can apply the patch manually or pass the review
+result to a separate implementation session.
 
 ```markdown
 ### Local fixes
@@ -76,6 +77,12 @@ order:
 11. Architecture, SemVer, and checks.
 12. A private-JSON preflight and exact digest-confirmed helper commands.
 
+For every actionable item, show `fix_mode`, publication operation and position
+when present. A patch fix also shows its absolute `.patch` path, SHA-256 digest,
+a full diff inside `<details>`, and separate `git apply --check` and `git apply`
+commands. A suggestion fix is marked as validated. A thread with
+`fix_mode=not_required` states that no code correction is needed.
+
 The model supplies localized presentation labels, natural role-authored
 publication bodies, and exhaustive label-applicability rationales. The runner
 owns observed label descriptions, paths, digests, hidden markers, structured
@@ -99,9 +106,17 @@ SHA-256 digest as explicit confirmation. `review_publish.py` rejects old command
 plans, path escapes, changed bodies, stale actor/target/refs/catalog/thread state,
 and unrelated label drift before mutation. It invokes `glab` without a shell and
 without an `env` override, so user-owned `glab` environment options remain
-available but never enter the plan or logs. Repeating the same confirmed command
-is the only recovery path: an exact existing marker becomes `already_applied`,
-while a reply whose resolve/reopen phase failed continues only the state change.
+available but never enter the plan or logs. Progress and bounded redacted request
+diagnostics go to stderr; the final structured result remains on stdout. A
+definitive non-mutating HTTP rejection records retry evidence, and the same
+confirmed command may retry only after fresh revalidation proves the marker is
+absent. Timeout, 5xx, malformed response, and unknown results remain `partial`
+and fail closed when the current helper recorded them as uncertain. A legacy
+`phase=unknown` receipt without diagnostics may retry only after a complete live
+read proves exact marker or label-state absence. An exact existing marker becomes `already_applied`, while a
+reply whose resolve/reopen phase failed continues only the idempotent state
+change. A completed action whose postcondition disappeared is blocked rather
+than published again.
 
 Recommended-issue markers include the MR identity digest. Search the bounded
 project issue scope before creating an issue; when a trusted published issue
@@ -111,5 +126,7 @@ create command.
 Severity and internal review bookkeeping must not appear in publication bodies.
 Published prose starts with the problem, answer, or concrete fix, speaks as the
 authenticated user, and continues the existing conversation naturally. A fix
-on an applicable current new-line position contains exactly one `suggestion`;
-general, deleted, or outdated positions use a concrete patch or replacement.
+on an applicable current new-line position contains exactly one single-line or
+bounded multi-line `suggestion`; general, deleted, outdated, non-contiguous, and
+otherwise unanchorable fixes contain the exact validated unified patch. The same
+patch is available as an immutable local `.patch` artifact for manual use.

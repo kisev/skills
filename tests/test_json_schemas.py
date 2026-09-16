@@ -88,7 +88,21 @@ def artifact_instances() -> list[dict[str, Any]]:
         "id": "rejected-1",
         "summary": "The broader cleanup is not part of this change.",
     }
-    body_content = "Finding body\n\n<!-- code-review:id=finding-1;revision=1;kind=finding;target=aaaaaaaaaaaaaaaa -->\n"
+    patch_content = (
+        "diff --git a/example.txt b/example.txt\n"
+        "--- a/example.txt\n"
+        "+++ b/example.txt\n"
+        "@@ -1 +1 @@\n"
+        "-old\n"
+        "+new\n"
+    )
+    patch_digest = hashlib.sha256(patch_content.encode()).hexdigest()
+    body_content = (
+        "Finding body\n\n```diff\n"
+        f"{patch_content.rstrip()}\n"
+        "```\n\n"
+        "<!-- code-review:id=finding-1;revision=1;kind=finding;target=aaaaaaaaaaaaaaaa -->\n"
+    )
     body_digest = hashlib.sha256(body_content.encode()).hexdigest()
     issue_content = "Issue body\n\n<!-- code-review:id=issue-1;revision=1;kind=issue;target=aaaaaaaaaaaaaaaa -->\n"
     issue_digest = hashlib.sha256(issue_content.encode()).hexdigest()
@@ -356,7 +370,7 @@ def artifact_instances() -> list[dict[str, Any]]:
         "review_plan",
         {
             "profile": "code-review",
-            "review_contract_version": 2,
+            "review_contract_version": 3,
             "external_mutations": False,
             "evidence_digest": DIGEST,
             "context_digest": DIGEST,
@@ -482,6 +496,10 @@ def artifact_instances() -> list[dict[str, Any]]:
                     "line": None,
                     "old_line": None,
                     "body": "Finding body",
+                    "fix_mode": "patch",
+                    "patch": patch_content,
+                    "patch_path": "/tmp/portable-artifacts/finding-1.patch",
+                    "patch_sha256": patch_digest,
                 }
             ],
             "previous_finding_assessments": [],
@@ -514,6 +532,10 @@ def artifact_instances() -> list[dict[str, Any]]:
                             "line": None,
                             "old_line": None,
                             "body": "Finding body",
+                            "fix_mode": "patch",
+                            "patch": patch_content,
+                            "patch_path": "/tmp/portable-artifacts/finding-1.patch",
+                            "patch_sha256": patch_digest,
                         },
                     },
                 },
@@ -762,6 +784,18 @@ def validate_schema_runtime_rejections() -> None:
     legacy_context["payload"].pop("current_user_id")
     artifact_validator.validate(legacy_context)
     validate_v2_artifact(legacy_context, "review_context")
+    structured_v2 = copy.deepcopy(artifacts["review_plan"])
+    structured_v2["payload"]["review_contract_version"] = 2
+    for publication in structured_v2["payload"]["finding_publications"]:
+        for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
+            publication.pop(key)
+    for entry in structured_v2["payload"]["finding_ledger"]:
+        publication = entry["record"].get("publication")
+        if publication is not None:
+            for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
+                publication.pop(key)
+    artifact_validator.validate(structured_v2)
+    validate_v2_artifact(structured_v2, "review_plan")
     legacy_plan = copy.deepcopy(artifacts["review_plan"])
     for key in (
         "review_contract_version",
@@ -816,6 +850,10 @@ def validate_schema_runtime_rejections() -> None:
     review_plan["payload"]["publication_preview"]["body_files"][0]["revision"] = 0
     invalid_nullable = copy.deepcopy(artifacts["review_plan"])
     invalid_nullable["payload"]["finding_publications"][0]["path"] = {}
+    invalid_patch = copy.deepcopy(artifacts["review_plan"])
+    invalid_patch["payload"]["finding_publications"][0]["patch"] = None
+    invalid_ledger_patch = copy.deepcopy(artifacts["review_plan"])
+    invalid_ledger_patch["payload"]["finding_ledger"][0]["record"]["publication"]["patch"] = None
     invalid_headers = copy.deepcopy(artifacts["review_plan"])
     invalid_headers["payload"]["presentation"]["previous_table_headers"].append("Extra")
     for kind, instance in (
@@ -824,6 +862,8 @@ def validate_schema_runtime_rejections() -> None:
         ("review_context", invalid_marker),
         ("review_plan", review_plan),
         ("review_plan", invalid_nullable),
+        ("review_plan", invalid_patch),
+        ("review_plan", invalid_ledger_patch),
         ("review_plan", invalid_headers),
     ):
         with pytest.raises(ValidationError):
