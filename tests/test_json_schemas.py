@@ -370,7 +370,7 @@ def artifact_instances() -> list[dict[str, Any]]:
         "review_plan",
         {
             "profile": "code-review",
-            "review_contract_version": 3,
+            "review_contract_version": 4,
             "external_mutations": False,
             "evidence_digest": DIGEST,
             "context_digest": DIGEST,
@@ -378,6 +378,7 @@ def artifact_instances() -> list[dict[str, Any]]:
             "target": {},
             "role": "reviewer",
             "mode": "deep",
+            "locale": "en",
             "incremental": incremental,
             "verdict": "ready",
             "complete": True,
@@ -485,6 +486,11 @@ def artifact_instances() -> list[dict[str, Any]]:
                 ],
             },
             "presentation": presentation,
+            "chat_assessment": {
+                "necessity": {"status": "supported", "rationale": "The defect is confirmed."},
+                "relevance": {"status": "current", "rationale": "The exact head is current."},
+                "change": "The change fixes the reviewed behavior.",
+            },
             "checks": ["task check"],
             "findings": [finding],
             "finding_publications": [
@@ -620,6 +626,7 @@ def artifact_instances() -> list[dict[str, Any]]:
             "evidence_digest": DIGEST,
             "finalize_digest": DIGEST,
             "context_digest": DIGEST,
+            "critic_receipt_digest": DIGEST,
             "mode": "deep",
             "external_mutations": False,
             "run_id": "review-run",
@@ -627,6 +634,8 @@ def artifact_instances() -> list[dict[str, Any]]:
             "verdict": "ready",
             "low_risk": True,
             "blocking_findings": False,
+            "blocking_finding_ids": [],
+            "owner_decision_reasons": [],
             "findings": [finding],
             "critic_findings": [rejected_finding],
             "accepted_findings": [finding],
@@ -786,6 +795,8 @@ def validate_schema_runtime_rejections() -> None:
     validate_v2_artifact(legacy_context, "review_context")
     structured_v2 = copy.deepcopy(artifacts["review_plan"])
     structured_v2["payload"]["review_contract_version"] = 2
+    structured_v2["payload"].pop("chat_assessment")
+    structured_v2["payload"].pop("locale")
     for publication in structured_v2["payload"]["finding_publications"]:
         for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
             publication.pop(key)
@@ -810,6 +821,8 @@ def validate_schema_runtime_rejections() -> None:
         "rejected_candidate_assessments",
         "rejected_candidate_ledger",
         "label_review",
+        "chat_assessment",
+        "locale",
     ):
         legacy_plan["payload"].pop(key)
     structured_preview = legacy_plan["payload"]["publication_preview"]

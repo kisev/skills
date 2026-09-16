@@ -281,6 +281,54 @@ def sha256(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def validate_active_plan(
+    plan_path: Path,
+    payload: dict[str, Any],
+    plan_digest: str,
+    root: Path,
+    pointer: dict[str, Any] | None = None,
+) -> None:
+    if payload.get("review_contract_version") != 4:
+        return
+    active_pointer = pointer or read_json(
+        root / "review-baseline.json", "review baseline", boundary=root
+    )
+    if set(active_pointer) != {
+        "contract_version",
+        "target",
+        "plan_path",
+        "plan_digest",
+        "markdown_path",
+        "markdown_digest",
+        "updated_at",
+    }:
+        raise portable.WorkflowError("review baseline has an invalid shape")
+    markdown_path = Path(str(active_pointer.get("markdown_path", "")))
+    markdown = file_bytes(markdown_path, "review Markdown", root)
+    try:
+        markdown_text = markdown.decode()
+    except UnicodeDecodeError as exc:
+        raise portable.WorkflowError("review Markdown is not UTF-8") from exc
+    progress = read_json(root / "review-current.json", "review progress", boundary=root)
+    current = read_json(root / "review-evidence.json", "current review evidence", boundary=root)
+    if (
+        active_pointer.get("plan_path") != str(plan_path)
+        or active_pointer.get("plan_digest") != plan_digest
+        or active_pointer.get("target") != payload.get("target")
+        or sha256(markdown) != active_pointer.get("markdown_digest")
+        or payload.get("markdown") != markdown_text
+        or progress.get("stage") != "plan_ready"
+        or progress.get("plan_path") != str(plan_path)
+        or progress.get("plan_digest") != plan_digest
+        or progress.get("evidence_digest") != payload.get("evidence_digest")
+        or progress.get("context_digest") != payload.get("context_digest")
+        or progress.get("decision_digest") != payload.get("decision_digest")
+        or current.get("evidence_path") != progress.get("evidence_path")
+        or current.get("evidence_digest") != payload.get("evidence_digest")
+    ):
+        raise portable.WorkflowError("contract-4 review plan is not the active finalized plan")
+
+
 def load_plan(plan_value: str) -> tuple[Path, dict[str, Any], str, Path]:
     supplied = Path(plan_value)
     pointer: dict[str, Any] | None = None
@@ -330,11 +378,12 @@ def load_plan(plan_value: str) -> tuple[Path, dict[str, Any], str, Path]:
         raise portable.WorkflowError("review baseline target does not match the immutable plan")
     if (
         payload.get("profile") != "code-review"
-        or payload.get("review_contract_version") not in {2, 3}
+        or payload.get("review_contract_version") not in {2, 3, 4}
         or payload.get("complete") is not True
         or payload.get("external_mutations") is not False
     ):
         raise portable.WorkflowError("review plan is incomplete or not executable")
+    validate_active_plan(plan_path, payload, cast(str, plan_digest), root, pointer)
     return plan_path, payload, cast(str, plan_digest), root
 
 
@@ -884,6 +933,20 @@ def publication_lock(root: Path) -> Iterator[None]:
         os.close(descriptor)
 
 
+@contextmanager
+def review_activation_lock(root: Path) -> Iterator[None]:
+    path = root / ".review-state.lock"
+    if path.is_symlink():
+        raise portable.WorkflowError("review activation lock must not be a symbolic link")
+    descriptor = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+
+
 def write_state(root: Path, digest: str, value: dict[str, Any]) -> Path:
     directory = portable.private_directory(root / "publication-state")
     path = directory / f"{digest}.json"
@@ -937,6 +1000,7 @@ def apply_action(
     plan_path: Path,
     plan_digest: str,
     root: Path,
+    plan: dict[str, Any],
     action: dict[str, Any],
     preflight: dict[str, Any],
     body: str | None,
@@ -945,7 +1009,8 @@ def apply_action(
     target = cast(dict[str, Any], preflight["target"])
     client = GlabClient(cast(str, target["hostname"]))
     state_path: Path | None = None
-    with publication_lock(root):
+    with review_activation_lock(root), publication_lock(root):
+        validate_active_plan(plan_path, plan, plan_digest, root)
         journal = load_state(root, cast(str, action["sha256"]))
         phase = journal_phase(journal)
         progress("revalidating remote state")
@@ -1307,7 +1372,7 @@ def main(argv: list[str] | None = None) -> int:
         plan_path, plan, plan_digest, root = load_plan(args.plan)
         progress("validating confirmed action")
         action, preflight, body = select_action(plan, args.action, args.confirm, root)
-        emit(apply_action(plan_path, plan_digest, root, action, preflight, body))
+        emit(apply_action(plan_path, plan_digest, root, plan, action, preflight, body))
         return 0
     except MutationError as exc:
         error = redacted(str(exc))

@@ -706,7 +706,7 @@ review_sha = os.environ["FAKE_REVIEW_SHA"]
 if endpoint.startswith("projects/group%%2Fproject"):
     value = {"id": 19}
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "title": "Review fixture", "description": "Fixture", "source_branch": "feature", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": "author"}, "updated_at": "changed" if changed else "fresh", "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
+    value = {"iid": 7, "title": "Review fixture", "description": "Fixture", "source_branch": "feature", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": "author"}, "state": "opened", "labels": [], "updated_at": "changed" if changed else "fresh", "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
     value = {"changes": [], "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
@@ -731,7 +731,22 @@ print(json.dumps(value))
             }
         )
         process = run_with_deadline(
-            [sys.executable, "-I", "-S", "-B", str(executable), "prepare", "--url", target],
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                str(executable),
+                "prepare",
+                "--url",
+                target,
+                "--repo-root",
+                str(repository),
+                "--review-mode",
+                "deep",
+                "--locale",
+                "en",
+            ],
             cwd=sandbox,
             env=environment,
             deadline=deadline,
@@ -744,6 +759,8 @@ print(json.dumps(value))
         items = output.get("items", []) if isinstance(output, dict) else []
         review_status = "failed"
         stale_status = "failed"
+        out_of_order_status = "failed"
+        premature_report_status = "failed"
         if process.returncode == 0 and items and isinstance(items[0], dict):
             evidence = items[0].get("artifact_path")
             artifact_root = items[0].get("artifact_root")
@@ -760,6 +777,8 @@ print(json.dumps(value))
                         evidence,
                         "--repo-root",
                         str(repository),
+                        "--review-mode",
+                        "deep",
                     ],
                     cwd=sandbox,
                     env=environment,
@@ -778,40 +797,57 @@ print(json.dumps(value))
                 context_digest = (
                     context_output.get("digest") if isinstance(context_output, dict) else None
                 )
-                finalized = run_with_deadline(
-                    [
-                        sys.executable,
-                        "-I",
-                        "-S",
-                        "-B",
-                        str(executable),
-                        "finalize",
-                        "--artifact-root",
-                        artifact_root,
-                    ],
-                    cwd=sandbox,
-                    env=environment,
-                    deadline=deadline,
-                    timeout_seconds=timeout_seconds,
-                )
-                try:
-                    final_output = json.loads(finalized.stdout)
-                except json.JSONDecodeError:
-                    final_output = {}
-                final_path = (
-                    final_output.get("artifact_path") if isinstance(final_output, dict) else None
-                )
-                final_digest = (
-                    final_output.get("digest") if isinstance(final_output, dict) else None
-                )
                 if (
-                    finalized.returncode == 0
-                    and isinstance(final_path, str)
-                    and isinstance(final_digest, str)
-                    and context_process.returncode == 0
+                    context_process.returncode == 0
                     and isinstance(context_path, str)
                     and isinstance(context_digest, str)
                 ):
+                    premature_finalize = run_with_deadline(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-B",
+                            str(executable),
+                            "finalize",
+                            "--artifact-root",
+                            artifact_root,
+                        ],
+                        cwd=sandbox,
+                        env=environment,
+                        deadline=deadline,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    out_of_order_status = (
+                        "passed" if premature_finalize.returncode == 2 else "failed"
+                    )
+                    premature_report = run_with_deadline(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-B",
+                            str(executable),
+                            "report-review",
+                            "--artifact-root",
+                            artifact_root,
+                        ],
+                        cwd=sandbox,
+                        env=environment,
+                        deadline=deadline,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    try:
+                        premature_output = json.loads(premature_report.stdout)
+                    except json.JSONDecodeError:
+                        premature_output = {}
+                    premature_report_status = (
+                        "passed"
+                        if premature_report.returncode == 4
+                        and premature_output.get("status") == "blocked"
+                        and premature_output.get("stage") == "critic_missing"
+                        else "failed"
+                    )
                     evidence_digest = hashlib.sha256(Path(evidence).read_bytes()).hexdigest()
                     receipt = sandbox / "receipt.json"
                     decision = sandbox / "decision.json"
@@ -828,6 +864,78 @@ print(json.dumps(value))
                         ),
                         encoding="utf-8",
                     )
+                    recorded = run_with_deadline(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-B",
+                            str(executable),
+                            "record-artifact",
+                            "--kind",
+                            "critic_receipt",
+                            "--evidence",
+                            evidence,
+                            "--input",
+                            str(receipt),
+                        ],
+                        cwd=sandbox,
+                        env=environment,
+                        deadline=deadline,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    try:
+                        recorded_output = json.loads(recorded.stdout)
+                    except json.JSONDecodeError:
+                        recorded_output = {}
+                    recorded_path = (
+                        recorded_output.get("artifact_path")
+                        if isinstance(recorded_output, dict)
+                        else None
+                    )
+                    recorded_digest = (
+                        recorded_output.get("digest") if isinstance(recorded_output, dict) else None
+                    )
+                    finalized = run_with_deadline(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-B",
+                            str(executable),
+                            "finalize",
+                            "--artifact-root",
+                            artifact_root,
+                        ],
+                        cwd=sandbox,
+                        env=environment,
+                        deadline=deadline,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    try:
+                        final_output = json.loads(finalized.stdout)
+                    except json.JSONDecodeError:
+                        final_output = {}
+                    final_path = (
+                        final_output.get("artifact_path")
+                        if isinstance(final_output, dict)
+                        else None
+                    )
+                    final_digest = (
+                        final_output.get("digest") if isinstance(final_output, dict) else None
+                    )
+                    if not (
+                        recorded.returncode == 0
+                        and isinstance(recorded_path, str)
+                        and isinstance(recorded_digest, str)
+                        and finalized.returncode == 0
+                        and isinstance(final_path, str)
+                        and isinstance(final_digest, str)
+                    ):
+                        raise EvalError(
+                            "offline_runner_contract",
+                            "code-review lifecycle did not reach decision_missing",
+                        )
                     decision.write_text(
                         json.dumps(
                             {
@@ -837,7 +945,11 @@ print(json.dumps(value))
                                 "evidence_digest": evidence_digest,
                                 "finalize_digest": final_digest,
                                 "context_digest": context_digest,
+                                "critic_receipt_digest": recorded_digest,
                                 "verdict": "ready",
+                                "blocking_findings": False,
+                                "blocking_finding_ids": [],
+                                "owner_decision_reasons": [],
                                 "run_id": "primary",
                                 "session_id": "primary-session",
                                 "findings": [],
@@ -861,7 +973,7 @@ print(json.dumps(value))
                         "--context",
                         context_path,
                         "--critic-receipt",
-                        str(receipt),
+                        recorded_path,
                         "--finalize-report",
                         final_path,
                         "--mode",
@@ -874,16 +986,172 @@ print(json.dumps(value))
                         deadline=deadline,
                         timeout_seconds=timeout_seconds,
                     )
-                    review_status = "passed" if review_process.returncode == 0 else "failed"
+                    try:
+                        review_output = json.loads(review_process.stdout)
+                    except json.JSONDecodeError:
+                        review_output = {}
+                    decision_path = (
+                        review_output.get("artifact_path")
+                        if isinstance(review_output, dict)
+                        else None
+                    )
+                    content = sandbox / "content.json"
+                    content.write_text(
+                        json.dumps(
+                            {
+                                "locale": "en",
+                                "chat_assessment": {
+                                    "necessity": {
+                                        "status": "supported",
+                                        "rationale": "The fixture change is intentional.",
+                                    },
+                                    "relevance": {
+                                        "status": "current",
+                                        "rationale": "The exact head is current.",
+                                    },
+                                    "change": "The fixture preserves its reviewed behavior.",
+                                },
+                                "summary": "The fixture preserves its reviewed behavior.",
+                                "architecture_assessment": "Ownership remains unchanged.",
+                                "semver_impact": "none",
+                                "semver_rationale": "No versioned behavior changes.",
+                                "mr_metadata_assessment": {
+                                    field: {
+                                        "status": "ok",
+                                        "rationale": f"The {field} fixture is sufficient.",
+                                        "recommendation": None,
+                                    }
+                                    for field in (
+                                        "title",
+                                        "description",
+                                        "labels",
+                                        "workflow_state",
+                                        "overall",
+                                    )
+                                },
+                                "label_assessments": [],
+                                "checks": ["Checked the exact fixture head."],
+                                "findings": [],
+                                "finding_publications": [],
+                                "previous_finding_assessments": [],
+                                "recommended_issues": [],
+                                "rejected_candidates": [],
+                                "rejected_candidate_assessments": [],
+                                "thread_decisions": [],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                    scaffold = (
+                        run_with_deadline(
+                            [
+                                sys.executable,
+                                "-I",
+                                "-S",
+                                "-B",
+                                str(executable),
+                                "scaffold-review",
+                                "--evidence",
+                                evidence,
+                                "--context",
+                                context_path,
+                                "--decision",
+                                decision_path,
+                                "--content",
+                                str(content),
+                            ],
+                            cwd=sandbox,
+                            env=environment,
+                            deadline=deadline,
+                            timeout_seconds=timeout_seconds,
+                        )
+                        if review_process.returncode == 0 and isinstance(decision_path, str)
+                        else None
+                    )
+                    report = (
+                        run_with_deadline(
+                            [
+                                sys.executable,
+                                "-I",
+                                "-S",
+                                "-B",
+                                str(executable),
+                                "report-review",
+                                "--artifact-root",
+                                artifact_root,
+                            ],
+                            cwd=sandbox,
+                            env=environment,
+                            deadline=deadline,
+                            timeout_seconds=timeout_seconds,
+                        )
+                        if scaffold is not None and scaffold.returncode == 0
+                        else None
+                    )
+                    try:
+                        report_output = json.loads(report.stdout) if report is not None else {}
+                    except json.JSONDecodeError:
+                        report_output = {}
+                    report_chat = report_output.get("chat")
+                    report_plan = report_output.get("publication_plan_path")
+                    review_status = (
+                        "passed"
+                        if report is not None
+                        and report.returncode == 0
+                        and report_output.get("status") == "ok"
+                        and isinstance(report_chat, str)
+                        and report_chat.startswith("### MR assessment")
+                        and "No findings." in report_chat
+                        and "<!-- code-review:" not in report_chat
+                        and isinstance(report_plan, str)
+                        and Path(report_plan).is_absolute()
+                        else "failed"
+                    )
                     state.write_text("changed", encoding="utf-8")
-                    stale_process = run_with_deadline(
-                        review_command,
+                    refreshed_prepare = run_with_deadline(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-B",
+                            str(executable),
+                            "prepare",
+                            "--url",
+                            target,
+                        ],
                         cwd=sandbox,
                         env=environment,
                         deadline=deadline,
                         timeout_seconds=timeout_seconds,
                     )
-                    stale_status = "passed" if stale_process.returncode == 2 else "failed"
+                    stale_process = run_with_deadline(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-B",
+                            str(executable),
+                            "report-review",
+                            "--artifact-root",
+                            artifact_root,
+                        ],
+                        cwd=sandbox,
+                        env=environment,
+                        deadline=deadline,
+                        timeout_seconds=timeout_seconds,
+                    )
+                    try:
+                        stale_output = json.loads(stale_process.stdout)
+                    except json.JSONDecodeError:
+                        stale_output = {}
+                    stale_status = (
+                        "passed"
+                        if refreshed_prepare.returncode == 0
+                        and stale_process.returncode == 4
+                        and stale_output.get("status") == "blocked"
+                        and stale_output.get("stage") == "stale"
+                        else "failed"
+                    )
         calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
         assertions = [
             {"id": "runner:json", "status": "passed" if isinstance(output, dict) else "failed"},
@@ -908,8 +1176,10 @@ print(json.dumps(value))
                 "id": "runner:external-mutations",
                 "status": "passed" if output.get("external_mutations") is False else "failed",
             },
-            {"id": "runner:critic-final-decision", "status": review_status},
-            {"id": "runner:stale-finalize", "status": stale_status},
+            {"id": "runner:critic-final-report", "status": review_status},
+            {"id": "runner:out-of-order-finalize", "status": out_of_order_status},
+            {"id": "runner:premature-report-blocked", "status": premature_report_status},
+            {"id": "runner:stale-report-blocked", "status": stale_status},
         ]
     return {
         "selected": selected,

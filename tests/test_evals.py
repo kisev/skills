@@ -243,9 +243,27 @@ def test_portable_gitlab_uses_one_deadline_for_every_subprocess(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     deadlines: list[float] = []
+    commands: list[str] = []
 
     def recording_deadline(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
         deadlines.append(cast(float, kwargs["deadline"]))
+        argv = cast(list[str], args[0])
+        commands.append(
+            next(
+                value
+                for value in argv
+                if value
+                in {
+                    "prepare",
+                    "context",
+                    "finalize",
+                    "record-artifact",
+                    "finalize-review",
+                    "scaffold-review",
+                    "report-review",
+                }
+            )
+        )
         return run_with_deadline(*args, **kwargs)
 
     monkeypatch.setattr("scripts.eval_runner.run_with_deadline", recording_deadline)
@@ -253,7 +271,19 @@ def test_portable_gitlab_uses_one_deadline_for_every_subprocess(
     observation = offline_observation(gitlab_scenario(), ROOT)
 
     assert observation["runner_assertions"]
-    assert len(deadlines) == 5
+    assert commands == [
+        "prepare",
+        "context",
+        "finalize",
+        "report-review",
+        "record-artifact",
+        "finalize",
+        "finalize-review",
+        "scaffold-review",
+        "report-review",
+        "prepare",
+        "report-review",
+    ]
     assert len(set(deadlines)) == 1
 
 

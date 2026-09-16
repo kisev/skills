@@ -633,6 +633,196 @@ def mr_metadata_assessment_is_valid(value: object) -> bool:
     )
 
 
+def review_chat_assessment_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {"necessity", "relevance", "change"}:
+        return False
+    necessity = value.get("necessity")
+    relevance = value.get("relevance")
+    return (
+        isinstance(necessity, dict)
+        and set(necessity) == {"status", "rationale"}
+        and necessity.get("status") in {"supported", "doubtful", "unconfirmed"}
+        and nonempty_string(necessity.get("rationale"))
+        and isinstance(relevance, dict)
+        and set(relevance) == {"status", "rationale"}
+        and relevance.get("status") in {"current", "partly_outdated", "outdated"}
+        and nonempty_string(relevance.get("rationale"))
+        and nonempty_string(value.get("change"))
+    )
+
+
+def code_review_presentation(
+    locale: str, role: str, verdict: str, incremental_mode: str
+) -> dict[str, Any]:
+    if locale not in {"en", "ru"}:
+        raise WorkflowError("review locale must be en or ru")
+    if role not in {"author", "reviewer"} or verdict not in {"ready", "not_ready", "blocked"}:
+        raise WorkflowError("review presentation identity is invalid")
+    if locale == "ru":
+        return {
+            "title": "План публикации ревью",
+            "incremental_notice": "Проведено инкрементальное ревью."
+            if incremental_mode == "incremental"
+            else None,
+            "target_label": "MR",
+            "role_label": "Роль",
+            "role_value": "автор MR" if role == "author" else "ревьюер чужого MR",
+            "verdict_label": "Итог",
+            "verdict_value": {
+                "ready": "можно сливать",
+                "not_ready": "нужны изменения",
+                "blocked": "нужно решение владельца",
+            }[verdict],
+            "metadata_heading": "Оформление MR",
+            "labels_heading": "Лейблы проекта",
+            "previous_findings_heading": "Сверка предыдущих обнаружений",
+            "open_threads_heading": "Открытые треды",
+            "closed_threads_heading": "Закрытые треды",
+            "local_fixes_heading": "Локальные исправления",
+            "new_findings_heading": "Новые обнаружения",
+            "recommended_issues_heading": "Рекомендуемые задачи",
+            "checked_heading": "Проверено без публикации",
+            "architecture_heading": "Архитектурная оценка",
+            "semver_heading": "Влияние на SemVer",
+            "checks_heading": "Проверки",
+            "publication_heading": "Ручная публикация",
+            "no_items": "Нет.",
+            "publication_warning": "Команды не выполнялись.",
+            "previous_table_headers": ["ID", "Было", "Стало", "Основание", "Действие"],
+            "evidence_label": "Доказательство",
+            "relation_label": "Связь с изменением",
+            "severity_labels": {
+                "critical": "Критическая",
+                "high": "Высокая",
+                "medium": "Средняя",
+                "low": "Низкая",
+            },
+            "recovery_label": "Если ответ опубликован, а состояние не изменилось, выполни только:",
+        }
+    return {
+        "title": "Code review publication plan",
+        "incremental_notice": "Incremental review completed."
+        if incremental_mode == "incremental"
+        else None,
+        "target_label": "Target",
+        "role_label": "Role",
+        "role_value": "author of this MR"
+        if role == "author"
+        else "reviewer of another author's MR",
+        "verdict_label": "Verdict",
+        "verdict_value": {
+            "ready": "ready to merge",
+            "not_ready": "changes required",
+            "blocked": "owner decision required",
+        }[verdict],
+        "metadata_heading": "MR metadata",
+        "labels_heading": "Project labels",
+        "previous_findings_heading": "Previous findings",
+        "open_threads_heading": "Open threads",
+        "closed_threads_heading": "Closed threads",
+        "local_fixes_heading": "Local fixes",
+        "new_findings_heading": "New findings",
+        "recommended_issues_heading": "Recommended issues",
+        "checked_heading": "Reviewed without publication",
+        "architecture_heading": "Architecture assessment",
+        "semver_heading": "SemVer impact",
+        "checks_heading": "Checks",
+        "publication_heading": "Manual publication preflight",
+        "no_items": "None.",
+        "publication_warning": "No command was executed.",
+        "previous_table_headers": [
+            "ID",
+            "Previous status",
+            "Current status",
+            "Rationale",
+            "Action",
+        ],
+        "evidence_label": "Evidence",
+        "relation_label": "Relation to change",
+        "severity_labels": {
+            "critical": "Critical",
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low",
+        },
+        "recovery_label": "If the response succeeds but the state change fails, run only:",
+    }
+
+
+def code_review_chat_labels(locale: str) -> dict[str, Any]:
+    if locale == "ru":
+        return {
+            "title": "### Оценка MR",
+            "blocked_title": "### Ревью заблокировано",
+            "role": "Роль",
+            "necessity": "Необходимость",
+            "relevance": "Актуальность",
+            "change": "Изменение",
+            "architecture": "Архитектура",
+            "semver": "SemVer",
+            "metadata": "Оформление MR",
+            "verdict": "Итог",
+            "checkout": "Checkout ревью",
+            "plan": "План публикации",
+            "findings": "Замечания",
+            "none": "Замечаний нет.",
+            "stage": "Этап",
+            "reason": "Причина",
+            "next_action": "Следующее действие",
+            "metadata_values": {
+                "ok": "готово",
+                "needs_change": "нужны изменения",
+                "unverified": "нужен контекст",
+            },
+            "necessity_values": {
+                "supported": "обоснована",
+                "doubtful": "сомнительна",
+                "unconfirmed": "не подтверждена",
+            },
+            "relevance_values": {
+                "current": "актуально",
+                "partly_outdated": "частично устарело",
+                "outdated": "устарело",
+            },
+        }
+    if locale != "en":
+        raise WorkflowError("review locale must be en or ru")
+    return {
+        "title": "### MR assessment",
+        "blocked_title": "### Review blocked",
+        "role": "Role",
+        "necessity": "Necessity",
+        "relevance": "Relevance",
+        "change": "Change",
+        "architecture": "Architecture",
+        "semver": "SemVer",
+        "metadata": "MR metadata",
+        "verdict": "Verdict",
+        "checkout": "Review checkout",
+        "plan": "Publication plan",
+        "findings": "Findings",
+        "none": "No findings.",
+        "stage": "Stage",
+        "reason": "Reason",
+        "next_action": "Next action",
+        "metadata_values": {
+            "ok": "ready",
+            "needs_change": "changes needed",
+            "unverified": "context needed",
+        },
+        "necessity_values": {
+            "supported": "supported",
+            "doubtful": "doubtful",
+            "unconfirmed": "unconfirmed",
+        },
+        "relevance_values": {
+            "current": "current",
+            "partly_outdated": "partly outdated",
+            "outdated": "outdated",
+        },
+    }
+
+
 def review_publication_preview_is_valid(value: object) -> bool:
     legacy_keys = {
         "mr_state",
@@ -1780,25 +1970,29 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "rejected_candidate_ledger",
         }
         structured_required = current_required | {"label_review"}
+        final_required = structured_required | {"chat_assessment", "locale"}
         actual_keys = set(payload)
         if actual_keys not in (
             minimal_required,
             legacy_required,
             current_required,
             structured_required,
+            final_required,
         ):
             raise WorkflowError("review plan payload has unknown or missing fields")
-        legacy_plan = actual_keys not in (current_required, structured_required)
-        structured_plan = actual_keys == structured_required
+        legacy_plan = actual_keys not in (current_required, structured_required, final_required)
+        structured_plan = actual_keys in (structured_required, final_required)
+        final_plan = actual_keys == final_required
         minimal_plan = actual_keys == minimal_required
         if (
             payload["profile"] != "code-review"
             or not legacy_plan
             and (
-                payload["review_contract_version"] not in {2, 3}
+                payload["review_contract_version"] not in {2, 3, 4}
                 if structured_plan
                 else payload["review_contract_version"] != 1
             )
+            or final_plan != (payload.get("review_contract_version") == 4)
             or payload["external_mutations"] is not False
             or not all(
                 is_digest(payload[key])
@@ -1837,7 +2031,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                     isinstance(item, dict) and "suggestion_applicable" in item
                     for item in payload["thread_decisions"]
                 )
-                or payload["review_contract_version"] == 3
+                or payload["review_contract_version"] in {3, 4}
                 and (
                     not finding_publications_are_valid(
                         payload["finding_publications"], require_fixes=True
@@ -1865,6 +2059,10 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             )
             or not legacy_plan
             and not isinstance(payload["presentation"], dict)
+            or final_plan
+            and not review_chat_assessment_is_valid(payload["chat_assessment"])
+            or final_plan
+            and payload.get("locale") not in {"en", "ru"}
             or not isinstance(payload["markdown"], str)
             or not minimal_plan
             and payload["semver_impact"] == "unknown"
@@ -1922,12 +2120,15 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             required
             | {
                 "context_digest",
+                "critic_receipt_digest",
                 "low_risk",
                 "blocking_findings",
                 "external_mutations",
                 "critic_findings",
                 "accepted_findings",
                 "critic_target_finding_ids",
+                "blocking_finding_ids",
+                "owner_decision_reasons",
             }
         ):
             raise WorkflowError("review decision payload has unknown or missing fields")
@@ -1937,6 +2138,9 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or not is_digest(payload["finalize_digest"])
             or ("context_digest" in payload and not is_digest(payload["context_digest"]))
+            or "critic_receipt_digest" in payload
+            and payload["critic_receipt_digest"] is not None
+            and not is_digest(payload["critic_receipt_digest"])
             or payload["mode"] not in {"fast", "normal", "deep", "incremental"}
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
@@ -1949,6 +2153,18 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             and (
                 not isinstance(payload["critic_target_finding_ids"], list)
                 or not all(nonempty_string(item) for item in payload["critic_target_finding_ids"])
+            )
+            or "blocking_finding_ids" in payload
+            and (
+                not isinstance(payload["blocking_finding_ids"], list)
+                or not all(nonempty_string(item) for item in payload["blocking_finding_ids"])
+                or len(payload["blocking_finding_ids"])
+                != len(set(cast(list[str], payload["blocking_finding_ids"])))
+            )
+            or "owner_decision_reasons" in payload
+            and (
+                not isinstance(payload["owner_decision_reasons"], list)
+                or not all(nonempty_string(item) for item in payload["owner_decision_reasons"])
             )
             or not findings_are_valid(payload["unresolved_threads"])
             or not isinstance(responses, list)
@@ -2315,7 +2531,7 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
     bundle["retrieval_complete"] = all(components_complete.values())
     if persist:
         artifact_path, artifact_digest = write_artifact(root, "evidence_snapshot", bundle)
-        if profile not in {"mr-prepare", "release-prepare"}:
+        if profile not in {"mr-prepare", "release-prepare", "code-review"}:
             write_json(
                 root / "current.json",
                 {"evidence_path": str(artifact_path), "evidence_digest": artifact_digest},
@@ -2327,9 +2543,13 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
     return bundle
 
 
-def evidence_from_root(root: Path) -> tuple[Path, dict[str, Any]]:
+def evidence_from_root(
+    root: Path, pointer_name: str = "current.json"
+) -> tuple[Path, dict[str, Any]]:
+    if pointer_name not in {"current.json", "review-evidence.json"}:
+        raise WorkflowError("collection state pointer name is invalid")
     try:
-        pointer = read_json(root / "current.json", "collection state")
+        pointer = read_json(root / pointer_name, "collection state")
         path = pointer.get("evidence_path")
         if not isinstance(path, str):
             raise WorkflowError("collection state has no evidence snapshot")
@@ -2339,6 +2559,8 @@ def evidence_from_root(root: Path) -> tuple[Path, dict[str, Any]]:
         _, payload = artifact_payload(source, "evidence_snapshot")
         return source, payload
     except WorkflowError:
+        if pointer_name != "current.json":
+            raise
         # Legacy v1 state had one immutable bundle.json instead of a current pointer.
         source = root / "bundle.json"
         _, payload = artifact_payload(source, "evidence_snapshot")
@@ -2688,9 +2910,9 @@ def fingerprint(bundle: dict[str, Any]) -> dict[str, object]:
     }
 
 
-def finalize(root_value: str) -> dict[str, object]:
+def finalize(root_value: str, pointer_name: str = "current.json") -> dict[str, object]:
     root = artifact_root(Path(root_value))
-    source, baseline = evidence_from_root(root)
+    source, baseline = evidence_from_root(root, pointer_name)
     target = baseline.get("target")
     if not isinstance(target, dict):
         raise WorkflowError("evidence target is missing")
@@ -3020,11 +3242,13 @@ def validate_decision(
     receipt: dict[str, Any] | None,
     mode: str,
     context_digest: str | None = None,
+    critic_receipt_digest: str | None = None,
 ) -> None:
     if (
         report.get("schema") != "portable-gitlab/review-decision/v2"
         or report.get("evidence_digest") != evidence_digest
         or (context_digest is not None and report.get("context_digest") != context_digest)
+        or report.get("critic_receipt_digest") != critic_receipt_digest
         or not is_digest(report.get("finalize_digest"))
         or report.get("mode") != mode
         or report.get("external_mutations") is not False
@@ -3033,19 +3257,48 @@ def validate_decision(
         or not isinstance(report.get("unresolved_threads"), list)
     ):
         raise WorkflowError("review decision is schema-invalid")
+    response_values = report["responses"]
     response_ids = {
         item.get("id")
-        for item in report["responses"]
+        for item in response_values
         if isinstance(item, dict)
         and item.get("decision") in {"accept", "reject"}
         and isinstance(item.get("reason"), str)
         and item["reason"]
     }
-    required = {item.get("id") for item in report.get("findings", []) if isinstance(item, dict)}
+    finding_subjects = [
+        item
+        for item in [
+            *cast(list[object], report.get("findings", [])),
+            *(cast(list[object], receipt["findings"]) if receipt is not None else []),
+        ]
+        if isinstance(item, dict)
+    ]
+    finding_ids = {item.get("id") for item in finding_subjects}
+    required = set(finding_ids)
     if receipt is not None:
         required |= {item.get("id") for item in receipt["findings"] if isinstance(item, dict)}
     required |= {item.get("id") for item in report["unresolved_threads"] if isinstance(item, dict)}
-    if None in required or not required.issubset(response_ids):
+    if context_digest is not None:
+        thread_ids = {
+            item.get("id") for item in report["unresolved_threads"] if isinstance(item, dict)
+        }
+        if (
+            len(finding_ids) != len(finding_subjects)
+            or any(
+                not isinstance(item_id, str)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", item_id) is None
+                for item_id in finding_ids
+            )
+            or any(
+                not isinstance(item_id, str)
+                or re.fullmatch(r"thread:[A-Za-z0-9][A-Za-z0-9._-]{0,127}", item_id) is None
+                for item_id in thread_ids
+            )
+            or finding_ids & thread_ids
+        ):
+            raise WorkflowError("code-review finding and thread subjects are not namespace-safe")
+    if None in required or len(response_ids) != len(response_values) or response_ids != required:
         raise WorkflowError(
             "review decision does not account for every finding and unresolved thread"
         )
@@ -3149,6 +3402,11 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     prepare = subparsers.add_parser("prepare")
     prepare.add_argument("--url", action="append")
     prepare.add_argument("--project-url")
+    if profile == "code-review":
+        prepare.add_argument("--repo-root")
+        prepare.add_argument("--review-mode", choices=("fast", "normal", "deep"), default="normal")
+        prepare.add_argument("--locale", choices=("en", "ru"), default="en")
+        prepare.add_argument("--incremental", choices=("auto", "off"), default="auto")
     if profile != "code-review":
         scaffold_parser = subparsers.add_parser("scaffold")
         scaffold_parser.add_argument("--bundle", required=True)
@@ -3166,11 +3424,21 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         context.add_argument("--evidence", required=True)
         context.add_argument("--repo-root", required=True)
         context.add_argument("--incremental", choices=("auto", "off"), default="auto")
+        context.add_argument("--review-mode", choices=("fast", "normal", "deep"), default="normal")
+        context.add_argument("--locale", choices=("en", "ru"), default="en")
         review_plan = subparsers.add_parser("scaffold-review")
         review_plan.add_argument("--evidence", required=True)
         review_plan.add_argument("--context", required=True)
         review_plan.add_argument("--decision", required=True)
         review_plan.add_argument("--content", required=True)
+        for command in ("status", "next"):
+            status_parser = subparsers.add_parser(command)
+            status_parser.add_argument("--artifact-root", required=True)
+        template = subparsers.add_parser("template-review")
+        template.add_argument("--artifact-root", required=True)
+        template.add_argument("--kind", choices=("critic", "decision", "content"), required=True)
+        report_review = subparsers.add_parser("report-review")
+        report_review.add_argument("--artifact-root", required=True)
     if profile not in {"mr-prepare", "release-prepare", "code-review"}:
         batch = subparsers.add_parser("scaffold-batch")
         batch.add_argument("--bundle", required=True)
@@ -3215,12 +3483,49 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         if args.command == "context":
             context_module = importlib.import_module("review_context")
             context_result = context_module.prepare_context(
-                args.evidence, args.repo_root, args.incremental
+                args.evidence,
+                args.repo_root,
+                args.incremental,
+                args.review_mode,
+                args.locale,
             )
             emit(context_result)
             return 0 if context_result["status"] == "ok" else 2
+        if args.command in {"status", "next"}:
+            context_module = importlib.import_module("review_context")
+            emit(context_module.review_status(args.artifact_root))
+            return 0
+        if args.command == "template-review":
+            context_module = importlib.import_module("review_context")
+            emit(context_module.template_review(args.artifact_root, args.kind))
+            return 0
+        if args.command == "report-review":
+            context_module = importlib.import_module("review_context")
+            report_result = context_module.report_review(args.artifact_root)
+            emit(report_result)
+            return 0 if report_result["status"] == "ok" else 4
         if args.command == "scaffold-review":
             context_module = importlib.import_module("review_context")
+            _, scaffold_evidence = artifact_payload(Path(args.evidence), "evidence_snapshot")
+            scaffold_root = artifact_root(Path(str(scaffold_evidence["artifact_root"])))
+            workflow_status = context_module.review_status(str(scaffold_root))
+            workflow_stage = workflow_status.get("resume_stage") or workflow_status.get("stage")
+            if workflow_stage != "content_missing":
+                raise WorkflowError(
+                    f"scaffold-review is out of order; current stage is {workflow_stage}"
+                )
+            scaffold_progress = context_module.load_progress(scaffold_root)
+            if scaffold_progress is None or any(
+                str(Path(actual).resolve()) != scaffold_progress[expected]
+                for actual, expected in (
+                    (args.evidence, "evidence_path"),
+                    (args.context, "context_path"),
+                    (args.decision, "decision_path"),
+                )
+            ):
+                raise WorkflowError(
+                    "scaffold-review arguments do not match the selected review progress"
+                )
             emit(
                 context_module.scaffold_review(
                     args.evidence,
@@ -3259,20 +3564,47 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             for target in targets:
                 try:
                     bundle = collect(target, profile)
-                    results.append(
-                        {
-                            "target": target["url"],
-                            "status": "ok",
-                            "artifact_path": bundle.get("preview_artifact_path"),
-                            "digest": bundle.get("preview_digest"),
-                            "artifact_root": bundle["artifact_root"],
-                            "head_sha": bundle["head_sha"],
-                            "base_sha": bundle.get("base_sha"),
-                            "start_sha": bundle.get("start_sha"),
-                            "complete": bundle["retrieval_complete"],
-                            "components_complete": bundle["components_complete"],
-                        }
-                    )
+                    item = {
+                        "target": target["url"],
+                        "status": "ok",
+                        "artifact_path": bundle.get("preview_artifact_path"),
+                        "digest": bundle.get("preview_digest"),
+                        "artifact_root": bundle["artifact_root"],
+                        "head_sha": bundle["head_sha"],
+                        "base_sha": bundle.get("base_sha"),
+                        "start_sha": bundle.get("start_sha"),
+                        "complete": bundle["retrieval_complete"],
+                        "components_complete": bundle["components_complete"],
+                    }
+                    if profile == "code-review":
+                        context_module = importlib.import_module("review_context")
+                        context_module.begin_review(
+                            cast(str, bundle["preview_artifact_path"]),
+                            cast(str, bundle["preview_digest"]),
+                            cast(str, bundle["artifact_root"]),
+                            args.repo_root,
+                            args.review_mode,
+                            args.locale,
+                            args.incremental,
+                        )
+                        item["stage"] = "prepared"
+                        item["next_action"] = context_module.runner_action(
+                            "context",
+                            "--evidence",
+                            cast(str, bundle["preview_artifact_path"]),
+                            "--repo-root",
+                            str(Path(args.repo_root).resolve())
+                            if args.repo_root is not None
+                            else "<checkout>",
+                            "--incremental",
+                            args.incremental,
+                            "--review-mode",
+                            args.review_mode,
+                            "--locale",
+                            args.locale,
+                            required_inputs=("repo_root",) if args.repo_root is None else (),
+                        )
+                    results.append(item)
                 except WorkflowError as exc:
                     print(redact(str(exc)), file=sys.stderr)
                     results.append(
@@ -3316,12 +3648,32 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             )
             return 0
         if args.command == "finalize":
+            workflow_progress: dict[str, Any] | None = None
             if profile in {"mr-prepare", "release-prepare"}:
                 result, root, evidence_path, bundle = finalize_plan(args.plan)
             else:
-                result = finalize(args.artifact_root)
+                if profile == "code-review":
+                    context_module = importlib.import_module("review_context")
+                    workflow_status = context_module.review_status(args.artifact_root)
+                    workflow_stage = workflow_status.get("resume_stage") or workflow_status.get(
+                        "stage"
+                    )
+                    workflow_progress = context_module.load_progress(
+                        artifact_root(Path(args.artifact_root))
+                    )
+                    if (
+                        workflow_stage not in {"context_ready", "finalize_missing"}
+                        or workflow_progress is None
+                    ):
+                        raise WorkflowError(
+                            f"code-review finalize is out of order; current stage is {workflow_stage}"
+                        )
+                pointer_name = (
+                    "review-evidence.json" if profile == "code-review" else "current.json"
+                )
+                result = finalize(args.artifact_root, pointer_name)
                 root = artifact_root(Path(args.artifact_root))
-                evidence_path, bundle = evidence_from_root(root)
+                evidence_path, bundle = evidence_from_root(root, pointer_name)
             result = finalize_payload(result, evidence_path, bundle, "evidence_snapshot")
             if profile == "release-review":
                 if not args.report:
@@ -3339,29 +3691,57 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     canonical(readiness_document)
                 ).hexdigest()
             path, artifact_digest = write_artifact(root, "finalize_report", result)
-            emit(
-                {
-                    "status": result["status"],
-                    "summary": {
-                        "tldr": "Rechecked evidence freshness.",
-                        "scope": [],
-                        "risks": result.get("changed", []),
-                        "checks": [
-                            "exact identity",
-                            "SHA",
-                            "labels",
-                            "discussions",
-                            "diff",
-                            "pipelines",
-                            "completeness",
-                        ],
+            response: dict[str, Any] = {
+                "status": result["status"],
+                "summary": {
+                    "tldr": "Rechecked evidence freshness.",
+                    "scope": [],
+                    "risks": result.get("changed", []),
+                    "checks": [
+                        "exact identity",
+                        "SHA",
+                        "labels",
+                        "discussions",
+                        "diff",
+                        "pipelines",
+                        "completeness",
+                    ],
+                },
+                "artifact_path": str(path),
+                "digest": artifact_digest,
+                "result": result,
+                "external_mutations": False,
+            }
+            if profile == "code-review" and result["status"] == "ok":
+                assert workflow_progress is not None
+                context_module = importlib.import_module("review_context")
+                context_module.advance_progress(
+                    root,
+                    "decision_missing",
+                    expected_stages={"context_ready", "finalize_missing"},
+                    expected={
+                        key: workflow_progress[key]
+                        for key in (
+                            "evidence_path",
+                            "evidence_digest",
+                            "context_path",
+                            "context_digest",
+                            "critic_receipt_path",
+                            "critic_receipt_digest",
+                        )
                     },
-                    "artifact_path": str(path),
-                    "digest": artifact_digest,
-                    "result": result,
-                    "external_mutations": False,
-                }
-            )
+                    finalize_report_path=str(path),
+                    finalize_report_digest=artifact_digest,
+                    decision_path=None,
+                    decision_digest=None,
+                    plan_path=None,
+                    plan_digest=None,
+                )
+                response["stage"] = "decision_missing"
+                response["next_action"] = context_module.runner_action(
+                    "template-review", "--artifact-root", str(root), "--kind", "decision"
+                )
+            emit(response)
             return 0 if result["status"] in {"ok", "not_applicable"} else 2
         if args.command == "prepare-local":
             if profile != "code-review":
@@ -3444,7 +3824,8 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             evidence_digest = hashlib.sha256(canonical(evidence_doc)).hexdigest()
             value = read_json(Path(args.input), "artifact input")
             if args.kind == "critic_receipt":
-                validate_critic(value, evidence_digest)
+                if profile != "code-review":
+                    validate_critic(value, evidence_digest)
             elif args.kind == "release_readiness":
                 validate_release_readiness(value, evidence, evidence_digest)
             elif (
@@ -3459,26 +3840,105 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             ):
                 raise WorkflowError("new code review findings require complete structured evidence")
             root = artifact_root(Path(str(evidence["artifact_root"])))
+            record_context_module: Any | None = None
+            if profile == "code-review" and args.kind == "critic_receipt":
+                record_context_module = importlib.import_module("review_context")
+                workflow_status = record_context_module.review_status(str(root))
+                workflow_stage = workflow_status.get("resume_stage") or workflow_status.get("stage")
+                progress = record_context_module.load_progress(root)
+                if (
+                    workflow_stage != "critic_missing"
+                    or progress is None
+                    or str(Path(args.evidence).resolve()) != progress["evidence_path"]
+                ):
+                    raise WorkflowError(
+                        f"critic receipt is out of order; current stage is {workflow_stage}"
+                    )
+                context_artifact = record_context_module.progress_artifact(
+                    root, progress, "context", "review_context"
+                )
+                if context_artifact is None:
+                    raise WorkflowError("critic receipt requires the selected review context")
+                selected_context = context_artifact[1]
+                scope_digest = (
+                    selected_context["incremental"]["incremental_delta_digest"]
+                    if progress["mode"] == "incremental"
+                    else None
+                )
+                validate_critic(value, evidence_digest, scope_digest)
             path, artifact_digest = write_artifact(root, args.kind, value)
-            emit(
-                {
-                    "status": "ok",
-                    "summary": {
-                        "tldr": "Saved a private schema-valid artifact.",
-                        "scope": [],
-                        "risks": [],
-                        "checks": ["schema", "evidence digest", "content address"],
+            response = {
+                "status": "ok",
+                "summary": {
+                    "tldr": "Saved a private schema-valid artifact.",
+                    "scope": [],
+                    "risks": [],
+                    "checks": ["schema", "evidence digest", "content address"],
+                },
+                "artifact_path": str(path),
+                "digest": artifact_digest,
+                "external_mutations": False,
+            }
+            if profile == "code-review" and args.kind == "critic_receipt":
+                assert record_context_module is not None
+                record_context_module.advance_progress(
+                    root,
+                    "finalize_missing",
+                    expected_stages={"context_ready"},
+                    expected={
+                        key: progress[key]
+                        for key in (
+                            "evidence_path",
+                            "evidence_digest",
+                            "context_path",
+                            "context_digest",
+                        )
                     },
-                    "artifact_path": str(path),
-                    "digest": artifact_digest,
-                    "external_mutations": False,
-                }
-            )
+                    critic_receipt_path=str(path),
+                    critic_receipt_digest=artifact_digest,
+                    finalize_report_path=None,
+                    finalize_report_digest=None,
+                    decision_path=None,
+                    decision_digest=None,
+                    plan_path=None,
+                    plan_digest=None,
+                )
+                response["stage"] = "finalize_missing"
+                response["next_action"] = record_context_module.runner_action(
+                    "finalize", "--artifact-root", str(root)
+                )
+            emit(response)
             return 0
         if args.command == "finalize-review":
             evidence_doc, evidence = artifact_payload(Path(args.evidence), "evidence_snapshot")
             evidence_digest = hashlib.sha256(canonical(evidence_doc)).hexdigest()
             root = artifact_root(Path(str(evidence["artifact_root"])))
+            review_context_module: Any | None = None
+            if profile == "code-review":
+                review_context_module = importlib.import_module("review_context")
+                workflow_status = review_context_module.review_status(str(root))
+                workflow_stage = workflow_status.get("resume_stage") or workflow_status.get("stage")
+                if workflow_stage != "decision_missing":
+                    raise WorkflowError(
+                        f"finalize-review is out of order; current stage is {workflow_stage}"
+                    )
+                progress = review_context_module.load_progress(root)
+                if (
+                    progress is None
+                    or any(
+                        (str(Path(actual).resolve()) if actual is not None else None) != expected
+                        for actual, expected in (
+                            (args.evidence, progress["evidence_path"]),
+                            (args.context, progress["context_path"]),
+                            (args.finalize_report, progress["finalize_report_path"]),
+                            (args.critic_receipt, progress["critic_receipt_path"]),
+                        )
+                    )
+                    or args.mode != progress["mode"]
+                ):
+                    raise WorkflowError(
+                        "finalize-review arguments do not match the selected review progress"
+                    )
             # Compare the explicitly supplied immutable snapshot, not current.json.
             review_target = evidence.get("target")
             if not isinstance(review_target, dict):
@@ -3492,28 +3952,41 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 raise WorkflowError("evidence is stale or incomplete at final review")
             context_digest = None
             if profile == "code-review":
-                context_module = importlib.import_module("review_context")
-                _, review_context, context_digest = context_module.validate_context_binding(
+                assert review_context_module is not None
+                _, review_context, context_digest = review_context_module.validate_context_binding(
                     args.context, args.evidence
                 )
-                current_context = context_module.refresh_context(review_context, args.evidence)
+                current_context = review_context_module.refresh_context(
+                    review_context, args.evidence
+                )
                 if (
                     review_context.get("complete") is not True
                     or current_context.get("complete") is not True
-                    or not context_module.contexts_match(review_context, current_context)
+                    or not review_context_module.contexts_match(review_context, current_context)
                 ):
                     raise WorkflowError("review context is stale or incomplete at final review")
             _, finalize_digest = validate_finalize_report(
                 Path(args.finalize_report), Path(args.evidence), evidence
             )
             report = read_json(Path(args.report), "review decision")
-            receipt = (
-                read_json(Path(args.critic_receipt), "critic receipt")
-                if args.critic_receipt
-                else None
-            )
-            if receipt is not None and receipt.get("schema") == "portable-gitlab/critic_receipt/v2":
-                _, receipt = artifact_payload(Path(args.critic_receipt), "critic_receipt")
+            receipt = None
+            receipt_digest: str | None = None
+            if args.critic_receipt:
+                receipt_path = regular_file(Path(args.critic_receipt), "critic receipt")
+                if profile == "code-review":
+                    receipt_digest = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+                    expected_receipt = (
+                        root / "artifacts" / "critic_receipt" / f"{receipt_digest}.json"
+                    )
+                    if receipt_path != expected_receipt:
+                        raise WorkflowError(
+                            "code-review critic receipt must be a recorded content-addressed artifact"
+                        )
+                    _, receipt = artifact_payload(receipt_path, "critic_receipt")
+                else:
+                    receipt = read_json(receipt_path, "critic receipt")
+                    if receipt.get("schema") == "portable-gitlab/critic_receipt/v2":
+                        _, receipt = artifact_payload(receipt_path, "critic_receipt")
             if receipt is not None:
                 incremental_scope_digest = (
                     review_context["incremental"]["incremental_delta_digest"]
@@ -3533,7 +4006,14 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     raise WorkflowError("critic receipt is not independent of the primary review")
             if profile == "code-review" and not detailed_findings_are_valid(report.get("findings")):
                 raise WorkflowError("review findings require complete structured evidence")
-            validate_decision(report, evidence_digest, receipt, args.mode, context_digest)
+            validate_decision(
+                report,
+                evidence_digest,
+                receipt,
+                args.mode,
+                context_digest,
+                receipt_digest,
+            )
             if report["finalize_digest"] != finalize_digest:
                 raise WorkflowError("review decision does not bind exact finalize report")
             if not evidence.get("retrieval_complete") or (
@@ -3550,7 +4030,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 )
                 candidates = [*primary_findings, *critic_findings]
                 candidate_ids = [item["id"] for item in candidates]
-                if len(candidate_ids) != len(set(candidate_ids)):
+                if len(candidate_ids) != len(set(candidate_ids)) or any(
+                    re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", str(item_id)) is None
+                    for item_id in candidate_ids
+                ):
                     raise WorkflowError("primary and critic finding IDs must be unique")
                 responses = {
                     item["id"]: item
@@ -3562,6 +4045,8 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 ]
                 severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
                 accepted_findings.sort(key=lambda item: severity_order[item["severity"]])
+                assert review_context_module is not None
+                review_context_module.validate_review_verdict(report, accepted_findings, evidence)
                 decision_payload = {
                     **report,
                     "critic_findings": critic_findings,
@@ -3571,29 +4056,52 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     else [],
                 }
             path, result_digest = write_artifact(root, "review_decision", decision_payload)
-            emit(
-                {
-                    "status": "ok",
-                    "summary": {
-                        "tldr": "Verified the review decision without external mutations.",
-                        "scope": [str(evidence.get("target", {}).get("url", "local"))],
-                        "risks": [],
-                        "checks": [
-                            "evidence binding",
-                            *(
-                                ["role and review context binding"]
-                                if profile == "code-review"
-                                else []
-                            ),
-                            "independent critic",
-                            "all findings and threads covered",
-                        ],
+            response = {
+                "status": "ok",
+                "summary": {
+                    "tldr": "Verified the review decision without external mutations.",
+                    "scope": [str(evidence.get("target", {}).get("url", "local"))],
+                    "risks": [],
+                    "checks": [
+                        "evidence binding",
+                        *(["role and review context binding"] if profile == "code-review" else []),
+                        "independent critic",
+                        "all findings and threads covered",
+                    ],
+                },
+                "artifact_path": str(path),
+                "digest": result_digest,
+                "external_mutations": False,
+            }
+            if profile == "code-review":
+                assert review_context_module is not None
+                review_context_module.advance_progress(
+                    root,
+                    "content_missing",
+                    expected_stages={"decision_missing"},
+                    expected={
+                        key: progress[key]
+                        for key in (
+                            "evidence_path",
+                            "evidence_digest",
+                            "context_path",
+                            "context_digest",
+                            "critic_receipt_path",
+                            "critic_receipt_digest",
+                            "finalize_report_path",
+                            "finalize_report_digest",
+                        )
                     },
-                    "artifact_path": str(path),
-                    "digest": result_digest,
-                    "external_mutations": False,
-                }
-            )
+                    decision_path=str(path),
+                    decision_digest=result_digest,
+                    plan_path=None,
+                    plan_digest=None,
+                )
+                response["stage"] = "content_missing"
+                response["next_action"] = review_context_module.runner_action(
+                    "template-review", "--artifact-root", str(root), "--kind", "content"
+                )
+            emit(response)
             return 0
         return error("invalid_command", "a supported subcommand is required")
     except WorkflowError as exc:

@@ -11,8 +11,13 @@ technical prose. Keep code, IDs, paths, API fields, and commands unchanged.
 
 ## Chat
 
-Keep the chat result compact. Localize the labels rather than copying the
-English example literally.
+Keep the chat result compact. `report-review` owns the labels and layout; print
+its `chat` field verbatim rather than composing the result manually. A missing,
+incomplete, or stale contract-4 plan produces only a localized blocked report
+with the failed stage and safe next action.
+When the current evidence artifact itself is unavailable, no trusted recovery
+command can be derived; the blocked report uses `next_action=null` and asks for
+the exact target again.
 
 ```markdown
 Incremental review completed. <!-- only for an incremental review -->
@@ -83,11 +88,11 @@ a full diff inside `<details>`, and separate `git apply --check` and `git apply`
 commands. A suggestion fix is marked as validated. A thread with
 `fix_mode=not_required` states that no code correction is needed.
 
-The model supplies localized presentation labels, natural role-authored
-publication bodies, and exhaustive label-applicability rationales. The runner
-owns observed label descriptions, paths, digests, hidden markers, structured
-actions, exact GitLab identity, and preflight checks. Do not hand-edit generated
-commands or markers.
+The model supplies semantic assessment prose, natural role-authored publication
+bodies, and exhaustive label-applicability rationales. The runner owns standard
+localized presentation labels, observed label descriptions, paths, digests,
+hidden markers, structured actions, exact GitLab identity, chat rendering, and
+preflight checks. Do not hand-edit generated commands, markers, or final chat.
 
 Every publishable response, finding, and recommended issue ends with a hidden
 marker owned by the runner:

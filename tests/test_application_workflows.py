@@ -226,8 +226,18 @@ print(json.dumps(value))
             root.chmod(0o700)
             markdown = root / "review-publication.md"
             baseline = root / "review-baseline.json"
+            progress = root / "review-current.json"
             markdown.write_text("old review\n", encoding="utf-8")
             baseline.write_text('{"old":true}\n', encoding="utf-8")
+            progress_value = module.empty_progress(
+                root / "artifacts" / "evidence_snapshot" / f"{'b' * 64}.json",
+                "b" * 64,
+                mode="normal",
+                locale="en",
+            )
+            progress_value["stage"] = "content_missing"
+            module.portable.write_json(progress, progress_value)
+            progress_bytes = progress.read_bytes()
             baseline_digest = hashlib.sha256(baseline.read_bytes()).hexdigest()
             real_fsync = os.fsync
             calls = 0
@@ -248,9 +258,11 @@ print(json.dumps(value))
                         "a" * 64,
                         {"url": "https://gitlab.example/group/project/-/merge_requests/7"},
                         baseline_digest,
+                        {"stage": "content_missing"},
                     )
             self.assertEqual(markdown.read_text(encoding="utf-8"), "old review\n")
             self.assertEqual(baseline.read_text(encoding="utf-8"), '{"old":true}\n')
+            self.assertEqual(progress.read_bytes(), progress_bytes)
 
     def test_line_finding_requires_exactly_one_suggestion(self) -> None:
         scripts = BUILT_SKILLS / "code-review" / "scripts"
@@ -508,6 +520,13 @@ print(json.dumps(value))
                 result = self.run_runner(skill, "prepare")
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(json.loads(result.stdout)["status"], "error")
+        wrong_finalize = self.run_runner(
+            "code-review", "finalize", "--evidence", "/tmp/not-an-artifact.json"
+        )
+        self.assertEqual(wrong_finalize.returncode, 2)
+        wrong_payload = json.loads(wrong_finalize.stdout)
+        self.assertEqual(wrong_payload["error"]["code"], "invalid_input")
+        self.assertIn("--artifact-root", wrong_payload["error"]["message"])
 
     def test_mr_prepare_plan_binds_evidence_and_markdown_companion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1200,11 +1219,11 @@ print(json.dumps(value))
             "run_id": "primary-run",
             "session_id": "primary-session",
             "findings": [{"id": "primary-1"}],
-            "unresolved_threads": [{"id": "thread-1"}],
+            "unresolved_threads": [{"id": "thread:thread-1"}],
             "responses": [
                 {"id": "primary-1", "decision": "reject", "reason": "not applicable"},
                 {"id": "critic-1", "decision": "accept", "reason": "confirmed"},
-                {"id": "thread-1", "decision": "accept", "reason": "needs resolution"},
+                {"id": "thread:thread-1", "decision": "accept", "reason": "needs resolution"},
             ],
         }
         module.validate_critic(receipt, "evidence")
@@ -1223,6 +1242,24 @@ print(json.dumps(value))
                 "evidence",
             )
         module.validate_decision(report, "evidence", receipt, "deep")
+        collision = {
+            **report,
+            "context_digest": "b" * 64,
+            "findings": [{"id": "thread:42"}],
+            "unresolved_threads": [{"id": "thread:42"}],
+            "responses": [
+                {"id": "thread:42", "decision": "accept", "reason": "collision"},
+                {"id": "critic-1", "decision": "accept", "reason": "confirmed"},
+            ],
+        }
+        with self.assertRaises(module.WorkflowError):
+            module.validate_decision(
+                collision,
+                "evidence",
+                receipt,
+                "deep",
+                context_digest="b" * 64,
+            )
         report["responses"].pop()
         with self.assertRaises(module.WorkflowError):
             module.validate_decision(report, "evidence", receipt, "deep")
@@ -1241,10 +1278,10 @@ print(json.dumps(value))
             "run_id": "primary-run",
             "session_id": "primary-session",
             "findings": [{"id": "finding"}],
-            "unresolved_threads": [{"id": "thread"}],
+            "unresolved_threads": [{"id": "thread:thread"}],
             "responses": [
                 {"id": "finding", "decision": "accept", "reason": "confirmed"},
-                {"id": "thread", "decision": "reject", "reason": "deferred"},
+                {"id": "thread:thread", "decision": "reject", "reason": "deferred"},
             ],
         }
         for mode in ("normal", "deep"):
@@ -1259,6 +1296,282 @@ print(json.dumps(value))
         report["blocking_findings"] = True
         with self.assertRaises(module.WorkflowError):
             module.validate_decision(report, "evidence", None, "fast")
+
+    def test_code_review_verdict_keeps_low_findings_non_blocking(self) -> None:
+        scripts = BUILT_SKILLS / "code-review" / "scripts"
+        previous_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "portable_runtime" or name.startswith("portable_runtime.")
+        }
+        sys.path.insert(0, str(scripts))
+        try:
+            module = load_module(scripts / "review_context.py", "built_review_context_verdict")
+        finally:
+            sys.path.remove(str(scripts))
+            for name in list(sys.modules):
+                if name == "portable_runtime" or name.startswith("portable_runtime."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous_modules)
+        low = {
+            "id": "docs-1",
+            "severity": "low",
+            "summary": "Documentation is incomplete",
+            "risk": "Readers can miss an option.",
+            "evidence": ["README omits the option."],
+            "consequence": "Adoption can take longer.",
+            "relation_to_change": "The change adds the option.",
+            "minimum_fix": "Document the option.",
+        }
+        evidence = {
+            "head_sha": "c",
+            "pipelines": {
+                "complete": True,
+                "items": [{"id": 1, "sha": "c", "status": "failed"}],
+            },
+        }
+        report = {
+            "verdict": "blocked",
+            "blocking_findings": False,
+            "blocking_finding_ids": [],
+            "owner_decision_reasons": ["The exact-head pipeline failed."],
+        }
+        module.validate_review_verdict(report, [low], evidence)
+        with self.assertRaises(module.portable.WorkflowError):
+            module.validate_review_verdict({**report, "verdict": "not_ready"}, [low], evidence)
+        with self.assertRaises(module.portable.WorkflowError):
+            module.validate_review_verdict(
+                {
+                    **report,
+                    "blocking_findings": True,
+                    "blocking_finding_ids": ["docs-1"],
+                    "verdict": "not_ready",
+                },
+                [low],
+                evidence,
+            )
+        high = {**low, "id": "runtime-1", "severity": "high"}
+        successful_evidence = {
+            **evidence,
+            "pipelines": {
+                "complete": True,
+                "items": [{"id": 2, "sha": "c", "status": "success"}],
+            },
+        }
+        with self.assertRaises(module.portable.WorkflowError):
+            module.validate_review_verdict(
+                {
+                    "verdict": "ready",
+                    "blocking_findings": False,
+                    "blocking_finding_ids": [],
+                    "owner_decision_reasons": [],
+                },
+                [high],
+                successful_evidence,
+            )
+        raw_head = "a" * 40
+        with self.assertRaises(module.portable.WorkflowError):
+            module.reject_visible_raw_refs(
+                f"Changed behavior at {raw_head}", {"head_sha": raw_head}
+            )
+        previous_head = "b" * 40
+        with self.assertRaises(module.portable.WorkflowError):
+            module.reject_visible_raw_refs(
+                f"Compared from {previous_head}",
+                {"head_sha": raw_head},
+                {
+                    "incremental": {
+                        "incremental_delta": {
+                            "from_head": previous_head,
+                            "to_head": raw_head,
+                        }
+                    }
+                },
+            )
+
+    def test_review_content_template_accounts_for_fifty_three_threads(self) -> None:
+        scripts = BUILT_SKILLS / "code-review" / "scripts"
+        previous_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "portable_runtime" or name.startswith("portable_runtime.")
+        }
+        sys.path.insert(0, str(scripts))
+        try:
+            module = load_module(scripts / "review_context.py", "built_review_context_template")
+        finally:
+            sys.path.remove(str(scripts))
+            for name in list(sys.modules):
+                if name == "portable_runtime" or name.startswith("portable_runtime."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous_modules)
+        discussions = [
+            {
+                "id": f"discussion-{index}",
+                "root_note_id": index,
+                "root_note_url": f"https://gitlab.example/mr#note_{index}",
+                "root_system": False,
+                "root_resolvable": True,
+                "root_resolved": False,
+                "notes": [{"id": index, "system": False, "body": f"thread {index}"}],
+            }
+            for index in range(1, 54)
+        ]
+        context = {
+            "role": "reviewer",
+            "discussions": discussions,
+            "notes": [],
+            "publication_markers": [],
+            "incremental": {
+                "previous_findings": [],
+                "previous_recommended_issues": [],
+                "reconsidered_rejected_candidates": [],
+            },
+        }
+        evidence = {
+            "labels": {"complete": True, "items": []},
+            "object": {"labels": []},
+        }
+        value = module.content_template(
+            evidence,
+            context,
+            {"findings": [], "critic_findings": [], "responses": [], "accepted_findings": []},
+            "en",
+        )
+        self.assertEqual(len(value["thread_decisions"]), 53)
+        self.assertEqual(
+            {item["id"] for item in value["thread_decisions"]},
+            {str(index) for index in range(1, 54)},
+        )
+        self.assertTrue(
+            all(len(item["last_note_body_sha256"]) == 64 for item in value["thread_decisions"])
+        )
+
+    def test_incomplete_review_context_does_not_advance(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = root / "repository"
+            repository.mkdir()
+            for arguments in (
+                ("init", "-q"),
+                ("config", "user.email", "reviewer@example.invalid"),
+                ("config", "user.name", "Example Reviewer"),
+            ):
+                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+            (repository / "review.txt").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "review.txt"], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            _glab, state = self.fake_glab(root)
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(state),
+                "FAKE_GLAB_LOG": str(root / "glab.log"),
+                "FAKE_BASE_SHA": revision,
+                "FAKE_START_SHA": revision,
+                "FAKE_HEAD_SHA": revision,
+                "FAKE_CHANGED_PATH": "server-only.txt",
+            }
+            target = "https://gitlab.example/group/project/-/merge_requests/7"
+            prepared = self.run_runner(
+                "code-review",
+                "prepare",
+                "--url",
+                target,
+                "--repo-root",
+                str(repository),
+                env=environment,
+            )
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            prepared_payload = json.loads(prepared.stdout)
+            context = self.run_runner(
+                "code-review",
+                *prepared_payload["items"][0]["next_action"]["argv"][2:],
+                env=environment,
+            )
+            self.assertEqual(context.returncode, 2)
+            context_payload = json.loads(context.stdout)
+            self.assertEqual(context_payload["stage"], "prepared")
+            self.assertEqual(context_payload["next_action"]["argv"][2], "context")
+            status = self.run_runner(
+                "code-review",
+                "status",
+                "--artifact-root",
+                prepared_payload["items"][0]["artifact_root"],
+                env=environment,
+            )
+            self.assertEqual(json.loads(status.stdout)["stage"], "prepared")
+
+    def test_fast_review_skips_critic_and_irrecoverable_evidence_stays_blocked(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repository = root / "repository"
+            repository.mkdir()
+            for arguments in (
+                ("init", "-q"),
+                ("config", "user.email", "reviewer@example.invalid"),
+                ("config", "user.name", "Example Reviewer"),
+            ):
+                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+            (repository / "review.txt").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "review.txt"], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
+            revision = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            _glab, state = self.fake_glab(root)
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(state),
+                "FAKE_GLAB_LOG": str(root / "glab.log"),
+                "FAKE_BASE_SHA": revision,
+                "FAKE_START_SHA": revision,
+                "FAKE_HEAD_SHA": revision,
+            }
+            target = "https://gitlab.example/group/project/-/merge_requests/7"
+            prepared = self.run_runner(
+                "code-review",
+                "prepare",
+                "--url",
+                target,
+                "--repo-root",
+                str(repository),
+                "--review-mode",
+                "fast",
+                env=environment,
+            )
+            self.assertEqual(prepared.returncode, 0, prepared.stderr)
+            prepared_payload = json.loads(prepared.stdout)
+            context = self.run_runner(
+                "code-review",
+                *prepared_payload["items"][0]["next_action"]["argv"][2:],
+                env=environment,
+            )
+            self.assertEqual(context.returncode, 0, context.stderr)
+            context_payload = json.loads(context.stdout)
+            self.assertEqual(context_payload["review_mode"], "fast")
+            self.assertEqual(context_payload["next_action"]["argv"][2], "finalize")
+            artifact_root = prepared_payload["items"][0]["artifact_root"]
+            status = self.run_runner(
+                "code-review", "status", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(json.loads(status.stdout)["stage"], "finalize_missing")
+            finalized = self.run_runner(
+                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(finalized.returncode, 0, finalized.stderr)
+            Path(prepared_payload["items"][0]["artifact_path"]).unlink()
+            blocked = self.run_runner(
+                "code-review", "report-review", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(blocked.returncode, 4)
+            blocked_payload = json.loads(blocked.stdout)
+            self.assertEqual(blocked_payload["stage"], "stale")
+            self.assertIsNone(blocked_payload["next_action"])
 
     def test_runner_final_review_requires_bound_current_finalize_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1306,35 +1619,73 @@ print(json.dumps(value))
             self.assertEqual(
                 self.run_runner("code-review", "scaffold-batch", env=environment).returncode, 2
             )
-            prepared = self.run_runner("code-review", "prepare", "--url", target, env=environment)
+            prepared = self.run_runner(
+                "code-review",
+                "prepare",
+                "--url",
+                target,
+                "--repo-root",
+                str(repository),
+                "--review-mode",
+                "deep",
+                "--locale",
+                "en",
+                env=environment,
+            )
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
-            evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
+            prepared_payload = json.loads(prepared.stdout)
+            self.assertEqual(prepared_payload["items"][0]["stage"], "prepared")
+            self.assertEqual(prepared_payload["items"][0]["next_action"]["argv"][2], "context")
+            evidence = prepared_payload["items"][0]["artifact_path"]
             self.assertTrue(
                 json.loads(prepared.stdout)["items"][0]["complete"], Path(evidence).read_text()
             )
             evidence_digest = hashlib.sha256(Path(evidence).read_bytes()).hexdigest()
             artifact_root = json.loads(prepared.stdout)["items"][0]["artifact_root"]
+            next_status = self.run_runner(
+                "code-review", "next", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(next_status.returncode, 0, next_status.stderr)
+            self.assertEqual(json.loads(next_status.stdout)["stage"], "prepared")
             context_result = self.run_runner(
                 "code-review",
-                "context",
-                "--evidence",
-                evidence,
-                "--repo-root",
-                str(repository),
+                *prepared_payload["items"][0]["next_action"]["argv"][2:],
                 env=environment,
             )
             self.assertEqual(context_result.returncode, 0, context_result.stderr)
             context = json.loads(context_result.stdout)
             self.assertEqual(context["role"], "reviewer")
             self.assertEqual(context["counts"]["open_resolvable"], 1)
+            self.assertEqual(context["next_action"]["argv"][2], "template-review")
             context_digest = context["digest"]
             context_path = context["artifact_path"]
-            finalized = self.run_runner(
-                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
+            replayed_context = self.run_runner(
+                "code-review",
+                *prepared_payload["items"][0]["next_action"]["argv"][2:],
+                env=environment,
             )
-            self.assertEqual(finalized.returncode, 0, finalized.stdout + finalized.stderr)
-            finalize_digest = json.loads(finalized.stdout)["digest"]
-            finalize_report = json.loads(finalized.stdout)["artifact_path"]
+            self.assertEqual(replayed_context.returncode, 2)
+            replay_status = self.run_runner(
+                "code-review", "status", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(json.loads(replay_status.stdout)["stage"], "critic_missing")
+            critic_template_result = self.run_runner(
+                "code-review",
+                "template-review",
+                "--artifact-root",
+                artifact_root,
+                "--kind",
+                "critic",
+                env=environment,
+            )
+            self.assertEqual(critic_template_result.returncode, 0, critic_template_result.stderr)
+            critic_template = json.loads(
+                Path(json.loads(critic_template_result.stdout)["template_path"]).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(critic_template["run_id"], "")
+            self.assertEqual(critic_template["evidence_digest"], evidence_digest)
             primary_finding = {
                 "id": "primary-1",
                 "severity": "high",
@@ -1369,6 +1720,57 @@ print(json.dumps(value))
                 ),
                 encoding="utf-8",
             )
+            unrecorded_status = self.run_runner(
+                "code-review", "status", "--artifact-root", artifact_root, env=environment
+            )
+            unrecorded_payload = json.loads(unrecorded_status.stdout)
+            self.assertEqual(
+                unrecorded_payload.get("resume_stage") or unrecorded_payload["stage"],
+                "critic_missing",
+            )
+            recorded_receipt = self.run_runner(
+                "code-review",
+                "record-artifact",
+                "--kind",
+                "critic_receipt",
+                "--evidence",
+                evidence,
+                "--input",
+                str(receipt),
+                env=environment,
+            )
+            self.assertEqual(recorded_receipt.returncode, 0, recorded_receipt.stderr)
+            recorded_payload = json.loads(recorded_receipt.stdout)
+            self.assertEqual(recorded_payload["next_action"]["argv"][2], "finalize")
+            receipt_artifact = recorded_payload["artifact_path"]
+            receipt_artifact_digest = recorded_payload["digest"]
+            finalized = self.run_runner(
+                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(finalized.returncode, 0, finalized.stdout + finalized.stderr)
+            finalized_payload = json.loads(finalized.stdout)
+            self.assertEqual(finalized_payload["next_action"]["argv"][2], "template-review")
+            finalize_digest = finalized_payload["digest"]
+            finalize_report = finalized_payload["artifact_path"]
+            decision_template_result = self.run_runner(
+                "code-review",
+                "template-review",
+                "--artifact-root",
+                artifact_root,
+                "--kind",
+                "decision",
+                env=environment,
+            )
+            self.assertEqual(
+                decision_template_result.returncode, 0, decision_template_result.stderr
+            )
+            decision_template = json.loads(
+                Path(json.loads(decision_template_result.stdout)["template_path"]).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(decision_template["context_digest"], context_digest)
+            self.assertEqual(decision_template["unresolved_threads"], [{"id": "thread:42"}])
             decision = root / "decision.json"
             decision.write_text(
                 json.dumps(
@@ -1379,11 +1781,15 @@ print(json.dumps(value))
                         "evidence_digest": evidence_digest,
                         "finalize_digest": finalize_digest,
                         "context_digest": context_digest,
+                        "critic_receipt_digest": receipt_artifact_digest,
                         "verdict": "not_ready",
+                        "blocking_findings": True,
+                        "blocking_finding_ids": ["primary-1"],
+                        "owner_decision_reasons": [],
                         "run_id": "primary-run",
                         "session_id": "primary-session",
                         "findings": [primary_finding],
-                        "unresolved_threads": [{"id": "42"}],
+                        "unresolved_threads": [{"id": "thread:42"}],
                         "responses": [
                             {"id": "primary-1", "decision": "accept", "reason": "confirmed"},
                             {
@@ -1391,13 +1797,13 @@ print(json.dumps(value))
                                 "decision": "reject",
                                 "reason": "outside the changed contract",
                             },
-                            {"id": "42", "decision": "accept", "reason": "still open"},
+                            {"id": "thread:42", "decision": "accept", "reason": "still open"},
                         ],
                     }
                 ),
                 encoding="utf-8",
             )
-            reviewed = self.run_runner(
+            raw_receipt_review = self.run_runner(
                 "code-review",
                 "finalize-review",
                 "--evidence",
@@ -1414,52 +1820,60 @@ print(json.dumps(value))
                 "deep",
                 env=environment,
             )
+            self.assertEqual(raw_receipt_review.returncode, 2)
+            reviewed = self.run_runner(
+                "code-review",
+                "finalize-review",
+                "--evidence",
+                evidence,
+                "--report",
+                str(decision),
+                "--context",
+                context_path,
+                "--critic-receipt",
+                receipt_artifact,
+                "--finalize-report",
+                finalize_report,
+                "--mode",
+                "deep",
+                env=environment,
+            )
             self.assertEqual(reviewed.returncode, 0, reviewed.stderr)
             reviewed_result = json.loads(reviewed.stdout)
             self.assertFalse(reviewed_result["external_mutations"])
+            content_template_result = self.run_runner(
+                "code-review",
+                "template-review",
+                "--artifact-root",
+                artifact_root,
+                "--kind",
+                "content",
+                env=environment,
+            )
+            self.assertEqual(content_template_result.returncode, 0, content_template_result.stderr)
+            generated_content = json.loads(
+                Path(json.loads(content_template_result.stdout)["template_path"]).read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertNotIn("presentation", generated_content)
+            self.assertEqual(len(generated_content["thread_decisions"]), 1)
+            self.assertEqual(len(generated_content["label_assessments"]), 4)
             review_content = root / "review-content.json"
             review_content.write_text(
                 json.dumps(
                     {
-                        "presentation": {
-                            "title": "Code review publication plan",
-                            "incremental_notice": None,
-                            "target_label": "Target",
-                            "role_label": "Role",
-                            "role_value": "reviewer",
-                            "verdict_label": "Verdict",
-                            "verdict_value": "changes required",
-                            "metadata_heading": "MR metadata",
-                            "labels_heading": "Project labels",
-                            "previous_findings_heading": "Previous findings",
-                            "open_threads_heading": "Open threads",
-                            "closed_threads_heading": "Closed threads",
-                            "local_fixes_heading": "Local fixes",
-                            "new_findings_heading": "New findings",
-                            "recommended_issues_heading": "Recommended issues",
-                            "checked_heading": "Reviewed without publication",
-                            "architecture_heading": "Architecture assessment",
-                            "semver_heading": "SemVer impact",
-                            "checks_heading": "Checks",
-                            "publication_heading": "Manual publication preflight",
-                            "no_items": "None.",
-                            "publication_warning": "No command was executed.",
-                            "evidence_label": "Evidence",
-                            "relation_label": "Relation to change",
-                            "severity_labels": {
-                                "critical": "Critical",
-                                "high": "High",
-                                "medium": "Medium",
-                                "low": "Low",
+                        "locale": "en",
+                        "chat_assessment": {
+                            "necessity": {
+                                "status": "supported",
+                                "rationale": "The retry defect is confirmed.",
                             },
-                            "recovery_label": "If the response succeeds but the state change fails, run only:",
-                            "previous_table_headers": [
-                                "ID",
-                                "Previous status",
-                                "Current status",
-                                "Rationale",
-                                "Action",
-                            ],
+                            "relevance": {
+                                "status": "current",
+                                "rationale": "The exact reviewed head is current.",
+                            },
+                            "change": "The MR adds retry behavior but does not reserve an idempotency key before the external call.",
                         },
                         "summary": "The change is small and preserves the reviewed contract.",
                         "architecture_assessment": "The responsibility remains with its existing owner.",
@@ -1651,9 +2065,35 @@ print(json.dumps(value))
             self.assertEqual(
                 plan_document["payload"]["label_review"]["semver"]["selected"], "semver::patch"
             )
+            self.assertEqual(plan_document["payload"]["review_contract_version"], 4)
+            report = self.run_runner(
+                "code-review", "report-review", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(report.returncode, 0, report.stderr)
+            report_payload = json.loads(report.stdout)
+            self.assertEqual(report_payload["stage"], "plan_ready")
+            self.assertIn(plan_result["markdown_path"], report_payload["chat"])
+            self.assertIn("### MR assessment", report_payload["chat"])
+            self.assertNotIn(primary_finding["summary"], report_payload["chat"])
+            self.assertNotIn(primary_finding["evidence"][0], report_payload["chat"])
+            (Path(artifact_root) / "current.json").write_text(
+                json.dumps(
+                    {
+                        "evidence_path": "/unrelated/profile/evidence.json",
+                        "evidence_digest": "0" * 64,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            still_active = self.run_runner(
+                "code-review", "report-review", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(still_active.returncode, 0, still_active.stderr)
             contract_two_plan = json.loads(json.dumps(plan_document))
             contract_two_payload = contract_two_plan["payload"]
             contract_two_payload["review_contract_version"] = 2
+            contract_two_payload.pop("chat_assessment")
+            contract_two_payload.pop("locale")
             for publication in contract_two_payload["finding_publications"]:
                 for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
                     publication.pop(key)
@@ -1824,28 +2264,58 @@ print(json.dumps(value))
                 2,
             )
             self.assertTrue((Path(artifact_root) / "review-baseline.json").is_file())
-            unchanged_context = self.run_runner(
+            unchanged_prepared = self.run_runner(
                 "code-review",
-                "context",
-                "--evidence",
-                evidence,
+                "prepare",
+                "--url",
+                target,
                 "--repo-root",
                 str(repository),
+                env=environment,
+            )
+            self.assertEqual(unchanged_prepared.returncode, 0, unchanged_prepared.stderr)
+            unchanged_prepared_payload = json.loads(unchanged_prepared.stdout)
+            unchanged_context = self.run_runner(
+                "code-review",
+                *unchanged_prepared_payload["items"][0]["next_action"]["argv"][2:],
                 env=environment,
             )
             self.assertEqual(unchanged_context.returncode, 0, unchanged_context.stderr)
             unchanged = json.loads(unchanged_context.stdout)["incremental"]
             self.assertEqual(unchanged["mode"], "unchanged")
             self.assertFalse(unchanged["critic_required"])
-            full_context = self.run_runner(
-                "code-review",
+            baseline_path = Path(artifact_root) / "review-baseline.json"
+            baseline_bytes = baseline_path.read_bytes()
+            baseline_path.unlink()
+            missing_baseline_report = self.run_runner(
+                "code-review", "report-review", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(missing_baseline_report.returncode, 4)
+            missing_baseline_payload = json.loads(missing_baseline_report.stdout)
+            self.assertEqual(missing_baseline_payload["stage"], "stale")
+            self.assertEqual(
+                missing_baseline_payload["next_action"]["argv"][2],
                 "context",
-                "--evidence",
-                evidence,
+            )
+            baseline_path.write_bytes(baseline_bytes)
+            full_prepared = self.run_runner(
+                "code-review",
+                "prepare",
+                "--url",
+                target,
                 "--repo-root",
                 str(repository),
                 "--incremental",
                 "off",
+                env=environment,
+            )
+            self.assertEqual(full_prepared.returncode, 0, full_prepared.stderr)
+            full_prepared_payload = json.loads(full_prepared.stdout)
+            full_action = full_prepared_payload["items"][0]["next_action"]["argv"]
+            self.assertEqual(full_action[full_action.index("--incremental") + 1], "off")
+            full_context = self.run_runner(
+                "code-review",
+                *full_prepared_payload["items"][0]["next_action"]["argv"][2:],
                 env=environment,
             )
             self.assertEqual(full_context.returncode, 0, full_context.stderr)
@@ -1944,11 +2414,16 @@ print(json.dumps(value))
                 env=environment,
             )
             self.assertEqual(stale_plan.returncode, 2)
+            author_prepared = self.run_runner(
+                "code-review", "prepare", "--url", target, env=environment
+            )
+            self.assertEqual(author_prepared.returncode, 0, author_prepared.stderr)
+            author_evidence = json.loads(author_prepared.stdout)["items"][0]["artifact_path"]
             author_context = self.run_runner(
                 "code-review",
                 "context",
                 "--evidence",
-                evidence,
+                author_evidence,
                 "--repo-root",
                 str(repository),
                 env=environment,
@@ -1995,6 +2470,23 @@ print(json.dumps(value))
             state.write_text("changed", encoding="utf-8")
             newer = self.run_runner("code-review", "prepare", "--url", target, env=environment)
             self.assertEqual(newer.returncode, 0, newer.stderr)
+            inactive_publication = subprocess.run(
+                contract_three_command,
+                cwd=root,
+                env=publish_environment,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(inactive_publication.returncode, 2)
+            blocked_report = self.run_runner(
+                "code-review", "report-review", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(blocked_report.returncode, 4, blocked_report.stderr)
+            blocked_payload = json.loads(blocked_report.stdout)
+            self.assertEqual(blocked_payload["stage"], "stale")
+            self.assertEqual(blocked_payload["next_action"]["argv"][2], "context")
+            self.assertNotIn(primary_finding["summary"], blocked_payload["chat"])
             stale = self.run_runner(
                 "code-review",
                 "finalize-review",
@@ -2040,6 +2532,8 @@ print(json.dumps(value))
                 incremental_evidence,
                 "--repo-root",
                 str(repository),
+                "--locale",
+                "ru",
                 env=environment,
             )
             self.assertEqual(incremental_context.returncode, 0, incremental_context.stderr)
@@ -2062,11 +2556,6 @@ print(json.dumps(value))
             incremental_evidence_digest = hashlib.sha256(
                 Path(incremental_evidence).read_bytes()
             ).hexdigest()
-            incremental_finalized = self.run_runner(
-                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
-            )
-            self.assertEqual(incremental_finalized.returncode, 0, incremental_finalized.stderr)
-            incremental_finalize = json.loads(incremental_finalized.stdout)
             incremental_finding = {
                 **primary_finding,
                 "evidence": [
@@ -2093,6 +2582,47 @@ print(json.dumps(value))
                 ),
                 encoding="utf-8",
             )
+            wrong_scope_receipt = root / "wrong-scope-receipt.json"
+            wrong_scope_value = json.loads(incremental_receipt.read_text(encoding="utf-8"))
+            wrong_scope_value["scope_digest"] = "0" * 64
+            wrong_scope_receipt.write_text(json.dumps(wrong_scope_value), encoding="utf-8")
+            rejected_scope = self.run_runner(
+                "code-review",
+                "record-artifact",
+                "--kind",
+                "critic_receipt",
+                "--evidence",
+                incremental_evidence,
+                "--input",
+                str(wrong_scope_receipt),
+                env=environment,
+            )
+            self.assertEqual(rejected_scope.returncode, 2)
+            recorded_incremental_receipt = self.run_runner(
+                "code-review",
+                "record-artifact",
+                "--kind",
+                "critic_receipt",
+                "--evidence",
+                incremental_evidence,
+                "--input",
+                str(incremental_receipt),
+                env=environment,
+            )
+            self.assertEqual(
+                recorded_incremental_receipt.returncode,
+                0,
+                recorded_incremental_receipt.stderr,
+            )
+            incremental_receipt_artifact = json.loads(recorded_incremental_receipt.stdout)[
+                "artifact_path"
+            ]
+            incremental_receipt_digest = json.loads(recorded_incremental_receipt.stdout)["digest"]
+            incremental_finalized = self.run_runner(
+                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(incremental_finalized.returncode, 0, incremental_finalized.stderr)
+            incremental_finalize = json.loads(incremental_finalized.stdout)
             incremental_decision = root / "incremental-decision.json"
             incremental_decision.write_text(
                 json.dumps(
@@ -2103,11 +2633,15 @@ print(json.dumps(value))
                         "evidence_digest": incremental_evidence_digest,
                         "finalize_digest": incremental_finalize["digest"],
                         "context_digest": incremental_context_result["digest"],
+                        "critic_receipt_digest": incremental_receipt_digest,
                         "verdict": "not_ready",
+                        "blocking_findings": True,
+                        "blocking_finding_ids": ["primary-1"],
+                        "owner_decision_reasons": [],
                         "run_id": "incremental-primary-run",
                         "session_id": "incremental-primary-session",
                         "findings": [incremental_finding],
-                        "unresolved_threads": [{"id": "42"}],
+                        "unresolved_threads": [{"id": "thread:42"}],
                         "responses": [
                             {"id": "primary-1", "decision": "accept", "reason": "still active"},
                             {
@@ -2115,7 +2649,7 @@ print(json.dumps(value))
                                 "decision": "reject",
                                 "reason": "still outside the changed contract",
                             },
-                            {"id": "42", "decision": "accept", "reason": "reply required"},
+                            {"id": "thread:42", "decision": "accept", "reason": "reply required"},
                         ],
                     }
                 ),
@@ -2131,7 +2665,7 @@ print(json.dumps(value))
                 "--context",
                 incremental_context_result["artifact_path"],
                 "--critic-receipt",
-                str(incremental_receipt),
+                incremental_receipt_artifact,
                 "--finalize-report",
                 incremental_finalize["artifact_path"],
                 "--mode",
@@ -2143,45 +2677,17 @@ print(json.dumps(value))
             incremental_content.write_text(
                 json.dumps(
                     {
-                        "presentation": {
-                            "title": "План публикации ревью",
-                            "incremental_notice": "Проведено инкрементальное ревью.",
-                            "target_label": "MR",
-                            "role_label": "Роль",
-                            "role_value": "ревьюер",
-                            "verdict_label": "Итог",
-                            "verdict_value": "нужны изменения",
-                            "metadata_heading": "Оформление MR",
-                            "labels_heading": "Лейблы проекта",
-                            "previous_findings_heading": "Сверка предыдущих обнаружений",
-                            "open_threads_heading": "Открытые треды",
-                            "closed_threads_heading": "Закрытые треды",
-                            "local_fixes_heading": "Локальные исправления",
-                            "new_findings_heading": "Новые обнаружения",
-                            "recommended_issues_heading": "Рекомендуемые задачи",
-                            "checked_heading": "Проверено без публикации",
-                            "architecture_heading": "Архитектурная оценка",
-                            "semver_heading": "Влияние на SemVer",
-                            "checks_heading": "Проверки",
-                            "publication_heading": "Ручная публикация",
-                            "no_items": "Нет.",
-                            "publication_warning": "Команды не выполнялись.",
-                            "evidence_label": "Доказательство",
-                            "relation_label": "Связь с изменением",
-                            "severity_labels": {
-                                "critical": "Критическая",
-                                "high": "Высокая",
-                                "medium": "Средняя",
-                                "low": "Низкая",
+                        "locale": "ru",
+                        "chat_assessment": {
+                            "necessity": {
+                                "status": "supported",
+                                "rationale": "Риск повторного вызова подтверждён.",
                             },
-                            "recovery_label": "Если ответ опубликован, а состояние не изменилось, выполни только:",
-                            "previous_table_headers": [
-                                "ID",
-                                "Было",
-                                "Стало",
-                                "Основание",
-                                "Действие",
-                            ],
+                            "relevance": {
+                                "status": "current",
+                                "rationale": "Проверен текущий exact head.",
+                            },
+                            "change": "Повторная проверка подтверждает, что риск идемпотентности сохраняется.",
                         },
                         "summary": "The follow-up keeps the original retry risk active.",
                         "architecture_assessment": "The responsibility remains with its owner.",
@@ -2355,13 +2861,22 @@ print(json.dumps(value))
             self.assertNotIn("`high`", incremental_markdown)
             self.assertIn("| primary-1 | Актуально | Изменено |", incremental_markdown)
             self.assertNotIn(next_head, incremental_markdown)
-            retained_marker_context = self.run_runner(
+            retained_prepared = self.run_runner(
                 "code-review",
-                "context",
-                "--evidence",
-                incremental_evidence,
+                "prepare",
+                "--url",
+                target,
                 "--repo-root",
                 str(repository),
+                "--locale",
+                "ru",
+                env=environment,
+            )
+            self.assertEqual(retained_prepared.returncode, 0, retained_prepared.stderr)
+            retained_prepared_payload = json.loads(retained_prepared.stdout)
+            retained_marker_context = self.run_runner(
+                "code-review",
+                *retained_prepared_payload["items"][0]["next_action"]["argv"][2:],
                 env=environment,
             )
             self.assertEqual(retained_marker_context.returncode, 0, retained_marker_context.stderr)

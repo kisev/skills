@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 6,
+  "revision": 7,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Validate exact SHA, completeness, critic, exhaustive labels, suggestion or patch fixes, role-authored prose, confirmed helper actions, inherited glab environment, publication diagnostics, and stale finalize contracts.",
+    "prompt": "Exercise exact SHA collection, runner-owned stage ordering, recorded critic, final chat rendering, premature-report blocking, and stale-plan blocking; also assert the source contracts for exhaustive labels and threads, validated fixes, role-authored prose, confirmed helper actions, inherited glab environment, diagnostics, and low-severity verdict policy.",
     "fixture": {
       "selected": ["skill:code-review"]
     },
@@ -48,7 +48,7 @@
       "contains": "Analyze every label in the complete project and inherited-group catalog"
     },
     {
-      "id": "suggestion",
+      "id": "fix-mode-contract",
       "path": "skills/code-review/references/workflow.md",
       "contains": "fix_mode=patch"
     },
@@ -71,6 +71,26 @@
       "id": "publication-diagnostics",
       "path": "skills/code-review/scripts/review_publish.py",
       "contains": "http_status="
+    },
+    {
+      "id": "runner-owned-report",
+      "path": "skills/code-review/scripts/review_context.py",
+      "contains": "def report_review("
+    },
+    {
+      "id": "out-of-order-gate",
+      "path": "shared/references/portable_gitlab/contract.py",
+      "contains": "finalize-review is out of order"
+    },
+    {
+      "id": "verbatim-chat",
+      "path": "skills/code-review/references/review-state-machine.md",
+      "contains": "print its `chat` value verbatim"
+    },
+    {
+      "id": "low-non-blocking",
+      "path": "skills/code-review/references/review-state-machine.md",
+      "contains": "An accepted `low` finding is"
     }
   ],
   "sandbox": {
@@ -83,7 +103,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "113aed369e3b4551ffbc05e0f577a4abc0f12a77eeaa0f57861a70da20674526",
+  "digest": "eb28f56293345c36b5dc2f4c5c3e5519d253346d2f23cafdaed9fce807f775d8",
   "locale": "neutral",
   "pair_id": null
 }

@@ -27,7 +27,7 @@ delta. Concrete label names are catalog results, never policy constants.
 New code-review findings record severity, risk, exact evidence, consequence,
 relation to the reviewed change, and a minimum fix. Legacy ID-only findings
 remain readable for existing v2 artifacts but cannot create a new review plan.
-Review contracts 2 and 3 also contain an evidence-derived MR metadata assessment,
+Review contracts 2 through 4 also contain an evidence-derived MR metadata assessment,
 a closed SemVer impact with rationale, localized presentation labels, a compact
 disposition for every previous finding, stable finding revisions, non-blocking
 recommended issues, and an exhaustive applicability decision for every exact
@@ -41,6 +41,14 @@ one textual unified patch. `not_required` is limited to threads without a code
 correction. Patches are checked against the exact reviewed head in a temporary
 Git index, reject binary, symlink, rename, traversal, and oversized content, and
 are stored as immutable private `.patch` files without changing the checkout.
+Contract 4 adds a semantic chat assessment and runner-owned presentation. A
+code-review-owned evidence pointer and target-scoped progress pointer expose
+prepared, context, critic, finalize, decision, content, plan, and stale stages
+without depending on another profile's shared collection pointer. Generated private drafts bind exact
+labels, threads, latest-note digests, critic scope, pipeline state, and prior
+artifacts. When the selected mode requires a critic, only a recorded
+content-addressed receipt can advance the workflow. Only a fresh contract-4 plan
+can render final chat.
 Publication bodies carry hidden stable-ID markers. Marker text is untrusted
 unless it matches the authenticated current user, exact MR, and finalized local
 baseline.
@@ -61,13 +69,17 @@ exact marker and performs only a pending idempotent thread-state phase after a
 posted reply. A legacy `phase=unknown` receipt without diagnostic evidence may
 retry only after a complete exact marker or label-state absence check; a
 completed action is never reopened after remote drift.
+For contract 4, the helper also holds the target review-state activation lock
+from a final current-evidence, progress, baseline, Markdown, and plan check
+through mutation and postcondition verification. A concurrent `prepare` cannot
+leave the superseded plan executable.
 
 The immutable review-plan envelope embeds the complete Markdown. A successful
 scaffold atomically replaces the target-scoped `review-publication.md` and a
 private pointer to that immutable plan. Contract 1 command plans remain readable
 as baselines but are never executable by the structured helper. Contract-2
-structured actions remain executable, but contract-1 and contract-2 plans fall
-back to a full review rather than becoming a contract-3 incremental baseline. Exact refs live
+structured actions remain executable, but older plans fall back to a full review
+rather than becoming a contract-4 incremental baseline. Exact refs live
 in private evidence and preflight JSON; the user-facing plan does not display raw
 commit SHAs. Prepare and review never invoke helper actions. MR state is recorded
 but does not suppress actions for merged or closed MRs.
@@ -76,7 +88,8 @@ but does not suppress actions for merged or closed MRs.
 also binds it to the exact publication plan digest. A critic receipt for an
 incremental review additionally binds the incremental-delta digest.
 `review_decision` binds a fresh report and gives every finding `accept` or
-`reject` with a reason.
+`reject` with a reason. When a critic is required, the decision also binds the
+exact recorded critic-receipt digest selected by progress state.
 `release_readiness` binds range/SHA, SemVer, compatibility, migration, rollback,
 and CI gates; `ready` needs complete evidence and closed gates.
 

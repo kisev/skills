@@ -21,9 +21,11 @@ and digest-confirmed single-action helper commands.
 
 Resolve boundary, select full or GitLab-only incremental scope, inspect code and
 contracts, revalidate previous findings, inspect every available project and
-inherited-group label, run the critic, classify actions, and report. A separately
-invoked helper follows `confirm -> revalidate -> apply one action -> verify ->
-report`.
+inherited-group label, record the critic when required, finalize evidence and the
+decision, scaffold a contract-4 plan, and render chat from that plan. The runner
+exposes the current stage and exact next action so interrupted reviews can resume
+without guessing. A separately invoked helper follows `confirm -> revalidate ->
+apply one action -> verify -> report`.
 
 ## Dependencies
 
@@ -39,11 +41,19 @@ invokes publication or edits reviewed files. A user
 may separately run one generated Python helper command to create or update a
 discussion, issue, thread state, or exact label delta after confirming that
 action's digest. The helper invokes `glab` without a shell, inherits but never
-serializes the parent environment, and records an atomic private receipt.
+serializes the parent environment, holds the shared review-state activation lock
+through final active-plan validation and mutation, and records an atomic private
+receipt.
 
 ## Errors, Partial, Escalation
 
 Missing exact evidence or a required critic is blocked, not silently ignored.
+Missing or stale context, critic, finalize, decision, content, plan, baseline, or
+Markdown bindings make the final report blocked; findings are never reported as
+a best-effort substitute. A failed exact-head pipeline without a blocking
+finding requires an owner decision, while low findings are non-blocking.
+Irrecoverable loss of the current evidence remains blocked without a synthesized
+next action because the target can no longer be trusted.
 Changed comparison boundaries, rewritten history, incompatible state, or
 incomplete baseline evidence select a full review instead of partial reuse.
 The publication helper rejects a missing or changed action/body digest, path
@@ -89,10 +99,18 @@ checkout; a thread without a code correction shall explicitly use
 `not_required`. It shall encode each external write as
 one closed structured action whose short Python-helper command requires that
 action's digest, revalidates bounded local and live GitLab state, invokes `glab`
-through inherited environment without a shell, emits bounded redacted request
-diagnostics, distinguishes definitive non-mutating rejection from uncertain
-outcomes, and recovers without duplicate publication; preparation shall never
-invoke it.
+through inherited environment without a shell, holds the shared review-state
+activation lock through active-plan validation and mutation, emits bounded
+redacted request diagnostics, distinguishes definitive non-mutating rejection
+from uncertain outcomes, and recovers without duplicate publication;
+preparation shall never invoke it. For remote review, the runner shall own a resumable fail-closed state
+machine from prepared evidence through a recorded independent critic when the
+selected mode requires one, fresh finalize report, bound decision, contract-4
+plan, baseline, Markdown, and final chat rendering. It shall generate model-ready critic, decision, and content
+templates with exact artifact, label, thread, latest-note, and pipeline bindings;
+reject out-of-order, incomplete, or stale stages; keep reviewer finding details
+out of chat; treat low findings as non-blocking; and render a failed exact-head
+pipeline without another blocking finding as owner decision required.
 
 ## Example
 

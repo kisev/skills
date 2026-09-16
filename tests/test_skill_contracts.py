@@ -234,6 +234,8 @@ def test_code_review_requires_compact_incremental_confirmed_publication_contract
         "fix_mode=patch",
         "temporary index",
         "bounded redacted diagnostics",
+        "runner-owned stages",
+        "print its `chat` field verbatim",
     ):
         assert marker in workflow
     output = (ROOT / "skills/code-review/references/output-format.md").read_text(encoding="utf-8")
@@ -249,8 +251,23 @@ def test_code_review_requires_compact_incremental_confirmed_publication_contract
         "factual role",
         "informal second-person",
         "exhaustive one-entry-per-catalog-label assessment",
+        "report-review` owns the labels and layout",
     ):
         assert marker in output
+    state_machine = (ROOT / "skills/code-review/references/review-state-machine.md").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "critic_missing",
+        "finalize_missing",
+        "decision_missing",
+        "content_missing",
+        "plan_ready",
+        "subagent text is not a critic receipt",
+        "print its `chat` value verbatim",
+        "An accepted `low` finding is",
+    ):
+        assert marker in state_machine
     for marker in (
         "Local WIP always receives",
         "delta-triggered scope",

@@ -227,10 +227,11 @@ def check_evidence(
         if not isinstance(eval_ids, list) or not eval_ids:
             raise SpecError("evidence_profile", name)
         for selected in selectors:
-            selector_path, _, selector_text = selected.partition("::")
+            selector_path, *selector_nodes = selected.split("::")
             target = ROOT / selector_path
             if not target.is_file() or (
-                selector_text and selector_text not in target.read_text(encoding="utf-8")
+                selector_nodes
+                and not all(node in target.read_text(encoding="utf-8") for node in selector_nodes)
             ):
                 raise SpecError("stale_selector", name)
         for eval_id in eval_ids:

@@ -10,6 +10,7 @@ import re
 import shlex
 import fcntl
 import subprocess
+import sys
 import tempfile
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -24,8 +25,22 @@ else:
 
 
 INCREMENTAL_CONTRACT_VERSION = 1
-REVIEW_CONTRACT_VERSION = 3
+REVIEW_CONTRACT_VERSION = 4
 BASELINE_NAME = "review-baseline.json"
+PROGRESS_NAME = "review-current.json"
+REVIEW_EVIDENCE_NAME = "review-evidence.json"
+REVIEW_STAGES = {
+    "prepared",
+    "context_ready",
+    "critic_missing",
+    "finalize_missing",
+    "decision_missing",
+    "content_missing",
+    "plan_ready",
+    "stale",
+}
+REVIEW_MODES = {"fast", "normal", "deep", "incremental", "unchanged"}
+SUPPORTED_LOCALES = {"en", "ru"}
 PUBLICATION_MARKER_RE = re.compile(
     r"<!-- code-review:id=(?P<id>[A-Za-z0-9][A-Za-z0-9._-]{0,63});"
     r"revision=(?P<revision>[1-9][0-9]*);kind=(?P<kind>finding|thread|issue);"
@@ -39,6 +54,213 @@ SUGGESTION_RE = re.compile(
 )
 SUGGESTION_OPENER_RE = re.compile(r"^```suggestion[^\r\n]*$", re.MULTILINE)
 PREVIOUS_FINDING_STATUSES = {"active", "fixed", "withdrawn", "changed", "unverified"}
+
+
+def runner_action(
+    command: str, *arguments: str, required_inputs: tuple[str, ...] = ()
+) -> dict[str, Any]:
+    argv = [sys.executable, str(Path(__file__).resolve().with_name("review_mr.py")), command]
+    argv.extend(arguments)
+    return {
+        "command": " ".join(shlex.quote(value) for value in argv),
+        "argv": argv,
+        "required_inputs": list(required_inputs),
+    }
+
+
+def empty_progress(
+    evidence_path: Path,
+    evidence_digest: str,
+    *,
+    repo_root: str | None = None,
+    mode: str | None = None,
+    locale: str | None = None,
+    incremental: str = "auto",
+) -> dict[str, Any]:
+    return {
+        "schema": "code-review/progress/v1",
+        "stage": "prepared",
+        "evidence_path": str(evidence_path),
+        "evidence_digest": evidence_digest,
+        "repo_root": repo_root,
+        "context_path": None,
+        "context_digest": None,
+        "mode": mode,
+        "locale": locale,
+        "incremental": incremental,
+        "critic_receipt_path": None,
+        "critic_receipt_digest": None,
+        "finalize_report_path": None,
+        "finalize_report_digest": None,
+        "decision_path": None,
+        "decision_digest": None,
+        "plan_path": None,
+        "plan_digest": None,
+        "updated_at": datetime.now(UTC).isoformat(),
+    }
+
+
+def validate_progress(value: object, root: Path) -> dict[str, Any]:
+    required = set(empty_progress(root / "placeholder", "0" * 64))
+    if not isinstance(value, dict) or set(value) != required:
+        raise portable.WorkflowError("code-review progress has an invalid shape")
+    if (
+        value.get("schema") != "code-review/progress/v1"
+        or value.get("stage") not in REVIEW_STAGES
+        or not portable.is_digest(value.get("evidence_digest"))
+        or value.get("mode") is not None
+        and value.get("mode") not in REVIEW_MODES
+        or value.get("locale") is not None
+        and value.get("locale") not in SUPPORTED_LOCALES
+        or value.get("incremental") not in {"auto", "off"}
+        or value.get("repo_root") is not None
+        and (
+            not portable.nonempty_string(value.get("repo_root"))
+            or not Path(cast(str, value["repo_root"])).is_absolute()
+        )
+        or not portable.nonempty_string(value.get("updated_at"))
+    ):
+        raise portable.WorkflowError("code-review progress is invalid")
+    for prefix in ("evidence", "context", "critic_receipt", "finalize_report", "decision", "plan"):
+        path_value = value.get(f"{prefix}_path")
+        digest_value = value.get(f"{prefix}_digest")
+        if (path_value is None) != (digest_value is None):
+            raise portable.WorkflowError("code-review progress artifact binding is incomplete")
+        if path_value is None:
+            continue
+        path = Path(str(path_value))
+        if (
+            not path.is_absolute()
+            or not path.is_relative_to(root)
+            or not portable.is_digest(digest_value)
+        ):
+            raise portable.WorkflowError("code-review progress artifact binding is unsafe")
+    return cast(dict[str, Any], value)
+
+
+def progress_path(root: Path) -> Path:
+    return root / PROGRESS_NAME
+
+
+def review_evidence_from_root(root: Path) -> tuple[Path, dict[str, Any]]:
+    pointer = portable.exact_keys(
+        portable.read_json(root / REVIEW_EVIDENCE_NAME, "current review evidence"),
+        {"evidence_path", "evidence_digest"},
+        "current review evidence",
+    )
+    digest = pointer["evidence_digest"]
+    if not portable.is_digest(digest):
+        raise portable.WorkflowError("current review evidence digest is invalid")
+    source = portable.regular_file(Path(str(pointer["evidence_path"])), "review evidence")
+    expected = root / "artifacts" / "evidence_snapshot" / f"{digest}.json"
+    if source != expected or hashlib.sha256(source.read_bytes()).hexdigest() != digest:
+        raise portable.WorkflowError("current review evidence binding changed")
+    _, evidence = portable.artifact_payload(source, "evidence_snapshot")
+    if evidence.get("profile") != "code-review":
+        raise portable.WorkflowError("current review evidence has the wrong profile")
+    return source, evidence
+
+
+def load_progress(root: Path) -> dict[str, Any] | None:
+    path = progress_path(root)
+    if not path.exists() and not path.is_symlink():
+        return None
+    return validate_progress(portable.read_json(path, "code-review progress"), root)
+
+
+def begin_review(
+    evidence_path: str,
+    evidence_digest: str,
+    artifact_root: str,
+    repo_root: str | None = None,
+    mode: str = "normal",
+    locale: str = "en",
+    incremental: str = "auto",
+) -> dict[str, Any]:
+    root = portable.artifact_root(Path(artifact_root))
+    source = portable.regular_file(Path(evidence_path), "review evidence")
+    expected = root / "artifacts" / "evidence_snapshot" / f"{evidence_digest}.json"
+    if source != expected or hashlib.sha256(source.read_bytes()).hexdigest() != evidence_digest:
+        raise portable.WorkflowError("review evidence cannot initialize progress")
+    if (
+        mode not in {"fast", "normal", "deep"}
+        or locale not in SUPPORTED_LOCALES
+        or incremental not in {"auto", "off"}
+    ):
+        raise portable.WorkflowError("review mode or locale cannot initialize progress")
+    resolved_repo = str(Path(repo_root).resolve()) if repo_root is not None else None
+    value = empty_progress(
+        source,
+        evidence_digest,
+        repo_root=resolved_repo,
+        mode=mode,
+        locale=locale,
+        incremental=incremental,
+    )
+    current_path = root / REVIEW_EVIDENCE_NAME
+    state_path = progress_path(root)
+    with review_state_lock(root):
+        if current_path.is_symlink() or state_path.is_symlink():
+            raise portable.WorkflowError("review current-state paths must not be symbolic links")
+        previous_current = current_path.read_bytes() if current_path.exists() else None
+        previous_progress = state_path.read_bytes() if state_path.exists() else None
+        try:
+            portable.write_json(state_path, value)
+            portable.write_json(
+                current_path,
+                {"evidence_path": str(source), "evidence_digest": evidence_digest},
+            )
+        except (OSError, UnicodeDecodeError, portable.WorkflowError):
+            for path, previous in (
+                (state_path, previous_progress),
+                (current_path, previous_current),
+            ):
+                if previous is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    replace_private_bytes(path, previous)
+            raise
+    return value
+
+
+def advance_progress(
+    root: Path,
+    stage: str,
+    *,
+    expected_stages: set[str] | None = None,
+    expected: dict[str, object] | None = None,
+    **changes: object,
+) -> dict[str, Any]:
+    if stage not in REVIEW_STAGES:
+        raise portable.WorkflowError("code-review progress stage is invalid")
+    with review_state_lock(root):
+        path = progress_path(root)
+        if path.exists() or path.is_symlink():
+            current = validate_progress(portable.read_json(path, "code-review progress"), root)
+        else:
+            evidence_path, _ = review_evidence_from_root(root)
+            evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+            current = empty_progress(evidence_path, evidence_digest)
+        if expected_stages is not None and current["stage"] not in expected_stages:
+            raise portable.WorkflowError("code-review progress changed during transition")
+        if expected is not None and (
+            not set(expected).issubset(current)
+            or any(current[key] != value for key, value in expected.items())
+        ):
+            raise portable.WorkflowError("code-review progress binding changed during transition")
+        unknown = set(changes) - set(current)
+        if unknown:
+            raise portable.WorkflowError("code-review progress update has unknown fields")
+        value = {**current, **changes, "stage": stage, "updated_at": datetime.now(UTC).isoformat()}
+        validate_progress(value, root)
+        portable.write_json(path, value)
+        return value
+
+
+def localized_presentation(
+    locale: str, role: str, verdict: str, incremental_mode: str
+) -> dict[str, Any]:
+    return portable.code_review_presentation(locale, role, verdict, incremental_mode)
 
 
 def repository_root(value: str) -> Path:
@@ -240,7 +462,7 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
         raise portable.WorkflowError("code-review baseline plan digest changed")
     if (
         plan.get("complete") is not True
-        or plan.get("review_contract_version") not in {1, 2, REVIEW_CONTRACT_VERSION}
+        or plan.get("review_contract_version") not in {1, 2, 3, REVIEW_CONTRACT_VERSION}
         or plan.get("target") != pointer.get("target")
     ):
         raise portable.WorkflowError("code-review baseline is incomplete or incompatible")
@@ -558,7 +780,7 @@ def incremental_context(
         _, old_context = artifact_for_digest(root, "review_context", plan.get("context_digest"))
         failures: list[str] = []
         if plan.get("review_contract_version") != REVIEW_CONTRACT_VERSION:
-            failures.append("baseline review contract predates validated fix artifacts")
+            failures.append("baseline review contract predates runner-owned final reporting")
         if (
             old_context.get("evidence_digest") != plan.get("evidence_digest")
             or old_context.get("target") != plan.get("target")
@@ -1062,13 +1284,97 @@ def collect_context(
 
 
 def prepare_context(
-    evidence_value: str, repo_root: str, incremental: str = "auto"
+    evidence_value: str,
+    repo_root: str,
+    incremental: str = "auto",
+    review_mode: str = "normal",
+    locale: str = "en",
 ) -> dict[str, object]:
-    _, evidence, root, evidence_digest = evidence_context(evidence_value)
+    if review_mode not in {"fast", "normal", "deep"}:
+        raise portable.WorkflowError("review mode must be fast, normal, or deep")
+    if locale not in SUPPORTED_LOCALES:
+        raise portable.WorkflowError("review locale must be en or ru")
+    evidence_path, evidence, root, evidence_digest = evidence_context(evidence_value)
+    current_evidence_path, _ = review_evidence_from_root(root)
+    if current_evidence_path != evidence_path:
+        raise portable.WorkflowError("review context requires the current evidence snapshot")
     context = collect_context(evidence, evidence_digest, repo_root, incremental)
     path, context_digest = portable.write_artifact(root, "review_context", context)
     incremental_value = cast(dict[str, Any], context["incremental"])
     delta = cast(dict[str, Any], incremental_value["incremental_delta"])
+    selected_mode = (
+        incremental_value["mode"]
+        if incremental_value["mode"] in {"incremental", "unchanged"}
+        else review_mode
+    )
+    critic_required = selected_mode in {"normal", "deep", "incremental"}
+    exact_git = cast(dict[str, Any], context["exact_git"])
+    resolved_repo = cast(str, exact_git["repo_root"])
+    if context["complete"]:
+        advance_progress(
+            root,
+            "context_ready",
+            expected_stages={"prepared"},
+            expected={"evidence_path": str(evidence_path), "evidence_digest": evidence_digest},
+            repo_root=resolved_repo,
+            context_path=str(path),
+            context_digest=context_digest,
+            mode=selected_mode,
+            locale=locale,
+            incremental=incremental,
+            critic_receipt_path=None,
+            critic_receipt_digest=None,
+            finalize_report_path=None,
+            finalize_report_digest=None,
+            decision_path=None,
+            decision_digest=None,
+            plan_path=None,
+            plan_digest=None,
+        )
+        if selected_mode == "unchanged":
+            next_action = runner_action("report-review", "--artifact-root", str(root))
+        elif critic_required:
+            next_action = runner_action(
+                "template-review", "--artifact-root", str(root), "--kind", "critic"
+            )
+        else:
+            next_action = runner_action("finalize", "--artifact-root", str(root))
+        stage = "context_ready"
+    else:
+        advance_progress(
+            root,
+            "prepared",
+            expected_stages={"prepared"},
+            expected={"evidence_path": str(evidence_path), "evidence_digest": evidence_digest},
+            repo_root=resolved_repo,
+            context_path=None,
+            context_digest=None,
+            mode=review_mode,
+            locale=locale,
+            incremental=incremental,
+            critic_receipt_path=None,
+            critic_receipt_digest=None,
+            finalize_report_path=None,
+            finalize_report_digest=None,
+            decision_path=None,
+            decision_digest=None,
+            plan_path=None,
+            plan_digest=None,
+        )
+        next_action = runner_action(
+            "context",
+            "--evidence",
+            str(evidence_path),
+            "--repo-root",
+            resolved_repo,
+            "--incremental",
+            incremental,
+            "--review-mode",
+            review_mode,
+            "--locale",
+            locale,
+        )
+        stage = "prepared"
     return {
         "status": "ok" if context["complete"] else "incomplete",
         "summary": {
@@ -1084,7 +1390,7 @@ def prepare_context(
         "incremental": {
             "mode": incremental_value["mode"],
             "reason": incremental_value["reason"],
-            "critic_required": incremental_value["critic_required"],
+            "critic_required": critic_required,
             "incremental_delta_digest": incremental_value["incremental_delta_digest"],
             "changed_paths": delta["changed_paths"],
             "changed_threads": len(delta["changed_thread_ids"]),
@@ -1096,6 +1402,10 @@ def prepare_context(
             if incremental_value["mode"] == "unchanged"
             else None,
         },
+        "review_mode": selected_mode,
+        "locale": locale,
+        "stage": stage,
+        "next_action": next_action,
         "complete": context["complete"],
         "external_mutations": False,
     }
@@ -1378,6 +1688,26 @@ def validate_presentation(value: object, incremental_mode: str) -> dict[str, Any
         or not all(portable.nonempty_string(item) for item in severity_labels.values())
     ):
         raise portable.WorkflowError("localized severity labels are invalid")
+    return cast(dict[str, Any], value)
+
+
+def validate_chat_assessment(value: object) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"necessity", "relevance", "change"}:
+        raise portable.WorkflowError("review chat assessment is invalid")
+    necessity = value.get("necessity")
+    relevance = value.get("relevance")
+    if (
+        not isinstance(necessity, dict)
+        or set(necessity) != {"status", "rationale"}
+        or necessity.get("status") not in {"supported", "doubtful", "unconfirmed"}
+        or not portable.nonempty_string(necessity.get("rationale"))
+        or not isinstance(relevance, dict)
+        or set(relevance) != {"status", "rationale"}
+        or relevance.get("status") not in {"current", "partly_outdated", "outdated"}
+        or not portable.nonempty_string(relevance.get("rationale"))
+        or not portable.nonempty_string(value.get("change"))
+    ):
+        raise portable.WorkflowError("review chat assessment is invalid")
     return cast(dict[str, Any], value)
 
 
@@ -1685,6 +2015,66 @@ def changed_diff_lines(
         old_lines.update(range(old_start, old_start + old_count))
         new_lines.update(range(new_start, new_start + new_count))
     return old_lines, new_lines
+
+
+def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    discussions = cast(list[dict[str, Any]], context.get("discussions", []))
+    expected: dict[str, dict[str, Any]] = {}
+    for item in discussions:
+        if item.get("root_system") is True:
+            continue
+        meaningful = [
+            note
+            for note in cast(list[dict[str, Any]], item.get("notes", []))
+            if note.get("system") is not True and isinstance(note.get("body"), str)
+        ]
+        if not meaningful:
+            raise portable.WorkflowError("non-system discussion has no meaningful note")
+        last_note = meaningful[-1]
+        expected[str(item["root_note_id"])] = {
+            **item,
+            "state": "resolved"
+            if item.get("root_resolved") is True
+            else "open"
+            if item.get("root_resolvable") is True
+            else "plain",
+            "url": item.get("root_note_url"),
+            "last_note_id": last_note.get("id"),
+            "last_note_body_sha256": hashlib.sha256(
+                cast(str, last_note["body"]).encode()
+            ).hexdigest(),
+        }
+    marked_root_note_ids = {
+        str(item["note_id"])
+        for item in cast(list[dict[str, Any]], context.get("publication_markers", []))
+        if item.get("kind") == "finding"
+        and item.get("resource_type") == "note"
+        and item.get("is_root") is True
+    }
+    expected = {key: value for key, value in expected.items() if key not in marked_root_note_ids}
+    discussion_note_ids = {
+        str(note.get("id"))
+        for discussion in discussions
+        for note in cast(list[dict[str, Any]], discussion.get("notes", []))
+    }
+    for note in cast(list[dict[str, Any]], context.get("notes", [])):
+        note_id = str(note.get("id"))
+        if (
+            note.get("system") is not True
+            and note_id not in discussion_note_ids
+            and note_id not in marked_root_note_ids
+        ):
+            body = note.get("body")
+            if not isinstance(body, str):
+                raise portable.WorkflowError("non-system note body is invalid")
+            expected[note_id] = {
+                "root_note_url": note.get("note_url"),
+                "state": "plain",
+                "url": note.get("note_url"),
+                "last_note_id": note.get("id"),
+                "last_note_body_sha256": hashlib.sha256(body.encode()).hexdigest(),
+            }
+    return expected
 
 
 def validate_thread_fix(
@@ -3588,22 +3978,45 @@ def publish_review_state(
     plan_digest: str,
     target: dict[str, Any],
     expected_incremental_baseline_state_digest: str | None,
+    expected_progress: dict[str, object],
 ) -> tuple[Path, str]:
     markdown_path = root / "review-publication.md"
     baseline_path = root / BASELINE_NAME
+    current_progress_path = progress_path(root)
     markdown_digest = hashlib.sha256(markdown.encode()).hexdigest()
     with review_state_lock(root):
-        if markdown_path.is_symlink() or baseline_path.is_symlink():
+        if (
+            markdown_path.is_symlink()
+            or baseline_path.is_symlink()
+            or current_progress_path.is_symlink()
+        ):
             raise portable.WorkflowError("review state paths must not be symbolic links")
+        current_progress = validate_progress(
+            portable.read_json(current_progress_path, "code-review progress"), root
+        )
+        if not set(expected_progress).issubset(current_progress) or any(
+            current_progress[key] != value for key, value in expected_progress.items()
+        ):
+            raise portable.WorkflowError("code-review progress changed before publication")
         previous_markdown = markdown_path.read_bytes() if markdown_path.exists() else None
         previous_baseline = baseline_path.read_bytes() if baseline_path.exists() else None
+        previous_progress = current_progress_path.read_bytes()
         actual_incremental_baseline_state_digest = (
             hashlib.sha256(previous_baseline).hexdigest() if previous_baseline is not None else None
         )
         if actual_incremental_baseline_state_digest != expected_incremental_baseline_state_digest:
             raise portable.WorkflowError("code-review baseline changed before publication")
+        next_progress = {
+            **current_progress,
+            "stage": "plan_ready",
+            "plan_path": str(plan_path),
+            "plan_digest": plan_digest,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        validate_progress(next_progress, root)
         try:
             replace_private_bytes(markdown_path, markdown.encode())
+            portable.write_json(current_progress_path, next_progress)
             portable.write_json(
                 baseline_path,
                 {
@@ -3630,6 +4043,7 @@ def publish_review_state(
                 baseline_path.unlink(missing_ok=True)
             else:
                 replace_private_bytes(baseline_path, previous_baseline)
+            replace_private_bytes(current_progress_path, previous_progress)
             directory_fd = os.open(root, os.O_RDONLY)
             try:
                 os.fsync(directory_fd)
@@ -3639,12 +4053,23 @@ def publish_review_state(
     return markdown_path.resolve(), markdown_digest
 
 
-def reject_visible_raw_refs(markdown: str, evidence: dict[str, Any]) -> None:
+def reject_visible_raw_refs(
+    markdown: str, evidence: dict[str, Any], context: dict[str, Any] | None = None
+) -> None:
     refs = [
         value
         for value in (evidence.get("base_sha"), evidence.get("start_sha"), evidence.get("head_sha"))
         if isinstance(value, str) and len(value) >= 12
     ]
+    if context is not None:
+        incremental = context.get("incremental")
+        delta = incremental.get("incremental_delta") if isinstance(incremental, dict) else None
+        if isinstance(delta, dict):
+            refs.extend(
+                value
+                for value in (delta.get("from_head"), delta.get("to_head"))
+                if isinstance(value, str) and len(value) >= 12 and value not in refs
+            )
     for line in markdown.splitlines():
         visible = re.sub(r"\]\(https?://[^)]*\)", "](...)", line).casefold()
         for value in refs:
@@ -3816,7 +4241,8 @@ def scaffold_review(
     content = portable.exact_keys(
         portable.read_json(Path(content_value), "review plan content"),
         {
-            "presentation",
+            "locale",
+            "chat_assessment",
             "summary",
             "architecture_assessment",
             "semver_impact",
@@ -3835,7 +4261,8 @@ def scaffold_review(
         "review plan content",
     )
     if (
-        not portable.nonempty_string(content["summary"])
+        content["locale"] not in SUPPORTED_LOCALES
+        or not portable.nonempty_string(content["summary"])
         or not portable.nonempty_string(content["architecture_assessment"])
         or content["semver_impact"] not in {"major", "minor", "patch", "none", "not_applicable"}
         or not portable.nonempty_string(content["semver_rationale"])
@@ -3845,6 +4272,11 @@ def scaffold_review(
         or not portable.thread_decisions_are_valid(content["thread_decisions"])
     ):
         raise portable.WorkflowError("review plan content is invalid")
+    progress = load_progress(root)
+    if progress is not None and content["locale"] != progress.get("locale"):
+        raise portable.WorkflowError(
+            "review content locale does not match selected progress locale"
+        )
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings = cast(list[dict[str, Any]], content["findings"])
     finding_ids = [finding["id"] for finding in findings]
@@ -3867,7 +4299,16 @@ def scaffold_review(
         raise portable.WorkflowError("an unchanged MR does not require a new review plan")
     if (incremental_mode == "incremental") != (decision.get("mode") == "incremental"):
         raise portable.WorkflowError("review decision mode does not match incremental context")
-    presentation = validate_presentation(content["presentation"], incremental_mode)
+    chat_assessment = validate_chat_assessment(content["chat_assessment"])
+    presentation = validate_presentation(
+        localized_presentation(
+            cast(str, content["locale"]),
+            cast(str, context["role"]),
+            cast(str, decision["verdict"]),
+            incremental_mode,
+        ),
+        incremental_mode,
+    )
     label_review = validate_label_assessments(
         evidence, content["label_assessments"], cast(str, content["semver_impact"])
     )
@@ -4016,54 +4457,7 @@ def scaffold_review(
         item["type"] != "local_fix" for item in finding_publications
     ):
         raise portable.WorkflowError("author findings require read-only local fix patches")
-    discussions = cast(list[dict[str, Any]], context["discussions"])
-    expected_threads: dict[str, dict[str, Any]] = {}
-    for item in discussions:
-        if item.get("root_system") is True:
-            continue
-        meaningful = [
-            note
-            for note in cast(list[dict[str, Any]], item.get("notes", []))
-            if note.get("system") is not True and isinstance(note.get("body"), str)
-        ]
-        if not meaningful:
-            raise portable.WorkflowError("non-system discussion has no meaningful note")
-        last_note = meaningful[-1]
-        expected_threads[str(item["root_note_id"])] = {
-            **item,
-            "last_note_id": last_note.get("id"),
-            "last_note_body_sha256": hashlib.sha256(
-                cast(str, last_note["body"]).encode()
-            ).hexdigest(),
-        }
-    marked_root_note_ids = {
-        str(item["note_id"])
-        for item in cast(list[dict[str, Any]], context["publication_markers"])
-        if item["kind"] == "finding" and item["resource_type"] == "note" and item["is_root"] is True
-    }
-    expected_threads = {
-        key: value for key, value in expected_threads.items() if key not in marked_root_note_ids
-    }
-    discussion_note_ids = {
-        str(note.get("id"))
-        for discussion in discussions
-        for note in cast(list[dict[str, Any]], discussion.get("notes", []))
-    }
-    for note in cast(list[dict[str, Any]], context["notes"]):
-        note_id = str(note.get("id"))
-        if (
-            note.get("system") is not True
-            and note_id not in discussion_note_ids
-            and note_id not in marked_root_note_ids
-        ):
-            body = note.get("body")
-            if not isinstance(body, str):
-                raise portable.WorkflowError("non-system note body is invalid")
-            expected_threads[note_id] = {
-                "root_note_url": note.get("note_url"),
-                "last_note_id": note.get("id"),
-                "last_note_body_sha256": hashlib.sha256(body.encode()).hexdigest(),
-            }
+    expected_threads = expected_thread_bindings(context)
     thread_decisions = cast(list[dict[str, Any]], content["thread_decisions"])
     actual_threads = {item["id"]: item for item in thread_decisions}
     if len(actual_threads) != len(thread_decisions) or set(actual_threads) != set(expected_threads):
@@ -4076,7 +4470,7 @@ def scaffold_review(
             and not portable.nonempty_string(item["proposed_response"])
         ):
             raise portable.WorkflowError("thread publication outcome and body disagree")
-        if item["url"] != expected_threads[thread_id].get("root_note_url"):
+        if item["url"] != expected_threads[thread_id].get("url"):
             raise portable.WorkflowError("thread decision URL does not match review context")
         if (
             set(item)
@@ -4148,7 +4542,7 @@ def scaffold_review(
         "thread_decisions": enriched_threads,
     }
     markdown = review_markdown(evidence, context, decision, render_content, metadata, publication)
-    reject_visible_raw_refs(markdown, evidence)
+    reject_visible_raw_refs(markdown, evidence, context)
     finding_ledger = build_finding_ledger(
         incremental,
         previous_assessments,
@@ -4176,6 +4570,7 @@ def scaffold_review(
         "target": context["target"],
         "role": context["role"],
         "mode": decision["mode"],
+        "locale": content["locale"],
         "incremental": incremental,
         "verdict": decision["verdict"],
         "complete": evidence.get("retrieval_complete") is True and context.get("complete") is True,
@@ -4183,6 +4578,7 @@ def scaffold_review(
         "architecture_assessment": content["architecture_assessment"],
         "semver_impact": content["semver_impact"],
         "semver_rationale": content["semver_rationale"],
+        "chat_assessment": chat_assessment,
         "mr_metadata_assessment": metadata,
         "label_review": label_review,
         "publication_preview": publication,
@@ -4208,6 +4604,15 @@ def scaffold_review(
         plan_digest,
         cast(dict[str, Any], context["target"]),
         cast(str | None, incremental["incremental_baseline"]["state_digest"]),
+        {
+            "stage": "content_missing",
+            "evidence_path": str(evidence_path),
+            "evidence_digest": evidence_digest,
+            "context_path": str(Path(context_value).resolve()),
+            "context_digest": context_digest,
+            "decision_path": str(Path(decision_value).resolve()),
+            "decision_digest": decision_digest,
+        },
     )
     return {
         "status": "ok" if payload["complete"] else "incomplete",
@@ -4231,5 +4636,734 @@ def scaffold_review(
         "publication_actions": [
             {"id": item["id"], "sha256": item["sha256"]} for item in publication["actions"]
         ],
+        "stage": "plan_ready",
+        "next_action": runner_action("report-review", "--artifact-root", str(root)),
         "external_mutations": False,
     }
+
+
+def progress_artifact(
+    root: Path, progress: dict[str, Any], prefix: str, kind: str
+) -> tuple[Path, dict[str, Any], str] | None:
+    path_value = progress.get(f"{prefix}_path")
+    digest_value = progress.get(f"{prefix}_digest")
+    if path_value is None and digest_value is None:
+        return None
+    if not isinstance(path_value, str) or not portable.is_digest(digest_value):
+        raise portable.WorkflowError("code-review progress artifact binding is incomplete")
+    path = portable.regular_file(Path(path_value), kind.replace("_", " "))
+    expected = root / "artifacts" / kind / f"{digest_value}.json"
+    if path != expected or hashlib.sha256(path.read_bytes()).hexdigest() != digest_value:
+        raise portable.WorkflowError("code-review progress artifact binding changed")
+    _, payload = portable.artifact_payload(path, kind)
+    return path, payload, cast(str, digest_value)
+
+
+def next_action_for_stage(
+    stage: str, root: Path, progress: dict[str, Any]
+) -> dict[str, Any] | None:
+    if stage == "prepared":
+        repo_root = cast(str | None, progress.get("repo_root"))
+        mode = cast(str, progress.get("mode") or "normal")
+        if mode in {"incremental", "unchanged"}:
+            mode = "normal"
+        return runner_action(
+            "context",
+            "--evidence",
+            cast(str, progress["evidence_path"]),
+            "--repo-root",
+            repo_root or "<checkout>",
+            "--incremental",
+            cast(str, progress.get("incremental") or "auto"),
+            "--review-mode",
+            mode,
+            "--locale",
+            cast(str, progress.get("locale") or "en"),
+            required_inputs=("repo_root",) if repo_root is None else (),
+        )
+    if stage == "critic_missing":
+        return runner_action("template-review", "--artifact-root", str(root), "--kind", "critic")
+    if stage in {"context_ready", "finalize_missing"}:
+        return runner_action("finalize", "--artifact-root", str(root))
+    if stage == "decision_missing":
+        return runner_action("template-review", "--artifact-root", str(root), "--kind", "decision")
+    if stage == "content_missing":
+        return runner_action("template-review", "--artifact-root", str(root), "--kind", "content")
+    if stage == "plan_ready":
+        return runner_action("report-review", "--artifact-root", str(root))
+    return None
+
+
+def restart_action(
+    root: Path, evidence: dict[str, Any], progress: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    target = evidence.get("target")
+    url = target.get("url") if isinstance(target, dict) else None
+    if not portable.nonempty_string(url):
+        return None
+    arguments = ["--url", cast(str, url)]
+    repo_root = progress.get("repo_root") if progress is not None else None
+    mode = progress.get("mode") if progress is not None else None
+    locale = progress.get("locale") if progress is not None else None
+    incremental = progress.get("incremental") if progress is not None else None
+    if isinstance(repo_root, str):
+        arguments.extend(("--repo-root", repo_root))
+    arguments.extend(
+        (
+            "--review-mode",
+            cast(str, mode) if mode in {"fast", "normal", "deep"} else "normal",
+            "--locale",
+            cast(str, locale) if locale in SUPPORTED_LOCALES else "en",
+            "--incremental",
+            cast(str, incremental) if incremental in {"auto", "off"} else "auto",
+        )
+    )
+    return runner_action("prepare", *arguments)
+
+
+def _review_status(artifact_root: str) -> dict[str, Any]:
+    root = portable.artifact_root(Path(artifact_root))
+    evidence_path, evidence = review_evidence_from_root(root)
+    evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    progress = load_progress(root) or empty_progress(evidence_path, evidence_digest)
+    if (
+        progress["evidence_path"] != str(evidence_path)
+        or progress["evidence_digest"] != evidence_digest
+    ):
+        progress = empty_progress(evidence_path, evidence_digest)
+    locale = cast(str, progress.get("locale") or "en")
+    actual_stage = "prepared"
+    reason = "review context has not been collected"
+    context: dict[str, Any] | None = None
+    context_artifact = progress_artifact(root, progress, "context", "review_context")
+    if context_artifact is not None:
+        context_path, context, context_digest = context_artifact
+        if (
+            context.get("evidence_digest") != evidence_digest
+            or context.get("target") != evidence.get("target")
+            or context.get("complete") is not True
+        ):
+            raise portable.WorkflowError("review context is stale or incomplete")
+        progress["context_path"] = str(context_path)
+        progress["context_digest"] = context_digest
+        mode = progress.get("mode")
+        if mode not in REVIEW_MODES:
+            actual_stage = "context_ready"
+            reason = "review mode has not been selected"
+        elif mode == "unchanged":
+            actual_stage = "plan_ready"
+            reason = "the MR has not changed since the finalized baseline"
+        else:
+            critic_required = mode in {"normal", "deep", "incremental"}
+            critic_artifact = progress_artifact(root, progress, "critic_receipt", "critic_receipt")
+            if critic_required and critic_artifact is None:
+                actual_stage = "critic_missing"
+                reason = "an independent recorded critic receipt is required"
+            else:
+                if critic_artifact is not None:
+                    _, critic, _ = critic_artifact
+                    scope_digest = (
+                        cast(dict[str, Any], context["incremental"])["incremental_delta_digest"]
+                        if mode == "incremental"
+                        else None
+                    )
+                    portable.validate_critic(critic, evidence_digest, scope_digest)
+                finalize_artifact = progress_artifact(
+                    root, progress, "finalize_report", "finalize_report"
+                )
+                if finalize_artifact is None:
+                    actual_stage = "finalize_missing"
+                    reason = "fresh evidence has not been finalized"
+                else:
+                    finalize_path, _, finalize_digest = finalize_artifact
+                    portable.validate_finalize_report(finalize_path, evidence_path, evidence)
+                    decision_artifact = progress_artifact(
+                        root, progress, "decision", "review_decision"
+                    )
+                    if decision_artifact is None:
+                        actual_stage = "decision_missing"
+                        reason = "the finalized review decision is missing"
+                    else:
+                        _, decision, _ = decision_artifact
+                        if (
+                            decision.get("evidence_digest") != evidence_digest
+                            or decision.get("context_digest") != progress["context_digest"]
+                            or decision.get("finalize_digest") != finalize_digest
+                            or decision.get("critic_receipt_digest")
+                            != progress.get("critic_receipt_digest")
+                            or decision.get("mode") != mode
+                        ):
+                            raise portable.WorkflowError("review decision is stale")
+                        actual_stage = "content_missing"
+                        reason = "the immutable review plan has not been created"
+
+    stale_plan_reason: str | None = None
+    plan: dict[str, Any] | None = None
+    try:
+        baseline = baseline_pointer(root)
+    except portable.WorkflowError:
+        baseline = None
+        stale_plan_reason = "the stable publication plan is invalid"
+    if baseline is not None:
+        pointer, candidate = baseline
+        unchanged = (
+            context is not None
+            and cast(dict[str, Any], context.get("incremental", {})).get("mode") == "unchanged"
+            and cast(dict[str, Any], context["incremental"])
+            .get("incremental_baseline", {})
+            .get("plan_digest")
+            == pointer.get("plan_digest")
+        )
+        current = (
+            candidate.get("review_contract_version") == REVIEW_CONTRACT_VERSION
+            and candidate.get("complete") is True
+            and candidate.get("target") == evidence.get("target")
+            and (
+                unchanged
+                or candidate.get("evidence_digest") == evidence_digest
+                and candidate.get("context_digest") == progress.get("context_digest")
+                and candidate.get("decision_digest") == progress.get("decision_digest")
+            )
+        )
+        if current:
+            plan = candidate
+            actual_stage = "plan_ready"
+            reason = (
+                "the unchanged MR reuses the current finalized review plan"
+                if unchanged
+                else "the current review plan is complete and fresh"
+            )
+            progress["plan_path"] = pointer["plan_path"]
+            progress["plan_digest"] = pointer["plan_digest"]
+        else:
+            stale_plan_reason = "the stable publication plan does not bind current evidence"
+    elif (
+        context is not None
+        and cast(dict[str, Any], context.get("incremental", {})).get("mode") == "unchanged"
+    ):
+        stale_plan_reason = "the unchanged review baseline is missing"
+        actual_stage = "prepared"
+        reason = "collect context again before continuing"
+
+    stage = (
+        "stale" if stale_plan_reason is not None and actual_stage != "plan_ready" else actual_stage
+    )
+    next_stage = actual_stage if stage == "stale" else stage
+    result = {
+        "status": "ok" if actual_stage == "plan_ready" else "incomplete",
+        "stage": stage,
+        "resume_stage": next_stage if stage == "stale" else None,
+        "reason": stale_plan_reason or reason,
+        "stale_plan": stale_plan_reason is not None,
+        "artifact_root": str(root),
+        "evidence_path": str(evidence_path),
+        "context_path": progress.get("context_path"),
+        "mode": progress.get("mode"),
+        "locale": locale,
+        "publication_plan_path": str(root / "review-publication.md")
+        if actual_stage == "plan_ready"
+        else None,
+        "plan_digest": progress.get("plan_digest") if plan is not None else None,
+        "next_action": next_action_for_stage(next_stage, root, progress),
+        "external_mutations": False,
+    }
+    return result
+
+
+def review_status(artifact_root: str) -> dict[str, Any]:
+    try:
+        return _review_status(artifact_root)
+    except (OSError, UnicodeDecodeError, portable.WorkflowError):
+        root = portable.artifact_root(Path(artifact_root))
+        try:
+            _, evidence = review_evidence_from_root(root)
+        except portable.WorkflowError:
+            evidence = {}
+        progress = None
+        try:
+            progress = load_progress(root)
+        except portable.WorkflowError:
+            pass
+        return {
+            "status": "incomplete",
+            "stage": "stale",
+            "resume_stage": "prepared",
+            "reason": "review progress or a bound artifact is invalid",
+            "stale_plan": True,
+            "artifact_root": str(root),
+            "evidence_path": None,
+            "context_path": None,
+            "mode": progress.get("mode") if progress is not None else None,
+            "locale": progress.get("locale") if progress is not None else "en",
+            "publication_plan_path": None,
+            "plan_digest": None,
+            "next_action": restart_action(root, evidence, progress),
+            "external_mutations": False,
+        }
+
+
+def write_review_draft(root: Path, name: str, identity: str, value: dict[str, Any]) -> Path:
+    directory = portable.private_directory(root / "review-drafts")
+    path = directory / f"{name}-{identity[:16]}.json"
+    with review_state_lock(root):
+        if path.exists() or path.is_symlink():
+            portable.regular_file(path, "review draft")
+        else:
+            portable.write_json(path, value)
+    return path.resolve()
+
+
+def content_template(
+    evidence: dict[str, Any], context: dict[str, Any], decision: dict[str, Any], locale: str
+) -> dict[str, Any]:
+    incremental = cast(dict[str, Any], context["incremental"])
+    accepted = cast(list[dict[str, Any]], decision.get("accepted_findings", []))
+    primary_by_id = {
+        str(item["id"]): item for item in cast(list[dict[str, Any]], decision.get("findings", []))
+    }
+    critic_by_id = {
+        str(item["id"]): item
+        for item in cast(list[dict[str, Any]], decision.get("critic_findings", []))
+    }
+    responses = {
+        str(item["id"]): item for item in cast(list[dict[str, Any]], decision.get("responses", []))
+    }
+    rejected_candidates: list[dict[str, Any]] = []
+    for item_id, finding in {**primary_by_id, **critic_by_id}.items():
+        response = responses.get(item_id)
+        if response is None or response.get("decision") != "reject":
+            continue
+        rejected_candidates.append(
+            {
+                "id": item_id,
+                "source": "primary" if item_id in primary_by_id else "critic",
+                "finding": finding,
+                "reason": "",
+                "paths": [],
+                "thread_ids": [],
+                "metadata_fields": [],
+                "ci": False,
+            }
+        )
+    previous_assessments = []
+    for kind, values in (
+        ("finding", cast(list[dict[str, Any]], incremental["previous_findings"])),
+        ("issue", cast(list[dict[str, Any]], incremental["previous_recommended_issues"])),
+    ):
+        for item in values:
+            previous_assessments.append(
+                {
+                    "id": str(item["id"]),
+                    "kind": kind,
+                    "status": "unverified",
+                    "previous_status": "",
+                    "current_status": "",
+                    "rationale": "",
+                    "action": "",
+                    "publication_action": "no_publication",
+                    "publication_body": None,
+                    "critic_required": True,
+                }
+            )
+    threads = []
+    for thread_id, binding in expected_thread_bindings(context).items():
+        threads.append(
+            {
+                "id": thread_id,
+                "url": binding["url"],
+                "state": binding["state"],
+                "assessment": "neutral",
+                "rationale": "",
+                "outcome": "no_publication",
+                "proposed_response": None,
+                "fix_mode": "not_required",
+                "patch": None,
+                "last_note_id": binding["last_note_id"],
+                "last_note_body_sha256": binding["last_note_body_sha256"],
+            }
+        )
+    return {
+        "locale": locale,
+        "chat_assessment": {
+            "necessity": {"status": "unconfirmed", "rationale": ""},
+            "relevance": {"status": "current", "rationale": ""},
+            "change": "",
+        },
+        "summary": "",
+        "architecture_assessment": "",
+        "semver_impact": "none",
+        "semver_rationale": "",
+        "mr_metadata_assessment": {
+            field: {"status": "unverified", "rationale": "", "recommendation": None}
+            for field in ("title", "description", "labels", "workflow_state", "overall")
+        },
+        "label_assessments": [
+            {"name": item["name"], "status": "unresolved", "rationale": ""}
+            for item in label_catalog(evidence)
+        ],
+        "checks": [],
+        "findings": accepted,
+        "finding_publications": [
+            {
+                "finding_id": item["id"],
+                "type": "local_fix" if context["role"] == "author" else "general",
+                "path": None,
+                "line": None,
+                "old_line": None,
+                "body": "",
+                "fix_mode": "patch",
+                "patch": "",
+            }
+            for item in accepted
+        ],
+        "previous_finding_assessments": previous_assessments,
+        "recommended_issues": [],
+        "rejected_candidates": rejected_candidates,
+        "rejected_candidate_assessments": [
+            {"id": item["id"], "decision": "still_rejected", "reason": ""}
+            for item in cast(list[dict[str, Any]], incremental["reconsidered_rejected_candidates"])
+        ],
+        "thread_decisions": threads,
+    }
+
+
+def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
+    status = review_status(artifact_root)
+    root = portable.artifact_root(Path(artifact_root))
+    progress = cast(dict[str, Any], load_progress(root))
+    evidence_path, evidence = review_evidence_from_root(root)
+    evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    context_artifact = progress_artifact(root, progress, "context", "review_context")
+    if context_artifact is None:
+        raise portable.WorkflowError("review context is required before template creation")
+    context_path, context, context_digest = context_artifact
+    mode = cast(str, progress["mode"])
+    locale = cast(str, progress["locale"])
+    if kind == "critic":
+        expected_stage = status.get("resume_stage") or status["stage"]
+        if expected_stage != "critic_missing":
+            raise portable.WorkflowError("critic template is not the next review stage")
+        incremental = cast(dict[str, Any], context["incremental"])
+        value: dict[str, Any] = {
+            "schema": "portable-gitlab/critic-receipt/v2",
+            "evidence_digest": evidence_digest,
+            "run_id": "",
+            "session_id": "",
+            "findings": [],
+            "external_mutations": False,
+        }
+        if mode == "incremental":
+            value["scope_digest"] = incremental["incremental_delta_digest"]
+            value["target_finding_ids"] = sorted(
+                str(item["id"])
+                for item in cast(list[dict[str, Any]], incremental["previous_findings"])
+            )
+        identity = evidence_digest
+    elif kind == "decision":
+        expected_stage = status.get("resume_stage") or status["stage"]
+        if expected_stage != "decision_missing":
+            raise portable.WorkflowError("decision template is not the next review stage")
+        finalize_artifact = cast(
+            tuple[Path, dict[str, Any], str],
+            progress_artifact(root, progress, "finalize_report", "finalize_report"),
+        )
+        _, _, finalize_digest = finalize_artifact
+        critic_artifact = progress_artifact(root, progress, "critic_receipt", "critic_receipt")
+        critic_findings = critic_artifact[1]["findings"] if critic_artifact is not None else []
+        critic_digest = critic_artifact[2] if critic_artifact is not None else None
+        open_threads = [
+            {"id": f"thread:{thread_id}"}
+            for thread_id, binding in expected_thread_bindings(context).items()
+            if binding["state"] == "open"
+        ]
+        pipeline_status, _ = portable.pipeline_summary(evidence)
+        failed_pipeline = pipeline_status == "failed"
+        blocking_ids = [item["id"] for item in critic_findings if item.get("severity") != "low"]
+        value = {
+            "schema": "portable-gitlab/review-decision/v2",
+            "evidence_digest": evidence_digest,
+            "finalize_digest": finalize_digest,
+            "context_digest": context_digest,
+            "critic_receipt_digest": critic_digest,
+            "mode": mode,
+            "external_mutations": False,
+            "verdict": "not_ready" if blocking_ids else "blocked" if failed_pipeline else "ready",
+            "run_id": "",
+            "session_id": "",
+            "low_risk": mode == "fast",
+            "blocking_findings": bool(blocking_ids),
+            "blocking_finding_ids": blocking_ids,
+            "owner_decision_reasons": [
+                "The exact-head pipeline failed and job logs are unavailable."
+            ]
+            if failed_pipeline and not blocking_ids
+            else [],
+            "findings": [],
+            "unresolved_threads": open_threads,
+            "responses": [
+                {"id": item["id"], "decision": "accept", "reason": ""}
+                for item in [*critic_findings, *open_threads]
+            ],
+        }
+        identity = finalize_digest
+    elif kind == "content":
+        expected_stage = status.get("resume_stage") or status["stage"]
+        if expected_stage != "content_missing":
+            raise portable.WorkflowError("content template is not the next review stage")
+        decision_artifact = cast(
+            tuple[Path, dict[str, Any], str],
+            progress_artifact(root, progress, "decision", "review_decision"),
+        )
+        _, decision, decision_digest = decision_artifact
+        value = content_template(evidence, context, decision, locale)
+        identity = decision_digest
+    else:
+        raise portable.WorkflowError("review template kind must be critic, decision, or content")
+    path = write_review_draft(root, kind, identity, value)
+    if kind == "critic":
+        next_action = runner_action(
+            "record-artifact",
+            "--kind",
+            "critic_receipt",
+            "--evidence",
+            str(evidence_path),
+            "--input",
+            str(path),
+        )
+    elif kind == "decision":
+        arguments = [
+            "--evidence",
+            str(evidence_path),
+            "--report",
+            str(path),
+            "--context",
+            str(context_path),
+            "--finalize-report",
+            cast(str, progress["finalize_report_path"]),
+            "--mode",
+            mode,
+        ]
+        if progress["critic_receipt_path"] is not None:
+            arguments.extend(("--critic-receipt", cast(str, progress["critic_receipt_path"])))
+        next_action = runner_action("finalize-review", *arguments)
+    else:
+        next_action = runner_action(
+            "scaffold-review",
+            "--evidence",
+            str(evidence_path),
+            "--context",
+            str(context_path),
+            "--decision",
+            cast(str, progress["decision_path"]),
+            "--content",
+            str(path),
+        )
+    return {
+        "status": "ok",
+        "stage": status["stage"],
+        "template_kind": kind,
+        "template_path": str(path),
+        "next_action": next_action,
+        "external_mutations": False,
+    }
+
+
+def validate_review_verdict(
+    report: dict[str, Any], accepted_findings: list[dict[str, Any]], evidence: dict[str, Any]
+) -> None:
+    accepted_by_id = {str(item["id"]): item for item in accepted_findings}
+    expected_blocking_ids = {
+        item_id for item_id, item in accepted_by_id.items() if item.get("severity") != "low"
+    }
+    blocking_value = report.get("blocking_finding_ids")
+    if blocking_value is None:
+        blocking_ids = {
+            item_id for item_id, item in accepted_by_id.items() if item.get("severity") != "low"
+        }
+    elif not isinstance(blocking_value, list) or not all(
+        portable.nonempty_string(item) for item in blocking_value
+    ):
+        raise portable.WorkflowError("blocking finding IDs are invalid")
+    else:
+        blocking_ids = set(cast(list[str], blocking_value))
+    if (
+        len(blocking_ids) != len(cast(list[str], blocking_value or list(blocking_ids)))
+        or blocking_ids != expected_blocking_ids
+        or report.get("blocking_findings") is not bool(blocking_ids)
+    ):
+        raise portable.WorkflowError("every accepted non-low finding must be blocking")
+    reasons = report.get("owner_decision_reasons", [])
+    if not isinstance(reasons, list) or not all(portable.nonempty_string(item) for item in reasons):
+        raise portable.WorkflowError("owner decision reasons are invalid")
+    pipeline_status, _ = portable.pipeline_summary(evidence)
+    if blocking_ids:
+        expected = "not_ready"
+    elif pipeline_status == "failed":
+        expected = "blocked"
+    elif reasons:
+        expected = "blocked"
+    else:
+        expected = "ready"
+    if report.get("verdict") != expected:
+        raise portable.WorkflowError(
+            "review verdict does not match findings and exact-head pipeline"
+        )
+
+
+def blocked_chat(locale: str, stage: str, reason: str, action: object) -> str:
+    command = cast(dict[str, Any], action).get("command") if isinstance(action, dict) else None
+    labels = portable.code_review_chat_labels(locale)
+    lines = [
+        labels["blocked_title"],
+        "",
+        f"- **{labels['stage']}:** `{stage}`",
+        f"- **{labels['reason']}:** {reason}",
+    ]
+    if command:
+        lines.append(f"- **{labels['next_action']}:** `{command}`")
+    return "\n".join(lines)
+
+
+def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -> str:
+    assessment = validate_chat_assessment(plan.get("chat_assessment"))
+    presentation = cast(dict[str, Any], plan["presentation"])
+    locale = cast(str, plan["locale"])
+    metadata = cast(dict[str, Any], plan["mr_metadata_assessment"])["assessment"]["overall"]
+    labels = portable.code_review_chat_labels(locale)
+    exact_git = cast(dict[str, Any], context["exact_git"])
+    semver = cast(str, plan["semver_impact"])
+    semver_value = (
+        semver.upper() if semver in {"major", "minor", "patch"} else semver.replace("_", " ")
+    )
+    necessity = cast(dict[str, Any], assessment["necessity"])
+    relevance = cast(dict[str, Any], assessment["relevance"])
+    necessity_values = cast(dict[str, str], labels["necessity_values"])
+    relevance_values = cast(dict[str, str], labels["relevance_values"])
+    metadata_values = cast(dict[str, str], labels["metadata_values"])
+    lines = []
+    if plan["mode"] == "incremental":
+        lines.extend([presentation["incremental_notice"], ""])
+    lines.extend(
+        [
+            cast(str, labels["title"]),
+            "",
+            f"- **{labels['role']}:** {presentation['role_value']}",
+            f"- **{labels['necessity']}:** {necessity_values[necessity['status']]} - {necessity['rationale']}",
+            f"- **{labels['relevance']}:** {relevance_values[relevance['status']]} - {relevance['rationale']}",
+            f"- **{labels['change']}:** {assessment['change']}",
+            f"- **{labels['architecture']}:** {plan['architecture_assessment']}",
+            f"- **{labels['semver']}:** {semver_value} - {plan['semver_rationale']}",
+            f"- **{labels['metadata']}:** {metadata_values[metadata['status']]}",
+            f"- **{labels['verdict']}:** {presentation['verdict_value']}",
+        ]
+    )
+    if not plan["findings"]:
+        lines.append(f"- **{labels['findings']}:** {labels['none']}")
+    lines.extend(
+        [
+            f"- **{labels['checkout']}:** `{exact_git['repo_root']}`",
+            f"- **{labels['plan']}:** `{plan_path}`",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _report_review(artifact_root: str) -> dict[str, Any]:
+    status = review_status(artifact_root)
+    locale = cast(str, status.get("locale") or "en")
+    if status["stage"] != "plan_ready":
+        return {
+            "status": "blocked",
+            "stage": status["stage"],
+            "reason": status["reason"],
+            "chat": blocked_chat(
+                locale,
+                cast(str, status["stage"]),
+                cast(str, status["reason"]),
+                status["next_action"],
+            ),
+            "next_action": status["next_action"],
+            "external_mutations": False,
+        }
+    root = portable.artifact_root(Path(artifact_root))
+    baseline = baseline_pointer(root)
+    if baseline is None:
+        raise portable.WorkflowError("current review baseline is unavailable")
+    pointer, plan = baseline
+    evidence_path, evidence = review_evidence_from_root(root)
+    progress = load_progress(root)
+    if progress is None:
+        raise portable.WorkflowError("code-review progress is unavailable")
+    recovery = restart_action(root, evidence, progress)
+    current = portable.collect(
+        cast(dict[str, Any], evidence["target"]), "code-review", persist=False
+    )
+    if current.get("retrieval_complete") is not True or portable.fingerprint(
+        current
+    ) != portable.fingerprint(evidence):
+        blocked = {**status, "stage": "stale", "reason": "review evidence changed before report"}
+        return {
+            "status": "blocked",
+            "stage": "stale",
+            "reason": blocked["reason"],
+            "chat": blocked_chat(locale, "stale", cast(str, blocked["reason"]), recovery),
+            "next_action": recovery,
+            "external_mutations": False,
+        }
+    context_artifact = progress_artifact(root, progress, "context", "review_context")
+    if context_artifact is None:
+        raise portable.WorkflowError("current review context is unavailable")
+    _, context, _ = context_artifact
+    refreshed = refresh_context(context, evidence_path)
+    report_context = dict(context)
+    report_context.pop("incremental", None)
+    report_context.pop("publication_markers", None)
+    if refreshed.get("complete") is not True or not contexts_match(report_context, refreshed):
+        return {
+            "status": "blocked",
+            "stage": "stale",
+            "reason": "review context changed before report",
+            "chat": blocked_chat(locale, "stale", "review context changed before report", recovery),
+            "next_action": recovery,
+            "external_mutations": False,
+        }
+    chat = review_chat(plan, context, cast(str, pointer["markdown_path"]))
+    reject_visible_raw_refs(chat, evidence, context)
+    return {
+        "status": "ok",
+        "stage": "plan_ready",
+        "chat": chat,
+        "publication_plan_path": pointer["markdown_path"],
+        "plan_digest": pointer["plan_digest"],
+        "next_action": None,
+        "external_mutations": False,
+    }
+
+
+def report_review(artifact_root: str) -> dict[str, Any]:
+    try:
+        return _report_review(artifact_root)
+    except (OSError, UnicodeDecodeError, portable.WorkflowError):
+        reason = "review state could not be safely revalidated"
+        next_action = None
+        locale = "en"
+        try:
+            root = portable.artifact_root(Path(artifact_root))
+            _, evidence = review_evidence_from_root(root)
+            try:
+                progress = load_progress(root)
+            except portable.WorkflowError:
+                progress = None
+            if progress is not None and progress.get("locale") in SUPPORTED_LOCALES:
+                locale = cast(str, progress["locale"])
+            next_action = restart_action(root, evidence, progress)
+        except portable.WorkflowError:
+            pass
+        return {
+            "status": "blocked",
+            "stage": "stale",
+            "reason": reason,
+            "chat": blocked_chat(locale, "stale", reason, next_action),
+            "next_action": next_action,
+            "external_mutations": False,
+        }

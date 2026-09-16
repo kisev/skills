@@ -122,7 +122,8 @@ The baseline pointer, exact refs, delta, previous findings, markers, and digests
 remain private technical JSON. User-facing reports omit raw SHAs.
 Every regenerated structured action receives an exact digest; confirmation of a
 previous action never authorizes a changed publication or label delta.
-Review-contract 1 and 2 plans remain readable, and structured contract-2 actions
-remain executable by the helper. They cannot be reused incrementally as a
-contract-3 baseline because they do not bind validated fix artifacts; context
-selection falls back to a full review instead.
+Review-contract 1 through 3 plans remain readable, and structured contract-2 and
+contract-3 actions remain executable by the helper. They cannot be reused
+incrementally as a contract-4 baseline because they do not bind the complete
+runner-owned state and chat assessment; context selection falls back to a full
+review instead.

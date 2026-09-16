@@ -364,6 +364,32 @@
       },
       "additionalProperties": false
     },
+    "review_chat_assessment": {
+      "type": "object",
+      "required": ["necessity", "relevance", "change"],
+      "properties": {
+        "necessity": {
+          "type": "object",
+          "required": ["status", "rationale"],
+          "properties": {
+            "status": { "enum": ["supported", "doubtful", "unconfirmed"] },
+            "rationale": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "relevance": {
+          "type": "object",
+          "required": ["status", "rationale"],
+          "properties": {
+            "status": { "enum": ["current", "partly_outdated", "outdated"] },
+            "rationale": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "change": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
     "publication_body": {
       "type": "object",
       "anyOf": [
@@ -1440,7 +1466,7 @@
               "additionalProperties": false,
               "properties": {
                 "profile": { "const": "code-review" },
-                "review_contract_version": { "enum": [1, 2, 3] },
+                "review_contract_version": { "enum": [1, 2, 3, 4] },
                 "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
@@ -1448,6 +1474,7 @@
                 "target": { "type": "object" },
                 "role": { "enum": ["author", "reviewer"] },
                 "mode": { "enum": ["fast", "normal", "deep", "incremental"] },
+                "locale": { "enum": ["en", "ru"] },
                 "incremental": { "$ref": "#/$defs/incremental_review" },
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
                 "complete": { "type": "boolean" },
@@ -1461,6 +1488,7 @@
                 "label_review": { "$ref": "#/$defs/code_review_label_review" },
                 "publication_preview": { "$ref": "#/$defs/review_publication_preview" },
                 "presentation": { "$ref": "#/$defs/review_presentation" },
+                "chat_assessment": { "$ref": "#/$defs/review_chat_assessment" },
                 "checks": { "type": "array", "items": { "type": "string", "minLength": 1 } },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
                 "finding_publications": {
@@ -1505,7 +1533,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "const": 3 } }
+                    "properties": { "review_contract_version": { "enum": [3, 4] } }
                   },
                   "then": {
                     "properties": {
@@ -1520,6 +1548,18 @@
                           "not": { "required": ["suggestion_applicable"] }
                         }
                       }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": ["review_contract_version"],
+                    "properties": { "review_contract_version": { "const": 4 } }
+                  },
+                  "then": { "required": ["chat_assessment", "locale"] },
+                  "else": {
+                    "not": {
+                      "anyOf": [{ "required": ["chat_assessment"] }, { "required": ["locale"] }]
                     }
                   }
                 }
@@ -1629,6 +1669,9 @@
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "finalize_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
+                "critic_receipt_digest": {
+                  "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }]
+                },
                 "mode": { "enum": ["fast", "normal", "deep", "incremental"] },
                 "external_mutations": { "const": false },
                 "run_id": { "type": "string", "minLength": 1 },
@@ -1636,6 +1679,14 @@
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
                 "low_risk": { "type": "boolean" },
                 "blocking_findings": { "type": "boolean" },
+                "blocking_finding_ids": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                },
+                "owner_decision_reasons": {
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 1 }
+                },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
                 "critic_findings": {
                   "type": "array",

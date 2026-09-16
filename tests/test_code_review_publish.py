@@ -247,27 +247,27 @@ def test_unknown_retry_requires_fresh_marker_absence(
 
     PUBLISH.write_state(tmp_path, digest, {"phase": "unknown", "uncertain": True})
     with pytest.raises(PUBLISH.MutationError):
-        PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, action, preflight, body)
+        PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, {}, action, preflight, body)
     assert client.mutations == 0
 
     PUBLISH.write_state(tmp_path, digest, {"phase": "unknown"})
-    result = PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, action, preflight, body)
+    result = PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, {}, action, preflight, body)
     assert result["status"] == "applied"
     assert client.mutations == 1
     assert client.events.index(("observe", False)) < client.events.index(("mutation", False))
 
-    repeated = PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, action, preflight, body)
+    repeated = PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, {}, action, preflight, body)
     assert repeated["status"] == "already_applied"
     assert client.mutations == 1
 
     client.mutated = False
     with pytest.raises(PUBLISH.BlockedError):
-        PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, action, preflight, body)
+        PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, {}, action, preflight, body)
     assert client.mutations == 1
 
     PUBLISH.write_state(tmp_path, digest, {"phase": "attempting_state"})
     with pytest.raises(PUBLISH.MutationError):
-        PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, action, preflight, body)
+        PUBLISH.apply_action(plan_path, "b" * 64, tmp_path, {}, action, preflight, body)
     assert client.mutations == 1
 
 
