@@ -8,6 +8,16 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## [3.2.1] - 2026-09-16
+
+### Fixed
+
+- Code review rejects structurally duplicate accepted findings before producing or
+  applying a publication plan, so an independent critic cannot create a second
+  comment for the same issue.
+- The GitLab publication helper sends JSON requests with an explicit
+  `Content-Type`, allowing confirmed line discussions to be accepted by GitLab.
+
 ## [3.2.0] - 2026-09-16
 
 ### Added
