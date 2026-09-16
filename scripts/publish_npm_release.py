@@ -98,6 +98,25 @@ def wait_for_metadata(name: str, version: str, attempts: int = 24) -> dict[str, 
     return None
 
 
+def download_registry_tarball(url: str, attempts: int = 24, delay: float = 5) -> bytes:
+    request = urllib.request.Request(url, headers={"User-Agent": "kisev-skills-release-check"})
+    for attempt in range(max(attempts, 1)):
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                content = response.read()
+                if not isinstance(content, bytes):
+                    raise PublicationError("registry tarball response is invalid")
+                return content
+        except urllib.error.HTTPError as error:
+            if error.code not in {404, 408, 429} and error.code < 500:
+                raise PublicationError(f"registry tarball returned HTTP {error.code}") from error
+        except (OSError, urllib.error.URLError):
+            pass
+        if attempt + 1 < attempts:
+            time.sleep(delay)
+    raise PublicationError("registry tarball did not become available")
+
+
 def provenance_matches(document: dict[str, Any], expected_sha512: str, revision: str) -> bool:
     records = document.get("attestations") if document else None
     if not isinstance(records, list):
@@ -232,8 +251,7 @@ def publish() -> dict[str, Any]:
     tarball_url = dist.get("tarball")
     if not isinstance(tarball_url, str):
         raise PublicationError("registry tarball URL is missing")
-    with urllib.request.urlopen(tarball_url, timeout=30) as response:
-        registry_content = response.read()
+    registry_content = download_registry_tarball(tarball_url)
     if hashlib.sha512(registry_content).hexdigest() != npm.get("sha512"):
         raise PublicationError("downloaded registry tarball differs from the validated tarball")
     verify_provenance(metadata, str(npm["sha512"]), revision)

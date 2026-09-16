@@ -4,6 +4,8 @@ import base64
 import hashlib
 import json
 import subprocess
+import urllib.error
+from email.message import Message
 from pathlib import Path
 
 import pytest
@@ -136,6 +138,38 @@ def test_trusted_publishing_rejects_an_old_npm(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(publish_npm_release, "command", lambda *_args: "11.5.0\n")
     with pytest.raises(publish_npm_release.PublicationError, match="11.5.1"):
         publish_npm_release.require_trusted_publishing_npm()
+
+
+def test_registry_tarball_download_retries_propagation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://registry.example/package.tgz"
+    responses: list[object] = [
+        urllib.error.HTTPError(url, 404, "Not Found", Message(), None),
+        type(
+            "Response",
+            (),
+            {
+                "__enter__": lambda self: self,
+                "__exit__": lambda self, *_args: None,
+                "read": lambda self: b"tarball",
+            },
+        )(),
+    ]
+    sleeps: list[float] = []
+
+    def urlopen(_request: object, timeout: int) -> object:
+        assert timeout == 30
+        response = responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr("scripts.publish_npm_release.urllib.request.urlopen", urlopen)
+    monkeypatch.setattr("scripts.publish_npm_release.time.sleep", sleeps.append)
+
+    assert publish_npm_release.download_registry_tarball(url, attempts=2, delay=0.01) == b"tarball"
+    assert sleeps == [0.01]
 
 
 def test_registry_smoke_installs_the_optional_runtime_peer(
