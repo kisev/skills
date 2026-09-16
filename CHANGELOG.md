@@ -6,6 +6,41 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
+## [3.0.0] - 2026-09-16
+
+### Added
+
+- Code review can prepare digest-bound GitLab comments, discussion replies, issue
+  proposals, and label changes. Every action is confirmed separately, revalidates
+  live state, and records a resumable local receipt.
+- `skills-opencode reconcile` archives exact-owned retired assets before cleanup,
+  preserves user-owned or modified files, and rolls planned paths back when a
+  confirmed operation fails.
+
+### Changed
+
+- OpenCode administration is CLI-only. `skills-opencode capabilities`, `doctor`,
+  `reconcile`, `agent`, and `critic` keep their deterministic interfaces, while
+  the core plugin exposes only the receipt-bound `route` tool.
+- The supported public inventory is 27 portable skills, 27 same-named skill
+  commands, 6 agents, 3 optional plugins, and 1 package tool.
+
+### Removed
+
+- The generic `doit` skill and command are removed; normal engineering work now
+  follows the active host and repository instructions directly.
+- The portable `lsp-report` skill and command are removed; use
+  `skills-opencode doctor` for OpenCode LSP reporting.
+- The `/agent-profiles`, `/capabilities`, `/doctor`, and `/reconcile` command
+  adapters and their package tools are removed.
+
+### Migration
+
+- Update the package, then run `skills-opencode reconcile --dry-run` and its exact
+  confirmation command to archive and remove unchanged retired package assets.
+- Remove installed `doit` and `lsp-report` copies with `skills remove`, or let a
+  confirmed package reconciliation remove copies carrying the Pages source marker.
+
 ## [2.4.2] - 2026-09-16
 
 ### Release
