@@ -5,7 +5,6 @@ import importlib.util
 import hashlib
 import json
 import os
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -1453,6 +1452,7 @@ print(json.dumps(value))
             "discussions": discussions,
             "notes": [],
             "publication_markers": [],
+            "issue_templates": [],
             "incremental": {
                 "previous_findings": [],
                 "previous_recommended_issues": [],
@@ -1477,6 +1477,67 @@ print(json.dumps(value))
         self.assertTrue(
             all(len(item["last_note_body_sha256"]) == 64 for item in value["thread_decisions"])
         )
+        self.assertTrue(all(item["outcome"] == "reply" for item in value["thread_decisions"]))
+
+    def test_recommended_issue_uses_exact_head_project_template(self) -> None:
+        scripts = BUILT_SKILLS / "code-review" / "scripts"
+        previous_modules = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == "portable_runtime" or name.startswith("portable_runtime.")
+        }
+        sys.path.insert(0, str(scripts))
+        try:
+            module = load_module(scripts / "review_context.py", "built_review_issue_templates")
+        finally:
+            sys.path.remove(str(scripts))
+            for name in list(sys.modules):
+                if name == "portable_runtime" or name.startswith("portable_runtime."):
+                    sys.modules.pop(name)
+            sys.modules.update(previous_modules)
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "reviewer@example.invalid"],
+                cwd=repository,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Example Reviewer"],
+                cwd=repository,
+                check=True,
+            )
+            template = repository / ".gitlab" / "issue_templates" / "отчёт об ошибке.md"
+            template.parent.mkdir(parents=True)
+            template.write_text("## Problem\n\n## Expected behavior\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=repository, check=True)
+            subprocess.run(["git", "commit", "-qm", "template"], cwd=repository, check=True)
+            head_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
+            templates = module.project_issue_templates(
+                {
+                    "complete": True,
+                    "repo_root": str(repository),
+                    "refs": {"head_sha": head_sha},
+                }
+            )
+            self.assertEqual(templates[0]["path"], ".gitlab/issue_templates/отчёт об ошибке.md")
+            issue = {
+                "id": "bug-1",
+                "title": "Fix the bug",
+                "problem": "The operation fails.",
+                "risk": "Users cannot complete it.",
+                "evidence": ["The exact reviewed path returns an error."],
+                "reason_out_of_scope": "The failing path predates this MR.",
+                "minimum_fix": "Handle the failing operation.",
+                "body": "## Problem\n\nThe operation fails.\n\n## Expected behavior\n\nIt succeeds.",
+                "template_path": ".gitlab/issue_templates/отчёт об ошибке.md",
+            }
+            self.assertEqual(module.validate_recommended_issues([issue], templates), [issue])
+            with self.assertRaises(module.portable.WorkflowError):
+                module.validate_recommended_issues([{**issue, "template_path": None}], templates)
 
     def test_incomplete_review_context_does_not_advance(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -1982,6 +2043,7 @@ print(json.dumps(value))
                             }
                         ],
                         "previous_finding_assessments": [],
+                        "issue_templates": [],
                         "recommended_issues": [
                             {
                                 "id": "issue-1",
@@ -1992,6 +2054,7 @@ print(json.dumps(value))
                                 "reason_out_of_scope": "The subsystem is not changed by this MR.",
                                 "minimum_fix": "Add the existing terminal retry metric separately.",
                                 "body": "Track a terminal metric for retry exhaustion in the broader subsystem.",
+                                "template_path": None,
                             }
                         ],
                         "rejected_candidates": [
@@ -2022,12 +2085,33 @@ print(json.dumps(value))
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"
                                 ).hexdigest(),
-                            }
+                            },
                         ],
                     }
                 ),
                 encoding="utf-8",
             )
+            invalid_content = json.loads(review_content.read_text(encoding="utf-8"))
+            invalid_content["thread_decisions"][0].update(
+                {"state": "resolved", "outcome": "no_publication", "proposed_response": None}
+            )
+            invalid_content_path = root / "invalid-review-content.json"
+            invalid_content_path.write_text(json.dumps(invalid_content), encoding="utf-8")
+            invalid_plan = self.run_runner(
+                "code-review",
+                "scaffold-review",
+                "--evidence",
+                evidence,
+                "--context",
+                context_path,
+                "--decision",
+                reviewed_result["artifact_path"],
+                "--content",
+                str(invalid_content_path),
+                env=environment,
+            )
+            self.assertEqual(invalid_plan.returncode, 2)
+            self.assertIn("state does not match", invalid_plan.stderr)
             review_plan = self.run_runner(
                 "code-review",
                 "scaffold-review",
@@ -2076,23 +2160,21 @@ print(json.dumps(value))
                 Path(value).read_text(encoding="utf-8")
                 for value in plan_result["publication_body_paths"]
             ]
-            self.assertTrue(all("<!-- code-review:id=" in value for value in bodies))
+            self.assertTrue(all("<!-- code-review:id=" not in value for value in bodies))
             commands = plan_result["publication_commands"]
             self.assertEqual(len(commands), 4)
-            self.assertTrue(all("review_publish.py apply" in value for value in commands))
-            self.assertTrue(all("--confirm" in value for value in commands))
-            self.assertTrue(all("glab" not in value for value in commands))
+            self.assertTrue(all(value.startswith("glab ") for value in commands))
+            self.assertTrue(all("review_publish.py" not in value for value in commands))
             plan_document = json.loads(
                 Path(plan_result["artifact_path"]).read_text(encoding="utf-8")
             )
             preview = plan_document["payload"]["publication_preview"]
             thread_action = next(item for item in preview["actions"] if item["kind"] == "thread")
-            finding_action = next(item for item in preview["actions"] if item["kind"] == "finding")
             self.assertEqual(thread_action["operation"], "resolve")
-            self.assertTrue(thread_action["spec"]["mutation"]["desired_resolved"])
+            self.assertIn("--method PUT", thread_action["command"])
+            self.assertIn("resolved=true", thread_action["command"])
             label_action = next(item for item in preview["actions"] if item["kind"] == "labels")
-            self.assertIsNone(label_action["spec"]["body"])
-            self.assertEqual(label_action["spec"]["mutation"]["add"], ["semver::patch"])
+            self.assertIn("--label semver::patch", label_action["command"])
             self.assertEqual(
                 plan_document["payload"]["label_review"]["semver"]["selected"], "semver::patch"
             )
@@ -2120,180 +2202,6 @@ print(json.dumps(value))
                 "code-review", "report-review", "--artifact-root", artifact_root, env=environment
             )
             self.assertEqual(still_active.returncode, 0, still_active.stderr)
-            contract_two_plan = json.loads(json.dumps(plan_document))
-            contract_two_payload = contract_two_plan["payload"]
-            contract_two_payload["review_contract_version"] = 2
-            contract_two_payload.pop("chat_assessment")
-            contract_two_payload.pop("locale")
-            for publication in contract_two_payload["finding_publications"]:
-                for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
-                    publication.pop(key)
-            for entry in contract_two_payload["finding_ledger"]:
-                publication = entry["record"].get("publication")
-                if publication is not None:
-                    for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
-                        publication.pop(key)
-            for thread in contract_two_payload["thread_decisions"]:
-                thread["suggestion_applicable"] = thread.pop("fix_mode") == "suggestion"
-                for key in ("patch", "patch_path", "patch_sha256"):
-                    thread.pop(key)
-            contract_two_content = (
-                json.dumps(
-                    contract_two_plan,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-                + "\n"
-            )
-            contract_two_digest = hashlib.sha256(contract_two_content.encode()).hexdigest()
-            contract_two_path = (
-                Path(artifact_root) / "artifacts" / "review_plan" / f"{contract_two_digest}.json"
-            )
-            contract_two_path.write_text(contract_two_content, encoding="utf-8")
-            publish_directory = root / "publish-bin"
-            publish_directory.mkdir()
-            _publish_glab, publish_state, publish_log = self.fake_publish_glab(publish_directory)
-            publish_environment = {
-                **environment,
-                "PATH": f"{publish_directory}:{os.environ['PATH']}",
-                "FAKE_PUBLISH_STATE": str(publish_state),
-                "FAKE_PUBLISH_LOG": str(publish_log),
-                "FAKE_INHERITED_OPTION": "custom-glab-config",
-                "FAKE_LABEL_CATALOG": json.dumps(
-                    plan_document["payload"]["label_review"]["catalog"]
-                ),
-            }
-            contract_three_command = shlex.split(label_action["command"])
-            action_command = list(contract_three_command)
-            action_command[action_command.index("--plan") + 1] = str(contract_two_path)
-            wrong_command = list(action_command)
-            wrong_command[wrong_command.index("--confirm") + 1] = "0" * 64
-            wrong_confirmation = subprocess.run(
-                wrong_command,
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(wrong_confirmation.returncode, 2, wrong_confirmation.stdout)
-            self.assertFalse(publish_log.exists())
-            applied = subprocess.run(
-                action_command,
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
-            self.assertEqual(json.loads(applied.stdout)["status"], "applied")
-            self.assertEqual(
-                json.loads(publish_state.read_text(encoding="utf-8"))["labels"],
-                ["semver::patch"],
-            )
-            repeated = subprocess.run(
-                contract_three_command,
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(repeated.returncode, 0, repeated.stdout + repeated.stderr)
-            self.assertEqual(json.loads(repeated.stdout)["status"], "already_applied")
-            contract_two_finding_command = shlex.split(finding_action["command"])
-            contract_two_finding_command[contract_two_finding_command.index("--plan") + 1] = str(
-                contract_two_path
-            )
-            published_finding = subprocess.run(
-                contract_two_finding_command,
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(
-                published_finding.returncode,
-                0,
-                published_finding.stdout + published_finding.stderr,
-            )
-            self.assertEqual(json.loads(published_finding.stdout)["status"], "applied")
-            repeated_finding = subprocess.run(
-                shlex.split(finding_action["command"]),
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(json.loads(repeated_finding.stdout)["status"], "already_applied")
-            publish_state_value = json.loads(publish_state.read_text(encoding="utf-8"))
-            publish_state_value["discussions"] = [
-                {
-                    "id": "discussion-42",
-                    "notes": [
-                        {
-                            "id": 42,
-                            "system": False,
-                            "resolvable": True,
-                            "resolved": False,
-                            "author": {"username": "other-reviewer"},
-                            "body": "Retry needs an idempotency key",
-                            "position": {
-                                "base_sha": base_sha,
-                                "start_sha": base_sha,
-                                "head_sha": head_sha,
-                                "new_path": "review.txt",
-                                "new_line": 2,
-                            },
-                        }
-                    ],
-                }
-            ]
-            publish_state.write_text(json.dumps(publish_state_value), encoding="utf-8")
-            thread_command = shlex.split(thread_action["command"])
-            resolved = subprocess.run(
-                thread_command,
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(resolved.returncode, 0, resolved.stdout + resolved.stderr)
-            self.assertEqual(json.loads(resolved.stdout)["status"], "applied")
-            resolved_state = json.loads(publish_state.read_text(encoding="utf-8"))
-            self.assertTrue(resolved_state["discussions"][0]["notes"][0]["resolved"])
-            self.assertIn(
-                "<!-- code-review:id=thread-42",
-                resolved_state["discussions"][0]["notes"][-1]["body"],
-            )
-            resolved_again = subprocess.run(
-                thread_command,
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(json.loads(resolved_again.stdout)["status"], "already_applied")
-            publish_calls = [
-                json.loads(line) for line in publish_log.read_text(encoding="utf-8").splitlines()
-            ]
-            self.assertTrue(publish_calls)
-            self.assertTrue(
-                all(item["inherited"] == "custom-glab-config" for item in publish_calls)
-            )
-            self.assertEqual(
-                sum(
-                    item["argv"][item["argv"].index("--method") + 1] == "PUT"
-                    for item in publish_calls
-                ),
-                2,
-            )
             self.assertTrue((Path(artifact_root) / "review-baseline.json").is_file())
             unchanged_prepared = self.run_runner(
                 "code-review",
@@ -2351,7 +2259,7 @@ print(json.dumps(value))
             )
             self.assertEqual(full_context.returncode, 0, full_context.stderr)
             self.assertEqual(json.loads(full_context.stdout)["incremental"]["mode"], "full")
-            finding_body = next(value for value in bodies if "id=primary-1" in value)
+            finding_body = next(value for value in bodies if "idempotency key" in value)
             published_discussions = [
                 {
                     "id": "discussion-42",
@@ -2405,30 +2313,13 @@ print(json.dumps(value))
             marked = json.loads(marked_context.stdout)
             self.assertEqual(marked["incremental"]["mode"], "incremental")
             context_document = json.loads(Path(marked["artifact_path"]).read_text(encoding="utf-8"))
-            self.assertEqual(
-                context_document["payload"]["publication_markers"][0]["id"], "primary-1"
-            )
-            forged_discussions = json.loads(published_discussions_json)
-            forged_discussions[1]["notes"][0]["author"]["username"] = "other-reviewer"
-            environment["FAKE_DISCUSSIONS_JSON"] = json.dumps(forged_discussions)
-            forged_prepared = self.run_runner(
-                "code-review", "prepare", "--url", target, env=environment
-            )
-            self.assertEqual(forged_prepared.returncode, 0, forged_prepared.stderr)
-            forged_context = self.run_runner(
-                "code-review",
-                "context",
-                "--evidence",
-                json.loads(forged_prepared.stdout)["items"][0]["artifact_path"],
-                "--repo-root",
-                str(repository),
-                env=environment,
-            )
-            self.assertEqual(forged_context.returncode, 0, forged_context.stderr)
-            forged_document = json.loads(
-                Path(json.loads(forged_context.stdout)["artifact_path"]).read_text(encoding="utf-8")
-            )
-            self.assertEqual(forged_document["payload"]["publication_markers"], [])
+            authored_notes = [
+                note
+                for discussion in context_document["payload"]["discussions"]
+                for note in discussion["notes"]
+                if note.get("author", {}).get("username") == "reviewer"
+            ]
+            self.assertEqual([note["body"] for note in authored_notes], [finding_body])
             environment["FAKE_DISCUSSIONS_JSON"] = published_discussions_json
             environment["FAKE_CURRENT_USER"] = "author"
             stale_plan = self.run_runner(
@@ -2501,15 +2392,6 @@ print(json.dumps(value))
             state.write_text("changed", encoding="utf-8")
             newer = self.run_runner("code-review", "prepare", "--url", target, env=environment)
             self.assertEqual(newer.returncode, 0, newer.stderr)
-            inactive_publication = subprocess.run(
-                contract_three_command,
-                cwd=root,
-                env=publish_environment,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            self.assertEqual(inactive_publication.returncode, 2)
             blocked_report = self.run_runner(
                 "code-review", "report-review", "--artifact-root", artifact_root, env=environment
             )
@@ -2809,6 +2691,7 @@ print(json.dumps(value))
                                 "critic_required": False,
                             },
                         ],
+                        "issue_templates": [],
                         "recommended_issues": [
                             {
                                 "id": "issue-1",
@@ -2819,6 +2702,7 @@ print(json.dumps(value))
                                 "reason_out_of_scope": "The subsystem is not changed by this MR.",
                                 "minimum_fix": "Add the existing terminal retry metric separately.",
                                 "body": "Track a terminal metric for retry exhaustion in the broader subsystem.",
+                                "template_path": None,
                             }
                         ],
                         "rejected_candidates": [
@@ -2855,7 +2739,22 @@ print(json.dumps(value))
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"
                                 ).hexdigest(),
-                            }
+                            },
+                            {
+                                "id": "99",
+                                "url": f"{target}#note_99",
+                                "state": "plain",
+                                "assessment": "neutral",
+                                "rationale": "The authenticated reviewer already addressed this topic.",
+                                "outcome": "no_publication",
+                                "proposed_response": None,
+                                "fix_mode": "not_required",
+                                "patch": None,
+                                "last_note_id": 99,
+                                "last_note_body_sha256": hashlib.sha256(
+                                    finding_body.encode()
+                                ).hexdigest(),
+                            },
                         ],
                     }
                 ),
@@ -2916,9 +2815,13 @@ print(json.dumps(value))
             retained_document = json.loads(
                 Path(retained_result["artifact_path"]).read_text(encoding="utf-8")
             )
-            self.assertEqual(
-                retained_document["payload"]["publication_markers"][0]["id"],
-                "primary-1",
+            self.assertTrue(
+                any(
+                    note.get("author", {}).get("username") == "reviewer"
+                    and "idempotency key" in note.get("body", "")
+                    for discussion in retained_document["payload"]["discussions"]
+                    for note in discussion["notes"]
+                )
             )
             environment["FAKE_BASE_SHA"] = head_sha
             environment["FAKE_START_SHA"] = head_sha
@@ -3725,16 +3628,16 @@ class MattermostAndTeamTests(unittest.TestCase):
             },
         )
 
-    def test_team_digest_rejects_stale_tampered_and_expired_plans_then_reports_apply(self) -> None:
+    def test_team_artifact_write_is_direct_and_rejects_unsafe_targets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "artifact.txt"
             source.write_text("first", encoding="utf-8")
             environment = {"XDG_STATE_HOME": str(root / "state")}
-            preview = self.run_script(
+            written = self.run_script(
                 "team-sprint-start",
                 "team_workflow.py",
-                "artifact-prepare",
+                "artifact-write",
                 "--target",
                 "out.txt",
                 "--input",
@@ -3742,137 +3645,15 @@ class MattermostAndTeamTests(unittest.TestCase):
                 cwd=root,
                 env=environment,
             )
-            self.assertEqual(preview.returncode, 0, preview.stderr)
-            prepared = json.loads(preview.stdout)
-            digest = prepared["digest"]
-            self.assertEqual(prepared["status"], "prepared")
-            self.assertIn(digest, prepared["apply_command"])
-            self.assertTrue(Path(prepared["artifact_path"]).is_file())
-            source.write_text("second", encoding="utf-8")
-            stale = self.run_script(
-                "team-sprint-start",
-                "team_workflow.py",
-                "artifact-apply",
-                "--target",
-                "out.txt",
-                "--input",
-                str(source),
-                "--digest",
-                digest,
-                cwd=root,
-                env=environment,
-            )
-            self.assertNotEqual(stale.returncode, 0)
-            self.assertIn("digest", json.loads(stale.stdout)["error"]["message"])
-            fresh = self.run_script(
-                "team-sprint-start",
-                "team_workflow.py",
-                "artifact-prepare",
-                "--target",
-                "out.txt",
-                "--input",
-                str(source),
-                cwd=root,
-                env=environment,
-            )
-            fresh_digest = json.loads(fresh.stdout)["digest"]
-            plan = Path(json.loads(fresh.stdout)["artifact_path"])
-            tampered = json.loads(plan.read_text(encoding="utf-8"))
-            tampered["payload"]["target"] = "other.txt"
-            plan.write_text(json.dumps(tampered), encoding="utf-8")
-            tampered_apply = self.run_script(
-                "team-sprint-start",
-                "team_workflow.py",
-                "artifact-apply",
-                "--target",
-                "out.txt",
-                "--input",
-                str(source),
-                "--digest",
-                fresh_digest,
-                cwd=root,
-                env=environment,
-            )
-            self.assertNotEqual(tampered_apply.returncode, 0)
-            expired = self.run_script(
-                "team-sprint-start",
-                "team_workflow.py",
-                "artifact-prepare",
-                "--target",
-                "expired.txt",
-                "--input",
-                str(source),
-                cwd=root,
-                env=environment,
-            )
-            expired_payload = json.loads(expired.stdout)
-            expired_plan = Path(expired_payload["artifact_path"])
-            expired_document = json.loads(expired_plan.read_text(encoding="utf-8"))
-            expired_document["expires_at"] = 0
-            expired_plan.write_text(json.dumps(expired_document), encoding="utf-8")
-            expired_apply = self.run_script(
-                "team-sprint-start",
-                "team_workflow.py",
-                "artifact-apply",
-                "--target",
-                "expired.txt",
-                "--input",
-                str(source),
-                "--digest",
-                expired_payload["digest"],
-                cwd=root,
-                env=environment,
-            )
-            self.assertNotEqual(expired_apply.returncode, 0)
-            valid = self.run_script(
-                "team-sprint-start",
-                "team_workflow.py",
-                "artifact-prepare",
-                "--target",
-                "valid.txt",
-                "--input",
-                str(source),
-                cwd=root,
-                env=environment,
-            )
-            valid_digest = json.loads(valid.stdout)["digest"]
-            applied = self.run_script(
-                "team-sprint-start",
-                "team_workflow.py",
-                "artifact-apply",
-                "--target",
-                "valid.txt",
-                "--input",
-                str(source),
-                "--digest",
-                valid_digest,
-                cwd=root,
-                env=environment,
-            )
-            self.assertEqual(applied.returncode, 0, applied.stderr)
-            applied_payload = json.loads(applied.stdout)
-            self.assertEqual(applied_payload["status"], "applied")
-            self.assertTrue(Path(applied_payload["report_path"]).is_file())
-            self.assertEqual(
-                self.run_script(
-                    "team-sprint-start",
-                    "team_workflow.py",
-                    "artifact-apply",
-                    "--target",
-                    "valid.txt",
-                    "--input",
-                    str(source),
-                    "--digest",
-                    valid_digest,
-                    cwd=root,
-                    env=environment,
-                ).returncode,
-                2,
-            )
+            self.assertEqual(written.returncode, 0, written.stderr)
+            payload = json.loads(written.stdout)
+            self.assertEqual(payload["status"], "written")
+            self.assertEqual((root / "out.txt").read_text(encoding="utf-8"), "first")
+            self.assertFalse((root / "state").exists())
             escaped = self.run_script(
                 "team-sprint-start",
                 "team_workflow.py",
-                "artifact-prepare",
+                "artifact-write",
                 "--target",
                 "../outside.txt",
                 "--input",
@@ -3887,7 +3668,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             symlink = self.run_script(
                 "team-sprint-start",
                 "team_workflow.py",
-                "artifact-prepare",
+                "artifact-write",
                 "--target",
                 "linked.txt",
                 "--input",

@@ -19,7 +19,7 @@ retrospective material plus evidence-completeness and verification results.
 
 Resolve or self-setup the profile, establish `[since, until)`, inventory every
 configured project, collect and validate evidence, distinguish delivery states,
-draft the configured artifact, preview writes, verify, and report.
+draft the configured artifact, write it, verify, and report.
 
 ## Dependencies
 
@@ -28,8 +28,8 @@ evidence connectors, and owned local state.
 
 ## Remote/Local Effects
 
-Read-only evidence collection and confirmation-bound local profile or artifact
-writes. No implicit external publication.
+Read-only evidence collection, confirmation-bound local profile writes, and
+direct bounded artifact writes. No implicit external publication.
 
 ## Errors, Partial, Escalation
 

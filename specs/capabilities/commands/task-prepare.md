@@ -22,7 +22,7 @@ The `task-prepare` skill and one readable source.
 
 ## Remote/Local Effects
 
-Chat output by default; a file write requires preview and digest confirmation; no publication.
+Chat output by default; an explicitly requested workspace-relative file write is direct and atomic; no publication.
 
 ## Errors/Partial/Escalation
 
@@ -37,7 +37,7 @@ The command adds no tracker or storage semantics.
 ### REQ-I-223 - Route the task-prepare command
 
 The command shall load exactly `task-prepare` and preserve its storage-neutral,
-chat-first, confirmation-gated file output without adding publication.
+chat-first, direct bounded file output without adding publication.
 
 ## Example
 

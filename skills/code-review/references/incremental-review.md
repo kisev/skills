@@ -114,16 +114,15 @@ content, or publication prose advances it. Thread replies use a stable ID
 derived from the root note and advance the revision for each new prepared reply.
 
 If a prior finding was not published, revalidate it and include its current body
-in the new plan. If a trusted marker shows that it was published, update the
-existing discussion instead of creating a duplicate. Ambiguous unmarked legacy
-text is not adopted automatically.
+in the new plan. Determine whether it is already published only by reading the
+current GitLab discussions, notes, and project issues authored by the current
+`glab` user and comparing their meaning to the finding. Do not use markers,
+receipts, command history, or a local publication state.
 
-The baseline pointer, exact refs, delta, previous findings, markers, and digests
-remain private technical JSON. User-facing reports omit raw SHAs.
-Every regenerated structured action receives an exact digest; confirmation of a
-previous action never authorizes a changed publication or label delta.
-Review-contract 1 through 3 plans remain readable, and structured contract-2 and
-contract-3 actions remain executable by the helper. They cannot be reused
-incrementally as a contract-4 baseline because they do not bind the complete
-runner-owned state and chat assessment; context selection falls back to a full
-review instead.
+The baseline pointer, exact refs, delta, and previous findings remain private
+technical JSON. User-facing reports omit raw SHAs. A prior manual command never
+authorizes a changed publication or label delta.
+Review-contract 1 through 3 plans remain readable as historical baselines, but
+their helper commands are not executable after migration to direct manual
+`glab` commands. They cannot be reused incrementally as a contract-4 baseline;
+context selection falls back to a full review instead.

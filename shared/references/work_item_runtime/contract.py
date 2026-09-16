@@ -6,6 +6,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -151,8 +153,37 @@ def parser() -> Parser:
     cli.add_argument("--file")
     cli.add_argument("--url")
     cli.add_argument("--output")
-    cli.add_argument("--confirm")
     return cli
+
+
+def output_path(value: str) -> Path:
+    root = Path.cwd().resolve()
+    candidate = Path(value)
+    if candidate.is_absolute() or any(part in {"", ".", ".."} for part in candidate.parts):
+        raise WorkflowError("output must be a safe workspace-relative path")
+    target = root / candidate
+    current = root
+    for part in candidate.parts[:-1]:
+        current /= part
+        if current.exists() and (current.is_symlink() or not current.is_dir()):
+            raise WorkflowError("output parent is unsafe")
+    if (target.exists() or target.is_symlink()) and (target.is_symlink() or not target.is_file()):
+        raise WorkflowError("output target is unsafe")
+    return target
+
+
+def atomic_write(path: Path, content: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temporary_path = Path(temporary)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
 
 def run(profile: str, argv: list[str] | None = None) -> int:
@@ -178,26 +209,16 @@ def run(profile: str, argv: list[str] | None = None) -> int:
         item, source = load_item(args)
         payload = result(profile, item, source)
         if args.output:
-            if not args.confirm:
-                plan = {
-                    "status": "prepared",
-                    "digest": digest(payload),
-                    "output": args.output,
-                    "external_mutations": False,
-                }
-                emit(plan)
-                return 0
-            if args.confirm != digest(payload):
-                raise WorkflowError("output confirmation digest does not match")
-            path = Path(args.output)
-            path.write_text(
-                json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-                encoding="utf-8",
+            path = output_path(args.output)
+            result_digest = digest(payload)
+            atomic_write(
+                path,
+                (json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode(),
             )
             payload = {
                 "status": "written",
                 "output": str(path),
-                "digest": args.confirm,
+                "digest": result_digest,
                 "external_mutations": False,
             }
         emit(payload)

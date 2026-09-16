@@ -1,9 +1,12 @@
 # Shared Interaction Contract
 
-All workflows use `resolve -> prepare -> present -> confirm ->
-apply -> report`. Omit only stages that do not apply: read-only workflows end at
-`prepare -> present -> report` without `confirm` or `apply`; prompt-only
-workflows follow the same visible protocol and need no runner.
+Workflows use only the stages that apply. Read-only workflows use `resolve ->
+prepare -> present -> report`. Ordinary bounded project-file edits use `resolve
+-> prepare -> apply -> report` and write directly without a private preview or
+Confirmation. External publication, user configuration, destructive cleanup,
+history changes, releases, and package lifecycle mutations use `resolve ->
+prepare -> present -> confirm -> apply -> report`. Prompt-only workflows need no
+runner.
 
 ## Evidence and Results
 
@@ -26,9 +29,11 @@ or ask a question whose prerequisites depend on another unanswered question. A
 broad GitLab target requires an exact boundary before any listing or API request;
 it is not Confirmation.
 
-Request **Confirmation** only after `prepare` for an exact local or external
-mutation. Group confirmations by independent risk, not by file. One approval may
-cover only the actions already shown in the plan with the same mutation boundary.
+Request **Confirmation** only after `prepare` for an exact external publication,
+user-configuration change, destructive cleanup, history change, release, or
+package lifecycle mutation. Ordinary bounded project-file edits do not require
+Confirmation. Group confirmations by independent risk, not by file. One approval
+may cover only the actions already shown in the plan with the same mutation boundary.
 A trusted host/system signal that Goal Mode is active authorizes, without another
 Confirmation, all and only actions explicitly listed in the accepted goal
 objective. The signal must carry the exact accepted objective, or identify an
@@ -52,9 +57,9 @@ review, and manual-plan preparation do not change external state.
 
 ## Present and Apply
 
-The human preview contains TLDR, scope, risks, checks, the write-once artifact
-path and its SHA-256 digest. Show conflicts completely. A confirmable CLI also
-shows TTL and an apply command with its digest.
+For confirmable mutations, the human preview contains TLDR, scope, risks, checks,
+the write-once artifact path, and its SHA-256 digest. Show conflicts completely.
+A confirmable CLI also shows TTL and an apply command with its digest.
 
 Executable apply rejects a missing, changed, stale, expired, or used plan before
 writing. Report status, results, evidence completeness, errors, and checks
@@ -63,7 +68,9 @@ SHA-256 digest, structured errors, and a non-zero exit code for failure.
 
 ## Boundaries
 
-Every durable state has one explicit owner. A portable skill may read or update
+Ordinary project-file edits must use bounded paths and atomic replacement or
+rollback, then report the resulting files, checks, and limitations. Every durable
+state has one explicit owner. A portable skill may read or update
 its declared state only; it must not create a hidden shared lifecycle, infer
 ownership from a caller, or mutate another workflow's state. GitLab prepare and
 review runners never publish. A separately invoked write helper may apply only

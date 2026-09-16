@@ -21,8 +21,9 @@ error. `--capabilities` has no side effects.
 
 1. Run `check` for one target and read the JSON. The absence of real successful
    or unsuccessful sessions is allowed and must not block the check.
-2. Before the first write, show the critical and major findings, exact paths, and
-   planned diff; obtain confirmation.
+2. Before the first write, identify the critical and major findings and exact
+   paths. Keep every edit inside the selected skill and write project files
+   directly with atomic replacement or rollback.
 3. Fix the causes of critical and major findings without rewriting the skill for
    style. When real session examples are available, collect only the minimum
    needed evidence and anonymize prompts, paths, identifiers, credentials, and

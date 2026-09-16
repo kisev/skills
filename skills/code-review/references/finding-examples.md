@@ -35,10 +35,13 @@ Use these examples to calibrate evidence and minimum fixes. Do not copy claims w
 ```
 
 Valid outcomes are `no_publication`, `local_fix`, `reply`, `resolve`, and
-`reopen`. A publishable response is natural prose followed by a runner-owned
-hidden marker; do not put severity or internal evidence labels in that prose.
+`reopen`. A publishable response is natural prose; do not put severity or
+internal evidence labels in that prose.
 Write it from the authenticated user's factual role and use natural informal
 second person when addressing the participant.
+
+An open thread must use `reply`, `resolve`, or author-mode `local_fix`; only
+resolved and plain threads may use `no_publication`.
 
 For an actionable current new-line position, prepare exactly one suggestion.
 Use a bounded range opener for a contiguous multi-line replacement:

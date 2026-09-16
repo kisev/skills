@@ -7,16 +7,16 @@ failed command.
 
 ## Stages
 
-| Stage              | Meaning                                                                   | Safe transition                                                          |
-| ------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `prepared`         | Current content-addressed evidence exists.                                | Collect context.                                                         |
-| `context_ready`    | Role, threads, exact Git context, mode, and locale are bound.             | Follow the returned transition.                                          |
-| `critic_missing`   | The selected mode requires an independent recorded critic.                | Generate, complete, and record the critic template.                      |
-| `finalize_missing` | Context and required critic evidence are present.                         | Revalidate current evidence with `finalize`.                             |
-| `decision_missing` | A fresh finalize report exists.                                           | Generate and complete the decision template, then run `finalize-review`. |
-| `content_missing`  | The immutable review decision exists.                                     | Generate and complete the content template, then run `scaffold-review`.  |
-| `plan_ready`       | A current contract-4 plan, Markdown, baseline pointer, and digests agree. | Run `report-review`.                                                     |
-| `stale`            | A stable plan or progress binding does not match current evidence.        | Follow `resume_stage` and `next_action`; never report the old plan.      |
+| Stage              | Meaning                                                            | Safe transition                                                          |
+| ------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `prepared`         | Current content-addressed evidence exists.                         | Collect context.                                                         |
+| `context_ready`    | Role, threads, exact Git context, mode, and locale are bound.      | Follow the returned transition.                                          |
+| `critic_missing`   | The selected mode requires an independent recorded critic.         | Generate, complete, and record the critic template.                      |
+| `finalize_missing` | Context and required critic evidence are present.                  | Revalidate current evidence with `finalize`.                             |
+| `decision_missing` | A fresh finalize report exists.                                    | Generate and complete the decision template, then run `finalize-review`. |
+| `content_missing`  | The immutable review decision exists.                              | Generate and complete the content template, then run `scaffold-review`.  |
+| `plan_ready`       | A current plan, Markdown, and review baseline agree.               | Run `report-review`.                                                     |
+| `stale`            | A stable plan or progress binding does not match current evidence. | Follow `resume_stage` and `next_action`; never report the old plan.      |
 
 An incomplete lifecycle is not a best-effort review. `report-review` returns
 `status=blocked`, the failed stage, its reason, and a safe transition without
@@ -57,10 +57,15 @@ again.
    reason; accepted findings must remain structurally distinct.
 7. When `content_missing`, run `template-review --kind content`. The generated
    draft prebinds accepted findings, every exact catalog label, every non-system
-   thread and latest-note digest, previous findings, and rejected candidates.
+   thread and latest-note digest, previous findings, rejected candidates, and all
+   `.gitlab/issue_templates` collected from the exact MR head. Each recommended
+   issue must select and fill its nearest matching template; when only one exists,
+   it must use that template.
    Complete every empty assessment, body, fix, rationale, and check, then run
    the returned `scaffold-review` action. The runner owns standard presentation
    labels; content supplies only `locale` and semantic `chat_assessment` prose.
+   Every open thread requires an explicit reply, resolve, or author local-fix
+   outcome; `no_publication` is limited to resolved and plain threads.
 8. Run the returned `report-review` action and print its `chat` value verbatim.
    Do not manually reconstruct, expand, or shorten the report. A later request
    to report the existing review runs `status` and `report-review`; it does not

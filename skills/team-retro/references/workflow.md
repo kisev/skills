@@ -117,9 +117,9 @@ Keep each slide focused, reserve readable space for text, and express bullets as
 content come from the profile or current repository evidence, not this public
 skill.
 
-Prepare the complete artifact in a private preview. Use `artifact-prepare`, show
-the compact summary and conflicts, obtain confirmation, then run the returned
-digest-bound `artifact-apply`. Do not modify image files and do not publish.
+Write the complete artifact directly with `artifact-write`, then report the
+resulting path, diff summary, and conflicts. Do not modify image files and do not
+publish.
 
 ## 6. Verify and Report
 
@@ -132,5 +132,5 @@ totals, external contributors, checks run, and every remaining limitation.
 Delete or retain private temporary evidence according to the user's instruction;
 never commit it by default.
 
-Read `references/interaction-contract.md` for evidence and confirmation rules
+Read `references/interaction-contract.md` for evidence and mutation rules
 and `references/language-policy.md` for user-facing prose.

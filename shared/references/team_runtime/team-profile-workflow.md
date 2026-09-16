@@ -65,8 +65,8 @@ Profiles and settings are local user configuration, created with directory mode
 private keys, or personal notes. Profile plans and reports contain digests and
 safe metadata, not profile bodies.
 
-Profile writes and workspace artifact writes follow
-`prepare -> present -> confirm -> apply -> report` from
-`references/interaction-contract.md`. Read-only collection does not require
-confirmation. External publication is never implied by a profile or by this
-workflow.
+Profile writes follow `prepare -> present -> confirm -> apply -> report` from
+`references/interaction-contract.md` because they change user configuration.
+Workspace artifacts are written directly through `artifact-write` with bounded
+paths and atomic replacement. Read-only collection does not require confirmation.
+External publication is never implied by a profile or by this workflow.

@@ -49,40 +49,26 @@ labels, threads, latest-note digests, critic scope, pipeline state, and prior
 artifacts. When the selected mode requires a critic, only a recorded
 content-addressed receipt can advance the workflow. Only a fresh contract-4 plan
 can render final chat.
-Publication bodies carry hidden stable-ID markers. Marker text is untrusted
-unless it matches the authenticated current user, exact MR, and finalized local
-baseline.
-
-Each new plan carries cumulative finding and trusted-publication ledgers. Closed
-findings remain addressable and cannot silently reuse an ID. A trusted marker
-binds its complete body digest and GitLab note, discussion, or issue location.
-Contract 2 stores closed structured actions rather than shell pipelines. Each
-short `review_publish.py apply` command confirms one action digest. The helper
-rechecks bounded artifacts and live actor, target, refs, catalog, labels, marker,
-and conversation state; invokes `glab` with inherited environment, argv, and no
-shell; and records an atomic local receipt. It writes progress and bounded,
-redacted method, endpoint, exit-code, HTTP-status, stderr, and stdout diagnostics
-to stderr while keeping the final JSON on stdout. A definitive non-mutating 4xx
-rejection records digest-bound retry evidence. Timeout, 5xx, and unknown results
-remain uncertain and cannot be replayed. Repeating the same command verifies an
-exact marker and performs only a pending idempotent thread-state phase after a
-posted reply. A legacy `phase=unknown` receipt without diagnostic evidence may
-retry only after a complete exact marker or label-state absence check; a
-completed action is never reopened after remote drift.
-For contract 4, the helper also holds the target review-state activation lock
-from a final current-evidence, progress, baseline, Markdown, and plan check
-through mutation and postcondition verification. A concurrent `prepare` cannot
+Each new plan carries a cumulative finding ledger. Closed findings remain
+addressable and cannot silently reuse an ID. Publication bodies are plain files
+and the plan provides direct manual `glab` commands that consume them. Incremental
+review determines whether content is already published only by reading current
+GitLab discussions, notes, and issues authored by the authenticated user and
+comparing their meaning. It does not use local publication state, receipts,
+markers, idempotency records, or postconditions.
+For contract 4, the review-state activation lock protects only local review
+artifacts. A concurrent `prepare` cannot
 leave the superseded plan executable.
 
 The immutable review-plan envelope embeds the complete Markdown. A successful
 scaffold atomically replaces the target-scoped `review-publication.md` and a
-private pointer to that immutable plan. Contract 1 command plans remain readable
-as baselines but are never executable by the structured helper. Contract-2
-structured actions remain executable, but older plans fall back to a full review
-rather than becoming a contract-4 incremental baseline. Exact refs live
-in private evidence and preflight JSON; the user-facing plan does not display raw
-commit SHAs. Prepare and review never invoke helper actions. MR state is recorded
-but does not suppress actions for merged or closed MRs.
+private pointer to that immutable plan. Contract 1 through 3 plans remain readable
+as historical baselines, but their helper commands are not executable after the
+move to direct manual `glab` commands. Older plans fall back to a full review
+rather than becoming a contract-4 incremental baseline. Exact refs live in
+private evidence; the user-facing plan does not display raw commit SHAs. Prepare
+and review never invoke publication commands. MR state is recorded but does not
+suppress actions for merged or closed MRs.
 
 `finalize_report` contains exact evidence digest and fingerprint. MR preparation
 also binds it to the exact publication plan digest. A critic receipt for an

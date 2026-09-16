@@ -16,7 +16,6 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Iterator, cast
-from urllib.parse import quote
 
 if TYPE_CHECKING:
     from shared.references.portable_gitlab import contract as portable
@@ -41,12 +40,6 @@ REVIEW_STAGES = {
 }
 REVIEW_MODES = {"fast", "normal", "deep", "incremental", "unchanged"}
 SUPPORTED_LOCALES = {"en", "ru"}
-PUBLICATION_MARKER_RE = re.compile(
-    r"<!-- code-review:id=(?P<id>[A-Za-z0-9][A-Za-z0-9._-]{0,63});"
-    r"revision=(?P<revision>[1-9][0-9]*);kind=(?P<kind>finding|thread|issue);"
-    r"target=(?P<target>[a-f0-9]{16}) -->"
-)
-PUBLICATION_MARKER_PREFIX = "<!-- code-review:"
 SUGGESTION_RE = re.compile(
     r"^```suggestion(?::-(?P<before>[0-9]+)\+(?P<after>[0-9]+))?\r?\n"
     r"(?P<replacement>.*?)^```[ \t]*$",
@@ -321,91 +314,6 @@ def username(value: object) -> str | None:
     return result if isinstance(result, str) and result else None
 
 
-def publication_marker(value: str) -> dict[str, Any] | None:
-    matches = list(PUBLICATION_MARKER_RE.finditer(value))
-    if not matches:
-        return None
-    if len(matches) != 1 or value[matches[0].end() :].strip():
-        raise portable.WorkflowError("code-review publication marker is malformed")
-    match = matches[0]
-    return {
-        "id": match.group("id"),
-        "revision": int(match.group("revision")),
-        "kind": match.group("kind"),
-        "target": match.group("target"),
-    }
-
-
-def marked_body(body: str, publication_id: str, revision: int, kind: str, target: str) -> str:
-    if not portable.nonempty_string(body) or PUBLICATION_MARKER_PREFIX in body:
-        raise portable.WorkflowError("publication body is empty or already contains a marker")
-    marker = publication_marker_text(publication_id, revision, kind, target)
-    if PUBLICATION_MARKER_RE.fullmatch(marker) is None:
-        raise portable.WorkflowError("publication marker identity is invalid")
-    return body.rstrip() + f"\n\n{marker}\n"
-
-
-def publication_marker_text(publication_id: str, revision: int, kind: str, target: str) -> str:
-    return (
-        f"<!-- code-review:id={publication_id};revision={revision};kind={kind};target={target} -->"
-    )
-
-
-def collect_publication_markers(
-    discussions: list[dict[str, Any]], notes: list[dict[str, Any]], current_username: str
-) -> tuple[list[dict[str, Any]], list[str]]:
-    markers: list[dict[str, Any]] = []
-    errors: list[str] = []
-    discussion_note_ids: set[str] = set()
-    sources: list[tuple[dict[str, Any], object, bool, object]] = []
-    note_urls = {str(note.get("id")): note.get("note_url") for note in notes}
-    for discussion in discussions:
-        discussion_id = discussion.get("id")
-        root_note_id = discussion.get("root_note_id")
-        for index, value in enumerate(cast(list[object], discussion.get("notes", []))):
-            if isinstance(value, dict):
-                discussion_note_ids.add(str(value.get("id")))
-                sources.append((value, discussion_id, index == 0, root_note_id))
-    sources.extend(
-        (note, None, True, note.get("id"))
-        for note in notes
-        if str(note.get("id")) not in discussion_note_ids
-    )
-    for note, discussion_id, is_root, root_note_id in sources:
-        if note.get("system") is True or username(note.get("author")) != current_username:
-            continue
-        body = note.get("body")
-        if not isinstance(body, str) or PUBLICATION_MARKER_PREFIX not in body:
-            continue
-        try:
-            marker = publication_marker(body)
-        except portable.WorkflowError as exc:
-            errors.append(f"note {note.get('id')}: {exc}")
-            continue
-        if marker is None:
-            errors.append(f"note {note.get('id')}: code-review publication marker is malformed")
-            continue
-        markers.append(
-            {
-                **marker,
-                "note_id": note.get("id"),
-                "note_url": note_urls.get(str(note.get("id"))),
-                "discussion_id": discussion_id,
-                "author_username": current_username,
-                "body_sha256": hashlib.sha256(body.encode()).hexdigest(),
-                "resource_type": "note",
-                "is_root": is_root,
-                "position": note.get("position")
-                if isinstance(note.get("position"), dict)
-                else None,
-                "root_note_id": root_note_id,
-                "resource_title": None,
-                "resource_body": None,
-            }
-        )
-    return sorted(markers, key=lambda item: (item["id"], item["revision"])), errors
-
-
 def discussion_signature(value: dict[str, Any]) -> str:
     notes = []
     for note in cast(list[object], value.get("notes", [])):
@@ -482,207 +390,6 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
     ):
         raise portable.WorkflowError("code-review baseline Markdown changed")
     return pointer, plan
-
-
-def trusted_publication_markers(
-    root: Path,
-    evidence: dict[str, Any],
-    current_username: str,
-    incremental: dict[str, Any],
-    markers: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    if incremental.get("mode") not in {"incremental", "unchanged"}:
-        return []
-    baseline = baseline_pointer(root)
-    if baseline is None:
-        return []
-    _, plan = baseline
-    target_marker = portable.digest(evidence.get("target"))[:16]
-    preview = plan.get("publication_preview")
-    if not isinstance(preview, dict):
-        return []
-    bodies = preview.get("body_files")
-    if not isinstance(bodies, list):
-        return []
-    planned = {
-        (item.get("publication_id"), item.get("revision"), item.get("kind")): item.get("sha256")
-        for item in bodies
-        if isinstance(item, dict)
-    }
-    action_values = preview.get("actions")
-    if isinstance(action_values, list):
-        planned_commands = {
-            (item.get("publication_id"), item.get("revision"), item.get("kind")): item.get(
-                "operation"
-            )
-            for item in action_values
-            if isinstance(item, dict) and item.get("publication_id") is not None
-        }
-    else:
-        planned_commands = {
-            (item.get("publication_id"), item.get("revision"), item.get("kind")): item.get(
-                "outcome"
-            )
-            for item in cast(list[object], preview.get("commands", []))
-            if isinstance(item, dict)
-        }
-    finding_publications = {
-        (item.get("finding_id"), item.get("revision")): item
-        for item in cast(list[object], plan.get("finding_publications", []))
-        if isinstance(item, dict)
-    }
-    previous_ledger = plan.get("publication_ledger")
-    if not isinstance(previous_ledger, list):
-        previous_ledger = []
-    previous = {
-        (item.get("id"), item.get("revision"), item.get("kind")): item
-        for item in previous_ledger
-        if isinstance(item, dict)
-    }
-    latest_previous_by_id: dict[str, dict[str, Any]] = {}
-    for identity, item in previous.items():
-        item_id, revision, _ = identity
-        current = latest_previous_by_id.get(str(item_id))
-        if current is None or isinstance(revision, int) and revision > current["revision"]:
-            latest_previous_by_id[str(item_id)] = item
-    issue_identities = {
-        identity for identity in set(planned) | set(previous) if identity[2] == "issue"
-    }
-    project = evidence.get("project")
-    if issue_identities and (
-        not isinstance(project, dict)
-        or not isinstance(project.get("id"), int)
-        or not isinstance(project.get("hostname"), str)
-    ):
-        raise portable.WorkflowError("project identity is unavailable for issue marker lookup")
-    if len(issue_identities) > 50:
-        raise portable.WorkflowError("too many recommended issues for bounded marker lookup")
-    project_value = cast(dict[str, Any], project)
-    previous_issues: dict[str, dict[str, Any]] = {}
-    for identity, item in previous.items():
-        issue_id, revision, kind = identity
-        current = previous_issues.get(str(issue_id))
-        if kind == "issue" and (
-            current is None or isinstance(revision, int) and revision > current["revision"]
-        ):
-            previous_issues[str(issue_id)] = item
-
-    def issue_marker(value: dict[str, Any]) -> dict[str, Any] | None:
-        if username(value.get("author")) != current_username:
-            return None
-        description = value.get("description")
-        if not isinstance(description, str) or PUBLICATION_MARKER_PREFIX not in description:
-            return None
-        marker = publication_marker(description)
-        if marker is None or marker["kind"] != "issue" or marker["target"] != target_marker:
-            return None
-        return {
-            **marker,
-            "note_id": value.get("iid"),
-            "note_url": value.get("web_url"),
-            "discussion_id": None,
-            "author_username": current_username,
-            "body_sha256": hashlib.sha256(description.encode()).hexdigest(),
-            "resource_type": "issue",
-            "is_root": True,
-            "position": None,
-            "root_note_id": None,
-            "resource_title": value.get("title"),
-            "resource_body": description,
-        }
-
-    for issue_id in sorted({str(identity[0]) for identity in issue_identities}):
-        bound = previous_issues.get(issue_id)
-        if bound is not None:
-            value = portable.glab_json(
-                cast(str, project_value["hostname"]),
-                f"projects/{project_value['id']}/issues/{bound['note_id']}",
-            )
-            if not isinstance(value, dict):
-                raise portable.WorkflowError("bound recommended issue is unavailable")
-            marker = issue_marker(value)
-            if marker is None or marker["id"] != issue_id:
-                raise portable.WorkflowError("bound recommended issue marker changed")
-            markers.append(marker)
-            continue
-        component = portable.paginated(
-            cast(str, project_value["hostname"]),
-            f"projects/{project_value['id']}/issues?scope=all&in=description&search={quote(issue_id, safe='')}",
-        )
-        if component.get("complete") is not True:
-            raise portable.WorkflowError("recommended issue marker lookup is incomplete")
-        for issue in cast(list[object], component.get("items", [])):
-            if not isinstance(issue, dict):
-                continue
-            marker = issue_marker(issue)
-            if marker is not None and marker["id"] == issue_id:
-                markers.append(marker)
-    trusted: list[dict[str, Any]] = []
-    for marker in markers:
-        if marker.get("target") != target_marker:
-            continue
-        identity = (marker.get("id"), marker.get("revision"), marker.get("kind"))
-        prior = previous.get(identity)
-        if prior is not None:
-            if any(
-                marker.get(key) != prior.get(key)
-                for key in (
-                    "note_id",
-                    "note_url",
-                    "discussion_id",
-                    "author_username",
-                    "body_sha256",
-                    "resource_type",
-                    "is_root",
-                    "position",
-                    "root_note_id",
-                    "target",
-                    "resource_title",
-                    "resource_body",
-                )
-            ):
-                raise portable.WorkflowError("trusted publication marker binding changed")
-            trusted.append(marker)
-            continue
-        expected_body_digest = planned.get(identity)
-        if expected_body_digest is None or marker.get("body_sha256") != expected_body_digest:
-            continue
-        outcome = planned_commands.get(identity)
-        if marker["kind"] == "issue":
-            binding_valid = marker.get("resource_type") == "issue"
-        elif marker["kind"] == "thread":
-            binding_valid = (
-                marker.get("resource_type") == "note"
-                and marker.get("is_root") is False
-                and marker.get("discussion_id") is not None
-                and str(marker.get("root_note_id")) == str(marker["id"])[len("thread-") :]
-            )
-        else:
-            binding_valid = (
-                marker.get("resource_type") == "note"
-                and marker.get("discussion_id") is not None
-                and marker.get("is_root") is (outcome in {"create_general", "create_line"})
-            )
-            prior_marker = latest_previous_by_id.get(str(marker["id"]))
-            if binding_valid and outcome in {"reply", "resolve", "reopen"}:
-                binding_valid = prior_marker is not None and marker.get(
-                    "discussion_id"
-                ) == prior_marker.get("discussion_id")
-            spec = finding_publications.get((marker["id"], marker["revision"]))
-            if binding_valid and outcome == "create_line" and spec is not None:
-                position = marker.get("position")
-                binding_valid = isinstance(position, dict) and (
-                    position.get("new_path") == spec.get("path")
-                    and position.get("new_line") == spec.get("line")
-                    or position.get("old_path") == spec.get("path")
-                    and position.get("old_line") == spec.get("old_line")
-                )
-        if binding_valid:
-            trusted.append(marker)
-    identities = [(item["id"], item["revision"], item["kind"]) for item in trusted]
-    if len(identities) != len(set(identities)):
-        raise portable.WorkflowError("a trusted publication marker appears more than once")
-    return trusted
 
 
 def artifact_for_digest(root: Path, kind: str, digest: object) -> tuple[Path, dict[str, Any]]:
@@ -966,7 +673,7 @@ def incremental_context(
             "previous_finding_publications": previous_finding_publications,
             "previous_recommended_issues": previous_recommended_issues,
             "previous_finding_ledger": finding_ledger,
-            "previous_publication_ledger": plan.get("publication_ledger", []),
+            "previous_publication_ledger": [],
             "previous_thread_decisions": plan.get("thread_decisions", []),
             "previous_rejected_candidates": rejected_candidates,
             "reconsidered_rejected_candidates": [
@@ -1109,6 +816,44 @@ def exact_git_context(repo_root: str, evidence: dict[str, Any]) -> dict[str, Any
     }
 
 
+def project_issue_templates(exact_git: dict[str, Any]) -> list[dict[str, Any]]:
+    if exact_git.get("complete") is not True:
+        raise portable.WorkflowError("exact Git context is unavailable for issue templates")
+    refs = cast(dict[str, Any], exact_git["refs"])
+    root = Path(cast(str, exact_git["repo_root"]))
+    head_sha = cast(str, refs["head_sha"])
+    raw_paths = portable.git_read(
+        root,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "-z",
+        head_sha,
+        "--",
+        ".gitlab/issue_templates",
+        text=False,
+    )
+    if not isinstance(raw_paths, bytes):
+        raise portable.WorkflowError("project issue template paths are invalid")
+    paths = [item.decode() for item in raw_paths.split(b"\0") if item]
+    templates: list[dict[str, Any]] = []
+    for path in paths:
+        name = path.removeprefix(".gitlab/issue_templates/")
+        if name == path or not name or "/" in name or not name.endswith(".md"):
+            raise portable.WorkflowError("project issue template path is invalid")
+        body = str(portable.git_read(root, "show", f"{head_sha}:{path}"))
+        if not portable.nonempty_string(body) or len(body.encode()) > portable.MAX_BYTES:
+            raise portable.WorkflowError("project issue template content is invalid")
+        templates.append(
+            {
+                "path": path,
+                "body": body,
+                "headings": re.findall(r"^#{1,6}\s+.+$", body, re.MULTILINE),
+            }
+        )
+    return templates
+
+
 def collect_context(
     evidence: dict[str, Any], evidence_digest: str, repo_root: str, incremental: str = "auto"
 ) -> dict[str, Any]:
@@ -1171,12 +916,13 @@ def collect_context(
         discussions, notes = [], []
     exact_git = exact_git_context(repo_root, evidence)
     errors.extend(cast(list[str], exact_git["errors"]))
+    try:
+        issue_templates = project_issue_templates(exact_git)
+    except portable.WorkflowError as exc:
+        errors.append(str(exc))
+        issue_templates = []
     content_notes = [note for note in notes if note.get("system") is not True]
     system_notes = [note for note in notes if note.get("system") is True]
-    publication_markers, marker_errors = collect_publication_markers(
-        discussions, notes, current_username
-    )
-    errors.extend(marker_errors)
     counts = {
         "discussions": len(discussions),
         "notes": len(notes),
@@ -1208,7 +954,7 @@ def collect_context(
         "mr_author_username": author_username,
         "discussions": discussions,
         "notes": notes,
-        "publication_markers": publication_markers,
+        "issue_templates": issue_templates,
         "counts": counts,
         "exact_git": exact_git,
         "complete": evidence.get("retrieval_complete") is True
@@ -1220,66 +966,7 @@ def collect_context(
     }
     root = portable.artifact_root(Path(str(evidence["artifact_root"])))
     selection = incremental_context(evidence, result, root, incremental)
-    try:
-        trusted_markers = trusted_publication_markers(
-            root, evidence, current_username, selection, publication_markers
-        )
-    except portable.WorkflowError as exc:
-        delta: dict[str, Any] = {
-            "from_head": None,
-            "to_head": evidence.get("head_sha"),
-            "changed_paths": [],
-            "changed_thread_ids": [],
-            "unchanged_thread_ids": [],
-            "changed_note_ids": [],
-            "unchanged_note_ids": [],
-            "metadata_fields": [],
-            "pipelines_changed": False,
-        }
-        selection = {
-            **selection,
-            "mode": "full",
-            "reason": "incremental review requires a full-review fallback",
-            "incremental_baseline": {
-                "plan_path": None,
-                "plan_digest": None,
-                "state_digest": selection["incremental_baseline"]["state_digest"],
-            },
-            "previous_findings": [],
-            "previous_finding_publications": [],
-            "previous_recommended_issues": [],
-            "previous_finding_ledger": [],
-            "previous_publication_ledger": [],
-            "previous_thread_decisions": [],
-            "previous_rejected_candidates": [],
-            "reconsidered_rejected_candidates": [],
-            "incremental_delta": delta,
-            "incremental_delta_digest": portable.digest(delta),
-            "critic_required": False,
-            "fallback_reasons": [*selection["fallback_reasons"], str(exc)],
-        }
-        trusted_markers = []
     result["incremental"] = selection
-    result["publication_markers"] = trusted_markers
-    previous_marker_identities = {
-        (item.get("id"), item.get("revision"), item.get("kind"))
-        for item in cast(list[dict[str, Any]], selection.get("previous_publication_ledger", []))
-    }
-    new_issue_markers = [
-        item
-        for item in cast(list[dict[str, Any]], result["publication_markers"])
-        if item["resource_type"] == "issue"
-        and (item["id"], item["revision"], item["kind"]) not in previous_marker_identities
-    ]
-    if selection["mode"] == "unchanged" and new_issue_markers:
-        selection["mode"] = "incremental"
-        selection["reason"] = "a recommended issue publication was discovered"
-        selection["critic_required"] = True
-        selection["incremental_delta"]["changed_note_ids"].extend(
-            f"issue:{item['note_id']}" for item in new_issue_markers
-        )
-        selection["incremental_delta"]["changed_note_ids"].sort()
-        selection["incremental_delta_digest"] = portable.digest(selection["incremental_delta"])
     return result
 
 
@@ -1438,7 +1125,6 @@ def contexts_match(expected: dict[str, Any], current: dict[str, Any]) -> bool:
     current_value = context_fingerprint(current)
     if "incremental" not in expected:
         current_value.pop("incremental", None)
-        current_value.pop("publication_markers", None)
     return context_fingerprint(expected) == current_value
 
 
@@ -2044,14 +1730,6 @@ def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any
                 cast(str, last_note["body"]).encode()
             ).hexdigest(),
         }
-    marked_root_note_ids = {
-        str(item["note_id"])
-        for item in cast(list[dict[str, Any]], context.get("publication_markers", []))
-        if item.get("kind") == "finding"
-        and item.get("resource_type") == "note"
-        and item.get("is_root") is True
-    }
-    expected = {key: value for key, value in expected.items() if key not in marked_root_note_ids}
     discussion_note_ids = {
         str(note.get("id"))
         for discussion in discussions
@@ -2059,11 +1737,7 @@ def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any
     }
     for note in cast(list[dict[str, Any]], context.get("notes", [])):
         note_id = str(note.get("id"))
-        if (
-            note.get("system") is not True
-            and note_id not in discussion_note_ids
-            and note_id not in marked_root_note_ids
-        ):
+        if note.get("system") is not True and note_id not in discussion_note_ids:
             body = note.get("body")
             if not isinstance(body, str):
                 raise portable.WorkflowError("non-system note body is invalid")
@@ -2250,7 +1924,9 @@ def validate_previous_assessments(
     return list(actual.values())
 
 
-def validate_recommended_issues(value: object) -> list[dict[str, Any]]:
+def validate_recommended_issues(
+    value: object, issue_templates: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     keys = {
         "id",
         "title",
@@ -2260,6 +1936,7 @@ def validate_recommended_issues(value: object) -> list[dict[str, Any]]:
         "reason_out_of_scope",
         "minimum_fix",
         "body",
+        "template_path",
     }
     if not isinstance(value, list):
         raise portable.WorkflowError("recommended issues must be an array")
@@ -2288,6 +1965,16 @@ def validate_recommended_issues(value: object) -> list[dict[str, Any]]:
             or not all(portable.nonempty_string(entry) for entry in item["evidence"])
         ):
             raise portable.WorkflowError("recommended issue content is invalid")
+        template_path = item.get("template_path")
+        templates = {str(template["path"]): template for template in issue_templates}
+        if templates and template_path not in templates:
+            raise portable.WorkflowError("recommended issue must select a project issue template")
+        if not templates and template_path is not None:
+            raise portable.WorkflowError("recommended issue template is unavailable")
+        if template_path is not None and not all(
+            heading in item["body"] for heading in templates[cast(str, template_path)]["headings"]
+        ):
+            raise portable.WorkflowError("recommended issue does not fill its selected template")
         seen.add(cast(str, item_id))
         result.append(cast(dict[str, Any], item))
     return result
@@ -2388,17 +2075,6 @@ def previous_revisions(incremental: dict[str, Any]) -> dict[str, int]:
     return result
 
 
-def marker_index(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    result: dict[str, dict[str, Any]] = {}
-    for marker in cast(list[dict[str, Any]], context.get("publication_markers", [])):
-        marker_id = str(marker.get("id"))
-        if marker_id not in result or marker.get("revision", 0) > result[marker_id].get(
-            "revision", 0
-        ):
-            result[marker_id] = marker
-    return result
-
-
 def finding_revisions(
     incremental: dict[str, Any],
     assessments: list[dict[str, Any]],
@@ -2421,750 +2097,6 @@ def finding_revisions(
     return revisions
 
 
-def publication_preflight(
-    evidence: dict[str, Any], context: dict[str, Any], root: Path
-) -> dict[str, str]:
-    project = evidence.get("project")
-    target = evidence.get("target")
-    object_value = evidence.get("object")
-    head_sha = evidence.get("head_sha")
-    if (
-        not isinstance(project, dict)
-        or not isinstance(project.get("id"), int)
-        or not portable.nonempty_string(project.get("hostname"))
-        or not isinstance(target, dict)
-        or not isinstance(target.get("iid"), int)
-        or not isinstance(object_value, dict)
-        or not portable.nonempty_string(object_value.get("state"))
-        or not portable.is_sha(head_sha)
-    ):
-        raise portable.WorkflowError("MR identity is incomplete for publication preflight")
-    hostname = cast(str, project["hostname"])
-    state = cast(str, object_value["state"])
-    endpoint = f"projects/{project['id']}/merge_requests/{target['iid']}"
-    endpoint_argument = shlex.quote(endpoint)
-    threads: dict[str, dict[str, Any]] = {}
-    for discussion in cast(list[dict[str, Any]], context.get("discussions", [])):
-        meaningful = [
-            note
-            for note in cast(list[dict[str, Any]], discussion.get("notes", []))
-            if note.get("system") is not True and isinstance(note.get("body"), str)
-        ]
-        if meaningful:
-            threads[str(discussion.get("id"))] = {
-                "resolved": discussion.get("root_resolved") is True,
-                "last_note_id": meaningful[-1].get("id"),
-                "last_note_body": meaningful[-1]["body"],
-            }
-    issues = {
-        str(marker["id"]): {
-            "iid": marker["note_id"],
-            "title": marker["resource_title"],
-            "description": marker["resource_body"],
-        }
-        for marker in cast(list[dict[str, Any]], context.get("publication_markers", []))
-        if marker.get("resource_type") == "issue"
-    }
-    payload = {
-        "state": state,
-        "diff_refs": {
-            "base_sha": evidence.get("base_sha"),
-            "start_sha": evidence.get("start_sha"),
-            "head_sha": head_sha,
-        },
-        "threads": threads,
-        "issues": issues,
-    }
-    content = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
-    digest = hashlib.sha256(content.encode()).hexdigest()
-    directory = portable.private_directory(root / "artifacts" / "review_plan" / "preflight")
-    path, actual_digest = portable.write_companion(directory / f"{digest}.json", content)
-    integrity = (
-        f"printf '%s  %s\\n' {shlex.quote(actual_digest)} {shlex.quote(str(path))} "
-        "| sha256sum --check --status"
-    )
-    query = shlex.quote(
-        ".state == $expected[0].state and "
-        ".diff_refs.base_sha == $expected[0].diff_refs.base_sha and "
-        ".diff_refs.start_sha == $expected[0].diff_refs.start_sha and "
-        ".diff_refs.head_sha == $expected[0].diff_refs.head_sha"
-    )
-    command = (
-        f"{integrity} && glab api --hostname {shlex.quote(hostname)} --method GET "
-        f"{endpoint_argument} | jq -e --slurpfile expected {shlex.quote(str(path))} {query}"
-    )
-    return {
-        "path": str(path),
-        "sha256": actual_digest,
-        "command": command,
-        "endpoint": endpoint,
-        "hostname": hostname,
-        "state": state,
-    }
-
-
-def publication_preview(
-    evidence: dict[str, Any],
-    context: dict[str, Any],
-    root: Path,
-    findings: list[dict[str, Any]],
-    finding_specs: list[dict[str, Any]],
-    assessments: list[dict[str, Any]],
-    thread_decisions: list[dict[str, Any]],
-    recommended_issues: list[dict[str, Any]],
-) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
-    project = cast(dict[str, Any], evidence["project"])
-    target = cast(dict[str, Any], evidence["target"])
-    preflight = publication_preflight(evidence, context, root)
-    target_marker = portable.digest(context["target"])[:16]
-    endpoint = preflight["endpoint"]
-    hostname = preflight["hostname"]
-    body_directory = portable.private_directory(root / "artifacts" / "review_plan" / "bodies")
-    body_files: list[dict[str, Any]] = []
-    commands: list[dict[str, Any]] = []
-    markers = marker_index(context)
-    discussion_by_id = {
-        str(item.get("id")): item
-        for item in cast(list[dict[str, Any]], context.get("discussions", []))
-    }
-    incremental = cast(dict[str, Any], context["incremental"])
-    previous = previous_revisions(incremental)
-    assessment_by_id = {item["id"]: item for item in assessments}
-    finding_ids = {str(item["id"]) for item in findings}
-    revisions = finding_revisions(incremental, assessments, finding_ids, markers)
-    previous_allowed = set(previous)
-
-    def mr_note_absence_guard(marker: str) -> str:
-        notes_endpoint = f"{endpoint}/notes?sort=asc&per_page=100"
-        discussions_endpoint = f"{endpoint}/discussions?per_page=100"
-        notes_query = shlex.quote('add | all(.[]; (((.body // "") | contains($marker)) | not))')
-        discussions_query = shlex.quote(
-            'add | all(.[]; all(.notes[]; (((.body // "") | contains($marker)) | not)))'
-        )
-        notes_guard = (
-            f"glab api --hostname {shlex.quote(hostname)} --method GET --paginate "
-            f"{shlex.quote(notes_endpoint)} | jq -s -e --arg marker {shlex.quote(marker)} "
-            f"{notes_query}"
-        )
-        discussions_guard = (
-            f"glab api --hostname {shlex.quote(hostname)} --method GET --paginate "
-            f"{shlex.quote(discussions_endpoint)} | jq -s -e --arg marker "
-            f"{shlex.quote(marker)} {discussions_query}"
-        )
-        return f"{notes_guard} && {discussions_guard}"
-
-    def discussion_guard(
-        discussion_endpoint: str,
-        discussion_id: object,
-        next_marker: str,
-        previous_marker: str | None = None,
-        *,
-        next_must_exist: bool = False,
-    ) -> str:
-        predicates = [
-            "((.notes[0].resolved // false) == $thread.resolved)",
-        ]
-        if next_must_exist:
-            predicates.append(
-                '(([.notes[] | select(.system != true)] | last | .body // "") | contains($next))'
-            )
-        else:
-            predicates.extend(
-                [
-                    "(([.notes[] | select(.system != true)] | last | .id) == $thread.last_note_id)",
-                    "(([.notes[] | select(.system != true)] | last | .body) == $thread.last_note_body)",
-                    'all(.notes[]; (((.body // "") | contains($next)) | not))',
-                ]
-            )
-        arguments = (
-            f"--slurpfile expected {shlex.quote(preflight['path'])} "
-            f"--arg discussion {shlex.quote(str(discussion_id))} "
-            f"--arg next {shlex.quote(next_marker)}"
-        )
-        if previous_marker is not None:
-            predicates.append('any(.notes[]; ((.body // "") | contains($previous)))')
-            arguments += f" --arg previous {shlex.quote(previous_marker)}"
-        query = "$expected[0].threads[$discussion] as $thread | " + " and ".join(predicates)
-        return (
-            f"glab api --hostname {shlex.quote(hostname)} --method GET "
-            f"{shlex.quote(discussion_endpoint)} | jq -e {arguments} "
-            f"{shlex.quote(query)}"
-        )
-
-    def issue_absence_guard(publication_id: str) -> str:
-        issue_endpoint = (
-            f"projects/{project['id']}/issues?scope=all&in=description&per_page=100"
-            f"&search={quote(publication_id, safe='')}"
-        )
-        query = shlex.quote(
-            'add | all(.[]; ((((.description // "") | contains($id)) and '
-            '((.description // "") | contains($target))) | not))'
-        )
-        return (
-            f"glab api --hostname {shlex.quote(hostname)} --method GET --paginate "
-            f"{shlex.quote(issue_endpoint)} | jq -s -e "
-            f"--arg id {shlex.quote(f'code-review:id={publication_id};')} "
-            f"--arg target {shlex.quote(f'target={target_marker}')} {query}"
-        )
-
-    def issue_update_guard(marker: dict[str, Any], next_marker: str) -> str:
-        issue_endpoint = f"projects/{project['id']}/issues/{marker['note_id']}"
-        previous_marker = publication_marker_text(
-            cast(str, marker["id"]), cast(int, marker["revision"]), "issue", target_marker
-        )
-        query = (
-            ".title == $issue.title and .description == $issue.description and "
-            '((.description // "") | contains($previous)) and '
-            '((((.description // "") | contains($next)) | not))'
-        )
-        return (
-            f"glab api --hostname {shlex.quote(hostname)} --method GET "
-            f"{shlex.quote(issue_endpoint)} | jq -e "
-            f"--slurpfile expected {shlex.quote(preflight['path'])} "
-            f"--arg issue_id {shlex.quote(cast(str, marker['id']))} "
-            f"--arg previous {shlex.quote(previous_marker)} "
-            f"--arg next {shlex.quote(next_marker)} "
-            f"{shlex.quote('$expected[0].issues[$issue_id] as $issue | ' + query)}"
-        )
-
-    enriched_findings: list[dict[str, Any]] = []
-    spec_by_id = {str(item["finding_id"]): item for item in finding_specs}
-    for finding in findings:
-        finding_id = str(finding["id"])
-        revision = revisions[finding_id]
-        spec = spec_by_id.get(finding_id)
-        if spec is None:
-            enriched_findings.append(
-                {
-                    "finding_id": finding_id,
-                    "revision": revision,
-                    "type": "local_fix",
-                    "path": None,
-                    "line": None,
-                    "old_line": None,
-                    "body": finding["minimum_fix"],
-                }
-            )
-            continue
-        enriched = {**spec, "revision": revision}
-        enriched_findings.append(enriched)
-        marker = markers.get(finding_id) if finding_id in previous_allowed else None
-        if marker is not None and marker.get("kind") != "finding":
-            raise portable.WorkflowError("finding publication marker kind is invalid")
-        assessment = assessment_by_id.get(finding_id)
-        if marker is not None:
-            if assessment is None:
-                raise portable.WorkflowError("published baseline finding lacks an assessment")
-            action = assessment.get("publication_action")
-            if action == "no_publication":
-                continue
-            body = cast(str, assessment["publication_body"])
-            next_revision = max(revision, cast(int, marker["revision"]) + 1)
-            next_marker = publication_marker_text(
-                finding_id, next_revision, "finding", target_marker
-            )
-            previous_marker = publication_marker_text(
-                finding_id, cast(int, marker["revision"]), "finding", target_marker
-            )
-            recovery_command = None
-            discussion_id = marker.get("discussion_id")
-            if discussion_id is None:
-                if action in {"resolve", "reopen"}:
-                    raise portable.WorkflowError(
-                        "a standalone marked note cannot be resolved or reopened"
-                    )
-                note_command = (
-                    f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                    f"{shlex.quote(f'{endpoint}/notes')} -F body=@BODY_PATH"
-                )
-                action_guard = mr_note_absence_guard(next_marker)
-            else:
-                discussion_endpoint = f"{endpoint}/discussions/{discussion_id}"
-                source_discussion = discussion_by_id.get(str(discussion_id))
-                if source_discussion is None:
-                    raise portable.WorkflowError("marked finding discussion is unavailable")
-                if (
-                    action in {"resolve", "reopen"}
-                    and source_discussion.get("root_resolvable") is not True
-                ):
-                    raise portable.WorkflowError("finding discussion is not resolvable")
-                if action == "resolve" and source_discussion.get("root_resolved") is True:
-                    raise portable.WorkflowError("a resolved finding discussion cannot be resolved")
-                if action == "reopen" and source_discussion.get("root_resolved") is not True:
-                    raise portable.WorkflowError("an open finding discussion cannot be reopened")
-                note_command = (
-                    f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                    f"{shlex.quote(f'{discussion_endpoint}/notes')} -F body=@BODY_PATH"
-                )
-                action_guard = discussion_guard(
-                    discussion_endpoint,
-                    discussion_id,
-                    next_marker,
-                    previous_marker,
-                )
-                if action in {"resolve", "reopen"}:
-                    resolved = "true" if action == "resolve" else "false"
-                    note_command += (
-                        f" && glab api --hostname {shlex.quote(hostname)} --method PUT "
-                        f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
-                    )
-                    recovery_command = (
-                        f"{preflight['command']} && "
-                        f"{discussion_guard(discussion_endpoint, discussion_id, next_marker, next_must_exist=True)} "
-                        f"&& glab api --hostname {shlex.quote(hostname)} --method PUT "
-                        f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
-                    )
-            placeholder = "BODY_PATH"
-            body = marked_body(body, finding_id, next_revision, "finding", target_marker)
-            body_digest = hashlib.sha256(body.encode()).hexdigest()
-            identity_digest = hashlib.sha256(finding_id.encode()).hexdigest()[:12]
-            body_path, actual_digest = portable.write_companion(
-                body_directory / f"{identity_digest}-{body_digest}.md", body
-            )
-            body_files.append(
-                {
-                    "publication_id": finding_id,
-                    "revision": next_revision,
-                    "kind": "finding",
-                    "path": str(body_path),
-                    "sha256": actual_digest,
-                    "content": body,
-                }
-            )
-            integrity = (
-                f"printf '%s  %s\\n' {shlex.quote(actual_digest)} {shlex.quote(str(body_path))} "
-                "| sha256sum --check --status"
-            )
-            commands.append(
-                {
-                    "publication_id": finding_id,
-                    "revision": next_revision,
-                    "kind": "finding",
-                    "outcome": action,
-                    "command": (
-                        f"{preflight['command']} && {action_guard} && {integrity} && "
-                        + note_command.replace(placeholder, shlex.quote(str(body_path)))
-                    ),
-                    "recovery_command": recovery_command,
-                }
-            )
-            continue
-        if context["role"] == "author":
-            continue
-        if spec["type"] == "general":
-            command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'{endpoint}/discussions')} -F body=@BODY_PATH"
-            )
-            outcome = "create_general"
-        else:
-            repository_url = str(context["target"].get("url", "")).split("/-/merge_requests/", 1)[0]
-            line_option = "--line" if spec["line"] is not None else "--old-line"
-            line_value = spec["line"] if spec["line"] is not None else spec["old_line"]
-            command = (
-                f"glab mr note create {target['iid']} --repo {shlex.quote(repository_url)} "
-                f"--file {shlex.quote(cast(str, spec['path']))} {line_option} {line_value} < BODY_PATH"
-            )
-            outcome = "create_line"
-        body = marked_body(cast(str, spec["body"]), finding_id, revision, "finding", target_marker)
-        body_digest = hashlib.sha256(body.encode()).hexdigest()
-        identity_digest = hashlib.sha256(finding_id.encode()).hexdigest()[:12]
-        body_path, actual_digest = portable.write_companion(
-            body_directory / f"{identity_digest}-{body_digest}.md", body
-        )
-        body_files.append(
-            {
-                "publication_id": finding_id,
-                "revision": revision,
-                "kind": "finding",
-                "path": str(body_path),
-                "sha256": actual_digest,
-                "content": body,
-            }
-        )
-        integrity = (
-            f"printf '%s  %s\\n' {shlex.quote(actual_digest)} {shlex.quote(str(body_path))} "
-            "| sha256sum --check --status"
-        )
-        commands.append(
-            {
-                "publication_id": finding_id,
-                "revision": revision,
-                "kind": "finding",
-                "outcome": outcome,
-                "command": (
-                    f"{preflight['command']} && "
-                    f"{mr_note_absence_guard(publication_marker_text(finding_id, revision, 'finding', target_marker))} "
-                    f"&& {integrity} && "
-                    + command.replace("BODY_PATH", shlex.quote(str(body_path)))
-                ),
-                "recovery_command": None,
-            }
-        )
-
-    previous_issue_by_id = {
-        str(item.get("id")): item
-        for item in cast(list[dict[str, Any]], incremental.get("previous_recommended_issues", []))
-    }
-    enriched_issues: list[dict[str, Any]] = []
-    for issue in recommended_issues:
-        issue_id = str(issue["id"])
-        prior = previous_issue_by_id.get(issue_id)
-        assessment = assessment_by_id.get(issue_id)
-        marker = markers.get(issue_id) if issue_id in previous_allowed else None
-        previous_revision = max(
-            int(prior["revision"]) if prior is not None else 0,
-            int(marker["revision"]) if marker is not None else 0,
-            previous.get(issue_id, 0),
-        )
-        revision = (
-            1
-            if previous_revision == 0
-            else previous_revision + (1 if assessment and assessment["status"] == "changed" else 0)
-        )
-        enriched = {**issue, "revision": revision}
-        enriched_issues.append(enriched)
-        if marker is not None and marker.get("kind") != "issue":
-            raise portable.WorkflowError("recommended issue marker kind is invalid")
-        if marker is not None:
-            if assessment is None:
-                continue
-            pending_update = previous.get(issue_id, 0) > int(marker["revision"])
-            if (
-                assessment["status"] == "changed"
-                and assessment["publication_action"] != "update_issue"
-                and not pending_update
-            ):
-                raise portable.WorkflowError("a changed published issue requires update_issue")
-            if (
-                assessment["status"] != "changed"
-                and assessment["publication_action"] == "update_issue"
-                and not pending_update
-            ):
-                raise portable.WorkflowError("an unchanged issue cannot be updated")
-            if assessment["publication_action"] == "no_publication" and not pending_update:
-                continue
-            if assessment["publication_action"] != "update_issue" and not pending_update:
-                raise portable.WorkflowError("published recommended issue requires update_issue")
-        elif assessment is not None and assessment["publication_action"] == "update_issue":
-            raise portable.WorkflowError("an unpublished recommended issue cannot be updated")
-        body = marked_body(cast(str, issue["body"]), issue_id, revision, "issue", target_marker)
-        body_digest = hashlib.sha256(body.encode()).hexdigest()
-        identity_digest = hashlib.sha256(issue_id.encode()).hexdigest()[:12]
-        body_path, actual_digest = portable.write_companion(
-            body_directory / f"{identity_digest}-{body_digest}.md", body
-        )
-        body_files.append(
-            {
-                "publication_id": issue_id,
-                "revision": revision,
-                "kind": "issue",
-                "path": str(body_path),
-                "sha256": actual_digest,
-                "content": body,
-            }
-        )
-        integrity = (
-            f"printf '%s  %s\\n' {shlex.quote(actual_digest)} {shlex.quote(str(body_path))} "
-            "| sha256sum --check --status"
-        )
-        if marker is None:
-            action_guard = issue_absence_guard(issue_id)
-            issue_command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'projects/{project["id"]}/issues')} "
-                f"-F {shlex.quote(f'title={issue["title"]}')} "
-                f"-F {shlex.quote(f'description=@{body_path}')}"
-            )
-            outcome = "create_issue"
-        else:
-            next_marker = publication_marker_text(issue_id, revision, "issue", target_marker)
-            action_guard = issue_update_guard(marker, next_marker)
-            issue_command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method PUT "
-                f"{shlex.quote(f'projects/{project["id"]}/issues/{marker["note_id"]}')} "
-                f"-F {shlex.quote(f'title={issue["title"]}')} "
-                f"-F {shlex.quote(f'description=@{body_path}')}"
-            )
-            outcome = "update_issue"
-        commands.append(
-            {
-                "publication_id": issue_id,
-                "revision": revision,
-                "kind": "issue",
-                "outcome": outcome,
-                "command": (
-                    f"{preflight['command']} && {action_guard} && {integrity} && {issue_command}"
-                ),
-                "recovery_command": None,
-            }
-        )
-
-    discussions = {
-        str(item["root_note_id"]): item
-        for item in cast(list[dict[str, Any]], context["discussions"])
-        if item.get("root_system") is False
-    }
-    for assessment in assessments:
-        assessment_id = str(assessment["id"])
-        if assessment["kind"] != "finding" or assessment_id in finding_ids:
-            continue
-        marker = markers.get(assessment_id)
-        action = assessment["publication_action"]
-        if marker is None or action == "no_publication":
-            continue
-        if marker.get("kind") != "finding":
-            raise portable.WorkflowError("previous finding marker kind is invalid")
-        discussion_id = marker.get("discussion_id")
-        if discussion_id is None and action in {"resolve", "reopen"}:
-            raise portable.WorkflowError("a standalone finding cannot be resolved or reopened")
-        revision = max(previous.get(assessment_id, 0), int(marker["revision"])) + 1
-        body = marked_body(
-            cast(str, assessment["publication_body"]),
-            assessment_id,
-            revision,
-            "finding",
-            target_marker,
-        )
-        body_digest = hashlib.sha256(body.encode()).hexdigest()
-        identity_digest = hashlib.sha256(assessment_id.encode()).hexdigest()[:12]
-        body_path, actual_digest = portable.write_companion(
-            body_directory / f"{identity_digest}-{body_digest}.md", body
-        )
-        body_files.append(
-            {
-                "publication_id": assessment_id,
-                "revision": revision,
-                "kind": "finding",
-                "path": str(body_path),
-                "sha256": actual_digest,
-                "content": body,
-            }
-        )
-        integrity = (
-            f"printf '%s  %s\\n' {shlex.quote(actual_digest)} {shlex.quote(str(body_path))} "
-            "| sha256sum --check --status"
-        )
-        next_marker = publication_marker_text(assessment_id, revision, "finding", target_marker)
-        previous_marker = publication_marker_text(
-            assessment_id, int(marker["revision"]), "finding", target_marker
-        )
-        recovery_command = None
-        if discussion_id is None:
-            publish_command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'{endpoint}/notes')} -F {shlex.quote(f'body=@{body_path}')}"
-            )
-            action_guard = mr_note_absence_guard(next_marker)
-        else:
-            discussion_endpoint = f"{endpoint}/discussions/{discussion_id}"
-            source_discussion = discussion_by_id.get(str(discussion_id))
-            if source_discussion is None:
-                raise portable.WorkflowError("previous finding discussion is unavailable")
-            if (
-                action in {"resolve", "reopen"}
-                and source_discussion.get("root_resolvable") is not True
-            ):
-                raise portable.WorkflowError("previous finding discussion is not resolvable")
-            if action == "resolve" and source_discussion.get("root_resolved") is True:
-                raise portable.WorkflowError("a resolved finding discussion cannot be resolved")
-            if action == "reopen" and source_discussion.get("root_resolved") is not True:
-                raise portable.WorkflowError("an open finding discussion cannot be reopened")
-            publish_command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'{discussion_endpoint}/notes')} "
-                f"-F {shlex.quote(f'body=@{body_path}')}"
-            )
-            action_guard = discussion_guard(
-                discussion_endpoint,
-                discussion_id,
-                next_marker,
-                previous_marker,
-            )
-            if action in {"resolve", "reopen"}:
-                resolved = "true" if action == "resolve" else "false"
-                publish_command += (
-                    f" && glab api --hostname {shlex.quote(hostname)} --method PUT "
-                    f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
-                )
-                recovery_command = (
-                    f"{preflight['command']} && "
-                    f"{discussion_guard(discussion_endpoint, discussion_id, next_marker, next_must_exist=True)} "
-                    f"&& glab api --hostname {shlex.quote(hostname)} --method PUT "
-                    f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
-                )
-        commands.append(
-            {
-                "publication_id": assessment_id,
-                "revision": revision,
-                "kind": "finding",
-                "outcome": action,
-                "command": (
-                    f"{preflight['command']} && {action_guard} && {integrity} && {publish_command}"
-                ),
-                "recovery_command": recovery_command,
-            }
-        )
-
-    for decision in thread_decisions:
-        action = decision["outcome"]
-        if action in {"no_publication", "local_fix"}:
-            continue
-        root_note_id = str(decision["id"])
-        publication_id = f"thread-{root_note_id}"
-        marker = markers.get(publication_id)
-        if marker is not None and marker.get("kind") != "thread":
-            raise portable.WorkflowError("thread publication marker kind is invalid")
-        revision = (int(marker["revision"]) if marker is not None else 0) + 1
-        body = marked_body(
-            cast(str, decision["proposed_response"]),
-            publication_id,
-            revision,
-            "thread",
-            target_marker,
-        )
-        body_digest = hashlib.sha256(body.encode()).hexdigest()
-        identity_digest = hashlib.sha256(publication_id.encode()).hexdigest()[:12]
-        body_path, actual_digest = portable.write_companion(
-            body_directory / f"{identity_digest}-{body_digest}.md", body
-        )
-        body_files.append(
-            {
-                "publication_id": publication_id,
-                "revision": revision,
-                "kind": "thread",
-                "path": str(body_path),
-                "sha256": actual_digest,
-                "content": body,
-            }
-        )
-        integrity = (
-            f"printf '%s  %s\\n' {shlex.quote(actual_digest)} {shlex.quote(str(body_path))} "
-            "| sha256sum --check --status"
-        )
-        next_marker = publication_marker_text(publication_id, revision, "thread", target_marker)
-        recovery_command = None
-        discussion = discussions.get(root_note_id)
-        if discussion is None:
-            if action in {"resolve", "reopen"}:
-                raise portable.WorkflowError("a plain note cannot be resolved or reopened")
-            publish_command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'{endpoint}/notes')} -F {shlex.quote(f'body=@{body_path}')}"
-            )
-            action_guard = mr_note_absence_guard(next_marker)
-        else:
-            discussion_endpoint = f"{endpoint}/discussions/{discussion['id']}"
-            thread_previous_marker = (
-                publication_marker_text(
-                    publication_id, int(marker["revision"]), "thread", target_marker
-                )
-                if marker is not None
-                else None
-            )
-            action_guard = discussion_guard(
-                discussion_endpoint,
-                discussion["id"],
-                next_marker,
-                thread_previous_marker,
-            )
-            publish_command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'{discussion_endpoint}/notes')} "
-                f"-F {shlex.quote(f'body=@{body_path}')}"
-            )
-            if action in {"resolve", "reopen"}:
-                resolved = "true" if action == "resolve" else "false"
-                publish_command += (
-                    f" && glab api --hostname {shlex.quote(hostname)} --method PUT "
-                    f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
-                )
-                recovery_command = (
-                    f"{preflight['command']} && "
-                    f"{discussion_guard(discussion_endpoint, discussion['id'], next_marker, next_must_exist=True)} "
-                    f"&& glab api --hostname {shlex.quote(hostname)} --method PUT "
-                    f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
-                )
-        commands.append(
-            {
-                "publication_id": publication_id,
-                "revision": revision,
-                "kind": "thread",
-                "outcome": action,
-                "command": (
-                    f"{preflight['command']} && {action_guard} && {integrity} && {publish_command}"
-                ),
-                "recovery_command": recovery_command,
-            }
-        )
-
-    result = {
-        "mr_state": preflight["state"],
-        "warning": "manual publication preview; no command was executed",
-        "preflight_path": preflight["path"],
-        "preflight_sha256": preflight["sha256"],
-        "preflight_command": preflight["command"],
-        "body_files": body_files,
-        "commands": commands,
-    }
-    if not portable.review_publication_preview_is_valid(result):
-        raise portable.WorkflowError("review publication preview is invalid")
-    return result, enriched_findings, enriched_issues
-
-
-def structured_publication_preflight(
-    evidence: dict[str, Any], context: dict[str, Any], root: Path, labels: dict[str, Any]
-) -> dict[str, str]:
-    project = evidence.get("project")
-    target = evidence.get("target")
-    object_value = evidence.get("object")
-    if (
-        not isinstance(project, dict)
-        or not isinstance(project.get("id"), int)
-        or not portable.nonempty_string(project.get("hostname"))
-        or not portable.nonempty_string(project.get("path"))
-        or not isinstance(target, dict)
-        or not isinstance(target.get("iid"), int)
-        or not isinstance(object_value, dict)
-        or not portable.nonempty_string(object_value.get("state"))
-        or not portable.nonempty_string(object_value.get("web_url"))
-        or not isinstance(object_value.get("diff_refs"), dict)
-    ):
-        raise portable.WorkflowError("MR identity is incomplete for publication preflight")
-    refs = cast(dict[str, Any], object_value["diff_refs"])
-    if any(not portable.is_sha(refs.get(key)) for key in ("base_sha", "start_sha", "head_sha")):
-        raise portable.WorkflowError("MR refs are incomplete for publication preflight")
-    payload = {
-        "schema": "code-review/publication-preflight/v1",
-        "actor": {
-            "id": context["current_user_id"],
-            "username": context["current_user_username"],
-        },
-        "target": {
-            "hostname": project["hostname"],
-            "project_id": project["id"],
-            "project_path": project["path"],
-            "mr_iid": target["iid"],
-            "mr_url": object_value["web_url"],
-        },
-        "mr": {
-            "state": object_value["state"],
-            "diff_refs": {key: refs[key] for key in ("base_sha", "start_sha", "head_sha")},
-        },
-        "labels": {
-            "catalog_sha256": labels["catalog_sha256"],
-            "catalog": labels["catalog"],
-            "current": labels["current"],
-            "proposed": labels["proposed"],
-        },
-    }
-    content = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
-    digest = hashlib.sha256(content.encode()).hexdigest()
-    directory = portable.private_directory(root / "artifacts" / "review_plan" / "preflight")
-    path, actual_digest = portable.write_companion(directory / f"{digest}.json", content)
-    return {"path": str(path), "sha256": actual_digest}
-
-
 def structured_publication_preview(
     evidence: dict[str, Any],
     context: dict[str, Any],
@@ -3176,15 +2108,11 @@ def structured_publication_preview(
     recommended_issues: list[dict[str, Any]],
     label_review: dict[str, Any],
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    preflight = structured_publication_preflight(evidence, context, root, label_review)
-    target_marker = portable.digest(context["target"])[:16]
     body_directory = portable.private_directory(root / "artifacts" / "review_plan" / "bodies")
     patch_directory = portable.private_directory(root / "artifacts" / "review_plan" / "patches")
-    helper_path = Path(__file__).resolve().with_name("review_publish.py")
-    baseline_path = root / BASELINE_NAME
     body_files: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
-    markers = marker_index(context)
+    markers: dict[str, dict[str, Any]] = {}
     incremental = cast(dict[str, Any], context["incremental"])
     previous = previous_revisions(incremental)
     previous_allowed = set(previous)
@@ -3199,11 +2127,13 @@ def structured_publication_preview(
         for item in cast(list[dict[str, Any]], context["discussions"])
         if item.get("root_system") is False
     }
-    note_by_id = {
-        str(item["id"]): item
-        for item in cast(list[dict[str, Any]], context["notes"])
-        if item.get("system") is not True
-    }
+    project = cast(dict[str, Any], evidence["project"])
+    target = cast(dict[str, Any], evidence["target"])
+    hostname = cast(str, project["hostname"])
+    endpoint = f"projects/{project['id']}/merge_requests/{target['iid']}"
+    repository_url = str(cast(dict[str, Any], evidence["object"])["web_url"]).split(
+        "/-/merge_requests/", 1
+    )[0]
 
     def enrich_fix(owner_kind: str, owner_id: str, item: dict[str, Any]) -> dict[str, Any]:
         patch = item.get("patch")
@@ -3251,30 +2181,6 @@ def structured_publication_preview(
             else None,
         }
 
-    def note_expectation(source: dict[str, Any]) -> dict[str, Any]:
-        body = source.get("body")
-        if not isinstance(body, str):
-            raise portable.WorkflowError("publication note body is invalid")
-        return {"note_id": source["id"], "body_sha256": hashlib.sha256(body.encode()).hexdigest()}
-
-    def marker_expectation(marker: dict[str, Any] | None) -> dict[str, Any] | None:
-        if marker is None:
-            return None
-        return {
-            key: marker.get(key)
-            for key in (
-                "id",
-                "revision",
-                "kind",
-                "note_id",
-                "discussion_id",
-                "author_username",
-                "body_sha256",
-                "resource_type",
-                "root_note_id",
-            )
-        }
-
     def add_body_action(
         publication_id: str,
         revision: int,
@@ -3284,56 +2190,75 @@ def structured_publication_preview(
         *,
         mutation: dict[str, Any] | None = None,
         thread: dict[str, Any] | None = None,
-        note: dict[str, Any] | None = None,
-        prior_marker: dict[str, Any] | None = None,
-        issue: dict[str, Any] | None = None,
     ) -> None:
-        body = marked_body(raw_body, publication_id, revision, kind, target_marker)
-        body_digest = hashlib.sha256(body.encode()).hexdigest()
+        body = raw_body.rstrip() + "\n"
         identity_digest = hashlib.sha256(publication_id.encode()).hexdigest()[:12]
-        body_path, actual_digest = portable.write_companion(
-            body_directory / f"{identity_digest}-{body_digest}.md", body
+        content_digest = hashlib.sha256(body.encode()).hexdigest()[:12]
+        body_path, _ = portable.write_companion(
+            body_directory / f"{identity_digest}-{content_digest}.md", body
         )
         body_record = {
             "publication_id": publication_id,
             "revision": revision,
             "kind": kind,
             "path": str(body_path),
-            "sha256": actual_digest,
             "content": body,
         }
         body_files.append(body_record)
-        spec = {
-            "schema": "code-review/publication-action/v1",
-            "preflight_sha256": preflight["sha256"],
-            "operation": operation,
-            "publication": {"id": publication_id, "revision": revision, "kind": kind},
-            "body": {"path": str(body_path), "sha256": actual_digest},
-            "expected": {
-                "thread": thread,
-                "note": note,
-                "prior_marker": marker_expectation(prior_marker),
-                "issue": issue,
-            },
-            "mutation": mutation or {},
-        }
-        action_digest = portable.digest(spec)
+        mutation_value = mutation or {}
         action_id = f"{kind}:{publication_id}:r{revision}:{operation}"
-        command = (
-            f"python3 {shlex.quote(str(helper_path))} apply "
-            f"--plan {shlex.quote(str(baseline_path))} "
-            f"--action {shlex.quote(action_id)} --confirm {action_digest}"
-        )
+        if operation == "create_line":
+            path = cast(str, mutation_value["path"])
+            line = mutation_value["line"] or mutation_value["old_line"]
+            line_option = "--line" if mutation_value["line"] is not None else "--old-line"
+            command = (
+                f"glab mr note create {target['iid']} --repo {shlex.quote(repository_url)} "
+                f"--file {shlex.quote(path)} {line_option} {line} < {shlex.quote(str(body_path))}"
+            )
+        elif operation == "create_general":
+            command = (
+                f"glab api --hostname {shlex.quote(hostname)} --method POST "
+                f"{shlex.quote(f'{endpoint}/discussions')} -F body=@{shlex.quote(str(body_path))}"
+            )
+        elif operation == "create_issue":
+            issue_endpoint = f"projects/{project['id']}/issues"
+            issue_title = cast(str, cast(dict[str, Any], mutation)["title"])
+            command = (
+                f"glab api --hostname {shlex.quote(hostname)} --method POST "
+                f"{shlex.quote(issue_endpoint)} -f {shlex.quote(f'title={issue_title}')} "
+                f"-F description=@{shlex.quote(str(body_path))}"
+            )
+        else:
+            discussion_id = thread.get("discussion_id") if thread is not None else None
+            if discussion_id is None:
+                command = (
+                    f"glab api --hostname {shlex.quote(hostname)} --method POST "
+                    f"{shlex.quote(f'{endpoint}/notes')} -F body=@{shlex.quote(str(body_path))}"
+                )
+            else:
+                discussion_endpoint = f"{endpoint}/discussions/{discussion_id}"
+                command = (
+                    f"glab api --hostname {shlex.quote(hostname)} --method POST "
+                    f"{shlex.quote(f'{discussion_endpoint}/notes')} -F body=@{shlex.quote(str(body_path))}"
+                )
+                if operation in {"resolve", "reopen"}:
+                    resolved = "true" if operation == "resolve" else "false"
+                    command += (
+                        f" && glab api --hostname {shlex.quote(hostname)} --method PUT "
+                        f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
+                    )
         actions.append(
             {
                 "id": action_id,
-                "sha256": action_digest,
                 "kind": kind,
                 "publication_id": publication_id,
-                "revision": revision,
                 "operation": operation,
                 "command": command,
-                "spec": spec,
+                "path": mutation_value.get("path")
+                or (thread.get("path") if thread is not None else None),
+                "line": mutation_value.get("line")
+                or mutation_value.get("old_line")
+                or (thread.get("line") if thread is not None else None),
             }
         )
 
@@ -3368,7 +2293,6 @@ def structured_publication_preview(
             )
             if operation in {"resolve", "reopen"} and discussion is None:
                 raise portable.WorkflowError("a standalone finding cannot change thread state")
-            source_note = note_by_id.get(str(marker["note_id"])) if discussion is None else None
             add_body_action(
                 finding_id,
                 next_revision,
@@ -3383,8 +2307,6 @@ def structured_publication_preview(
                     else None
                 },
                 thread=thread_expectation(discussion) if discussion is not None else None,
-                note=note_expectation(source_note) if source_note is not None else None,
-                prior_marker=marker,
             )
             continue
         if context["role"] == "author":
@@ -3436,20 +2358,10 @@ def structured_publication_preview(
             if assessment["publication_action"] != "update_issue" and not pending_update:
                 raise portable.WorkflowError("published recommended issue requires update_issue")
             operation = "update_issue"
-            expected_issue = {
-                "iid": marker["note_id"],
-                "title_sha256": hashlib.sha256(
-                    cast(str, marker["resource_title"]).encode()
-                ).hexdigest(),
-                "description_sha256": hashlib.sha256(
-                    cast(str, marker["resource_body"]).encode()
-                ).hexdigest(),
-            }
         else:
             if assessment is not None and assessment["publication_action"] == "update_issue":
                 raise portable.WorkflowError("an unpublished recommended issue cannot be updated")
             operation = "create_issue"
-            expected_issue = None
         add_body_action(
             issue_id,
             revision,
@@ -3457,8 +2369,6 @@ def structured_publication_preview(
             operation,
             cast(str, issue_value["body"]),
             mutation={"title": issue_value["title"]},
-            prior_marker=marker,
-            issue=expected_issue,
         )
 
     for assessment in assessments:
@@ -3478,7 +2388,6 @@ def structured_publication_preview(
         )
         if operation in {"resolve", "reopen"} and discussion is None:
             raise portable.WorkflowError("a standalone finding cannot change thread state")
-        source_note = note_by_id.get(str(marker["note_id"])) if discussion is None else None
         revision = max(previous.get(assessment_id, 0), int(marker["revision"])) + 1
         add_body_action(
             assessment_id,
@@ -3494,8 +2403,6 @@ def structured_publication_preview(
                 else None
             },
             thread=thread_expectation(discussion) if discussion is not None else None,
-            note=note_expectation(source_note) if source_note is not None else None,
-            prior_marker=marker,
         )
 
     for decision in enriched_threads:
@@ -3509,7 +2416,6 @@ def structured_publication_preview(
             raise portable.WorkflowError("thread publication marker kind is invalid")
         revision = (int(marker["revision"]) if marker is not None else 0) + 1
         discussion = discussion_by_root.get(root_note_id)
-        source_note = note_by_id.get(root_note_id) if discussion is None else None
         if operation in {"resolve", "reopen"} and discussion is None:
             raise portable.WorkflowError("a plain note cannot change thread state")
         add_body_action(
@@ -3526,45 +2432,24 @@ def structured_publication_preview(
                 else None
             },
             thread=thread_expectation(discussion) if discussion is not None else None,
-            note=note_expectation(source_note) if source_note is not None else None,
-            prior_marker=marker,
         )
 
     if label_review["add"] or label_review["remove"]:
-        label_spec = {
-            "schema": "code-review/publication-action/v1",
-            "preflight_sha256": preflight["sha256"],
-            "operation": "update_labels",
-            "publication": None,
-            "body": None,
-            "expected": {
-                "thread": None,
-                "note": None,
-                "prior_marker": None,
-                "issue": None,
-            },
-            "mutation": {
-                "add": label_review["add"],
-                "remove": label_review["remove"],
-                "proposed": label_review["proposed"],
-            },
-        }
-        action_digest = portable.digest(label_spec)
         action_id = "labels:update"
+        label_command = f"glab mr update {target['iid']} --repo {shlex.quote(repository_url)}"
+        if label_review["add"]:
+            label_command += f" --label {shlex.quote(','.join(label_review['add']))}"
+        if label_review["remove"]:
+            label_command += f" --unlabel {shlex.quote(','.join(label_review['remove']))}"
         actions.append(
             {
                 "id": action_id,
-                "sha256": action_digest,
                 "kind": "labels",
                 "publication_id": None,
-                "revision": None,
                 "operation": "update_labels",
-                "command": (
-                    f"python3 {shlex.quote(str(helper_path))} apply "
-                    f"--plan {shlex.quote(str(baseline_path))} "
-                    f"--action {shlex.quote(action_id)} --confirm {action_digest}"
-                ),
-                "spec": label_spec,
+                "command": label_command,
+                "path": None,
+                "line": None,
             }
         )
 
@@ -3573,10 +2458,7 @@ def structured_publication_preview(
         raise portable.WorkflowError("publication action IDs must be unique")
     result = {
         "mr_state": cast(dict[str, Any], evidence["object"])["state"],
-        "warning": "manual digest-confirmed publication; no action was executed",
-        "preflight_path": preflight["path"],
-        "preflight_sha256": preflight["sha256"],
-        "helper_path": str(helper_path),
+        "warning": "manual publication; no command was executed",
         "body_files": body_files,
         "actions": actions,
     }
@@ -3721,23 +2603,16 @@ def review_markdown(
             [
                 f"### `{action['id']}`",
                 "",
-                f"`action-sha256:{action['sha256']}`",
-                "",
                 f"`operation:{action['operation']}`",
                 "",
             ]
         )
-        mutation = cast(dict[str, Any], action["spec"]["mutation"])
-        expected_thread = cast(dict[str, Any] | None, action["spec"]["expected"]["thread"])
-        if portable.nonempty_string(mutation.get("path")):
-            anchor = mutation.get("line") or mutation.get("old_line")
-            lines.extend([f"`position:{mutation['path']}:{anchor}`", ""])
-        elif expected_thread is not None and portable.nonempty_string(expected_thread.get("path")):
-            lines.extend([f"`position:{expected_thread['path']}:{expected_thread['line']}`", ""])
+        if portable.nonempty_string(action.get("path")):
+            lines.extend([f"`position:{action['path']}:{action['line']}`", ""])
         if body is not None:
             lines.extend(
                 [
-                    f"`{body['path']}` (`{body['sha256']}`)",
+                    f"`{body['path']}`",
                     "",
                     portable.marked_preview(
                         f"PUBLICATION {publication_id} BODY", cast(str, body["content"])
@@ -3746,17 +2621,6 @@ def review_markdown(
                 ]
             )
         lines.extend(["```shell", cast(str, action["command"]), "```"])
-        if action["operation"] in {"resolve", "reopen"}:
-            lines.extend(
-                [
-                    "",
-                    presentation["recovery_label"],
-                    "",
-                    "```shell",
-                    cast(str, action["command"]),
-                    "```",
-                ]
-            )
         lines.append("")
 
     def add_publication_action(publication_id: str) -> None:
@@ -3931,9 +2795,6 @@ def review_markdown(
             "",
             presentation["publication_warning"],
             "",
-            f"`{publication['preflight_path']}` (`{publication['preflight_sha256']}`)",
-            "",
-            f"`{publication['helper_path']}`",
         ]
     )
     for action in publication_actions:
@@ -4159,22 +3020,6 @@ def build_finding_ledger(
     return sorted(ledger, key=lambda item: item["id"])
 
 
-def build_publication_ledger(
-    incremental: dict[str, Any], markers: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
-    ledger = {
-        (item["id"], item["revision"], item["kind"]): item
-        for item in cast(list[dict[str, Any]], incremental.get("previous_publication_ledger", []))
-    }
-    for marker in markers:
-        identity = (marker["id"], marker["revision"], marker["kind"])
-        existing = ledger.get(identity)
-        if existing is not None and existing != marker:
-            raise portable.WorkflowError("publication marker ledger binding changed")
-        ledger[identity] = marker
-    return sorted(ledger.values(), key=lambda item: (item["id"], item["revision"], item["kind"]))
-
-
 def build_rejected_candidate_ledger(
     incremental: dict[str, Any],
     rejected_candidates: list[dict[str, Any]],
@@ -4253,6 +3098,7 @@ def scaffold_review(
             "findings",
             "finding_publications",
             "previous_finding_assessments",
+            "issue_templates",
             "recommended_issues",
             "rejected_candidates",
             "rejected_candidate_assessments",
@@ -4272,6 +3118,8 @@ def scaffold_review(
         or not portable.thread_decisions_are_valid(content["thread_decisions"])
     ):
         raise portable.WorkflowError("review plan content is invalid")
+    if content["issue_templates"] != context["issue_templates"]:
+        raise portable.WorkflowError("review content issue templates do not match review context")
     progress = load_progress(root)
     if progress is not None and content["locale"] != progress.get("locale"):
         raise portable.WorkflowError(
@@ -4326,7 +3174,9 @@ def scaffold_review(
         content["rejected_candidate_assessments"], reconsidered_rejected
     )
     rejected_candidates = validate_rejected_candidates(content["rejected_candidates"], decision)
-    recommended_issues = validate_recommended_issues(content["recommended_issues"])
+    recommended_issues = validate_recommended_issues(
+        content["recommended_issues"], cast(list[dict[str, Any]], context["issue_templates"])
+    )
     issue_ids = [str(item["id"]) for item in recommended_issues]
     if (
         len(issue_ids) != len(set(issue_ids))
@@ -4343,7 +3193,7 @@ def scaffold_review(
         str(item["id"]): item
         for item in cast(list[dict[str, Any]], incremental["previous_finding_ledger"])
     }
-    observed_markers = marker_index(context)
+    observed_markers: dict[str, dict[str, Any]] = {}
     previous_finding_ids = {str(item["id"]) for item in previous_findings}
     previous_issue_ids = {str(item["id"]) for item in previous_issues}
     current_finding_ids = set(finding_ids)
@@ -4465,6 +3315,11 @@ def scaffold_review(
     if len(actual_threads) != len(thread_decisions) or set(actual_threads) != set(expected_threads):
         raise portable.WorkflowError("review plan must account for every non-system thread")
     for thread_id, item in actual_threads.items():
+        source = expected_threads[thread_id]
+        if item["state"] != source["state"]:
+            raise portable.WorkflowError("thread decision state does not match review context")
+        if source["state"] == "open" and item["outcome"] == "no_publication":
+            raise portable.WorkflowError("an open thread requires an explicit outcome")
         if (
             item["outcome"] == "no_publication"
             and item["proposed_response"] is not None
@@ -4493,7 +3348,6 @@ def scaffold_review(
             or item["last_note_body_sha256"] != expected_threads[thread_id]["last_note_body_sha256"]
         ):
             raise portable.WorkflowError("thread decision does not bind the latest note")
-        source = expected_threads[thread_id]
         validate_thread_fix(item, source, repo_root, head_sha)
         if item["outcome"] == "resolve" and (
             source.get("root_resolvable") is not True or source.get("root_resolved") is True
@@ -4553,9 +3407,7 @@ def scaffold_review(
         enriched_issues,
         publication,
     )
-    publication_ledger = build_publication_ledger(
-        incremental, cast(list[dict[str, Any]], context["publication_markers"])
-    )
+    publication_ledger: list[dict[str, Any]] = []
     rejected_candidate_ledger = build_rejected_candidate_ledger(
         incremental,
         rejected_candidates,
@@ -4636,7 +3488,7 @@ def scaffold_review(
         ],
         "publication_commands": [item["command"] for item in publication["actions"]],
         "publication_actions": [
-            {"id": item["id"], "sha256": item["sha256"]} for item in publication["actions"]
+            {"id": item["id"], "command": item["command"]} for item in publication["actions"]
         ],
         "stage": "plan_ready",
         "next_action": runner_action("report-review", "--artifact-root", str(root)),
@@ -4976,7 +3828,7 @@ def content_template(
                 "state": binding["state"],
                 "assessment": "neutral",
                 "rationale": "",
-                "outcome": "no_publication",
+                "outcome": "reply" if binding["state"] == "open" else "no_publication",
                 "proposed_response": None,
                 "fix_mode": "not_required",
                 "patch": None,
@@ -5019,6 +3871,7 @@ def content_template(
             for item in accepted
         ],
         "previous_finding_assessments": previous_assessments,
+        "issue_templates": context["issue_templates"],
         "recommended_issues": [],
         "rejected_candidates": rejected_candidates,
         "rejected_candidate_assessments": [
@@ -5319,7 +4172,6 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
     refreshed = refresh_context(context, evidence_path)
     report_context = dict(context)
     report_context.pop("incremental", None)
-    report_context.pop("publication_markers", None)
     if refreshed.get("complete") is not True or not contexts_match(report_context, refreshed):
         return {
             "status": "blocked",

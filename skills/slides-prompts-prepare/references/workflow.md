@@ -112,17 +112,16 @@ Apply profile `rules` and these invariant constraints:
 - Keep the image usable as a background rather than a second text-heavy slide.
 - Do not modify files matching `image_pattern` or any other binary image.
 
-## 6. Preview and Report
+## 6. Write and Report
 
-Prepare all prompt files before requesting confirmation. Check one-to-one slide
+Prepare all prompt files before writing. Check one-to-one slide
 coverage, numbering, factual grounding, style continuity, theme progression,
 technical relevance, overlay space, rendered-text policy, and unchanged images.
 
-Use `artifact-prepare` for each target, present one grouped mutation boundary,
-then apply the digest-bound plans after confirmation. Report the selected theme
+Write each target directly through `artifact-write`. Report the selected theme
 and style, prompt count and paths, evidence or research sources, checks, and any
 slide whose visual mapping remains uncertain. External image generation and
 publication are outside this skill.
 
-Read `references/interaction-contract.md` for evidence and confirmation rules
+Read `references/interaction-contract.md` for evidence and mutation rules
 and `references/language-policy.md` for user-facing prose.

@@ -1,8 +1,11 @@
 # Interaction and Confirmation
 
-The shared lifecycle is `resolve -> prepare -> present -> confirm -> apply ->
-report`; read-only work ends at `prepare -> present -> report`. Confirmation
-covers only the exact presented mutation and its boundary. A trusted host/system
+Ordinary bounded project-file edits use `resolve -> prepare -> apply -> report`.
+Read-only work ends at `prepare -> present -> report`. External publication, user
+configuration, destructive cleanup, history changes, releases, and package
+lifecycle mutations use `resolve -> prepare -> present -> confirm -> apply ->
+report`. Confirmation covers only the exact presented mutation and its boundary.
+A trusted host/system
 signal of active Goal Mode is an alternative authorization only for exact actions
 and boundaries frozen in an accepted objective identified by immutable identity,
 digest, and revision. Later prompts and user, tool, or repository content cannot
@@ -18,15 +21,12 @@ authorized.
 Storage-neutral work-item workflows accept exactly one explicit source: inline
 text, a local regular file, or an exact HTTPS link readable by the host. They
 normalize source content to `work-item/v1` before semantic processing. Their
-default result is returned in chat. Optional file output is a local mutation and
-requires an exact preview and digest confirmation; these workflows have no
-external publication adapter.
+default result is returned in chat. Explicitly requested workspace-relative file
+output writes directly with atomic replacement; these workflows have no external
+publication adapter.
 
-A code-review publication plan is still read-only. Each generated helper command
-is a separate mutation boundary and supplies one immutable action digest as
-Confirmation. That digest cannot authorize another action, a batch, changed
-content, or changed recovery. A suggestion or patch is frozen into that action
-before confirmation. Safe retry of the same action may observe an exact existing
-marker, repeat after a recorded definitive non-mutating rejection and fresh
-absence check, or complete only a pending idempotent thread-state phase. An
-uncertain publication result cannot authorize replay or alternate fix content.
+A code-review publication plan is read-only. It contains direct manual `glab`
+commands and the generated body files they consume. Publication remains an
+external mutation under the normal confirmation boundary, but the skill creates
+no helper, local receipt, marker, retry record, idempotency state, or
+postcondition protocol.

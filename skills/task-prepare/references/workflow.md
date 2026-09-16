@@ -10,9 +10,9 @@ outcome, acceptance criteria, and verification.
 The normalized item must also include dependencies, external actions,
 assumptions, safety/operational constraints, risks, and stop conditions. The
 agent evaluates semantic feasibility and returns the same structured report as
-the machine validator. The default result is in chat. A file is written only
-after an explicit preview and digest confirmation. There is no publication
-adapter or external mutation.
+the machine validator. The default result is in chat. An explicitly requested
+workspace-relative file is written directly with atomic replacement. There is no
+publication adapter or external mutation.
 
 Write user-facing prose in the language of the latest user request; use English when that language is ambiguous. Do not invent
 tracker identifiers, labels, owners, or publication metadata. Do not create or

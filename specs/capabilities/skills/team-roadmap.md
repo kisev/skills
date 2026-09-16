@@ -13,13 +13,13 @@ Trigger for roadmap action; near-miss: sprint close or implementation planning.
 
 Input is the fixed action, an automatically resolved default profile or explicit
 context override, target periods, the current roadmap, and bounded delivery
-evidence. Output is a structured roadmap view or confirmation-bound update.
+evidence. Output is a structured roadmap view or direct bounded update.
 
 ## Workflow Stages
 
 Resolve or self-setup the profile, establish period boundaries, build a
 goal-by-goal evidence matrix, reconcile plan and fact, preserve history, assign
-every unfinished goal a destination, preview updates, verify, and report.
+every unfinished goal a destination, write updates, verify, and report.
 
 ## Dependencies
 
@@ -28,8 +28,8 @@ baseline files, and optional bounded GitLab metrics collection.
 
 ## Remote/Local Effects
 
-Read-only evidence collection and confirmation-bound local profile or roadmap
-writes; no work-item creation or implicit publication.
+Read-only evidence collection, confirmation-bound local profile writes, and
+direct bounded roadmap writes; no work-item creation or implicit publication.
 
 ## Errors, Partial, Escalation
 

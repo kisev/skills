@@ -22,11 +22,6 @@
       "test_selector": "tests/test_skill_contracts.py::test_project_spec_identifiers_and_decisions_are_append_only",
       "eval_ids": ["stage20.skill.spec-manage.trigger.en"]
     },
-    "goal_authorization": {
-      "kind": "automated",
-      "test_selector": "tests/test_evals.py::test_goal_authorization_offline_runner_exercises_decision_cases",
-      "eval_ids": ["goal-mode-authorization", "golden.core-contracts", "golden.core-contracts.en"]
-    },
     "goal_skill": {
       "kind": "automated",
       "test_selector": "tests/test_repository.py::test_goal_output_contract_declares_bounded_deterministic_outcomes",
@@ -412,7 +407,7 @@
     "REQ-F-103": {
       "surface": "skill:ast-grep",
       "source": "specs/capabilities/skills/ast-grep.md",
-      "block_sha256": "99774427392a71a6297584d48353c2d059e78bfe13c62fd44f6fecdb676bf46a",
+      "block_sha256": "0d3a1698ae40573cfd70fcd15424c0808b6b5895059e7d166cadf87f1981a9c8",
       "evidence_profile": "skills"
     },
     "REQ-F-104": {
@@ -424,7 +419,7 @@
     "REQ-F-105": {
       "surface": "skill:code-review",
       "source": "specs/capabilities/skills/code-review.md",
-      "block_sha256": "70fbb5d85af56b5e5399c082087d59ec39948eef3dd0068f7f8ded33897eceec",
+      "block_sha256": "e1a4ad05081bebfca1aac73aa6e20db88cda47b0f2c271cb435b0e6c63ddc12d",
       "evidence_profile": "code_review"
     },
     "REQ-F-106": {
@@ -436,8 +431,8 @@
     "REQ-F-107": {
       "surface": "skill:docs-prepare",
       "source": "specs/capabilities/skills/docs-prepare.md",
-      "block_sha256": "d6d06daf581db19e6e8ac23b2af2f448b260e397f18bb783529d02700ad91104",
-      "evidence_profile": "goal_authorization"
+      "block_sha256": "704d671bfff292fa33ea688c0e2ae10de240eba807256d438c7a14d053187995",
+      "evidence_profile": "skills"
     },
     "REQ-F-108": {
       "surface": "skill:docs-review",
@@ -514,8 +509,8 @@
     "REQ-F-120": {
       "surface": "skill:spec-manage",
       "source": "specs/capabilities/skills/spec-manage.md",
-      "block_sha256": "22b792a655fd20578a3603e5e16ec33b2a9ebb26698fd7da52d95d9bbe0fbecd",
-      "evidence_profile": "goal_authorization"
+      "block_sha256": "273cbcb03f14879f14265fcca8074e6b1733f7f9f826e5cad4439e6e8df693f4",
+      "evidence_profile": "skills"
     },
     "REQ-F-121": {
       "surface": "skill:stopit",
@@ -532,7 +527,7 @@
     "REQ-F-123": {
       "surface": "skill:task-prepare",
       "source": "specs/capabilities/skills/task-prepare.md",
-      "block_sha256": "a4940ee2c4cc4bfc61c408ab8d4819234767d0c166ca45ee25c2a1ca029d93e8",
+      "block_sha256": "b764ede23058c0c2f7fc605ac65181a05b06d1b85b84bfde0ffd5df8705f6419",
       "evidence_profile": "task_skills"
     },
     "REQ-F-124": {
@@ -670,7 +665,7 @@
     "REQ-I-203": {
       "surface": "command:ast-grep",
       "source": "specs/capabilities/commands/ast-grep.md",
-      "block_sha256": "a24358931f3091c935eb0c9e5d23b1d3391f388271ffb3f6d58520e1579b3156",
+      "block_sha256": "98bb2c52b2aaee8f176315a3830f357c24a3e70c5cd60956ec8362ae866bcdf4",
       "evidence_profile": "commands"
     },
     "REQ-I-204": {
@@ -790,7 +785,7 @@
     "REQ-I-223": {
       "surface": "command:task-prepare",
       "source": "specs/capabilities/commands/task-prepare.md",
-      "block_sha256": "e3e4b4ee4f0ffef0128640944a0106af67f78ca5b4708d918c38b61153373ae0",
+      "block_sha256": "970042d06e706e58ae9cbdc2b857194e42440b4588312ebebc77e09ada7c9f8d",
       "evidence_profile": "task_commands"
     },
     "REQ-I-224": {

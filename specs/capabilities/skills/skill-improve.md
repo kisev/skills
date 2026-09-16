@@ -14,7 +14,7 @@ Input is one skill path. Output is findings or a bounded improvement with checks
 
 ## Workflow Stages
 
-Resolve skill, check frontmatter/resources, preview changes, apply, recheck, report.
+Resolve skill, check frontmatter/resources, write changes, recheck, report.
 
 ## Dependencies
 
@@ -22,7 +22,7 @@ Skill validators, repository rules, and source resources.
 
 ## Remote/Local Effects
 
-Local reads and confirmed skill writes; no remote effects.
+Local reads and bounded atomic skill writes; no remote effects.
 
 ## Errors, Partial, Escalation
 

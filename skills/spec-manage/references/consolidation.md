@@ -10,13 +10,13 @@ An explicit request to consolidate the specification requires a native question:
 
 ## Analysis
 
-Before preview, check whether the affected area requires combining two normative formulations of one contract into one canonical point and replacing a duplicate with a reference; compacting a withdrawn or superseded requirement into the historical form from `references/requirements.md`; removing a temporary implementation plan or behavior no longer in the agreed target state; removing details that do not affect an observable contract or architectural invariant while retaining necessary causality and references; repairing a link to a removed path, stale `REQ-*`/`ADR-*`, or withdrawn interface; or replacing a changed architectural decision with a new ADR with explicit supersession rather than rewriting an accepted ADR.
+Before writing, check whether the affected area requires combining two normative formulations of one contract into one canonical point and replacing a duplicate with a reference; compacting a withdrawn or superseded requirement into the historical form from `references/requirements.md`; removing a temporary implementation plan or behavior no longer in the agreed target state; removing details that do not affect an observable contract or architectural invariant while retaining necessary causality and references; repairing a link to a removed path, stale `REQ-*`/`ADR-*`, or withdrawn interface; or replacing a changed architectural decision with a new ADR with explicit supersession rather than rewriting an accepted ADR.
 
 Do not remove current non-scope, confirmed risk, compatibility boundary, or necessary explanation merely for brevity. Do not create an archive, version, changelog, plan, delta, or other durable workflow artifact inside `specs/`.
 
-## Preview and confirmation
+## Result
 
-Before showing the diff, explicitly add either:
+After writing, report either:
 
 ```text
 Consolidation: required
@@ -33,7 +33,7 @@ Scope: requirements/interfaces/cli.md
 Reason: the requested contract is new and has no duplicate or superseded wording.
 ```
 
-For `required`, the preview must contain both the substantive change and justified simplification edits. For `not required`, do not invent cleanup. In both cases, obtain confirmation of the exact diff first.
+For `required`, the change must contain both the substantive update and justified simplification edits. For `not required`, do not invent cleanup. Report the resulting diff without requiring a separate confirmation step.
 
 ## Completion
 

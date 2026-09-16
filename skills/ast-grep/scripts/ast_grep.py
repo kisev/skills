@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safe JSON search and explicitly confirmed AST rewrites."""
+"""Safe JSON search and direct AST rewrites."""
 
 from __future__ import annotations
 
@@ -58,8 +58,6 @@ def parser() -> ContractArgumentParser:
             command.add_argument("--rewrite", required=True)
             command.add_argument("--workspace", default=".")
             command.add_argument("--dry-run", action="store_true")
-            command.add_argument("--apply", action="store_true")
-            command.add_argument("--confirm")
     return result
 
 
@@ -162,7 +160,7 @@ def apply_changes(original: bytes, changes: list[dict[str, Any]]) -> bytes:
     return updated
 
 
-def preview(arguments: Any) -> dict[str, Any]:
+def prepare_rewrite(arguments: Any) -> dict[str, Any]:
     workspace = workspace_path(arguments.workspace)
     targets = rewrite_paths(arguments.paths, workspace)
     matches = run_ast_grep(arguments.lang, arguments.pattern, targets, arguments.rewrite)
@@ -210,21 +208,12 @@ def preview(arguments: Any) -> dict[str, Any]:
                 tofile=name,
             )
         )
-    digest = (
-        hashlib.sha256(
-            json.dumps(changes, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        if changes
-        else None
-    )
     return {
         "schema_version": 1,
         "workspace": str(workspace),
         "changes": changes,
         "match_count": len(changes),
         "diff": "".join(diff),
-        "confirmation": digest,
-        "confirmation_request": {"digest": digest} if digest else None,
     }
 
 
@@ -264,9 +253,7 @@ def atomic_replace(updates: list[tuple[Path, bytes]]) -> None:
         shutil.rmtree(stage, ignore_errors=True)
 
 
-def apply_preview(document: dict[str, Any], expected: str) -> None:
-    if document["confirmation"] != expected:
-        raise ValueError("digest_mismatch: confirmation digest does not match preview")
+def apply_rewrite(document: dict[str, Any]) -> None:
     workspace = workspace_path(str(document["workspace"]))
     grouped: dict[str, list[dict[str, Any]]] = {}
     for change in document["changes"]:
@@ -279,7 +266,7 @@ def apply_preview(document: dict[str, Any], expected: str) -> None:
             hashlib.sha256(original).hexdigest() != str(change["original_sha256"])
             for change in changes
         ):
-            raise ValueError(f"digest_mismatch: rewrite target changed after preview: {path}")
+            raise ValueError(f"digest_mismatch: rewrite target changed before write: {path}")
         updates.append((path, apply_changes(original, changes)))
     atomic_replace(updates)
 
@@ -293,8 +280,7 @@ def main(argv: list[str] | None = None) -> int:
         mutation="write",
         supports_dry_run=True,
         external_tools=("ast-grep",),
-        destructive_flags=("--apply", "--confirm"),
-        confirmation=True,
+        destructive_flags=(),
     ):
         return 0
     arguments = arguments_parser.parse_args(argv)
@@ -308,18 +294,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
             )
             return 0
-        if arguments.apply and arguments.dry_run:
-            raise ValueError("--apply cannot be used with --dry-run")
-        document = preview(arguments)
+        document = prepare_rewrite(arguments)
         if not document["match_count"]:
             document["applied"] = False
-        elif arguments.apply:
-            if not arguments.confirm:
-                raise ValueError("rewrite apply requires explicit --confirm DIGEST")
-            apply_preview(document, arguments.confirm)
-            document["applied"] = True
         else:
-            document["applied"] = False
+            document["applied"] = not arguments.dry_run
+            if document["applied"]:
+                apply_rewrite(document)
         print(json.dumps(document, ensure_ascii=False, sort_keys=True))
         return 0
     except ToolUnavailable as error:

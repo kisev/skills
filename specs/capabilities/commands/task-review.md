@@ -22,7 +22,7 @@ The `task-review` skill and one readable source.
 
 ## Remote/Local Effects
 
-Chat output by default; a file write requires preview and digest confirmation; no publication.
+Chat output by default; an explicitly requested workspace-relative file write is direct and atomic; no publication.
 
 ## Errors/Partial/Escalation
 

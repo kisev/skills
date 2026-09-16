@@ -13,11 +13,11 @@ of `@kisev/skills-opencode`.
 | ------------------------ | ---------------------------------------------------------------------------------------- |
 | `agents-md`              | Create or review repository-scoped `AGENTS.md` instructions.                             |
 | `askme`                  | Clarify an incomplete task or design through a bounded interview.                        |
-| `ast-grep`               | Run structural search or a confirmed AST rewrite through ast-grep.                       |
+| `ast-grep`               | Run structural search or a safe direct AST rewrite through ast-grep.                     |
 | `code-explain`           | Build a read-only guided map of current WIP, a Git range, branch, or MR history.         |
 | `code-review`            | Review a GitLab MR or local WIP for defects and risks.                                   |
 | `commit-msg`             | Produce one concise English commit message from local changes.                           |
-| `docs-prepare`           | Prepare one evidence-based user document and private preview.                            |
+| `docs-prepare`           | Prepare one evidence-based user document directly in the project.                        |
 | `docs-review`            | Review user documentation for accuracy and usability.                                    |
 | `goal`                   | Produce a read-only structured Markdown goal of at most 4000 characters.                 |
 | `humanize`               | Edit technical prose into direct, natural language.                                      |

@@ -58,19 +58,19 @@
       "contains": "authenticated user's factual role"
     },
     {
-      "id": "confirmed-action",
-      "path": "skills/code-review/scripts/review_publish.py",
-      "contains": "publication action confirmation digest does not match"
+      "id": "manual-publication",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "direct manual `glab` commands"
     },
     {
-      "id": "inherited-environment",
-      "path": "skills/code-review/scripts/review_publish.py",
-      "contains": "shell=False"
+      "id": "no-publication-state",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "local publication receipts"
     },
     {
-      "id": "publication-diagnostics",
-      "path": "skills/code-review/scripts/review_publish.py",
-      "contains": "http_status="
+      "id": "issue-templates",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "nearest template"
     },
     {
       "id": "runner-owned-report",
@@ -103,7 +103,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "eb28f56293345c36b5dc2f4c5c3e5519d253346d2f23cafdaed9fce807f775d8",
+  "digest": "c0081877bc547a69804f13f15ff33bac2ff7e7c5a3589c46256a576ed56b992c",
   "locale": "neutral",
   "pair_id": null
 }

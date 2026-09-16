@@ -394,7 +394,8 @@
       "type": "object",
       "anyOf": [
         { "required": ["finding_id", "path", "sha256", "content"] },
-        { "required": ["publication_id", "revision", "kind", "path", "sha256", "content"] }
+        { "required": ["publication_id", "revision", "kind", "path", "sha256", "content"] },
+        { "required": ["publication_id", "revision", "kind", "path", "content"] }
       ],
       "properties": {
         "finding_id": { "type": "string", "minLength": 1 },
@@ -447,15 +448,22 @@
     },
     "review_publication_action": {
       "type": "object",
-      "required": [
-        "id",
-        "sha256",
-        "kind",
-        "publication_id",
-        "revision",
-        "operation",
-        "command",
-        "spec"
+      "anyOf": [
+        {
+          "required": [
+            "id",
+            "sha256",
+            "kind",
+            "publication_id",
+            "revision",
+            "operation",
+            "command",
+            "spec"
+          ]
+        },
+        {
+          "required": ["id", "kind", "publication_id", "operation", "command", "path", "line"]
+        }
       ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
@@ -480,6 +488,8 @@
           ]
         },
         "command": { "type": "string", "minLength": 1 },
+        "path": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "line": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
         "spec": {
           "type": "object",
           "required": [
@@ -521,6 +531,9 @@
       "anyOf": [
         { "required": ["mr_state", "warning", "preflight_command", "body_files", "commands"] },
         {
+          "required": ["mr_state", "warning", "body_files", "actions"]
+        },
+        {
           "required": [
             "mr_state",
             "warning",
@@ -537,7 +550,6 @@
             "warning",
             "preflight_path",
             "preflight_sha256",
-            "helper_path",
             "body_files",
             "actions"
           ]
@@ -549,7 +561,6 @@
         "preflight_path": { "type": "string", "minLength": 1 },
         "preflight_sha256": { "$ref": "#/$defs/digest" },
         "preflight_command": { "type": "string", "minLength": 1 },
-        "helper_path": { "type": "string", "minLength": 1 },
         "body_files": { "type": "array", "items": { "$ref": "#/$defs/publication_body" } },
         "commands": { "type": "array", "items": { "$ref": "#/$defs/publication_command" } },
         "actions": {
@@ -788,7 +799,10 @@
         },
         "reason_out_of_scope": { "type": "string", "minLength": 1 },
         "minimum_fix": { "type": "string", "minLength": 1 },
-        "body": { "type": "string", "minLength": 1 }
+        "body": { "type": "string", "minLength": 1 },
+        "template_path": {
+          "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
+        }
       },
       "additionalProperties": false
     },
@@ -1271,7 +1285,7 @@
                     "mr_author_username",
                     "discussions",
                     "notes",
-                    "publication_markers",
+                    "issue_templates",
                     "counts",
                     "exact_git",
                     "incremental",
@@ -1294,7 +1308,7 @@
                     "mr_author_username",
                     "discussions",
                     "notes",
-                    "publication_markers",
+                    "issue_templates",
                     "counts",
                     "exact_git",
                     "incremental",
@@ -1318,10 +1332,7 @@
                 "mr_author_username": { "type": "string", "minLength": 1 },
                 "discussions": { "type": "array" },
                 "notes": { "type": "array" },
-                "publication_markers": {
-                  "type": "array",
-                  "items": { "$ref": "#/$defs/publication_marker" }
-                },
+                "issue_templates": { "type": "array" },
                 "counts": { "$ref": "#/$defs/review_counts" },
                 "exact_git": { "$ref": "#/$defs/exact_git" },
                 "incremental": { "$ref": "#/$defs/incremental_review" },
@@ -1466,7 +1477,7 @@
               "additionalProperties": false,
               "properties": {
                 "profile": { "const": "code-review" },
-                "review_contract_version": { "enum": [1, 2, 3, 4] },
+                "review_contract_version": { "enum": [1, 2, 3, 4, 5] },
                 "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },

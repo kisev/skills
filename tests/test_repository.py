@@ -128,11 +128,11 @@ WORKFLOW_CONTRACTS = {
     ),
     "agents-md": (
         "at most 20 one-line bullets",
-        "show the exact diff and obtain explicit confirmation",
+        "write the bounded project file directly",
     ),
     "docs-prepare": (
         "create or improve one document",
-        "content-addressed preview artifact",
+        "write it directly with atomic replacement",
     ),
     "docs-review": (
         "do not modify the repository, documents, external systems",
@@ -164,8 +164,8 @@ WORKFLOW_CONTRACTS = {
         "reading map, not an\nevaluation of change quality",
     ),
     "ast-grep": (
-        "always create a preview first",
-        "--apply --confirm <digest>",
+        "writes immediately",
+        "--dry-run",
         "must not trigger installation",
     ),
     "skill-improve": (
@@ -289,15 +289,15 @@ class PortableSkillValidationTests(unittest.TestCase):
         source = ROOT / "shared/references/interaction-contract.md"
         source_text = source.read_text(encoding="utf-8")
         for requirement in (
-            "resolve -> prepare -> present -> confirm ->\napply -> report",
+            "Ordinary bounded project-file edits use `resolve\n-> prepare -> apply -> report`",
             "Ask a **Question** only before `prepare`",
-            "Request **Confirmation** only after `prepare`",
+            "write directly without a private preview",
             "Read-only",
             "manual-plan preparation do not change external state",
             "TLDR, scope, risks, checks",
             "write-once artifact",
             "apply command with its digest",
-            "rejects a missing, changed, stale, expired, or used plan",
+            "Ordinary project-file edits must use bounded paths",
         ):
             with self.subTest(requirement=requirement):
                 self.assertIn(requirement, source_text)
@@ -319,9 +319,9 @@ class PortableSkillValidationTests(unittest.TestCase):
                 )
         for name in ("spec-manage", "docs-prepare"):
             text = (BUILT_SKILLS / name / "references/workflow.md").read_text(encoding="utf-8")
-            with self.subTest(skill=name, behavior="compact-preview"):
-                self.assertIn("TLDR", text)
-                self.assertIn("do not print", text.lower())
+            with self.subTest(skill=name, behavior="direct-write"):
+                self.assertIn("write", text.lower())
+                self.assertIn("atomic", text.lower())
 
     def test_language_policy_is_materialized_in_each_built_skill(self) -> None:
         source = ROOT / "shared/references/language-policy.md"
@@ -493,6 +493,32 @@ class PortableSkillValidationTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn(marker, result.stdout)
+                with tempfile.TemporaryDirectory() as temporary:
+                    output = Path(temporary) / "result.json"
+                    written = subprocess.run(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-S",
+                            "-B",
+                            str(
+                                root
+                                / f"scripts/{'prepare_task.py' if name == 'task-prepare' else 'review_task.py' if name == 'task-review' else 'triage_task.py'}"
+                            ),
+                            command,
+                            "--text",
+                            "Example work item",
+                            "--output",
+                            "result.json",
+                        ],
+                        cwd=temporary,
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    self.assertEqual(written.returncode, 0, written.stderr)
+                    self.assertEqual(json.loads(written.stdout)["status"], "written")
+                    self.assertTrue(output.is_file())
 
     def test_pinned_cli_lists_all_portable_skills(self) -> None:
         result = subprocess.run(
@@ -670,7 +696,7 @@ class PortableRunnerTests(unittest.TestCase):
             str(root),
         )
 
-    def test_ast_rewrite_preview_apply_and_stale_digest(self) -> None:
+    def test_ast_rewrite_applies_immediately_and_dry_run_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "workspace"
             root.mkdir()
@@ -680,29 +706,16 @@ class PortableRunnerTests(unittest.TestCase):
             bin_dir.mkdir()
             self.fake_ast_grep(bin_dir)
             environment = {"PATH": str(bin_dir)}
-            preview = self.run_runner("ast-grep", *self.ast_arguments(root), env=environment)
-            self.assertEqual(preview.returncode, 0, preview.stderr)
-            document = json.loads(preview.stdout)
-            self.assertFalse(document["applied"])
+            dry_run = self.run_runner(
+                "ast-grep", *self.ast_arguments(root, "--dry-run"), env=environment
+            )
+            self.assertEqual(dry_run.returncode, 0, dry_run.stderr)
+            self.assertFalse(json.loads(dry_run.stdout)["applied"])
             self.assertEqual(source.read_text(encoding="utf-8"), "const value = 1;\n")
-            source.write_text("const changed = 1;\n", encoding="utf-8")
-            stale = self.run_runner(
-                "ast-grep",
-                *self.ast_arguments(root, "--apply", "--confirm", document["confirmation"]),
-                env=environment,
-            )
-            self.assertEqual(stale.returncode, 2)
-            self.assertEqual(json.loads(stale.stdout)["error"]["code"], "digest_mismatch")
-            self.assertEqual(source.read_text(encoding="utf-8"), "const changed = 1;\n")
-            fresh = self.run_runner("ast-grep", *self.ast_arguments(root), env=environment)
-            digest = json.loads(fresh.stdout)["confirmation"]
-            applied = self.run_runner(
-                "ast-grep",
-                *self.ast_arguments(root, "--apply", "--confirm", digest),
-                env=environment,
-            )
+            applied = self.run_runner("ast-grep", *self.ast_arguments(root), env=environment)
             self.assertEqual(applied.returncode, 0, applied.stderr)
-            self.assertEqual(source.read_text(encoding="utf-8"), "let changed = 1\n")
+            self.assertTrue(json.loads(applied.stdout)["applied"])
+            self.assertEqual(source.read_text(encoding="utf-8"), "let value = 1\n")
 
     def test_ast_search_accepts_upstream_empty_result_status(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

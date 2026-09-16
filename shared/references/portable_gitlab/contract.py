@@ -547,6 +547,7 @@ def thread_decisions_are_valid(value: object) -> bool:
             "neutral",
         }
         and item.get("outcome") in {"no_publication", "local_fix", "reply", "resolve", "reopen"}
+        and not (item.get("state") == "open" and item.get("outcome") == "no_publication")
         and (
             item.get("proposed_response") is None or nonempty_string(item.get("proposed_response"))
         )
@@ -847,12 +848,61 @@ def review_publication_preview_is_valid(value: object) -> bool:
         "warning",
         "preflight_path",
         "preflight_sha256",
-        "helper_path",
         "body_files",
         "actions",
     }
+    manual_keys = {"mr_state", "warning", "body_files", "actions"}
     if not isinstance(value, dict):
         return False
+    if set(value) == manual_keys:
+        body_files, actions = value["body_files"], value["actions"]
+        if (
+            not all(nonempty_string(value.get(key)) for key in ("mr_state", "warning"))
+            or not isinstance(body_files, list)
+            or not isinstance(actions, list)
+            or not all(
+                isinstance(item, dict)
+                and set(item) == {"publication_id", "revision", "kind", "path", "content"}
+                and nonempty_string(item.get("publication_id"))
+                and isinstance(item.get("revision"), int)
+                and item["revision"] >= 1
+                and item.get("kind") in {"finding", "thread", "issue"}
+                and nonempty_string(item.get("path"))
+                and Path(item["path"]).is_absolute()
+                and nonempty_string(item.get("content"))
+                for item in body_files
+            )
+            or not all(
+                isinstance(item, dict)
+                and set(item)
+                == {"id", "kind", "publication_id", "operation", "command", "path", "line"}
+                and nonempty_string(item.get("id"))
+                and item.get("kind") in {"finding", "thread", "issue", "labels"}
+                and item.get("operation")
+                in {
+                    "create_general",
+                    "create_line",
+                    "create_issue",
+                    "reply",
+                    "resolve",
+                    "reopen",
+                    "update_labels",
+                }
+                and nonempty_string(item.get("command"))
+                for item in actions
+            )
+        ):
+            return False
+        action_ids = [item["id"] for item in cast(list[dict[str, Any]], actions)]
+        manual_body_ids = {
+            item["publication_id"] for item in cast(list[dict[str, Any]], body_files)
+        }
+        manual_action_body_ids = {
+            item["publication_id"]
+            for item in cast(list[dict[str, Any]], actions)
+            if item["publication_id"] is not None
+        }
+        return len(action_ids) == len(set(action_ids)) and manual_body_ids == manual_action_body_ids
     if set(value) == structured_keys:
         body_files, actions = value["body_files"], value["actions"]
         if (
@@ -861,8 +911,6 @@ def review_publication_preview_is_valid(value: object) -> bool:
             )
             or not Path(value["preflight_path"]).is_absolute()
             or not is_digest(value.get("preflight_sha256"))
-            or not nonempty_string(value.get("helper_path"))
-            or not Path(value["helper_path"]).is_absolute()
             or not isinstance(body_files, list)
             or not isinstance(actions, list)
         ):
@@ -1816,7 +1864,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "artifact_root",
             "prepared_at",
         }
-        current_required = legacy_required | {"publication_markers", "incremental"}
+        current_required = legacy_required | {"incremental", "issue_templates"}
         structured_required = current_required | {"current_user_id"}
         if set(payload) not in (legacy_required, current_required, structured_required):
             raise WorkflowError("review context payload has unknown or missing fields")
@@ -1853,7 +1901,6 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 for key in (
                     "discussions",
                     "notes",
-                    *(("publication_markers",) if not legacy_context else ()),
                     "errors",
                 )
             )
@@ -1998,7 +2045,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             payload["profile"] != "code-review"
             or not legacy_plan
             and (
-                payload["review_contract_version"] not in {2, 3, 4}
+                payload["review_contract_version"] not in {2, 3, 4, 5}
                 if structured_plan
                 else payload["review_contract_version"] != 1
             )
@@ -2041,7 +2088,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                     isinstance(item, dict) and "suggestion_applicable" in item
                     for item in payload["thread_decisions"]
                 )
-                or payload["review_contract_version"] in {3, 4}
+                or payload["review_contract_version"] in {3, 4, 5}
                 and (
                     not finding_publications_are_valid(
                         payload["finding_publications"], require_fixes=True

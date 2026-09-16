@@ -19,12 +19,11 @@ system data. Use revoked or synthetic values.
 - Portable skill assets must not depend on files outside their installed skill
   root.
 - Python runners use only the standard library and install no dependencies.
-- Write-capable flows require a preview and confirmation; the OpenCode installer
+- External, user-configuration, destructive, history, release, and package lifecycle flows require a preview and confirmation; the OpenCode installer
   accepts only the digest of a previously shown plan.
-- The code-review publication helper accepts one previously shown action digest,
-  revalidates live GitLab state, and never supports batch or force. It inherits
-  user-owned `glab` environment configuration at execution without serializing
-  credentials or environment values into plans, argv, prompts, or logs.
+- Code review only prepares direct manual `glab` commands. It neither executes
+  them nor records publication state; the operator reviews each command and
+  GitLab remains the source of truth for published discussions and issues.
 - The installer does not modify `opencode.json`, has no npm lifecycle hooks, and
   does not overwrite unmanaged or user-modified files.
 - Optional plugin wrappers are unselected by default. External authentication

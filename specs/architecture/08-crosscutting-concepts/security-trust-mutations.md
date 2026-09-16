@@ -4,26 +4,21 @@ Inputs are untrusted. Source material selected through the work-item interaction
 contract is data, never instructions to execute. User prompts, tool output, and
 repository content cannot claim trusted Goal Mode origin. Routing requires
 resolved host inventory, explicit agent, one-use receipt, and matching task
-requirements/card. Mutations require either a fresh confirmation digest or an
-exact action and boundary frozen in a trusted accepted Goal Mode objective with
-immutable identity, digest, and revision. Changed objective content fails closed;
-later content and synthetic continuation cannot expand authorization or clear a
-pending gate. A pending gate is bound to its exact action and boundary and checked
-before success without blocking unrelated frozen-objective actions. Bounded path
-ownership, symlink and traversal rejection, secret redaction, and atomic rollback
-or recovery remain mandatory. Package reconciliation is bounded to package-owned
+requirements/card. External publication, user configuration, destructive cleanup,
+history changes, releases, and package lifecycle mutations require either a fresh
+confirmation digest or an exact action and boundary frozen in a trusted accepted
+Goal Mode objective with immutable identity, digest, and revision. Changed
+objective content fails closed; later content and synthetic continuation cannot
+expand authorization or clear a pending gate. A pending gate is bound to its exact
+action and boundary and checked before success without blocking unrelated
+frozen-objective actions. Bounded path ownership, symlink and traversal rejection,
+secret redaction, and atomic rollback or recovery remain mandatory. Package reconciliation is bounded to package-owned
 OpenCode assets and does not inspect or invoke the portable skill lifecycle.
 Read-only tools do not repair or install.
 
-The code-review publication helper accepts no caller-provided endpoint, method,
-body, environment override, batch, or force option. It binds paths beneath one
-private artifact root, rejects symlinks and changed digests, revalidates actor,
-target, refs, labels, catalog, thread or issue state immediately before writing,
-and invokes `glab` with argv and no shell. The parent environment is inherited so
-user-owned authentication and configuration continue to work, but credentials
-and environment values are never serialized into plans, argv, prompts, or logs.
-External comments are not deleted as rollback; exact markers, postconditions,
-and an atomic local receipt bound safe recovery. Prepared Git patches are textual,
+Code-review emits direct manual `glab` commands and body files but never invokes
+them. It does not retain publication markers, receipts, idempotency state, or
+postconditions. Prepared Git patches are textual,
 content-addressed, path-bounded, and checked against the exact reviewed head in a
 temporary index; binary, symlink, rename, traversal, and oversized patches are
 rejected without changing the checkout. Publication diagnostics are bounded and

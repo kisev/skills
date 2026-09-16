@@ -21,10 +21,10 @@
     {
       "id": "docs-plan",
       "path": "skills/docs-prepare/references/workflow.md",
-      "contains": "exact frozen trusted Goal authorization"
+      "contains": "write it directly with atomic replacement"
     }
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "b56f38fc0c81749a6f8c068805e0c41130f3893b7b0234ac832f2fbb0ed76c84"
+  "digest": "bd7f9e2305f26b19320ebdf54dfbc74ffd2c2460d1e671af4b73821668d62b5b"
 }

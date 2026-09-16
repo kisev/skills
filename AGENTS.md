@@ -51,7 +51,7 @@
 - Preserve agentskills.io frontmatter constraints and keep every built skill self-contained.
 - Keep Python runners shipped in portable skills compatible with Python 3.12+ and standard-library-only.
 - Validate every committed `*.schema.json` with a concrete valid instance and add it to the exhaustive mapping in `tests/test_json_schemas.py`.
-- Require preview, explicit confirmation, final revalidation, bounded paths, and atomic replacement or rollback for write-capable flows.
+- Write ordinary project files directly with bounded paths and atomic replacement or rollback; require preview and explicit confirmation only for external publication, user configuration, destructive cleanup, history changes, releases, and package lifecycle mutations.
 - Keep credentials, private endpoints, local paths, caches, live-eval output, and generated artifacts out of Git.
 - Do not weaken a failing gate with exclusions, warning baselines, missing-import ignores, or skipped tests without a documented compatibility reason.
 - Update `specs/` and `specs/traceability.json` for material behavior, compatibility, or security-boundary changes.

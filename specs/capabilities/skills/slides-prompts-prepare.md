@@ -13,13 +13,13 @@ Trigger for slides or prompts; near-miss: sending a presentation or choosing a c
 
 Input is the fixed action, an automatically resolved default profile or explicit
 context override, an existing presentation, and a selected or saved visual
-direction. Output is one English prompt file per slide and a local write plan.
+direction. Output is one English prompt file per slide.
 
 ## Workflow Stages
 
 Resolve or self-setup the profile, research named themes when needed, analyze
 every slide, map theme plus factual technical references, draft one prompt per
-slide, verify coverage and unchanged images, preview writes, and report.
+slide, verify coverage and unchanged images, write prompts, and report.
 
 ## Dependencies
 
@@ -28,8 +28,8 @@ web research for named external themes.
 
 ## Remote/Local Effects
 
-Read-only research and confirmation-bound prompt-file writes; no presentation,
-image, publication, or external-message mutation.
+Read-only research and direct bounded prompt-file writes; no presentation, image,
+publication, or external-message mutation.
 
 ## Errors, Partial, Escalation
 

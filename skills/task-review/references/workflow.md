@@ -9,8 +9,8 @@ Review starts with the normalized item and returns exactly one quality verdict:
 `ready`, `needs_clarification`, or `blocked`, with evidence-backed findings and
 recommended changes. Do not mix machine and semantic findings; an unchanged
 item and evidence must produce the same result. The default result is in chat;
-file output requires explicit preview and digest confirmation. No publication or
-external mutation exists.
+an explicitly requested workspace-relative output is written directly with
+atomic replacement. No publication or external mutation exists.
 
 The review describes quality state, not an action log. Account for reachability
 of criteria with known dependencies and consistency of outcome, scope, and

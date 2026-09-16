@@ -14,7 +14,7 @@ Input is a repository scope. Output is a checked instruction document or audit.
 
 ## Workflow Stages
 
-Resolve scope, inspect evidence, prepare content, present, confirm mutation, report.
+Resolve scope, inspect evidence, prepare content, write, validate, report.
 
 ## Dependencies
 
@@ -23,7 +23,7 @@ Uses repository paths and the shared interaction contract.
 ## Remote/Local Effects
 
 Local checkout reads, or exact-revision remote reads when no checkout is
-available; confirmed local writes only. No remote mutations.
+available; bounded atomic local writes only. No remote mutations.
 
 ## Errors, Partial, Escalation
 

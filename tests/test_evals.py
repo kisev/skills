@@ -149,10 +149,12 @@ def test_goal_authorization_offline_runner_exercises_decision_cases() -> None:
         assert (
             ROOT / ".build/skills" / skill / "scripts/goal_authorization.py"
         ).read_bytes() == policy
-    authorization = "ordinary Confirmation or exact frozen trusted Goal authorization"
     for skill in ("docs-prepare", "spec-manage"):
         workflow = ROOT / "skills" / skill / "references/workflow.md"
-        assert authorization in workflow.read_text(encoding="utf-8")
+        assert (
+            "write it directly" in workflow.read_text(encoding="utf-8")
+            or "write it directly" in workflow.read_text(encoding="utf-8").lower()
+        )
         assert (ROOT / ".build" / "skills" / skill / "references/workflow.md").read_bytes() == (
             workflow.read_bytes()
         )

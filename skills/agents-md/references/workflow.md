@@ -40,8 +40,8 @@ skill resource; do not look for it in the working repository. Apply
     not translate confirmed instructions solely to match the response language.
 13. Before writing, recheck every new or changed rule against the source map and
     assess conflicts with parent and nested files.
-14. Show the exact diff and obtain explicit confirmation before writing. After
-    confirmation, apply only the agreed change.
+14. Write the bounded project file directly with atomic replacement, then show
+    the resulting diff.
 15. Validate content, nesting, and scope after writing: the file exists when
     required, contains only applicable rules, has no stale or inherited
     duplicates, and does not conflict with nested files. If reconciliation

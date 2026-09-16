@@ -22,7 +22,7 @@ One readable source, host HTTPS reading when selected, and the bundled work-item
 
 ## Remote/Local Effects
 
-Chat output by default; optional file output only after exact preview and digest confirmation; no external mutation or publication.
+Chat output by default; explicitly requested workspace-relative file output writes directly and atomically; no external mutation or publication.
 
 ## Errors, Partial, Escalation
 

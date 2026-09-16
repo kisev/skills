@@ -1071,13 +1071,9 @@ def main(argv: list[str] | None = None) -> int:
     profile_save.add_argument("--input", required=True)
     profile_save.add_argument("--digest", required=True)
     profile_save.add_argument("--set-default", action="store_true")
-    artifact_prepare = subparsers.add_parser("artifact-prepare")
-    artifact_prepare.add_argument("--target", required=True)
-    artifact_prepare.add_argument("--input", required=True)
-    artifact_apply = subparsers.add_parser("artifact-apply")
-    artifact_apply.add_argument("--target", required=True)
-    artifact_apply.add_argument("--input", required=True)
-    artifact_apply.add_argument("--digest", required=True)
+    artifact_write = subparsers.add_parser("artifact-write")
+    artifact_write.add_argument("--target", required=True)
+    artifact_write.add_argument("--input", required=True)
     try:
         args = parser.parse_args(argv)
     except WorkflowError as exc:
@@ -1087,13 +1083,13 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "schema_version": 1,
                 "payload_version": "1.1.0",
-                "mutation": "local-write-confirmed",
+                "mutation": "local-write",
                 "dry_run": True,
-                "state_protocol": "digest-bound-preview",
+                "state_protocol": "confirmed-config-direct-workspace",
                 "profile_schema": "references/team-context.schema.json",
                 "profile_location": "${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts",
                 "external_tools": {},
-                "destructive_flags": ["context-save", "profile-save", "artifact-apply"],
+                "destructive_flags": ["context-save", "profile-save"],
             }
         )
         return 0
@@ -1308,57 +1304,23 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             return 0
-        if args.command == "artifact-prepare":
+        if args.command == "artifact-write":
             artifact_source = regular(Path(args.input), "artifact input")
             content = artifact_source.read_bytes()
             target = workspace_target(args.target)
-            payload = {
-                "kind": "artifact",
-                "target": args.target,
-                "content": content.decode("utf-8"),
-            }
-            plan_digest, path, expires_at = prepare_plan(payload)
-            emit(
-                {
-                    "status": "prepared",
-                    "summary": {
-                        "tldr": "Writing local artifact.",
-                        "scope": [str(target)],
-                        "risks": ["existing file will be replaced"] if target.exists() else [],
-                        "checks": ["regular input", "safe workspace path"],
-                    },
-                    "artifact_path": str(path),
-                    "digest": plan_digest,
-                    "expires_at": expires_at,
-                    "ttl_seconds": TTL_SECONDS,
-                    "apply_command": f"artifact-apply --target {args.target} --input {args.input} --digest {plan_digest}",
-                }
-            )
-            return 0
-        if args.command == "artifact-apply":
-            artifact_source = regular(Path(args.input), "artifact input")
-            content = artifact_source.read_bytes()
-            target = workspace_target(args.target)
-            consume(
-                args.digest,
-                {"kind": "artifact", "target": args.target, "content": content.decode("utf-8")},
-            )
             target.parent.mkdir(parents=True, exist_ok=True)
             atomic(target, content)
-            report_path, report_digest = report(
-                args.digest, {"status": "applied", "target": str(target)}
-            )
             emit(
                 {
-                    "status": "applied",
+                    "status": "written",
                     "summary": {
                         "tldr": "Artifact written.",
                         "scope": [str(target)],
                         "risks": [],
-                        "checks": ["digest", "expiry", "single_use", "safe_path"],
+                        "checks": ["regular input", "safe workspace path", "atomic replace"],
                     },
-                    "report_path": str(report_path),
-                    "report_digest": report_digest,
+                    "target": str(target),
+                    "digest": hashlib.sha256(content).hexdigest(),
                 }
             )
             return 0

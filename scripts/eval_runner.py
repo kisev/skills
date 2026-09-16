@@ -1034,6 +1034,7 @@ print(json.dumps(value))
                                 "findings": [],
                                 "finding_publications": [],
                                 "previous_finding_assessments": [],
+                                "issue_templates": [],
                                 "recommended_issues": [],
                                 "rejected_candidates": [],
                                 "rejected_candidate_assessments": [],

@@ -80,12 +80,11 @@ create issues, epics, milestones, or external messages. Record source
 discrepancies next to the affected goal unless the profile identifies another
 owned location.
 
-## 5. Preview, Apply, and Verify
+## 5. Write and Verify
 
-For a review, report findings and stop without writing. For an update, prepare
-the complete candidate document in a private preview, run `artifact-prepare`,
-show changed periods, unresolved conflicts, evidence gaps, and checks, then ask
-for confirmation. Apply only through the returned digest-bound command.
+For a review, report findings and stop without writing. For an update, write the
+complete candidate document directly through `artifact-write`, then report
+changed periods, unresolved conflicts, evidence gaps, and checks.
 
 Run every applicable command in `actions.roadmap.verification_commands`. Prefer
 direct linting of the target path when repository wrappers ignore untracked
@@ -96,5 +95,5 @@ Report periods reviewed, goals completed, carried, backlogged, cancelled, or
 blocked, unplanned delivery, source discrepancies, evidence completeness,
 artifact path, and verification results.
 
-Read `references/interaction-contract.md` for evidence and confirmation rules
+Read `references/interaction-contract.md` for evidence and mutation rules
 and `references/language-policy.md` for user-facing prose.

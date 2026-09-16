@@ -10,11 +10,11 @@ Routes syntax search/rewrite; near-miss: text substitution.
 
 ## Inputs/Outputs
 
-Untrusted pattern arguments become skill input; output is search or plan.
+Untrusted pattern arguments become skill input; output is search or rewrite result.
 
 ## Workflow Stages
 
-Select, pass, preview/apply through skill, report.
+Select, pass, rewrite through skill, report.
 
 ## Dependencies
 
@@ -22,11 +22,11 @@ Select, pass, preview/apply through skill, report.
 
 ## Remote/Local Effects
 
-Effects match the skill and require its confirmation boundary.
+Effects match the skill's bounded local-write boundary.
 
 ## Errors/Partial/Escalation
 
-Unsafe paths and stale plans escalate.
+Unsafe paths and stale targets escalate.
 
 ## Unique Constraints
 
@@ -36,7 +36,7 @@ No command argument bypasses rewrite safety.
 
 ### REQ-I-203 - Route the ast-grep command
 
-The command shall load exactly `ast-grep` and preserve preview and digest checks.
+The command shall load exactly `ast-grep` and preserve direct-write safety checks.
 
 ## Example
 

@@ -14,7 +14,7 @@ Arguments become bounded doc input; output follows the skill.
 
 ## Workflow Stages
 
-Select, pass, inspect, draft, confirm if needed, report.
+Select, pass, inspect, draft, write, report.
 
 ## Dependencies
 
@@ -22,7 +22,7 @@ Select, pass, inspect, draft, confirm if needed, report.
 
 ## Remote/Local Effects
 
-Confirmed local document writes only.
+Bounded local document writes only.
 
 ## Errors/Partial/Escalation
 

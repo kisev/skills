@@ -4,7 +4,7 @@ Use AST search when node boundaries and metavariables matter; use text search wh
 
 For read-only search run `python3 -I -S -B scripts/ast_grep.py search --pattern 'const $A = $B' --lang javascript PATH`. Report structured matches: file, range, matched text, and metavariables. Do not modify files or suggest apply for a search-only request.
 
-Rewrite targets must be regular non-symlink files inside an existing non-symlink workspace. Always preview first with `python3 -I -S -B scripts/ast_grep.py rewrite --pattern 'const $A = $B' --rewrite 'let $A = $B' --lang javascript --workspace PATH PATH`. Report affected files, match count, diff, and `confirmation` digest. Zero matches are a no-op without confirmation. Add no `--apply` before explicit confirmation; afterward repeat exactly the same invocation with `--apply --confirm <DIGEST>`. The runner rebuilds the preview and rejects a different digest, stale target, traversal, and symlink before writing. It prepares every file before the first replacement and rolls back replaced files after a replacement error.
+Rewrite targets must be regular non-symlink files inside an existing non-symlink workspace. Run `python3 -I -S -B scripts/ast_grep.py rewrite --pattern 'const $A = $B' --rewrite 'let $A = $B' --lang javascript --workspace PATH PATH`; it validates all targets, writes immediately, and reports affected files, match count, and the resulting diff. Zero matches are a no-op. Use `--dry-run` only when the user explicitly asks not to write. The runner rejects changed targets, traversal, and symlinks before writing, prepares every file before the first replacement, and rolls back replaced files after a replacement error.
 
 Use AST search instead of text search when node boundaries and metavariables matter. For plain text, text search is faster and clearer. Patterns use ast-grep syntax: `$NAME` is one node, `$$$NAME` is a sequence of nodes, and repeated metavariables must match.
 
@@ -23,7 +23,7 @@ Show structured matches: file, range, matched text, and metavariables. Do not mo
 
 ## Rewrite
 
-Rewrite targets must be regular non-symlink files inside an existing non-symlink workspace. Always create a preview first:
+Rewrite targets must be regular non-symlink files inside an existing non-symlink workspace:
 
 ```shell
 python3 -I -S -B scripts/ast_grep.py rewrite \
@@ -31,4 +31,4 @@ python3 -I -S -B scripts/ast_grep.py rewrite \
   --lang javascript --workspace PATH PATH
 ```
 
-Show affected files, match count, diff, and the `confirmation` digest. On zero matches, report a no-op without confirmation. Do not add `--apply` before explicit user confirmation. After confirmation, repeat the exact same invocation with `--apply --confirm <DIGEST>`. The runner rebuilds the preview, rejects a different digest, stale target, traversal, and symlink without writing; preparation of all files finishes before the first replacement, and a replacement error rolls back already replaced files.
+The command writes immediately and returns affected files, match count, and the resulting diff. On zero matches, report a no-op. Use `--dry-run` only for an explicitly requested read-only run. The runner rejects changed targets, traversal, and symlinks without writing; preparation of all files finishes before the first replacement, and a replacement error rolls back already replaced files.

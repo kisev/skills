@@ -14,7 +14,7 @@ Arguments select mode and scope; output is specs or audit findings.
 
 ## Workflow Stages
 
-Select, pass, inspect, preview, confirm/apply when applicable, report.
+Select, pass, inspect, write, verify, report.
 
 ## Dependencies
 
@@ -22,7 +22,7 @@ Select, pass, inspect, preview, confirm/apply when applicable, report.
 
 ## Remote/Local Effects
 
-Confirmed local `specs/` effects only.
+Bounded local `specs/` effects only.
 
 ## Errors/Partial/Escalation
 

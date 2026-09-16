@@ -97,14 +97,9 @@ def artifact_instances() -> list[dict[str, Any]]:
         "+new\n"
     )
     patch_digest = hashlib.sha256(patch_content.encode()).hexdigest()
-    body_content = (
-        "Finding body\n\n```diff\n"
-        f"{patch_content.rstrip()}\n"
-        "```\n\n"
-        "<!-- code-review:id=finding-1;revision=1;kind=finding;target=aaaaaaaaaaaaaaaa -->\n"
-    )
+    body_content = "Finding body\n\n```diff\n" + patch_content.rstrip() + "\n```\n"
     body_digest = hashlib.sha256(body_content.encode()).hexdigest()
-    issue_content = "Issue body\n\n<!-- code-review:id=issue-1;revision=1;kind=issue;target=aaaaaaaaaaaaaaaa -->\n"
+    issue_content = "Issue body\n"
     issue_digest = hashlib.sha256(issue_content.encode()).hexdigest()
     incremental_delta: dict[str, Any] = {
         "from_head": None,
@@ -284,25 +279,7 @@ def artifact_instances() -> list[dict[str, Any]]:
             "mr_author_username": "author",
             "discussions": [],
             "notes": [],
-            "publication_markers": [
-                {
-                    "id": "finding-1",
-                    "revision": 1,
-                    "kind": "finding",
-                    "note_id": 42,
-                    "note_url": "https://gitlab.example/group/project/-/merge_requests/7#note_42",
-                    "discussion_id": "discussion-42",
-                    "author_username": "reviewer",
-                    "body_sha256": body_digest,
-                    "resource_type": "note",
-                    "is_root": True,
-                    "position": None,
-                    "root_note_id": 42,
-                    "target": "aaaaaaaaaaaaaaaa",
-                    "resource_title": None,
-                    "resource_body": None,
-                }
-            ],
+            "issue_templates": [],
             "counts": {
                 "discussions": 0,
                 "notes": 0,
@@ -433,7 +410,6 @@ def artifact_instances() -> list[dict[str, Any]]:
                 "warning": "Actions are prepared but were not executed.",
                 "preflight_path": "/tmp/portable-artifacts/preflight.json",
                 "preflight_sha256": DIGEST,
-                "helper_path": "/tmp/portable-skills/code-review/scripts/review_publish.py",
                 "body_files": [
                     {
                         "publication_id": "finding-1",
@@ -460,7 +436,7 @@ def artifact_instances() -> list[dict[str, Any]]:
                         "publication_id": "finding-1",
                         "revision": 1,
                         "operation": "create_general",
-                        "command": "python3 review_publish.py apply --action finding-1",
+                        "command": "glab api --method POST projects/1/merge_requests/1/discussions -F body=@/tmp/portable-artifacts/finding-1.md",
                         "spec": finding_action_spec,
                     },
                     {
@@ -470,7 +446,7 @@ def artifact_instances() -> list[dict[str, Any]]:
                         "publication_id": "issue-1",
                         "revision": 1,
                         "operation": "create_issue",
-                        "command": "python3 review_publish.py apply --action issue-1",
+                        "command": "glab api --method POST projects/1/issues -F description=@/tmp/portable-artifacts/issue-1.md",
                         "spec": issue_action_spec,
                     },
                     {
@@ -480,7 +456,7 @@ def artifact_instances() -> list[dict[str, Any]]:
                         "publication_id": None,
                         "revision": None,
                         "operation": "update_labels",
-                        "command": "python3 review_publish.py apply --action labels:update",
+                        "command": "glab mr update 1 --repo https://gitlab.example/group/project --label semver::patch",
                         "spec": label_action_spec,
                     },
                 ],
@@ -789,7 +765,7 @@ def validate_schema_runtime_rejections() -> None:
     )
     legacy_context = copy.deepcopy(artifacts["review_context"])
     legacy_context["payload"].pop("incremental")
-    legacy_context["payload"].pop("publication_markers")
+    legacy_context["payload"].pop("issue_templates")
     legacy_context["payload"].pop("current_user_id")
     artifact_validator.validate(legacy_context)
     validate_v2_artifact(legacy_context, "review_context")
@@ -857,8 +833,6 @@ def validate_schema_runtime_rejections() -> None:
     release_inventory["payload"]["counts"] = {}
     review_context = copy.deepcopy(artifacts["review_context"])
     review_context["payload"]["exact_git"] = {}
-    invalid_marker = copy.deepcopy(artifacts["review_context"])
-    invalid_marker["payload"]["publication_markers"][0]["id"] = "!finding"
     review_plan = copy.deepcopy(artifacts["review_plan"])
     review_plan["payload"]["publication_preview"]["body_files"][0]["revision"] = 0
     invalid_nullable = copy.deepcopy(artifacts["review_plan"])
@@ -872,7 +846,6 @@ def validate_schema_runtime_rejections() -> None:
     for kind, instance in (
         ("release_inventory", release_inventory),
         ("review_context", review_context),
-        ("review_context", invalid_marker),
         ("review_plan", review_plan),
         ("review_plan", invalid_nullable),
         ("review_plan", invalid_patch),

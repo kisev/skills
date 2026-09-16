@@ -14,7 +14,7 @@ Arguments identify a skill; output is checked improvement.
 
 ## Workflow Stages
 
-Select, pass, inspect, preview, apply, recheck, report.
+Select, pass, inspect, write, recheck, report.
 
 ## Dependencies
 
@@ -22,7 +22,7 @@ Select, pass, inspect, preview, apply, recheck, report.
 
 ## Remote/Local Effects
 
-Confirmed local skill writes.
+Bounded atomic local skill writes.
 
 ## Errors/Partial/Escalation
 

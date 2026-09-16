@@ -51,11 +51,11 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "uncommitted changes",
             "exact requested revision",
             "merge/pull-request",
-            "exact diff",
+            "resulting diff",
         ),
         "askme": ("**Proposed task**", "current frontier", "never simulated self-review"),
         "ast-grep": (
-            "--apply --confirm <DIGEST>",
+            "--dry-run",
             "rolls back replaced files",
             "must not trigger installation",
         ),
@@ -66,8 +66,8 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
         ),
         "commit-msg": ("git diff --cached", "exactly one line", "Do not run `git add`"),
         "docs-prepare": (
-            "content-addressed preview artifact",
-            "Do not print the draft or diff",
+            "write it directly with atomic replacement",
+            "Do not create a private preview artifact",
             "never combine workflows",
         ),
         "docs-review": (
@@ -217,7 +217,7 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
         assert required.search(workflow), name
 
 
-def test_code_review_requires_compact_incremental_confirmed_publication_contract() -> None:
+def test_code_review_requires_compact_incremental_manual_publication_contract() -> None:
     workflow = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
     for marker in (
         "--incremental auto",
@@ -228,12 +228,10 @@ def test_code_review_requires_compact_incremental_confirmed_publication_contract
         "review-publication.md",
         "complete absolute filesystem paths",
         "label_assessments",
-        "scripts/review_publish.py apply",
-        "Each command confirms exactly one action digest",
-        "inherits the caller's environment",
+        "direct manual `glab` commands",
+        "Do not add hidden markers",
         "fix_mode=patch",
         "temporary index",
-        "bounded redacted diagnostics",
         "runner-owned stages",
         "print its `chat` field verbatim",
     ):
@@ -245,7 +243,7 @@ def test_code_review_requires_compact_incremental_confirmed_publication_contract
     for marker in (
         "For another author's MR, do not expose finding titles",
         "use a `file://` link",
-        "<!-- code-review:id=<stable-id>",
+        "manual checklist, not a publication protocol",
         "selected response language",
         "authenticated user's",
         "factual role",

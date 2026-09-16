@@ -10,9 +10,6 @@ Normalized work-item validation and review distinguish `ready`,
 separate. Triage classifies evidence without issuing a quality verdict. JSON
 reports and CLI exit codes are stable within the package contracts.
 
-For code-review publication, a definitive non-mutating HTTP rejection is
-`blocked` with bounded redacted method, endpoint, exit-code, status, and response
-diagnostics plus retry evidence. Timeout, 5xx, malformed response, failed
-postcondition observation, and any unknown mutation outcome are `partial`; they
-record uncertainty and never trigger automatic replay. Progress is written to
-stderr and the final status remains structured JSON on stdout.
+Code-review does not execute publication commands. A failed manual `glab`
+command is outside the review runner; the user may inspect current GitLab state
+and rerun or revise it through a new review.

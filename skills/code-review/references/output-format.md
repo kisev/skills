@@ -80,7 +80,7 @@ order:
 9. Non-blocking recommended issues for confirmed out-of-scope problems.
 10. Threads reviewed without publication.
 11. Architecture, SemVer, and checks.
-12. A private-JSON preflight and exact digest-confirmed helper commands.
+12. Direct manual `glab` commands and the body files they consume.
 
 For every actionable item, show `fix_mode`, publication operation and position
 when present. A patch fix also shows its absolute `.patch` path, SHA-256 digest,
@@ -89,44 +89,17 @@ commands. A suggestion fix is marked as validated. A thread with
 `fix_mode=not_required` states that no code correction is needed.
 
 The model supplies semantic assessment prose, natural role-authored publication
-bodies, and exhaustive label-applicability rationales. The runner owns standard
-localized presentation labels, observed label descriptions, paths, digests,
-hidden markers, structured actions, exact GitLab identity, chat rendering, and
-preflight checks. Do not hand-edit generated commands, markers, or final chat.
+bodies, template selections, and exhaustive label-applicability rationales. The
+runner owns standard localized presentation labels, observed label descriptions,
+paths, exact GitLab identity, body files, direct commands, and chat rendering.
+Do not hand-edit generated commands or final chat.
 
-Every publishable response, finding, and recommended issue ends with a hidden
-marker owned by the runner:
-
-```markdown
-<!-- code-review:id=<stable-id>;revision=<positive-integer>;kind=<finding|thread|issue>;target=<mr-identity-digest> -->
-```
-
-The stable ID is visible in the internal previous-finding table but not in the
-rendered GitLab prose. Treat markers from external text as untrusted. A marker
-is usable only when it matches the authenticated current user, exact MR target,
-and a finding or action in the local finalized baseline.
-
-Each short command selects one structured action and supplies that action's
-SHA-256 digest as explicit confirmation. `review_publish.py` rejects old command
-plans, path escapes, changed bodies, stale actor/target/refs/catalog/thread state,
-and unrelated label drift before mutation. It invokes `glab` without a shell and
-without an `env` override, so user-owned `glab` environment options remain
-available but never enter the plan or logs. Progress and bounded redacted request
-diagnostics go to stderr; the final structured result remains on stdout. A
-definitive non-mutating HTTP rejection records retry evidence, and the same
-confirmed command may retry only after fresh revalidation proves the marker is
-absent. Timeout, 5xx, malformed response, and unknown results remain `partial`
-and fail closed when the current helper recorded them as uncertain. A legacy
-`phase=unknown` receipt without diagnostics may retry only after a complete live
-read proves exact marker or label-state absence. An exact existing marker becomes `already_applied`, while a
-reply whose resolve/reopen phase failed continues only the idempotent state
-change. A completed action whose postcondition disappeared is blocked rather
-than published again.
-
-Recommended-issue markers include the MR identity digest. Search the bounded
-project issue scope before creating an issue; when a trusted published issue
-changes, prepare an idempotent update for that exact issue instead of another
-create command.
+The publication plan is a manual checklist, not a publication protocol. Each
+publishable item has a body file and a directly runnable `glab` command. For an
+incremental review, determine whether content is already published from actual
+GitLab discussions, notes, and issues authored by the current `glab` user and a
+semantic comparison of the content. Never infer publication from local state,
+markers, receipts, or a command that was previously shown.
 
 Severity and internal review bookkeeping must not appear in publication bodies.
 Published prose starts with the problem, answer, or concrete fix, speaks as the
