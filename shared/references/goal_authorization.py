@@ -1,4 +1,4 @@
-"""Read-only Goal Mode authorization conformance validator.
+"""Shared read-only Goal Mode authorization conformance validator.
 
 Exit 0 reports capabilities or passing assertions, exit 1 reports failed
 assertions, and exit 2 reports an invalid command, target, or JSON input.

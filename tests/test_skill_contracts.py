@@ -75,11 +75,6 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "only confirmed findings",
             "never publish them",
         ),
-        "doit": (
-            "exact action is included in the approved plan",
-            "separate confirmations",
-            "Do not require a particular host",
-        ),
     }
     for name, markers in expected_markers.items():
         workflow = (ROOT / "skills" / name / "references" / "workflow.md").read_text(
@@ -298,7 +293,6 @@ def test_stage_16_core_workflow_boundaries_are_observable() -> None:
     commit_msg = (ROOT / "skills/commit-msg/references/workflow.md").read_text(encoding="utf-8")
     docs_prepare = (ROOT / "skills/docs-prepare/references/workflow.md").read_text(encoding="utf-8")
     docs_review = (ROOT / "skills/docs-review/references/workflow.md").read_text(encoding="utf-8")
-    doit = (ROOT / "skills/doit/references/workflow.md").read_text(encoding="utf-8")
     goal = (ROOT / "skills/goal/references/workflow.md").read_text(encoding="utf-8")
     humanize = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
     improve = (ROOT / "skills/skill-improve/references/workflow.md").read_text(encoding="utf-8")
@@ -307,9 +301,7 @@ def test_stage_16_core_workflow_boundaries_are_observable() -> None:
     assert "commitlint/configuration" in commit_msg
     assert "complete user-facing documentation set" in docs_prepare
     assert "canonical specifications" in docs_review
-    assert "exact action is included in the approved plan" in doit
     assert "structured Markdown rather than JSON" in goal
     assert "at or below 4000 characters" in goal
     assert "any human language" in humanize
     assert "absence of real" in improve
-    assert "Never push" not in doit

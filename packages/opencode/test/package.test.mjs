@@ -90,15 +90,13 @@ test("installer wizard uses shared multi-select groups and keeps defaults", () =
   assert.match(source, /Portable skills are installed separately through npx skills/);
   assert.match(source, /This installer does not install, update, or remove portable skills/);
   assert.match(source, /Skill command adapters/);
-  assert.match(source, /Package command adapters/);
   assert.match(source, /selectOptions\(\s*label,\s*names,\s*initialSelected,/);
   assert.match(source, /group\("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS\)/);
-  assert.match(source, /group\("Package command adapters", PACKAGE_COMMANDS, PACKAGE_COMMANDS\)/);
   assert.match(source, /group\("Fixed agents", defaults\.agents, defaults\.agents\)/);
   assert.match(source, /group\("Selectable plugins", SELECTABLE_PLUGINS, \[\]\)/);
   assert.doesNotMatch(source, /"Select all", "Select none"/);
   assert.match(source, /--skill-commands/);
-  assert.match(source, /--package-commands/);
+  assert.doesNotMatch(source, /--package-commands/);
 });
 
 test("modified managed reconcile preview is blocked without Apply", async () => {
@@ -318,34 +316,27 @@ async function install(scope, cwd, home) {
   return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
 }
 
-test("registry generates exactly thirty-three thin command assets", () => {
-  assert.equal(COMMAND_REGISTRY.length, 33);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 33);
+test("registry generates exactly twenty-seven thin skill command assets", () => {
+  assert.equal(COMMAND_REGISTRY.length, 27);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 27);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
   for (const entry of COMMAND_REGISTRY) {
-    if (entry.skill) assert.ok(skills.has(entry.skill), entry.skill);
+    assert.ok(skills.has(entry.skill), entry.skill);
     const rendered = renderCommand(entry);
-    assert.match(rendered, entry.packageTool ? /package tool/ : /native Skill tool/);
+    assert.match(rendered, /native Skill tool/);
     assert.match(rendered, /untrusted input/);
     assert.match(rendered, /\$ARGUMENTS/);
-    if (entry.packageTool) {
-      assert.ok(rendered.includes(`Call package tool \`${entry.packageTool}\` exactly once`));
-      assert.ok(rendered.includes(`\`${entry.argumentSchema}\``));
-      if (entry.packageTool === "doctor") assert.doesNotMatch(rendered, /apply requires/);
-    }
-    if (entry.skill) {
-      assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
-      assert.ok(
-        rendered.includes(`npx --yes ${SKILLS_INSTALLER_SPEC} add https://kisev.github.io/skills`),
-      );
-    }
+    assert.ok(rendered.includes(`Required skill \`${entry.skill}\` is not installed`));
+    assert.ok(
+      rendered.includes(`npx --yes ${SKILLS_INSTALLER_SPEC} add https://kisev.github.io/skills`),
+    );
     assert.doesNotMatch(rendered, /python|runner|curl|fetch\(/i);
     assert.equal(
       readFileSync(join(PACKAGE, "dist", "assets", "commands", `${entry.name}.md`), "utf8"),
       rendered,
     );
   }
-  for (const expected of ["code-explain", "goal", "lsp-report", "spec-manage", "team-sprint-start"])
+  for (const expected of ["code-explain", "goal", "spec-manage", "team-sprint-start"])
     assert.ok(COMMAND_REGISTRY.some((entry) => entry.skill === expected));
   assert.deepEqual(
     COMMAND_REGISTRY.filter((entry) => entry.skill === "goal").map((entry) => entry.name),
@@ -360,13 +351,8 @@ test("registry generates exactly thirty-three thin command assets", () => {
     "goal-start",
   ])
     assert.ok(!COMMAND_REGISTRY.some((entry) => entry.name === forbidden));
-  assert.ok(!COMMAND_REGISTRY.some((entry) => entry.skill === "agent-profiles"));
-  assert.deepEqual(
-    COMMAND_REGISTRY.filter((entry) => entry.packageTool)
-      .map((entry) => entry.name)
-      .sort(),
-    ["agent-profiles", "capabilities", "doctor", "reconcile"],
-  );
+  for (const removed of ["agent-profiles", "capabilities", "doctor", "lsp-report", "reconcile"])
+    assert.ok(!COMMAND_REGISTRY.some((entry) => entry.name === removed));
 });
 
 test("code-review command is one logic-free skill adapter", () => {
@@ -386,7 +372,7 @@ test("code-review command is one logic-free skill adapter", () => {
   );
 });
 
-test("non-TTY install accepts explicit subsets for both command adapter groups", () => {
+test("non-TTY install accepts an explicit skill command subset", () => {
   const directory = temporary();
   try {
     const result = spawnSync(
@@ -396,8 +382,6 @@ test("non-TTY install accepts explicit subsets for both command adapter groups",
         "install",
         "--skill-commands",
         "agents-md",
-        "--package-commands",
-        "doctor",
         "--agents",
         "none",
         "--plugins",
@@ -409,10 +393,10 @@ test("non-TTY install accepts explicit subsets for both command adapter groups",
     );
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout).plan.selection, {
-      commands: ["agents-md", "doctor"],
+      commands: ["agents-md"],
       agents: [],
       plugins: [],
-      core_activation: true,
+      core_activation: false,
     });
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -473,8 +457,8 @@ test("agent assets contain six contract-bound profiles without model selection",
   const manager = readFileSync(join(PACKAGE, "dist", "assets", "agents", "manager.md"), "utf8");
   const critic = readFileSync(join(PACKAGE, "dist", "assets", "agents", "critic.md"), "utf8");
   const review = readFileSync(join(PACKAGE, "dist", "assets", "agents", "review.md"), "utf8");
-  assert.match(manager, /`doit` is the sole coordinator/);
-  assert.match(manager, /Do not implement a\s+second lifecycle/);
+  assert.match(manager, /Own the OpenCode lifecycle for routed work/);
+  assert.match(manager, /Do not infer completion/);
   assert.match(critic, /Do not edit files,[\s\S]*direct worker remediation/);
   assert.match(review, /exact[\s\S]*task allowlist/);
   assert.doesNotMatch(`${manager}\n${review}`, /critic-\*/);
@@ -491,11 +475,11 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     assert.deepEqual(second.operations, first.operations);
     assert.equal(second.plan_digest, first.plan_digest);
     assert.notEqual(second.confirmation_digest, first.confirmation_digest);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 42);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 36);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 33);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 27);
     await assert.rejects(lstat(join(home, ".config", "opencode", "plugins")), { code: "ENOENT" });
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), {
       code: "ENOENT",
@@ -587,7 +571,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", repeat.digest, project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 42);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 36);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -780,7 +764,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     const changed = join(project, ".opencode", "commands", "askme.md");
     await writeFile(changed, "user change\n");
     const plan = await preview("uninstall", "project", project, home);
-    assert.ok(plan.operations.filter((item) => item.operation === "archive-pending").length >= 32);
+    assert.ok(plan.operations.filter((item) => item.operation === "archive-pending").length >= 26);
     assert.deepEqual(
       plan.operations.find((item) => item.path === "commands/askme.md").operation,
       "conflict",
@@ -1463,28 +1447,9 @@ test("managed worktree lifecycle rejects unknown and dirty paths without deletin
   }
 });
 
-test("package catalog and doctor tools are strictly observational", async () => {
+test("plugin exposes only the route package tool", async () => {
   const hooks = await plugin({});
-  const catalog = JSON.parse(await hooks.tool.capabilities.execute({}, { sessionID: "bound" }));
-  const doctor = JSON.parse(await hooks.tool.doctor.execute({}, { sessionID: "bound" }));
-  assert.deepEqual(catalog.package_commands, [
-    "capabilities",
-    "doctor",
-    "reconcile",
-    "agent-profiles",
-  ]);
-  assert.deepEqual(catalog.tools, [
-    "capabilities",
-    "route",
-    "doctor",
-    "agent_profiles",
-    "reconcile",
-  ]);
-  assert.equal(catalog.version, PACKAGE_VERSION);
-  assert.equal(doctor.mutations, false);
-  assert.equal(doctor.versions.package, PACKAGE_VERSION);
-  assert.equal(doctor.versions.catalog, PACKAGE_VERSION);
-  assert.ok(!catalog.skills.includes("agent-profiles"));
+  assert.deepEqual(Object.keys(hooks.tool), ["route"]);
 });
 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {

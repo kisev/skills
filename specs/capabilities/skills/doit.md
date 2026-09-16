@@ -1,8 +1,12 @@
 # `doit`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Generic engineering execution is now the responsibility of the host agent and repository guidance.
+
 ## Purpose
 
-Coordinate an engineering change with preview, bounded execution, and verification.
+Historical capability record for the retired generic engineering coordinator.
 
 ## Triggers and Near-Misses
 
@@ -37,7 +41,10 @@ Portable coordinator behavior remains host-neutral; OpenCode routing is an adapt
 
 ### REQ-F-109 - Coordinate bounded changes
 
-The skill shall execute only regularly confirmed actions or exact actions and
+Status: withdrawn on 2026-09-16 because the public `doit` skill was retired
+without a replacement.
+
+Former requirement: the skill shall execute only regularly confirmed actions or exact actions and
 boundaries frozen in a trusted accepted Goal Mode objective identified by immutable
 identity, digest, and revision, then verify them before reporting success.
 

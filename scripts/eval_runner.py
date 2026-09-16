@@ -24,7 +24,7 @@ SCENARIO_SCHEMA = "eval-scenario/v1"
 RESULT_SCHEMA = "eval-result/v1"
 ADAPTER_PROTOCOLS = {"opencode": "opencode-cli-json/v1", "codex": "codex-cli-json/v1"}
 OFFLINE_RUNNERS = {
-    "assertions-v1": {("doit", "scripts/goal_authorization.py")},
+    "assertions-v1": {("docs-prepare", "scripts/goal_authorization.py")},
     "portable-gitlab-v2": {("code-review", "scripts/review_mr.py")},
 }
 LEGACY_GITLAB_V2_DIGEST = "60641989df03379e5a79a39dec59588b7e359f7424ca985b74b08265e8b52979"
@@ -404,11 +404,11 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
                 "surface_coverage_drift", f"{surface} coverage does not match inventory"
             )
     if (
-        len(expected["skill"]) != 29
-        or len(expected["command"]) != 33
+        len(expected["skill"]) != 27
+        or len(expected["command"]) != 27
         or len(expected["agent"]) != 6
         or len(expected["plugin"]) != 3
-        or len(expected["package-tool"]) != 5
+        or len(expected["package-tool"]) != 1
     ):
         raise EvalError("stale_package_inventory", "public surface counts do not match stage 20")
     skill_scenarios = [
@@ -416,9 +416,9 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
         for item in scenarios
         if item["surface"] == "skill" and item["kind"] in {"trigger", "near-miss"}
     ]
-    if len(skill_scenarios) < 116:
+    if len(skill_scenarios) < 108:
         raise EvalError(
-            "skill_corpus_incomplete", "skill trigger/near-miss corpus is below 116 scenarios"
+            "skill_corpus_incomplete", "skill trigger/near-miss corpus is below 108 scenarios"
         )
     for name in expected["skill"]:
         items = [

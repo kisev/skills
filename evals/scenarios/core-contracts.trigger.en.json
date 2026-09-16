@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "skill.core-contracts.trigger.en",
-  "revision": 1,
+  "revision": 2,
   "kind": "trigger",
   "locale": "en",
   "pair_id": "skill.core-contracts.trigger",
@@ -9,10 +9,10 @@
   "host": "any",
   "input": {
     "prompt": "Check shared portable contracts and confirmation boundaries for core skills.",
-    "fixture": { "selected": ["skill:doit", "skill:askme", "skill:docs-prepare"] }
+    "fixture": { "selected": ["skill:askme", "skill:docs-prepare"] }
   },
   "expected": {
-    "selected": ["skill:doit", "skill:askme", "skill:docs-prepare"],
+    "selected": ["skill:askme", "skill:docs-prepare"],
     "not_selected": ["skill:briefing", "skill:stopit"]
   },
   "invariants": [
@@ -34,5 +34,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "e76d20008bbbef5aed357f50e6d8e28a5202daca10e73fe686cf35811903db53"
+  "digest": "77a67fe41bbb7d389386f40f5d687d46e1a2bb7c51b4eecfc0880457fef48fff"
 }

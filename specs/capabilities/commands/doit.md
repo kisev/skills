@@ -1,8 +1,12 @@
 # `/doit`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: The retired `doit` skill no longer has a command adapter.
+
 ## Purpose
 
-Expose the `doit` skill as the portable engineering command adapter.
+Historical capability record for the retired command adapter.
 
 ## Triggers and Near-Misses
 
@@ -36,7 +40,11 @@ The command cannot bypass the execution-card boundary.
 
 ### REQ-I-209 - Route the doit command
 
-The command shall load exactly `doit` and preserve bounded execution and verification.
+Status: withdrawn on 2026-09-16 because `/doit` was retired with its skill and
+has no replacement.
+
+Former requirement: the command shall load exactly `doit` and preserve bounded
+execution and verification.
 
 ## Example
 

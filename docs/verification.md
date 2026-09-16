@@ -51,13 +51,13 @@ preserved; no archive restore or purge command is exposed.
 
 ## Current Surface
 
-The current inventory covers 29 portable skills, 33 command adapters, 6 fixed
-agents, 3 selectable plugin wrappers, 5 package tools, and the core plugin. The
+The current inventory covers 27 portable skills, 27 command adapters, 6 fixed
+agents, 3 selectable plugin wrappers, 1 package tool, and the core plugin. The
 package tool `route` has no slash command.
 
 The catalog descriptions are checked against the current skill contracts:
-`goal` returns read-only structured Markdown of at most 4000 characters;
-`lsp-report` is host-neutral; task workflows are storage-neutral; and
+`goal` returns read-only structured Markdown of at most 4000 characters; task
+workflows are storage-neutral; and
 `code-explain` accepts current WIP, an exact range, a branch, or an exact HTTPS MR
 link and presents history without a review verdict.
 

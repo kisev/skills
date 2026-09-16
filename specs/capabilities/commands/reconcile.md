@@ -1,8 +1,12 @@
 # `/reconcile`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Reconciliation remains available through `skills-opencode reconcile`.
+
 ## Purpose
 
-Preview or apply scope-isolated reconciliation of retired managed assets.
+Historical capability record for the retired slash-command adapter.
 
 ## Triggers and Near-Misses
 
@@ -38,7 +42,9 @@ Unknown or pre-marker sources, runtime state, and user-owned files are untouched
 
 ### REQ-I-232 - Route the reconcile package command
 
-The command shall expose the exact package-tool argument schema, default omitted
+Status: withdrawn on 2026-09-16 because reconciliation is now CLI-only.
+
+Former requirement: the command shall expose the exact package-tool argument schema, default omitted
 scope to project, invoke package tool `reconcile`, and require a fresh
 confirmation digest for apply.
 

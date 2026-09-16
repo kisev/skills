@@ -12,23 +12,23 @@ the current GitHub Release. The optional integration package is
 
 ## Active Portable Skills
 
-There are exactly 29 active portable skills:
+There are exactly 27 active portable skills:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `doit`, `goal`, `humanize`, `lsp-report`,
-`mattermost`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
+`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`, `mr-prepare`,
+`release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
 `task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
 `team-sprint-close`, and `team-sprint-start`.
 
 The authored inventory contains deduplicated definitions; build and distribution
-inventories contain the same 29 self-contained skills. Shared files are declared
+inventories contain the same 27 self-contained skills. Shared files are declared
 by `shared/manifest.json`, injected only into `.build/skills`, and checked
 byte-for-byte.
 
 ## Portable Cleanup Records
 
-The current migration inventory names exactly these nine retired portable skills. It
+The current migration inventory names exactly these eleven retired portable skills. It
 does not contain a portable `multi-run` record.
 
 | Retired name     | Current replacement                                                                              |
@@ -37,6 +37,8 @@ does not contain a portable `multi-run` record.
 | `schedule`       | None                                                                                             |
 | `usage`          | None                                                                                             |
 | `overview`       | None                                                                                             |
+| `doit`           | None                                                                                             |
+| `lsp-report`     | None                                                                                             |
 | `project-spec`   | `spec-manage`                                                                                    |
 | `skill-improver` | `skill-improve`                                                                                  |
 | `walkthrough`    | `code-explain`                                                                                   |
@@ -53,14 +55,12 @@ pre-marker installations still require explicit cleanup.
 
 ## Current OpenCode Surface
 
-The current package inventory has 33 commands: one per active skill plus
-`/capabilities`, `/doctor`, `/reconcile`, and `/agent-profiles`. The package tool
-`route` remains available without a slash command.
+The current package inventory has 27 commands, one per active skill. The package
+tool `route` remains available without a slash command.
 
 The six fixed agents are `manager`, `architect`, `mapper`, `worker`, `review`, and
 `critic`. The selectable plugin wrappers are `rules-injector`, `rtk`, and
-`zed-bell`. Package tools are `capabilities`, `route`, `doctor`, `agent_profiles`,
-and `reconcile`.
+`zed-bell`. The only package tool is `route`; administration uses the direct CLI.
 
 ## Ownership and Archive
 

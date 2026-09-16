@@ -1,22 +1,25 @@
 {
   "schema": "eval-scenario/v1",
   "id": "golden.core-contracts",
-  "revision": 2,
+  "revision": 3,
   "kind": "golden",
   "locale": "ru",
   "pair_id": "golden.core-contracts",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Выполни core skill workflow с полными evidence, планом и отдельными confirmations по рискам.",
-    "fixture": { "selected": ["skill:doit"] }
+    "prompt": "Подготовь изменение пользовательской документации с полными evidence, планом и отдельными confirmations по рискам.",
+    "fixture": { "selected": ["skill:docs-prepare"] }
   },
-  "expected": { "selected": ["skill:doit"], "not_selected": ["skill:briefing", "skill:stopit"] },
+  "expected": {
+    "selected": ["skill:docs-prepare"],
+    "not_selected": ["skill:briefing", "skill:stopit"]
+  },
   "invariants": [
     {
       "id": "plan-bound",
-      "path": "skills/doit/references/workflow.md",
-      "contains": "frozen accepted goal objective"
+      "path": "shared/references/interaction-contract.md",
+      "contains": "exact accepted objective"
     },
     {
       "id": "separate-history",
@@ -31,5 +34,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "f97e94c0f3bb6ec242bb0e65e44795b3011ef650d30903c67f14b653d0d15449"
+  "digest": "ada83d011454bd0a66024b658782254c4cbf0e0df7b6e64583a6f70790c0cd4c"
 }

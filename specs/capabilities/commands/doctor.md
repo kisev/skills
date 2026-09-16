@@ -1,8 +1,12 @@
 # `/doctor`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Diagnostics remain available through `skills-opencode doctor`.
+
 ## Purpose
 
-Inspect package integration health without installing or repairing.
+Historical capability record for the retired slash-command adapter.
 
 ## Triggers and Near-Misses
 
@@ -37,7 +41,9 @@ No repair or install.
 
 ### REQ-I-231 - Route the doctor package command
 
-The command shall expose the exact package-tool argument schema, default omitted
+Status: withdrawn on 2026-09-16 because diagnostics are now CLI-only.
+
+Former requirement: the command shall expose the exact package-tool argument schema, default omitted
 scope to project, invoke package tool `doctor`, and remain observational.
 
 ## Example

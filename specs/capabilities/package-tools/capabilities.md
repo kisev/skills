@@ -1,8 +1,12 @@
 # Package Tool `capabilities`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Package inventory remains available through `skills-opencode capabilities`.
+
 ## Purpose
 
-Return the bundled package capability catalog.
+Historical capability record for the retired OpenCode package tool.
 
 ## Triggers and Near-Misses
 
@@ -36,7 +40,10 @@ The tool never changes configuration or state.
 
 ### REQ-F-501 - Report package inventory
 
-The tool shall report the exact `29/33/6/3/5` inventory and core/plugin distinction.
+Status: withdrawn on 2026-09-16 because package inventory is now CLI-only.
+
+Former requirement: the tool shall report the exact public inventory and
+core/plugin distinction.
 
 ## Example
 

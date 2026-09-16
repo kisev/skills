@@ -1,6 +1,6 @@
 {
   "schema": "eval-scenario/v1",
-  "id": "doit.goal-mode-authorization",
+  "id": "goal-mode-authorization",
   "revision": 3,
   "kind": "deterministic",
   "locale": "neutral",
@@ -10,7 +10,7 @@
   "input": {
     "prompt": "Verify Goal Mode authorization boundaries.",
     "fixture": {
-      "selected": ["skill:doit"],
+      "selected": ["skill:docs-prepare"],
       "objectives": {
         "full": {
           "accepted": true,
@@ -283,17 +283,17 @@
     },
     "offline_runner": {
       "protocol": "assertions-v1",
-      "skill": "doit",
+      "skill": "docs-prepare",
       "script": "scripts/goal_authorization.py",
       "target": "goal-authorization-v1"
     }
   },
   "expected": {
-    "selected": ["skill:doit"],
+    "selected": ["skill:docs-prepare"],
     "not_selected": []
   },
-  "invariants": [{ "id": "policy-engine", "path": "skills/doit/scripts/goal_authorization.py" }],
+  "invariants": [{ "id": "policy-engine", "path": "shared/references/goal_authorization.py" }],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "92843346a805fd21c11b98042caa6610fcbfe6f56057de5b116405ad5680d832"
+  "digest": "d139a2a1af6f7cf15ca31723a3a0f6892753f0c9aa51f59cc706272db98bfdfd"
 }

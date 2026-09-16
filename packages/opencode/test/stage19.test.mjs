@@ -198,7 +198,7 @@ test("CLI help is structured and explains commands options workflow and scope", 
     help.stdout,
     /Usage:[\s\S]*Commands:[\s\S]*Common options:[\s\S]*Install selection:[\s\S]*Agent model options:[\s\S]*Safe mutation workflow:[\s\S]*Scope behavior:[\s\S]*Examples:[\s\S]*Documentation:/,
   );
-  assert.match(help.stdout, /^  install\s{2,}Select and deploy package-owned commands/m);
+  assert.match(help.stdout, /^  install\s{2,}Select and deploy skill commands/m);
   assert.match(help.stdout, /^  doctor\s{2,}Inspect versions, ownership, drift/m);
   assert.match(help.stdout, /^  agent configure\s{2,}Choose an agent model interactively/m);
   assert.match(help.stdout, /^  critic remove\s{2,}Remove a package-managed additional critic/m);

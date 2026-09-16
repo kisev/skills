@@ -1,8 +1,12 @@
 # Package Tool `doctor`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Diagnostics remain available through `skills-opencode doctor`.
+
 ## Purpose
 
-Inspect package integration health and opt-in defaults.
+Historical capability record for the retired OpenCode package tool.
 
 ## Triggers and Near-Misses
 
@@ -37,7 +41,10 @@ No install, repair, or config mutation.
 
 ### REQ-F-503 - Keep doctor observational
 
-The tool shall inspect health without writing and shall never serialize secrets.
+Status: withdrawn on 2026-09-16 because diagnostics are now CLI-only.
+
+Former requirement: the tool shall inspect health without writing and shall never
+serialize secrets.
 
 ## Example
 

@@ -26,7 +26,7 @@ from scripts.eval_runner import (
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "eval_runner.py"
-GOAL_AUTHORIZATION = ROOT / ".build/skills/doit/scripts/goal_authorization.py"
+GOAL_AUTHORIZATION = ROOT / ".build/skills/docs-prepare/scripts/goal_authorization.py"
 LEGACY_GITLAB_V2 = ROOT / "tests/fixtures/evals/gitlab-evidence-contract-v2.json"
 
 
@@ -104,7 +104,7 @@ def goal_scenario() -> dict[str, Any]:
     return cast(
         dict[str, Any],
         json.loads(
-            (ROOT / "evals/scenarios/doit.goal-mode-authorization.json").read_text(encoding="utf-8")
+            (ROOT / "evals/scenarios/goal-mode-authorization.json").read_text(encoding="utf-8")
         ),
     )
 
@@ -141,10 +141,14 @@ def test_goal_authorization_offline_runner_exercises_decision_cases() -> None:
     assert scenario["input"]["offline_runner"]["protocol"] == "assertions-v1"
     assert all("contains" not in item and "absent" not in item for item in scenario["invariants"])
     contract = (ROOT / "shared/references/interaction-contract.md").read_bytes()
-    for skill in ("docs-prepare", "doit", "spec-manage"):
+    policy = (ROOT / "shared/references/goal_authorization.py").read_bytes()
+    for skill in ("docs-prepare", "spec-manage"):
         assert (
             ROOT / ".build/skills" / skill / "references/interaction-contract.md"
         ).read_bytes() == contract
+        assert (
+            ROOT / ".build/skills" / skill / "scripts/goal_authorization.py"
+        ).read_bytes() == policy
     authorization = "ordinary Confirmation or exact frozen trusted Goal authorization"
     for skill in ("docs-prepare", "spec-manage"):
         workflow = ROOT / "skills" / skill / "references/workflow.md"
@@ -154,7 +158,7 @@ def test_goal_authorization_offline_runner_exercises_decision_cases() -> None:
         )
     expected = {f"policy:{case['id']}" for case in scenario["input"]["fixture"]["cases"]}
 
-    result = run_eval("--offline", "--scenario", "doit.goal-mode-authorization")
+    result = run_eval("--offline", "--scenario", "goal-mode-authorization")
 
     assert result.returncode == 0
     evaluated = payload(result)["results"][0]
@@ -179,8 +183,8 @@ def test_offline_runner_schema_and_validation_reject_unsafe_configurations() -> 
 
     cases = (
         ("protocol", "unknown-v1", "unsupported_runner_protocol"),
-        ("skill", "/tmp/doit", "sandbox_escape"),
-        ("skill", "../doit", "sandbox_escape"),
+        ("skill", "/tmp/docs-prepare", "sandbox_escape"),
+        ("skill", "../docs-prepare", "sandbox_escape"),
         ("script", "/tmp/runner.py", "sandbox_escape"),
         ("script", "scripts/../../runner.py", "sandbox_escape"),
         ("script", "scripts/other.py", "unsupported_runner"),
@@ -207,7 +211,7 @@ def test_offline_runner_rejects_symlink_without_execution(tmp_path: Path) -> Non
     outside.write_text(
         f"from pathlib import Path\nPath({str(marker)!r}).touch()\n", encoding="utf-8"
     )
-    runner = tmp_path / ".build/skills/doit/scripts/goal_authorization.py"
+    runner = tmp_path / ".build/skills/docs-prepare/scripts/goal_authorization.py"
     runner.parent.mkdir(parents=True)
     runner.symlink_to(outside)
 
@@ -219,7 +223,7 @@ def test_offline_runner_rejects_symlink_without_execution(tmp_path: Path) -> Non
 
 
 def test_offline_runner_timeout_is_bounded_and_classified(tmp_path: Path) -> None:
-    runner = tmp_path / ".build/skills/doit/scripts/goal_authorization.py"
+    runner = tmp_path / ".build/skills/docs-prepare/scripts/goal_authorization.py"
     runner.parent.mkdir(parents=True)
     runner.write_text("import time\ntime.sleep(10)\n", encoding="utf-8")
     scenario = goal_scenario()

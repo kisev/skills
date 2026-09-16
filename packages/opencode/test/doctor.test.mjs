@@ -13,7 +13,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import plugin from "../dist/index.js";
 import { collectDoctorFacts, doctorExitCode } from "../dist/doctor.js";
 import { renderDoctor } from "../dist/cli-output.js";
 
@@ -166,124 +165,7 @@ test("doctor reports disabled LSP and inaccessible symlink inputs without readin
   }
 });
 
-test("package tool and direct CLI share core doctor findings", async () => {
-  const item = fixture();
-  const original = {
-    HOME: process.env.HOME,
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-    XDG_STATE_HOME: process.env.XDG_STATE_HOME,
-  };
-  try {
-    writeFileSync(join(item.project, "sample.py"), "print('ok')\n");
-    process.env.HOME = item.home;
-    process.env.XDG_CONFIG_HOME = join(item.home, ".config");
-    process.env.XDG_STATE_HOME = join(item.home, ".state");
-    const hooks = await plugin({ directory: item.project });
-    const packageReport = JSON.parse(
-      await hooks.tool.doctor.execute({}, { directory: item.project }),
-    );
-    const cli = spawnSync(process.execPath, [join(PACKAGE, "dist/cli.js"), "doctor", "--json"], {
-      cwd: item.project,
-      env: environment(item.home),
-      encoding: "utf8",
-    });
-    const directReport = JSON.parse(cli.stdout);
-    assert.equal(packageReport.schema_version, directReport.schema_version);
-    assert.equal(packageReport.mutations, directReport.mutations);
-    assert.deepEqual(
-      packageReport.checks.map((check) => [check.id, check.status]),
-      directReport.checks.map((check) => [check.id, check.status]),
-    );
-    assert.deepEqual(
-      packageReport.lsp.servers.map((server) => ({
-        name: server.name,
-        applicable: server.applicable,
-        binary_available: server.binary_available,
-        active: server.active,
-        reason: server.reason,
-      })),
-      directReport.lsp.servers.map((server) => ({
-        name: server.name,
-        applicable: server.applicable,
-        binary_available: server.binary_available,
-        active: server.active,
-        reason: server.reason,
-      })),
-    );
-  } finally {
-    for (const [key, value] of Object.entries(original))
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    rmSync(item.root, { recursive: true, force: true });
-  }
-});
-
-test("portable lsp-report and package doctor use the same catalog facts", async () => {
-  const item = fixture();
-  const original = {
-    HOME: process.env.HOME,
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-    XDG_STATE_HOME: process.env.XDG_STATE_HOME,
-  };
-  try {
-    writeFileSync(join(item.project, "sample.py"), "print('ok')\n");
-    process.env.HOME = item.home;
-    process.env.XDG_CONFIG_HOME = join(item.home, ".config");
-    process.env.XDG_STATE_HOME = join(item.home, ".state");
-    const hooks = await plugin({ directory: item.project });
-    const packageReport = JSON.parse(
-      await hooks.tool.doctor.execute({ scope: "project" }, { directory: item.project }),
-    );
-    const portable = spawnSync(
-      "python3",
-      [
-        "-I",
-        "-S",
-        "-B",
-        join(ROOT, ".build/skills/lsp-report/scripts/lsp_report.py"),
-        "--project",
-        item.project,
-        "--format",
-        "json",
-      ],
-      { cwd: ROOT, env: environment(item.home), encoding: "utf8" },
-    );
-    assert.equal(portable.status, 0, portable.stderr);
-    const portableReport = JSON.parse(portable.stdout);
-    assert.equal(portableReport.catalog_version, packageReport.lsp.catalog_version);
-    assert.deepEqual(
-      portableReport.servers.map((server) => ({
-        name: server.name,
-        applicable: server.applicable,
-        binary_available: server.binary_available,
-        active: server.active,
-        reason: server.reason,
-      })),
-      packageReport.lsp.servers.map((server) => ({
-        name: server.name,
-        applicable: server.applicable,
-        binary_available: server.binary_available,
-        active: server.active,
-        reason: server.reason,
-      })),
-    );
-  } finally {
-    for (const [key, value] of Object.entries(original))
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    rmSync(item.root, { recursive: true, force: true });
-  }
-});
-
-test("built package and built portable catalogs are byte-identical to shared catalog", () => {
+test("built package LSP catalog is byte-identical to the shared catalog", () => {
   const canonical = readFileSync(join(ROOT, "shared/references/lsp-catalog.json"));
   assert.deepEqual(readFileSync(join(PACKAGE, "dist/assets/lsp-catalog.json")), canonical);
-  assert.deepEqual(
-    readFileSync(join(ROOT, ".build/skills/lsp-report/scripts/portable_runtime/lsp-catalog.json")),
-    canonical,
-  );
-  assert.deepEqual(
-    readFileSync(join(ROOT, ".build/skills/lsp-report/scripts/portable_runtime/lsp-catalog.json")),
-    canonical,
-  );
 });

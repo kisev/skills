@@ -10,7 +10,7 @@ one on its own or install both for the complete OpenCode experience.
 
 | Component                | What it provides                                                                          | Lifecycle                                                                                     |
 | ------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Portable Agent Skills    | 29 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills`     |
+| Portable Agent Skills    | 27 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills`     |
 | `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
 Portable skills do not require the npm package. The package does not contain,
@@ -36,9 +36,9 @@ updates, cleanup, and troubleshooting, or browse the
 
 `@kisev/skills-opencode` extends OpenCode with:
 
-- slash-command adapters for installed skills and package tools;
+- slash-command adapters for installed skills;
 - six fixed agent roles and profile management;
-- capability routing, installation, `reconcile`, and `doctor` tooling;
+- capability routing plus direct CLI installation, diagnostics, profiles, and reconciliation;
 - opt-in `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
 
 Install the package persistently in the npm project that owns the integration,

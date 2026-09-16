@@ -4,7 +4,9 @@ The accepted decisions below describe the current merged architecture. They are
 not proposals or roadmap items.
 
 - [ADR-0001: Direct Git self-contained skills](0001-direct-git-self-contained-skills.md)
-- [ADR-0002: Target public surface](0002-target-public-surface.md)
-- [ADR-0003: Portable coordinator and routing adapter](0003-portable-coordinator-routing-adapter.md)
+- [ADR-0002: Target public surface](0002-target-public-surface.md) (superseded)
+- [ADR-0003: Portable coordinator and routing adapter](0003-portable-coordinator-routing-adapter.md) (superseded)
 - [ADR-0004: Content-addressed archive](0004-content-addressed-archive.md)
 - [ADR-0005: GitHub Pages well-known distribution](0005-github-pages-well-known-distribution.md)
+- [ADR-0006: Retire generic doit coordinator](0006-retire-generic-doit-coordinator.md) (superseded)
+- [ADR-0007: Make administration CLI-only](0007-make-administration-cli-only.md)

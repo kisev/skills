@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "skill.core-contracts.near-miss",
-  "revision": 1,
+  "revision": 2,
   "kind": "near-miss",
   "locale": "ru",
   "pair_id": "skill.core-contracts.near-miss",
@@ -11,16 +11,20 @@
     "prompt": "Просто перефразируй текст, не проверяя contracts и не планируя изменения.",
     "fixture": { "selected": [] }
   },
-  "expected": { "selected": [], "not_selected": ["skill:doit", "skill:humanize"] },
+  "expected": { "selected": [], "not_selected": ["skill:docs-prepare", "skill:humanize"] },
   "invariants": [
     {
       "id": "humanize-language",
       "path": "skills/humanize/references/workflow.md",
       "contains": "any human language"
     },
-    { "id": "doit-plan", "path": "skills/doit/references/workflow.md", "contains": "approved plan" }
+    {
+      "id": "docs-plan",
+      "path": "skills/docs-prepare/references/workflow.md",
+      "contains": "exact frozen trusted Goal authorization"
+    }
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "89491d43396758ff79a4d38e33ae95cc0cfe9e62f8b5226de61a11b926a3402e"
+  "digest": "b56f38fc0c81749a6f8c068805e0c41130f3893b7b0234ac832f2fbb0ed76c84"
 }

@@ -38,7 +38,7 @@ npm, then creates the GitHub Release.
 
 Portable skills are host-neutral and every published archive is self-contained.
 `packages/opencode/` is an optional OpenCode adapter and contains no copied
-skills. Before `npm pack`, package commands, the LSP catalog, and authored agent
+skills. Before `npm pack`, skill commands, the LSP catalog, and authored agent
 and plugin assets are materialized under `packages/opencode/dist/assets/`.
 
 The installer changes only the selected command, agent, and plugin assets after
@@ -52,36 +52,33 @@ package version. Selectable plugins are opt-in.
 
 The package exports one core infrastructure plugin and exactly three selectable
 plugin modules: `rules-injector`, `rtk`, and `zed-bell`. The core plugin registers
-exactly five package tools: `capabilities`, `route`, `doctor`, `agent_profiles`,
-and `reconcile`. None of these package surfaces becomes a runtime dependency of
-portable skills.
+only the `route` package tool. This package surface does not become a runtime
+dependency of portable skills.
 
-The direct CLI and package tool share the versioned, read-only `doctor` facts
-API. It inspects configuration, LSP, ownership, and lifecycle state without
+The direct CLI exposes the versioned, read-only `doctor` facts API. It inspects
+configuration, LSP, ownership, and lifecycle state without
 loading plugin factories, repairing state, or starting LSP servers. Missing host
 facts are reported as `unavailable` or `incomplete`. The canonical
-`shared/references/lsp-catalog.json` is materialized into both `lsp-report` and
-the OpenCode package.
+`shared/references/lsp-catalog.json` is materialized into the OpenCode package.
 
 Package writes use bounded global or project roots, private locks and
 confirmation receipts, final revalidation, atomic file replacement, and a
 journaled rollback path. Stale, expired, superseded, or replayed confirmations
 fail before mutation; user-owned files and unrelated durable state remain
 outside package ownership. Scope-aware direct commands default to the current
-directory; one `--global` flag selects global state. Package tools use the same
-project default. Portable cleanup snapshots preview-bound paths before invoking
+directory; one `--global` flag selects global state. Direct CLI administration
+uses the same project default. Portable cleanup snapshots preview-bound paths before invoking
 the pinned external CLI directly; rollback for concurrent unplanned paths is
 best-effort. Global archive state is shared globally; project archives are
 isolated by project-root digest.
 
 ## Routing Contracts
 
-`doit` is the sole owner of the evidence -> plan -> confirmation -> execution ->
-checks -> report lifecycle. The OpenCode `manager` only adapts that lifecycle to
-native Task calls. The `route` tool has four categories: `exploration` to
+The OpenCode `manager` owns the evidence -> plan -> authorization -> execution ->
+checks -> report lifecycle for routed work. The `route` tool has four categories: `exploration` to
 `mapper`, `architecture` to `architect`, `implementation` to `worker`, and
-`review` to `review` or one selected `critic`. Documentation and quick requests
-stay with `doit`.
+`review` to `review` or one selected `critic`. The manager handles read-only quick
+requests directly and routes write-capable documentation as implementation.
 
 Routing inventory comes from resolved host configuration; callers cannot inject
 agents, capabilities, tools, models, or availability. A routing decision records

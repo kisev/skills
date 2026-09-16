@@ -24,7 +24,7 @@ def test_spec_checker_passes_and_reports_stable_shape() -> None:
     assert result.returncode == 0
     value = json.loads(result.stdout)
     assert value["status"] == "passed"
-    assert value["spec_files"] == 109
+    assert value["spec_files"] == 111
 
 
 def test_negative_spec_fixtures_return_stable_codes() -> None:

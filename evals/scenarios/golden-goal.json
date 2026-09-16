@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "golden.goal.work-item",
-  "revision": 1,
+  "revision": 2,
   "kind": "golden",
   "surface": "skill",
   "host": "any",
@@ -13,7 +13,7 @@
   },
   "expected": {
     "selected": ["skill:goal"],
-    "not_selected": ["command:doctor"]
+    "not_selected": []
   },
   "invariants": [
     {
@@ -37,7 +37,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "672b22fb70941df75e5aab3a3f41375e3ab32a4ef1bb93a433c7a1f3956b3692",
+  "digest": "0edf994e4cba4a3e916b82caeed2e8d51963e84978a952bd02a57a029a91911e",
   "locale": "ru",
   "pair_id": "golden.goal.work-item"
 }

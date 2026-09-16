@@ -15,14 +15,11 @@ normalize their documented inputs to `work-item/v1` before semantic processing.
 
 ### REQ-I-002 - Command interface
 
-Each public command shall route to its named skill or package tool, shall treat
+Each public command shall route to its same-named skill, shall treat
 arguments as untrusted input without bypassing the selected contract, and shall
 not add state, storage, or publication behavior absent from that contract. Command
 selection remains the user's decision: the installer selects command adapters,
-not portable skills. Skill command adapters load an already-installed same-named
-skill, while package command adapters invoke package tools.
-Package command adapters shall present the exact structured argument schema,
-project-scope default, phase, and confirmation requirements of their tool.
+not portable skills. Command adapters load an already-installed same-named skill.
 Pre-selector guidance shall identify the exact configured `skills` CLI version
 and the supported Pages source, and previews shall expose deterministic
 `plan_digest` separately from the unique `confirmation_digest`; superseded plans
@@ -30,10 +27,8 @@ expose only redacted kind, short confirmation digest, and timestamps.
 
 ### REQ-I-003 - Package tool interface
 
-The core plugin shall register exactly `capabilities`, `route`, `doctor`,
-`agent_profiles`, and `reconcile` tools with versioned structured results.
-`doctor`, `agent_profiles`, and `reconcile` shall default omitted scope to
-`project`; `capabilities` shall accept no scope.
+The core plugin shall register exactly the `route` package tool with versioned
+structured results and one-use routing receipts.
 
 ### REQ-I-004 - Plugin interface
 

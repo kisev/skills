@@ -1,8 +1,12 @@
 # `/capabilities`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Package inventory remains available through `skills-opencode capabilities`.
+
 ## Purpose
 
-List the bundled OpenCode capability catalog without changing anything.
+Historical capability record for the retired slash-command adapter.
 
 ## Triggers and Near-Misses
 
@@ -36,8 +40,10 @@ No install, config, or state mutation.
 
 ### REQ-I-230 - Route the capabilities package command
 
-The command shall expose the exact empty argument schema, invoke package tool
-`capabilities`, and return its versioned catalog.
+Status: withdrawn on 2026-09-16 because package inventory is now CLI-only.
+
+Former requirement: the command shall expose the exact empty argument schema,
+invoke package tool `capabilities`, and return its versioned catalog.
 
 ## Example
 

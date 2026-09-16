@@ -48,15 +48,19 @@
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "doit/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
       "destination": "spec-manage/references/interaction-contract.md"
     },
     {
       "source": "references/interaction-contract.md",
       "destination": "docs-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/goal_authorization.py",
+      "destination": "docs-prepare/scripts/goal_authorization.py"
+    },
+    {
+      "source": "references/goal_authorization.py",
+      "destination": "spec-manage/scripts/goal_authorization.py"
     },
     {
       "source": "references/interaction-contract.md",
@@ -319,26 +323,6 @@
       "destination": "release-review/references/portable-gitlab-contracts-v2.schema.json"
     },
     {
-      "source": "references/python_runtime/__init__.py",
-      "destination": "lsp-report/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "lsp-report/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "lsp-report/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/lsp.py",
-      "destination": "lsp-report/scripts/portable_runtime/lsp.py"
-    },
-    {
-      "source": "references/lsp-catalog.json",
-      "destination": "lsp-report/scripts/portable_runtime/lsp-catalog.json"
-    },
-    {
       "source": "references/work_item_runtime/interaction-contract.md",
       "destination": "task-triage/references/interaction-contract.md"
     },
@@ -396,19 +380,11 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "doit/references/language-policy.md"
-    },
-    {
-      "source": "references/language-policy.md",
       "destination": "goal/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
       "destination": "humanize/references/language-policy.md"
-    },
-    {
-      "source": "references/language-policy.md",
-      "destination": "lsp-report/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",

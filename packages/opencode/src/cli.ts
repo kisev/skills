@@ -28,7 +28,6 @@ import {
   defaultSelection,
   InstallerError,
   normalizeSelection,
-  PACKAGE_COMMANDS,
   preview,
   SELECTABLE_PLUGINS,
   SKILL_COMMANDS,
@@ -101,11 +100,7 @@ function parseOptions(values: string[]): Options {
     } else if (value === "--json") {
       if (options.json) throw new InstallerError("invalid_input", "--json may be supplied once");
       options.json = true;
-    } else if (
-      ["--commands", "--skill-commands", "--package-commands", "--agents", "--plugins"].includes(
-        value,
-      )
-    ) {
+    } else if (["--commands", "--skill-commands", "--agents", "--plugins"].includes(value)) {
       const raw = values[++index];
       if (!raw)
         throw new InstallerError("invalid_input", `${value} requires a comma-separated value`);
@@ -119,9 +114,7 @@ function parseOptions(values: string[]): Options {
               .map((item) => item.trim())
               .filter(Boolean);
       options.selectionFlag = true;
-      if (value === "--package-commands") {
-        options.commands = [...(options.commands ?? []), ...names];
-      } else if (value === "--skill-commands") {
+      if (value === "--skill-commands") {
         options.commands = [...(options.commands ?? []), ...names];
       } else {
         options[target] = names;
@@ -151,7 +144,7 @@ function rootHelp(): string {
     "",
     "Commands:",
     ...helpRows([
-      ["install", "Select and deploy package-owned commands, agents, and plugin wrappers."],
+      ["install", "Select and deploy skill commands, agents, and plugin wrappers."],
       [
         "uninstall",
         "Archive and remove exact-owned assets while preserving conflicts and user files.",
@@ -179,9 +172,8 @@ function rootHelp(): string {
     "",
     "Install selection:",
     ...helpRows([
-      ["--commands <list|none>", "Select command adapters from both command groups."],
+      ["--commands <list|none>", "Select adapters for installed portable skills."],
       ["--skill-commands <list|none>", "Select adapters for installed portable skills."],
-      ["--package-commands <list|none>", "Select adapters for package tools."],
       ["--agents <list|none>", "Select fixed agents."],
       ["--plugins <list|none>", "Select optional plugin wrappers."],
     ]),
@@ -301,9 +293,8 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview operations and issue a one-time confirmation digest."],
         ["--confirm <digest>", "Apply the exact unexpired preview."],
-        ["--commands <list|none>", "Select adapters from both command groups."],
+        ["--commands <list|none>", "Select installed-skill adapters."],
         ["--skill-commands <list|none>", "Select installed-skill adapters."],
-        ["--package-commands <list|none>", "Select package-tool adapters."],
         ["--agents <list|none>", "Select fixed agents."],
         ["--plugins <list|none>", "Select optional plugin wrappers."],
         ["--json", "Emit stable machine-readable output."],
@@ -650,7 +641,6 @@ async function interactiveInstallerSelection(): Promise<InstallerSelection> {
       "Portable skills are installed separately through npx skills.",
       "This installer does not install, update, or remove portable skills.",
       "Skill command adapters are OpenCode slash commands that load an already-installed skill with the same name.",
-      "Package command adapters invoke package tools.",
       "Selecting a command adapter does not select or install its skill.",
       "\n",
     ].join("\n"),
@@ -671,10 +661,7 @@ async function interactiveInstallerSelection(): Promise<InstallerSelection> {
     return selected;
   };
   const defaults = defaultSelection();
-  const commands = [
-    ...(await group("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS)),
-    ...(await group("Package command adapters", PACKAGE_COMMANDS, PACKAGE_COMMANDS)),
-  ];
+  const commands = await group("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS);
   const agents = await group("Fixed agents", defaults.agents, defaults.agents);
   const plugins = await group("Selectable plugins", SELECTABLE_PLUGINS, []);
   return normalizeSelection({

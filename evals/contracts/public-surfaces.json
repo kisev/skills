@@ -9,10 +9,8 @@
     "commit-msg",
     "docs-prepare",
     "docs-review",
-    "doit",
     "goal",
     "humanize",
-    "lsp-report",
     "mattermost",
     "mr-prepare",
     "release-prepare",
@@ -40,10 +38,8 @@
     "commit-msg",
     "docs-prepare",
     "docs-review",
-    "doit",
     "goal",
     "humanize",
-    "lsp-report",
     "mattermost",
     "mr-prepare",
     "release-prepare",
@@ -60,14 +56,10 @@
     "team-retro",
     "team-roadmap",
     "team-sprint-close",
-    "team-sprint-start",
-    "capabilities",
-    "doctor",
-    "reconcile",
-    "agent-profiles"
+    "team-sprint-start"
   ],
   "agents": ["manager", "architect", "mapper", "worker", "review", "critic"],
   "plugins": ["rules-injector", "rtk", "zed-bell"],
-  "package_tools": ["capabilities", "route", "doctor", "agent_profiles", "reconcile"],
+  "package_tools": ["route"],
   "infrastructure": ["core"]
 }

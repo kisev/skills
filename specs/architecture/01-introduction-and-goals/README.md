@@ -6,5 +6,5 @@ installation, observable lifecycle state, reproducible distribution, and
 evidence-backed compatibility. Stakeholders are skill users, OpenCode users,
 maintainers, host agents, and evaluators.
 
-The public target has inventory `29/33/6/3/5`; requirements are in
+The public target has inventory `27/27/6/3/1`; requirements are in
 `requirements/` and evidence is in `traceability.json`.

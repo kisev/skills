@@ -40,7 +40,7 @@ KNOWN_SURFACES = {
     "scope",
     "quality-gate",
 }
-EXPECTED_COUNTS = {"skills": 29, "commands": 33, "agents": 6, "plugins": 3, "package_tools": 5}
+EXPECTED_COUNTS = {"skills": 27, "commands": 27, "agents": 6, "plugins": 3, "package_tools": 1}
 
 
 class SpecError(Exception):
@@ -102,8 +102,8 @@ def requirement_blocks() -> dict[str, tuple[Path, str]]:
 
 def check_structure() -> None:
     files = sorted(path.relative_to(ROOT) for path in (ROOT / "specs").rglob("*") if path.is_file())
-    if len(files) != 109:
-        raise SpecError("spec_structure", f"expected 109 files, got {len(files)}")
+    if len(files) != 111:
+        raise SpecError("spec_structure", f"expected 111 files, got {len(files)}")
     required = {
         "specs/README.md",
         "specs/traceability.json",
@@ -131,7 +131,7 @@ def check_inventory() -> dict[str, Any]:
     command_specs = sorted(
         path.stem
         for path in (ROOT / "specs/capabilities/commands").glob("*.md")
-        if path.stem != "README"
+        if path.stem != "README" and "- Status: withdrawn" not in path.read_text(encoding="utf-8")
     )
     if command_specs != sorted(inventory["commands"]):
         raise SpecError("inventory", "commands do not match canonical catalog")
@@ -489,7 +489,7 @@ def main(argv: list[str] | None = None) -> int:
                     "schema": "spec-check/v1",
                     "status": "passed",
                     "requirements": len(blocks),
-                    "spec_files": 109,
+                    "spec_files": 111,
                 },
                 sort_keys=True,
                 separators=(",", ":"),

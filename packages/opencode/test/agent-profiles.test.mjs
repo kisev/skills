@@ -15,8 +15,6 @@ import { join, resolve } from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
 
-import plugin from "../dist/index.js";
-
 import {
   AgentProfileError,
   applyAgentProfileChange,
@@ -253,14 +251,14 @@ test("single and multi selectors share visual controls and deterministic selecti
 
   const subset = fakeTTY();
   const subsetResult = selectOptions(
-    "Commands",
-    ["doctor", "reconcile", "agent-profiles"],
-    ["doctor", "reconcile", "agent-profiles"],
+    "Skill commands",
+    ["askme", "goal", "humanize"],
+    ["askme", "goal", "humanize"],
     subset.stdin,
     subset.stderr,
   );
   subset.stdin.write("n\x1b[B \r");
-  assert.deepEqual(await subsetResult, ["reconcile"]);
+  assert.deepEqual(await subsetResult, ["goal"]);
 
   const all = fakeTTY();
   const allResult = selectOptions(
@@ -1247,11 +1245,9 @@ test("CLI human plan never truncates conflicts", async () => {
   }
 });
 
-test("direct CLI and package tool are thin non-LLM profile interfaces", async () => {
+test("direct CLI is a thin non-LLM profile interface", async () => {
   const context = await roots();
   const executable = join(PACKAGE, "dist", "cli.js");
-  const previousHome = process.env.HOME;
-  const previousState = process.env.XDG_STATE_HOME;
   const environment = {
     ...process.env,
     HOME: context.home,
@@ -1320,55 +1316,7 @@ test("direct CLI and package tool are thin non-LLM profile interfaces", async ()
       run(["agent", "list"]).inventory.profiles.find((item) => item.name === "manager").variant,
       "high",
     );
-
-    process.env.HOME = context.home;
-    process.env.XDG_STATE_HOME = join(context.home, ".state");
-    const hooks = await plugin({ directory: context.project });
-    const otherProject = join(context.directory, "other-project");
-    await mkdir(otherProject);
-    const contextual = JSON.parse(
-      await hooks.tool.agent_profiles.execute(
-        { action: "list" },
-        { sessionID: "profile", directory: otherProject },
-      ),
-    );
-    assert.equal(contextual.inventory.root, join(otherProject, ".opencode"));
-    const reconciled = JSON.parse(
-      await hooks.tool.reconcile.execute(
-        { phase: "preview" },
-        { sessionID: "profile", directory: otherProject },
-      ),
-    );
-    assert.equal(reconciled.plan.root, otherProject);
-    assert.equal(reconciled.plan.scope, "project");
-    const listed = JSON.parse(
-      await hooks.tool.agent_profiles.execute({ action: "list" }, { sessionID: "profile" }),
-    );
-    assert.equal(
-      listed.inventory.profiles.find((item) => item.name === "manager").model,
-      "openai/gpt-5",
-    );
-    const request = {
-      action: "critic_add",
-      phase: "preview",
-      name: "critic-tool",
-      model: "anthropic/claude",
-    };
-    const toolPlan = JSON.parse(
-      await hooks.tool.agent_profiles.execute(request, { sessionID: "profile" }),
-    ).plan;
-    const applied = JSON.parse(
-      await hooks.tool.agent_profiles.execute(
-        { ...request, phase: "apply", confirmation_digest: toolPlan.digest },
-        { sessionID: "profile" },
-      ),
-    );
-    assert.equal(applied.requires_restart, true);
   } finally {
-    if (previousHome === undefined) delete process.env.HOME;
-    else process.env.HOME = previousHome;
-    if (previousState === undefined) delete process.env.XDG_STATE_HOME;
-    else process.env.XDG_STATE_HOME = previousState;
     rmSync(context.directory, { recursive: true, force: true });
   }
 });

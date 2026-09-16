@@ -1,22 +1,25 @@
 {
   "schema": "eval-scenario/v1",
   "id": "golden.core-contracts.en",
-  "revision": 2,
+  "revision": 3,
   "kind": "golden",
   "locale": "en",
   "pair_id": "golden.core-contracts",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Run the core skill workflow with complete evidence, a bounded plan, and risk-specific confirmations.",
-    "fixture": { "selected": ["skill:doit"] }
+    "prompt": "Prepare a user-documentation change with complete evidence, a bounded plan, and risk-specific confirmations.",
+    "fixture": { "selected": ["skill:docs-prepare"] }
   },
-  "expected": { "selected": ["skill:doit"], "not_selected": ["skill:briefing", "skill:stopit"] },
+  "expected": {
+    "selected": ["skill:docs-prepare"],
+    "not_selected": ["skill:briefing", "skill:stopit"]
+  },
   "invariants": [
     {
       "id": "plan-bound",
-      "path": "skills/doit/references/workflow.md",
-      "contains": "frozen accepted goal objective"
+      "path": "shared/references/interaction-contract.md",
+      "contains": "exact accepted objective"
     },
     {
       "id": "separate-history",
@@ -31,5 +34,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "3a10c035983e8cd84a179141e1db4e02779d870117db39432c9c981f468ac3b4"
+  "digest": "d0c4abff0981f459a833a9902b0f037c4e1bb488352cf0e2a7bdc4c87d8697ab"
 }

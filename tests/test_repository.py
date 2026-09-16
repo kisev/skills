@@ -25,10 +25,8 @@ PORTABLE_SKILLS = (
     "commit-msg",
     "docs-prepare",
     "docs-review",
-    "doit",
     "goal",
     "humanize",
-    "lsp-report",
     "mattermost",
     "mr-prepare",
     "release-prepare",
@@ -153,12 +151,6 @@ WORKFLOW_CONTRACTS = {
         "operating system temporary directory, not in the",
         "show the complete draft and temporary path",
     ),
-    "doit": (
-        "exact action is included in the approved plan",
-        "separate confirmations",
-        "content-addressed preview artifact",
-        "do not require a particular host",
-    ),
     "goal": (
         "strictly read-only",
         "work-item/v1",
@@ -206,7 +198,6 @@ RUNNERS = {
     "team-retro": "scripts/team_workflow.py",
     "team-roadmap": "scripts/team_workflow.py",
     "slides-prompts-prepare": "scripts/team_workflow.py",
-    "lsp-report": "scripts/lsp_report.py",
 }
 
 
@@ -289,7 +280,6 @@ class PortableSkillValidationTests(unittest.TestCase):
         names = (
             "spec-manage",
             "docs-prepare",
-            "doit",
             "team-sprint-start",
             "mr-prepare",
             "code-review",
@@ -327,7 +317,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                     (BUILT_SKILLS / name / "references/interaction-contract.md").read_bytes(),
                     generic_source.read_bytes(),
                 )
-        for name in ("spec-manage", "docs-prepare", "doit"):
+        for name in ("spec-manage", "docs-prepare"):
             text = (BUILT_SKILLS / name / "references/workflow.md").read_text(encoding="utf-8")
             with self.subTest(skill=name, behavior="compact-preview"):
                 self.assertIn("TLDR", text)
@@ -426,7 +416,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             if entry["source"].startswith("references/python_runtime/")
         ]
         destinations = {entry["destination"] for entry in runtime_entries}
-        for name in ("ast-grep", "rtk", "skill-improve", "code-explain", "lsp-report"):
+        for name in ("ast-grep", "rtk", "skill-improve", "code-explain"):
             with self.subTest(skill=name):
                 self.assertIn(f"{name}/scripts/portable_runtime/capabilities.py", destinations)
                 self.assertIn(f"{name}/scripts/portable_runtime/contract.py", destinations)
@@ -437,18 +427,10 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
-        opencode_skills = {"lsp-report"}
         for path in BUILT_SKILLS.rglob("*"):
             if path.is_file() and "__pycache__" not in path.parts and path.suffix in {".md", ".py"}:
                 text = path.read_text(encoding="utf-8").lower()
-                markers: tuple[str, ...] = FORBIDDEN_PORTABLE_MARKERS
-                if path.relative_to(BUILT_SKILLS).parts[0] in opencode_skills:
-                    markers = tuple(
-                        marker
-                        for marker in markers
-                        if marker not in {"~/.config/opencode", "~/.local/state/opencode"}
-                    )
-                for marker in markers:
+                for marker in FORBIDDEN_PORTABLE_MARKERS:
                     self.assertNotIn(marker, text, f"{marker} in {path}")
 
     def test_gitlab_skills_materialize_their_own_contract_and_runtime(self) -> None:
@@ -915,45 +897,6 @@ class PortableRunnerTests(unittest.TestCase):
             )
             self.assertEqual(from_file.returncode, 0, from_file.stderr)
             self.assertEqual(json.loads(from_file.stdout)["source"]["diff_file"], str(artifact))
-
-
-class OpenCodePortableRuntimeTests(unittest.TestCase):
-    def run_skill(
-        self, skill: str, *arguments: str, environment: dict[str, str]
-    ) -> subprocess.CompletedProcess[str]:
-        runner = RUNNERS[skill]
-        return subprocess.run(
-            [sys.executable, "-I", "-S", "-B", str(BUILT_SKILLS / skill / runner), *arguments],
-            cwd=tempfile.gettempdir(),
-            env={**os.environ, **environment, "PYTHONPATH": "/invalid"},
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-    def test_read_only_reports_do_not_create_state(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            project = Path(temporary) / "project"
-            project.mkdir()
-            state = Path(temporary) / "state"
-            environment = {
-                "HOME": temporary,
-                "XDG_STATE_HOME": str(state),
-                "XDG_CONFIG_HOME": str(Path(temporary) / "config"),
-            }
-            for skill, arguments in (
-                ("lsp-report", ("--project", str(project), "--format", "json")),
-            ):
-                result = self.run_skill(skill, *arguments, environment=environment)
-                self.assertEqual(result.returncode, 0, result.stderr)
-                report = json.loads(result.stdout)
-                for server in report["servers"]:
-                    self.assertIn(server["applicability"], {"applicable", "not-applicable"})
-                    self.assertEqual(server["configuration"], "unknown")
-                    self.assertIn(server["binary"], {"available", "missing"})
-                    self.assertEqual(server["runtime"], "inactive")
-                    self.assertEqual(server["runtime_status"], "unknown")
-            self.assertFalse(state.exists())
 
 
 if __name__ == "__main__":

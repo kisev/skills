@@ -1,7 +1,8 @@
 # ADR-0002: Target Public Surface
 
-- Status: accepted
+- Status: superseded by [ADR-0006](0006-retire-generic-doit-coordinator.md)
 - Date: 2026-09-10
+- Status changed: 2026-09-16
 
 ## Context
 
@@ -22,3 +23,8 @@ would make inventory and compatibility ambiguous.
 
 Catalog parity is machine-checkable. Adding a surface requires an explicit
 contract and corresponding evidence.
+
+## Supersession
+
+[ADR-0006](0006-retire-generic-doit-coordinator.md) reduced the public surface to
+`28/32/6/3/5` by retiring the generic `doit` skill and its command adapter.

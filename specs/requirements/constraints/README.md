@@ -30,7 +30,7 @@ archival can preserve recovery and auditability.
 ### REQ-C-005 - Bounded distribution change in this target
 
 The current target changes portable build, publication, and installation transport
-without expanding the `29/33/6/3/5` capability inventory or the declared OpenCode
+without expanding the `27/27/6/3/1` capability inventory or the declared OpenCode
 compatibility range.
 
 ### REQ-C-006 - Mandatory specification traceability gate

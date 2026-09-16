@@ -63,18 +63,18 @@ OpenCode](opencode-integration.md#обновление).
 
 ## Удаление устаревших имён
 
-Текущий [инвентарь миграции](../migration-inventory.md) определяет девять
+Текущий [инвентарь миграции](../migration-inventory.md) определяет одиннадцать
 устаревших имён. Для глобальной установки, общей для OpenCode и Codex, удалите их
 явно:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary --agent opencode --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --agent opencode --agent codex --global --yes
 ```
 
 Только для Codex используйте:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --agent codex --global --yes
 ```
 
 Используйте те же агенты и область, что при установке. Для области проекта не

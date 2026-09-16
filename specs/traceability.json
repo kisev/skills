@@ -10,7 +10,7 @@
     "inventory": {
       "kind": "automated",
       "test_selector": "tests/test_stage20_verification.py::test_stage20_compatibility_inventory_is_explicit_and_hostless",
-      "eval_ids": ["stage20.infrastructure.core.contract", "stage20.command.capabilities.contract"]
+      "eval_ids": ["stage20.infrastructure.core.contract"]
     },
     "skills": {
       "kind": "automated",
@@ -25,11 +25,7 @@
     "goal_authorization": {
       "kind": "automated",
       "test_selector": "tests/test_evals.py::test_goal_authorization_offline_runner_exercises_decision_cases",
-      "eval_ids": [
-        "doit.goal-mode-authorization",
-        "golden.core-contracts",
-        "golden.core-contracts.en"
-      ]
+      "eval_ids": ["goal-mode-authorization", "golden.core-contracts", "golden.core-contracts.en"]
     },
     "goal_skill": {
       "kind": "automated",
@@ -48,7 +44,7 @@
     "commands": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/package.test.mjs::installer wizard uses shared multi-select groups and keeps defaults",
-      "eval_ids": ["stage20.command.spec-manage.contract", "stage20.command.capabilities.contract"]
+      "eval_ids": ["stage20.command.spec-manage.contract"]
     },
     "code_review": {
       "kind": "automated",
@@ -62,12 +58,12 @@
     },
     "goal_command": {
       "kind": "automated",
-      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
+      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly twenty-seven thin skill command assets",
       "eval_ids": ["stage20.command.goal.contract"]
     },
     "task_commands": {
       "kind": "automated",
-      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly thirty-three thin command assets",
+      "test_selector": "packages/opencode/test/package.test.mjs::registry generates exactly twenty-seven thin skill command assets",
       "eval_ids": [
         "stage20.command.task-prepare.contract",
         "stage20.command.task-review.contract",
@@ -92,12 +88,12 @@
     "doctor": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/doctor.test.mjs::doctor JSON is versioned, read-only, partial tolerant, and has stable exit code",
-      "eval_ids": ["golden.doctor.read-only-redaction.en"]
+      "eval_ids": ["stage20.infrastructure.core.contract"]
     },
     "profiles": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/agent-profiles.test.mjs::receipts expire, are one-use, and reject stale inventory",
-      "eval_ids": ["stage20.command.agent-profiles.contract"]
+      "eval_ids": ["stage20.infrastructure.core.contract"]
     },
     "reconcile": {
       "kind": "automated",
@@ -107,7 +103,7 @@
         "packages/opencode/test/package.test.mjs::reconcile rolls back known paths when the direct remover fails",
         "packages/opencode/test/package.test.mjs::reconcile preserves a file added after preview"
       ],
-      "eval_ids": ["stage20.command.reconcile.contract"]
+      "eval_ids": ["stage20.infrastructure.core.contract"]
     },
     "distribution": {
       "kind": "automated",
@@ -201,7 +197,7 @@
     "REQ-F-001": {
       "surface": "system",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "7b7ad28b6c1d14cf702ffb62cc9f822d07a719fcf81d9ed01d798608c728f593",
+      "block_sha256": "dad8c7ee940d029fe18f46335eb43162c259a017bbb9f0f0048d1c4aa08e5497",
       "evidence_profile": "inventory",
       "manual_evidence_ids": ["ME-ARCH-003"]
     },
@@ -241,13 +237,13 @@
     "REQ-F-007": {
       "surface": "doctor",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "de621ef472f1eddbbbd340f66a27ad459b9f8cdd8d0a84ddc15ecf69f55ca220",
+      "block_sha256": "a801e2c3d3db7e86b4f863a48b43e1918de029ba3a6e085a70a51ce8e225caf6",
       "evidence_profile": "doctor"
     },
     "REQ-F-008": {
       "surface": "compatibility",
       "source": "specs/requirements/functional/README.md",
-      "block_sha256": "d2d1b6c20ec3ca756b1f4e4e8ae7db3692d958762d5cf7d94297546265b698a8",
+      "block_sha256": "363159eec386fb4e4eed60c29ae1cc4af36c749730568075fd3925decc1a94d5",
       "evidence_profile": "compatibility"
     },
     "REQ-I-001": {
@@ -259,13 +255,13 @@
     "REQ-I-002": {
       "surface": "commands",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "c03d7c5e0b1ab3cbebd33574e274d89dc24a9e5e39c8cd273636707364774122",
+      "block_sha256": "2c9c0c704ad92590d8dc2ea36f7e76aaac78be9833fc670c7bc13c5c5c3c4627",
       "evidence_profile": "commands"
     },
     "REQ-I-003": {
       "surface": "package-tools",
       "source": "specs/requirements/interfaces/README.md",
-      "block_sha256": "1278dec9acc5536bb6be47393c53d809347aebb2e93dce7ca96433d971c4660c",
+      "block_sha256": "2b22145574159156c8008fdcb128080edf1549fc48d833ce0f5c9ab579d25aa0",
       "evidence_profile": "inventory"
     },
     "REQ-I-004": {
@@ -380,7 +376,7 @@
     "REQ-C-005": {
       "surface": "scope",
       "source": "specs/requirements/constraints/README.md",
-      "block_sha256": "9a65529b12a4f271a588d926a2589ac783f7e31d75c2ab565ea47cb2eb4e3b56",
+      "block_sha256": "f10bcb778869d12380bf15c36ae282b26400130e422048d30758ba7a74279ae3",
       "evidence_profile": "quality"
     },
     "REQ-C-006": {
@@ -450,10 +446,10 @@
       "evidence_profile": "skills"
     },
     "REQ-F-109": {
-      "surface": "skill:doit",
+      "surface": "skills",
       "source": "specs/capabilities/skills/doit.md",
-      "block_sha256": "8d4c04f0d6d4e863ab7d85b3ad2a006a3505fe5f3ca59f4572b9d4d8793d3fda",
-      "evidence_profile": "goal_authorization"
+      "block_sha256": "e818aac5dd0d7202c6637c50e1a632a45d76ae7417198486557202e70ddedd61",
+      "evidence_profile": "inventory"
     },
     "REQ-F-110": {
       "surface": "skill:goal",
@@ -468,10 +464,10 @@
       "evidence_profile": "skills"
     },
     "REQ-F-112": {
-      "surface": "skill:lsp-report",
+      "surface": "skills",
       "source": "specs/capabilities/skills/lsp-report.md",
-      "block_sha256": "052d9df1a2a46ef5807e1542cce1d7b3458e545445fb72883dac275ffbbac869",
-      "evidence_profile": "skills"
+      "block_sha256": "f7b1fe998b59531de2d9e01bf09d1add68418cbb86fbecd1bc0557a6364fd4fd",
+      "evidence_profile": "inventory"
     },
     "REQ-F-113": {
       "surface": "skill:mattermost",
@@ -630,9 +626,9 @@
       "evidence_profile": "plugins"
     },
     "REQ-F-501": {
-      "surface": "tool:capabilities",
+      "surface": "package-tools",
       "source": "specs/capabilities/package-tools/capabilities.md",
-      "block_sha256": "53c04802aeb78a6a687446f40aff96dd1784a0733e5771ae6600e2406b768d4e",
+      "block_sha256": "83c6746ec76d5e08d779022a0e445d742ae22b288897f77e3926ae4d368254c1",
       "evidence_profile": "inventory"
     },
     "REQ-F-502": {
@@ -642,22 +638,22 @@
       "evidence_profile": "routing"
     },
     "REQ-F-503": {
-      "surface": "tool:doctor",
+      "surface": "package-tools",
       "source": "specs/capabilities/package-tools/doctor.md",
-      "block_sha256": "2b591bcfe8f14d05942e6acc87cda1296e191c6e827a48d7ce994d4f04110db6",
-      "evidence_profile": "doctor"
+      "block_sha256": "8e2acad5e56aabd86f03156c4102cc32ba399a16ad97a88bcdd7c5e4ce267422",
+      "evidence_profile": "inventory"
     },
     "REQ-F-504": {
-      "surface": "tool:agent_profiles",
+      "surface": "package-tools",
       "source": "specs/capabilities/package-tools/agent_profiles.md",
-      "block_sha256": "75e7331cdb0f3614c070b3429fd5df3178fcc346a7fb93f2983cd6fba93c682e",
-      "evidence_profile": "profiles"
+      "block_sha256": "fe4ea5cdd4691904c267b73f0337cce10121a73b01079d2fd2d0fd4b3a75cb3e",
+      "evidence_profile": "inventory"
     },
     "REQ-F-505": {
-      "surface": "tool:reconcile",
+      "surface": "package-tools",
       "source": "specs/capabilities/package-tools/reconcile.md",
-      "block_sha256": "5f49b433e29709b4bb303499a9bdc407faccbbaad9df4e5f9690696fdcf8890f",
-      "evidence_profile": "reconcile"
+      "block_sha256": "373ad6c4253eda23a5874d41fe6245ed85c9e3dbb7ddc3e7b018eb66b03b804d",
+      "evidence_profile": "inventory"
     },
     "REQ-I-201": {
       "surface": "command:agents-md",
@@ -708,10 +704,10 @@
       "evidence_profile": "commands"
     },
     "REQ-I-209": {
-      "surface": "command:doit",
+      "surface": "commands",
       "source": "specs/capabilities/commands/doit.md",
-      "block_sha256": "074f12253e2481cb0fde3de4bd1b8e0907ba7b4579cd7251b1695c9cbf5d79da",
-      "evidence_profile": "commands"
+      "block_sha256": "878849f15ea6775e8136023fd04ab7eec8ed90937610b5680f5c76f99dcc6a79",
+      "evidence_profile": "inventory"
     },
     "REQ-I-210": {
       "surface": "command:goal",
@@ -726,10 +722,10 @@
       "evidence_profile": "commands"
     },
     "REQ-I-212": {
-      "surface": "command:lsp-report",
+      "surface": "commands",
       "source": "specs/capabilities/commands/lsp-report.md",
-      "block_sha256": "b15322b9811656793c3e955b0fca15890e29f7e34714f1a806962ed70b779e20",
-      "evidence_profile": "commands"
+      "block_sha256": "517f3be699c8804e974957c8767665895cec578fed838dd7a8aa65a49cff636b",
+      "evidence_profile": "inventory"
     },
     "REQ-I-213": {
       "surface": "command:mattermost",
@@ -834,28 +830,28 @@
       "evidence_profile": "commands"
     },
     "REQ-I-230": {
-      "surface": "command:capabilities",
+      "surface": "commands",
       "source": "specs/capabilities/commands/capabilities.md",
-      "block_sha256": "4a293417aa2791e5bb0df35ed44db401726a6054c335b6e4a7db2433f7d631dc",
-      "evidence_profile": "commands"
+      "block_sha256": "8b039744ab719e98f1cfb16ea728343f03adac88e52d6a8ec8aaaf6cd64b352e",
+      "evidence_profile": "inventory"
     },
     "REQ-I-231": {
-      "surface": "command:doctor",
+      "surface": "commands",
       "source": "specs/capabilities/commands/doctor.md",
-      "block_sha256": "490b20a4709672c7468d9cf53bdd912155e1398f38fa8f900ef24471f353a16f",
-      "evidence_profile": "commands"
+      "block_sha256": "3ee039255e55eeda7010274d5f4c64eaee2de9d269e41594a0fb9f50529ae0fa",
+      "evidence_profile": "inventory"
     },
     "REQ-I-232": {
-      "surface": "command:reconcile",
+      "surface": "commands",
       "source": "specs/capabilities/commands/reconcile.md",
-      "block_sha256": "4392899de98c84d9637ea161590c20efe1b685354106bf15baf93b75b4fb97be",
-      "evidence_profile": "commands"
+      "block_sha256": "9d0da3cc2ed8695c9870d5a884b51dc7e1a8f975d655d92ee5c74888f1cb3a2a",
+      "evidence_profile": "inventory"
     },
     "REQ-I-233": {
-      "surface": "command:agent-profiles",
+      "surface": "commands",
       "source": "specs/capabilities/commands/agent-profiles.md",
-      "block_sha256": "ebf7dd66b646ba0a4757f2fd271938f3535c9712fe89807ed4ffe65388774f4a",
-      "evidence_profile": "commands"
+      "block_sha256": "4afe01c9f74e79748a0030e07b278f603a2526c45c689ea8b61da6061b7c7d10",
+      "evidence_profile": "inventory"
     }
   }
 }

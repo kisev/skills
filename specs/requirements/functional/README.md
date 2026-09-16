@@ -5,8 +5,8 @@
 ### REQ-F-001 - Expose the verified capability surface
 
 The repository shall expose exactly the public inventory in
-`evals/contracts/public-surfaces.json`: 29 skills, 33 commands, 6 agents, 3
-selectable plugins, and 5 package tools.
+`evals/contracts/public-surfaces.json`: 27 skills, 27 commands, 6 agents, 3
+selectable plugins, and 1 package tool.
 
 #### Verification
 
@@ -60,11 +60,11 @@ atomic rollback, and restart semantics defined by the package contract.
 
 ### REQ-F-007 - Provide observational health and inventory
 
-The package shall expose capability and doctor observations without installing,
+The direct CLI shall expose capability and doctor observations without installing,
 repairing, or mutating runtime state.
 
 ### REQ-F-008 - Support compatible host integration
 
 The package shall support the declared OpenCode compatibility range and expose
-the package tools, plugin exports, and CLI behavior defined by the package
+the route tool, plugin exports, and CLI behavior defined by the package
 contract.

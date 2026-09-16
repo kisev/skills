@@ -172,7 +172,7 @@ def test_precommit_matches_root_level_and_nested_files() -> None:
     groups = _load_precommit().classify(
         [
             "top.json",
-            "skills/lsp-report/scripts/lsp_report.py",
+            "skills/ast-grep/scripts/ast_grep.py",
             "skills/mattermost/tests/test_mattermost.py",
             "evals/schemas/result-v1.schema.json",
             "packages/opencode/contracts/execution-card-v1.schema.json",
@@ -184,12 +184,12 @@ def test_precommit_matches_root_level_and_nested_files() -> None:
         "top.json",
     ]
     assert groups["python"] == [
-        "skills/lsp-report/scripts/lsp_report.py",
+        "skills/ast-grep/scripts/ast_grep.py",
         "skills/mattermost/tests/test_mattermost.py",
     ]
     assert groups["python_tests"] == ["skills/mattermost/tests/test_mattermost.py"]
     assert groups["skills"] == [
-        "skills/lsp-report/scripts/lsp_report.py",
+        "skills/ast-grep/scripts/ast_grep.py",
         "skills/mattermost/tests/test_mattermost.py",
     ]
     assert groups["schemas"] == [

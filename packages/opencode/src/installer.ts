@@ -113,12 +113,11 @@ function retiredAssetPaths(): Set<string> {
 }
 
 export const SELECTABLE_PLUGINS = [...CATALOG.plugins] as SelectablePlugin[];
-export const PACKAGE_COMMANDS = [...CATALOG.package_commands] as string[];
 export const SKILL_COMMANDS = [...CATALOG.skills] as string[];
 
 export function defaultSelection(): InstallerSelection {
   return {
-    commands: [...SKILL_COMMANDS, ...PACKAGE_COMMANDS].sort(),
+    commands: [...SKILL_COMMANDS].sort(),
     agents: [...FIXED_AGENT_ROLES],
     plugins: [],
     core_activation: true,
@@ -126,7 +125,7 @@ export function defaultSelection(): InstallerSelection {
 }
 
 export function normalizeSelection(value: Partial<InstallerSelection> = {}): InstallerSelection {
-  const allCommands = new Set([...SKILL_COMMANDS, ...PACKAGE_COMMANDS]);
+  const allCommands = new Set(SKILL_COMMANDS);
   const commands = [...new Set(value.commands ?? defaultSelection().commands)].sort();
   const agents = [...new Set(value.agents ?? FIXED_AGENT_ROLES)] as FixedAgentRole[];
   const plugins = [...new Set(value.plugins ?? [])] as SelectablePlugin[];
@@ -140,10 +139,7 @@ export function normalizeSelection(value: Partial<InstallerSelection> = {}): Ins
     commands,
     agents: agents.sort(),
     plugins: plugins.sort(),
-    core_activation: Boolean(
-      value.core_activation ??
-      (commands.some((name) => PACKAGE_COMMANDS.includes(name)) || agents.length),
-    ),
+    core_activation: Boolean(value.core_activation ?? agents.length),
   };
 }
 

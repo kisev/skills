@@ -11,22 +11,22 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Активные переносимые навыки
 
-Активны ровно 29 переносимых навыков:
+Активны ровно 27 переносимых навыков:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `doit`, `goal`, `humanize`, `lsp-report`,
-`mattermost`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
+`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`, `mr-prepare`,
+`release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
 `task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
 `team-sprint-close` и `team-sprint-start`.
 
 Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
-те же 29 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+те же 27 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
 добавляются только в `.build/skills` и проверяются побайтово.
 
 ## Сведения об очистке переносимых навыков
 
-Текущий инвентарь миграции содержит ровно эти девять устаревших имён переносимых
+Текущий инвентарь миграции содержит ровно эти одиннадцать устаревших имён переносимых
 навыков. Имени `multi-run` в нём нет.
 
 | Устаревшее имя   | Текущая замена                                                                                   |
@@ -35,6 +35,8 @@ GitHub Release. Необязательный пакет интеграции - `
 | `schedule`       | Нет                                                                                              |
 | `usage`          | Нет                                                                                              |
 | `overview`       | Нет                                                                                              |
+| `doit`           | Нет                                                                                              |
+| `lsp-report`     | Нет                                                                                              |
 | `project-spec`   | `spec-manage`                                                                                    |
 | `skill-improver` | `skill-improve`                                                                                  |
 | `walkthrough`    | `code-explain`                                                                                   |
@@ -51,14 +53,13 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Текущий состав интеграции OpenCode
 
-Текущий состав пакета содержит 33 команды: по одной для каждого активного навыка,
-а также `/capabilities`, `/doctor`, `/reconcile` и `/agent-profiles`. Инструмент
-пакета `route` доступен без слеш-команды.
+Текущий состав пакета содержит 27 команд: по одной для каждого активного навыка.
+Инструмент пакета `route` доступен без слеш-команды.
 
 Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,
 `review`, `critic`. Доступные обёртки плагинов: `rules-injector`, `rtk`,
-`zed-bell`. Инструменты пакета: `capabilities`, `route`, `doctor`,
-`agent_profiles`, `reconcile`.
+`zed-bell`. Единственный инструмент пакета - `route`; для администрирования
+используется прямой CLI.
 
 ## Принадлежность и архив
 

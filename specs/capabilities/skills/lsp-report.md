@@ -1,8 +1,12 @@
 # `lsp-report`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: `skills-opencode doctor` is the single supported LSP reporting interface.
+
 ## Purpose
 
-Report applicable OpenCode LSP configuration without starting servers.
+Historical capability record for the retired portable LSP reporter.
 
 ## Triggers and Near-Misses
 
@@ -36,7 +40,11 @@ The report never starts an LSP or installs dependencies.
 
 ### REQ-F-112 - Keep LSP reporting observational
 
-The skill shall report LSP state without starting servers or changing configuration.
+Status: withdrawn on 2026-09-16 because the portable skill was replaced by the
+direct `skills-opencode doctor` CLI.
+
+Former requirement: the skill shall report LSP state without starting servers or
+changing configuration.
 
 ## Example
 

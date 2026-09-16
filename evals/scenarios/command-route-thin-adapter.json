@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
   "id": "command.route.thin-adapter",
-  "revision": 1,
+  "revision": 2,
   "kind": "deterministic",
   "surface": "command",
   "host": "opencode",
   "input": {
-    "prompt": "Use package tool route to inspect assets without a slash command.",
+    "prompt": "Use the route package tool without a slash command.",
     "fixture": {
       "selected": ["package-tool:route"]
     }
@@ -18,8 +18,8 @@
   "invariants": [
     {
       "id": "route-package-tool",
-      "path": "packages/opencode/src/registry.ts",
-      "contains": "packageTool"
+      "path": "packages/opencode/src/index.ts",
+      "contains": "tool: { route }"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "6b8cb5734068156c78d91b1f26509988ef141d7c6bdab85c0e2cb009de057d09",
+  "digest": "b83913ca381a4f1658f6ad43e15600b6f5287a5c4ebc1fdfbca22bd5e3eee114",
   "locale": "neutral",
   "pair_id": null
 }

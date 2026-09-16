@@ -58,12 +58,11 @@ npx --yes @kisev/skills-opencode@latest install --global --dry-run
 
 ## Выбор компонентов
 
-В TTY команда `install` открывает четыре группы: Skill command adapters, Package
-command adapters, Fixed agents и Selectable plugins. Две группы команд и шесть
-агентов с фиксированными ролями изначально выбраны, необязательные плагины - нет.
-Skill command adapters - это слеш-команды OpenCode, которые загружают уже
-установленный одноимённый переносимый навык. Package command adapters вызывают
-инструменты пакета. Выбор адаптера не выбирает и не устанавливает навык. В каждой
+В TTY команда `install` открывает три группы: Skill command adapters, Fixed agents
+и Selectable plugins. Команды навыков и шесть агентов с фиксированными ролями
+изначально выбраны, необязательные плагины - нет. Skill command adapters - это
+слеш-команды OpenCode, которые загружают уже установленный одноимённый переносимый
+навык. Выбор адаптера не выбирает и не устанавливает навык. В каждой
 группе можно выбрать произвольный набор: Up/Down перемещает курсор, Space
 переключает элемент, A выбирает всё, N снимает выбор, Enter подтверждает, Escape
 отменяет.
@@ -73,7 +72,7 @@ Skill command adapters - это слеш-команды OpenCode, которые
 
 ```shell
 npx --yes @kisev/skills-opencode@latest install \
-  --commands doctor,reconcile,agent-profiles \
+  --commands askme,code-review,goal \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
 ```
@@ -249,8 +248,8 @@ npm uninstall @kisev/skills-opencode
   независимо.
 - Команды, соответствующие навыкам, являются простыми адаптерами; поведение
   определяет переносимый навык, который устанавливается отдельно.
-- Инструменты пакета: `capabilities`, `route`, `doctor`, `agent_profiles`,
-  `reconcile`; у `route` нет слеш-команды.
+- Единственный инструмент пакета - `route`; у него нет слеш-команды.
+  Административные операции выполняются через прямой CLI `skills-opencode`.
 - Глобальная область не зависит от текущего рабочего каталога; область проекта
   использует `.opencode` в текущем каталоге.
 - Установщик считает своими только файлы, для которых принадлежность подтверждена

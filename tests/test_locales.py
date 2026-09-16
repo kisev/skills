@@ -91,7 +91,6 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "plugin" in document
         assert "restart" in document or "перезапуск" in document
         assert "Skill command adapters" in document
-        assert "Package command adapters" in document
         assert "npm install --save-exact @kisev/skills-opencode" in document
         assert "npx --yes @kisev/skills-opencode@latest" in document
         assert "npm exec -- skills-opencode" not in document
@@ -149,7 +148,7 @@ def test_portable_cleanup_docs_cover_every_retired_skill_name() -> None:
         *inventory["renamed"],
         *inventory["replacements"],
     }
-    assert len(retired) == 9
+    assert len(retired) == 11
 
     for relative in (
         "docs/migration-inventory.md",

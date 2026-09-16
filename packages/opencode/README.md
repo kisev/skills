@@ -8,10 +8,10 @@ update, and removal lifecycle.
 
 ## What It Adds
 
-- OpenCode slash-command adapters for installed portable skills and package tools.
+- OpenCode slash-command adapters for installed portable skills.
 - Six fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`, and
   `critic`.
-- Capability routing, `doctor`, `reconcile`, and agent-profile tooling.
+- Capability routing plus direct CLI diagnostics, reconciliation, and profiles.
 - Optional `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
 
 The package does not contain, install, or update portable skills. Confirmed

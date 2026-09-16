@@ -1,8 +1,12 @@
 # `/lsp-report`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: LSP reporting remains available through `skills-opencode doctor`.
+
 ## Purpose
 
-Expose the observational `lsp-report` command.
+Historical capability record for the retired slash-command adapter.
 
 ## Triggers and Near-Misses
 
@@ -36,7 +40,9 @@ No dependency installation.
 
 ### REQ-I-212 - Route the lsp-report command
 
-The command shall load exactly `lsp-report` and remain observational.
+Status: withdrawn on 2026-09-16 because LSP reporting moved to the direct CLI.
+
+Former requirement: the command shall load exactly `lsp-report` and remain observational.
 
 ## Example
 

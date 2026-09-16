@@ -58,11 +58,10 @@ npx --yes @kisev/skills-opencode@latest install --global --dry-run
 
 ## Select Assets
 
-In a TTY, `install` opens four selection groups: Skill command adapters, Package
-command adapters, Fixed agents, and Selectable plugins. The two command groups
-and six fixed agents start selected; optional plugins start unselected. Skill
-command adapters are OpenCode slash commands that load an already-installed
-same-named portable skill. Package command adapters invoke package tools. A
+In a TTY, `install` opens three selection groups: Skill command adapters, Fixed
+agents, and Selectable plugins. Skill commands and six fixed agents start
+selected; optional plugins start unselected. Skill command adapters are OpenCode
+slash commands that load an already-installed same-named portable skill. A
 command adapter selection never selects or installs a skill. Each group supports
 an arbitrary subset: Up/Down moves, Space toggles, A selects all, N selects none,
 Enter confirms, and Escape cancels.
@@ -72,7 +71,7 @@ commands, all fixed agents, and no wrapper:
 
 ```shell
 npx --yes @kisev/skills-opencode@latest install \
-  --commands doctor,reconcile,agent-profiles \
+  --commands askme,code-review,goal \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
 ```
@@ -238,8 +237,8 @@ retained profile configuration. It does not remove portable skills or edit
 - Portable skills and package assets install, update, and uninstall independently.
 - Commands corresponding to skills are thin adapters; the portable skill remains
   authoritative and must be installed separately.
-- Package tools are `capabilities`, `route`, `doctor`, `agent_profiles`, and
-  `reconcile`; `route` has no slash command.
+- The only package tool is `route`; it has no slash command. Administrative
+  operations use the direct `skills-opencode` CLI.
 - Global scope is cwd-independent; project scope targets `.opencode` under the
   current directory.
 - The installer owns only files proved by manifests and exact hashes.

@@ -1,8 +1,12 @@
 # Package Tool `reconcile`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Reconciliation remains available through `skills-opencode reconcile`.
+
 ## Purpose
 
-Preview or archive exact-owned retired public assets.
+Historical capability record for the retired OpenCode package tool.
 
 ## Triggers and Near-Misses
 
@@ -42,7 +46,9 @@ remain unchanged.
 
 ### REQ-F-505 - Archive exact-owned retired assets
 
-The tool shall archive exact-owned retired assets content-addressably, invoke the
+Status: withdrawn on 2026-09-16 because reconciliation is now CLI-only.
+
+Former requirement: the tool shall archive exact-owned retired assets content-addressably, invoke the
 configured exact `skills` CLI directly for marked portable cleanup, validate
 bounded postconditions, roll known planned paths back on failure, and preserve
 unrelated state on a best-effort basis under concurrent external changes.

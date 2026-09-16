@@ -1,8 +1,12 @@
 # `/agent-profiles`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Profile management remains available through `skills-opencode agent` and `critic` commands.
+
 ## Purpose
 
-List, preview, or apply package-owned OpenCode agent profile changes.
+Historical capability record for the retired slash-command adapter.
 
 ## Triggers and Near-Misses
 
@@ -37,7 +41,9 @@ Package does not edit `opencode.json` directly.
 
 ### REQ-I-233 - Route the agent-profiles package command
 
-The command shall expose the exact package-tool argument schema, default omitted
+Status: withdrawn on 2026-09-16 because profile management is now CLI-only.
+
+Former requirement: the command shall expose the exact package-tool argument schema, default omitted
 scope to project, invoke package tool `agent_profiles`, and require preview plus
 confirmation for mutation.
 

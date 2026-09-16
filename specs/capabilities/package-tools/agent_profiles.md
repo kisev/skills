@@ -1,8 +1,12 @@
 # Package Tool `agent_profiles`
 
+- Status: withdrawn
+- Status changed: 2026-09-16
+- Reason: Profile management remains available through `skills-opencode agent` and `critic` commands.
+
 ## Purpose
 
-List, preview, and apply package-owned OpenCode agent profile changes.
+Historical capability record for the retired OpenCode package tool.
 
 ## Triggers and Near-Misses
 
@@ -37,7 +41,10 @@ Exact semantic ownership and restart behavior are preserved.
 
 ### REQ-F-504 - Mutate profiles transactionally
 
-The tool shall require preview and fresh confirmation and preserve user-owned configuration.
+Status: withdrawn on 2026-09-16 because profile management is now CLI-only.
+
+Former requirement: the tool shall require preview and fresh confirmation and
+preserve user-owned configuration.
 
 ## Example
 

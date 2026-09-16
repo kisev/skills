@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "skill.goal.trigger",
-  "revision": 1,
+  "revision": 2,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
@@ -13,7 +13,7 @@
   },
   "expected": {
     "selected": ["skill:goal"],
-    "not_selected": ["command:doctor"]
+    "not_selected": []
   },
   "invariants": [
     {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "5e90b820bbaf7ef687ebed7445930f23fc0cba113dd36ceb35018dc0cc5ea864",
+  "digest": "3af595ac4c12e5f7d8e34f6339251aa395496803d79e674e471e636477d1b5be",
   "locale": "ru",
   "pair_id": "skill.goal.trigger"
 }
