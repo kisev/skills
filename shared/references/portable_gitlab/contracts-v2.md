@@ -41,13 +41,23 @@ one textual unified patch. `not_required` is limited to threads without a code
 correction. Patches are checked against the exact reviewed head in a temporary
 Git index, reject binary, symlink, rename, traversal, and oversized content, and
 are stored as immutable private `.patch` files without changing the checkout.
-Contract 4 adds a semantic chat assessment and runner-owned presentation. A
+Every new review invocation reassesses every open and resolved discussion and all
+of its non-system replies. A resolved thread closed by another or unknown user
+requires a confirming or corrective reply. `no_publication` is allowed only for
+a plain note or an unchanged current-user conclusion that the same user closed
+and last published. Published patches use one copy-ready `sh` heredoc invoking
+`git apply`. A `resolve` or `reopen` action follows, but is separate from, the
+action that publishes its explanation.
+Contract 4 adds a semantic chat assessment and runner-owned presentation.
+Contract 5 binds thread decisions to the complete discussion, including system
+notes, retains explicit `unchanged` mode, and enforces assessment-to-state
+transitions plus a validated code fix for an accepted thread. A
 code-review-owned evidence pointer and target-scoped progress pointer expose
 prepared, context, critic, finalize, decision, content, plan, and stale stages
 without depending on another profile's shared collection pointer. Generated private drafts bind exact
 labels, threads, latest-note digests, critic scope, pipeline state, and prior
 artifacts. When the selected mode requires a critic, only a recorded
-content-addressed receipt can advance the workflow. Only a fresh contract-4 plan
+content-addressed receipt can advance the workflow. Only a fresh contract-5 plan
 can render final chat.
 Each new plan carries a cumulative finding ledger. Closed findings remain
 addressable and cannot silently reuse an ID. Publication bodies are plain files
@@ -56,16 +66,16 @@ review determines whether content is already published only by reading current
 GitLab discussions, notes, and issues authored by the authenticated user and
 comparing their meaning. It does not use local publication state, receipts,
 markers, idempotency records, or postconditions.
-For contract 4, the review-state activation lock protects only local review
+For contract 5, the review-state activation lock protects only local review
 artifacts. A concurrent `prepare` cannot
 leave the superseded plan executable.
 
 The immutable review-plan envelope embeds the complete Markdown. A successful
 scaffold atomically replaces the target-scoped `review-publication.md` and a
-private pointer to that immutable plan. Contract 1 through 3 plans remain readable
+private pointer to that immutable plan. Contract 1 through 4 plans remain readable
 as historical baselines, but their helper commands are not executable after the
 move to direct manual `glab` commands. Older plans fall back to a full review
-rather than becoming a contract-4 incremental baseline. Exact refs live in
+rather than becoming a contract-5 incremental baseline. Exact refs live in
 private evidence; the user-facing plan does not display raw commit SHAs. Prepare
 and review never invoke publication commands. MR state is recorded but does not
 suppress actions for merged or closed MRs.

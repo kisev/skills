@@ -40,8 +40,10 @@ internal evidence labels in that prose.
 Write it from the authenticated user's factual role and use natural informal
 second person when addressing the participant.
 
-An open thread must use `reply`, `resolve`, or author-mode `local_fix`; only
-resolved and plain threads may use `no_publication`.
+An open thread must use `reply`, `resolve`, or author-mode `local_fix`. A thread
+resolved by another or unknown user still requires a confirming or corrective
+reply. Use `no_publication` only for a plain note or when the authenticated user
+closed the thread and their latest published conclusion remains current.
 
 For an actionable current new-line position, prepare exactly one suggestion.
 Use a bounded range opener for a contiguous multi-line replacement:
@@ -58,13 +60,15 @@ result = provider.submit(operation)
 For a general, deleted, outdated, non-contiguous, or otherwise unanchorable fix,
 set `fix_mode=patch` and provide one applicable textual unified patch:
 
-```diff
+```sh
+git apply <<'PATCH'
 diff --git a/src/payment.py b/src/payment.py
 --- a/src/payment.py
 +++ b/src/payment.py
 @@ -18 +18,2 @@
 +operation = reserve_operation(request.id)
  result = provider.submit(request)
+PATCH
 ```
 
 The runner checks the patch against the exact reviewed head without changing the
@@ -73,6 +77,9 @@ findings in one patch. Multiple suggestion blocks, suggestion on a deleted line,
 binary or symlink patches, and rewritten fix content after confirmation are
 invalid. Omit `index` lines so private revision identifiers do not enter the
 publication plan.
+
+For `resolve` or `reopen`, publish the explanatory reply first and show the state
+change as a separate command. Never close or reopen a thread without that reply.
 
 ## Recommended issue
 
@@ -90,6 +97,10 @@ describe the author as an independent reviewer.
 
 ## Weak formulations
 
+- `Closing.` does not explain whether the concern was false, fixed, or still
+  relevant, and is not an acceptable closing reply.
+- `Fixed.` does not identify the checked behavior or explain why the closure is
+  valid.
 - `This function is too long` has no consequence or contract evidence.
 - `Tests are missing` is not a finding until a concrete unverified behavior is identified.
 - `This may be slow` is speculation without a path, scale, or measurement.

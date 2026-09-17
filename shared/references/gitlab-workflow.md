@@ -40,4 +40,7 @@ revalidation, and treats timeout, 5xx, malformed response, and unknown outcomes
 as uncertain. It never substitutes another fix or repeats an uncertain
 publication; an already posted reply may continue only its pending idempotent
 thread-state transition.
+Direct code-review commands keep those same operations visibly separate: first
+publish the complete-context explanation, then run the `resolve` or `reopen`
+command. A prepared state command never stands alone without its explanation.
 `approve`, `merge`, and `push` remain outside this helper boundary.

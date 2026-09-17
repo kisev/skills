@@ -15,7 +15,9 @@ compact role-aware assessment and a stable manual publication plan containing
 ranked findings, thread actions, previous-finding dispositions, recommended
 issues, exhaustive project-label applicability, a compact label delta, metadata
 assessment, SemVer rationale, validated per-item suggestions or unified patches,
-and direct manual `glab` commands that consume generated body files.
+and direct manual `glab` commands that consume generated body files. Published
+patches are copy-ready `git apply` heredocs, while explanation and thread-state
+commands remain separate.
 
 ## Workflow Stages
 
@@ -94,10 +96,25 @@ checkout; a thread without a code correction shall explicitly use
 author local-fix outcome rather than `no_publication`. It shall prepare direct
 manual `glab` commands with explicit body files and shall not track command
 execution, publication receipts, hidden markers, retries, or postconditions;
-preparation shall never invoke those commands. For remote review, the runner shall own a resumable fail-closed state
-machine from prepared evidence through a recorded independent critic when the
-selected mode requires one, fresh finalize report, bound decision, contract-4
-plan, baseline, Markdown, and final chat rendering. It shall generate model-ready critic, decision, and content
+preparation shall never invoke those commands. Every invocation shall read every
+open and resolved non-system discussion and all replies, including an unchanged
+incremental scope. A thread closed by another or unknown user shall receive a
+concise full-context reply that confirms or rejects the closure; silence is
+allowed only for a plain note or the authenticated user's still-current latest
+conclusion after that user closed the thread. Published Git patches shall use one
+copy-ready quoted `git apply` heredoc. A thread-state command shall follow as a
+separate action after its explanatory reply, and no state change shall be
+prepared without one. Contract-5 plans shall bind every thread decision to the
+full discussion chronology, including system notes; reject stale chronology;
+retain explicit `unchanged` mode; require a validated `suggestion` or patch and
+an open/reopened thread for an accepted problem; and require resolution for an
+open thread found fixed, false-positive, duplicate, or not related. Its optional
+`fixing_commit` shall contain only a natural title and immutable GitLab revision
+URL when canonical evidence proves attribution. For remote
+review, the runner shall own a resumable fail-closed state machine from prepared
+evidence through a recorded independent critic when the selected mode requires
+one, fresh finalize report, bound decision, contract-5 plan, baseline, Markdown,
+and final chat rendering. It shall generate model-ready critic, decision, and content
 templates with exact artifact, label, thread, latest-note, and pipeline bindings;
 reject out-of-order, incomplete, stale, or structurally duplicate accepted findings and plans; keep reviewer finding details
 out of chat; treat low findings as non-blocking; and render a failed exact-head

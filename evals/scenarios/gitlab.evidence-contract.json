@@ -1,12 +1,12 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 7,
+  "revision": 11,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Exercise exact SHA collection, runner-owned stage ordering, recorded critic, final chat rendering, premature-report blocking, and stale-plan blocking; also assert the source contracts for exhaustive labels and threads, validated fixes, role-authored prose, confirmed helper actions, inherited glab environment, diagnostics, and low-severity verdict policy.",
+    "prompt": "Exercise exact SHA collection, runner-owned stage ordering, recorded critic, final chat rendering, premature-report blocking, and stale-plan blocking; also assert exhaustive open and resolved discussion analysis, actor-aware closed-thread replies, separate reply and state commands, copy-ready Git patches, exhaustive labels, validated fixes, role-authored prose, diagnostics, and low-severity verdict policy.",
     "fixture": {
       "selected": ["skill:code-review"]
     },
@@ -63,6 +63,46 @@
       "contains": "direct manual `glab` commands"
     },
     {
+      "id": "all-discussions",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "On every invocation, read every non-system discussion and every reply"
+    },
+    {
+      "id": "closed-by-other",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "closed by another or an unknown user always requires"
+    },
+    {
+      "id": "separate-thread-state",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "first publish the explanation, then change thread state"
+    },
+    {
+      "id": "copy-ready-patch",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "git apply <<'PATCH'"
+    },
+    {
+      "id": "contract-five-thread-audit",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "thread_sha256"
+    },
+    {
+      "id": "accepted-thread-fix",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "accepted` requires a valid `suggestion` or `patch`"
+    },
+    {
+      "id": "fixing-commit-attribution",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "without guessing a commit"
+    },
+    {
+      "id": "closing-reply-antiexamples",
+      "path": "skills/code-review/references/finding-examples.md",
+      "contains": "`Closing.` does not explain"
+    },
+    {
       "id": "no-publication-state",
       "path": "skills/code-review/references/workflow.md",
       "contains": "local publication receipts"
@@ -103,7 +143,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "c0081877bc547a69804f13f15ff33bac2ff7e7c5a3589c46256a576ed56b992c",
+  "digest": "9782b8dfca3bf0f3bcc60d7a0e3801ce9bcf00c614436b08d3dfeed99c203dd4",
   "locale": "neutral",
   "pair_id": null
 }

@@ -29,4 +29,6 @@ A code-review publication plan is read-only. It contains direct manual `glab`
 commands and the generated body files they consume. Publication remains an
 external mutation under the normal confirmation boundary, but the skill creates
 no helper, local receipt, marker, retry record, idempotency state, or
-postcondition protocol.
+postcondition protocol. A thread explanation and its following `resolve` or
+`reopen` operation are separate ordered manual actions; the plan never presents a
+state change without the explanation that justifies it.

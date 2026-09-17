@@ -36,7 +36,9 @@ again.
    `next_action.required_inputs` marks that one value for substitution before
    execution.
 2. Run the returned `context` action. The runner stores the selected full,
-   incremental, or unchanged mode. Do not run a parallel `glab mr view` or fetch
+   incremental, or unchanged scope. An unchanged scope skips the critic but
+   continues through fresh finalize, decision, content, and plan stages. Do not
+   run a parallel `glab mr view` or fetch
    the same MR data separately; the canonical evidence and context are the only
    remote-review input.
 3. Inspect code from the exact local refs. Keep complete diffs and verbose tool
@@ -65,11 +67,15 @@ again.
    the returned `scaffold-review` action. The runner owns standard presentation
    labels; content supplies only `locale` and semantic `chat_assessment` prose.
    Every open thread requires an explicit reply, resolve, or author local-fix
-   outcome; `no_publication` is limited to resolved and plain threads.
+   outcome. A resolved thread closed by another or unknown user requires a
+   reply; `no_publication` is limited to plain notes and a current conclusion
+   last published and closed by the authenticated user. Read the complete thread
+   before writing a concise response. A state change is a separate command after
+   its explanatory reply.
 8. Run the returned `report-review` action and print its `chat` value verbatim.
    Do not manually reconstruct, expand, or shorten the report. A later request
-   to report the existing review runs `status` and `report-review`; it does not
-   repeat analysis when the plan is still current.
+   to report the existing review runs `status` and `report-review`; a new skill
+   invocation starts a fresh discussion audit even when the MR is unchanged.
 
 Private draft files are editable inputs, not finalized evidence. Empty template
 fields intentionally fail validation. The runner accepts a critic only after

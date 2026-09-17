@@ -527,9 +527,9 @@ def duplicate_detailed_finding_ids(value: object) -> list[list[str]]:
 
 def thread_decisions_are_valid(value: object) -> bool:
     legacy = {"id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"}
-    current = legacy | {"last_note_id", "last_note_body_sha256"}
+    current = legacy | {"last_note_id", "last_note_body_sha256", "thread_sha256"}
     structured = current | {"suggestion_applicable"}
-    fix = current | {"fix_mode", "patch"}
+    fix = current | {"fix_mode", "patch", "fixing_commit"}
     materialized_fix = fix | {"patch_path", "patch_sha256"}
     return isinstance(value, list) and all(
         isinstance(item, dict)
@@ -555,11 +555,18 @@ def thread_decisions_are_valid(value: object) -> bool:
             set(item) == legacy
             or item.get("last_note_id") is not None
             and is_digest(item.get("last_note_body_sha256"))
+            and is_digest(item.get("thread_sha256"))
         )
         and (set(item) != structured or isinstance(item.get("suggestion_applicable"), bool))
         and (
             set(item) not in (fix, materialized_fix)
             or item.get("fix_mode") in {"suggestion", "patch", "not_required"}
+            and (
+                item.get("fixing_commit") is None
+                or isinstance(item.get("fixing_commit"), dict)
+                and set(item["fixing_commit"]) == {"title", "url"}
+                and all(nonempty_string(item["fixing_commit"].get(key)) for key in ("title", "url"))
+            )
             and (
                 item.get("fix_mode") == "patch"
                 and nonempty_string(item.get("patch"))
@@ -2049,7 +2056,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 if structured_plan
                 else payload["review_contract_version"] != 1
             )
-            or final_plan != (payload.get("review_contract_version") == 4)
+            or final_plan != (payload.get("review_contract_version") in {4, 5})
             or payload["external_mutations"] is not False
             or not all(
                 is_digest(payload[key])
@@ -2061,7 +2068,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             not in (
                 {"fast", "normal", "deep"}
                 if legacy_plan
-                else {"fast", "normal", "deep", "incremental"}
+                else {"fast", "normal", "deep", "incremental", "unchanged"}
             )
             or not legacy_plan
             and not incremental_review_is_valid(payload["incremental"])
@@ -2198,7 +2205,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or "critic_receipt_digest" in payload
             and payload["critic_receipt_digest"] is not None
             and not is_digest(payload["critic_receipt_digest"])
-            or payload["mode"] not in {"fast", "normal", "deep", "incremental"}
+            or payload["mode"] not in {"fast", "normal", "deep", "incremental", "unchanged"}
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
             or not findings_are_valid(payload["findings"])
@@ -3528,7 +3535,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     decision.add_argument("--evidence", required=True)
     decision.add_argument("--report", required=True)
     decision.add_argument(
-        "--mode", choices=("fast", "normal", "deep", "incremental"), required=True
+        "--mode", choices=("fast", "normal", "deep", "incremental", "unchanged"), required=True
     )
     decision.add_argument("--critic-receipt")
     decision.add_argument("--finalize-report", required=True)

@@ -8,6 +8,22 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## [4.1.0] - 2026-09-17
+
+### Added
+
+- Code review now audits every open and resolved discussion on every invocation,
+  including unchanged MRs. Its contract-5 plans bind decisions to the complete
+  discussion chronology, keep `unchanged` explicit, and validate optional fixing
+  commit attribution without exposing a SHA.
+
+### Changed
+
+- Code review now requires a validated suggestion or patch for accepted thread
+  findings, enforces matching resolve/reopen state transitions, prepares comment
+  and thread-state commands separately, and renders unanchored fixes as
+  copy-ready `git apply` heredocs.
+
 ## [4.0.0] - 2026-09-17
 
 ### Changed

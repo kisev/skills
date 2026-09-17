@@ -13,7 +13,7 @@ technical prose. Keep code, IDs, paths, API fields, and commands unchanged.
 
 Keep the chat result compact. `report-review` owns the labels and layout; print
 its `chat` field verbatim rather than composing the result manually. A missing,
-incomplete, or stale contract-4 plan produces only a localized blocked report
+incomplete, or stale contract-5 plan produces only a localized blocked report
 with the failed stage and safe next action.
 When the current evidence artifact itself is unavailable, no trusted recovery
 command can be derived; the blocked report uses `next_action=null` and asks for
@@ -102,9 +102,13 @@ semantic comparison of the content. Never infer publication from local state,
 markers, receipts, or a command that was previously shown.
 
 Severity and internal review bookkeeping must not appear in publication bodies.
-Published prose starts with the problem, answer, or concrete fix, speaks as the
-authenticated user, and continues the existing conversation naturally. A fix
+Published prose is concise without losing the evidence or required action. It
+starts with the answer, correction, or concrete fix, speaks as the authenticated
+user, and continues the complete existing conversation naturally instead of
+restating it. A fix
 on an applicable current new-line position contains exactly one single-line or
 bounded multi-line `suggestion`; general, deleted, outdated, non-contiguous, and
-otherwise unanchorable fixes contain the exact validated unified patch. The same
-patch is available as an immutable local `.patch` artifact for manual use.
+otherwise unanchorable fixes contain the exact validated unified patch inside one
+copy-ready `sh` block using `git apply <<'PATCH'`. The same patch is available as
+an immutable local `.patch` artifact for manual use. A thread-state command is
+shown separately after the command that publishes its explanation.

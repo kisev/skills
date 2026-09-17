@@ -22,4 +22,7 @@ postconditions. Prepared Git patches are textual,
 content-addressed, path-bounded, and checked against the exact reviewed head in a
 temporary index; binary, symlink, rename, traversal, and oversized patches are
 rejected without changing the checkout. Publication diagnostics are bounded and
-redacted before reaching stderr or structured output.
+redacted before reaching stderr or structured output. A patch embedded in a
+publication body uses one copy-ready quoted `git apply` heredoc. Thread replies
+and state changes remain separate commands so a close or reopen cannot hide the
+required explanation.

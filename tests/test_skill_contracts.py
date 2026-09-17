@@ -234,6 +234,12 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "temporary index",
         "runner-owned stages",
         "print its `chat` field verbatim",
+        "On every invocation, read every non-system discussion and every reply",
+        "closed by another or an unknown user always requires",
+        "first publish the explanation, then change thread state",
+        "git apply <<'PATCH'",
+        "thread_sha256",
+        "accepted` requires a valid `suggestion` or `patch`",
     ):
         assert marker in workflow
     output = (ROOT / "skills/code-review/references/output-format.md").read_text(encoding="utf-8")
@@ -250,6 +256,8 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "informal second-person",
         "exhaustive one-entry-per-catalog-label assessment",
         "report-review` owns the labels and layout",
+        "continues the complete existing conversation naturally",
+        "thread-state command is",
     ):
         assert marker in output
     state_machine = (ROOT / "skills/code-review/references/review-state-machine.md").read_text(

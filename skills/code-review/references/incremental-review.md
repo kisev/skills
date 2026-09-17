@@ -38,8 +38,9 @@ reuse part of an incompatible result.
 
 If code is unchanged but discussions, standalone notes, metadata, the complete
 project/inherited label catalog, or CI changed, run an incremental review of
-those changes. If nothing changed, return a short no-op result without a critic
-or a new review plan.
+those changes. If nothing changed, omit the critic but still create a fresh plan
+after reading every open and resolved discussion and every reply. Never treat an
+unchanged diff as permission to reuse the previous thread decisions.
 
 ## Scope
 
@@ -50,8 +51,8 @@ callers, consumers, configuration, and contracts when the delta can affect them.
 Do not repeat analysis of the complete historical MR diff.
 
 Fetch and snapshot all current discussions and notes for freshness. Deeply read
-new or changed conversations and every conversation needed to revalidate a
-previous finding. Do not trust `resolved=true`, an approval, green CI, or a
+every complete conversation on every invocation, including resolved threads and
+unchanged replies. Do not trust `resolved=true`, an approval, green CI, or a
 short "Fixed" response as proof.
 
 ## Previous findings
@@ -112,6 +113,9 @@ New findings and recommended issues start at revision 1. An unchanged active
 finding keeps its revision; changing `fix_mode`, suggestion content, patch
 content, or publication prose advances it. Thread replies use a stable ID
 derived from the root note and advance the revision for each new prepared reply.
+A thread closed by another or unknown user always receives a new assessment and
+prepared reply. Suppress a duplicate only when the authenticated user both
+closed the thread and still owns its latest complete, current conclusion.
 
 If a prior finding was not published, revalidate it and include its current body
 in the new plan. Determine whether it is already published only by reading the
@@ -124,5 +128,5 @@ technical JSON. User-facing reports omit raw SHAs. A prior manual command never
 authorizes a changed publication or label delta.
 Review-contract 1 through 3 plans remain readable as historical baselines, but
 their helper commands are not executable after migration to direct manual
-`glab` commands. They cannot be reused incrementally as a contract-4 baseline;
+`glab` commands. They cannot be reused incrementally as a contract-5 baseline;
 context selection falls back to a full review instead.

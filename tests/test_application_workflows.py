@@ -1445,10 +1445,89 @@ print(json.dumps(value))
                 "root_resolved": False,
                 "notes": [{"id": index, "system": False, "body": f"thread {index}"}],
             }
-            for index in range(1, 54)
+            for index in range(1, 50)
         ]
+        discussions.extend(
+            [
+                {
+                    "id": "closed-by-other",
+                    "root_note_id": 50,
+                    "root_note_url": "https://gitlab.example/mr#note_50",
+                    "root_system": False,
+                    "root_resolvable": True,
+                    "root_resolved": True,
+                    "root_resolved_by_username": "other-reviewer",
+                    "notes": [
+                        {
+                            "id": 50,
+                            "system": False,
+                            "body": "fixed",
+                            "author": {"username": "other-reviewer"},
+                        }
+                    ],
+                },
+                {
+                    "id": "closed-with-own-conclusion",
+                    "root_note_id": 51,
+                    "root_note_url": "https://gitlab.example/mr#note_51",
+                    "root_system": False,
+                    "root_resolvable": True,
+                    "root_resolved": True,
+                    "root_resolved_by_username": "reviewer",
+                    "notes": [
+                        {
+                            "id": 51,
+                            "system": False,
+                            "body": "confirmed fixed",
+                            "author": {"username": "reviewer"},
+                        }
+                    ],
+                },
+                {
+                    "id": "reply-after-own-close",
+                    "root_note_id": 52,
+                    "root_note_url": "https://gitlab.example/mr#note_52",
+                    "root_system": False,
+                    "root_resolvable": True,
+                    "root_resolved": True,
+                    "root_resolved_by_username": "reviewer",
+                    "notes": [
+                        {
+                            "id": 52,
+                            "system": False,
+                            "body": "confirmed fixed",
+                            "author": {"username": "reviewer"},
+                        },
+                        {
+                            "id": 152,
+                            "system": False,
+                            "body": "this still fails",
+                            "author": {"username": "other-reviewer"},
+                        },
+                    ],
+                },
+                {
+                    "id": "closed-by-unknown",
+                    "root_note_id": 53,
+                    "root_note_url": "https://gitlab.example/mr#note_53",
+                    "root_system": False,
+                    "root_resolvable": True,
+                    "root_resolved": True,
+                    "root_resolved_by_username": None,
+                    "notes": [
+                        {
+                            "id": 53,
+                            "system": False,
+                            "body": "confirmed fixed",
+                            "author": {"username": "reviewer"},
+                        }
+                    ],
+                },
+            ]
+        )
         context = {
             "role": "reviewer",
+            "current_user_username": "reviewer",
             "discussions": discussions,
             "notes": [],
             "publication_markers": [],
@@ -1477,7 +1556,12 @@ print(json.dumps(value))
         self.assertTrue(
             all(len(item["last_note_body_sha256"]) == 64 for item in value["thread_decisions"])
         )
-        self.assertTrue(all(item["outcome"] == "reply" for item in value["thread_decisions"]))
+        self.assertTrue(all(len(item["thread_sha256"]) == 64 for item in value["thread_decisions"]))
+        outcomes = {item["id"]: item["outcome"] for item in value["thread_decisions"]}
+        self.assertEqual(outcomes["50"], "reply")
+        self.assertEqual(outcomes["51"], "reply")
+        self.assertEqual(outcomes["52"], "reply")
+        self.assertEqual(outcomes["53"], "reply")
 
     def test_recommended_issue_uses_exact_head_project_template(self) -> None:
         scripts = BUILT_SKILLS / "code-review" / "scripts"
@@ -2081,10 +2165,14 @@ print(json.dumps(value))
                                 "proposed_response": "I tracked the remaining risk in the current finding. Closing.",
                                 "fix_mode": "not_required",
                                 "patch": None,
+                                "fixing_commit": None,
                                 "last_note_id": 42,
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"
                                 ).hexdigest(),
+                                "thread_sha256": generated_content["thread_decisions"][0][
+                                    "thread_sha256"
+                                ],
                             },
                         ],
                     }
@@ -2112,6 +2200,27 @@ print(json.dumps(value))
             )
             self.assertEqual(invalid_plan.returncode, 2)
             self.assertIn("state does not match", invalid_plan.stderr)
+            invalid_accepted = json.loads(review_content.read_text(encoding="utf-8"))
+            invalid_accepted["thread_decisions"][0].update(
+                {"assessment": "accepted", "outcome": "reply", "fix_mode": "not_required"}
+            )
+            invalid_accepted_path = root / "invalid-accepted-content.json"
+            invalid_accepted_path.write_text(json.dumps(invalid_accepted), encoding="utf-8")
+            invalid_accepted_plan = self.run_runner(
+                "code-review",
+                "scaffold-review",
+                "--evidence",
+                evidence,
+                "--context",
+                context_path,
+                "--decision",
+                reviewed_result["artifact_path"],
+                "--content",
+                str(invalid_accepted_path),
+                env=environment,
+            )
+            self.assertEqual(invalid_accepted_plan.returncode, 2)
+            self.assertIn("accepted thread requires", invalid_accepted_plan.stderr)
             review_plan = self.run_runner(
                 "code-review",
                 "scaffold-review",
@@ -2161,24 +2270,31 @@ print(json.dumps(value))
                 for value in plan_result["publication_body_paths"]
             ]
             self.assertTrue(all("<!-- code-review:id=" not in value for value in bodies))
+            patch_body = next(value for value in bodies if "diff --git" in value)
+            self.assertIn("```sh\ngit apply <<'PATCH'\n", patch_body)
+            self.assertIn("\nPATCH\n```", patch_body)
+            self.assertNotIn("```diff", patch_body)
             commands = plan_result["publication_commands"]
-            self.assertEqual(len(commands), 4)
+            self.assertEqual(len(commands), 5)
             self.assertTrue(all(value.startswith("glab ") for value in commands))
             self.assertTrue(all("review_publish.py" not in value for value in commands))
             plan_document = json.loads(
                 Path(plan_result["artifact_path"]).read_text(encoding="utf-8")
             )
             preview = plan_document["payload"]["publication_preview"]
-            thread_action = next(item for item in preview["actions"] if item["kind"] == "thread")
-            self.assertEqual(thread_action["operation"], "resolve")
-            self.assertIn("--method PUT", thread_action["command"])
-            self.assertIn("resolved=true", thread_action["command"])
+            thread_actions = [item for item in preview["actions"] if item["kind"] == "thread"]
+            self.assertEqual([item["operation"] for item in thread_actions], ["reply", "resolve"])
+            self.assertIn("--method POST", thread_actions[0]["command"])
+            self.assertIn("/notes", thread_actions[0]["command"])
+            self.assertIn("--method PUT", thread_actions[1]["command"])
+            self.assertIn("resolved=true", thread_actions[1]["command"])
+            self.assertTrue(all("&&" not in item["command"] for item in thread_actions))
             label_action = next(item for item in preview["actions"] if item["kind"] == "labels")
             self.assertIn("--label semver::patch", label_action["command"])
             self.assertEqual(
                 plan_document["payload"]["label_review"]["semver"]["selected"], "semver::patch"
             )
-            self.assertEqual(plan_document["payload"]["review_contract_version"], 4)
+            self.assertEqual(plan_document["payload"]["review_contract_version"], 5)
             report = self.run_runner(
                 "code-review", "report-review", "--artifact-root", artifact_root, env=environment
             )
@@ -2223,6 +2339,149 @@ print(json.dumps(value))
             unchanged = json.loads(unchanged_context.stdout)["incremental"]
             self.assertEqual(unchanged["mode"], "unchanged")
             self.assertFalse(unchanged["critic_required"])
+            self.assertEqual(json.loads(unchanged_context.stdout)["review_mode"], "unchanged")
+            self.assertEqual(
+                json.loads(unchanged_context.stdout)["next_action"]["argv"][2], "finalize"
+            )
+            unchanged_context_payload = json.loads(unchanged_context.stdout)
+            unchanged_finalized = self.run_runner(
+                "code-review", "finalize", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(unchanged_finalized.returncode, 0, unchanged_finalized.stderr)
+            unchanged_finalize_payload = json.loads(unchanged_finalized.stdout)
+            unchanged_decision_template = self.run_runner(
+                "code-review",
+                "template-review",
+                "--artifact-root",
+                artifact_root,
+                "--kind",
+                "decision",
+                env=environment,
+            )
+            self.assertEqual(
+                unchanged_decision_template.returncode, 0, unchanged_decision_template.stderr
+            )
+            unchanged_decision = json.loads(
+                Path(json.loads(unchanged_decision_template.stdout)["template_path"]).read_text(
+                    encoding="utf-8"
+                )
+            )
+            unchanged_decision.update(
+                {
+                    "run_id": "unchanged-run",
+                    "session_id": "unchanged-session",
+                    "verdict": "not_ready",
+                    "blocking_findings": True,
+                    "blocking_finding_ids": ["primary-1"],
+                    "findings": [primary_finding],
+                    "responses": [
+                        {"id": "thread:42", "decision": "accept", "reason": "still reviewed"},
+                        {"id": "primary-1", "decision": "accept", "reason": "still active"},
+                    ],
+                }
+            )
+            unchanged_decision_path = root / "unchanged-decision.json"
+            unchanged_decision_path.write_text(json.dumps(unchanged_decision), encoding="utf-8")
+            unchanged_reviewed = self.run_runner(
+                "code-review",
+                "finalize-review",
+                "--evidence",
+                unchanged_prepared_payload["items"][0]["artifact_path"],
+                "--report",
+                str(unchanged_decision_path),
+                "--context",
+                unchanged_context_payload["artifact_path"],
+                "--finalize-report",
+                unchanged_finalize_payload["artifact_path"],
+                "--mode",
+                "unchanged",
+                env=environment,
+            )
+            self.assertEqual(unchanged_reviewed.returncode, 0, unchanged_reviewed.stderr)
+            unchanged_content_template = self.run_runner(
+                "code-review",
+                "template-review",
+                "--artifact-root",
+                artifact_root,
+                "--kind",
+                "content",
+                env=environment,
+            )
+            self.assertEqual(
+                unchanged_content_template.returncode, 0, unchanged_content_template.stderr
+            )
+            unchanged_template_content = json.loads(
+                Path(json.loads(unchanged_content_template.stdout)["template_path"]).read_text(
+                    encoding="utf-8"
+                )
+            )
+            unchanged_content = json.loads(review_content.read_text(encoding="utf-8"))
+            unchanged_content["thread_decisions"] = unchanged_template_content["thread_decisions"]
+            unchanged_content["rejected_candidates"] = unchanged_template_content[
+                "rejected_candidates"
+            ]
+            unchanged_content["rejected_candidate_assessments"] = unchanged_template_content[
+                "rejected_candidate_assessments"
+            ]
+            unchanged_content["thread_decisions"][0].update(
+                {
+                    "assessment": "fixed",
+                    "rationale": "The thread was rechecked in the unchanged audit.",
+                    "outcome": "resolve",
+                    "proposed_response": "The current code still matches the checked result. Closing.",
+                }
+            )
+            unchanged_content["previous_finding_assessments"] = [
+                {
+                    "id": "primary-1",
+                    "kind": "finding",
+                    "status": "active",
+                    "previous_status": "active",
+                    "current_status": "active",
+                    "rationale": "The finding remains valid in the unchanged audit.",
+                    "action": "No changed publication is needed.",
+                    "publication_action": "no_publication",
+                    "publication_body": None,
+                    "critic_required": False,
+                },
+                {
+                    "id": "issue-1",
+                    "kind": "issue",
+                    "status": "active",
+                    "previous_status": "active",
+                    "current_status": "active",
+                    "rationale": "The separate issue remains outside this MR.",
+                    "action": "No issue update is needed.",
+                    "publication_action": "no_publication",
+                    "publication_body": None,
+                    "critic_required": False,
+                },
+            ]
+            unchanged_content_path = root / "unchanged-content.json"
+            unchanged_content_path.write_text(json.dumps(unchanged_content), encoding="utf-8")
+            unchanged_plan = self.run_runner(
+                "code-review",
+                "scaffold-review",
+                "--evidence",
+                unchanged_prepared_payload["items"][0]["artifact_path"],
+                "--context",
+                unchanged_context_payload["artifact_path"],
+                "--decision",
+                json.loads(unchanged_reviewed.stdout)["artifact_path"],
+                "--content",
+                str(unchanged_content_path),
+                env=environment,
+            )
+            self.assertEqual(unchanged_plan.returncode, 0, unchanged_plan.stderr)
+            unchanged_plan_document = json.loads(
+                Path(json.loads(unchanged_plan.stdout)["artifact_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(unchanged_plan_document["payload"]["mode"], "unchanged")
+            unchanged_report = self.run_runner(
+                "code-review", "report-review", "--artifact-root", artifact_root, env=environment
+            )
+            self.assertEqual(unchanged_report.returncode, 0, unchanged_report.stderr)
+            self.assertEqual(json.loads(unchanged_report.stdout)["stage"], "plan_ready")
             baseline_path = Path(artifact_root) / "review-baseline.json"
             baseline_bytes = baseline_path.read_bytes()
             baseline_path.unlink()
@@ -2231,10 +2490,10 @@ print(json.dumps(value))
             )
             self.assertEqual(missing_baseline_report.returncode, 4)
             missing_baseline_payload = json.loads(missing_baseline_report.stdout)
-            self.assertEqual(missing_baseline_payload["stage"], "stale")
+            self.assertEqual(missing_baseline_payload["stage"], "content_missing")
             self.assertEqual(
                 missing_baseline_payload["next_action"]["argv"][2],
-                "context",
+                "template-review",
             )
             baseline_path.write_bytes(baseline_bytes)
             full_prepared = self.run_runner(
@@ -2586,6 +2845,24 @@ print(json.dumps(value))
                 env=environment,
             )
             self.assertEqual(incremental_reviewed.returncode, 0, incremental_reviewed.stderr)
+            incremental_template = self.run_runner(
+                "code-review",
+                "template-review",
+                "--artifact-root",
+                artifact_root,
+                "--kind",
+                "content",
+                env=environment,
+            )
+            self.assertEqual(incremental_template.returncode, 0, incremental_template.stderr)
+            incremental_threads = {
+                item["id"]: item
+                for item in json.loads(
+                    Path(json.loads(incremental_template.stdout)["template_path"]).read_text(
+                        encoding="utf-8"
+                    )
+                )["thread_decisions"]
+            }
             incremental_content = root / "incremental-content.json"
             incremental_content.write_text(
                 json.dumps(
@@ -2735,10 +3012,12 @@ print(json.dumps(value))
                                 "proposed_response": "Тебе всё ещё нужно резервировать ключ идемпотентности до вызова.\n\n```suggestion\nreviewed change\n```",
                                 "fix_mode": "suggestion",
                                 "patch": None,
+                                "fixing_commit": None,
                                 "last_note_id": 42,
                                 "last_note_body_sha256": hashlib.sha256(
                                     b"Retry needs an idempotency key"
                                 ).hexdigest(),
+                                "thread_sha256": incremental_threads["42"]["thread_sha256"],
                             },
                             {
                                 "id": "99",
@@ -2750,10 +3029,12 @@ print(json.dumps(value))
                                 "proposed_response": None,
                                 "fix_mode": "not_required",
                                 "patch": None,
+                                "fixing_commit": None,
                                 "last_note_id": 99,
                                 "last_note_body_sha256": hashlib.sha256(
                                     finding_body.encode()
                                 ).hexdigest(),
+                                "thread_sha256": incremental_threads["99"]["thread_sha256"],
                             },
                         ],
                     }

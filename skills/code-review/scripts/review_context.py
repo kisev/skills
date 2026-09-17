@@ -24,7 +24,7 @@ else:
 
 
 INCREMENTAL_CONTRACT_VERSION = 1
-REVIEW_CONTRACT_VERSION = 4
+REVIEW_CONTRACT_VERSION = 5
 BASELINE_NAME = "review-baseline.json"
 PROGRESS_NAME = "review-current.json"
 REVIEW_EVIDENCE_NAME = "review-evidence.json"
@@ -46,6 +46,9 @@ SUGGESTION_RE = re.compile(
     re.DOTALL | re.MULTILINE,
 )
 SUGGESTION_OPENER_RE = re.compile(r"^```suggestion[^\r\n]*$", re.MULTILINE)
+IMMUTABLE_GITLAB_COMMIT_URL_RE = re.compile(
+    r"^https://[^/]+/.+/-/commits?/[0-9a-f]{40}$", re.IGNORECASE
+)
 PREVIOUS_FINDING_STATUSES = {"active", "fixed", "withdrawn", "changed", "unverified"}
 
 
@@ -317,7 +320,7 @@ def username(value: object) -> str | None:
 def discussion_signature(value: dict[str, Any]) -> str:
     notes = []
     for note in cast(list[object], value.get("notes", [])):
-        if not isinstance(note, dict) or note.get("system") is True:
+        if not isinstance(note, dict):
             continue
         notes.append(
             {
@@ -370,7 +373,7 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
         raise portable.WorkflowError("code-review baseline plan digest changed")
     if (
         plan.get("complete") is not True
-        or plan.get("review_contract_version") not in {1, 2, 3, REVIEW_CONTRACT_VERSION}
+        or plan.get("review_contract_version") not in {1, 2, 3, 4, REVIEW_CONTRACT_VERSION}
         or plan.get("target") != pointer.get("target")
     ):
         raise portable.WorkflowError("code-review baseline is incomplete or incompatible")
@@ -487,7 +490,7 @@ def incremental_context(
         _, old_context = artifact_for_digest(root, "review_context", plan.get("context_digest"))
         failures: list[str] = []
         if plan.get("review_contract_version") != REVIEW_CONTRACT_VERSION:
-            failures.append("baseline review contract predates runner-owned final reporting")
+            failures.append("baseline review contract predates complete-thread audit binding")
         if (
             old_context.get("evidence_digest") != plan.get("evidence_digest")
             or old_context.get("target") != plan.get("target")
@@ -1018,9 +1021,7 @@ def prepare_context(
             plan_path=None,
             plan_digest=None,
         )
-        if selected_mode == "unchanged":
-            next_action = runner_action("report-review", "--artifact-root", str(root))
-        elif critic_required:
+        if critic_required:
             next_action = runner_action(
                 "template-review", "--artifact-root", str(root), "--kind", "critic"
             )
@@ -1085,9 +1086,7 @@ def prepare_context(
             "metadata_fields": delta["metadata_fields"],
             "pipelines_changed": delta["pipelines_changed"],
             "fallback_reasons": incremental_value["fallback_reasons"],
-            "publication_plan_path": str(root / "review-publication.md")
-            if incremental_value["mode"] == "unchanged"
-            else None,
+            "publication_plan_path": None,
         },
         "review_mode": selected_mode,
         "locale": locale,
@@ -1729,6 +1728,7 @@ def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any
             "last_note_body_sha256": hashlib.sha256(
                 cast(str, last_note["body"]).encode()
             ).hexdigest(),
+            "thread_sha256": hashlib.sha256(discussion_signature(item).encode()).hexdigest(),
         }
     discussion_note_ids = {
         str(note.get("id"))
@@ -1747,8 +1747,38 @@ def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any
                 "url": note.get("note_url"),
                 "last_note_id": note.get("id"),
                 "last_note_body_sha256": hashlib.sha256(body.encode()).hexdigest(),
+                "thread_sha256": hashlib.sha256(
+                    json.dumps(note, sort_keys=True, ensure_ascii=False).encode()
+                ).hexdigest(),
             }
     return expected
+
+
+def has_current_user_closing_conclusion(source: dict[str, Any], current_username: str) -> bool:
+    if (
+        source.get("root_resolved") is not True
+        or source.get("root_resolved_by_username") != current_username
+    ):
+        return False
+    meaningful = [
+        note
+        for note in cast(list[dict[str, Any]], source.get("notes", []))
+        if note.get("system") is not True and isinstance(note.get("body"), str)
+    ]
+    return bool(meaningful) and username(meaningful[-1].get("author")) == current_username
+
+
+def validate_fixing_commit(value: object) -> None:
+    if value is None:
+        return
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"title", "url"}
+        or not portable.nonempty_string(value.get("title"))
+        or not isinstance(value.get("url"), str)
+        or IMMUTABLE_GITLAB_COMMIT_URL_RE.fullmatch(value["url"]) is None
+    ):
+        raise portable.WorkflowError("fixing commit attribution is invalid")
 
 
 def validate_thread_fix(
@@ -2152,7 +2182,7 @@ def structured_publication_preview(
         if fix.get("fix_mode") != "patch":
             return body
         patch = cast(str, fix["patch"])
-        return f"{body.rstrip()}\n\n```diff\n{patch.rstrip()}\n```"
+        return f"{body.rstrip()}\n\n```sh\ngit apply <<'PATCH'\n{patch.rstrip()}\nPATCH\n```"
 
     enriched_threads = [enrich_fix("thread", str(item["id"]), item) for item in thread_decisions]
 
@@ -2206,8 +2236,9 @@ def structured_publication_preview(
         }
         body_files.append(body_record)
         mutation_value = mutation or {}
-        action_id = f"{kind}:{publication_id}:r{revision}:{operation}"
-        if operation == "create_line":
+        publication_operation = "reply" if operation in {"resolve", "reopen"} else operation
+        action_id = f"{kind}:{publication_id}:r{revision}:{publication_operation}"
+        if publication_operation == "create_line":
             path = cast(str, mutation_value["path"])
             line = mutation_value["line"] or mutation_value["old_line"]
             line_option = "--line" if mutation_value["line"] is not None else "--old-line"
@@ -2215,7 +2246,7 @@ def structured_publication_preview(
                 f"glab mr note create {target['iid']} --repo {shlex.quote(repository_url)} "
                 f"--file {shlex.quote(path)} {line_option} {line} < {shlex.quote(str(body_path))}"
             )
-        elif operation == "create_general":
+        elif publication_operation == "create_general":
             command = (
                 f"glab api --hostname {shlex.quote(hostname)} --method POST "
                 f"{shlex.quote(f'{endpoint}/discussions')} -F body=@{shlex.quote(str(body_path))}"
@@ -2241,18 +2272,12 @@ def structured_publication_preview(
                     f"glab api --hostname {shlex.quote(hostname)} --method POST "
                     f"{shlex.quote(f'{discussion_endpoint}/notes')} -F body=@{shlex.quote(str(body_path))}"
                 )
-                if operation in {"resolve", "reopen"}:
-                    resolved = "true" if operation == "resolve" else "false"
-                    command += (
-                        f" && glab api --hostname {shlex.quote(hostname)} --method PUT "
-                        f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
-                    )
         actions.append(
             {
                 "id": action_id,
                 "kind": kind,
                 "publication_id": publication_id,
-                "operation": operation,
+                "operation": publication_operation,
                 "command": command,
                 "path": mutation_value.get("path")
                 or (thread.get("path") if thread is not None else None),
@@ -2261,6 +2286,27 @@ def structured_publication_preview(
                 or (thread.get("line") if thread is not None else None),
             }
         )
+        if operation in {"resolve", "reopen"}:
+            if thread is None or thread.get("discussion_id") is None:
+                raise portable.WorkflowError("thread state action requires a discussion")
+            discussion_endpoint = f"{endpoint}/discussions/{thread['discussion_id']}"
+            resolved = "true" if operation == "resolve" else "false"
+            actions.append(
+                {
+                    "id": f"{kind}:{publication_id}:r{revision}:{operation}",
+                    "kind": kind,
+                    "publication_id": publication_id,
+                    "operation": operation,
+                    "command": (
+                        f"glab api --hostname {shlex.quote(hostname)} --method PUT "
+                        f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
+                    ),
+                    "path": mutation_value.get("path") or thread.get("path"),
+                    "line": mutation_value.get("line")
+                    or mutation_value.get("old_line")
+                    or thread.get("line"),
+                }
+            )
 
     enriched_findings: list[dict[str, Any]] = []
     spec_by_id = {
@@ -2488,11 +2534,11 @@ def review_markdown(
         for item in cast(list[dict[str, Any]], publication["body_files"])
     }
     publication_actions = cast(list[dict[str, Any]], publication["actions"])
-    actions_by_publication = {
-        item["publication_id"]: item
-        for item in publication_actions
-        if item["publication_id"] is not None
-    }
+    actions_by_publication: dict[str, list[dict[str, Any]]] = {}
+    for item in publication_actions:
+        publication_id = item["publication_id"]
+        if publication_id is not None:
+            actions_by_publication.setdefault(str(publication_id), []).append(item)
     lines = [
         f"# {presentation['title']}",
         "",
@@ -2609,7 +2655,7 @@ def review_markdown(
         )
         if portable.nonempty_string(action.get("path")):
             lines.extend([f"`position:{action['path']}:{action['line']}`", ""])
-        if body is not None:
+        if body is not None and action["operation"] not in {"resolve", "reopen"}:
             lines.extend(
                 [
                     f"`{body['path']}`",
@@ -2624,10 +2670,8 @@ def review_markdown(
         lines.append("")
 
     def add_publication_action(publication_id: str) -> None:
-        action = actions_by_publication.get(publication_id)
-        if action is None:
-            return
-        add_action(action)
+        for action in actions_by_publication.get(publication_id, []):
+            add_action(action)
 
     for item in previous:
         if item["publication_action"] != "no_publication":
@@ -3145,8 +3189,6 @@ def scaffold_review(
         raise portable.WorkflowError("review plan findings do not match the review decision")
     incremental = cast(dict[str, Any], context["incremental"])
     incremental_mode = str(incremental["mode"])
-    if incremental_mode == "unchanged":
-        raise portable.WorkflowError("an unchanged MR does not require a new review plan")
     if (incremental_mode == "incremental") != (decision.get("mode") == "incremental"):
         raise portable.WorkflowError("review decision mode does not match incremental context")
     chat_assessment = validate_chat_assessment(content["chat_assessment"])
@@ -3310,6 +3352,7 @@ def scaffold_review(
     ):
         raise portable.WorkflowError("author findings require read-only local fix patches")
     expected_threads = expected_thread_bindings(context)
+    current_username = cast(str, context["current_user_username"])
     thread_decisions = cast(list[dict[str, Any]], content["thread_decisions"])
     actual_threads = {item["id"]: item for item in thread_decisions}
     if len(actual_threads) != len(thread_decisions) or set(actual_threads) != set(expected_threads):
@@ -3321,6 +3364,14 @@ def scaffold_review(
         if source["state"] == "open" and item["outcome"] == "no_publication":
             raise portable.WorkflowError("an open thread requires an explicit outcome")
         if (
+            source["state"] == "resolved"
+            and item["outcome"] == "no_publication"
+            and not has_current_user_closing_conclusion(source, current_username)
+        ):
+            raise portable.WorkflowError(
+                "a thread closed by another user or followed by another user requires a response"
+            )
+        if (
             item["outcome"] == "no_publication"
             and item["proposed_response"] is not None
             or item["outcome"] != "no_publication"
@@ -3329,6 +3380,7 @@ def scaffold_review(
             raise portable.WorkflowError("thread publication outcome and body disagree")
         if item["url"] != expected_threads[thread_id].get("url"):
             raise portable.WorkflowError("thread decision URL does not match review context")
+        validate_fixing_commit(item["fixing_commit"])
         if (
             set(item)
             != {
@@ -3341,14 +3393,41 @@ def scaffold_review(
                 "proposed_response",
                 "fix_mode",
                 "patch",
+                "fixing_commit",
                 "last_note_id",
                 "last_note_body_sha256",
+                "thread_sha256",
             }
             or item["last_note_id"] != expected_threads[thread_id]["last_note_id"]
             or item["last_note_body_sha256"] != expected_threads[thread_id]["last_note_body_sha256"]
+            or item["thread_sha256"] != expected_threads[thread_id]["thread_sha256"]
         ):
-            raise portable.WorkflowError("thread decision does not bind the latest note")
+            raise portable.WorkflowError("thread decision does not bind the complete discussion")
         validate_thread_fix(item, source, repo_root, head_sha)
+        assessment = cast(str, item["assessment"])
+        outcome = cast(str, item["outcome"])
+        if assessment == "accepted":
+            if item["fix_mode"] not in {"suggestion", "patch"}:
+                raise portable.WorkflowError("an accepted thread requires a validated code fix")
+            expected_outcome = "reopen" if source["state"] == "resolved" else None
+            if expected_outcome is not None and outcome != expected_outcome:
+                raise portable.WorkflowError("an accepted resolved thread requires reopen")
+            if source["state"] == "open" and outcome not in {"reply", "local_fix"}:
+                raise portable.WorkflowError("an accepted open thread must remain open")
+        if assessment in {"fixed", "false_positive", "duplicate", "not_related"}:
+            expected_outcome = "resolve" if source["state"] == "open" else None
+            if expected_outcome is not None and outcome != expected_outcome:
+                raise portable.WorkflowError(
+                    "a closing assessment on an open thread requires resolve"
+                )
+            if source["state"] == "resolved" and outcome not in {"reply", "no_publication"}:
+                raise portable.WorkflowError(
+                    "a closing assessment must keep a resolved thread closed"
+                )
+        if assessment in {"question", "neutral"} and outcome in {"resolve", "reopen"}:
+            raise portable.WorkflowError(
+                "a neutral or question assessment cannot change thread state"
+            )
         if item["outcome"] == "resolve" and (
             source.get("root_resolvable") is not True or source.get("root_resolved") is True
         ):
@@ -3604,9 +3683,6 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
         if mode not in REVIEW_MODES:
             actual_stage = "context_ready"
             reason = "review mode has not been selected"
-        elif mode == "unchanged":
-            actual_stage = "plan_ready"
-            reason = "the MR has not changed since the finalized baseline"
         else:
             critic_required = mode in {"normal", "deep", "incremental"}
             critic_artifact = progress_artifact(root, progress, "critic_receipt", "critic_receipt")
@@ -3660,45 +3736,22 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
         stale_plan_reason = "the stable publication plan is invalid"
     if baseline is not None:
         pointer, candidate = baseline
-        unchanged = (
-            context is not None
-            and cast(dict[str, Any], context.get("incremental", {})).get("mode") == "unchanged"
-            and cast(dict[str, Any], context["incremental"])
-            .get("incremental_baseline", {})
-            .get("plan_digest")
-            == pointer.get("plan_digest")
-        )
         current = (
             candidate.get("review_contract_version") == REVIEW_CONTRACT_VERSION
             and candidate.get("complete") is True
             and candidate.get("target") == evidence.get("target")
-            and (
-                unchanged
-                or candidate.get("evidence_digest") == evidence_digest
-                and candidate.get("context_digest") == progress.get("context_digest")
-                and candidate.get("decision_digest") == progress.get("decision_digest")
-            )
+            and candidate.get("evidence_digest") == evidence_digest
+            and candidate.get("context_digest") == progress.get("context_digest")
+            and candidate.get("decision_digest") == progress.get("decision_digest")
         )
         if current:
             plan = candidate
             actual_stage = "plan_ready"
-            reason = (
-                "the unchanged MR reuses the current finalized review plan"
-                if unchanged
-                else "the current review plan is complete and fresh"
-            )
+            reason = "the current review plan is complete and fresh"
             progress["plan_path"] = pointer["plan_path"]
             progress["plan_digest"] = pointer["plan_digest"]
         else:
             stale_plan_reason = "the stable publication plan does not bind current evidence"
-    elif (
-        context is not None
-        and cast(dict[str, Any], context.get("incremental", {})).get("mode") == "unchanged"
-    ):
-        stale_plan_reason = "the unchanged review baseline is missing"
-        actual_stage = "prepared"
-        reason = "collect context again before continuing"
-
     stage = (
         "stale" if stale_plan_reason is not None and actual_stage != "plan_ready" else actual_stage
     )
@@ -3828,12 +3881,14 @@ def content_template(
                 "state": binding["state"],
                 "assessment": "neutral",
                 "rationale": "",
-                "outcome": "reply" if binding["state"] == "open" else "no_publication",
+                "outcome": "reply",
                 "proposed_response": None,
                 "fix_mode": "not_required",
                 "patch": None,
+                "fixing_commit": None,
                 "last_note_id": binding["last_note_id"],
                 "last_note_body_sha256": binding["last_note_body_sha256"],
+                "thread_sha256": binding["thread_sha256"],
             }
         )
     return {

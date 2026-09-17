@@ -347,7 +347,7 @@ def artifact_instances() -> list[dict[str, Any]]:
         "review_plan",
         {
             "profile": "code-review",
-            "review_contract_version": 4,
+            "review_contract_version": 5,
             "external_mutations": False,
             "evidence_digest": DIGEST,
             "context_digest": DIGEST,

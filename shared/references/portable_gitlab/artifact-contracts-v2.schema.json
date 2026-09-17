@@ -263,6 +263,7 @@
             "proposed_response",
             "fix_mode",
             "patch",
+            "fixing_commit",
             "patch_path",
             "patch_sha256",
             "last_note_id",
@@ -293,12 +294,27 @@
         "suggestion_applicable": { "type": "boolean" },
         "fix_mode": { "enum": ["suggestion", "patch", "not_required"] },
         "patch": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
+        "fixing_commit": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["title", "url"],
+              "properties": {
+                "title": { "type": "string", "minLength": 1 },
+                "url": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
         "patch_path": {
           "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
         },
         "patch_sha256": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
         "last_note_id": {},
-        "last_note_body_sha256": { "$ref": "#/$defs/digest" }
+        "last_note_body_sha256": { "$ref": "#/$defs/digest" },
+        "thread_sha256": { "$ref": "#/$defs/digest" }
       },
       "allOf": [
         {
@@ -1484,7 +1500,7 @@
                 "decision_digest": { "$ref": "#/$defs/digest" },
                 "target": { "type": "object" },
                 "role": { "enum": ["author", "reviewer"] },
-                "mode": { "enum": ["fast", "normal", "deep", "incremental"] },
+                "mode": { "enum": ["fast", "normal", "deep", "incremental", "unchanged"] },
                 "locale": { "enum": ["en", "ru"] },
                 "incremental": { "$ref": "#/$defs/incremental_review" },
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
@@ -1544,7 +1560,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "enum": [3, 4] } }
+                    "properties": { "review_contract_version": { "enum": [3, 4, 5] } }
                   },
                   "then": {
                     "properties": {
@@ -1555,7 +1571,13 @@
                       },
                       "thread_decisions": {
                         "items": {
-                          "required": ["fix_mode", "patch", "patch_path", "patch_sha256"],
+                          "required": [
+                            "fix_mode",
+                            "patch",
+                            "fixing_commit",
+                            "patch_path",
+                            "patch_sha256"
+                          ],
                           "not": { "required": ["suggestion_applicable"] }
                         }
                       }
@@ -1565,12 +1587,23 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "const": 4 } }
+                    "properties": { "review_contract_version": { "enum": [4, 5] } }
                   },
                   "then": { "required": ["chat_assessment", "locale"] },
                   "else": {
                     "not": {
                       "anyOf": [{ "required": ["chat_assessment"] }, { "required": ["locale"] }]
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "required": ["review_contract_version"],
+                    "properties": { "review_contract_version": { "const": 5 } }
+                  },
+                  "then": {
+                    "properties": {
+                      "thread_decisions": { "items": { "required": ["thread_sha256"] } }
                     }
                   }
                 }
@@ -1683,7 +1716,7 @@
                 "critic_receipt_digest": {
                   "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }]
                 },
-                "mode": { "enum": ["fast", "normal", "deep", "incremental"] },
+                "mode": { "enum": ["fast", "normal", "deep", "incremental", "unchanged"] },
                 "external_mutations": { "const": false },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },
