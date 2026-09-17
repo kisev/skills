@@ -42,10 +42,10 @@ correction. Patches are checked against the exact reviewed head in a temporary
 Git index, reject binary, symlink, rename, traversal, and oversized content, and
 are stored as immutable private `.patch` files without changing the checkout.
 Every new review invocation reassesses every open and resolved discussion and all
-of its non-system replies. A resolved thread closed by another or unknown user
-requires a confirming or corrective reply. `no_publication` is allowed only for
-a plain note or an unchanged current-user conclusion that the same user closed
-and last published. Published patches use one copy-ready `sh` heredoc invoking
+of its non-system replies. A resolved thread needs a reply only when it adds
+information. Explicitly select `no_publication` when an existing explanation or
+applied suggestion is confirmed by current code, regardless of the resolver.
+Published patches use one copy-ready `sh` heredoc invoking
 `git apply`. A `resolve` or `reopen` action follows, but is separate from, the
 action that publishes its explanation.
 Contract 4 adds a semantic chat assessment and runner-owned presentation.

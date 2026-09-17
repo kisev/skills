@@ -67,9 +67,9 @@ again.
    the returned `scaffold-review` action. The runner owns standard presentation
    labels; content supplies only `locale` and semantic `chat_assessment` prose.
    Every open thread requires an explicit reply, resolve, or author local-fix
-   outcome. A resolved thread closed by another or unknown user requires a
-   reply; `no_publication` is limited to plain notes and a current conclusion
-   last published and closed by the authenticated user. Read the complete thread
+   outcome. A resolved thread needs a reply only when it adds new information.
+   Select `no_publication` explicitly after checking its explanation or applied
+   suggestion against current code. Read the complete thread
    before writing a concise response. A state change is a separate command after
    its explanatory reply.
 8. Run the returned `report-review` action and print its `chat` value verbatim.

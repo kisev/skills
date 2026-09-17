@@ -113,9 +113,10 @@ New findings and recommended issues start at revision 1. An unchanged active
 finding keeps its revision; changing `fix_mode`, suggestion content, patch
 content, or publication prose advances it. Thread replies use a stable ID
 derived from the root note and advance the revision for each new prepared reply.
-A thread closed by another or unknown user always receives a new assessment and
-prepared reply. Suppress a duplicate only when the authenticated user both
-closed the thread and still owns its latest complete, current conclusion.
+Reassess every closed thread regardless of its author or resolver. Explicitly
+choose `no_publication` after verifying an existing explanation or applied
+suggestion when a reply adds nothing. Reopen a confirmed remaining problem with
+a contextual reply and validated fix.
 
 If a prior finding was not published, revalidate it and include its current body
 in the new plan. Determine whether it is already published only by reading the

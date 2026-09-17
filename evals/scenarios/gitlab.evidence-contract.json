@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 11,
+  "revision": 12,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
@@ -68,9 +68,9 @@
       "contains": "On every invocation, read every non-system discussion and every reply"
     },
     {
-      "id": "closed-by-other",
+      "id": "closed-thread-context",
       "path": "skills/code-review/references/workflow.md",
-      "contains": "closed by another or an unknown user always requires"
+      "contains": "A resolved thread uses `no_publication`"
     },
     {
       "id": "separate-thread-state",
@@ -101,6 +101,16 @@
       "id": "closing-reply-antiexamples",
       "path": "skills/code-review/references/finding-examples.md",
       "contains": "`Closing.` does not explain"
+    },
+    {
+      "id": "resolved-thread-deduplication",
+      "path": "skills/code-review/references/workflow.md",
+      "contains": "applied GitLab suggestion already establishes the fix"
+    },
+    {
+      "id": "human-plan-layout",
+      "path": "skills/code-review/references/output-format.md",
+      "contains": "action IDs, operations, body paths"
     },
     {
       "id": "no-publication-state",
@@ -143,7 +153,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "9782b8dfca3bf0f3bcc60d7a0e3801ce9bcf00c614436b08d3dfeed99c203dd4",
+  "digest": "35df98ca6a32743d6af843d5e1c4183aeb60f2a95869fe434f29311d2652a286",
   "locale": "neutral",
   "pair_id": null
 }

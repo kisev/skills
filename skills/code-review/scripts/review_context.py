@@ -25,6 +25,7 @@ else:
 
 INCREMENTAL_CONTRACT_VERSION = 1
 REVIEW_CONTRACT_VERSION = 5
+SKILL_VERSION = "@PORTABLE_RELEASE_VERSION@"
 BASELINE_NAME = "review-baseline.json"
 PROGRESS_NAME = "review-current.json"
 REVIEW_EVIDENCE_NAME = "review-evidence.json"
@@ -1754,20 +1755,6 @@ def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any
     return expected
 
 
-def has_current_user_closing_conclusion(source: dict[str, Any], current_username: str) -> bool:
-    if (
-        source.get("root_resolved") is not True
-        or source.get("root_resolved_by_username") != current_username
-    ):
-        return False
-    meaningful = [
-        note
-        for note in cast(list[dict[str, Any]], source.get("notes", []))
-        if note.get("system") is not True and isinstance(note.get("body"), str)
-    ]
-    return bool(meaningful) and username(meaningful[-1].get("author")) == current_username
-
-
 def validate_fixing_commit(value: object) -> None:
     if value is None:
         return
@@ -2546,6 +2533,7 @@ def review_markdown(
         f"- {presentation['target_label']}: {context['target'].get('url')}",
         f"- {presentation['role_label']}: {presentation['role_value']}",
         f"- {presentation['verdict_label']}: {presentation['verdict_value']}",
+        f"- code-review: {SKILL_VERSION} · contract: {REVIEW_CONTRACT_VERSION}",
         f"- {presentation['publication_warning']}",
         "",
         content["summary"],
@@ -2553,33 +2541,26 @@ def review_markdown(
         f"## {presentation['metadata_heading']}",
         "",
     ]
-    for field in ("title", "description", "labels", "workflow_state", "overall"):
+    for field in ("title", "description", "workflow_state", "overall"):
         item = assessment[field]
-        lines.extend([f"### `{field}`", "", item["rationale"]])
-        if item["recommendation"]:
-            lines.extend(["", cast(str, item["recommendation"])])
-        lines.append("")
+        labels = portable.review_metadata_labels(content["locale"])
+        text = item["recommendation"] or item["rationale"]
+        lines.append(f"- **{labels[field]}:** {text}")
+    lines.append("")
 
     label_review = cast(dict[str, Any], content["label_review"])
-    label_assessments = {
-        item["name"]: item for item in cast(list[dict[str, Any]], label_review["assessments"])
-    }
+    shown_actions: set[str] = set()
     lines.extend([f"## {presentation['labels_heading']}", ""])
-    for field in ("current", "add", "remove", "unresolved"):
+    for field in ("add", "remove"):
         values = cast(list[str], label_review[field])
         rendered = (
             ", ".join(f"`{value}`" for value in values) if values else presentation["no_items"]
         )
-        lines.extend([f"- `{field}`: {rendered}"])
-    relevant = sorted(
-        set(cast(list[str], label_review["add"]))
-        | set(cast(list[str], label_review["remove"]))
-        | set(cast(list[str], label_review["unresolved"])),
-        key=str.casefold,
-    )
-    if relevant:
-        lines.append("")
-        lines.extend(f"- `{name}`: {label_assessments[name]['rationale']}" for name in relevant)
+        lines.append(f"- {portable.review_action_labels(content['locale'])[field]}: {rendered}")
+    label_action = next((item for item in publication_actions if item["kind"] == "labels"), None)
+    if label_action is not None:
+        shown_actions.add(cast(str, label_action["id"]))
+        lines.extend(["", "```shell", cast(str, label_action["command"]), "```"])
     lines.append("")
 
     lines.extend([f"## {presentation['previous_findings_heading']}", ""])
@@ -2610,63 +2591,41 @@ def review_markdown(
             )
         lines.append("")
 
-    shown_actions: set[str] = set()
-
     def add_fix(fix: dict[str, Any]) -> None:
-        lines.extend([f"`fix_mode:{fix['fix_mode']}`", ""])
         if fix["fix_mode"] == "suggestion":
-            lines.extend(["`suggestion:validated`", ""])
             return
         if fix["fix_mode"] != "patch":
             return
-        patch_path = cast(str, fix["patch_path"])
         lines.extend(
             [
-                f"`{patch_path}` (`{fix['patch_sha256']}`)",
-                "",
-                "<details>",
-                "<summary>Git patch</summary>",
-                "",
-                "```diff",
+                "```sh",
+                "git apply <<'PATCH'",
                 cast(str, fix["patch"]).rstrip(),
-                "```",
-                "",
-                "</details>",
-                "",
-                "```shell",
-                f"git apply --check {shlex.quote(patch_path)}",
-                f"git apply {shlex.quote(patch_path)}",
+                "PATCH",
                 "```",
                 "",
             ]
         )
 
     def add_action(action: dict[str, Any]) -> None:
+        if action["id"] in shown_actions:
+            return
         publication_id = action["publication_id"]
         body = bodies.get(publication_id) if publication_id is not None else None
         shown_actions.add(cast(str, action["id"]))
-        lines.extend(
-            [
-                f"### `{action['id']}`",
-                "",
-                f"`operation:{action['operation']}`",
-                "",
-            ]
-        )
-        if portable.nonempty_string(action.get("path")):
-            lines.extend([f"`position:{action['path']}:{action['line']}`", ""])
         if body is not None and action["operation"] not in {"resolve", "reopen"}:
             lines.extend(
                 [
-                    f"`{body['path']}`",
-                    "",
                     portable.marked_preview(
                         f"PUBLICATION {publication_id} BODY", cast(str, body["content"])
                     ),
                     "",
                 ]
             )
-        lines.extend(["```shell", cast(str, action["command"]), "```"])
+        label = portable.review_action_labels(content["locale"])[
+            action["operation"] if action["operation"] in {"resolve", "reopen"} else "reply"
+        ]
+        lines.extend([label, "", "```shell", cast(str, action["command"]), "```"])
         lines.append("")
 
     def add_publication_action(publication_id: str) -> None:
@@ -2686,7 +2645,6 @@ def review_markdown(
             return
         for item in items:
             lines.extend([f"### [{item['id']}]({item['url']})", "", item["rationale"], ""])
-            add_fix(item)
             add_publication_action(f"thread-{item['id']}")
 
     add_thread_section(
@@ -2747,7 +2705,6 @@ def review_markdown(
     if not reviewer_findings:
         lines.extend([presentation["no_items"], ""])
     for finding in reviewer_findings:
-        reviewer_publication = finding_publications.get(finding["id"])
         lines.extend(
             [
                 f"### {finding['summary']}",
@@ -2770,11 +2727,6 @@ def review_markdown(
                 "",
             ]
         )
-        if reviewer_publication is not None and reviewer_publication["type"] == "line":
-            line = reviewer_publication["line"] or reviewer_publication["old_line"]
-            lines.extend([f"`{reviewer_publication['path']}:{line}`", ""])
-        if reviewer_publication is not None:
-            add_fix(reviewer_publication)
         if finding["id"] in finding_publications:
             add_publication_action(cast(str, finding["id"]))
 
@@ -2814,8 +2766,7 @@ def review_markdown(
         lines.extend([presentation["no_items"], ""])
     else:
         lines.extend(
-            f"- [{item['id']}]({item['url']}): {item['rationale']} (`fix_mode:{item['fix_mode']}`)"
-            for item in without_publication
+            f"- [{item['id']}]({item['url']}): {item['rationale']}" for item in without_publication
         )
         lines.append("")
 
@@ -2835,17 +2786,14 @@ def review_markdown(
             "",
             *[f"- {value}" for value in content["checks"]],
             "",
-            f"## {presentation['publication_heading']}",
-            "",
-            presentation["publication_warning"],
-            "",
         ]
     )
     for action in publication_actions:
         if action["id"] in shown_actions:
             continue
-        lines.append("")
-        add_action(action)
+        if action["kind"] != "labels":
+            lines.append("")
+            add_action(action)
     return "\n".join(lines) + "\n"
 
 
@@ -3352,7 +3300,6 @@ def scaffold_review(
     ):
         raise portable.WorkflowError("author findings require read-only local fix patches")
     expected_threads = expected_thread_bindings(context)
-    current_username = cast(str, context["current_user_username"])
     thread_decisions = cast(list[dict[str, Any]], content["thread_decisions"])
     actual_threads = {item["id"]: item for item in thread_decisions}
     if len(actual_threads) != len(thread_decisions) or set(actual_threads) != set(expected_threads):
@@ -3363,14 +3310,6 @@ def scaffold_review(
             raise portable.WorkflowError("thread decision state does not match review context")
         if source["state"] == "open" and item["outcome"] == "no_publication":
             raise portable.WorkflowError("an open thread requires an explicit outcome")
-        if (
-            source["state"] == "resolved"
-            and item["outcome"] == "no_publication"
-            and not has_current_user_closing_conclusion(source, current_username)
-        ):
-            raise portable.WorkflowError(
-                "a thread closed by another user or followed by another user requires a response"
-            )
         if (
             item["outcome"] == "no_publication"
             and item["proposed_response"] is not None

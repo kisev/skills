@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import stat
 import tempfile
@@ -109,6 +110,20 @@ def copy_source(destination: Path) -> None:
         source_entrypoint.rename(skill / "SKILL.md")
 
 
+def stamp_release(root: Path) -> None:
+    if not (root / "code-review").exists():
+        return
+    version = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
+    if not isinstance(version, str) or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
+        raise BuildError("invalid portable release version")
+    target = root / "code-review/scripts/review_context.py"
+    text = target.read_text(encoding="utf-8")
+    token = "@PORTABLE_RELEASE_VERSION@"
+    if text.count(token) != 1:
+        raise BuildError("code-review release placeholder must occur exactly once")
+    target.write_text(text.replace(token, version), encoding="utf-8")
+
+
 def materialize(root: Path, entries: list[tuple[Path, Path]]) -> None:
     for source, relative in entries:
         target = root / relative
@@ -171,6 +186,7 @@ def build(output: Path, check: bool) -> int:
     ) as temporary:
         staged = Path(temporary) / "skills"
         copy_source(staged)
+        stamp_release(staged)
         materialize(staged, entries)
         check_materialized(staged, entries)
         if check:

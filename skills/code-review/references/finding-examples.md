@@ -41,9 +41,9 @@ Write it from the authenticated user's factual role and use natural informal
 second person when addressing the participant.
 
 An open thread must use `reply`, `resolve`, or author-mode `local_fix`. A thread
-resolved by another or unknown user still requires a confirming or corrective
-reply. Use `no_publication` only for a plain note or when the authenticated user
-closed the thread and their latest published conclusion remains current.
+resolved by another or unknown user needs a reply only when it adds information.
+Use `no_publication` after confirming that the existing explanation or applied
+suggestion remains correct, regardless of the resolver's identity.
 
 For an actionable current new-line position, prepare exactly one suggestion.
 Use a bounded range opener for a contiguous multi-line replacement:

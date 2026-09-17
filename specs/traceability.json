@@ -1,6 +1,6 @@
 {
   "schema": "traceability/v1",
-  "target": "4.1.0",
+  "target": "4.1.1",
   "source_revision": "2dad0676a58b5ec27198f9b3538be66df32a3dc1",
   "hash": {
     "algorithm": "sha256",
@@ -45,6 +45,8 @@
       "kind": "automated",
       "test_selectors": [
         "tests/test_application_workflows.py::PortableWorkflowTests::test_review_content_template_accounts_for_fifty_three_threads",
+        "tests/test_review_report.py::test_compact_report_keeps_one_decision_and_copyable_local_fix",
+        "tests/test_build_skills.py::test_release_stamp_is_portable_and_reproducible",
         "tests/test_application_workflows.py::PortableWorkflowTests::test_runner_final_review_requires_bound_current_finalize_evidence"
       ],
       "eval_ids": ["gitlab.code-review-routing", "gitlab.evidence-contract"]
@@ -422,7 +424,7 @@
     "REQ-F-105": {
       "surface": "skill:code-review",
       "source": "specs/capabilities/skills/code-review.md",
-      "block_sha256": "1956c80e4d12014a3c3448335fb134572835f29bf244c9b2ab31970930cf5731",
+      "block_sha256": "189cff83fe5460250169b4b2bdcccdc421b6c613e0e0c465fabc15eb87438b2f",
       "evidence_profile": "code_review"
     },
     "REQ-F-106": {

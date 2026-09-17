@@ -58,19 +58,19 @@ result to a separate implementation session.
 ```
 
 If there are no findings, say so explicitly inside the compact assessment. If
-the MR did not change after the baseline, report that briefly, do not run a
-critic, and reuse the existing publication-plan path.
+the MR did not change after the baseline, report that briefly and complete the
+fresh discussion audit without a critic.
 
 ## Publication plan
 
-The stable `review-publication.md` is action-oriented and contains, in this
-order:
+The stable `review-publication.md` is a compact human review document. Its header
+shows `code-review: <skill version> · contract: <version>`, then contains:
 
 1. Target, role, verdict, and the manual-only warning.
-2. MR metadata assessment.
-3. A compact project-label section with current labels, add/remove delta,
-   unresolved labels, and reasons for only those relevant decisions. Keep the
-   exhaustive one-entry-per-catalog-label assessment in private JSON.
+2. Compact MR metadata without a repeated labels recommendation.
+3. A project-label section beside metadata with only add/remove delta and its
+   command. Keep current labels, unresolved labels, and exhaustive assessment in
+   private JSON.
 4. A compact previous-finding table with ID, previous status, current status,
    rationale, and action.
 5. Open-thread actions.
@@ -80,13 +80,12 @@ order:
 9. Non-blocking recommended issues for confirmed out-of-scope problems.
 10. Threads reviewed without publication.
 11. Architecture, SemVer, and checks.
-12. Direct manual `glab` commands and the body files they consume.
+12. No separate manual-publication section: each command stays beside its item.
 
-For every actionable item, show `fix_mode`, publication operation and position
-when present. A patch fix also shows its absolute `.patch` path, SHA-256 digest,
-a full diff inside `<details>`, and separate `git apply --check` and `git apply`
-commands. A suggestion fix is marked as validated. A thread with
-`fix_mode=not_required` states that no code correction is needed.
+For every actionable item, show its natural conclusion, publication preview,
+suggestion or patch when applicable, and directly runnable command. Do not show
+`fix_mode`, action IDs, operations, body paths, digests, raw positions, or a
+separate artifact copy of a patch. Those bindings remain in private JSON.
 
 The model supplies semantic assessment prose, natural role-authored publication
 bodies, template selections, and exhaustive label-applicability rationales. The
@@ -102,7 +101,9 @@ semantic comparison of the content. Never infer publication from local state,
 markers, receipts, or a command that was previously shown.
 
 Severity and internal review bookkeeping must not appear in publication bodies.
-Published prose is concise without losing the evidence or required action. It
+Published prose is concise without losing the evidence or required action. Apply
+the `humanize` skill before drafting it and do not use `;` outside code,
+commands, or exact quotations. It
 starts with the answer, correction, or concrete fix, speaks as the authenticated
 user, and continues the complete existing conversation naturally instead of
 restating it. A fix

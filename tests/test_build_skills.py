@@ -39,6 +39,27 @@ def isolated_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return sources
 
 
+@pytest.mark.parametrize("version", ["7.2.3", "8.0.1"])
+def test_release_stamp_is_portable_and_reproducible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: str
+) -> None:
+    source_root = build_skills.ROOT
+    manifest = tmp_path / "packages/skills/package.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"version": version}))
+    monkeypatch.setattr(build_skills, "ROOT", tmp_path)
+    output = tmp_path / "built"
+    build_skills.build(output, False)
+    build_skills.build(output, True)
+    runner = output / "code-review/scripts/review_context.py"
+    assert f'SKILL_VERSION = "{version}"' in runner.read_text()
+    assert "@PORTABLE_RELEASE_VERSION@" not in runner.read_text()
+    assert (
+        "@PORTABLE_RELEASE_VERSION@"
+        in (source_root / "skills/code-review/scripts/review_context.py").read_text()
+    )
+
+
 def test_manifest_rejects_duplicate_missing_symlink_and_escape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

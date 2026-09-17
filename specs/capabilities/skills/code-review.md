@@ -18,6 +18,9 @@ assessment, SemVer rationale, validated per-item suggestions or unified patches,
 and direct manual `glab` commands that consume generated body files. Published
 patches are copy-ready `git apply` heredocs, while explanation and thread-state
 commands remain separate.
+The human publication plan identifies the skill and review-contract versions,
+keeps label delta beside compact MR metadata, and omits internal action IDs,
+operations, positions, body paths, and digests.
 
 ## Workflow Stages
 
@@ -98,10 +101,9 @@ manual `glab` commands with explicit body files and shall not track command
 execution, publication receipts, hidden markers, retries, or postconditions;
 preparation shall never invoke those commands. Every invocation shall read every
 open and resolved non-system discussion and all replies, including an unchanged
-incremental scope. A thread closed by another or unknown user shall receive a
-concise full-context reply that confirms or rejects the closure; silence is
-allowed only for a plain note or the authenticated user's still-current latest
-conclusion after that user closed the thread. Published Git patches shall use one
+incremental scope. A thread closed by any user shall receive a concise reply only
+when it adds information after checking the full conversation and current code.
+Published Git patches shall use one
 copy-ready quoted `git apply` heredoc. A thread-state command shall follow as a
 separate action after its explanatory reply, and no state change shall be
 prepared without one. Contract-5 plans shall bind every thread decision to the
@@ -119,6 +121,18 @@ templates with exact artifact, label, thread, latest-note, and pipeline bindings
 reject out-of-order, incomplete, stale, or structurally duplicate accepted findings and plans; keep reviewer finding details
 out of chat; treat low findings as non-blocking; and render a failed exact-head
 pipeline without another blocking finding as owner decision required.
+For a resolved thread with a sufficient existing explanation or applied GitLab
+suggestion, it shall prepare no duplicate reply; a new reply is permitted only
+when it adds a confirmed correction or independent information. Publication
+prose shall apply `humanize`, avoid semicolons outside exact code, commands, and
+quotations, and never claim to close a thread that is already resolved.
+The plan shall display its producer release version stamped from the portable
+release manifest during build, without a maintained version literal or runtime
+checkout dependency. Metadata shall be compact, label changes and their command
+shall appear once beside it, and actions shall have human-readable captions.
+Local fixes shall retain copy-ready patch previews. Semantically equivalent
+labels shall prefer namespaced labels based on their names and descriptions,
+replacing existing plain equivalents without hardcoded alias matching.
 
 ## Example
 

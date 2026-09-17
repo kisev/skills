@@ -669,6 +669,44 @@ def review_chat_assessment_is_valid(value: object) -> bool:
     )
 
 
+def review_metadata_labels(locale: str) -> dict[str, str]:
+    return (
+        {
+            "title": "Заголовок",
+            "description": "Описание",
+            "workflow_state": "Состояние",
+            "overall": "Итог оформления",
+        }
+        if locale == "ru"
+        else {
+            "title": "Title",
+            "description": "Description",
+            "workflow_state": "State",
+            "overall": "Metadata summary",
+        }
+    )
+
+
+def review_action_labels(locale: str) -> dict[str, str]:
+    return (
+        {
+            "add": "Добавить",
+            "remove": "Убрать",
+            "reply": "Опубликовать ответ:",
+            "resolve": "После успешной публикации закрыть тред:",
+            "reopen": "После успешной публикации переоткрыть тред:",
+        }
+        if locale == "ru"
+        else {
+            "add": "Add",
+            "remove": "Remove",
+            "reply": "Publish reply:",
+            "resolve": "After successful publication, resolve the thread:",
+            "reopen": "After successful publication, reopen the thread:",
+        }
+    )
+
+
 def code_review_presentation(
     locale: str, role: str, verdict: str, incremental_mode: str
 ) -> dict[str, Any]:

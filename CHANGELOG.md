@@ -8,6 +8,19 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## [4.1.1] - 2026-09-17
+
+### Fixed
+
+- Code-review reports show the release version stamped at build time, compact MR
+  metadata, one label delta with its command, and readable reply/state actions.
+  Internal action fields and duplicate patch previews no longer clutter reports.
+- Closed threads with a verified explanation or applied suggestion no longer
+  require redundant replies. Workflow guidance uses humanize and prefers
+  semantically equivalent namespaced labels over plain labels.
+- Local fixes retain copy-ready patch previews. Regression coverage includes
+  report layout, semantic label replacement, and reproducible version stamping.
+
 ## [4.1.0] - 2026-09-17
 
 ### Added
