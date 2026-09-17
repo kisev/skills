@@ -8,6 +8,25 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## [4.0.0] - 2026-09-17
+
+### Changed
+
+- Bounded project-file workflows now write directly with atomic replacement;
+  preview/confirmation protocols remain only for external publication, user
+  configuration, destructive cleanup, history changes, releases, and package
+  lifecycle operations.
+- Code review now prepares direct manual `glab` commands and body files. GitLab
+  discussions, notes, and issues authored by the current user are the source of
+  truth for incremental publication assessment.
+
+### Removed
+
+- The digest-confirmed `review_publish.py` helper, publication receipts, hidden
+  publication markers, retry state, and postcondition verification are removed.
+- Confirmation-based project-write flows, including `ast-grep rewrite --apply`
+  and the former work-item/team artifact apply phases, are removed.
+
 ## [3.2.1] - 2026-09-16
 
 ### Fixed
