@@ -4,7 +4,8 @@ Use `resolve -> prepare -> present -> report` for chat output and `resolve ->
 prepare -> apply -> report` for bounded project-file output. Ask a **Question**
 only before `prepare`. Write an explicitly requested workspace-relative output
 directly with atomic replacement; do not create a preview artifact or request
-Confirmation.
+Confirmation. In `task-prepare`, intent to prepare GitLab tasks also requests the
+bounded local publication bundle, without requiring an explicit output filename.
 
 Evidence is complete only when every required input and check for the declared
 scope was observed. Do not declare a result complete when evidence is partial,

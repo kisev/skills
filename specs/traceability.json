@@ -36,6 +36,17 @@
         "stage20.skill.task-triage.trigger.en"
       ]
     },
+    "task_publication": {
+      "kind": "automated",
+      "test_selectors": [
+        "tests/test_task_publication.py::test_creation_command_preserves_literal_markdown_and_pins_target",
+        "tests/test_task_publication.py::test_group_url_cannot_be_used_as_project_issue_target",
+        "tests/test_task_publication.py::test_batch_requires_agreement_and_defers_unknown_iids",
+        "tests/test_task_publication.py::test_resume_uses_real_iids_without_recreating_issues",
+        "tests/test_task_publication.py::test_built_script_is_standalone_and_neutral_mode_stays_chat_first"
+      ],
+      "eval_ids": ["stage17.generic-task.trigger.en"]
+    },
     "commands": {
       "kind": "automated",
       "test_selector": "packages/opencode/test/package.test.mjs::installer wizard uses shared multi-select groups and keeps defaults",
@@ -532,8 +543,8 @@
     "REQ-F-123": {
       "surface": "skill:task-prepare",
       "source": "specs/capabilities/skills/task-prepare.md",
-      "block_sha256": "b764ede23058c0c2f7fc605ac65181a05b06d1b85b84bfde0ffd5df8705f6419",
-      "evidence_profile": "task_skills"
+      "block_sha256": "5e4ed19b3ba630db887a2ed21f50012df5327d68efacd09a36bc1b4f7693f93c",
+      "evidence_profile": "task_publication"
     },
     "REQ-F-124": {
       "surface": "skill:task-review",

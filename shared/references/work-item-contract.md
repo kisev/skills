@@ -33,7 +33,10 @@ unresolved.
 ## Workflow Duties
 
 - `askme` changes only contract fields and returns `normalized_item` or `blocker`.
-- `task-prepare` creates no output artifact unless an explicit workspace-relative output path is requested and makes no external mutation.
+- `task-prepare` keeps neutral output in chat unless a workspace-relative file is
+  requested. Explicit intent to prepare tasks for GitLab selects a local
+  `task-publication.md` plan with manual commands. It makes no external mutation.
+  One task is the default; a requested or agreed set normalizes each task separately.
 - `task-review` returns evidence-backed findings without reviewing implementation.
 - `goal` does not turn an invalid item into `running` and binds completion evidence.
 - One workflow owns each durable state; these workflows do not create a shared

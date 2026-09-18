@@ -31,7 +31,7 @@ of `@kisev/skills-opencode`.
 | `spec-manage`            | Initialize, onboard, update, or audit canonical project specifications.                  |
 | `stopit`                 | Write a sanitized handoff for the next session.                                          |
 | `briefing`               | Turn transcripts, notes, or research into a structured factual summary.                  |
-| `task-prepare`           | Prepare a storage-neutral, self-contained work item without publication.                 |
+| `task-prepare`           | Prepare a task or agreed GitLab task set with a manual publication plan.                 |
 | `task-review`            | Review a storage-neutral work item without changing external state.                      |
 | `task-triage`            | Triage explicit storage-neutral work-item material read-only.                            |
 | `team-retro`             | Prepare an evidence-based retrospective or delivery presentation from a private profile. |
