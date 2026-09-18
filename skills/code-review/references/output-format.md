@@ -13,7 +13,7 @@ technical prose. Keep code, IDs, paths, API fields, and commands unchanged.
 
 Keep the chat result compact. `report-review` owns the labels and layout; print
 its `chat` field verbatim rather than composing the result manually. A missing,
-incomplete, or stale contract-5 plan produces only a localized blocked report
+incomplete, or stale contract-6 plan produces only a localized blocked report
 with the failed stage and safe next action.
 When the current evidence artifact itself is unavailable, no trusted recovery
 command can be derived; the blocked report uses `next_action=null` and asks for
@@ -29,14 +29,21 @@ Incremental review completed. <!-- only for an incremental review -->
 - **Relevance:** <current / partly outdated / outdated> - <why>
 - **Change:** <two to four sentences about behavior before and after>
 - **Architecture:** <short assessment of ownership and project fit>
-- **SemVer:** <MAJOR / MINOR / PATCH / none / not applicable> - <why>
+- **MR contribution / label:** <MAJOR / MINOR / PATCH / none / not applicable> - <why>
+- **SemVer basis:** `<last published release>` → `<target branch>` + MR
+- **Next release:** <MAJOR / MINOR / PATCH / none / not applicable> - <why>
+- **Release policy:** <evidence-based policy and relevant release line>
 - **MR metadata:** <ready / changes needed / context needed>
 - **Verdict:** <ready to merge / changes required / owner decision required>
 - **Review checkout:** `<absolute path>`
 - **Publication plan:** `<absolute path>/review-publication.md`
 ```
 
-Do not print raw base, start, or head SHAs. Exact refs stay in private JSON
+If the release basis cannot be established, replace the basis and next-release
+lines with **SemVer: target-branch fallback**, the named target branch, and the
+specific reason. The MR contribution still drives the label. See `semver.md`.
+
+Do not print raw release, target, base, start, or head SHAs. Exact refs stay in private JSON
 evidence. Blob and commit links may remain pinned to immutable revisions while
 their visible text contains only a path, line, or natural description. Never
 use a `file://` link for a local artifact.

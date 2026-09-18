@@ -19,12 +19,14 @@ from typing import TYPE_CHECKING, Any, Iterator, cast
 
 if TYPE_CHECKING:
     from shared.references.portable_gitlab import contract as portable
+    from shared.references.portable_gitlab import review_semver
     from shared.references.portable_gitlab.label_assessment import (
         label_catalog as label_catalog,
         validate_label_assessments as validate_label_assessments,
     )
 else:
     from portable_runtime import contract as portable
+    from portable_runtime import review_semver
     from portable_runtime.label_assessment import (
         label_catalog as label_catalog,
         validate_label_assessments as validate_label_assessments,
@@ -32,7 +34,7 @@ else:
 
 
 INCREMENTAL_CONTRACT_VERSION = 1
-REVIEW_CONTRACT_VERSION = 5
+REVIEW_CONTRACT_VERSION = 6
 SKILL_VERSION = "@PORTABLE_RELEASE_VERSION@"
 BASELINE_NAME = "review-baseline.json"
 PROGRESS_NAME = "review-current.json"
@@ -382,7 +384,7 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
         raise portable.WorkflowError("code-review baseline plan digest changed")
     if (
         plan.get("complete") is not True
-        or plan.get("review_contract_version") not in {1, 2, 3, 4, REVIEW_CONTRACT_VERSION}
+        or plan.get("review_contract_version") not in {1, 2, 3, 4, 5, REVIEW_CONTRACT_VERSION}
         or plan.get("target") != pointer.get("target")
     ):
         raise portable.WorkflowError("code-review baseline is incomplete or incompatible")
@@ -499,7 +501,9 @@ def incremental_context(
         _, old_context = artifact_for_digest(root, "review_context", plan.get("context_digest"))
         failures: list[str] = []
         if plan.get("review_contract_version") != REVIEW_CONTRACT_VERSION:
-            failures.append("baseline review contract predates complete-thread audit binding")
+            failures.append("baseline review contract predates release-aware SemVer")
+        if old_context.get("release_evidence") != context.get("release_evidence"):
+            failures.append("release evidence or target branch changed")
         if (
             old_context.get("evidence_digest") != plan.get("evidence_digest")
             or old_context.get("target") != plan.get("target")
@@ -967,6 +971,7 @@ def collect_context(
         "discussions": discussions,
         "notes": notes,
         "issue_templates": issue_templates,
+        "release_evidence": review_semver.collect(evidence),
         "counts": counts,
         "exact_git": exact_git,
         "complete": evidence.get("retrieval_complete") is True
@@ -2659,9 +2664,7 @@ def review_markdown(
             "",
             f"## {presentation['semver_heading']}",
             "",
-            f"`{content['semver_impact']}`",
-            "",
-            content["semver_rationale"],
+            *review_semver.report_lines(content, cast(str, content["locale"])),
             "",
             f"## {presentation['checks_heading']}",
             "",
@@ -2796,6 +2799,16 @@ def reject_visible_raw_refs(
         if isinstance(value, str) and len(value) >= 12
     ]
     if context is not None:
+        release = context.get("release_evidence")
+        if isinstance(release, dict):
+            candidates = [release.get("target_sha")]
+            for key in ("releases", "tags"):
+                for item in release[key]["items"]:
+                    if isinstance(item, dict) and isinstance(item.get("commit"), dict):
+                        candidates.append(item["commit"].get("id"))
+            refs.extend(
+                value for value in candidates if isinstance(value, str) and len(value) >= 12
+            )
         incremental = context.get("incremental")
         delta = incremental.get("incremental_delta") if isinstance(incremental, dict) else None
         if isinstance(delta, dict):
@@ -2965,6 +2978,7 @@ def scaffold_review(
             "architecture_assessment",
             "semver_impact",
             "semver_rationale",
+            "semver_assessment",
             "mr_metadata_assessment",
             "label_assessments",
             "checks",
@@ -2993,6 +3007,7 @@ def scaffold_review(
         raise portable.WorkflowError("review plan content is invalid")
     if content["issue_templates"] != context["issue_templates"]:
         raise portable.WorkflowError("review content issue templates do not match review context")
+    review_semver.validate(content["semver_assessment"], evidence, context)
     progress = load_progress(root)
     if progress is not None and content["locale"] != progress.get("locale"):
         raise portable.WorkflowError(
@@ -3331,6 +3346,7 @@ def scaffold_review(
         "architecture_assessment": content["architecture_assessment"],
         "semver_impact": content["semver_impact"],
         "semver_rationale": content["semver_rationale"],
+        "semver_assessment": content["semver_assessment"],
         "chat_assessment": chat_assessment,
         "mr_metadata_assessment": metadata,
         "label_review": label_review,
@@ -3722,6 +3738,7 @@ def content_template(
         "architecture_assessment": "",
         "semver_impact": "none",
         "semver_rationale": "",
+        "semver_assessment": review_semver.template(evidence, context),
         "mr_metadata_assessment": {
             field: {"status": "unverified", "rationale": "", "recommendation": None}
             for field in ("title", "description", "labels", "workflow_state", "overall")
@@ -3961,10 +3978,6 @@ def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -
     metadata = cast(dict[str, Any], plan["mr_metadata_assessment"])["assessment"]["overall"]
     labels = portable.code_review_chat_labels(locale)
     exact_git = cast(dict[str, Any], context["exact_git"])
-    semver = cast(str, plan["semver_impact"])
-    semver_value = (
-        semver.upper() if semver in {"major", "minor", "patch"} else semver.replace("_", " ")
-    )
     necessity = cast(dict[str, Any], assessment["necessity"])
     relevance = cast(dict[str, Any], assessment["relevance"])
     necessity_values = cast(dict[str, str], labels["necessity_values"])
@@ -3982,7 +3995,7 @@ def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -
             f"- **{labels['relevance']}:** {relevance_values[relevance['status']]} - {relevance['rationale']}",
             f"- **{labels['change']}:** {assessment['change']}",
             f"- **{labels['architecture']}:** {plan['architecture_assessment']}",
-            f"- **{labels['semver']}:** {semver_value} - {plan['semver_rationale']}",
+            *review_semver.report_lines(plan, locale),
             f"- **{labels['metadata']}:** {metadata_values[metadata['status']]}",
             f"- **{labels['verdict']}:** {presentation['verdict_value']}",
         ]

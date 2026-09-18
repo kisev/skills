@@ -82,6 +82,10 @@ if endpoint.startswith("projects/group%%2Fproject"):
     value = {"id": 19, "path_with_namespace": "group/project", "default_branch": "main", "merge_requests_template": os.environ.get("FAKE_MR_DEFAULT_TEMPLATE")}
 elif endpoint == "projects/19/repository/commits/main":
     value = {"id": "a"}
+elif endpoint == "projects/19/repository/branches/main":
+    value = {"name": "main", "commit": {"id": os.environ["FAKE_TARGET_SHA"]}} if "FAKE_TARGET_SHA" in os.environ else []
+elif endpoint.startswith("projects/19/releases?"):
+    value = json.loads(os.environ.get("FAKE_RELEASES", "[]"))
 elif endpoint.startswith("projects/19/repository/tree?"):
     from urllib.parse import parse_qs, urlsplit
     path = parse_qs(urlsplit(endpoint).query).get("path", [""])[0]
@@ -1898,6 +1902,7 @@ print(json.dumps(value))
             "notes": [],
             "publication_markers": [],
             "issue_templates": [],
+            "release_evidence": {"target_branch": "main", "target_sha": "b"},
             "incremental": {
                 "previous_findings": [],
                 "previous_recommended_issues": [],
@@ -2421,6 +2426,12 @@ print(json.dumps(value))
                         "architecture_assessment": "The responsibility remains with its existing owner.",
                         "semver_impact": "patch",
                         "semver_rationale": "The fix changes behavior without changing the public API.",
+                        "semver_assessment": {
+                            **generated_content["semver_assessment"],
+                            "policy": "No release policy was found in the fixture.",
+                            "sources": ["Fixture repository and empty release catalog"],
+                            "fallback_reason": "No confirmed release is available.",
+                        },
                         "mr_metadata_assessment": {
                             "title": {
                                 "status": "needs_change",
@@ -2624,7 +2635,7 @@ print(json.dumps(value))
             self.assertIn("The fix changes behavior without changing the public API.", markdown)
             self.assertIn("git apply <<'PATCH'", markdown)
             release = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
-            self.assertIn(f"code-review: {release} · contract: 5", markdown)
+            self.assertIn(f"code-review: {release} · contract: 6", markdown)
             self.assertNotIn("`operation:", markdown)
             self.assertNotIn("`position:", markdown)
             self.assertNotIn("## Manual publication", markdown)
@@ -2663,7 +2674,7 @@ print(json.dumps(value))
             self.assertEqual(
                 plan_document["payload"]["label_review"]["semver"]["selected"], "semver::patch"
             )
-            self.assertEqual(plan_document["payload"]["review_contract_version"], 5)
+            self.assertEqual(plan_document["payload"]["review_contract_version"], 6)
             report = self.run_runner(
                 "code-review", "report-review", "--artifact-root", artifact_root, env=environment
             )
@@ -3252,6 +3263,12 @@ print(json.dumps(value))
                         "architecture_assessment": "The responsibility remains with its owner.",
                         "semver_impact": "patch",
                         "semver_rationale": "No public API changes.",
+                        "semver_assessment": {
+                            **generated_content["semver_assessment"],
+                            "policy": "No release policy was found in the fixture.",
+                            "sources": ["Fixture repository and empty release catalog"],
+                            "fallback_reason": "No confirmed release is available.",
+                        },
                         "mr_metadata_assessment": {
                             field: {
                                 "status": "ok",
@@ -3472,6 +3489,32 @@ print(json.dumps(value))
                     for discussion in retained_document["payload"]["discussions"]
                     for note in discussion["notes"]
                 )
+            )
+            environment["FAKE_RELEASES"] = json.dumps(
+                [{"tag_name": "v1.4.0", "commit": {"id": base_sha}}]
+            )
+            release_changed = self.run_runner(
+                "code-review",
+                "prepare",
+                "--url",
+                target,
+                "--repo-root",
+                str(repository),
+                "--locale",
+                "ru",
+                env=environment,
+            )
+            self.assertEqual(release_changed.returncode, 0, release_changed.stderr)
+            release_context = self.run_runner(
+                "code-review",
+                *json.loads(release_changed.stdout)["items"][0]["next_action"]["argv"][2:],
+                env=environment,
+            )
+            self.assertEqual(release_context.returncode, 0, release_context.stderr)
+            release_selection = json.loads(release_context.stdout)["incremental"]
+            self.assertEqual(release_selection["mode"], "full")
+            self.assertIn(
+                "release evidence or target branch changed", release_selection["fallback_reasons"]
             )
             environment["FAKE_BASE_SHA"] = head_sha
             environment["FAKE_START_SHA"] = head_sha

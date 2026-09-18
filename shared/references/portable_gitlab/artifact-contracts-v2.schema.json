@@ -1259,6 +1259,74 @@
         }
       ]
     },
+    "semver_assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "policy",
+        "sources",
+        "baseline",
+        "target_branch",
+        "target_sha",
+        "target_revision",
+        "fallback_reason",
+        "release_impact",
+        "release_rationale"
+      ],
+      "properties": {
+        "mode": { "enum": ["release", "target_fallback"] },
+        "policy": { "type": "string", "minLength": 1 },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "target_branch": { "type": "string", "minLength": 1 },
+        "target_sha": { "$ref": "#/$defs/sha" },
+        "target_revision": { "enum": ["current", "mr_snapshot"] },
+        "baseline": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "sha", "source"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1 },
+                "sha": { "$ref": "#/$defs/sha" },
+                "source": { "enum": ["releases", "tags"] }
+              }
+            }
+          ]
+        },
+        "fallback_reason": { "type": ["string", "null"], "minLength": 1 },
+        "release_impact": { "enum": ["major", "minor", "patch", "none", "not_applicable", null] },
+        "release_rationale": { "type": ["string", "null"], "minLength": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "release" } } },
+          "then": {
+            "properties": {
+              "baseline": { "type": "object" },
+              "fallback_reason": { "type": "null" },
+              "target_revision": { "const": "current" },
+              "release_impact": { "type": "string" },
+              "release_rationale": { "type": "string" }
+            }
+          },
+          "else": {
+            "properties": {
+              "baseline": { "type": "null" },
+              "fallback_reason": { "type": "string" },
+              "release_impact": { "type": "null" },
+              "release_rationale": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
     "review_context": {
       "allOf": [
         { "$ref": "#/$defs/envelope" },
@@ -1349,6 +1417,18 @@
                 "discussions": { "type": "array" },
                 "notes": { "type": "array" },
                 "issue_templates": { "type": "array" },
+                "release_evidence": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["target_branch", "target_sha", "releases", "tags", "errors"],
+                  "properties": {
+                    "target_branch": { "type": ["string", "null"] },
+                    "target_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+                    "releases": { "$ref": "#/$defs/component" },
+                    "tags": { "$ref": "#/$defs/component" },
+                    "errors": { "type": "array", "items": { "type": "string" } }
+                  }
+                },
                 "counts": { "$ref": "#/$defs/review_counts" },
                 "exact_git": { "$ref": "#/$defs/exact_git" },
                 "incremental": { "$ref": "#/$defs/incremental_review" },
@@ -1579,7 +1659,7 @@
               "additionalProperties": false,
               "properties": {
                 "profile": { "const": "code-review" },
-                "review_contract_version": { "enum": [1, 2, 3, 4, 5] },
+                "review_contract_version": { "enum": [1, 2, 3, 4, 5, 6] },
                 "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
@@ -1597,6 +1677,7 @@
                   "enum": ["major", "minor", "patch", "none", "not_applicable", "unknown"]
                 },
                 "semver_rationale": { "type": "string", "minLength": 1 },
+                "semver_assessment": { "$ref": "#/$defs/semver_assessment" },
                 "mr_metadata_assessment": { "$ref": "#/$defs/mr_metadata_assessment" },
                 "label_review": { "$ref": "#/$defs/code_review_label_review" },
                 "publication_preview": { "$ref": "#/$defs/review_publication_preview" },
@@ -1646,7 +1727,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "enum": [3, 4, 5] } }
+                    "properties": { "review_contract_version": { "enum": [3, 4, 5, 6] } }
                   },
                   "then": {
                     "properties": {
@@ -1673,7 +1754,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "enum": [4, 5] } }
+                    "properties": { "review_contract_version": { "enum": [4, 5, 6] } }
                   },
                   "then": { "required": ["chat_assessment", "locale"] },
                   "else": {
@@ -1685,13 +1766,21 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "const": 5 } }
+                    "properties": { "review_contract_version": { "enum": [5, 6] } }
                   },
                   "then": {
                     "properties": {
                       "thread_decisions": { "items": { "required": ["thread_sha256"] } }
                     }
                   }
+                },
+                {
+                  "if": {
+                    "required": ["review_contract_version"],
+                    "properties": { "review_contract_version": { "const": 6 } }
+                  },
+                  "then": { "required": ["semver_assessment", "label_review"] },
+                  "else": { "not": { "required": ["semver_assessment"] } }
                 }
               ]
             }

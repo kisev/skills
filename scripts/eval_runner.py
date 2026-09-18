@@ -1015,6 +1015,18 @@ print(json.dumps(value))
                                 "architecture_assessment": "Ownership remains unchanged.",
                                 "semver_impact": "none",
                                 "semver_rationale": "No versioned behavior changes.",
+                                "semver_assessment": {
+                                    "mode": "target_fallback",
+                                    "policy": "The fixture has no established release policy.",
+                                    "sources": ["Fixture repository and empty release catalog"],
+                                    "baseline": None,
+                                    "target_branch": "main",
+                                    "target_sha": review_sha,
+                                    "target_revision": "mr_snapshot",
+                                    "fallback_reason": "No published release could be established.",
+                                    "release_impact": None,
+                                    "release_rationale": None,
+                                },
                                 "mr_metadata_assessment": {
                                     field: {
                                         "status": "ok",

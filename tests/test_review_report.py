@@ -9,6 +9,8 @@ from typing import Any
 
 import pytest
 
+from tests.test_review_semver import fallback_assessment
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -80,6 +82,7 @@ def test_compact_report_keeps_one_decision_and_copyable_local_fix(review: Module
         "architecture_assessment": "Existing ownership is preserved.",
         "semver_impact": "minor",
         "semver_rationale": "Compatible option.",
+        "semver_assessment": fallback_assessment(),
         "checks": ["Compared current code."],
     }
     actions: list[dict[str, Any]] = [
@@ -127,7 +130,7 @@ def test_compact_report_keeps_one_decision_and_copyable_local_fix(review: Module
         {}, {"role": "author", "target": {"url": url}}, {}, content, metadata, publication
     )
     release = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
-    assert f"code-review: {release} · contract: 5" in report
+    assert f"code-review: {release} · contract: 6" in report
     assert "**Title:** Looks correct." in report
     assert report.index(actions[-1]["command"]) < report.index("## Closed threads")
     for action in actions:

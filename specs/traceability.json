@@ -57,6 +57,8 @@
       "test_selectors": [
         "tests/test_application_workflows.py::PortableWorkflowTests::test_review_content_template_accounts_for_fifty_three_threads",
         "tests/test_review_report.py::test_compact_report_keeps_one_decision_and_copyable_local_fix",
+        "tests/test_review_semver.py::test_release_major_keeps_patch_mr_label",
+        "tests/test_review_semver.py::test_unknown_policy_is_explicit_fallback_without_release_claim",
         "tests/test_build_skills.py::test_release_stamp_is_portable_and_reproducible",
         "tests/test_application_workflows.py::PortableWorkflowTests::test_runner_final_review_requires_bound_current_finalize_evidence"
       ],
@@ -435,7 +437,7 @@
     "REQ-F-105": {
       "surface": "skill:code-review",
       "source": "specs/capabilities/skills/code-review.md",
-      "block_sha256": "189cff83fe5460250169b4b2bdcccdc421b6c613e0e0c465fabc15eb87438b2f",
+      "block_sha256": "1fde7de50444b2592898c463dd224305b84ceb9274195fb98f4649c86526b739",
       "evidence_profile": "code_review"
     },
     "REQ-F-106": {

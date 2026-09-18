@@ -127,7 +127,12 @@ receipts, command history, or a local publication state.
 The baseline pointer, exact refs, delta, and previous findings remain private
 technical JSON. User-facing reports omit raw SHAs. A prior manual command never
 authorizes a changed publication or label delta.
-Review-contract 1 through 3 plans remain readable as historical baselines, but
+Review-contract 1 through 5 plans remain readable as historical baselines, but
 their helper commands are not executable after migration to direct manual
-`glab` commands. They cannot be reused incrementally as a contract-5 baseline;
+`glab` commands. They cannot be reused incrementally as a contract-6 baseline;
 context selection falls back to a full review instead.
+
+Release/tag catalogs and the current target revision are part of the context
+fingerprint. A change to this evidence forces full review even if the MR head
+is unchanged. Reassess release policy and both SemVer impacts on every run;
+never reuse a next-release estimate solely because the MR diff is unchanged.

@@ -1916,10 +1916,21 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         }
         current_required = legacy_required | {"incremental", "issue_templates"}
         structured_required = current_required | {"current_user_id"}
-        if set(payload) not in (legacy_required, current_required, structured_required):
+        release_required = structured_required | {"release_evidence"}
+        if set(payload) not in (
+            legacy_required,
+            current_required,
+            structured_required,
+            release_required,
+        ):
             raise WorkflowError("review context payload has unknown or missing fields")
         legacy_context = set(payload) == legacy_required
-        structured_context = set(payload) == structured_required
+        structured_context = set(payload) in (structured_required, release_required)
+        if set(payload) == release_required:
+            from .review_semver import evidence_is_valid
+
+            if not evidence_is_valid(payload["release_evidence"]):
+                raise WorkflowError("review release evidence is schema-invalid")
         counts = payload["counts"]
         exact_git = payload["exact_git"]
         if (
@@ -2103,6 +2114,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         }
         structured_required = current_required | {"label_review"}
         final_required = structured_required | {"chat_assessment", "locale"}
+        release_required = final_required | {"semver_assessment"}
         actual_keys = set(payload)
         if actual_keys not in (
             minimal_required,
@@ -2110,21 +2122,38 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             current_required,
             structured_required,
             final_required,
+            release_required,
         ):
             raise WorkflowError("review plan payload has unknown or missing fields")
-        legacy_plan = actual_keys not in (current_required, structured_required, final_required)
-        structured_plan = actual_keys in (structured_required, final_required)
-        final_plan = actual_keys == final_required
+        legacy_plan = actual_keys not in (
+            current_required,
+            structured_required,
+            final_required,
+            release_required,
+        )
+        structured_plan = actual_keys in (structured_required, final_required, release_required)
+        final_plan = actual_keys in (final_required, release_required)
         minimal_plan = actual_keys == minimal_required
+        from .review_semver import assessment_is_valid
+
+        if (actual_keys == release_required) != (payload.get("review_contract_version") == 6) or (
+            actual_keys == release_required
+            and (
+                not assessment_is_valid(payload["semver_assessment"])
+                or not code_review_label_review_is_valid(payload["label_review"])
+                or payload["label_review"]["semver"]["impact"] != payload["semver_impact"]
+            )
+        ):
+            raise WorkflowError("review plan SemVer assessment is invalid")
         if (
             payload["profile"] != "code-review"
             or not legacy_plan
             and (
-                payload["review_contract_version"] not in {2, 3, 4, 5}
+                payload["review_contract_version"] not in {2, 3, 4, 5, 6}
                 if structured_plan
                 else payload["review_contract_version"] != 1
             )
-            or final_plan != (payload.get("review_contract_version") in {4, 5})
+            or final_plan != (payload.get("review_contract_version") in {4, 5, 6})
             or payload["external_mutations"] is not False
             or not all(
                 is_digest(payload[key])
@@ -2163,7 +2192,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                     isinstance(item, dict) and "suggestion_applicable" in item
                     for item in payload["thread_decisions"]
                 )
-                or payload["review_contract_version"] in {3, 4, 5}
+                or payload["review_contract_version"] in {3, 4, 5, 6}
                 and (
                     not finding_publications_are_valid(
                         payload["finding_publications"], require_fixes=True
@@ -2409,6 +2438,11 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
 
 def allowed_endpoint(endpoint: str) -> bool:
     # These are the complete collection endpoints. Query values are generated, never caller input.
+    if re.fullmatch(
+        r"projects/[0-9]+/(?:releases|repository/tags)(?:\?[^#]+)?|projects/[0-9]+/repository/branches/[^/?#]+",
+        endpoint,
+    ):
+        return True
     return bool(
         re.fullmatch(
             r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",

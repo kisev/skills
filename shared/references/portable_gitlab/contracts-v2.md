@@ -92,13 +92,24 @@ leave the superseded plan executable.
 
 The immutable review-plan envelope embeds the complete Markdown. A successful
 scaffold atomically replaces the target-scoped `review-publication.md` and a
-private pointer to that immutable plan. Contract 1 through 4 plans remain readable
+private pointer to that immutable plan. Contract 1 through 5 plans remain readable
 as historical baselines, but their helper commands are not executable after the
 move to direct manual `glab` commands. Older plans fall back to a full review
-rather than becoming a contract-5 incremental baseline. Exact refs live in
+rather than becoming a contract-6 incremental baseline. Exact refs live in
 private evidence; the user-facing plan does not display raw commit SHAs. Prepare
 and review never invoke publication commands. MR state is recorded but does not
 suppress actions for merged or closed MRs.
+
+Contract 6 adds required `semver_assessment` to the content and plan. Existing
+`semver_impact`/`semver_rationale` describe only the MR contribution and select
+its compatibility label. The new assessment binds release policy and sources,
+the selected catalog release/tag name and commit, current target branch/commit,
+and a distinct accumulated next-release impact/rationale. `target_fallback`
+requires a reason and null release fields. If current target lookup failed,
+`target_revision=mr_snapshot` explicitly identifies the MR start snapshot.
+Review context collects `release_evidence` without making absent publication
+information block review. Refreshing catalogs and the target commit protects
+finalization; a changed release basis forces full review on the next invocation.
 
 `finalize_report` contains exact evidence digest and fingerprint. MR preparation
 also binds it to the exact publication plan digest. A critic receipt for an

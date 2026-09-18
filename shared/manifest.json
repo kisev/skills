@@ -2,6 +2,22 @@
   "version": 1,
   "files": [
     {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "code-review/scripts/portable_runtime/review_semver.py"
+    },
+    {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "mr-prepare/scripts/portable_runtime/review_semver.py"
+    },
+    {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "release-prepare/scripts/portable_runtime/review_semver.py"
+    },
+    {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "release-review/scripts/portable_runtime/review_semver.py"
+    },
+    {
       "source": "references/work_item_runtime/publication.py",
       "destination": "task-prepare/scripts/portable_runtime/publication.py"
     },

@@ -27,7 +27,7 @@ operations, positions, body paths, and digests.
 Resolve boundary, select full or GitLab-only incremental scope, inspect code and
 contracts, revalidate previous findings, inspect every available project and
 inherited-group label, record the critic when required, finalize evidence and the
-decision, scaffold a contract-4 plan, and render chat from that plan. The runner
+decision, scaffold a contract-6 plan, and render chat from that plan. The runner
 exposes the current stage and exact next action so interrupted reviews can resume
 without guessing. Publication remains a separate manual step through the direct
 `glab` commands shown in the plan.
@@ -90,7 +90,23 @@ multilingual role-aware assessment and an action-oriented
 `suggestion` fixes, exhaustive private
 project/inherited-label applicability with SemVer-linked compact delta, thread
 reply/resolve/reopen previews, reviewer findings, non-blocking recommended
-issues, and metadata/SemVer assessments. Every actionable finding, thread
+issues, and metadata/SemVer assessments. Contract-6 plans shall distinguish the
+MR's own SemVer contribution (which selects its compatibility label) from the
+accumulated next-release impact after including the MR. The reviewer shall
+establish publication policy and the last published release of the affected
+line from project documentation, publishing configuration, and release evidence,
+never from branch names or globally newest tags alone. The runner shall collect
+paginated release/tag catalogs and the current target commit, bind the chosen
+release name/commit to a complete catalog and available related Git objects,
+and refresh this evidence before final output. Changed release evidence or target
+revision shall force full review rather than reuse an unchanged assessment.
+When policy, publication, or comparison cannot be established reliably, the
+review shall continue with an explicit reason and target-branch fallback; the
+release estimate shall be null, and the MR's target-relative assessment shall
+select its label. Reports shall show the mode, named comparison basis, policy,
+and separate rationales, keeping exact commits in private JSON. Existing plans
+remain readable but cannot serve as contract-6 incremental baselines.
+Every actionable finding, thread
 correction, and author local fix shall contain either one exact-position
 single-line or bounded multi-line suggestion or one content-addressed textual
 unified patch validated against the exact reviewed head without changing the
@@ -115,7 +131,7 @@ open thread found fixed, false-positive, duplicate, or not related. Its optional
 URL when canonical evidence proves attribution. For remote
 review, the runner shall own a resumable fail-closed state machine from prepared
 evidence through a recorded independent critic when the selected mode requires
-one, fresh finalize report, bound decision, contract-5 plan, baseline, Markdown,
+one, fresh finalize report, bound decision, contract-6 plan, baseline, Markdown,
 and final chat rendering. It shall generate model-ready critic, decision, and content
 templates with exact artifact, label, thread, latest-note, and pipeline bindings;
 reject out-of-order, incomplete, stale, or structurally duplicate accepted findings and plans; keep reviewer finding details

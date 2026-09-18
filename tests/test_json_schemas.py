@@ -16,6 +16,7 @@ from jsonschema.validators import validator_for
 from scripts import eval_runner
 from shared.references.portable_gitlab.contract import WorkflowError, validate_v2_artifact
 from tests.test_work_item_contract import item as work_item
+from tests.test_review_semver import fallback_assessment, release_assessment
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
@@ -280,6 +281,13 @@ def artifact_instances() -> list[dict[str, Any]]:
             "discussions": [],
             "notes": [],
             "issue_templates": [],
+            "release_evidence": {
+                "target_branch": "main",
+                "target_sha": "b",
+                "releases": component(),
+                "tags": component(),
+                "errors": [],
+            },
             "counts": {
                 "discussions": 0,
                 "notes": 0,
@@ -372,7 +380,7 @@ def artifact_instances() -> list[dict[str, Any]]:
         "review_plan",
         {
             "profile": "code-review",
-            "review_contract_version": 5,
+            "review_contract_version": 6,
             "external_mutations": False,
             "evidence_digest": DIGEST,
             "context_digest": DIGEST,
@@ -388,6 +396,7 @@ def artifact_instances() -> list[dict[str, Any]]:
             "architecture_assessment": "The existing ownership boundary is preserved.",
             "semver_impact": "patch",
             "semver_rationale": "The fix changes behavior without changing the public API.",
+            "semver_assessment": release_assessment(),
             "mr_metadata_assessment": {
                 "observed": {
                     "title": "Fix schema drift",
@@ -792,12 +801,14 @@ def validate_schema_runtime_rejections() -> None:
     legacy_context["payload"].pop("incremental")
     legacy_context["payload"].pop("issue_templates")
     legacy_context["payload"].pop("current_user_id")
+    legacy_context["payload"].pop("release_evidence")
     artifact_validator.validate(legacy_context)
     validate_v2_artifact(legacy_context, "review_context")
     structured_v2 = copy.deepcopy(artifacts["review_plan"])
     structured_v2["payload"]["review_contract_version"] = 2
     structured_v2["payload"].pop("chat_assessment")
     structured_v2["payload"].pop("locale")
+    structured_v2["payload"].pop("semver_assessment")
     for publication in structured_v2["payload"]["finding_publications"]:
         for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
             publication.pop(key)
@@ -808,6 +819,22 @@ def validate_schema_runtime_rejections() -> None:
                 publication.pop(key)
     artifact_validator.validate(structured_v2)
     validate_v2_artifact(structured_v2, "review_plan")
+    fallback_plan = copy.deepcopy(artifacts["review_plan"])
+    fallback_plan["payload"]["semver_assessment"] = fallback_assessment()
+    artifact_validator.validate(fallback_plan)
+    validate_v2_artifact(fallback_plan, "review_plan")
+    semver_mutations: list[dict[str, Any]] = [
+        {"fallback_reason": ""},
+        {"release_impact": "patch"},
+        {"sources": []},
+    ]
+    for mutation in semver_mutations:
+        invalid_semver = copy.deepcopy(fallback_plan)
+        invalid_semver["payload"]["semver_assessment"].update(mutation)
+        with pytest.raises(ValidationError):
+            artifact_validator.validate(invalid_semver)
+        with pytest.raises(WorkflowError):
+            validate_v2_artifact(invalid_semver, "review_plan")
     legacy_plan = copy.deepcopy(artifacts["review_plan"])
     for key in (
         "review_contract_version",
@@ -824,6 +851,7 @@ def validate_schema_runtime_rejections() -> None:
         "label_review",
         "chat_assessment",
         "locale",
+        "semver_assessment",
     ):
         legacy_plan["payload"].pop(key)
     structured_preview = legacy_plan["payload"]["publication_preview"]
