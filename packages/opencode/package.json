@@ -1,6 +1,6 @@
 {
   "name": "@kisev/skills-opencode",
-  "version": "4.1.1",
+  "version": "5.0.0",
   "skillsInstallerVersion": "1.5.23",
   "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
   "license": "MIT",

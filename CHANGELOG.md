@@ -8,6 +8,23 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## [5.0.0] - 2026-09-18
+
+### Added
+
+- MR preparation now produces stable bilingual publication plans, project
+  templates, manual `glab` commands, and evidence-bound freshness checks.
+
+### Fixed
+
+- Clarified when askme applies and how manual continuation proceeds. npm release
+  verification now tolerates registry propagation delays.
+
+### Breaking Changes
+
+- MR preparation requires locale-bound drafts with exhaustive label assessments.
+  Regenerate legacy drafts and publication plans.
+
 ## [4.1.1] - 2026-09-17
 
 ### Fixed

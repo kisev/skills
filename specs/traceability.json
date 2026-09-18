@@ -1,6 +1,6 @@
 {
   "schema": "traceability/v1",
-  "target": "4.1.1",
+  "target": "5.0.0",
   "source_revision": "2dad0676a58b5ec27198f9b3538be66df32a3dc1",
   "hash": {
     "algorithm": "sha256",
