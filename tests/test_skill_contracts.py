@@ -24,6 +24,29 @@ def test_every_skill_has_required_frontmatter() -> None:
         assert not re.search(r"^\s*version\s*:", frontmatter, re.MULTILINE), skill
 
 
+def test_askme_discovery_and_manual_continuation_contract() -> None:
+    skill = BUILT_SKILLS / "askme"
+    frontmatter = (skill / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1]
+    description = frontmatter.split("description:", 1)[1].split("license:", 1)[0]
+    for phrase in ("узнай у меня", "уточни у меня", "спроси меня", "ask me", "askme"):
+        assert phrase in description
+    for marker in ("equivalent intent", "conditionally", "quoted text", "negated requests"):
+        assert marker in description
+
+    workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
+    for marker in (
+        "do not by themselves activate an interview",
+        "A separate invitation to ask questions in the same message does",
+        "no clarification questions remain",
+        "Always stop and wait for explicit manual continuation",
+        "even when there were no questions or the invitation was conditional",
+        "An interview answer or confirmation of the proposed task alone is not permission",
+        "this also applies to `task-prepare`",
+    ):
+        assert marker in workflow
+    assert "confirmation of the proposed task permits it to continue" not in workflow
+
+
 def test_built_skill_files_match_canonical_sources() -> None:
     for source, relative_destination in manifest_entries():
         destination = BUILT_SKILLS / relative_destination

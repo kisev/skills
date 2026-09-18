@@ -406,7 +406,7 @@
     "REQ-F-102": {
       "surface": "skill:askme",
       "source": "specs/capabilities/skills/askme.md",
-      "block_sha256": "f40e34795a5914247c0c5dbbf4bc15bfeed07c5389bb57a9c5fe0ba223fb4726",
+      "block_sha256": "a26e1a368c0d3520c2fa59210a75ba925b8c2c4b310a9ce8281eeffc748fdc65",
       "evidence_profile": "skills"
     },
     "REQ-F-103": {
