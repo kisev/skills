@@ -2,6 +2,18 @@
   "version": 1,
   "files": [
     {
+      "source": "references/portable_gitlab/label_assessment.py",
+      "destination": "mr-prepare/scripts/portable_runtime/label_assessment.py"
+    },
+    {
+      "source": "references/portable_gitlab/label_assessment.py",
+      "destination": "code-review/scripts/portable_runtime/label_assessment.py"
+    },
+    {
+      "source": "references/portable_gitlab/mr_publication.py",
+      "destination": "mr-prepare/scripts/portable_runtime/mr_publication.py"
+    },
+    {
       "source": "references/work-item-contract.md",
       "destination": "askme/references/work-item-contract.md"
     },
@@ -457,10 +469,6 @@
     {
       "source": "references/language-policy.md",
       "destination": "slides-prompts-prepare/references/language-policy.md"
-    },
-    {
-      "source": "references/label-semantics.md",
-      "destination": "mr-prepare/references/label-semantics.md"
     },
     {
       "source": "references/label-semantics.md",

@@ -5,6 +5,7 @@ import importlib.util
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -78,9 +79,30 @@ base_sha = os.environ.get("FAKE_BASE_SHA", "a")
 start_sha = os.environ.get("FAKE_START_SHA", "b")
 changed_path = os.environ.get("FAKE_CHANGED_PATH")
 if endpoint.startswith("projects/group%%2Fproject"):
-    value = {"id": 19, "path_with_namespace": "group/project"}
+    value = {"id": 19, "path_with_namespace": "group/project", "default_branch": "main", "merge_requests_template": os.environ.get("FAKE_MR_DEFAULT_TEMPLATE")}
+elif endpoint == "projects/19/repository/commits/main":
+    value = {"id": "a"}
+elif endpoint.startswith("projects/19/repository/tree?"):
+    from urllib.parse import parse_qs, urlsplit
+    path = parse_qs(urlsplit(endpoint).query).get("path", [""])[0]
+    templates = json.loads(os.environ.get("FAKE_MR_TEMPLATES", "[]"))
+    if os.environ.get("FAKE_MR_TEMPLATE_FAILURE"):
+        sys.exit(1)
+    if not templates:
+        value = []
+    elif path == "":
+        value = [{"type": "tree", "path": ".gitlab"}]
+    elif path == ".gitlab":
+        value = [{"type": "tree", "path": ".gitlab/merge_request_templates"}]
+    else:
+        value = [{"type": "blob", "path": ".gitlab/merge_request_templates/" + name} for name in templates]
+elif endpoint.startswith("projects/19/repository/files/"):
+    import base64
+    from urllib.parse import unquote
+    path = unquote(endpoint.split("/files/", 1)[1].split("?", 1)[0])
+    value = {"file_path": path, "encoding": "base64", "content": base64.b64encode(b"## Context\\n\\n## Verification\\n").decode()}
 elif endpoint.startswith("projects/19/labels"):
-    value = [{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}, {"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}, {"name": "semver::major", "description": "Breaking compatibility"}, {"name": "semver::patch", "description": "Backward-compatible fix"}]
+    value = json.loads(os.environ["FAKE_LABEL_CATALOG"]) if "FAKE_LABEL_CATALOG" in os.environ else [{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}, {"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}, {"name": "semver::major", "description": "Breaking compatibility"}, {"name": "semver::patch", "description": "Backward-compatible fix"}]
 elif endpoint == "projects/19/merge_requests/7":
     value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "updated_at": "changed" if changed else "fresh", "labels": json.loads(os.environ.get("FAKE_MR_LABELS", "[]")), "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
 elif endpoint == "projects/19/merge_requests/7/changes":
@@ -527,6 +549,31 @@ print(json.dumps(value))
         self.assertEqual(wrong_payload["error"]["code"], "invalid_input")
         self.assertIn("--artifact-root", wrong_payload["error"]["message"])
 
+    def mr_content(self, evidence: str, **overrides: Any) -> dict[str, Any]:
+        bundle = json.loads(Path(evidence).read_text())["payload"]
+        return {
+            "locale": bundle["project"].get("locale", "en"),
+            "title": "Prepare exact merge request publication plan",
+            "description": "## Context\n\nPreserve public behavior.\n\n## Verification\n\nChecks were not run.",
+            "change_summary": ["Clarify purpose and report unverified checks."],
+            "limitations": [],
+            "template": {"id": None, "rationale": "No project template is available."},
+            "preservation_notes": [
+                "Retained observable behavior; corrected unsupported CI success."
+            ],
+            "semver_impact": "none",
+            "semver_rationale": "No versioned behavior changes in this fixture.",
+            "label_assessments": [
+                {
+                    "name": item["name"],
+                    "status": "unresolved",
+                    "rationale": "The available evidence does not determine applicability.",
+                }
+                for item in bundle["labels"]["items"]
+            ],
+            **overrides,
+        }
+
     def test_mr_prepare_plan_binds_evidence_and_markdown_companion(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -550,20 +597,7 @@ print(json.dumps(value))
             evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
             content = root / "content.json"
             content.write_text(
-                json.dumps(
-                    {
-                        "title": "Prepare exact merge request publication plan",
-                        "description": "Proposed description",
-                        "label_intent": {
-                            "change_type": None,
-                            "workflow_state": None,
-                            "urgency": None,
-                            "impact": None,
-                            "compatibility": None,
-                            "origin": None,
-                        },
-                    }
-                ),
+                json.dumps(self.mr_content(evidence)),
                 encoding="utf-8",
             )
             scaffolded = self.run_runner(
@@ -580,8 +614,12 @@ print(json.dumps(value))
             plan = scaffold["artifact_path"]
             markdown = Path(scaffold["markdown_path"])
             markdown_text = markdown.read_text(encoding="utf-8")
-            self.assertIn("- Decision: `change`", markdown_text)
-            self.assertIn("Pipeline status for exact head SHA: `missing`", markdown_text)
+            self.assertEqual(markdown.name, "mr-publication.md")
+            self.assertIn("Pipeline for the current revision: missing", markdown_text)
+            self.assertNotIn("Current description", markdown_text)
+            self.assertNotIn("Current merge request title", markdown_text)
+            self.assertNotIn("Head SHA", markdown_text)
+            self.assertIn("glab api --hostname gitlab.example --method PUT", markdown_text)
             self.assertEqual(markdown.stat().st_mode & 0o777, 0o600)
 
             finalized = self.run_runner("mr-prepare", "finalize", "--plan", plan, env=environment)
@@ -603,6 +641,334 @@ print(json.dumps(value))
             modified = self.run_runner("mr-prepare", "finalize", "--plan", plan, env=environment)
             self.assertEqual(modified.returncode, 2)
             self.assertEqual(json.loads(modified.stdout)["status"], "error")
+
+    def test_mr_publication_payloads_labels_locale_and_supersession(self) -> None:
+        for locale in ("en", "ru"):
+            with (
+                self.subTest(locale=locale),
+                tempfile.TemporaryDirectory(prefix="mr plan '") as temporary,
+            ):
+                root = Path(temporary)
+                _, state = self.fake_glab(root)
+                log = root / "glab.log"
+                catalog = [
+                    {"name": "type::feature", "description": "Feature"},
+                    {"name": "type::security", "description": "Security"},
+                    {"name": "obsolete", "description": "No longer applicable"},
+                    {"name": "team::docs", "description": "Documentation ownership"},
+                ]
+                environment = {
+                    "XDG_STATE_HOME": str(root / "state"),
+                    "PATH": f"{root}:{os.environ['PATH']}",
+                    "FAKE_GLAB_STATE": str(state),
+                    "FAKE_GLAB_LOG": str(log),
+                    "FAKE_LABEL_CATALOG": json.dumps(catalog),
+                    "FAKE_MR_LABELS": json.dumps(["type::security", "obsolete"]),
+                }
+                prepared = self.run_runner(
+                    "mr-prepare",
+                    "prepare",
+                    "--url",
+                    "https://gitlab.example/group/project/-/merge_requests/7",
+                    "--locale",
+                    locale,
+                    env=environment,
+                )
+                self.assertEqual(prepared.returncode, 0, prepared.stdout)
+                evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
+                description = (
+                    "## Контекст\n\nКавычки ' и \"; $(touch NEVER)\n```sh\ncommand --flag\n```\n"
+                )
+                content = self.mr_content(
+                    evidence,
+                    description=description,
+                    label_assessments=[
+                        {
+                            "name": item["name"],
+                            "status": "unresolved"
+                            if item["name"] == "type::security"
+                            else "inapplicable"
+                            if item["name"] == "obsolete"
+                            else "applicable",
+                            "rationale": "Confirmed by the collected diff.",
+                        }
+                        for item in catalog
+                    ],
+                )
+                draft = root / "content.json"
+                draft.write_text(json.dumps(content))
+                result = self.run_runner(
+                    "mr-prepare",
+                    "scaffold",
+                    "--bundle",
+                    evidence,
+                    "--content",
+                    str(draft),
+                    env=environment,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout)
+                output = json.loads(result.stdout)
+                plan = json.loads(Path(output["artifact_path"]).read_text())["payload"]
+                markdown = Path(output["markdown_path"])
+                original = markdown.read_bytes()
+                self.assertIn(
+                    "План обновления MR" if locale == "ru" else "MR update plan", original.decode()
+                )
+                self.assertIn(description, original.decode())
+                payloads = {}
+                for request in plan["requests"]:
+                    args = shlex.split(request["command"])
+                    self.assertEqual(
+                        args[:7],
+                        [
+                            "glab",
+                            "api",
+                            "--hostname",
+                            "gitlab.example",
+                            "--method",
+                            "PUT",
+                            "projects/19/merge_requests/7",
+                        ],
+                    )
+                    payloads[request["field"]] = json.loads(Path(args[-1]).read_text())
+                self.assertEqual(payloads["description"], {"description": description})
+                self.assertEqual(
+                    payloads["labels"],
+                    {"add_labels": "team::docs,type::feature", "remove_labels": "obsolete"},
+                )
+                self.assertIn("type::security", plan["label_review"]["proposed"])
+                pointer = markdown.with_suffix(".json")
+                finalize_args = shlex.split(
+                    plan["markdown"].split("```sh\n")[-1].split("\n```", 1)[0]
+                )
+                final = self.run_runner("mr-prepare", *finalize_args[2:], env=environment)
+                self.assertEqual(final.returncode, 0, final.stdout)
+                request_path = Path(shlex.split(plan["requests"][0]["command"])[-1])
+                request_bytes = request_path.read_bytes()
+                request_path.write_text("{}")
+                modified = self.run_runner(
+                    "mr-prepare", "finalize", "--plan", str(pointer), env=environment
+                )
+                self.assertNotEqual(modified.returncode, 0)
+                request_path.write_bytes(request_bytes)
+                content["locale"] = "ru" if locale == "en" else "en"
+                draft.write_text(json.dumps(content))
+                invalid = self.run_runner(
+                    "mr-prepare",
+                    "scaffold",
+                    "--bundle",
+                    evidence,
+                    "--content",
+                    str(draft),
+                    env=environment,
+                )
+                self.assertNotEqual(invalid.returncode, 0)
+                self.assertEqual(markdown.read_bytes(), original)
+                content.update(
+                    locale=locale,
+                    title="Current merge request title",
+                    description="Current description",
+                )
+                draft.write_text(json.dumps(content))
+                replacement = self.run_runner(
+                    "mr-prepare",
+                    "scaffold",
+                    "--bundle",
+                    evidence,
+                    "--content",
+                    str(draft),
+                    env=environment,
+                )
+                self.assertEqual(replacement.returncode, 0, replacement.stdout)
+                new = json.loads(Path(json.loads(replacement.stdout)["artifact_path"]).read_text())[
+                    "payload"
+                ]
+                self.assertEqual([item["field"] for item in new["requests"]], ["labels"])
+                superseded = self.run_runner(
+                    "mr-prepare", "finalize", "--plan", output["artifact_path"], env=environment
+                )
+                self.assertNotEqual(superseded.returncode, 0)
+                old_tab = self.run_runner("mr-prepare", *finalize_args[2:], env=environment)
+                self.assertNotEqual(old_tab.returncode, 0)
+                self.assertIn("binding is stale", old_tab.stdout)
+                self.assertEqual(request_path.read_bytes(), request_bytes)
+                calls = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertTrue(all(call[call.index("--method") + 1] == "GET" for call in calls))
+
+    def test_mr_template_discovery_selection_and_freshness(self) -> None:
+        for names, default, failure in [
+            ([], None, False),
+            (["Default.md"], None, False),
+            (["Feature.md", "Bug.md"], "## Purpose", False),
+            ([], None, True),
+        ]:
+            with (
+                self.subTest(names=names, failure=failure),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = Path(temporary)
+                _, state = self.fake_glab(root)
+                environment = {
+                    "XDG_STATE_HOME": str(root / "state"),
+                    "PATH": f"{root}:{os.environ['PATH']}",
+                    "FAKE_GLAB_STATE": str(state),
+                    "FAKE_GLAB_LOG": str(root / "glab.log"),
+                    "FAKE_MR_TEMPLATES": json.dumps(names),
+                }
+                if default:
+                    environment["FAKE_MR_DEFAULT_TEMPLATE"] = default
+                if failure:
+                    environment["FAKE_MR_TEMPLATE_FAILURE"] = "1"
+                prepared = self.run_runner(
+                    "mr-prepare",
+                    "prepare",
+                    "--url",
+                    "https://gitlab.example/group/project/-/merge_requests/7",
+                    env=environment,
+                )
+                self.assertEqual(prepared.returncode, 0, prepared.stdout)
+                evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
+                bundle = json.loads(Path(evidence).read_text())["payload"]
+                self.assertEqual(bundle["project"]["locale"], "en")
+                templates = bundle["project"]["mr_templates"]
+                self.assertEqual(templates["complete"], not failure)
+                self.assertEqual(len(templates["items"]), len(names) + bool(default))
+                selected = (
+                    "project-default"
+                    if default
+                    else f".gitlab/merge_request_templates/{names[0]}"
+                    if names
+                    else None
+                )
+                content = self.mr_content(
+                    evidence,
+                    **({"description": "## Purpose\n\nVerified purpose."} if default else {}),
+                    template={
+                        "id": selected,
+                        "rationale": "Use project default or sole available template.",
+                    },
+                    limitations=["Template retrieval failed."] if failure else [],
+                )
+                draft = root / "content.json"
+                draft.write_text(json.dumps(content))
+                result = self.run_runner(
+                    "mr-prepare",
+                    "scaffold",
+                    "--bundle",
+                    evidence,
+                    "--content",
+                    str(draft),
+                    env=environment,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout)
+                output = json.loads(result.stdout)
+                if selected:
+                    missing_heading = {
+                        **content,
+                        "description": "A summary without the required template headings.",
+                    }
+                    draft.write_text(json.dumps(missing_heading))
+                    invalid_heading = self.run_runner(
+                        "mr-prepare",
+                        "scaffold",
+                        "--bundle",
+                        evidence,
+                        "--content",
+                        str(draft),
+                        env=environment,
+                    )
+                    self.assertNotEqual(invalid_heading.returncode, 0)
+                    self.assertIn("template headings", invalid_heading.stdout)
+                if failure:
+                    self.assertIn(
+                        "This does not mean no templates exist",
+                        Path(output["markdown_path"]).read_text(),
+                    )
+                else:
+                    final = self.run_runner(
+                        "mr-prepare",
+                        "finalize",
+                        "--plan",
+                        output["artifact_path"],
+                        env={**environment, "FAKE_MR_DEFAULT_TEMPLATE": "Changed default template"},
+                    )
+                    self.assertNotEqual(final.returncode, 0)
+                    self.assertIn("mr_project", final.stdout)
+                content["template"]["id"] = "invented.md"
+                draft.write_text(json.dumps(content))
+                invalid = self.run_runner(
+                    "mr-prepare",
+                    "scaffold",
+                    "--bundle",
+                    evidence,
+                    "--content",
+                    str(draft),
+                    env=environment,
+                )
+                self.assertNotEqual(invalid.returncode, 0)
+
+    def test_mr_stable_publication_rolls_back_and_partial_run_is_not_success(self) -> None:
+        from shared.references.portable_gitlab import contract, mr_publication
+
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ):
+            root = Path(temporary)
+            os.environ["XDG_STATE_HOME"] = str(root / "state")
+            _, state = self.fake_glab(root)
+            environment = {
+                "XDG_STATE_HOME": str(root / "state"),
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FAKE_GLAB_STATE": str(state),
+                "FAKE_GLAB_LOG": str(root / "glab.log"),
+            }
+            prepared = self.run_runner(
+                "mr-prepare",
+                "prepare",
+                "--url",
+                "https://gitlab.example/group/project/-/merge_requests/7",
+                env=environment,
+            )
+            evidence = json.loads(prepared.stdout)["items"][0]["artifact_path"]
+            bundle = json.loads(Path(evidence).read_text())["payload"]
+            content = self.mr_content(evidence)
+            first = mr_publication.scaffold(Path(evidence), bundle, content)
+            markdown = Path(first["markdown_path"])
+            pointer = markdown.with_suffix(".json")
+            previous = (markdown.read_bytes(), pointer.read_bytes())
+            real_write = contract.write_bytes
+            failed = False
+
+            def fail_once(path: Path, data: bytes) -> None:
+                nonlocal failed
+                if path == markdown and not failed:
+                    failed = True
+                    raise OSError("simulated replacement failure")
+                real_write(path, data)
+
+            with patch.object(contract, "write_bytes", side_effect=fail_once):
+                with self.assertRaises(contract.WorkflowError):
+                    mr_publication.scaffold(
+                        Path(evidence), bundle, {**content, "title": "A different proposed title"}
+                    )
+            self.assertEqual((markdown.read_bytes(), pointer.read_bytes()), previous)
+            lock = markdown.parent / ".mr-publication.lock"
+            self.assertFalse(lock.exists())
+            with mr_publication.publication_lock(markdown.parent):
+                with self.assertRaises(contract.WorkflowError):
+                    mr_publication.scaffold(Path(evidence), bundle, content)
+            partial = {**bundle, "retrieval_complete": False}
+            source, _ = contract.write_artifact(markdown.parent, "evidence_snapshot", partial)
+            result = mr_publication.scaffold(source, partial, content)
+            self.assertEqual(result["status"], "incomplete")
+            self.assertIsNone(result["markdown_path"])
+            self.assertNotIn(str(markdown), result["chat"])
+            self.assertEqual((markdown.read_bytes(), pointer.read_bytes()), previous)
+            old_format = {
+                "title": content["title"],
+                "description": content["description"],
+                "label_intent": {},
+            }
+            with self.assertRaisesRegex(contract.WorkflowError, "contract changed"):
+                mr_publication.scaffold(Path(evidence), bundle, old_format)
 
     def test_release_prepare_inventory_artifacts_and_freshness(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

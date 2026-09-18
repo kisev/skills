@@ -478,7 +478,7 @@
     "REQ-F-114": {
       "surface": "skill:mr-prepare",
       "source": "specs/capabilities/skills/mr-prepare.md",
-      "block_sha256": "47fe99e3266aae06c55f37b949e9340a2c8c4110cbe21e9f39685c80db867074",
+      "block_sha256": "52c4d3ba2a96b66ecd50d604d344229ac1a66207ff5d63e179234e6695219331",
       "evidence_profile": "skills"
     },
     "REQ-F-115": {

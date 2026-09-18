@@ -232,12 +232,23 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
     required = re.compile(
         r"language of the latest user request; use\s+English when that language is ambiguous"
     )
-    for name in ("mr-prepare", "task-prepare", "release-prepare"):
+    for name in ("task-prepare", "release-prepare"):
         workflow = (ROOT / "skills" / name / "references" / "workflow.md").read_text(
             encoding="utf-8"
         )
         assert "references/language-policy.md" in workflow, name
         assert required.search(workflow), name
+    # MR preparation uses code-review's session-aware locale selection.
+    mr_workflow = (ROOT / "skills/mr-prepare/references/workflow.md").read_text(encoding="utf-8")
+    for marker in (
+        "references/language-policy.md",
+        "explicit user request, applicable agent",
+        "established user prose in the session, then English",
+        "--locale <en|ru>",
+        "locale is bound to evidence and must match the content draft",
+        "presentation.fallback_sections",
+    ):
+        assert marker in mr_workflow
 
 
 def test_code_review_requires_compact_incremental_manual_publication_contract() -> None:

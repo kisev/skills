@@ -350,6 +350,11 @@ def read_json(path: Path, label: str) -> dict[str, Any]:
 
 def write_json(path: Path, value: object) -> None:
     """Only mutable state pointers use this helper; artifacts use write_artifact."""
+    write_bytes(path, canonical(value))
+
+
+def write_bytes(path: Path, content: bytes) -> None:
+    """Atomically replace a private mutable file."""
     if path.is_symlink() or path.exists() and not path.is_file():
         raise WorkflowError("state path must be a regular non-symlink file")
     target = path.resolve()
@@ -359,7 +364,7 @@ def write_json(path: Path, value: object) -> None:
     try:
         fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
         with os.fdopen(fd, "wb") as handle:
-            handle.write(canonical(value))
+            handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary, target)
@@ -2003,8 +2008,10 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             )
         elif profile == "mr-prepare":
             expected_keys = required
-            keys_valid = actual_keys == expected_keys or actual_keys == (
-                expected_keys | label_fields
+            keys_valid = (
+                actual_keys == expected_keys
+                or actual_keys == (expected_keys | label_fields)
+                or actual_keys == (expected_keys | label_fields | {"mr_content", "requests"})
             )
         else:
             expected_keys = required
@@ -2027,7 +2034,30 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                     or not companions_are_valid(payload.get("companions"))
                 )
             )
-            or ("label_review" in payload and not label_review_is_valid(payload["label_review"]))
+            or (
+                "label_review" in payload
+                and not (
+                    code_review_label_review_is_valid(payload["label_review"])
+                    if "mr_content" in payload
+                    else label_review_is_valid(payload["label_review"])
+                )
+            )
+            or (
+                "mr_content" in payload
+                and (
+                    not isinstance(payload["mr_content"], dict)
+                    or not isinstance(payload.get("requests"), list)
+                    or not all(
+                        isinstance(item, dict)
+                        and set(item) == {"name", "content", "sha256", "field", "command"}
+                        and all(isinstance(value, str) for value in item.values())
+                        and item["field"] in {"title", "description", "labels"}
+                        and is_digest(item["sha256"])
+                        and item["name"] == f"{item['sha256']}-{item['field']}.json"
+                        for item in payload["requests"]
+                    )
+                )
+            )
         ):
             raise WorkflowError("publication plan payload is schema-invalid")
     elif kind == "review_plan":
@@ -2381,7 +2411,7 @@ def allowed_endpoint(endpoint: str) -> bool:
     # These are the complete collection endpoints. Query values are generated, never caller input.
     return bool(
         re.fullmatch(
-            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?))",
+            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",
             endpoint,
         )
     )
@@ -2476,7 +2506,9 @@ def component(
     }
 
 
-def collect(target: dict[str, object], profile: str, *, persist: bool = True) -> dict[str, object]:
+def collect(
+    target: dict[str, object], profile: str, *, persist: bool = True, locale: str = "en"
+) -> dict[str, object]:
     if profile not in PROFILES:
         raise WorkflowError("workflow profile is unsafe")
     iid_value = target.get("iid")
@@ -2630,6 +2662,14 @@ def collect(target: dict[str, object], profile: str, *, persist: bool = True) ->
             },
         }
     components_complete = cast(dict[str, bool], bundle["components_complete"])
+    if profile == "mr-prepare":
+        from .mr_publication import collect_templates
+
+        if locale not in {"en", "ru"}:
+            raise WorkflowError("MR locale must be en or ru")
+        cast(dict[str, Any], bundle["project"]).update(
+            {"locale": locale, "mr_templates": collect_templates(hostname, project)}
+        )
     bundle["retrieval_complete"] = all(components_complete.values())
     if persist:
         artifact_path, artifact_digest = write_artifact(root, "evidence_snapshot", bundle)
@@ -2672,6 +2712,10 @@ def evidence_from_root(
 def marked_preview(label: str, value: str) -> str:
     separator = "" if value.endswith("\n") else "\n"
     return f"<!-- {label} START -->\n{value}{separator}<!-- {label} END -->"
+
+
+def template_headings(body: str) -> list[str]:
+    return re.findall(r"^#{1,6}\s+.+$", body, re.MULTILINE)
 
 
 def pipeline_summary(bundle: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
@@ -2883,6 +2927,10 @@ def scaffold(
     if source != expected_source:
         raise WorkflowError("evidence snapshot is not in its content-addressed collection")
     profile = bundle.get("profile")
+    if profile == "mr-prepare":
+        from .mr_publication import scaffold as scaffold_mr
+
+        return scaffold_mr(source, bundle, read_json(Path(content_file), "MR content"))
     release_inventory: dict[str, Any] | None = None
     inventory_digest: str | None = None
     release_companions: list[dict[str, str]] = []
@@ -2998,6 +3046,7 @@ def scaffold(
 
 def fingerprint(bundle: dict[str, Any]) -> dict[str, object]:
     return {
+        **({"mr_project": bundle.get("project")} if bundle.get("profile") == "mr-prepare" else {}),
         "target": bundle.get("target"),
         "head_sha": bundle.get("head_sha"),
         "base_sha": bundle.get("base_sha"),
@@ -3040,7 +3089,12 @@ def finalize(root_value: str, pointer_name: str = "current.json") -> dict[str, o
 def plan_context(
     plan_value: str,
 ) -> tuple[Path, Path, dict[str, Any], str, Path, dict[str, Any], dict[str, Any] | None]:
-    plan_path = regular_file(Path(plan_value), "publication plan")
+    candidate = Path(plan_value)
+    if candidate.name == "mr-publication.json":
+        from .mr_publication import resolve_plan
+
+        candidate = resolve_plan(candidate)
+    plan_path = regular_file(candidate, "publication plan")
     _, plan = artifact_payload(plan_path, "publication_plan")
     plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
     if plan_path.parent.name != "publication_plan" or plan_path.parent.parent.name != "artifacts":
@@ -3069,9 +3123,20 @@ def plan_context(
     expected_complete = baseline.get("retrieval_complete")
     label_review = plan.get("label_review")
     if label_review is not None:
-        if not label_review_is_valid(label_review):
+        validator = (
+            code_review_label_review_is_valid if "mr_content" in plan else label_review_is_valid
+        )
+        if not validator(label_review):
             raise WorkflowError("publication plan label review is invalid")
         expected_complete = bool(expected_complete) and label_review.get("complete") is True
+    if plan.get("profile") == "mr-prepare":
+        from .mr_publication import resolve_plan, validate_plan
+
+        if "mr_content" not in plan:
+            raise WorkflowError("legacy MR plan: prepare and scaffold the MR again")
+        if resolve_plan(root / "mr-publication.json") != plan_path:
+            raise WorkflowError("MR plan was superseded; prepare again")
+        validate_plan(root, plan, baseline)
     if plan.get("profile") == "release-prepare":
         inventory_digest = plan.get("inventory_digest")
         if not is_digest(inventory_digest):
@@ -3108,8 +3173,19 @@ def plan_context(
 
 def finalize_plan(
     plan_value: str,
+    expected_binding: str | None = None,
 ) -> tuple[dict[str, object], Path, Path, dict[str, Any]]:
     root, _, plan, plan_digest, source, baseline, release_inventory = plan_context(plan_value)
+    if expected_binding is not None:
+        if plan.get("profile") != "mr-prepare" or not is_digest(expected_binding):
+            raise WorkflowError("expected MR plan binding is invalid")
+        from .mr_publication import plan_binding
+
+        if (
+            plan_binding(plan["evidence_digest"], plan["mr_content"], plan["requests"])
+            != expected_binding
+        ):
+            raise WorkflowError("MR plan binding is stale; prepare again")
     target = baseline.get("target")
     if not isinstance(target, dict):
         raise WorkflowError("evidence target is missing")
@@ -3125,7 +3201,12 @@ def finalize_plan(
             source,
             baseline,
         )
-    current = collect(target, str(baseline.get("profile", "task-triage")), persist=False)
+    current = collect(
+        target,
+        str(baseline.get("profile", "task-triage")),
+        persist=False,
+        locale=baseline.get("project", {}).get("locale", "en"),
+    )
     before, after = fingerprint(baseline), fingerprint(current)
     changed = [name for name in before if before[name] != after[name]]
     plan_label_review = plan.get("label_review")
@@ -3140,6 +3221,13 @@ def finalize_plan(
         ) != inventory_module.inventory_fingerprint(current_inventory):
             changed.append("release_inventory")
         complete = complete and current_inventory.get("complete") is True
+    if plan.get("profile") == "mr-prepare":
+        # A concurrent successful scaffold must not let an older check report readiness.
+        plan_context(plan_value)
+        from .mr_publication import resolve_plan
+
+        if resolve_plan(root / "mr-publication.json").stem != plan_digest:
+            raise WorkflowError("MR plan was superseded during the freshness check")
     return (
         {
             "status": "ok" if not changed and complete else "stale",
@@ -3514,6 +3602,8 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     prepare = subparsers.add_parser("prepare")
     prepare.add_argument("--url", action="append")
     prepare.add_argument("--project-url")
+    if profile == "mr-prepare":
+        prepare.add_argument("--locale", choices=("en", "ru"), default="en")
     if profile == "code-review":
         prepare.add_argument("--repo-root")
         prepare.add_argument("--review-mode", choices=("fast", "normal", "deep"), default="normal")
@@ -3558,6 +3648,8 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     final = subparsers.add_parser("finalize")
     if profile in {"mr-prepare", "release-prepare"}:
         final.add_argument("--plan", required=True)
+        if profile == "mr-prepare":
+            final.add_argument("--expected-binding")
     else:
         final.add_argument("--artifact-root", required=True)
     final.add_argument("--report")
@@ -3591,7 +3683,30 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         return error("invalid_input", str(exc))
     if args.capabilities:
         return capabilities(profile)
+    mr_locale = getattr(args, "locale", "en")
     try:
+        if profile in {"mr-prepare", "release-prepare"} and args.command in {
+            "scaffold",
+            "finalize",
+        }:
+            if args.command == "scaffold":
+                _, input_payload = artifact_payload(Path(args.bundle), "evidence_snapshot")
+            else:
+                input_path = Path(args.plan)
+                if input_path.name == "mr-publication.json":
+                    if profile != "mr-prepare":
+                        raise WorkflowError("MR publication pointers require mr-prepare")
+                    from .mr_publication import resolve_plan
+
+                    input_path = resolve_plan(input_path)
+                _, input_payload = artifact_payload(input_path, "publication_plan")
+            if input_payload.get("profile") != profile:
+                raise WorkflowError("artifact profile does not match the invoked skill")
+        if profile == "mr-prepare":
+            if args.command == "scaffold":
+                mr_locale = input_payload.get("project", {}).get("locale", "en")
+            elif args.command == "finalize":
+                mr_locale = input_payload.get("mr_content", {}).get("locale", "en")
         if args.command == "context":
             context_module = importlib.import_module("review_context")
             context_result = context_module.prepare_context(
@@ -3675,7 +3790,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             results = []
             for target in targets:
                 try:
-                    bundle = collect(target, profile)
+                    bundle = collect(target, profile, locale=getattr(args, "locale", "en"))
                     item = {
                         "target": target["url"],
                         "status": "ok",
@@ -3688,6 +3803,23 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                         "complete": bundle["retrieval_complete"],
                         "components_complete": bundle["components_complete"],
                     }
+                    if profile == "mr-prepare":
+                        from .mr_publication import text as mr_text
+
+                        item["presentation"] = {
+                            "fallback_sections": {
+                                key: mr_text(mr_locale)[key]
+                                for key in (
+                                    "context",
+                                    "changes",
+                                    "compatibility",
+                                    "verification",
+                                    "references",
+                                )
+                            }
+                        }
+                        if not bundle["retrieval_complete"]:
+                            item["status"] = "incomplete"
                     if profile == "code-review":
                         context_module = importlib.import_module("review_context")
                         context_module.begin_review(
@@ -3723,8 +3855,15 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                         {"target": target["url"], "status": "error", "error": redact(str(exc))}
                     )
             status = "ok" if all(item["status"] == "ok" for item in results) else "partial"
+            mr_chat: dict[str, str] = {}
+            if profile == "mr-prepare" and status != "ok":
+                from .mr_publication import blocked_chat
+
+                reason = str(results[0].get("error", "evidence collection is incomplete"))
+                mr_chat["chat"] = blocked_chat(mr_locale, reason)
             emit(
                 {
+                    **mr_chat,
                     "status": status,
                     "summary": {
                         "tldr": "Completed GET-only GitLab evidence preparation.",
@@ -3750,19 +3889,20 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 if args.command == "scaffold"
                 else "batch-publication-plan.md"
             )
-            emit(
-                scaffold(
-                    args.bundle,
-                    args.content,
-                    plan_name,
-                    getattr(args, "inventory", None),
-                )
+            scaffold_result = scaffold(
+                args.bundle,
+                args.content,
+                plan_name,
+                getattr(args, "inventory", None),
             )
-            return 0
+            emit(scaffold_result)
+            return 2 if profile == "mr-prepare" and scaffold_result["status"] != "ok" else 0
         if args.command == "finalize":
             workflow_progress: dict[str, Any] | None = None
             if profile in {"mr-prepare", "release-prepare"}:
-                result, root, evidence_path, bundle = finalize_plan(args.plan)
+                result, root, evidence_path, bundle = finalize_plan(
+                    args.plan, getattr(args, "expected_binding", None)
+                )
             else:
                 if profile == "code-review":
                     context_module = importlib.import_module("review_context")
@@ -3824,6 +3964,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 "result": result,
                 "external_mutations": False,
             }
+            if profile == "mr-prepare":
+                from .mr_publication import freshness_chat
+
+                response["chat"] = freshness_chat(mr_locale, result)
             if profile == "code-review" and result["status"] == "ok":
                 assert workflow_progress is not None
                 context_module = importlib.import_module("review_context")
@@ -4218,4 +4362,16 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         return error("invalid_command", "a supported subcommand is required")
     except WorkflowError as exc:
         code = "tool_unavailable" if "unavailable" in str(exc) else "invalid_input"
+        if profile == "mr-prepare":
+            from .mr_publication import blocked_chat
+
+            emit(
+                {
+                    "status": "error",
+                    "error": {"code": code, "message": str(exc)},
+                    "chat": blocked_chat(mr_locale, str(exc)),
+                    "external_mutations": False,
+                }
+            )
+            return 3 if code == "tool_unavailable" else 2
         return error(code, str(exc), 3 if code == "tool_unavailable" else 2)

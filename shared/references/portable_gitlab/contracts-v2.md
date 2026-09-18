@@ -20,10 +20,30 @@ snapshot. Incremental metadata keeps exact baseline and delta refs private;
 local WIP never has an incremental baseline.
 `publication_plan`, `review_plan`, `analysis_report`, and `critic_receipt` bind
 their evidence digest; the latter records `run_id` and `session_id`.
-MR and release publication plans may contain a read-only `label_review`. It maps
+Release and legacy MR publication plans may contain a semantic `label_review`. It maps
 closed semantic roles and values to unique labels from the complete project and
 inherited-group catalog, preserves unknown labels, and records only an add/remove
 delta. Concrete label names are catalog results, never policy constants.
+
+New ordinary MR plans instead use the same exhaustive applicability assessment
+as code review, retaining unresolved labels and requiring evidence for removals.
+Their `mr_content` binds locale, template selection, preservation assessment,
+metadata-edit summary and SemVer rationale. `requests` stores exact immutable
+JSON payloads and explicit-host manual `glab` commands. Title and description
+requests contain only changed fields; labels use add/remove delta. No command is
+executed by a runner. Legacy MR plans remain readable but require fresh preparation
+before finalize. Release preparation retains its existing content contract.
+
+MR evidence stores locale and template discovery in `project`. Discovery reads
+the project default description and bounded repository templates from an exact
+default-branch revision; failure is distinct from absence and is shown as a
+limitation. Changes to this evidence invalidate readiness. Successful scaffold
+replaces `mr-publication.md` and `mr-publication.json` under a target-scoped lock
+with rollback; immutable evidence and requests remain private. Finalize accepts
+the stable pointer or exact plan and checks the current pointer, Markdown and
+request bodies. Failed scaffolds do not return an old stable path as success.
+The displayed freshness command binds the expected evidence, draft and requests
+so an older open document cannot accidentally validate a replacement plan.
 New code-review findings record severity, risk, exact evidence, consequence,
 relation to the reviewed change, and a minimum fix. Legacy ID-only findings
 remain readable for existing v2 artifacts but cannot create a new review plan.
