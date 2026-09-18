@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 import subprocess
+import time
 import urllib.error
 from email.message import Message
 from pathlib import Path
@@ -130,8 +131,25 @@ def test_npm_provenance_binds_artifact_workflow_and_revision(
     publish_npm_release.verify_provenance(metadata, sha512, revision, attempts=2, delay=0.01)
     assert sleeps == [0.01]
     monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: document)
+    monkeypatch.setattr(
+        time,
+        "sleep",
+        lambda _: pytest.fail("must not retry mismatched provenance"),
+    )
     with pytest.raises(publish_npm_release.PublicationError, match="does not bind"):
-        publish_npm_release.verify_provenance(metadata, sha512, "c" * 40, attempts=1)
+        publish_npm_release.verify_provenance(metadata, sha512, "c" * 40, attempts=3)
+
+    refreshed_responses = iter([metadata, None, document])
+    monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: next(refreshed_responses))
+    monkeypatch.setattr(time, "sleep", sleeps.append)
+    publish_npm_release.verify_provenance(
+        {"dist": {}},
+        sha512,
+        revision,
+        attempts=3,
+        delay=0.01,
+        metadata_url="https://registry.example/version",
+    )
 
 
 def test_trusted_publishing_rejects_an_old_npm(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,6 +209,89 @@ def test_registry_smoke_installs_the_optional_runtime_peer(
     assert f"@kisev/skills-opencode@{RELEASE_VERSION}" in install
     assert "@opencode-ai/plugin@1.18.29" in install
     assert ("npm", "audit", "signatures", "--json") in calls
+
+
+def test_registry_wait_survives_four_minute_propagation(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    clock = [0.0]
+    pauses: list[float] = []
+
+    def sleep(seconds: float) -> None:
+        pauses.append(seconds)
+        clock[0] += seconds
+
+    def read() -> bytes:
+        if clock[0] < 240:
+            raise publish_npm_release.RegistryPending("HTTP 404")
+        return b"exact artifact"
+
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(time, "sleep", sleep)
+    assert publish_npm_release.wait_for_registry("tarball", read, 60, 5) == b"exact artifact"
+    assert pauses[:4] == [5, 10, 20, 30]
+    assert max(pauses) == 30
+    assert "waiting for registry propagation" in capsys.readouterr().err
+
+
+def test_registry_stages_share_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = [590.0]
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(time, "sleep", lambda delay: clock.__setitem__(0, clock[0] + delay))
+    assert publish_npm_release.wait_for_registry("provenance", lambda: None, 60, 5, 600) is None
+    assert clock[0] == 600
+
+
+@pytest.mark.parametrize("status", [408, 429, 500, 503])
+def test_registry_metadata_transient_errors_are_retryable(
+    monkeypatch: pytest.MonkeyPatch, status: int
+) -> None:
+    def unavailable(*_args: object, **_kwargs: object) -> None:
+        raise urllib.error.HTTPError(
+            "https://registry.example/", status, "unavailable", Message(), None
+        )
+
+    monkeypatch.setattr("scripts.publish_npm_release.urllib.request.urlopen", unavailable)
+    with pytest.raises(publish_npm_release.RegistryPending):
+        publish_npm_release.request_json("https://registry.example/")
+
+
+def test_registry_authorization_failure_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    def forbidden(*_args: object, **_kwargs: object) -> None:
+        raise urllib.error.HTTPError("https://registry.example/", 403, "forbidden", Message(), None)
+
+    monkeypatch.setattr("scripts.publish_npm_release.urllib.request.urlopen", forbidden)
+    monkeypatch.setattr(time, "sleep", lambda _: pytest.fail("must not retry 403"))
+    with pytest.raises(publish_npm_release.PublicationError, match="HTTP 403"):
+        publish_npm_release.download_registry_tarball("https://registry.example/archive")
+
+
+def test_existing_registry_version_is_verified_without_republication(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    content = b"exact artifact"
+    npm = {"name": "@example/package", **build_release_artifacts.hashes(content)}
+    release = {"npm": npm, "version": "1.0.0", "revision": "a" * 40}
+    metadata = {
+        "dist": {"integrity": npm["integrity"], "tarball": "https://registry.example/archive"}
+    }
+    monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
+    monkeypatch.setattr(
+        publish_npm_release, "manifest", lambda: (release, tmp_path / "package.tgz")
+    )
+    monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: metadata)
+    monkeypatch.setattr(
+        publish_npm_release, "download_registry_tarball", lambda *_args, **_kwargs: content
+    )
+    monkeypatch.setattr(publish_npm_release, "verify_provenance", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(publish_npm_release, "registry_smoke", lambda *_args: None)
+    monkeypatch.setattr(
+        publish_npm_release, "command", lambda *_args: pytest.fail("must not republish")
+    )
+    assert publish_npm_release.publish() == metadata
+    metadata["dist"]["integrity"] = "wrong"
+    with pytest.raises(publish_npm_release.PublicationError, match="differs"):
+        publish_npm_release.publish()
 
 
 def test_release_manifest_rejects_tampered_tarball(

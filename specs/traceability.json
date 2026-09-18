@@ -345,7 +345,7 @@
     "REQ-Q-008": {
       "surface": "distribution",
       "source": "specs/requirements/quality/README.md",
-      "block_sha256": "4748ca7be69058e895c740a8893266ed0006f85a8bc068717e37602ff0d5701a",
+      "block_sha256": "a4779562acf7927c347cd44fbfbacb1cc75ea3c4f595ebbd07d6265c8355fb31",
       "evidence_profile": "release"
     },
     "REQ-C-001": {

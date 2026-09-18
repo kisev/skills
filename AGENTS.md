@@ -56,5 +56,5 @@
 - Do not weaken a failing gate with exclusions, warning baselines, missing-import ignores, or skipped tests without a documented compatibility reason.
 - Update `specs/` and `specs/traceability.json` for material behavior, compatibility, or security-boundary changes.
 - For engineering-only commits with no specification impact, add `Spec-Impact: none - <reason>` to the commit message.
-- Never rewrite published tags or package versions; use a new patch version for release-only corrections.
+- Never rewrite published tags or package versions; registry propagation alone is not a reason to bump: `task release:npm` waits up to 10 minutes, then inspect the failure and use `gh run rerun <run-id> --failed` with retained artifacts for transient failures; use a new patch only for actual release corrections.
 - Keep the portable version manifest, OpenCode package and lockfile, catalog, changelog heading, annotated `vX.Y.Z` tag, Pages distribution, npm artifact, and GitHub Release on one commit; after confirmation, atomically push the release branch and tag without a duplicate local `task release:prepare`, because `.github/workflows/publish.yml` owns exact preflight, publication, verification, and release creation.

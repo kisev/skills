@@ -105,7 +105,8 @@ jobs:
         with:
           name: ${{ needs.preflight.outputs.npm-artifact }}
           path: .build/release
-      - run: task release:npm
+      - name: Publish once and wait for verified registry propagation
+        run: task release:npm
 
   github-release:
     name: Create GitHub Release
