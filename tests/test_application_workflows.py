@@ -1566,6 +1566,77 @@ print(json.dumps(value))
         self.assertIn("projects/19/pipelines?sha=c&per_page=100&page=1", calls)
         self.assertIn("projects/19/merge_requests/7/commits?per_page=100&page=1", calls)
 
+    def test_code_review_collects_jobs_traces_and_downstream_pipelines(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_jobs"
+        )
+        target = {
+            "url": "https://gitlab.example/group/project/-/merge_requests/7",
+            "hostname": "gitlab.example",
+            "project_path": "group/project",
+            "kind": "merge_requests",
+            "iid": 7,
+        }
+        calls: list[str] = []
+
+        def fake(_hostname: str, endpoint: str) -> object:
+            calls.append(endpoint)
+            if endpoint.startswith("projects/group%2Fproject"):
+                return {"id": 19}
+            if endpoint == "projects/19/merge_requests/7":
+                return {
+                    "iid": 7,
+                    "labels": [],
+                    "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+                }
+            if endpoint == "projects/19/merge_requests/7/changes":
+                return {
+                    "changes": [],
+                    "diff_refs": {"base_sha": "a", "start_sha": "b", "head_sha": "c"},
+                }
+            if endpoint.startswith("projects/19/merge_requests/7/commits"):
+                return [{"id": "c"}]
+            if endpoint.startswith("projects/19/pipelines?sha=c"):
+                return [{"id": 41, "sha": "c", "status": "failed"}]
+            if endpoint.startswith("projects/19/pipelines/41/jobs"):
+                return [{"id": 51, "name": "policy", "stage": "verify", "status": "failed"}]
+            if endpoint.startswith("projects/19/pipelines/41/bridges"):
+                return [
+                    {
+                        "id": 52,
+                        "name": "downstream",
+                        "stage": "verify",
+                        "status": "success",
+                        "downstream_pipeline": {"id": 42, "project_id": 23},
+                    }
+                ]
+            if endpoint.startswith("projects/23/pipelines/42/jobs"):
+                return [{"id": 53, "name": "lint", "stage": "test", "status": "success"}]
+            if endpoint.startswith("projects/23/pipelines/42/bridges"):
+                return []
+            return []
+
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(os.environ, {"XDG_STATE_HOME": temporary}),
+            patch.object(module, "glab_json", side_effect=fake),
+            patch.object(
+                module,
+                "glab_text",
+                return_value="Approval count is insufficient\ntoken=hidden-value\n",
+            ),
+        ):
+            bundle = module.collect(target, "code-review")
+        self.assertTrue(bundle["retrieval_complete"])
+        pipeline = bundle["pipelines"]["items"][0]
+        evidence = pipeline["job_evidence"]
+        self.assertEqual(len(evidence["pipelines"]), 2)
+        trace = evidence["pipelines"][0]["jobs"][0]["trace"]
+        self.assertIn("Approval count is insufficient", trace["excerpt"])
+        self.assertIn("token=[REDACTED]", trace["excerpt"])
+        self.assertNotIn("hidden-value", trace["excerpt"])
+        self.assertIn("projects/23/pipelines/42/jobs?per_page=100&page=1", calls)
+
     def test_review_decision_requires_independent_critic_and_all_responses(self) -> None:
         module = load_module(
             ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_critic"
@@ -1768,6 +1839,80 @@ print(json.dumps(value))
                 },
                 [high],
                 successful_evidence,
+            )
+        failed_job = {
+            "project_id": 19,
+            "pipeline_id": 2,
+            "id": 7,
+            "status": "failed",
+            "trace": {
+                "complete": True,
+                "truncated": False,
+                "excerpt": "Merge request requires two approvals.",
+                "sha256": "a" * 64,
+            },
+        }
+        job_evidence = {
+            "head_sha": "c",
+            "pipelines": {
+                "complete": True,
+                "items": [
+                    {
+                        "id": 2,
+                        "sha": "c",
+                        "status": "failed",
+                        "job_evidence": {
+                            "complete": True,
+                            "errors": [],
+                            "truncated": False,
+                            "pipelines": [
+                                {
+                                    "project_id": 19,
+                                    "pipeline_id": 2,
+                                    "jobs": [failed_job],
+                                }
+                            ],
+                        },
+                    }
+                ],
+            },
+        }
+        process_gate = {
+            "project_id": 19,
+            "pipeline_id": 2,
+            "job_id": 7,
+            "classification": "process_gate",
+            "rationale": "The job enforces the approval policy rather than code quality.",
+            "trace_evidence": "requires two approvals",
+        }
+        module.validate_review_verdict(
+            {
+                "verdict": "ready",
+                "blocking_findings": False,
+                "blocking_finding_ids": [],
+                "owner_decision_reasons": [],
+                "ci_job_assessments": [process_gate],
+            },
+            [low],
+            job_evidence,
+        )
+        with self.assertRaises(module.portable.WorkflowError):
+            module.validate_review_verdict(
+                {
+                    "verdict": "ready",
+                    "blocking_findings": False,
+                    "blocking_finding_ids": [],
+                    "owner_decision_reasons": [],
+                    "ci_job_assessments": [
+                        {
+                            **process_gate,
+                            "classification": "code_failure",
+                            "rationale": "The test assertion failed.",
+                        }
+                    ],
+                },
+                [low],
+                job_evidence,
             )
         raw_head = "a" * 40
         with self.assertRaises(module.portable.WorkflowError):

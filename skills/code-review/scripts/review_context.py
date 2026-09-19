@@ -3774,6 +3774,111 @@ def content_template(
     }
 
 
+def ci_problem_jobs(evidence: dict[str, Any]) -> tuple[list[dict[str, Any]], bool, str]:
+    pipelines = evidence.get("pipelines")
+    head_sha = evidence.get("head_sha")
+    if not isinstance(pipelines, dict) or not isinstance(head_sha, str):
+        return [], False, "unverified"
+    pipeline = portable.select_exact_pipeline(pipelines, head_sha)
+    if pipeline is None:
+        return [], False, "missing"
+    status = str(pipeline.get("status", "unknown"))
+    job_evidence = pipeline.get("job_evidence")
+    if not isinstance(job_evidence, dict):
+        return [], False, status
+    problems = []
+    for child in job_evidence.get("pipelines", []):
+        if not isinstance(child, dict):
+            continue
+        for job in child.get("jobs", []):
+            if isinstance(job, dict) and job.get("status") in {"failed", "canceled"}:
+                problems.append(cast(dict[str, Any], job))
+    complete = pipelines.get("complete") is True and job_evidence.get("complete") is True
+    return problems, complete, status
+
+
+def ci_job_assessment_template(evidence: dict[str, Any]) -> list[dict[str, object]]:
+    problems, _, _ = ci_problem_jobs(evidence)
+    result = []
+    for job in problems:
+        trace = job.get("trace")
+        excerpt = trace.get("excerpt") if isinstance(trace, dict) else ""
+        lines = [line.strip() for line in str(excerpt or "").splitlines() if line.strip()]
+        result.append(
+            {
+                "project_id": job["project_id"],
+                "pipeline_id": job["pipeline_id"],
+                "job_id": job["id"],
+                "classification": "unknown",
+                "rationale": "The failure cause has not been classified yet.",
+                "trace_evidence": lines[-1]
+                if lines
+                else "Trace unavailable in canonical evidence.",
+            }
+        )
+    return result
+
+
+def ci_blocks_ready(evidence: dict[str, Any], assessments: object) -> bool:
+    problems, complete, pipeline_status = ci_problem_jobs(evidence)
+    if not isinstance(assessments, list):
+        raise portable.WorkflowError("CI job assessments are invalid")
+    expected = {
+        (job.get("project_id"), job.get("pipeline_id"), job.get("id")): job for job in problems
+    }
+    actual: dict[tuple[object, object, object], dict[str, Any]] = {}
+    for raw in assessments:
+        if not isinstance(raw, dict):
+            raise portable.WorkflowError("CI job assessments are invalid")
+        item = cast(dict[str, Any], raw)
+        key = (item.get("project_id"), item.get("pipeline_id"), item.get("job_id"))
+        if (
+            key in actual
+            or item.get("classification")
+            not in {"process_gate", "code_failure", "infrastructure_failure", "unknown"}
+            or not portable.nonempty_string(item.get("rationale"))
+            or not portable.nonempty_string(item.get("trace_evidence"))
+        ):
+            raise portable.WorkflowError("CI job assessments are invalid")
+        actual[key] = item
+    if set(actual) != set(expected):
+        raise portable.WorkflowError(
+            "review decision does not assess every failed or canceled CI job"
+        )
+    for key, job in expected.items():
+        assessment = actual[key]
+        trace = job.get("trace")
+        if isinstance(trace, dict) and trace.get("complete") is True:
+            excerpt = trace.get("excerpt")
+            if not isinstance(excerpt, str) or assessment["trace_evidence"] not in excerpt:
+                raise portable.WorkflowError("CI job assessment is not supported by its trace")
+        elif assessment["classification"] != "unknown":
+            raise portable.WorkflowError("unavailable CI trace must remain classified as unknown")
+    normalized_status = (
+        "running"
+        if pipeline_status in {"created", "waiting_for_resource", "preparing", "pending", "running"}
+        else pipeline_status
+    )
+    if not complete or normalized_status not in {"success", "failed"}:
+        return True
+    pipeline = portable.select_exact_pipeline(
+        cast(dict[str, object], evidence["pipelines"]), cast(str, evidence["head_sha"])
+    )
+    job_evidence = pipeline.get("job_evidence") if pipeline is not None else None
+    terminal_statuses = {"success", "skipped", "manual", "failed", "canceled"}
+    if isinstance(job_evidence, dict) and any(
+        job.get("status") not in terminal_statuses
+        for child in job_evidence.get("pipelines", [])
+        if isinstance(child, dict)
+        for job in child.get("jobs", [])
+        if isinstance(job, dict)
+    ):
+        return True
+    if normalized_status == "failed" and not problems:
+        return True
+    return any(item["classification"] != "process_gate" for item in actual.values())
+
+
 def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
     status = review_status(artifact_root)
     root = portable.artifact_root(Path(artifact_root))
@@ -3823,8 +3928,8 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
             for thread_id, binding in expected_thread_bindings(context).items()
             if binding["state"] == "open"
         ]
-        pipeline_status, _ = portable.pipeline_summary(evidence)
-        failed_pipeline = pipeline_status == "failed"
+        ci_assessments = ci_job_assessment_template(evidence)
+        ci_blocked = ci_blocks_ready(evidence, ci_assessments)
         blocking_ids = [item["id"] for item in critic_findings if item.get("severity") != "low"]
         value = {
             "schema": "portable-gitlab/review-decision/v2",
@@ -3834,16 +3939,17 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
             "critic_receipt_digest": critic_digest,
             "mode": mode,
             "external_mutations": False,
-            "verdict": "not_ready" if blocking_ids else "blocked" if failed_pipeline else "ready",
+            "verdict": "not_ready" if blocking_ids else "blocked" if ci_blocked else "ready",
             "run_id": "",
             "session_id": "",
             "low_risk": mode == "fast",
             "blocking_findings": bool(blocking_ids),
             "blocking_finding_ids": blocking_ids,
+            "ci_job_assessments": ci_assessments,
             "owner_decision_reasons": [
-                "The exact-head pipeline failed and job logs are unavailable."
+                "Exact-head CI jobs are unsuccessful, incomplete, or not yet classified as process gates."
             ]
-            if failed_pipeline and not blocking_ids
+            if ci_blocked and not blocking_ids
             else [],
             "findings": [],
             "unresolved_threads": open_threads,
@@ -3942,10 +4048,12 @@ def validate_review_verdict(
     reasons = report.get("owner_decision_reasons", [])
     if not isinstance(reasons, list) or not all(portable.nonempty_string(item) for item in reasons):
         raise portable.WorkflowError("owner decision reasons are invalid")
-    pipeline_status, _ = portable.pipeline_summary(evidence)
+    ci_blocked = ci_blocks_ready(evidence, report.get("ci_job_assessments", []))
+    if ci_blocked and not blocking_ids and not reasons:
+        raise portable.WorkflowError("blocking CI evidence requires an owner decision reason")
     if blocking_ids:
         expected = "not_ready"
-    elif pipeline_status == "failed":
+    elif ci_blocked:
         expected = "blocked"
     elif reasons:
         expected = "blocked"

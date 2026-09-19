@@ -1906,6 +1906,36 @@
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 }
                 },
+                "ci_job_assessments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "project_id",
+                      "pipeline_id",
+                      "job_id",
+                      "classification",
+                      "rationale",
+                      "trace_evidence"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "project_id": { "type": "integer", "minimum": 1 },
+                      "pipeline_id": { "type": "integer", "minimum": 1 },
+                      "job_id": { "type": "integer", "minimum": 1 },
+                      "classification": {
+                        "enum": [
+                          "process_gate",
+                          "code_failure",
+                          "infrastructure_failure",
+                          "unknown"
+                        ]
+                      },
+                      "rationale": { "type": "string", "minLength": 1 },
+                      "trace_evidence": { "type": "string", "minLength": 1 }
+                    }
+                  }
+                },
                 "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
                 "critic_findings": {
                   "type": "array",

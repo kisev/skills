@@ -48,11 +48,15 @@ change and the body file consumed by that command.
 
 ## Errors, Partial, Escalation
 
-Missing exact evidence or a required critic is blocked, not silently ignored.
+Missing exact evidence, complete exact-head job metadata, required failed-job
+trace excerpts, or a required critic is blocked, not silently ignored.
 Missing or stale context, critic, finalize, decision, content, plan, baseline, or
 Markdown bindings make the final report blocked; findings are never reported as
-a best-effort substitute. A failed exact-head pipeline without a blocking
-finding requires an owner decision, while low findings are non-blocking.
+a best-effort substitute. Failed/canceled jobs are classified from bounded,
+redacted trace evidence across child/downstream pipelines rather than from job
+names. Only clearly proven approval or equivalent manual process gates may avoid
+blocking `ready`; code, infrastructure, unknown, and incomplete failures remain
+blocking, while low findings are non-blocking.
 Irrecoverable loss of the current evidence remains blocked without a synthesized
 next action because the target can no longer be trusted.
 Changed comparison boundaries, rewritten history, incompatible state, or
@@ -133,10 +137,14 @@ review, the runner shall own a resumable fail-closed state machine from prepared
 evidence through a recorded independent critic when the selected mode requires
 one, fresh finalize report, bound decision, contract-6 plan, baseline, Markdown,
 and final chat rendering. It shall generate model-ready critic, decision, and content
-templates with exact artifact, label, thread, latest-note, and pipeline bindings;
+templates with exact artifact, label, thread, latest-note, pipeline, complete job
+inventory, and bounded failed/canceled trace bindings;
 reject out-of-order, incomplete, stale, or structurally duplicate accepted findings and plans; keep reviewer finding details
-out of chat; treat low findings as non-blocking; and render a failed exact-head
-pipeline without another blocking finding as owner decision required.
+out of chat; treat low findings as non-blocking; recursively collect bounded
+child/downstream CI evidence; require trace-supported classification for every
+failed/canceled job; permit `ready` only for complete CI evidence whose failures
+are all proven manual process gates; and otherwise render blocking CI without
+another blocking finding as owner decision required.
 For a resolved thread with a sufficient existing explanation or applied GitLab
 suggestion, it shall prepare no duplicate reply; a new reply is permitted only
 when it adds a confirmed correction or independent information. Publication

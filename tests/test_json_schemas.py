@@ -646,6 +646,16 @@ def artifact_instances() -> list[dict[str, Any]]:
             "blocking_findings": False,
             "blocking_finding_ids": [],
             "owner_decision_reasons": [],
+            "ci_job_assessments": [
+                {
+                    "project_id": 1,
+                    "pipeline_id": 2,
+                    "job_id": 3,
+                    "classification": "process_gate",
+                    "rationale": "The trace reports an unmet approval policy.",
+                    "trace_evidence": "Approval is required.",
+                }
+            ],
             "findings": [finding],
             "critic_findings": [rejected_finding],
             "accepted_findings": [finding],

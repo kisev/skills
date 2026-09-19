@@ -711,6 +711,12 @@ elif endpoint == "projects/19/merge_requests/7/changes":
     value = {"changes": [], "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
     value = [{"id": review_sha}]
+elif endpoint.startswith("projects/19/pipelines?sha="):
+    value = [{"id": 41, "sha": review_sha, "status": "success"}]
+elif endpoint.startswith("projects/19/pipelines/41/jobs"):
+    value = [{"id": 51, "name": "test", "stage": "test", "status": "success"}]
+elif endpoint.startswith("projects/19/pipelines/41/bridges"):
+    value = []
 elif endpoint == "user":
     value = {"id": 23, "username": "reviewer"}
 else:
@@ -950,6 +956,7 @@ print(json.dumps(value))
                                 "blocking_findings": False,
                                 "blocking_finding_ids": [],
                                 "owner_decision_reasons": [],
+                                "ci_job_assessments": [],
                                 "run_id": "primary",
                                 "session_id": "primary-session",
                                 "findings": [],

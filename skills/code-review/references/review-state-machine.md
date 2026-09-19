@@ -53,8 +53,10 @@ again.
 6. When `decision_missing`, run `template-review --kind decision`, complete the
    generated private draft, and run its exact `finalize-review` action. The
    template prebinds evidence, context, finalize, critic findings, open thread
-   IDs as `thread:ROOT_NOTE_ID`, and the exact-head pipeline state. Add every
-   primary finding and its disposition before finalization. If a critic finding
+   IDs as `thread:ROOT_NOTE_ID`, the exact-head pipeline state, and every
+   failed/canceled job from recursively collected child/downstream pipelines.
+   Classify each job from its bounded trace excerpt. Add every primary finding
+   and its disposition before finalization. If a critic finding
    duplicates an accepted primary finding, reject the critic candidate with that
    reason; accepted findings must remain structurally distinct.
 7. When `content_missing`, run `template-review --kind content`. The generated
@@ -87,11 +89,20 @@ chat report only from a fresh `review-publication.md` and baseline pair.
 - Every accepted `critical`, `high`, or `medium` finding is blocking, produces
   `not_ready`, and renders as `changes required`. An accepted `low` finding is
   always non-blocking.
-- If no finding is blocking and the exact-head pipeline is `failed`, use
-  `blocked`; it renders as `owner decision required` because job logs and the
-  failure cause are not part of canonical evidence.
+- Exact-head CI evidence includes bounded job metadata and bounded, redacted
+  trace excerpts for failed/canceled jobs across recursively collected
+  child/downstream pipelines. Missing, truncated, active, canceled, unsupported,
+  or unclassified CI evidence uses `blocked` when no finding already requires
+  `not_ready`.
+- A failed job may be classified as `process_gate` only when its trace clearly
+  proves an unmet approval or equivalent manual policy gate unrelated to code
+  quality. Job names alone are insufficient. Only a complete pipeline whose
+  failed/canceled jobs are all proven process gates may still use `ready`.
+- Confirmed code failures should become findings. Infrastructure failures and
+  unknown causes remain blocking rather than being silently treated as code
+  defects or process gates.
 - Other owner decisions require a non-empty reason and use `blocked`.
-- With no blocking finding, failed pipeline, or owner-decision reason, use
+- With no blocking finding, blocking CI evidence, or owner-decision reason, use
   `ready`.
 
 The runner validates this policy before creating the review decision. Metadata

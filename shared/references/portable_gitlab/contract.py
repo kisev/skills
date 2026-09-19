@@ -21,6 +21,11 @@ from urllib.parse import urlsplit
 
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 1_000
+MAX_CI_PIPELINES = 20
+MAX_CI_JOB_PAGES = 5
+MAX_CI_TRACES = 50
+MAX_TRACE_BYTES = 64 * 1024
+MAX_PIPELINE_DEPTH = 5
 ARTIFACT_VERSION = 2
 ARTIFACT_SCHEMA_NAME = "artifact-contracts-v2.schema.json"
 URL_RE = re.compile(
@@ -2290,6 +2295,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 "critic_target_finding_ids",
                 "blocking_finding_ids",
                 "owner_decision_reasons",
+                "ci_job_assessments",
             }
         ):
             raise WorkflowError("review decision payload has unknown or missing fields")
@@ -2326,6 +2332,31 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             and (
                 not isinstance(payload["owner_decision_reasons"], list)
                 or not all(nonempty_string(item) for item in payload["owner_decision_reasons"])
+            )
+            or "ci_job_assessments" in payload
+            and (
+                not isinstance(payload["ci_job_assessments"], list)
+                or not all(
+                    isinstance(item, dict)
+                    and set(item)
+                    == {
+                        "project_id",
+                        "pipeline_id",
+                        "job_id",
+                        "classification",
+                        "rationale",
+                        "trace_evidence",
+                    }
+                    and all(
+                        isinstance(item.get(key), int)
+                        for key in ("project_id", "pipeline_id", "job_id")
+                    )
+                    and item.get("classification")
+                    in {"process_gate", "code_failure", "infrastructure_failure", "unknown"}
+                    and nonempty_string(item.get("rationale"))
+                    and nonempty_string(item.get("trace_evidence"))
+                    for item in payload["ci_job_assessments"]
+                )
             )
             or not findings_are_valid(payload["unresolved_threads"])
             or not isinstance(responses, list)
@@ -2445,7 +2476,7 @@ def allowed_endpoint(endpoint: str) -> bool:
         return True
     return bool(
         re.fullmatch(
-            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",
+            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/pipelines/[1-9][0-9]*/(?:jobs|bridges)(?:\?[^#]+)?|[0-9]+/jobs/[1-9][0-9]*/trace|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",
             endpoint,
         )
     )
@@ -2479,12 +2510,44 @@ def glab_json(hostname: str, endpoint: str) -> object:
         raise WorkflowError("GitLab returned invalid JSON") from exc
 
 
-def paginated(hostname: str, endpoint: str) -> dict[str, object]:
+def glab_text(hostname: str, endpoint: str) -> str:
+    if not re.fullmatch(r"[a-z0-9.-]+", hostname) or not allowed_endpoint(endpoint):
+        raise WorkflowError("GitLab endpoint is outside the collection allowlist")
+    glab = shutil.which("glab")
+    if glab is None:
+        raise WorkflowError("glab is unavailable; install and authenticate it outside this skill")
+    try:
+        completed = subprocess.run(
+            [
+                glab,
+                "api",
+                "--hostname",
+                hostname,
+                "--method",
+                "GET",
+                "--header",
+                f"Range: bytes=-{MAX_TRACE_BYTES}",
+                endpoint,
+            ],
+            check=False,
+            capture_output=True,
+            timeout=45,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise WorkflowError("GitLab job trace could not be completed") from exc
+    if completed.returncode:
+        raise WorkflowError(f"GitLab job trace request failed with status {completed.returncode}")
+    if len(completed.stdout) > MAX_BYTES:
+        raise WorkflowError("GitLab job trace exceeds the response size limit")
+    return completed.stdout.decode(errors="replace")
+
+
+def paginated(hostname: str, endpoint: str, *, max_pages: int = MAX_PAGES) -> dict[str, object]:
     items: list[object] = []
     seen: set[str] = set()
     page_digests: set[str] = set()
     errors: list[str] = []
-    for page in range(1, MAX_PAGES + 1):
+    for page in range(1, max_pages + 1):
         separator = "&" if "?" in endpoint else "?"
         try:
             value = glab_json(hostname, f"{endpoint}{separator}per_page=100&page={page}")
@@ -2518,7 +2581,7 @@ def paginated(hostname: str, endpoint: str) -> dict[str, object]:
         "items": items,
         "complete": False,
         "errors": errors,
-        "pages": MAX_PAGES if not errors else page,
+        "pages": max_pages if not errors else page,
         "truncated": True,
     }
 
@@ -2536,6 +2599,168 @@ def component(
         "complete": complete,
         "errors": errors or [],
         "pages": pages,
+        "truncated": truncated,
+    }
+
+
+def select_exact_pipeline(pipelines: dict[str, object], head_sha: str) -> dict[str, Any] | None:
+    items = pipelines.get("items")
+    if not isinstance(items, list):
+        return None
+    exact = [item for item in items if isinstance(item, dict) and item.get("sha") == head_sha]
+    if not exact:
+        return None
+
+    def pipeline_id(item: dict[str, Any]) -> int:
+        value = item.get("id")
+        return value if isinstance(value, int) else -1
+
+    return max(cast(list[dict[str, Any]], exact), key=pipeline_id)
+
+
+def trace_excerpt(value: str) -> dict[str, object]:
+    sanitized = redact(re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)).replace("\r", "")
+    encoded = sanitized.encode()
+    truncated = len(encoded) > MAX_TRACE_BYTES
+    if truncated:
+        encoded = encoded[-MAX_TRACE_BYTES:]
+        sanitized = encoded.decode(errors="replace")
+    return {
+        "complete": True,
+        "truncated": truncated,
+        "excerpt": sanitized,
+        "sha256": hashlib.sha256(value.encode()).hexdigest(),
+    }
+
+
+def pipeline_job(item: dict[str, Any], project_id: int, pipeline_id: int) -> dict[str, object]:
+    fields = (
+        "id",
+        "name",
+        "stage",
+        "status",
+        "allow_failure",
+        "web_url",
+        "created_at",
+        "started_at",
+        "finished_at",
+        "duration",
+        "queued_duration",
+        "failure_reason",
+    )
+    return {
+        "project_id": project_id,
+        "pipeline_id": pipeline_id,
+        **{key: item.get(key) for key in fields},
+    }
+
+
+def collect_pipeline_jobs(
+    hostname: str, project_id: int, pipeline: dict[str, Any]
+) -> dict[str, object]:
+    pipeline_id = pipeline.get("id")
+    if not isinstance(pipeline_id, int):
+        return {
+            "complete": False,
+            "errors": ["selected pipeline has no numeric ID"],
+            "pipelines": [],
+            "truncated": True,
+        }
+    queue: list[tuple[int, int, int, int | None]] = [(project_id, pipeline_id, 0, None)]
+    seen: set[tuple[int, int]] = set()
+    collected: list[dict[str, object]] = []
+    errors: list[str] = []
+    traces = 0
+    truncated = False
+    while queue:
+        current_project, current_pipeline, depth, parent_pipeline = queue.pop(0)
+        identity = (current_project, current_pipeline)
+        if identity in seen:
+            continue
+        if len(seen) >= MAX_CI_PIPELINES:
+            errors.append("CI pipeline traversal limit reached")
+            truncated = True
+            break
+        seen.add(identity)
+        jobs = paginated(
+            hostname,
+            f"projects/{current_project}/pipelines/{current_pipeline}/jobs",
+            max_pages=MAX_CI_JOB_PAGES,
+        )
+        bridges = paginated(
+            hostname,
+            f"projects/{current_project}/pipelines/{current_pipeline}/bridges",
+            max_pages=MAX_CI_JOB_PAGES,
+        )
+        pipeline_errors = [
+            *cast(list[str], jobs["errors"]),
+            *cast(list[str], bridges["errors"]),
+        ]
+        normalized_jobs: list[dict[str, object]] = []
+        for raw in [*cast(list[object], jobs["items"]), *cast(list[object], bridges["items"])]:
+            if not isinstance(raw, dict) or not isinstance(raw.get("id"), int):
+                pipeline_errors.append("GitLab returned invalid CI job metadata")
+                continue
+            normalized = pipeline_job(cast(dict[str, Any], raw), current_project, current_pipeline)
+            if raw.get("status") in {"failed", "canceled"}:
+                if traces >= MAX_CI_TRACES:
+                    normalized["trace"] = {
+                        "complete": False,
+                        "truncated": True,
+                        "excerpt": "",
+                        "sha256": None,
+                    }
+                    pipeline_errors.append("CI job trace limit reached")
+                    truncated = True
+                else:
+                    traces += 1
+                    try:
+                        normalized["trace"] = trace_excerpt(
+                            glab_text(
+                                hostname, f"projects/{current_project}/jobs/{raw['id']}/trace"
+                            )
+                        )
+                    except WorkflowError as exc:
+                        normalized["trace"] = {
+                            "complete": False,
+                            "truncated": True,
+                            "excerpt": "",
+                            "sha256": None,
+                        }
+                        pipeline_errors.append(str(exc))
+            normalized_jobs.append(normalized)
+        for raw in cast(list[object], bridges["items"]):
+            if not isinstance(raw, dict) or not isinstance(raw.get("downstream_pipeline"), dict):
+                continue
+            downstream = cast(dict[str, Any], raw["downstream_pipeline"])
+            downstream_id = downstream.get("id")
+            downstream_project = downstream.get("project_id", current_project)
+            if not isinstance(downstream_id, int) or not isinstance(downstream_project, int):
+                pipeline_errors.append("downstream pipeline identity is incomplete")
+                continue
+            if depth >= MAX_PIPELINE_DEPTH:
+                pipeline_errors.append("downstream pipeline depth limit reached")
+                truncated = True
+                continue
+            queue.append((downstream_project, downstream_id, depth + 1, current_pipeline))
+        collected.append(
+            {
+                "project_id": current_project,
+                "pipeline_id": current_pipeline,
+                "parent_pipeline_id": parent_pipeline,
+                "depth": depth,
+                "jobs": normalized_jobs,
+                "complete": jobs["complete"] is True
+                and bridges["complete"] is True
+                and not pipeline_errors,
+                "errors": pipeline_errors,
+            }
+        )
+        errors.extend(pipeline_errors)
+    return {
+        "complete": not errors and not truncated,
+        "errors": errors,
+        "pipelines": collected,
         "truncated": truncated,
     }
 
@@ -2661,6 +2886,24 @@ def collect(
                 pipelines = paginated(
                     hostname, f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}"
                 )
+                if profile == "code-review" and pipelines["complete"] is True:
+                    selected_pipeline = select_exact_pipeline(pipelines, head_sha)
+                    if selected_pipeline is not None:
+                        job_evidence = collect_pipeline_jobs(
+                            hostname, project_id, selected_pipeline
+                        )
+                        selected_pipeline["job_evidence"] = job_evidence
+                        if job_evidence["complete"] is not True:
+                            pipelines = component(
+                                cast(list[object], pipelines["items"]),
+                                complete=False,
+                                errors=[
+                                    *cast(list[str], pipelines["errors"]),
+                                    *cast(list[str], job_evidence["errors"]),
+                                ],
+                                pages=cast(int, pipelines["pages"]),
+                                truncated=bool(job_evidence["truncated"]),
+                            )
             else:
                 pipelines = component(
                     complete=False, errors=["exact head SHA is unavailable"], truncated=True
@@ -2759,19 +3002,11 @@ def pipeline_summary(bundle: dict[str, Any]) -> tuple[str, dict[str, Any] | None
         return "unverified: collection incomplete", None
     if not isinstance(head_sha, str) or not head_sha:
         return "unverified: exact head SHA unavailable", None
-    items = pipelines.get("items")
-    if not isinstance(items, list):
+    if not isinstance(pipelines.get("items"), list):
         return "unverified: pipeline data invalid", None
-    exact = [item for item in items if isinstance(item, dict) and item.get("sha") == head_sha]
-    if not exact:
+    pipeline = select_exact_pipeline(cast(dict[str, object], pipelines), head_sha)
+    if pipeline is None:
         return "missing", None
-    pipeline = exact[0]
-    for candidate in exact[1:]:
-        candidate_id, pipeline_id = candidate.get("id"), pipeline.get("id")
-        if isinstance(candidate_id, int) and (
-            not isinstance(pipeline_id, int) or candidate_id > pipeline_id
-        ):
-            pipeline = candidate
     raw_status = pipeline.get("status")
     if raw_status in {"success", "running", "failed", "canceled"}:
         return str(raw_status), pipeline

@@ -60,7 +60,9 @@
         "tests/test_review_semver.py::test_release_major_keeps_patch_mr_label",
         "tests/test_review_semver.py::test_unknown_policy_is_explicit_fallback_without_release_claim",
         "tests/test_build_skills.py::test_release_stamp_is_portable_and_reproducible",
-        "tests/test_application_workflows.py::PortableWorkflowTests::test_runner_final_review_requires_bound_current_finalize_evidence"
+        "tests/test_application_workflows.py::PortableWorkflowTests::test_runner_final_review_requires_bound_current_finalize_evidence",
+        "tests/test_application_workflows.py::PortableWorkflowTests::test_code_review_collects_jobs_traces_and_downstream_pipelines",
+        "tests/test_application_workflows.py::PortableWorkflowTests::test_code_review_verdict_keeps_low_findings_non_blocking"
       ],
       "eval_ids": ["gitlab.code-review-routing", "gitlab.evidence-contract"]
     },
@@ -437,7 +439,7 @@
     "REQ-F-105": {
       "surface": "skill:code-review",
       "source": "specs/capabilities/skills/code-review.md",
-      "block_sha256": "1fde7de50444b2592898c463dd224305b84ceb9274195fb98f4649c86526b739",
+      "block_sha256": "57213546a250a6fab2423ca4c9c36a09b3e857fb7ebfaa7f772e1d1eb9b2e6a9",
       "evidence_profile": "code_review"
     },
     "REQ-F-106": {
