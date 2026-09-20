@@ -71,10 +71,12 @@ comparison cannot be established reliably, keep the review running with
 to its target branch and use that assessment for the compatibility label.
 Never describe it as the next release's SemVer.
 
-Bind `target_branch` and `target_sha` to collected evidence. If current target
-lookup failed, the draft uses the exact MR `start_sha` snapshot: explicitly say
-that freshness of the target could not be established. `target_revision` records
-`current` or `mr_snapshot`, and the runner reports snapshot fallback. Use the MR base/head
+Bind `target_branch` and `target_sha` to collected evidence. Use the current
+target revision only when its exact commit is available in the local review
+repository. If lookup failed or the commit is unavailable locally, the draft
+uses the exact MR `start_sha` snapshot: explicitly say that freshness of the
+target could not be established. `target_revision` records `current` or
+`mr_snapshot`, and the runner reports snapshot fallback. Use the MR base/head
 diff for attribution, so target-only commits are not mistaken for MR removals.
 
 Every invocation, including unchanged/incremental review, reassesses the release

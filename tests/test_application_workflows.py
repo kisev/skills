@@ -1572,7 +1572,8 @@ print(json.dumps(value))
         ):
             bundle = module.collect(target, "code-review")
         self.assertTrue(bundle["retrieval_complete"])
-        self.assertIn("projects/19/pipelines?sha=c&per_page=100&page=1", calls)
+        self.assertIn("projects/19/merge_requests/7/pipelines?per_page=100&page=1", calls)
+        self.assertNotIn("projects/19/pipelines?sha=c&per_page=100&page=1", calls)
         self.assertIn("projects/19/merge_requests/7/commits?per_page=100&page=1", calls)
 
     def test_code_review_collects_jobs_traces_and_downstream_pipelines(self) -> None:
@@ -1605,7 +1606,7 @@ print(json.dumps(value))
                 }
             if endpoint.startswith("projects/19/merge_requests/7/commits"):
                 return [{"id": "c"}]
-            if endpoint.startswith("projects/19/pipelines?sha=c"):
+            if endpoint.startswith("projects/19/merge_requests/7/pipelines"):
                 return [{"id": 41, "sha": "c", "status": "failed"}]
             if endpoint.startswith("projects/19/pipelines/41/jobs"):
                 return [{"id": 51, "name": "policy", "stage": "verify", "status": "failed"}]
@@ -1632,7 +1633,16 @@ print(json.dumps(value))
             patch.object(
                 module,
                 "glab_text",
-                return_value="Approval count is insufficient\ntoken=hidden-value\n",
+                return_value=(
+                    "Approval count is insufficient\n"
+                    "token=hidden-value\n"
+                    "Authorization: Bearer bearer-value\n"
+                    "AWS_ACCESS_KEY_ID=cloud-value\n"
+                    "https://user:url-value@example.invalid/path\n"
+                    "postgresql://user:database-value@example.invalid/db\n"
+                    '{"password":"json-value"}\n'
+                    "-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----\n"
+                ),
             ),
         ):
             bundle = module.collect(target, "code-review")
@@ -1643,7 +1653,22 @@ print(json.dumps(value))
         trace = evidence["pipelines"][0]["jobs"][0]["trace"]
         self.assertIn("Approval count is insufficient", trace["excerpt"])
         self.assertIn("token=[REDACTED]", trace["excerpt"])
-        self.assertNotIn("hidden-value", trace["excerpt"])
+        for secret in (
+            "hidden-value",
+            "bearer-value",
+            "cloud-value",
+            "url-value",
+            "database-value",
+            "json-value",
+            "private-value",
+        ):
+            self.assertNotIn(secret, trace["excerpt"])
+        self.assertIn("Authorization: [REDACTED]", trace["excerpt"])
+        self.assertIn("AWS_ACCESS_KEY_ID=[REDACTED]", trace["excerpt"])
+        self.assertIn("https://[REDACTED]@example.invalid/path", trace["excerpt"])
+        self.assertIn("postgresql://[REDACTED]@example.invalid/db", trace["excerpt"])
+        self.assertIn('{"password":"[REDACTED]"}', trace["excerpt"])
+        self.assertIn("[REDACTED PRIVATE KEY]", trace["excerpt"])
         self.assertIn("projects/23/pipelines/42/jobs?per_page=100&page=1", calls)
 
     def test_review_decision_requires_independent_critic_and_all_responses(self) -> None:
@@ -2063,6 +2088,7 @@ print(json.dumps(value))
             },
         }
         evidence = {
+            "start_sha": "a",
             "labels": {"complete": True, "items": []},
             "object": {"labels": []},
         }

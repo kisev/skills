@@ -48,8 +48,8 @@ change and the body file consumed by that command.
 
 ## Errors, Partial, Escalation
 
-Missing exact evidence, complete exact-head job metadata, required failed-job
-trace excerpts, or a required critic is blocked, not silently ignored.
+Missing exact evidence, complete MR-bound exact-head job metadata, required
+failed-job trace excerpts, or a required critic is blocked, not silently ignored.
 Missing or stale context, critic, finalize, decision, content, plan, baseline, or
 Markdown bindings make the final report blocked; findings are never reported as
 a best-effort substitute. Failed/canceled jobs are classified from bounded,

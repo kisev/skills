@@ -8,12 +8,34 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[5.1.0] - 2026-09-21
+
+### Added
+
+- Code review now assesses the MR contribution separately from the accumulated
+  next-release SemVer impact, using verified release catalogs and target-branch
+  evidence with an explicit fallback when no release basis can be established.
+- Code review now inspects the complete job inventory for the MR-bound exact-head
+  pipeline, including bounded failed-job traces and recursively collected
+  downstream pipelines.
+
 ### Changed
 
 - CI now materializes portable skills once and fans the immutable artifact out
   to direct Task targets instead of routing checks through `ci:*` aggregators.
 - The package metadata now pins skills installer `1.7.0`, and compatibility
   verification covers the configured OpenCode `1.18.31` toolchain.
+- Repository quality gates now use the pinned Mise toolchain, strict Python type
+  and lint checks, focused pre-commit hooks, and one documented `task pre-push`
+  gate. Existing portable skill and OpenCode package consumers require no
+  migration.
+
+### Fixed
+
+- Code review now binds pipeline evidence to the merge request, falls back to the
+  verified MR target snapshot when the current target commit is unavailable
+  locally, and redacts authorization headers, cloud credentials, credentialed
+  URLs, JSON secrets, and private keys from failed-job traces.
 
 ### Removed
 

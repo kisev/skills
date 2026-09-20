@@ -175,6 +175,26 @@ def test_unknown_policy_is_explicit_fallback_without_release_claim() -> None:
             review_semver.validate(invalid, evidence, context)
 
 
+def test_current_target_falls_back_when_commit_is_unavailable_locally(
+    release_context: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
+) -> None:
+    evidence, context, _assessment = release_context
+    unavailable = "f" * 40
+    context["release_evidence"]["target_sha"] = unavailable
+    assessment = fallback_assessment(evidence["start_sha"])
+
+    assert review_semver.template(evidence, context)["target_revision"] == "mr_snapshot"
+    assert review_semver.validate(assessment, evidence, context) == assessment
+
+    current = {
+        **assessment,
+        "target_sha": unavailable,
+        "target_revision": "current",
+    }
+    with pytest.raises(contract.WorkflowError):
+        review_semver.validate(current, evidence, context)
+
+
 def test_release_only_commit_need_not_be_target_ancestor(
     release_context: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
 ) -> None:

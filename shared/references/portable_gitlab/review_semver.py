@@ -102,18 +102,39 @@ def assessment_is_valid(value: object) -> bool:
 
 def template(evidence: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     release = context["release_evidence"]
+    target_sha, target_revision = comparison_target(evidence, context)
     return {
         "mode": "target_fallback",
         "policy": "",
         "sources": [],
         "baseline": None,
         "target_branch": release["target_branch"] or evidence["object"].get("target_branch", ""),
-        "target_sha": release["target_sha"] or evidence["start_sha"],
-        "target_revision": "current" if release["target_sha"] else "mr_snapshot",
+        "target_sha": target_sha,
+        "target_revision": target_revision,
         "fallback_reason": "",
         "release_impact": None,
         "release_rationale": None,
     }
+
+
+def comparison_target(evidence: dict[str, Any], context: dict[str, Any]) -> tuple[str, str]:
+    target_sha = context["release_evidence"]["target_sha"]
+    exact_git = context.get("exact_git")
+    if portable.is_sha(target_sha) and isinstance(exact_git, dict):
+        repo_root = exact_git.get("repo_root")
+        if isinstance(repo_root, str):
+            try:
+                resolved = str(
+                    portable.git_read(
+                        Path(repo_root), "rev-parse", "--verify", f"{target_sha}^{{commit}}"
+                    )
+                ).strip()
+            except portable.WorkflowError:
+                pass
+            else:
+                if resolved == target_sha:
+                    return target_sha, "current"
+    return evidence["start_sha"], "mr_snapshot"
 
 
 def validate(value: object, evidence: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -123,18 +144,18 @@ def validate(value: object, evidence: dict[str, Any], context: dict[str, Any]) -
         )
     result = cast("dict[str, Any]", value)
     release = context["release_evidence"]
-    expected_sha = release["target_sha"] or evidence["start_sha"]
+    expected_sha, expected_revision = comparison_target(evidence, context)
     if (
         result["target_branch"] != release["target_branch"]
         or result["target_sha"] != expected_sha
-        or result["target_revision"] != ("current" if release["target_sha"] else "mr_snapshot")
+        or result["target_revision"] != expected_revision
     ):
         raise portable.WorkflowError(
             "SemVer target does not match collected target branch evidence"
         )
     if result["mode"] == "target_fallback":
         return result
-    if release["target_sha"] is None:
+    if release["target_sha"] is None or expected_revision != "current":
         raise portable.WorkflowError("release SemVer requires the current target branch revision")
     baseline = result["baseline"]
     catalog = release[baseline["source"]]

@@ -32,6 +32,21 @@ URL_RE = re.compile(
     r"^https://(?P<host>[^/?#]+)/(?P<project>.+?)/-/(?P<kind>issues|merge_requests)/(?P<iid>[1-9][0-9]*)/?$"
 )
 SECRET_RE = re.compile(r"(?i)(token|password|secret|private[_-]?token)\s*[=:]\s*[^\s,]+")
+JSON_SECRET_RE = re.compile(
+    r"(?i)([\"'](?:authorization|password|secret|private[_-]?token|api[_-]?key|"
+    r"access[_-]?key(?:[_-]?id)?|client[_-]?secret|aws_session_token)[\"']\s*:\s*)"
+    r"([\"'])[^\r\n]*?\2"
+)
+AUTHORIZATION_RE = re.compile(r"(?im)(\bauthorization\s*:\s*)[^\r\n]+")
+CLOUD_CREDENTIAL_RE = re.compile(
+    r"(?i)\b((?:AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|AWS_SESSION_TOKEN|"
+    r"GOOGLE_API_KEY|AZURE_CLIENT_ID|AZURE_CLIENT_SECRET)\s*[=:]\s*)[^\s,]+"
+)
+URL_CREDENTIAL_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^@\s/]+@")
+PRIVATE_KEY_RE = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
+    re.DOTALL,
+)
 SEMVER_RE = re.compile(
     r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
 )
@@ -190,7 +205,12 @@ class ContractArgumentParser(argparse.ArgumentParser):
 
 
 def redact(value: str) -> str:
-    return SECRET_RE.sub(r"\1=[REDACTED]", value)
+    redacted = PRIVATE_KEY_RE.sub("[REDACTED PRIVATE KEY]", value)
+    redacted = JSON_SECRET_RE.sub(r"\1\2[REDACTED]\2", redacted)
+    redacted = AUTHORIZATION_RE.sub(r"\1[REDACTED]", redacted)
+    redacted = CLOUD_CREDENTIAL_RE.sub(r"\1[REDACTED]", redacted)
+    redacted = URL_CREDENTIAL_RE.sub(r"\1[REDACTED]@", redacted)
+    return SECRET_RE.sub(r"\1=[REDACTED]", redacted)
 
 
 def emit(value: object) -> None:
@@ -2540,7 +2560,7 @@ def allowed_endpoint(endpoint: str) -> bool:
         return True
     return bool(
         re.fullmatch(
-            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/pipelines/[1-9][0-9]*/(?:jobs|bridges)(?:\?[^#]+)?|[0-9]+/jobs/[1-9][0-9]*/trace|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",
+            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/pipelines/[1-9][0-9]*/(?:jobs|bridges)(?:\?[^#]+)?|[0-9]+/jobs/[1-9][0-9]*/trace|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes|pipelines))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",
             endpoint,
         )
     )
@@ -2952,9 +2972,12 @@ def collect(
                         pages=cast("int", commits["pages"]),
                         truncated=True,
                     )
-                pipelines = paginated(
-                    hostname, f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}"
+                pipeline_endpoint = (
+                    f"projects/{project_id}/merge_requests/{iid}/pipelines"
+                    if profile == "code-review"
+                    else f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}"
                 )
+                pipelines = paginated(hostname, pipeline_endpoint)
                 if profile == "code-review" and pipelines["complete"] is True:
                     selected_pipeline = select_exact_pipeline(pipelines, head_sha)
                     if selected_pipeline is not None:

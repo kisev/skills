@@ -713,7 +713,7 @@ elif endpoint == "projects/19/merge_requests/7/changes":
     value = {{"changes": [], "diff_refs": {{"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
     value = [{{"id": review_sha}}]
-elif endpoint.startswith("projects/19/pipelines?sha="):
+elif endpoint.startswith("projects/19/merge_requests/7/pipelines"):
     value = [{{"id": 41, "sha": review_sha, "status": "success"}}]
 elif endpoint.startswith("projects/19/pipelines/41/jobs"):
     value = [{{"id": 51, "name": "test", "stage": "test", "status": "success"}}]
