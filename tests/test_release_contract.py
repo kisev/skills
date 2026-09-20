@@ -65,6 +65,43 @@ def test_release_check_rejects_distribution_revision_drift(
         check_release.validate()
 
 
+def test_pre_tag_check_validates_name_without_requiring_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tag = f"v{RELEASE_VERSION}"
+    monkeypatch.setattr(
+        check_release,
+        "git",
+        lambda *arguments: (
+            subprocess.run(
+                ["git", *arguments], cwd=ROOT, capture_output=True, text=True, check=True
+            ).stdout.strip()
+            if arguments == ("rev-parse", "HEAD")
+            else pytest.fail(f"unexpected published-tag lookup: {arguments}")
+        ),
+    )
+
+    assert check_release.validate(tag)["version"] == RELEASE_VERSION
+
+
+def test_published_release_check_requires_tag() -> None:
+    with pytest.raises(check_release.ReleaseError, match="requires a tag"):
+        check_release.validate(published=True)
+
+
+def test_release_check_can_require_a_clean_tree(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_git = check_release.git
+
+    def dirty_git(*arguments: str) -> str:
+        if arguments == ("status", "--porcelain"):
+            return " M package.json"
+        return real_git(*arguments)
+
+    monkeypatch.setattr(check_release, "git", dirty_git)
+    with pytest.raises(check_release.ReleaseError, match="clean working tree"):
+        check_release.validate(require_clean=True)
+
+
 def test_release_artifact_hashes_use_registry_integrity_format() -> None:
     content = b"exact npm artifact"
     result = build_release_artifacts.hashes(content)
@@ -437,11 +474,16 @@ def test_release_environment_revision_must_match_head(monkeypatch: pytest.Monkey
 
 def test_release_workflow_gates_publication_and_final_release() -> None:
     workflow = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
+    preflight = (ROOT / ".github/workflows/release-preflight.yml").read_text(encoding="utf-8")
     assert (
         workflow.index("preflight:") < workflow.index("pages:") < workflow.index("github-release:")
     )
     assert workflow.count("needs: preflight") == 2
     assert "task release:prepare" in workflow
+    assert "task release:preflight" in preflight
+    assert 'branches:\n      - "release/v*"' in preflight
+    assert "GITHUB_REF_NAME#release/" in preflight
+    assert "upload-artifact" not in preflight
     assert "task release:pages:verify" in workflow
     assert "task release:npm" in workflow
     assert "task release:github" in workflow

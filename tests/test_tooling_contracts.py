@@ -14,6 +14,8 @@ def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
     assert "commitlint --edit {1}" in hooks
     assert "--fix" not in hooks
     assert "git add" not in hooks
+    assert "mise exec -- editorconfig-checker" in hooks
+    assert "mise exec -- ec" not in hooks
     for slow_check in ("pytest", "mypy", "build:skills", "version:check", "package:check"):
         assert slow_check not in hooks
 
@@ -21,6 +23,9 @@ def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
 def test_workflows_delegate_quality_checks_to_task() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
+    release_preflight = (ROOT / ".github/workflows/release-preflight.yml").read_text(
+        encoding="utf-8"
+    )
     live = (ROOT / ".github/workflows/evals-live.yml").read_text(encoding="utf-8")
     assert not (ROOT / ".github/workflows/pages.yml").exists()
     assert 'task "$CHECK_TASK"' in ci
@@ -62,7 +67,7 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "github.event.deleted != true" in ci
     assert 'test "$DELETED_REF" = true' in ci
     assert "fetch-depth: 0" in ci
-    for workflow in (ci, publish, live):
+    for workflow in (ci, publish, release_preflight, live):
         for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", workflow):
             assert re.fullmatch(r"[0-9a-f]{40}", reference)
     for duplicated in ("ruff ", "pytest", "npm ci", "npm test", "agentskills"):
@@ -97,7 +102,11 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     assert "mise exec -- npm test" in taskfile
     assert "mise exec -- gitleaks" in taskfile
     assert "mise exec -- uv" in taskfile
+    assert "mise exec -- editorconfig-checker" in taskfile
+    assert "mise exec -- ec" not in taskfile
     assert "      - task: build:skills\n      - task: version:check" in taskfile
     assert "deps: [check, dependency:audit]" in taskfile
+    assert "  release:preflight:" in taskfile
+    assert "task release:check -- --published" in taskfile
     distribution = (ROOT / "scripts/build_distribution.py").read_text(encoding="utf-8")
     assert "build_skills(BUILT_SKILLS" not in distribution

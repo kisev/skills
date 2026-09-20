@@ -57,7 +57,7 @@ pre-commit:
 
           - name: editorconfig
             glob: "**/*"
-            run: mise exec -- ec {files}
+            run: mise exec -- editorconfig-checker {files}
 
     - name: configuration
       group:

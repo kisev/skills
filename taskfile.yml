@@ -62,7 +62,7 @@ tasks:
   lint:editorconfig:
     desc: Lint mixed files via EditorConfig
     cmds:
-      - mise exec -- ec
+      - mise exec -- editorconfig-checker
 
   lint:github:
     desc: Lint Github workflows
@@ -161,11 +161,18 @@ tasks:
       - task: distribution:build
       - mise exec -- uv run --locked python scripts/check_release.py {{.CLI_ARGS}}
 
-  release:prepare:
-    desc: Run the full gate and build immutable release artifacts
+  release:preflight:
+    desc: Verify a release commit before creating its tag
     cmds:
-      - task: check
-      - task: release:check
+      - task release:check -- --require-clean
+      - task: pre-push
+      - mise exec -- uv run --locked python scripts/build_release_artifacts.py
+
+  release:prepare:
+    desc: Verify the published tag and build immutable release artifacts
+    cmds:
+      - task release:check -- --published --require-clean
+      - task: pre-push
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:npm:

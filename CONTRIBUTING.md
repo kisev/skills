@@ -124,9 +124,14 @@ Pages distribution, `@kisev/skills-opencode` version, tag, and GitHub Release
 must refer to one commit. Do not change a published version; publish a new patch
 release instead.
 
-A tag push starts the single `.github/workflows/publish.yml` release workflow.
-It runs the full quality gate before publication, builds one exact npm tarball
-and a cross-channel digest manifest, publishes and verifies GitHub Pages and npm,
-and only then creates the GitHub Release. npm publishing uses trusted publishing
-through OIDC and verifies the registry tarball, imports, CLI, signatures, and
-provenance.
+Push the prepared release commit first to the exact `release/vX.Y.Z` branch. The
+read-only `.github/workflows/release-preflight.yml` workflow runs the complete
+gate, builds the proposed artifacts, and validates the version without requiring
+the tag to exist. After it succeeds, atomically push the same commit to `main`
+with its annotated `vX.Y.Z` tag, then delete the temporary branch.
+
+The tag starts `.github/workflows/publish.yml`. It revalidates the published tag
+and revision, builds one exact npm tarball and cross-channel digest manifest,
+publishes and verifies GitHub Pages and npm, and only then creates the GitHub
+Release. npm publishing uses trusted publishing through OIDC and verifies the
+registry tarball, imports, CLI, signatures, and provenance.

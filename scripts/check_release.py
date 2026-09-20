@@ -42,7 +42,9 @@ def git(*arguments: str) -> str:
     return result.stdout.strip()
 
 
-def validate(tag: str | None = None) -> dict[str, str]:
+def validate(
+    tag: str | None = None, *, published: bool = False, require_clean: bool = False
+) -> dict[str, str]:
     portable = read_json(PORTABLE_PACKAGE).get("version")
     opencode = read_json(OPENCODE_PACKAGE).get("version")
     lock = read_json(OPENCODE_LOCK)
@@ -74,6 +76,8 @@ def validate(tag: str | None = None) -> dict[str, str]:
         raise ReleaseError(f"CHANGELOG.md has no release heading for {version}")
 
     revision = git("rev-parse", "HEAD")
+    if require_clean and git("status", "--porcelain"):
+        raise ReleaseError("release validation requires a clean working tree")
     expected_revision = os.environ.get("RELEASE_REVISION")
     if expected_revision is not None and expected_revision != revision:
         raise ReleaseError("release environment revision does not match HEAD")
@@ -83,10 +87,13 @@ def validate(tag: str | None = None) -> dict[str, str]:
     if release_index.get("source_revision") != revision:
         raise ReleaseError("Pages distribution revision does not match HEAD")
 
+    if published and tag is None:
+        raise ReleaseError("published release validation requires a tag")
     if tag is not None:
         expected = f"v{version}"
         if tag != expected:
             raise ReleaseError(f"tag {tag!r} does not match {expected!r}")
+    if published and tag is not None:
         if git("cat-file", "-t", f"refs/tags/{tag}") != "tag":
             raise ReleaseError("release tag must be annotated")
         if git("rev-parse", f"refs/tags/{tag}^{{commit}}") != revision:
@@ -116,9 +123,19 @@ def validate(tag: str | None = None) -> dict[str, str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag", default=os.environ.get("RELEASE_TAG"))
+    parser.add_argument(
+        "--published",
+        action="store_true",
+        help="require the annotated tag and release commit to exist on origin/main",
+    )
+    parser.add_argument(
+        "--require-clean",
+        action="store_true",
+        help="reject uncommitted release inputs",
+    )
     args = parser.parse_args(argv)
     try:
-        result = validate(args.tag)
+        result = validate(args.tag, published=args.published, require_clean=args.require_clean)
     except ReleaseError as error:
         parser.error(str(error))
     print(json.dumps({"status": "ok", **result}, sort_keys=True, separators=(",", ":")))

@@ -8,6 +8,18 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[5.1.3] - 2026-09-21
+
+### Fixed
+
+- EditorConfig checks now invoke the installed `editorconfig-checker` binary
+  instead of the unconfigured local alias `ec`. The `v5.1.2` clean-runner
+  preflight stopped before artifacts were created because that alias was absent.
+- Releases now require a clean pre-tag `release/vX.Y.Z` branch workflow before
+  `main` and the annotated tag are pushed. Local validation no longer requires
+  an unpublished tag or incorrectly assumes the release commit is already on
+  `origin/main`.
+
 ## \[5.1.2] - 2026-09-21
 
 ### Fixed
