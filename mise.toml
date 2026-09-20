@@ -7,6 +7,9 @@ min_version = "2026.9.11"
 [settings]
   disable_backends = ["asdf", "vfox"]
 
+  [settings.npm]
+    package_manager = "npm"
+
 # tombi: format.rules.table-keys-order = "ascending"
 [tools]
   "aqua:BurntSushi/ripgrep" = "15.2.0"

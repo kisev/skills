@@ -8,6 +8,15 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[5.1.2] - 2026-09-21
+
+### Fixed
+
+- Mise now uses its npm installer for npm-backed tools, ensuring `npm_args`
+  installs the pinned Remark plugins on clean runners. The `v5.1.1` preflight
+  stopped before artifacts were created because the default Aube installer
+  ignored those plugin arguments.
+
 ## \[5.1.1] - 2026-09-21
 
 ### Fixed
