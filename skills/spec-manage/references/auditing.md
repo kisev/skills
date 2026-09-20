@@ -2,10 +2,9 @@
 
 Audit is completely read-only. Independently check canonical-document quality and its correspondence to source code, tests, schemas, configuration, CLI/API, CI, and deployment. Do not fix anything or create report files.
 
-The repository gate (`task spec:check`) is necessary but not sufficient. A full
-audit runs the deterministic gate first and then requires one independent critic
-pass whose initial conclusions are hidden from the primary reviewer. The primary
-reviewer accepts or rejects critic findings against repository evidence.
+A full audit requires one independent critic pass whose initial conclusions are
+hidden from the primary reviewer. The primary reviewer accepts or rejects critic
+findings against repository evidence.
 
 ## Order
 

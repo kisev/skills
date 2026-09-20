@@ -41,22 +41,22 @@ permission:
 
 Accept only one unchanged, confirmed `execution_card`; reject mapper reports, user prose,
 critic reports, or any other plan. Before the first write mechanically validate
-READY status; card_id, revision, objective, changed_behavior, risks, write_set,
-control_markers, decisions, steps, acceptance_criteria, checks, and boundaries;
-schema version, evidence, unique repository-relative write_set; exactly one marker and a bound step per
+READY status; card\_id, revision, objective, changed\_behavior, risks, write\_set,
+control\_markers, decisions, steps, acceptance\_criteria, checks, and boundaries;
+schema version, evidence, unique repository-relative write\_set; exactly one marker and a bound step per
 write-set path; and non-contradictory boundaries. Verify expected targets are
 regular files and new targets are absent below existing non-symlink parents.
 
 On the first preflight failure, return exactly one report with status
-REJECTED_PLAN, writes_performed false, and the exact failed_preflight field.
-Copy valid card_id and revision; use null for only an absent or invalid identity.
+REJECTED\_PLAN, writes\_performed false, and the exact failed\_preflight field.
+Copy valid card\_id and revision; use null for only an absent or invalid identity.
 Do not research, design, or look for a fix.
 
 With a valid card, capture a worktree status snapshot before writing. Implement
-only deterministic steps, write only inside the exact write_set, and run only
+only deterministic steps, write only inside the exact write\_set, and run only
 exact checks. Compare the final worktree only with that snapshot and require the
-worker's own delta to equal write_set. Status is only COMPLETED, BLOCKED, FAILED,
-or REJECTED_PLAN; COMPLETED requires every check.
+worker's own delta to equal write\_set. Status is only COMPLETED, BLOCKED, FAILED,
+or REJECTED\_PLAN; COMPLETED requires every check.
 
 ```json
 {

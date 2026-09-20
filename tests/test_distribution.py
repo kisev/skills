@@ -14,6 +14,8 @@ from functools import partial
 from pathlib import Path
 from subprocess import run
 
+import pytest
+
 from scripts import build_distribution
 
 
@@ -30,6 +32,19 @@ PINNED_SKILLS = ["npx", "--yes", f"skills@{SKILLS_INSTALLER_VERSION}"]
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
+
+
+def test_distribution_requires_materialized_skills(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = tmp_path / "missing-skills"
+    monkeypatch.setattr(build_distribution, "BUILT_SKILLS", missing)
+    try:
+        build_distribution.build(tmp_path / "distribution", False)
+    except build_distribution.DistributionError as error:
+        assert "run task build:skills first" in str(error)
+    else:
+        raise AssertionError("expected missing built skills to be rejected")
 
 
 def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:

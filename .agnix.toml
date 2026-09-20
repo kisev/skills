@@ -6,13 +6,13 @@ target = "Generic"
 max_files_to_validate = 10000
 
 [rules]
-agents = false
-tool_names = false
+  agents = false
+  tool_names = false
 
 [[overrides]]
-paths = ["**/attempt/SKILL.md", "**/goal/SKILL.md"]
-disabled_rules = ["CC-SK-008"]
+  paths = ["**/attempt/SKILL.md", "**/goal/SKILL.md"]
+  disabled_rules = ["CC-SK-008"]
 
 [[overrides]]
-paths = ["**/release-prepare/SKILL.md", "**/release-review/SKILL.md"]
-disabled_rules = ["CC-SK-006"]
+  paths = ["**/release-prepare/SKILL.md", "**/release-review/SKILL.md"]
+  disabled_rules = ["CC-SK-006"]

@@ -48,6 +48,7 @@ def release_context(tmp_path: Path) -> tuple[dict[str, Any], dict[str, Any], dic
         return subprocess.check_output(["git", "-C", str(tmp_path), *args], text=True).strip()
 
     git("init", "--quiet")
+    git("config", "commit.gpgsign", "false")
     for value in ("released API\n", "pending breaking change\n"):
         (tmp_path / "api.txt").write_text(value)
         git("add", "api.txt")

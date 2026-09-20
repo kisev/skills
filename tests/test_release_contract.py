@@ -395,8 +395,6 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     assert "      - pages\n      - npm" in workflow
     assert "needs.preflight.outputs.npm-artifact" in workflow
     assert "needs.preflight.outputs.pages-artifact" in workflow
-    assert "task: ci:spec-impact" in (ROOT / "taskfile.yml").read_text(encoding="utf-8")
-
     builder = (ROOT / "scripts/build_release_artifacts.py").read_text(encoding="utf-8")
     publisher = (ROOT / "scripts/publish_npm_release.py").read_text(encoding="utf-8")
     pages = (ROOT / "scripts/verify_distribution_url.py").read_text(encoding="utf-8")

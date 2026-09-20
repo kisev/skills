@@ -13,4 +13,4 @@
 - `tests/` contains repository, distribution, workflow, and eval contracts.
 - `evals/` contains machine-readable scenarios, fixtures, schemas, and negative
   corpus entries.
-- `specs/` is the canonical normative model and traceability index.
+- `specs/` is the canonical Markdown normative model.

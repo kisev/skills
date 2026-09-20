@@ -22,7 +22,8 @@ class ReleaseError(Exception):
 def changelog(version: str) -> str:
     text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     match = re.search(
-        rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}\n(?P<body>.*?)(?=^## \[|\Z)",
+        rf"^## \\?\[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}\n"
+        rf"(?P<body>.*?)(?=^## \\?\[|\Z)",
         text,
         flags=re.MULTILINE | re.DOTALL,
     )

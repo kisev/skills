@@ -1,18 +1,24 @@
 {
   "name": "@kisev/skills-opencode",
   "version": "5.0.0",
-  "skillsInstallerVersion": "1.5.23",
   "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
+  "homepage": "https://github.com/kisev/skills#readme",
+  "bugs": {
+    "url": "https://github.com/kisev/skills/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kisev/skills.git",
     "directory": "packages/opencode"
   },
-  "homepage": "https://github.com/kisev/skills#readme",
-  "bugs": {
-    "url": "https://github.com/kisev/skills/issues"
+  "bin": {
+    "skills-opencode": "./dist/cli.js"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -32,26 +38,16 @@
       "import": "./dist/plugins/zed-bell.js"
     }
   },
-  "bin": {
-    "skills-opencode": "./dist/cli.js"
-  },
-  "files": [
-    "dist",
-    "README.md"
-  ],
-  "engines": {
-    "node": ">=22"
-  },
   "scripts": {
-    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node dist/generate-assets.js",
-    "format": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --write src test package.json tsconfig.json README.md",
-    "format:check": "prettier --config ../../.prettierrc.json --ignore-path ../../.prettierignore --check src test package.json tsconfig.json README.md",
-    "lint": "oxlint src test",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "generate-assets": "npm run build",
-    "generate-assets:check": "npm run build && node dist/generate-assets.js --check",
-    "test": "npm run build && node --test test/agent-profiles.test.mjs && node --test test/doctor.test.mjs && node --test test/package.test.mjs && node --test test/stage19.test.mjs",
-    "smoke": "npm run build && node test/smoke.mjs"
+    "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json && node dist/generate-assets.js",
+    "test": "node --test test/agent-profiles.test.mjs test/doctor.test.mjs test/package.test.mjs test/stage19.test.mjs",
+    "smoke": "node test/smoke.mjs",
+    "pack:check": "node test/pack-allowlist.mjs"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.29",
+    "@types/node": "22.15.30",
+    "typescript": "7.0.2"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.18.29 <1.19.0"
@@ -61,9 +57,8 @@
       "optional": true
     }
   },
-  "devDependencies": {
-    "@opencode-ai/plugin": "1.18.29",
-    "@types/node": "22.15.30",
-    "typescript": "5.8.3"
-  }
+  "engines": {
+    "node": ">=22"
+  },
+  "skillsInstallerVersion": "1.7.0"
 }

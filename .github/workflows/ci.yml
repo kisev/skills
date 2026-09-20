@@ -1,10 +1,15 @@
+---
 name: CI
 
-on:
+"on":
   push:
     branches:
       - "**"
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: read
@@ -14,17 +19,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  spec-impact:
-    name: Specification impact
+  skills-build:
+    name: Materialize portable skills
     if: ${{ github.event.deleted != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4.3.0
+      - run: task build:skills
+      - uses: actions/upload-artifact@v7
         with:
-          fetch-depth: 0
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
-      - run: task ci:spec-impact
+          name: built-skills
+          path: .build/skills
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
 
   quality:
     name: ${{ matrix.name }}
@@ -35,44 +45,74 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Static analysis
-            task: ci:static
-          - name: Python tests
-            task: ci:python
-          - name: Portable distribution
-            task: ci:portable
+          - name: Version contracts
+            task: version:check
+          - name: Lint
+            task: lint
+          - name: Type checks
+            task: typecheck
+          - name: Secret scanning
+            task: security
           - name: Offline evaluations
             task: eval:check
           - name: OpenCode package
             task: package:check
-          - name: Secret scanning
-            task: security
     env:
       CHECK_TASK: ${{ matrix.task }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4.3.0
+      - run: task "$CHECK_TASK"
+
+  built-quality:
+    name: ${{ matrix.name }}
+    if: ${{ github.event.deleted != true }}
+    needs: skills-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Python tests
+            task: test:python
+          - name: Locales
+            task: locale:check
+          - name: Portable distribution
+            task: distribution:check
+          - name: Skill validation
+            task: skills:validate
+    env:
+      CHECK_TASK: ${{ matrix.task }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v4.3.0
+      - uses: actions/download-artifact@v8
         with:
-          fetch-depth: 0
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+          name: built-skills
+          path: .build/skills
       - run: task "$CHECK_TASK"
 
   check:
     name: check
     if: ${{ always() }}
     needs:
-      - spec-impact
+      - skills-build
       - quality
+      - built-quality
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
       DELETED_REF: ${{ github.event.deleted }}
-      SPEC_IMPACT_RESULT: ${{ needs.spec-impact.result }}
+      SKILLS_BUILD_RESULT: ${{ needs.skills-build.result }}
       QUALITY_RESULT: ${{ needs.quality.result }}
+      BUILT_QUALITY_RESULT: ${{ needs.built-quality.result }}
     steps:
       - name: Require every CI gate
         run: |
           if test "$DELETED_REF" = true; then
             exit 0
           fi
-          test "$SPEC_IMPACT_RESULT" = success
+          test "$SKILLS_BUILD_RESULT" = success
           test "$QUALITY_RESULT" = success
+          test "$BUILT_QUALITY_RESULT" = success

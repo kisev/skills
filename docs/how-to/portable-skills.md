@@ -7,13 +7,13 @@ skills. These operations are independent of `@kisev/skills-opencode`.
 
 ## Choose a Scope and Host
 
-| Choice        | Option                                  | Canonical location                       |
-| ------------- | --------------------------------------- | ---------------------------------------- |
-| Global scope  | Add `--global`                          | `~/.agents/skills`                       |
-| Project scope | Omit `--global`                         | `.agents/skills`                         |
-| Codex only    | `--agent codex`                         | Selected scope                           |
-| OpenCode only | `--agent opencode`                      | Selected scope                           |
-| Both hosts    | `--agent opencode --agent codex --copy` | One canonical copy in the selected scope |
+| Choice | Option | Canonical location |
+| - | - | - |
+| Global scope | Add `--global` | `~/.agents/skills` |
+| Project scope | Omit `--global` | `.agents/skills` |
+| Codex only | `--agent codex` | Selected scope |
+| OpenCode only | `--agent opencode` | Selected scope |
+| Both hosts | `--agent opencode --agent codex --copy` | One canonical copy in the selected scope |
 
 ## Install
 

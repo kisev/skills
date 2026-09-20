@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://www.schemastore.org/remarkrc.json
+---
+settings:
+  bullet: "-"
+  closeAtx: false
+  emphasis: "*"
+  fence: "`"
+  fences: true
+  incrementListMarker: true
+  listItemIndent: one
+  quote: "\""
+  resourceLink: false
+  rule: "-"
+  ruleRepetition: 3
+  ruleSpaces: false
+  setext: false
+  strong: "*"
+  tightDefinitions: false
+
+plugins:
+  - remark-frontmatter
+  - - remark-gfm
+    - tablePipeAlign: false
+      tableCellPadding: true

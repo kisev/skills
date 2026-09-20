@@ -65,7 +65,7 @@ def validate(tag: str | None = None) -> dict[str, str]:
         raise ReleaseError(f"invalid release version: {version}")
     if (
         re.search(
-            rf"^## \[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}$",
+            rf"^## \\?\[{re.escape(version)}\] - \d{{4}}-\d{{2}}-\d{{2}}$",
             CHANGELOG.read_text(encoding="utf-8"),
             re.MULTILINE,
         )

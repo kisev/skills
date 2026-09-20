@@ -83,7 +83,12 @@ export type AgentInventory = {
   digest: string;
 };
 export type AgentProfileAction =
-  "install" | "model-set" | "critic-add" | "critic-remove" | "reconcile" | "uninstall";
+  | "install"
+  | "model-set"
+  | "critic-add"
+  | "critic-remove"
+  | "reconcile"
+  | "uninstall";
 export type AgentProfileRequest = {
   action: AgentProfileAction;
   name?: string;

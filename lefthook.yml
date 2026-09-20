@@ -1,19 +1,105 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/evilmartians/lefthook/master/schema.json
 ---
-pre-commit:
-  commands:
-    staged-checks:
-      run: task pre-commit
-      fail_text: "Fast staged checks failed; the complete gate still runs at pre-push"
+glob_matcher: doublestar
 
-commit-msg:
-  commands:
-    spec-impact:
-      run: uv run --locked python scripts/check_specs.py --staged --message-file {1}
-      fail_text: "Behavioral changes require specs/traceability or Spec-Impact trailer"
+pre-commit:
+  parallel: true
+  files: git diff --cached --name-only --diff-filter=ACMR
+  jobs:
+    - name: security
+      run: mise exec -- gitleaks git --pre-commit --staged --no-banner --redact
+
+    - name: lint
+      group:
+        parallel: true
+        jobs:
+          - name: yaml
+            glob: "**/*.{yml,yaml}"
+            run: mise exec -- yamllint {files}
+
+          - name: github-actions
+            glob: ".github/workflows/*.{yml,yaml}"
+            run: mise exec -- actionlint {files}
+
+          - name: toml
+            glob: "**/*.toml"
+            run: |
+              mise exec -- tombi lint {files}
+              mise exec -- tombi format --check {files}
+
+          - name: markdown
+            glob: "**/*.md"
+            run: |
+              NPM_CONFIG_PREFIX="$(mise where npm:remark-cli)" mise exec -- remark {files} --no-stdout --frail --quiet
+              mise exec -- markdownlint-cli2 --no-globs {files}
+
+          - name: python
+            glob: "**/*.py"
+            run: |
+              mise exec -- uv run --locked ruff check --force-exclude {files}
+              mise exec -- uv run --locked ruff format --check --force-exclude {files}
+
+          - name: javascript-typescript
+            glob: "**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"
+            run: |
+              mise exec -- oxlint {files}
+              mise exec -- oxfmt --check {files}
+
+          - name: json
+            glob: "**/*.{json,jsonc,json5}"
+            run: mise exec -- oxfmt --check {files}
+
+          - name: shell
+            glob: "**/*.sh"
+            run: |
+              mise exec -- shfmt -d {files}
+              mise exec -- shellcheck {files}
+
+          - name: editorconfig
+            glob: "**/*"
+            run: mise exec -- ec {files}
+
+    - name: configuration
+      group:
+        parallel: true
+        jobs:
+          - name: markdown
+            glob:
+              - ".markdownlint-cli2.mjs"
+              - ".markdownlint.yml"
+              - ".remarkrc.yml"
+            run: task lint:markdown
+
+          - name: yaml
+            glob: ".yamllint.yml"
+            run: task lint:yaml
+
+          - name: toml
+            glob: ".tombi.toml"
+            run: task lint:toml
+
+          - name: editorconfig
+            glob:
+              - ".editorconfig"
+              - ".editorconfig-checker.json"
+            run: task lint:editorconfig
+
+          - name: lefthook
+            glob: "lefthook.yml"
+            run: mise exec -- lefthook validate
+
+          - name: python-lock
+            glob:
+              - "pyproject.toml"
+              - "uv.lock"
+            run: mise exec -- uv lock --check
+
+          - name: tools
+            glob: "mise.toml"
+            run: mise ls --current --local
 
 pre-push:
-  commands:
-    single-local-gate:
+  jobs:
+    - name: complete-gate
       run: task pre-push
       fail_text: "The single complete local push gate failed"

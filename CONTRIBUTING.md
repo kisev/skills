@@ -34,19 +34,19 @@ task check
 
 The main public tasks divide the checks as follows:
 
-| Task                         | Purpose                                                                    |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `tools`                      | Show the active pinned toolchain.                                          |
-| `format`, `format:check`     | Format sources and regenerate assets, or check formatting without writing. |
-| `lint`, `typecheck`, `test`  | Run source, type, and test checks.                                         |
-| `generate`, `generate:check` | Build ignored artifacts or check their reproducibility.                    |
-| `skills:validate`            | Run Agnix, `agentskills`, and internal skill contracts.                    |
-| `package:check`              | Verify the complete OpenCode package lifecycle.                            |
-| `eval:check`                 | Validate evaluation data and run the hostless offline suite.               |
-| `dependency:audit`           | Audit the locked Python and npm dependency graphs.                         |
-| `security`                   | Scan Git history and the working tree for secrets with gitleaks.           |
-| `check`                      | Run the complete local and CI quality gate.                                |
-| `pre-commit`, `pre-push`     | Run the task sets used by Git hooks.                                       |
+| Task | Purpose |
+| - | - |
+| `tools` | Show the active pinned toolchain. |
+| `format`, `format:check` | Format sources and regenerate assets, or check formatting without writing. |
+| `lint`, `typecheck`, `test` | Run source, type, and test checks. |
+| `generate`, `generate:check` | Build ignored artifacts or check their reproducibility. |
+| `skills:validate` | Run Agnix, `agentskills`, and internal skill contracts. |
+| `package:check` | Verify the complete OpenCode package lifecycle. |
+| `eval:check` | Validate evaluation data and run the hostless offline suite. |
+| `dependency:audit` | Audit the locked Python and npm dependency graphs. |
+| `security` | Scan Git history and the working tree for secrets with gitleaks. |
+| `check` | Run the complete local and CI quality gate. |
+| `pre-push` | Run the complete local push gate used by Lefthook. |
 
 `task format` may change tracked files, while `task generate` writes only
 ignored artifacts. Portable authored entrypoints are named `SKILL.source.md`;
@@ -103,9 +103,9 @@ Install hooks after bootstrap:
 lefthook install
 ```
 
-`pre-commit` invokes `task pre-commit` and selects fast, non-mutating checks from
-staged and deleted paths, including schemas, specs, and toolchain metadata. A
-docs-only change does not run the package lifecycle.
+`pre-commit` runs fast, non-mutating lint and security checks directly against
+staged files with pinned Mise tools. Deleted paths are excluded; builds, tests,
+generation, and release checks do not run.
 
 `pre-push` invokes `task pre-push`, which runs `task check` and
 `task dependency:audit` concurrently. The full gate runs the package lifecycle

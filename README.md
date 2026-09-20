@@ -8,9 +8,9 @@ one on its own or install both for the complete OpenCode experience.
 
 ## Project Components
 
-| Component                | What it provides                                                                          | Lifecycle                                                                                     |
-| ------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| Portable Agent Skills    | 27 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills`     |
+| Component | What it provides | Lifecycle |
+| - | - | - |
+| Portable Agent Skills | 27 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
 | `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
 Portable skills do not require the npm package. The package does not contain,

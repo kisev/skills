@@ -43,7 +43,13 @@ const assetsRoot = resolve(packageRoot, "dist", "assets");
 
 export type Action = "install" | "uninstall";
 export type Operation =
-  "create" | "update" | "remove" | "unchanged" | "missing" | "conflict" | "archive-pending";
+  | "create"
+  | "update"
+  | "remove"
+  | "unchanged"
+  | "missing"
+  | "conflict"
+  | "archive-pending";
 export type PlanItem = { path: string; operation: Operation; reason?: string; sha256?: string };
 export type SelectablePlugin = (typeof CATALOG.plugins)[number];
 export type InstallerSelection = {

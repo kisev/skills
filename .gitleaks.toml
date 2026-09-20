@@ -1,4 +1,4 @@
 title = "skills gitleaks configuration"
 
 [extend]
-useDefault = true
+  useDefault = true

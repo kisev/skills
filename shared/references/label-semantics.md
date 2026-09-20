@@ -4,14 +4,14 @@ This policy maps semantic information to labels already available in a GitLab pr
 
 ## Roles
 
-| Semantic role    | Information carried                             | Supported values                                                                   |
-| ---------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `change_type`    | What kind of change this is                     | `release`, `feature`, `bug`, `maintenance`, `documentation`, `security`            |
-| `workflow_state` | Where the MR is in its lifecycle                | `in_progress`, `review`, `blocked`, `completed`, `declined`, `needs_info`, `stale` |
-| `urgency`        | How soon action is needed                       | `emergency`, `urgent`, `standard`, `low`                                           |
-| `impact`         | How severe the technical or user impact is      | `critical`, `high`, `medium`, `low`                                                |
-| `compatibility`  | Required semantic-version impact                | `major`, `minor`, `patch`                                                          |
-| `origin`         | Where the request and implementation originated | `internal`, `external`, `inner_source`                                             |
+| Semantic role | Information carried | Supported values |
+| - | - | - |
+| `change_type` | What kind of change this is | `release`, `feature`, `bug`, `maintenance`, `documentation`, `security` |
+| `workflow_state` | Where the MR is in its lifecycle | `in_progress`, `review`, `blocked`, `completed`, `declined`, `needs_info`, `stale` |
+| `urgency` | How soon action is needed | `emergency`, `urgent`, `standard`, `low` |
+| `impact` | How severe the technical or user impact is | `critical`, `high`, `medium`, `low` |
+| `compatibility` | Required semantic-version impact | `major`, `minor`, `patch` |
+| `origin` | Where the request and implementation originated | `internal`, `external`, `inner_source` |
 
 Priority or urgency is business timing; impact is technical consequence. Do not derive one from the other. Leave `urgency`, `origin`, and initiative/theme labels unchanged without explicit evidence.
 

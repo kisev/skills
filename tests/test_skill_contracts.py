@@ -53,17 +53,15 @@ def test_built_skill_files_match_canonical_sources() -> None:
         assert destination.read_bytes() == source.read_bytes(), destination
 
 
-def test_rebuilding_portable_skills_does_not_change_repository_state() -> None:
-    before = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout
-    subprocess.run(
-        ["python3", "scripts/build_skills.py"], cwd=ROOT, check=True, capture_output=True, text=True
+def test_portable_skill_build_output_is_ignored() -> None:
+    result = subprocess.run(
+        ["git", "check-ignore", ".build/skills"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    after = subprocess.run(
-        ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout
-    assert after == before
+    assert result.returncode == 0
 
 
 def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:

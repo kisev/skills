@@ -88,7 +88,6 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     portable = read_json(root / "packages/skills/package.json")
     opencode = read_json(root / "packages/opencode/package.json")
     lock = read_json(root / "packages/opencode/package-lock.json")
-    traceability = read_json(root / "specs/traceability.json")
     compatibility = read_json(root / "evals/contracts/opencode-compatibility.json")
     with (root / "mise.toml").open("rb") as stream:
         mise = tomllib.load(stream)
@@ -101,14 +100,15 @@ def validate(root: Path = ROOT) -> dict[str, object]:
         "packages/opencode/package.json": opencode.get("version"),
         "packages/opencode/package-lock.json": lock.get("version"),
         "packages/opencode/package-lock.json packages root": lock_packages[""].get("version"),
-        "specs/traceability.json": traceability.get("target"),
     }
     drift = {name: value for name, value in release_mirrors.items() if value != release}
     if drift:
         raise VersionError(f"project release mirrors differ from {release}: {drift}")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     heading = re.search(
-        r"^## \[([0-9]+\.[0-9]+\.[0-9]+)\] - \d{4}-\d{2}-\d{2}$", changelog, re.MULTILINE
+        r"^## \\?\[([0-9]+\.[0-9]+\.[0-9]+)\] - \d{4}-\d{2}-\d{2}$",
+        changelog,
+        re.MULTILINE,
     )
     if not heading or heading.group(1) != release:
         raise VersionError("first changelog release does not match project release")
@@ -144,7 +144,7 @@ def validate(root: Path = ROOT) -> dict[str, object]:
         raise VersionError("OpenCode development dependencies are missing")
     checked_versions = {
         "package dev dependency": dev_dependencies.get("@opencode-ai/plugin"),
-        "mise OpenCode": tools.get("opencode"),
+        "mise OpenCode": tools.get("aqua:anomalyco/opencode"),
     }
     unsupported = {
         name: value for name, value in checked_versions.items() if value not in compatible

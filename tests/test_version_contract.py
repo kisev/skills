@@ -30,13 +30,12 @@ def version_root(root: Path) -> Path:
         root / "packages/opencode/package-lock.json",
         {"version": "2.2.3", "packages": {"": {"version": "2.2.3"}}},
     )
-    write_json(root / "specs/traceability.json", {"target": "2.2.3"})
     write_json(
         root / "evals/contracts/opencode-compatibility.json",
-        {"range": ">=1.18.29 <1.19.0", "versions": ["1.18.29", "1.18.30"]},
+        {"range": ">=1.18.29 <1.19.0", "versions": ["1.18.29", "1.18.31"]},
     )
     (root / "mise.toml").write_text(
-        '[tools]\n"npm:skills" = "1.5.23"\nopencode = "1.18.29"\n',
+        '[tools]\n"npm:skills" = "1.5.23"\n"aqua:anomalyco/opencode" = "1.18.29"\n',
         encoding="utf-8",
     )
     (root / "CHANGELOG.md").write_text("## [2.2.3] - 2026-09-15\n", encoding="utf-8")
@@ -57,7 +56,7 @@ def test_repository_version_contract_is_centralized() -> None:
     result = check_versions.validate(ROOT)
     assert result["status"] == "passed"
     assert result["portable_skills"] == 27
-    assert result["skills_installer"] == "1.5.23"
+    assert result["skills_installer"] == "1.7.0"
 
 
 def test_version_contract_rejects_release_mirror_drift(tmp_path: Path) -> None:

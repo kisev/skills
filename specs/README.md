@@ -19,13 +19,10 @@ available; selectable plugins are `rules-injector`, `rtk`, and `zed-bell`.
 - [Architecture](architecture/README.md) describes boundaries and runtime views.
 - [Capabilities](capabilities/README.md) indexes every public capability.
 - [Crosscutting concepts](architecture/08-crosscutting-concepts/README.md) hold shared behavior.
-- [Traceability](traceability.json) binds requirements to automated and manual evidence.
 
 ## Scope Boundary
 
 The specification covers the GitHub Pages distribution, the OpenCode package and CLI,
 orchestration, durable state, content-addressed archive behavior, security
-boundaries, tests, evals, and compatibility. Repository quality gates are part
-of the supported contract: `task spec:check` is deterministic and mandatory,
-while `spec-manage` full audit remains a separate semantic review with an
-independent critic pass.
+boundaries, tests, evals, and compatibility. The `spec-manage` workflow owns
+canonical updates and read-only semantic review with an independent critic pass.

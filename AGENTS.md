@@ -44,7 +44,7 @@
 - Keep OpenCode-only commands, agents, plugins, routing, and installer behavior under `packages/opencode/`.
 - Do not edit `.build/`, `packages/opencode/dist/`, generated `SKILL.md`, or copied assets directly; use `task generate` and verify reproducibility with `task generate:check`.
 - Run `mise install` from the repository root before making changes.
-- Treat `taskfile.yml` as the only task graph; workflows and hooks must call its public tasks instead of duplicating tool commands.
+- Treat `taskfile.yml` as the full repository and CI task graph; the Lefthook pre-commit fast path may invoke pinned Mise tools directly for staged files, while workflows and pre-push must call public tasks.
 - Add focused contract or regression tests for observable behavior.
 - Run `task format` after maintained-source formatting changes; run `task check` before a non-push handoff, while Lefthook `pre-push` owns complete local verification for pushes.
 - Treat `task pre-push` as the single local push gate: it runs `task check` and `task dependency:audit` concurrently; do not run either immediately before a push unless diagnosing a failure.
@@ -54,7 +54,6 @@
 - Write ordinary project files directly with bounded paths and atomic replacement or rollback; require preview and explicit confirmation only for external publication, user configuration, destructive cleanup, history changes, releases, and package lifecycle mutations.
 - Keep credentials, private endpoints, local paths, caches, live-eval output, and generated artifacts out of Git.
 - Do not weaken a failing gate with exclusions, warning baselines, missing-import ignores, or skipped tests without a documented compatibility reason.
-- Update `specs/` and `specs/traceability.json` for material behavior, compatibility, or security-boundary changes.
-- For engineering-only commits with no specification impact, add `Spec-Impact: none - <reason>` to the commit message.
+- Update canonical `specs/` for material behavior, compatibility, or security-boundary changes.
 - Never rewrite published tags or package versions; registry propagation alone is not a reason to bump: `task release:npm` waits up to 10 minutes, then inspect the failure and use `gh run rerun <run-id> --failed` with retained artifacts for transient failures; use a new patch only for actual release corrections.
 - Keep the portable version manifest, OpenCode package and lockfile, catalog, changelog heading, annotated `vX.Y.Z` tag, Pages distribution, npm artifact, and GitHub Release on one commit; after confirmation, atomically push the release branch and tag without a duplicate local `task release:prepare`, because `.github/workflows/publish.yml` owns exact preflight, publication, verification, and release creation.

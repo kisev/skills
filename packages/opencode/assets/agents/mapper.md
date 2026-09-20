@@ -29,5 +29,5 @@ exactly one structured `mapper_report` and no prose, plan, patch, or
 ```
 
 Use factual path and caller/test/pattern evidence only. If evidence is missing,
-record it in evidence_gaps instead of guessing. Do not design a solution, edit
+record it in evidence\_gaps instead of guessing. Do not design a solution, edit
 files, run write commands, or delegate work.

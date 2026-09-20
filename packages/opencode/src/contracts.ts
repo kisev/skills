@@ -2,7 +2,12 @@ import { validateExecutionCard, type ExecutionCard } from "./routing.js";
 
 export const CONTRACT_SCHEMA_VERSION = 1 as const;
 export type AgentReportStatus =
-  "COMPLETED" | "BLOCKED" | "FAILED" | "REJECTED_PLAN" | "APPROVED" | "CHANGES_REQUIRED";
+  | "COMPLETED"
+  | "BLOCKED"
+  | "FAILED"
+  | "REJECTED_PLAN"
+  | "APPROVED"
+  | "CHANGES_REQUIRED";
 export type MapperReport = {
   mapper_report: {
     schema_version: 1;

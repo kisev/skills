@@ -1,4 +1,4 @@
-# ADR-NNNN: [Short decision]
+# ADR-NNNN: \[Short decision]
 
 - Status: proposed
 - Date: YYYY-MM-DD
@@ -8,31 +8,31 @@
 
 ## Context and problem statement
 
-[Describe the context, problem, and decision boundary.]
+\[Describe the context, problem, and decision boundary.]
 
 ## Decision drivers
 
-- [Decision driver.]
+- \[Decision driver.]
 
 ## Considered options
 
-- [Considered alternative.]
-- [Considered alternative.]
+- \[Considered alternative.]
+- \[Considered alternative.]
 
 ## Outcome
 
-[Record the selected option and primary rationale.]
+\[Record the selected option and primary rationale.]
 
 ## Consequences
 
 ### Positive
 
-- [Positive consequence.]
+- \[Positive consequence.]
 
 ### Negative
 
-- [Negative consequence or trade-off.]
+- \[Negative consequence or trade-off.]
 
 ## Links
 
-- [REQ-* or related ADR.]
+- \[REQ-\* or related ADR.]

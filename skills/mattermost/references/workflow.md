@@ -66,7 +66,7 @@ origin-bound credential is missing or expired. Do not ask for credentials in
 chat and never pass a token through argv.
 
 1. Prepare authorization with `python '/path/to/mattermost/scripts/mattermost.py'
-auth preview 'MATTERMOST_URL'`.
+   auth preview 'MATTERMOST_URL'`.
 2. After explicit user consent, run the emitted apply command with
    `--browser-consent`; the runner invokes the installed `agent-browser` only for
    the exact HTTPS origin.

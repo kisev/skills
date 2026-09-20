@@ -845,6 +845,12 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
     ]);
     assert.equal(readdirSync(directory).length, 0);
     const packageJson = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
+    assert.deepEqual(Object.keys(packageJson.scripts).sort(), [
+      "build",
+      "pack:check",
+      "smoke",
+      "test",
+    ]);
     for (const lifecycle of ["preinstall", "install", "postinstall", "prepack", "prepare"])
       assert.equal(packageJson.scripts[lifecycle], undefined);
   } finally {
@@ -1263,6 +1269,8 @@ test.skip("retired background attempts are not part of the 2.0.0 surface", async
       "user.name=Test",
       "-c",
       "user.email=test@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
       "commit",
       "-qm",
       "initial",
@@ -1423,6 +1431,8 @@ test("managed worktree lifecycle rejects unknown and dirty paths without deletin
       "user.name=Test",
       "-c",
       "user.email=test@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
       "commit",
       "-qm",
       "initial",

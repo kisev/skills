@@ -5,254 +5,263 @@ set: [pipefail, errexit, nounset]
 
 tasks:
   default:
-    desc: List available tasks
+    desc: Show all tasks
     cmds:
       - task --list
 
   tools:
-    desc: Show the pinned toolchain
+    desc: Show the active pinned toolchain
     cmds:
       - mise ls --current --local
 
-  spec:check:
-    desc: Validate canonical specs and traceability
+  lint:
+    desc: "[group] Lint"
+    deps:
+      - lint:yaml
+      - lint:toml
+      - lint:markdown
+      - lint:shell
+      - lint:editorconfig
+      - lint:github
+      - lint:lefthook
+      - lint:json
+      - lint:jsts
+      - lint:python
+
+  lint:yaml:
+    desc: Lint yaml
     cmds:
-      - uv run --locked python scripts/check_specs.py
+      - mise exec -- fd -H -g '*.{yml,yaml}' -X yamllint
+
+  lint:toml:
+    desc: Lint toml
+    cmds:
+      - mise exec -- fd -H -g '*.toml' -X tombi lint
+      - mise exec -- fd -H -g '*.toml' -X tombi format --check
+
+  lint:markdown:
+    desc: Lint markdown
+    cmds:
+      - NPM_CONFIG_PREFIX="$(mise where npm:remark-cli)" mise exec -- fd -H -g '*.md' -X remark --no-stdout --frail
+      - mise exec -- fd -H -g '*.md' -X markdownlint-cli2 --no-globs
+
+  lint:shell:
+    desc: Lint shell
+    cmds:
+      - mise exec -- fd -H -g '*.sh' -X shfmt -d
+      - mise exec -- fd -H -g '*.sh' -X shellcheck
+
+  lint:editorconfig:
+    desc: Lint mixed files via EditorConfig
+    cmds:
+      - mise exec -- ec
+
+  lint:github:
+    desc: Lint Github workflows
+    cmds:
+      - mise exec -- actionlint
+
+  lint:lefthook:
+    desc: Validate Lefthook configuration
+    cmds:
+      - mise exec -- lefthook validate
+
+  lint:json:
+    desc: Lint json
+    cmds:
+      - mise exec -- fd -H -t f -g '*.{json,jsonc,json5}' -X oxfmt --check
+
+  lint:jsts:
+    desc: Lint js/ts
+    cmds:
+      - mise exec -- fd -H -g '*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}' -X oxlint
+      - mise exec -- fd -H -g '*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,d.ts}' -X oxfmt --check
+
+  lint:python:
+    desc: Lint python
+    cmds:
+      - mise exec -- uv run --locked ruff check .
+      - mise exec -- uv run --locked ruff format --check .
+
+  format:
+    desc: "[group] Format"
+    deps:
+      - format:toml
+      - format:shell
+      - format:markdown
+      - format:json
+      - format:jsts
+      - format:python
+
+  format:toml:
+    desc: Format toml
+    cmds:
+      - mise exec -- fd -H -g '*.toml' -X tombi format
+
+  format:shell:
+    desc: Format shell
+    cmds:
+      - mise exec -- fd -H -g '*.sh' -X shfmt -w
+
+  format:markdown:
+    desc: Format markdown
+    cmds:
+      - NPM_CONFIG_PREFIX="$(mise where npm:remark-cli)" mise exec -- fd -H -g '*.md' -x remark {} --output
+      - mise exec -- fd -H -g '*.md' -X markdownlint-cli2 --no-globs --fix
+
+  format:json:
+    desc: Format json
+    cmds:
+      - mise exec -- fd -H -g '*.{json,jsonc,json5}' -X oxfmt
+
+  format:jsts:
+    desc: Format js/ts
+    cmds:
+      - mise exec -- fd -H -g '*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,d.ts}' -X oxfmt
+
+  format:python:
+    desc: Format python
+    cmds:
+      - mise exec -- uv run --locked ruff check --fix .
+      - mise exec -- uv run --locked ruff format .
+
+  typecheck:
+    desc: "[group] Check types"
+    deps:
+      - typecheck:typescript
+      - typecheck:python
+
+  typecheck:typescript:
+    desc: Check types in typescript
+    deps: [package:install]
+    cmds:
+      - mise exec -- tsc --project packages/opencode/tsconfig.json --noEmit
+
+  typecheck:python:
+    desc: Check types in python
+    cmds:
+      - mise exec -- uv run --locked mypy
 
   version:check:
     desc: Validate release, installer, compatibility, and documentation version authorities
     cmds:
-      - uv run --locked python scripts/check_versions.py
-
-  spec:skill:
-    desc: Print a read-only canonical report for one skill
-    cmds:
-      - uv run --locked python scripts/check_specs.py --skill "{{.CLI_ARGS}}"
-
-  spec:impact:
-    desc: Check spec impact for a commit range
-    cmds:
-      - uv run --locked python scripts/check_specs.py --range "{{.BASE}}" "{{.HEAD}}"
-
-  spec:audit:
-    desc: Run the read-only semantic specification audit
-    cmds:
-      - uv run --locked python scripts/spec_audit.py --critic-pass
+      - mise exec -- uv run --locked python scripts/check_versions.py
 
   release:check:
     desc: Validate aligned release versions and built Pages provenance
     cmds:
-      - task: build:distribution
-      - uv run --locked python scripts/check_release.py {{.CLI_ARGS}}
+      - task: distribution:build
+      - mise exec -- uv run --locked python scripts/check_release.py {{.CLI_ARGS}}
 
   release:prepare:
     desc: Run the full gate and build immutable release artifacts
     cmds:
-      - task: ci:spec-impact
       - task: check
       - task: release:check
-      - uv run --locked python scripts/build_release_artifacts.py
+      - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:npm:
     desc: Publish or accept and verify the exact npm release artifact
     cmds:
-      - uv run --locked python scripts/publish_npm_release.py
+      - mise exec -- uv run --locked python scripts/publish_npm_release.py
 
   release:pages:verify:
     desc: Verify the exact deployed Pages release artifact
     cmds:
       - >-
-        uv run --locked python scripts/verify_distribution_url.py "$PAGES_URL"
+        mise exec -- uv run --locked python scripts/verify_distribution_url.py "$PAGES_URL"
         --version "${RELEASE_TAG#v}" --revision "$RELEASE_REVISION"
         --attempts 24 --manifest .build/release/release.json
 
   release:github:
     desc: Create or verify the final GitHub Release
     cmds:
-      - uv run --locked python scripts/create_github_release.py
+      - mise exec -- uv run --locked python scripts/create_github_release.py
 
   dependency:audit:
     desc: Audit locked Python and npm dependencies
     cmds:
       - >-
-        uv export --locked --all-groups --no-emit-project --format requirements.txt
-        | uv run --locked pip-audit --requirement /dev/stdin --disable-pip
+        mise exec -- sh -c 'uv export --locked --all-groups --no-emit-project
+        --format requirements.txt | uv run --locked pip-audit
+        --requirement /dev/stdin --disable-pip'
       - task: package:audit
 
-  format:
-    desc: Format canonical maintained sources and regenerate assets
+  python:lock:check:
+    desc: Verify the locked Python dependency graph
     cmds:
-      - uv run --locked ruff format scripts shared/references tests skills
-      - prettier --write .
-      - tombi format --offline mise.toml pyproject.toml tombi.toml
-      - task: package:format
-      - task: generate
-
-  format:check:
-    desc: Check formatting without changing tracked files
-    cmds:
-      - task: format:repository:check
-      - task: package:format:check
-
-  format:repository:check:
-    internal: true
-    cmds:
-      - uv run --locked ruff format --check scripts shared/references tests skills
-      - prettier --check .
-      - tombi format --offline --check mise.toml pyproject.toml tombi.toml
-
-  lint:
-    desc: Run source, document, data, workflow, and shell linters
-    cmds:
-      - task: lint:repository
-      - oxlint packages/opencode/src packages/opencode/test
-
-  lint:repository:
-    internal: true
-    cmds:
-      - uv run --locked ruff check scripts shared/references tests skills
-      - markdownlint-cli2
-      - uv run --locked yamllint .github lefthook.yml taskfile.yml .yamllint.yml
-      - actionlint
-      - task: lint:data
-      - task: lint:shell
-
-  lint:data:
-    internal: true
-    cmds:
-      - fd --hidden --type f --extension json --exclude node_modules --exclude dist --exec jq empty
-      - >-
-        yq --exit-status '.' .github/workflows/ci.yml .github/workflows/evals-live.yml
-        .github/workflows/publish.yml
-        lefthook.yml taskfile.yml .yamllint.yml >/dev/null
-      - >-
-        rg --files --hidden -g '*.toml' -g '!packages/opencode/node_modules/**'
-        | xargs tombi lint --offline
-
-  lint:shell:
-    internal: true
-    cmds:
-      - fd --hidden --type f --extension sh --exclude node_modules --exec shfmt -d
-      - fd --hidden --type f --extension sh --exclude node_modules --exec shellcheck
-
-  typecheck:
-    desc: Run strict Python and TypeScript type checks
-    cmds:
-      - task: typecheck:python
-      - task: package:typecheck
-
-  typecheck:python:
-    internal: true
-    cmds:
-      - uv run --locked mypy
+      - mise exec -- uv lock --check
 
   test:
     desc: Run Python and Node contract tests
     cmds:
+      - task: build:skills
       - task: test:python
       - task: package:test
 
   test:python:
-    internal: true
+    desc: Run Python tests against materialized skills
     cmds:
-      - SKILLS_BINARY="$(mise which skills)" uv run --locked pytest
+      - SKILLS_BINARY="$(mise which skills)" mise exec -- uv run --locked pytest
 
   generate:
     desc: Build all untracked distribution and package artifacts
     cmds:
-      - task: build:skills
-      - task: build:distribution
+      - task: distribution:build
       - task: package:generate
 
   generate:check:
-    desc: Check generated artifacts without changing authored sources
+    desc: Check the generated portable distribution without changing authored sources
     cmds:
-      - task: build:skills:check
-      - task: generate:distribution:check
-      - task: package:generate:check
+      - task: build:skills
+      - task: distribution:check
 
   build:skills:
-    internal: true
+    desc: Materialize portable skills
+    run: once
     cmds:
-      - uv run --locked python scripts/build_skills.py
-
-  build:skills:check:
-    internal: true
-    cmds:
-      - uv run --locked python scripts/build_skills.py --check
+      - mise exec -- uv run --locked python scripts/build_skills.py
 
   distribution:build:
     desc: Build the GitHub Pages portable distribution
+    deps: [build:skills]
     cmds:
-      - task: build:distribution
+      - mise exec -- uv run --locked python scripts/build_distribution.py
 
   distribution:check:
     desc: Check the reproducible GitHub Pages portable distribution
     cmds:
-      - task: generate:distribution:check
+      - mise exec -- uv run --locked python scripts/build_distribution.py --check
 
-  build:distribution:
-    internal: true
-    cmds:
-      - uv run --locked python scripts/build_distribution.py
-
-  generate:distribution:check:
-    internal: true
-    cmds:
-      - uv run --locked python scripts/build_distribution.py --check
 
   skills:validate:
     desc: Validate Agent Skills with complementary validators
-    deps: [build:skills]
     cmds:
-      - uv run --locked python scripts/check_agnix.py
+      - mise exec -- uv run --locked python scripts/check_agnix.py
       - for:
           var: SKILLS
-        cmd: uv run --locked agentskills validate "{{.ITEM}}"
-      - uv run --locked pytest tests/test_skill_contracts.py
+        cmd: mise exec -- uv run --locked agentskills validate "{{.ITEM}}"
     vars:
       SKILLS:
-        sh: fd --type f --glob 'SKILL.md' .build/skills --exec dirname | sort
+        sh: mise exec -- sh -c "fd --type f --glob 'SKILL.md' .build/skills --exec dirname | sort"
 
   locale:check:
     desc: Validate translated public documentation and materialized references
-    deps: [build:skills]
     cmds:
-      - uv run --locked python scripts/check_locales.py
-      - uv run --locked python scripts/build_skills.py --check
-      - uv run --locked python scripts/check_locales.py --built .build/skills
-
-  package:quick-check:
-    desc: Run fast non-mutating OpenCode package checks for staged changes
-    deps: [package:install]
-    dir: packages/opencode
-    cmds:
-      - npm run format:check
-      - npm run lint
-      - npm run typecheck
-
-  package:check:
-    desc: Verify the complete OpenCode package lifecycle and tarball
-    deps: [build:skills, package:quick-check]
-    dir: packages/opencode
-    cmds:
-      - npm run generate-assets:check
-      - npm test
-      - npm run smoke
-      - node test/pack-allowlist.mjs
+      - mise exec -- uv run --locked python scripts/check_locales.py
+      - mise exec -- uv run --locked python scripts/check_locales.py --built .build/skills
 
   eval:check:
     desc: Validate behavioral eval schemas and run the hostless deterministic suite
-    deps: [build:skills]
     cmds:
-      - uv run --locked python scripts/eval_runner.py --validate
-      - uv run --locked python scripts/eval_runner.py --offline
+      - mise exec -- uv run --locked python scripts/eval_runner.py --validate
+      - mise exec -- uv run --locked python scripts/eval_runner.py --offline
 
   eval:live:
     desc: Run an explicitly configured trusted live evaluation
     cmds:
       - >-
-        uv run --locked python scripts/eval_runner.py --trusted-live
+        mise exec -- uv run --locked python scripts/eval_runner.py --trusted-live
         --host "$EVAL_HOST" --model "$EVAL_MODEL" --timeout "$EVAL_TIMEOUT"
         --max-tokens "$EVAL_MAX_TOKENS" --max-cost "$EVAL_MAX_COST"
         --output evals/live/result.json
@@ -260,102 +269,63 @@ tasks:
   security:
     desc: Scan the repository for committed secrets
     cmds:
-      - gitleaks git --config .gitleaks.toml --redact --no-banner
-      - gitleaks dir . --config .gitleaks.toml --redact --no-banner
-
-  ci:static:
-    desc: Run repository formatting, specification, lint, and Python type checks
-    cmds:
-      - task: format:repository:check
-      - task: version:check
-      - task: spec:check
-      - task: lint:repository
-      - task: typecheck:python
-
-  ci:python:
-    desc: Run repository and skill-local Python tests
-    cmds:
-      - task: test:python
-
-  ci:portable:
-    desc: Validate portable skills and the Pages distribution
-    cmds:
-      - task: locale:check
-      - task: distribution:check
-      - task: skills:validate
-
-  ci:spec-impact:
-    desc: Resolve and check the specification impact for the CI event
-    cmds:
-      - uv run --locked python scripts/check_ci_spec_impact.py
+      - mise exec -- gitleaks git --config .gitleaks.toml --redact --no-banner
+      - mise exec -- gitleaks dir . --config .gitleaks.toml --redact --no-banner
 
   check:
     desc: Run the complete local and CI quality gate
     cmds:
-      - task: ci:static
-      - task: ci:python
-      - task: ci:portable
+      - task: build:skills
+      - task: version:check
+      - task: lint
+      - task: typecheck
+      - task: test:python
+      - task: locale:check
+      - task: distribution:check
+      - task: skills:validate
       - task: eval:check
       - task: package:check
       - task: security
-
-  pre-commit:
-    desc: Run path-scoped non-mutating checks for staged files
-    cmds:
-      - uv run --locked python scripts/precommit.py
 
   pre-push:
     desc: Run the single complete local gate before push
     deps: [check, dependency:audit]
 
-  package:format:
-    internal: true
+  package:check:
+    desc: Verify the complete OpenCode package lifecycle and tarball
+    deps: [package:test]
     dir: packages/opencode
     cmds:
-      - npm run format
-
-  package:format:check:
-    internal: true
-    dir: packages/opencode
-    cmds:
-      - npm run format:check
-
-  package:typecheck:
-    internal: true
-    dir: packages/opencode
-    deps: [package:install]
-    cmds:
-      - npm run typecheck
+      - mise exec -- npm run smoke
+      - mise exec -- npm run pack:check
 
   package:test:
     internal: true
     dir: packages/opencode
-    deps: [package:install]
+    deps: [package:build]
     cmds:
-      - npm test
+      - mise exec -- npm test
 
   package:generate:
     internal: true
-    dir: packages/opencode
-    deps: [package:install]
-    cmds:
-      - npm run generate-assets
+    deps: [package:build]
 
-  package:generate:check:
+  package:build:
     internal: true
     dir: packages/opencode
     deps: [package:install]
     cmds:
-      - npm run generate-assets:check
+      - mise exec -- npm run build
 
   package:install:
     internal: true
+    run: once
     dir: packages/opencode
     cmds:
-      - npm ci
+      - mise exec -- npm ci
 
   package:audit:
     internal: true
     dir: packages/opencode
     cmds:
-      - npm audit --package-lock-only
+      - mise exec -- npm audit --package-lock-only

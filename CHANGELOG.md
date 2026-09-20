@@ -8,7 +8,20 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
-## [5.0.0] - 2026-09-18
+### Changed
+
+- CI now materializes portable skills once and fans the immutable artifact out
+  to direct Task targets instead of routing checks through `ci:*` aggregators.
+- The package metadata now pins skills installer `1.7.0`, and compatibility
+  verification covers the configured OpenCode `1.18.31` toolchain.
+
+### Removed
+
+- Removed machine specification traceability, commit-impact trailers, hooks, and
+  CI enforcement. Canonical Markdown specs and semantic `spec-manage` workflows
+  remain the source of truth.
+
+## \[5.0.0] - 2026-09-18
 
 ### Added
 
@@ -25,7 +38,7 @@ All notable changes to this project are documented in this file. Entries follow
 - MR preparation requires locale-bound drafts with exhaustive label assessments.
   Regenerate legacy drafts and publication plans.
 
-## [4.1.1] - 2026-09-17
+## \[4.1.1] - 2026-09-17
 
 ### Fixed
 
@@ -38,7 +51,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Local fixes retain copy-ready patch previews. Regression coverage includes
   report layout, semantic label replacement, and reproducible version stamping.
 
-## [4.1.0] - 2026-09-17
+## \[4.1.0] - 2026-09-17
 
 ### Added
 
@@ -54,7 +67,7 @@ All notable changes to this project are documented in this file. Entries follow
   and thread-state commands separately, and renders unanchored fixes as
   copy-ready `git apply` heredocs.
 
-## [4.0.0] - 2026-09-17
+## \[4.0.0] - 2026-09-17
 
 ### Changed
 
@@ -73,7 +86,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Confirmation-based project-write flows, including `ast-grep rewrite --apply`
   and the former work-item/team artifact apply phases, are removed.
 
-## [3.2.1] - 2026-09-16
+## \[3.2.1] - 2026-09-16
 
 ### Fixed
 
@@ -83,7 +96,7 @@ All notable changes to this project are documented in this file. Entries follow
 - The GitLab publication helper sends JSON requests with an explicit
   `Content-Type`, allowing confirmed line discussions to be accepted by GitLab.
 
-## [3.2.0] - 2026-09-16
+## \[3.2.0] - 2026-09-16
 
 ### Added
 
@@ -105,7 +118,7 @@ All notable changes to this project are documented in this file. Entries follow
   confirmed publication share one lock, preventing superseded plans from being
   reported or executed.
 
-## [3.1.1] - 2026-09-16
+## \[3.1.1] - 2026-09-16
 
 ### Release
 
@@ -114,7 +127,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Runtime, schemas, documentation, and compatibility behavior are unchanged from
   3.1.0; release verification now tolerates bounded registry propagation delay.
 
-## [3.1.0] - 2026-09-16
+## \[3.1.0] - 2026-09-16
 
 ### Added
 
@@ -131,7 +144,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Structured contract-2 plans remain executable, while older baselines fall back
   to a full review before producing contract-3 fix artifacts.
 
-## [3.0.0] - 2026-09-16
+## \[3.0.0] - 2026-09-16
 
 ### Added
 
@@ -166,7 +179,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Remove installed `doit` and `lsp-report` copies with `skills remove`, or let a
   confirmed package reconciliation remove copies carrying the Pages source marker.
 
-## [2.4.2] - 2026-09-16
+## \[2.4.2] - 2026-09-16
 
 ### Release
 
@@ -174,7 +187,7 @@ All notable changes to this project are documented in this file. Entries follow
   immutable release tag because npm recorded 2.4.1 without a downloadable tarball.
 - Documentation, locale contracts, and runtime behavior are unchanged from 2.4.1.
 
-## [2.4.1] - 2026-09-16
+## \[2.4.1] - 2026-09-16
 
 ### Fixed
 
@@ -183,7 +196,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Locale validation now detects mismatched Markdown blocks, and portable cleanup
   guidance includes the `summary` to `briefing` rename.
 
-## [2.4.0] - 2026-09-16
+## \[2.4.0] - 2026-09-16
 
 ### Added
 
@@ -199,14 +212,14 @@ All notable changes to this project are documented in this file. Entries follow
 - Local release gates now use the single `task pre-push` entrypoint before a
   branch and its annotated release tag are pushed atomically.
 
-## [2.3.1] - 2026-09-15
+## \[2.3.1] - 2026-09-15
 
 ### Fixed
 
 - OpenCode installer upgrades that deselect every fixed agent now preserve the
   separate profile configuration while removing managed profiles without rollback.
 
-## [2.3.0] - 2026-09-15
+## \[2.3.0] - 2026-09-15
 
 ### Added
 
@@ -226,7 +239,7 @@ All notable changes to this project are documented in this file. Entries follow
   come from centralized, validated sources of truth; per-skill metadata versions
   were removed in favor of distribution metadata and content-addressed archive digests.
 
-## [2.2.3] - 2026-09-15
+## \[2.2.3] - 2026-09-15
 
 ### Fixed
 
@@ -237,7 +250,7 @@ All notable changes to this project are documented in this file. Entries follow
   digest before posting while remaining preview-only and never executing GitLab
   mutations automatically.
 
-## [2.2.2] - 2026-09-14
+## \[2.2.2] - 2026-09-14
 
 ### Fixed
 
@@ -245,7 +258,7 @@ All notable changes to this project are documented in this file. Entries follow
   registry provenance propagates, without accepting a mismatched artifact.
 - GitHub artifact uploads use the supported Node 24 action runtime.
 
-## [2.2.1] - 2026-09-14
+## \[2.2.1] - 2026-09-14
 
 ### Added
 
@@ -270,7 +283,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Ordinary push CI no longer runs on release tags, removing the historical tag
   specification-range failure mode.
 
-## [2.2.0] - 2026-09-14
+## \[2.2.0] - 2026-09-14
 
 ### Added
 
@@ -296,7 +309,7 @@ All notable changes to this project are documented in this file. Entries follow
   Repeat `skills add` with `https://kisev.github.io/skills` and the same scope and
   agents to rebind them before using `skills update`.
 
-## [2.1.0] - 2026-09-14
+## \[2.1.0] - 2026-09-14
 
 ### Added
 
@@ -333,7 +346,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Pre-commit checks isolate their Git environment, and GitLab eval/schema
   formatting remains deterministic.
 
-## [2.0.6] - 2026-09-11
+## \[2.0.6] - 2026-09-11
 
 ### Fixed
 
@@ -344,7 +357,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Offline policy runners now enforce bounded paths, shared timeouts, stable JSON
   errors, and compatibility with the previous GitLab evidence scenario.
 
-## [2.0.5] - 2026-09-11
+## \[2.0.5] - 2026-09-11
 
 ### Fixed
 
@@ -352,7 +365,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Legacy `2.0.3` preview receipts are normalized and replaced by the next
   preview instead of failing with `invalid_receipt`.
 
-## [2.0.4] - 2026-09-11
+## \[2.0.4] - 2026-09-11
 
 ### Release
 
@@ -361,7 +374,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Portable skill metadata remains `2.0.0`; inventory and archive ownership are
   unchanged.
 
-## [2.0.3] - 2026-09-11
+## \[2.0.3] - 2026-09-11
 
 ### Fixed
 
@@ -381,7 +394,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Portable skill metadata remains `2.0.0`; inventory, runtime, agents, plugins, and
   manifest schema are unchanged.
 
-## [2.0.2] - 2026-09-10
+## \[2.0.2] - 2026-09-10
 
 ### Fixed
 
@@ -395,7 +408,7 @@ All notable changes to this project are documented in this file. Entries follow
 
 - Runtime, skills, public inventory, and behavioral contracts are unchanged.
 
-## [2.0.1] - 2026-09-10
+## \[2.0.1] - 2026-09-10
 
 ### Fixed
 
@@ -411,7 +424,7 @@ All notable changes to this project are documented in this file. Entries follow
 - This is a CI-only fix: runtime, skills, public inventory, and behavioral contracts
   are unchanged. Portable skill metadata remains `2.0.0`.
 
-## [2.0.0] - 2026-09-10
+## \[2.0.0] - 2026-09-10
 
 ### Breaking changes
 
@@ -439,6 +452,7 @@ All notable changes to this project are documented in this file. Entries follow
 - An exact migration from `v1.2.0` uses the migration inventory and preserves
   ownership and hash evidence; renamed skills require manual verification of the
   new name.
+
 - Reconcile moves retired exact-owned assets into a private content-addressed archive
   with `archive-pending` status; modified, user-owned, and unknown assets remain
   conflicts. Archive, restore, and purge are not included in this release.
@@ -459,7 +473,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Live evaluation is not part of the ordinary quality gate and runs only explicitly in
   a trusted environment.
 
-## [1.2.0] - 2026-09-07
+## \[1.2.0] - 2026-09-07
 
 ### Added
 
@@ -474,7 +488,7 @@ All notable changes to this project are documented in this file. Entries follow
 - `goal` became a read-only portable `work-item/v1` generator; lifecycle and
   auto-continuation are removed. Historical state remains for future classification.
 
-## [1.1.1] - 2026-09-06
+## \[1.1.1] - 2026-09-06
 
 ### Changed
 
@@ -483,7 +497,7 @@ All notable changes to this project are documented in this file. Entries follow
 - Preview prints a ready-to-run confirm command and collapses long path groups without
   hiding conflicts, digest, TTL, or the restart flag.
 
-## [1.1.0] - 2026-09-06
+## \[1.1.0] - 2026-09-06
 
 ### Added
 
@@ -511,7 +525,7 @@ All notable changes to this project are documented in this file. Entries follow
 - State primitives prohibit symlink targets and parents, use private modes and atomic
   writes, and append safely.
 
-## [1.0.0] - 2026-09-05
+## \[1.0.0] - 2026-09-05
 
 ### Added
 

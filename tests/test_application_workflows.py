@@ -365,6 +365,11 @@ print(json.dumps(value))
             repository = Path(temporary)
             subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
             subprocess.run(
+                ["git", "config", "commit.gpgsign", "false"],
+                cwd=repository,
+                check=True,
+            )
+            subprocess.run(
                 ["git", "config", "user.email", "reviewer@example.invalid"],
                 cwd=repository,
                 check=True,
@@ -981,6 +986,8 @@ print(json.dumps(value))
             repository.mkdir()
             for arguments in (
                 ("init", "-q"),
+                ("config", "commit.gpgsign", "false"),
+                ("config", "tag.gpgsign", "false"),
                 ("config", "user.email", "developer@example.invalid"),
                 ("config", "user.name", "Example Developer"),
             ):
@@ -1295,6 +1302,7 @@ print(json.dumps(value))
             repository = Path(temporary)
             for arguments in (
                 ("init", "-q"),
+                ("config", "commit.gpgsign", "false"),
                 ("config", "user.email", "test@example.invalid"),
                 ("config", "user.name", "Test"),
             ):
@@ -1330,6 +1338,7 @@ print(json.dumps(value))
                 repository = Path(temporary)
                 for git_arguments in (
                     ("init", "-q"),
+                    ("config", "commit.gpgsign", "false"),
                     ("config", "user.email", "test@example.invalid"),
                     ("config", "user.name", "Test"),
                 ):
@@ -1398,6 +1407,7 @@ print(json.dumps(value))
             repository = Path(temporary)
             for arguments in (
                 ("init", "-q"),
+                ("config", "commit.gpgsign", "false"),
                 ("config", "user.email", "test@example.invalid"),
                 ("config", "user.name", "Test"),
             ):
@@ -2099,6 +2109,11 @@ print(json.dumps(value))
             repository = Path(temporary)
             subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
             subprocess.run(
+                ["git", "config", "commit.gpgsign", "false"],
+                cwd=repository,
+                check=True,
+            )
+            subprocess.run(
                 ["git", "config", "user.email", "reviewer@example.invalid"],
                 cwd=repository,
                 check=True,
@@ -2146,6 +2161,7 @@ print(json.dumps(value))
             repository.mkdir()
             for arguments in (
                 ("init", "-q"),
+                ("config", "commit.gpgsign", "false"),
                 ("config", "user.email", "reviewer@example.invalid"),
                 ("config", "user.name", "Example Reviewer"),
             ):
@@ -2204,6 +2220,7 @@ print(json.dumps(value))
             repository.mkdir()
             for arguments in (
                 ("init", "-q"),
+                ("config", "commit.gpgsign", "false"),
                 ("config", "user.email", "reviewer@example.invalid"),
                 ("config", "user.name", "Example Reviewer"),
             ):
@@ -2272,6 +2289,7 @@ print(json.dumps(value))
             repository.mkdir()
             for arguments in (
                 ("init", "-q"),
+                ("config", "commit.gpgsign", "false"),
                 ("config", "user.email", "reviewer@example.invalid"),
                 ("config", "user.name", "Example Reviewer"),
             ):

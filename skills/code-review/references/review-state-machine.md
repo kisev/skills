@@ -7,16 +7,16 @@ failed command.
 
 ## Stages
 
-| Stage              | Meaning                                                            | Safe transition                                                          |
-| ------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `prepared`         | Current content-addressed evidence exists.                         | Collect context.                                                         |
-| `context_ready`    | Role, threads, exact Git context, mode, and locale are bound.      | Follow the returned transition.                                          |
-| `critic_missing`   | The selected mode requires an independent recorded critic.         | Generate, complete, and record the critic template.                      |
-| `finalize_missing` | Context and required critic evidence are present.                  | Revalidate current evidence with `finalize`.                             |
-| `decision_missing` | A fresh finalize report exists.                                    | Generate and complete the decision template, then run `finalize-review`. |
-| `content_missing`  | The immutable review decision exists.                              | Generate and complete the content template, then run `scaffold-review`.  |
-| `plan_ready`       | A current plan, Markdown, and review baseline agree.               | Run `report-review`.                                                     |
-| `stale`            | A stable plan or progress binding does not match current evidence. | Follow `resume_stage` and `next_action`; never report the old plan.      |
+| Stage | Meaning | Safe transition |
+| - | - | - |
+| `prepared` | Current content-addressed evidence exists. | Collect context. |
+| `context_ready` | Role, threads, exact Git context, mode, and locale are bound. | Follow the returned transition. |
+| `critic_missing` | The selected mode requires an independent recorded critic. | Generate, complete, and record the critic template. |
+| `finalize_missing` | Context and required critic evidence are present. | Revalidate current evidence with `finalize`. |
+| `decision_missing` | A fresh finalize report exists. | Generate and complete the decision template, then run `finalize-review`. |
+| `content_missing` | The immutable review decision exists. | Generate and complete the content template, then run `scaffold-review`. |
+| `plan_ready` | A current plan, Markdown, and review baseline agree. | Run `report-review`. |
+| `stale` | A stable plan or progress binding does not match current evidence. | Follow `resume_stage` and `next_action`; never report the old plan. |
 
 An incomplete lifecycle is not a best-effort review. `report-review` returns
 `status=blocked`, the failed stage, its reason, and a safe transition without
@@ -28,8 +28,7 @@ again.
 
 ## Remote sequence
 
-1. Run `scripts/review_mr.py prepare --url MR_URL --repo-root CHECKOUT
---review-mode MODE --locale LOCALE --incremental INCREMENTAL`, where the last
+1. Run `scripts/review_mr.py prepare --url MR_URL --repo-root CHECKOUT --review-mode MODE --locale LOCALE --incremental INCREMENTAL`, where the last
    three values use `fast|normal|deep`, `en|ru`, and `auto|off` respectively.
    The response creates the current progress pointer and returns a fully bound
    context action. If an old caller omits the checkout,

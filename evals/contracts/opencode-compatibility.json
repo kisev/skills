@@ -2,7 +2,7 @@
   "schema": "opencode-compatibility/v1",
   "package": "@kisev/skills-opencode",
   "range": ">=1.18.29 <1.19.0",
-  "versions": ["1.18.29", "1.18.30"],
+  "versions": ["1.18.29", "1.18.31"],
   "checks": [
     "package-build",
     "tool-registration",

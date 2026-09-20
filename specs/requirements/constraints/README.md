@@ -32,20 +32,21 @@ The current target changes portable build, publication, and installation transpo
 without expanding the `27/27/6/3/1` capability inventory or the declared OpenCode
 compatibility range.
 
-### REQ-C-006 - Mandatory specification traceability gate
+### REQ-C-006 - Specification traceability gate (withdrawn)
 
-After the bootstrap boundary, behavioral commits shall update the corresponding
-canonical `specs/` and traceability evidence or carry the exact
-`Spec-Impact: none - <reason>` trailer. The deterministic `task spec:check` gate
-is mandatory; semantic `spec-manage` audit remains a separate read-only review.
+Status: withdrawn. This requirement formerly mandated machine traceability,
+commit-impact trailers, and a deterministic specification gate. The automation
+was removed because it had no independent consumer and could not verify semantic
+correctness. Canonical Markdown maintenance and semantic review remain owned by
+`spec-manage`.
 
 ### REQ-C-007 - Separate version authorities
 
 The project release, portable installer, and OpenCode compatibility range shall
-each have one declared authority. Required package, lock, specification, runtime,
-and toolchain mirrors shall be checked automatically. User documentation shall
-follow stable channels without copying the current project release, and portable
-skill metadata shall not carry a version.
+each have one declared authority. Required package, lock, runtime, and toolchain
+mirrors shall be checked automatically. User documentation shall follow stable
+channels without copying the current project release, and portable skill metadata
+shall not carry a version.
 
 ### REQ-C-008 - Preserve specification lifecycle history
 

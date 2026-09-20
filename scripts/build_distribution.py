@@ -19,8 +19,6 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from scripts.build_skills import DEFAULT_OUTPUT as BUILT_SKILLS  # noqa: E402
-from scripts.build_skills import build as build_skills  # noqa: E402
-from scripts.check_locales import validate as validate_locales  # noqa: E402
 
 PACKAGE = ROOT / "packages" / "skills"
 INVENTORY = ROOT / "evals" / "contracts" / "public-surfaces.json"
@@ -75,8 +73,8 @@ def archive(skill: Path) -> bytes:
 
 
 def build(output: Path, check: bool) -> int:
-    build_skills(BUILT_SKILLS, False)
-    validate_locales(built=BUILT_SKILLS)
+    if not BUILT_SKILLS.is_dir():
+        raise DistributionError("built skills are missing; run task build:skills first")
     manifest = json.loads((PACKAGE / "package.json").read_text(encoding="utf-8"))
     version = manifest.get("version")
     if not isinstance(version, str) or not SEMVER.fullmatch(version):

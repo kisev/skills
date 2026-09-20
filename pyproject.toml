@@ -1,42 +1,42 @@
 [project]
-name = "kisev-skills-tooling"
-version = "0.0.0"
-description = "Development tooling for the Agent Skills repository"
-requires-python = "==3.12.*"
-dependencies = []
+  name = "kisev-skills-tooling"
+  version = "0.0.0"
+  description = "Development tooling for the Agent Skills repository"
+  requires-python = "==3.12.*"
+  dependencies = []
 
 [dependency-groups]
-dev = [
-  "jsonschema[format-nongpl]==4.26.0",
-  "mypy==2.3.1",
-  "pip-audit==2.10.1",
-  "pytest==9.0.3",
-  "ruff==0.16.6",
-  "skills-ref==0.1.1",
-  "types-jsonschema==4.26.0.20260518",
-  "yamllint==1.38.0",
-]
+  dev = [
+    "jsonschema[format-nongpl]==4.26.0",
+    "mypy==2.3.1",
+    "pip-audit==2.10.1",
+    "pytest==9.0.3",
+    "ruff==0.16.6",
+    "skills-ref==0.1.1",
+    "types-jsonschema==4.26.0.20260518",
+    "yamllint==1.38.0",
+  ]
 
 [tool.mypy]
-python_version = "3.12"
-strict = true
-explicit_package_bases = true
-files = ["scripts", "shared/references", "tests", "skills/*/scripts/*.py"]
+  python_version = "3.12"
+  strict = true
+  explicit_package_bases = true
+  files = ["scripts", "shared/references", "tests", "skills/*/scripts/*.py"]
 
 [tool.pytest.ini_options]
-addopts = ["-ra"]
-pythonpath = ["."]
-testpaths = ["tests", "skills/*/tests"]
+  addopts = ["-ra"]
+  pythonpath = ["."]
+  testpaths = ["tests", "skills/*/tests"]
 
 [tool.ruff]
-target-version = "py312"
-line-length = 100
+  target-version = "py312"
+  line-length = 100
 
-[tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+  [tool.ruff.lint]
+    select = ["E4", "E7", "E9", "F"]
 
-[tool.ruff.lint.per-file-ignores]
-"skills/*/scripts/*.py" = ["E402"]
+    [tool.ruff.lint.per-file-ignores]
+      "skills/*/scripts/*.py" = ["E402"]
 
 [tool.uv]
-package = false
+  package = false

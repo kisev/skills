@@ -29,19 +29,19 @@ GitHub Release. Необязательный пакет интеграции - `
 Текущий инвентарь миграции содержит ровно эти одиннадцать устаревших имён переносимых
 навыков. Имени `multi-run` в нём нет.
 
-| Устаревшее имя   | Текущая замена                                                                                   |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| `attempt`        | Нет                                                                                              |
-| `schedule`       | Нет                                                                                              |
-| `usage`          | Нет                                                                                              |
-| `overview`       | Нет                                                                                              |
-| `doit`           | Нет                                                                                              |
-| `lsp-report`     | Нет                                                                                              |
-| `project-spec`   | `spec-manage`                                                                                    |
-| `skill-improver` | `skill-improve`                                                                                  |
-| `walkthrough`    | `code-explain`                                                                                   |
-| `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
-| `summary`        | `briefing`                                                                                       |
+| Устаревшее имя | Текущая замена |
+| - | - |
+| `attempt` | Нет |
+| `schedule` | Нет |
+| `usage` | Нет |
+| `overview` | Нет |
+| `doit` | Нет |
+| `lsp-report` | Нет |
+| `project-spec` | `spec-manage` |
+| `skill-improver` | `skill-improve` |
+| `walkthrough` | `code-explain` |
+| `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
+| `summary` | `briefing` |
 
 Операция `update` в CLI `skills` обнаруживает удалённые в источнике имена и
 предлагает удалить их локальные копии. Эти точные имена также можно удалить явно

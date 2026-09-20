@@ -31,19 +31,19 @@ byte-for-byte.
 The current migration inventory names exactly these eleven retired portable skills. It
 does not contain a portable `multi-run` record.
 
-| Retired name     | Current replacement                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| `attempt`        | None                                                                                             |
-| `schedule`       | None                                                                                             |
-| `usage`          | None                                                                                             |
-| `overview`       | None                                                                                             |
-| `doit`           | None                                                                                             |
-| `lsp-report`     | None                                                                                             |
-| `project-spec`   | `spec-manage`                                                                                    |
-| `skill-improver` | `skill-improve`                                                                                  |
-| `walkthrough`    | `code-explain`                                                                                   |
-| `team-workflow`  | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
-| `summary`        | `briefing`                                                                                       |
+| Retired name | Current replacement |
+| - | - |
+| `attempt` | None |
+| `schedule` | None |
+| `usage` | None |
+| `overview` | None |
+| `doit` | None |
+| `lsp-report` | None |
+| `project-spec` | `spec-manage` |
+| `skill-improver` | `skill-improve` |
+| `walkthrough` | `code-explain` |
+| `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
+| `summary` | `briefing` |
 
 The `skills` CLI `update` operation detects names deleted upstream and offers to
 remove their local copies. Cleanup can also remove these exact names explicitly

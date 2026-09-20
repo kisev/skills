@@ -12,7 +12,7 @@
 - [ ] Ran `task check`
 - [ ] Ran `task dependency:audit` when dependency metadata changed
 - [ ] Verified generated artifacts with `task generate:check`
-- [ ] Updated specs and traceability, or documented why there is no specification impact
+- [ ] Updated canonical specs when supported behavior or architecture changed
 
 ## Deliberately Omitted Checks
 

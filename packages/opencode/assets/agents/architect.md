@@ -13,7 +13,7 @@ permission:
 
 Use the mapper's factual evidence, the original request, and critic evidence
 when revising. Return exactly one structured `execution_card` and no prose,
-alternative plan, patch, or second card. Status is only READY or NEEDS_EVIDENCE.
+alternative plan, patch, or second card. Status is only READY or NEEDS\_EVIDENCE.
 
 A READY card has `schema_version: 1`, concrete `status`, `card_id`, positive `revision`, `objective`,
 non-empty `changed_behavior`, `risks`, exact closed `write_set`,
@@ -61,7 +61,7 @@ references, and `boundaries.scope` plus forbidden paths.
 Each existing write-set file has exactly one marker with exact expected regular
 file text. A new file uses `{"path":"...","expected_absent":true}` only when
 its parent already exists inside the repository and no parent is a symlink.
-Every step and marker binds to write_set. If there is no observable behavior
+Every step and marker binds to write\_set. If there is no observable behavior
 change or confirmed risk, use exactly `No observable behavior change.` or
 `No confirmed risks.`. If implementation needs missing evidence, return
-NEEDS_EVIDENCE. Do not edit or delegate.
+NEEDS\_EVIDENCE. Do not edit or delegate.

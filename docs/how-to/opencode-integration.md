@@ -10,13 +10,13 @@ skills have a separate lifecycle and must be installed independently through the
 
 The package requires Node.js 22+ and OpenCode `>=1.18.29 <1.19.0`.
 
-| Component          | Project scope                | Global scope                                              |
-| ------------------ | ---------------------------- | --------------------------------------------------------- |
-| npm package        | project `node_modules`       | `node_modules` in the npm project at `~/.config/opencode` |
-| Commands           | `.opencode/commands`         | `~/.config/opencode/commands`                             |
-| Agents             | `.opencode/agents`           | `~/.config/opencode/agents`                               |
-| Optional wrappers  | `.opencode/plugins`          | `~/.config/opencode/plugins`                              |
-| Ownership metadata | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode`                     |
+| Component | Project scope | Global scope |
+| - | - | - |
+| npm package | project `node_modules` | `node_modules` in the npm project at `~/.config/opencode` |
+| Commands | `.opencode/commands` | `~/.config/opencode/commands` |
+| Agents | `.opencode/agents` | `~/.config/opencode/agents` |
+| Optional wrappers | `.opencode/plugins` | `~/.config/opencode/plugins` |
+| Ownership metadata | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode` |
 
 The package and generated wrappers must remain resolvable after the installer
 exits. Import, plugin loading, and npm lifecycle scripts do not install assets,

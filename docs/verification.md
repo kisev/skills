@@ -76,7 +76,7 @@ registration, configuration, installer ownership, archive/reconcile behavior,
 agent discovery, negative inputs, path escapes, malformed results, incomplete
 budgets, and secret leakage.
 
-Compatibility checks exercise OpenCode `1.18.29` and `1.18.30` inside
+Compatibility checks exercise OpenCode `1.18.29` and `1.18.31` inside
 `>=1.18.29 <1.19.0` without credentials.
 
 ## Live Evaluation and Clean Checkout

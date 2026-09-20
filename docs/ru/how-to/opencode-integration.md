@@ -10,13 +10,13 @@
 
 Пакет требует Node.js 22+ и OpenCode `>=1.18.29 <1.19.0`.
 
-| Компонент                 | Область проекта              | Глобальная область                                |
-| ------------------------- | ---------------------------- | ------------------------------------------------- |
-| npm-пакет                 | `node_modules` проекта       | `node_modules` в npm-проекте `~/.config/opencode` |
-| Команды                   | `.opencode/commands`         | `~/.config/opencode/commands`                     |
-| Агенты                    | `.opencode/agents`           | `~/.config/opencode/agents`                       |
-| Необязательные обёртки    | `.opencode/plugins`          | `~/.config/opencode/plugins`                      |
-| Метаданные принадлежности | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode`             |
+| Компонент | Область проекта | Глобальная область |
+| - | - | - |
+| npm-пакет | `node_modules` проекта | `node_modules` в npm-проекте `~/.config/opencode` |
+| Команды | `.opencode/commands` | `~/.config/opencode/commands` |
+| Агенты | `.opencode/agents` | `~/.config/opencode/agents` |
+| Необязательные обёртки | `.opencode/plugins` | `~/.config/opencode/plugins` |
+| Метаданные принадлежности | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode` |
 
 Пакет и созданные обёртки должны оставаться доступными после завершения работы
 установщика. Импорт, загрузка плагина и сценарии жизненного цикла npm не

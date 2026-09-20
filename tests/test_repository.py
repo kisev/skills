@@ -819,6 +819,7 @@ class PortableRunnerTests(unittest.TestCase):
             repository = Path(temporary)
             for arguments in (
                 ("init", "-q"),
+                ("config", "commit.gpgsign", "false"),
                 ("config", "user.email", "test@example.invalid"),
                 ("config", "user.name", "Test"),
             ):

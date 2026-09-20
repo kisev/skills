@@ -47,13 +47,13 @@ in the selected locale. A template is not authorization for external actions.
 When no template is available, preserve an already useful structure. Otherwise
 use this fallback, omitting empty and inapplicable sections:
 
-| Section                     | Content                                                    |
-| --------------------------- | ---------------------------------------------------------- |
-| Context                     | Problem, purpose and motivation                            |
-| Changes                     | Observable behavior and important decisions                |
-| Compatibility and migration | Breaking changes and upgrade actions                       |
-| Verification                | Actual checks, results and material gaps                   |
-| References                  | Relevant real issues, discussions, specs and documentation |
+| Section | Content |
+| - | - |
+| Context | Problem, purpose and motivation |
+| Changes | Observable behavior and important decisions |
+| Compatibility and migration | Breaking changes and upgrade actions |
+| Verification | Actual checks, results and material gaps |
+| References | Relevant real issues, discussions, specs and documentation |
 
 Use the localized `presentation.fallback_sections` labels returned by `prepare`.
 
