@@ -98,6 +98,11 @@ pre-commit:
             glob: "mise.toml"
             run: mise ls --current --local
 
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: mise exec -- commitlint --edit {1}
+
 pre-push:
   jobs:
     - name: complete-gate

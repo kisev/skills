@@ -21,12 +21,14 @@ Install pinned runtimes and standalone tools from the repository root:
 
 ```shell
 mise install
+task install
 task --list
 ```
 
-`taskfile.yml` is the only task graph. Local development, Lefthook, and GitHub
-Actions invoke its public tasks instead of duplicating tool commands. Run the
-single quality gate before submitting any change:
+`taskfile.yml` is the full repository and CI task graph. Lefthook directly runs
+pinned tools only for its staged-file pre-commit fast path; pre-push and GitHub
+Actions invoke public tasks. Run the single quality gate before submitting any
+change:
 
 ```shell
 task check
@@ -36,6 +38,7 @@ The main public tasks divide the checks as follows:
 
 | Task | Purpose |
 | - | - |
+| `install` | Install pinned tools, locked dependencies, and Git hooks. |
 | `tools` | Show the active pinned toolchain. |
 | `format`, `format:check` | Format sources and regenerate assets, or check formatting without writing. |
 | `lint`, `typecheck`, `test` | Run source, type, and test checks. |

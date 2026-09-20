@@ -64,6 +64,7 @@ migration, compatibility, and both installation lifecycles are linked there.
 
 ```shell
 mise install
+task install
 task check
 ```
 

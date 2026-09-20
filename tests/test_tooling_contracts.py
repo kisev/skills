@@ -11,6 +11,7 @@ def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
     assert "--diff-filter=ACMR" in hooks
     assert "--staged" in hooks
     assert "run: task pre-push" in hooks
+    assert "commitlint --edit {1}" in hooks
     assert "--fix" not in hooks
     assert "git add" not in hooks
     for slow_check in ("pytest", "mypy", "build:skills", "version:check", "package:check"):

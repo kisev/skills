@@ -66,6 +66,7 @@ npx --yes @kisev/skills-opencode@latest install --dry-run
 
 ```shell
 mise install
+task install
 task check
 ```
 

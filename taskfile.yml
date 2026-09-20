@@ -9,6 +9,14 @@ tasks:
     cmds:
       - task --list
 
+  install:
+    desc: Install pinned tools, locked dependencies, and Git hooks
+    cmds:
+      - mise install
+      - mise exec -- uv sync --locked --all-groups
+      - task: package:install
+      - mise exec -- lefthook install
+
   tools:
     desc: Show the active pinned toolchain
     cmds:
