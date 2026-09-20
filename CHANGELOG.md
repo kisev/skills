@@ -8,6 +8,15 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[5.1.1] - 2026-09-21
+
+### Fixed
+
+- GitHub Actions are pinned to immutable commit SHAs again, satisfying the
+  repository's enforced action policy. The `v5.1.0` workflow was rejected before
+  any jobs or artifacts were created; `v5.1.1` is the corresponding release
+  correction.
+
 ## \[5.1.0] - 2026-09-21
 
 ### Added

@@ -64,7 +64,7 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "fetch-depth: 0" in ci
     for workflow in (ci, publish, live):
         for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", workflow):
-            assert re.fullmatch(r"(?:[0-9a-f]{40}|v[0-9]+(?:\.[0-9]+){0,2})", reference)
+            assert re.fullmatch(r"[0-9a-f]{40}", reference)
     for duplicated in ("ruff ", "pytest", "npm ci", "npm test", "agentskills"):
         assert duplicated not in ci
         assert duplicated not in publish
