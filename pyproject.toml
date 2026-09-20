@@ -20,11 +20,19 @@
 [tool.mypy]
   python_version = "3.12"
   strict = true
+  disallow_any_unimported = true
   explicit_package_bases = true
   files = ["scripts", "shared/references", "tests", "skills/*/scripts/*.py"]
 
 [tool.pytest.ini_options]
-  addopts = ["-ra"]
+  addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-v",
+    "--tb=short",
+    "-ra",
+    "--durations=10",
+  ]
   pythonpath = ["."]
   testpaths = ["tests", "skills/*/tests"]
 
@@ -34,9 +42,152 @@
 
   [tool.ruff.lint]
     select = ["E4", "E7", "E9", "F"]
+    ignore = [
+      "PERF401",                      # Explicit diagnostic loops are clearer than generated extend expressions.
+      "PLR2004",                      # Protocol and schema literals are meaningful at their use sites.
+    ]
+    extend-select = [
+      "S",
+      "PLC",
+      "PLE",
+      "PLR",
+      "PLW",
+      "I",
+      "UP",
+      "B",
+      "C4",
+      "RUF",
+      "SIM",
+      "PERF",
+      "A",
+      "PT",
+      "RET",
+      "ISC",
+      "PIE",
+      "C901",
+      "TRY300",
+      "TC",
+    ]
 
     [tool.ruff.lint.per-file-ignores]
-      "skills/*/scripts/*.py" = ["E402"]
+      "**/tests/**/*.py" = [
+        "A002",                                                             # Framework callback names follow their inherited signatures.
+        "PLC0415",                                                          # Tests import isolated modules after fixture setup.
+        "PLR0911",                                                          # Fixture dispatch helpers intentionally model many outcomes.
+        "PLR0915",                                                          # Integration scenarios keep setup and assertions together.
+        "PT009",                                                            # Existing suites intentionally use unittest.TestCase helpers.
+        "PT017",                                                            # unittest exception assertions are part of that test style.
+        "PT018",                                                            # Compound contract assertions retain useful failure context.
+        "PT027",                                                            # unittest exception assertions are part of that test style.
+        "RUF001",                                                           # Confusable characters are intentional fixture data.
+        "S101",                                                             # Assertions are the test contract.
+        "S105",                                                             # Test tokens are inert fixtures.
+        "S108",                                                             # Tests intentionally exercise temporary-path boundaries.
+        "S310",                                                             # Tests intentionally exercise local HTTP fixtures.
+        "S603",                                                             # Tests invoke bounded command vectors without a shell.
+        "S607",                                                             # Tests exercise the same PATH-based CLI contract as production.
+        "SIM117",                                                           # Nested context setup keeps long integration fixtures readable.
+      ]
+      "scripts/build_distribution.py" = [
+        "PLC0415",                                                          # Lazy imports avoid loading build-only modules for metadata checks.
+        "S607",                                                             # Git is a required PATH-resolved build dependency.
+      ]
+      "scripts/build_release_artifacts.py" = ["S603"]                       # Arguments are a fixed internal command vector.
+      "scripts/check_agnix.py" = [
+        "S603",                                                             # Arguments are generated from validated repository paths.
+        "S607",                                                             # Agnix is provided by the pinned Mise toolchain.
+      ]
+      "scripts/check_release.py" = [
+        "S603",                                                             # Arguments are fixed release-verification commands.
+        "S607",                                                             # Git and npm are required PATH-resolved tools.
+      ]
+      "scripts/build_stage20_corpus.py" = ["RUF001"]                        # Confusable characters are intentional corpus cases.
+      "scripts/build_skills.py" = ["S105"]                                  # The value is a public build placeholder, not a credential.
+      "scripts/create_github_release.py" = ["S310"]                         # Requests use the fixed GitHub HTTPS API origin.
+      "scripts/eval_runner.py" = [
+        "PLR0911",                                                          # The evaluator maps many explicit terminal states.
+        "S101",                                                             # Assertions narrow validated internal fixture state.
+        "S603",                                                             # Adapter commands use validated argument vectors without a shell.
+        "S607",                                                             # Host CLIs are intentionally resolved through the pinned PATH.
+      ]
+      "scripts/publish_npm_release.py" = ["S603"]                           # npm commands use fixed release argument vectors.
+      "scripts/verify_distribution_url.py" = ["TRY300"]                     # Retry-loop success returns remain adjacent to verification.
+      "shared/references/portable_gitlab/contract.py" = [
+        "B904",                                                             # Portable CLI errors preserve stable messages across Python versions.
+        "C901",                                                             # The compatibility runtime is intentionally centralized and stateful.
+        "PLC0415",                                                          # Profile-specific modules load only for selected workflows.
+        "PLR0911",                                                          # Command dispatch returns explicit protocol outcomes.
+        "PLR0912",                                                          # Command dispatch covers the complete protocol matrix.
+        "PLR0915",                                                          # Splitting the dispatcher would duplicate transactional state.
+        "RUF001",                                                           # User-visible Cyrillic evidence is intentional.
+        "S101",                                                             # Assertions narrow state validated immediately before use.
+        "S603",                                                             # Portable GitLab calls use validated argument vectors.
+        "TRY300",                                                           # Return placement preserves the portable error boundary.
+      ]
+      "shared/references/portable_gitlab/mr_publication.py" = [
+        "RUF001"
+      ]                                                                     # User-visible Cyrillic evidence is intentional.
+      "shared/references/python_runtime/state.py" = [
+        "PLC0415"
+      ]                                                                     # Platform-specific locking modules are imported lazily.
+      "shared/references/team_runtime/gitlab_period_metrics.py" = [
+        "S603"
+      ]                                                                     # GitLab CLI arguments are validated structured queries.
+      "shared/references/team_runtime/team_workflow.py" = [
+        "B904",                                                             # Stable portable errors intentionally omit interpreter context.
+        "C901",                                                             # Profile inspection is one bounded compatibility operation.
+        "PLR0911",                                                          # Explicit terminal states mirror the workflow protocol.
+        "PLR0912",                                                          # Branches map independent evidence sources.
+      ]
+      "shared/references/work_item.py" = ["C901"]                           # Checks remain centralized to preserve deterministic ordering.
+      "shared/references/work_item_runtime/contract.py" = [
+        "S310",                                                             # URL inputs are validated as credential-free HTTPS first.
+        "TRY300",                                                           # Successful parsing returns inside the bounded input branch.
+      ]
+      "shared/references/work_item_runtime/publication.py" = [
+        "RUF001",                                                           # User-visible Cyrillic evidence is intentional.
+        "TRY300",                                                           # Successful publication returns inside the atomic write branch.
+      ]
+      "skills/ast-grep/scripts/ast_grep.py" = [
+        "S603",                                                             # Ast-grep receives validated language, pattern, and paths.
+        "TRY300",                                                           # Success returns stay next to each CLI operation.
+      ]
+      "skills/code-explain/scripts/walkthrough.py" = [
+        "S603",                                                             # Git commands use validated revisions and repository paths.
+        "S607",                                                             # Git is an intentional PATH-resolved runtime dependency.
+        "TRY300",                                                           # Success output and return remain one atomic CLI branch.
+      ]
+      "skills/code-review/scripts/review_context.py" = [
+        "C901",                                                             # Review assembly keeps deterministic evidence ordering in one pass.
+        "PLR0911",                                                          # Explicit exits represent distinct review states.
+        "PLR0912",                                                          # Review scaffolding covers independent evidence branches.
+        "PLR0915",                                                          # Splitting would duplicate the publication context.
+        "S603",                                                             # Git and GitLab commands use validated structured arguments.
+        "S607",                                                             # Host CLIs are intentional PATH-resolved dependencies.
+      ]
+      "skills/mattermost/scripts/mattermost.py" = [
+        "PLR0911",                                                          # The portable client maps explicit API outcomes.
+        "S101",                                                             # Assertions narrow already validated response shapes.
+        "S310",                                                             # Origins are normalized to credential-free HTTPS before requests.
+        "S608",                                                             # Dynamic SQL uses generated placeholders or fixed table names only.
+        "S603",                                                             # Browser launch uses a validated URL argument without a shell.
+        "S607",                                                             # The host browser opener is intentionally PATH-resolved.
+        "TRY300",                                                           # Transaction success returns remain in their guarded branches.
+      ]
+      "skills/skill-improve/scripts/skill_improver.py" = [
+        "S603"
+      ]                                                                     # The validator receives a bounded temporary skill path.
+
+    [tool.ruff.lint.mccabe]
+      max-complexity = 40
+
+    [tool.ruff.lint.pylint]
+      max-args = 15
+      max-branches = 50
+      max-statements = 163
+
+  [tool.ruff.format]
+    quote-style = "double"
 
 [tool.uv]
   package = false

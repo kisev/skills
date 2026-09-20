@@ -66,10 +66,7 @@ class FakeClient:
 
     def get(self, path):
         self.calls.append(path)
-        if self.handler is not None:
-            value = self.handler(path)
-        else:
-            value = self.responses[path]
+        value = self.handler(path) if self.handler is not None else self.responses[path]
         if isinstance(value, Exception):
             raise value
         return value
@@ -209,6 +206,7 @@ class MattermostTests(unittest.TestCase):
             if path.startswith(f"/channels/{CHANNEL_ID}/posts?"):
                 return {"order": [], "posts": {}}
             self.fail(f"unexpected GET {path}")
+            return None
 
         client = FakeClient(handler=handler)
         with (
@@ -533,6 +531,7 @@ class MattermostTests(unittest.TestCase):
             if path == f"/posts/{root_id}":
                 return post(root_id, 1500)
             self.fail(f"unexpected GET {path}")
+            return None
 
         self.cache_environment()
         client = FakeClient(handler=handler)

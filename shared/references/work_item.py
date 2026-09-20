@@ -226,7 +226,7 @@ def machine_checks(item: dict[str, Any]) -> list[dict[str, Any]]:
 
         def visit(identifier: str, trail: list[str]) -> None:
             if identifier in visiting:
-                cycle = trail[trail.index(identifier) :] + [identifier]
+                cycle = [*trail[trail.index(identifier) :], identifier]
                 findings.append(
                     finding(
                         "DEPENDENCY_CYCLE",
@@ -240,7 +240,7 @@ def machine_checks(item: dict[str, Any]) -> list[dict[str, Any]]:
             visiting.add(identifier)
             for reference in dependency_map[identifier].get("depends_on", []):
                 if reference in dependency_map:
-                    visit(reference, trail + [reference])
+                    visit(reference, [*trail, reference])
             visiting.remove(identifier)
             visited.add(identifier)
 

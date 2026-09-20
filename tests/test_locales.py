@@ -8,7 +8,6 @@ import pytest
 
 from scripts import check_locales
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

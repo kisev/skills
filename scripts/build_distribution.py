@@ -8,11 +8,11 @@ import gzip
 import hashlib
 import io
 import json
+import re
 import subprocess
 import sys
 import tarfile
 import tempfile
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,17 +58,19 @@ def revision() -> str:
 
 def archive(skill: Path) -> bytes:
     payload = io.BytesIO()
-    with gzip.GzipFile(fileobj=payload, mode="wb", mtime=0) as compressed:
-        with tarfile.open(fileobj=compressed, mode="w") as document:
-            for source in sorted(skill.rglob("*")):
-                if source.is_symlink() or not source.is_file():
-                    continue
-                info = tarfile.TarInfo(source.relative_to(skill).as_posix())
-                content = source.read_bytes()
-                info.size = len(content)
-                info.mode = 0o644
-                info.mtime = 0
-                document.addfile(info, io.BytesIO(content))
+    with (
+        gzip.GzipFile(fileobj=payload, mode="wb", mtime=0) as compressed,
+        tarfile.open(fileobj=compressed, mode="w") as document,
+    ):
+        for source in sorted(skill.rglob("*")):
+            if source.is_symlink() or not source.is_file():
+                continue
+            info = tarfile.TarInfo(source.relative_to(skill).as_posix())
+            content = source.read_bytes()
+            info.size = len(content)
+            info.mode = 0o644
+            info.mtime = 0
+            document.addfile(info, io.BytesIO(content))
     return payload.getvalue()
 
 

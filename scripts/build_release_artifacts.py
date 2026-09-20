@@ -40,7 +40,7 @@ def command(*arguments: str, cwd: Path = ROOT, env: dict[str, str] | None = None
 def hashes(content: bytes) -> dict[str, str]:
     sha512 = hashlib.sha512(content).digest()
     return {
-        "sha1": hashlib.sha1(content).hexdigest(),
+        "sha1": hashlib.sha1(content, usedforsecurity=False).hexdigest(),
         "sha512": hashlib.sha512(content).hexdigest(),
         "integrity": f"sha512-{base64.b64encode(sha512).decode('ascii')}",
     }
@@ -93,7 +93,7 @@ def pack() -> tuple[bytes, dict[str, Any]]:
         paths.sort()
         if not all(path in ALLOWED_PACKAGE_FILES or path.startswith("dist/") for path in paths):
             raise ArtifactError("npm package contains an unexpected file")
-        if not ALLOWED_PACKAGE_FILES <= set(paths) or not any(
+        if not set(paths) >= ALLOWED_PACKAGE_FILES or not any(
             path.startswith("dist/") for path in paths
         ):
             raise ArtifactError("npm package allowlist is incomplete")

@@ -6,17 +6,19 @@ import hashlib
 import json
 import subprocess
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from jsonschema import FormatChecker, ValidationError
-from jsonschema.protocols import Validator
 from jsonschema.validators import validator_for
 
 from scripts import eval_runner
 from shared.references.portable_gitlab.contract import WorkflowError, validate_v2_artifact
-from tests.test_work_item_contract import item as work_item
 from tests.test_review_semver import fallback_assessment, release_assessment
+from tests.test_work_item_contract import item as work_item
+
+if TYPE_CHECKING:
+    from jsonschema.protocols import Validator
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
@@ -744,7 +746,7 @@ def validate_shared_contract_instances() -> None:
     validator("shared/references/team_runtime/team-context.schema.json").validate(
         load("shared/references/team_runtime/team-context.example.json")
     )
-    validator("shared/references/work-item-contract.schema.json").validate(cast(Any, work_item()))
+    validator("shared/references/work-item-contract.schema.json").validate(cast("Any", work_item()))
     artifact_validator = validator(
         "shared/references/portable_gitlab/artifact-contracts-v2.schema.json"
     )

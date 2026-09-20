@@ -13,7 +13,6 @@ import json
 import sys
 from typing import Any, NoReturn
 
-
 TRUSTED_ORIGINS = {"trusted-host", "trusted-system"}
 OBJECTIVE_KEYS = {"accepted", "actions", "digest", "id", "revision"}
 ACTION_KEYS = {"action", "boundary"}
@@ -184,7 +183,8 @@ def verify_fixture(fixture: Any, target: str) -> dict[str, Any]:
             )
         ):
             raise ValueError(f"case {case['id']} is structurally invalid")
-        assert isinstance(objective_name, str)
+        if not isinstance(objective_name, str):
+            raise ValueError(f"case {case['id']} has no valid objective")
         objective = copy.deepcopy(objectives[objective_name])
         if case.get("mutate_objective") == "append-later-additions":
             objective["actions"].extend(copy.deepcopy(later_additions))

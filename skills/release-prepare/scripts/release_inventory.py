@@ -169,10 +169,10 @@ def commit_associations(
             "sha": sha,
             "message": portable.redact(message),
         }
-        for message in cast(list[str], result["errors"])
+        for message in cast("list[str]", result["errors"])
     ]
     merge_requests, format_errors = normalized_merge_requests(
-        cast(list[object], result["items"]), target_branch, sha
+        cast("list[object]", result["items"]), target_branch, sha
     )
     errors.extend(format_errors)
     complete = bool(result["complete"]) and not format_errors
@@ -289,7 +289,7 @@ def collect_inventory(
         merge_requests, item_errors, associations_complete = association_by_sha[commit["sha"]]
         errors.extend(item_errors)
         for merge_request in merge_requests:
-            merge_requests_by_iid.setdefault(cast(int, merge_request["iid"]), merge_request)
+            merge_requests_by_iid.setdefault(cast("int", merge_request["iid"]), merge_request)
         commit.update(
             {
                 "merge_requests": merge_requests,

@@ -260,6 +260,7 @@ def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: 
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     assert Path(json.loads(result.stdout)["output"]).is_file()
@@ -277,6 +278,7 @@ def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: 
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        check=False,
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["status"] == "ok"

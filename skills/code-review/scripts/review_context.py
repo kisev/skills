@@ -3,33 +3,35 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import re
 import shlex
-import fcntl
 import subprocess
 import sys
 import tempfile
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, Iterator, cast
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from shared.references.portable_gitlab import contract as portable
     from shared.references.portable_gitlab import review_semver
     from shared.references.portable_gitlab.label_assessment import (
-        label_catalog as label_catalog,
-        validate_label_assessments as validate_label_assessments,
+        label_catalog,
+        validate_label_assessments,
     )
 else:
     from portable_runtime import contract as portable
     from portable_runtime import review_semver
     from portable_runtime.label_assessment import (
-        label_catalog as label_catalog,
-        validate_label_assessments as validate_label_assessments,
+        label_catalog,
+        validate_label_assessments,
     )
 
 
@@ -115,15 +117,15 @@ def validate_progress(value: object, root: Path) -> dict[str, Any]:
         value.get("schema") != "code-review/progress/v1"
         or value.get("stage") not in REVIEW_STAGES
         or not portable.is_digest(value.get("evidence_digest"))
-        or value.get("mode") is not None
-        and value.get("mode") not in REVIEW_MODES
-        or value.get("locale") is not None
-        and value.get("locale") not in SUPPORTED_LOCALES
+        or (value.get("mode") is not None and value.get("mode") not in REVIEW_MODES)
+        or (value.get("locale") is not None and value.get("locale") not in SUPPORTED_LOCALES)
         or value.get("incremental") not in {"auto", "off"}
-        or value.get("repo_root") is not None
-        and (
-            not portable.nonempty_string(value.get("repo_root"))
-            or not Path(cast(str, value["repo_root"])).is_absolute()
+        or (
+            value.get("repo_root") is not None
+            and (
+                not portable.nonempty_string(value.get("repo_root"))
+                or not Path(cast("str", value["repo_root"])).is_absolute()
+            )
         )
         or not portable.nonempty_string(value.get("updated_at"))
     ):
@@ -142,7 +144,7 @@ def validate_progress(value: object, root: Path) -> dict[str, Any]:
             or not portable.is_digest(digest_value)
         ):
             raise portable.WorkflowError("code-review progress artifact binding is unsafe")
-    return cast(dict[str, Any], value)
+    return cast("dict[str, Any]", value)
 
 
 def progress_path(root: Path) -> Path:
@@ -317,7 +319,7 @@ def deduplicate(values: list[object], label: str) -> list[dict[str, Any]]:
             raise portable.WorkflowError(f"GitLab {label} entry is not an object")
         item_id = value.get("id")
         stable_id(item_id)
-        unique.setdefault(cast(int | str, item_id), value)
+        unique.setdefault(cast("int | str", item_id), value)
     return sorted(unique.values(), key=lambda item: stable_id(item.get("id")))
 
 
@@ -330,7 +332,7 @@ def username(value: object) -> str | None:
 
 def discussion_signature(value: dict[str, Any]) -> str:
     notes = []
-    for note in cast(list[object], value.get("notes", [])):
+    for note in cast("list[object]", value.get("notes", [])):
         if not isinstance(note, dict):
             continue
         notes.append(
@@ -419,17 +421,16 @@ def artifact_for_digest(root: Path, kind: str, digest: object) -> tuple[Path, di
 
 def rejected_candidate_is_affected(candidate: dict[str, Any], delta: dict[str, Any]) -> bool:
     return bool(
-        set(cast(list[str], candidate.get("paths", [])))
-        & set(cast(list[str], delta.get("changed_paths", [])))
-        or set(cast(list[str], candidate.get("thread_ids", [])))
+        set(cast("list[str]", candidate.get("paths", [])))
+        & set(cast("list[str]", delta.get("changed_paths", [])))
+        or set(cast("list[str]", candidate.get("thread_ids", [])))
         & (
-            set(cast(list[str], delta.get("changed_thread_ids", [])))
-            | set(cast(list[str], delta.get("changed_note_ids", [])))
+            set(cast("list[str]", delta.get("changed_thread_ids", [])))
+            | set(cast("list[str]", delta.get("changed_note_ids", [])))
         )
-        or set(cast(list[str], candidate.get("metadata_fields", [])))
-        & set(cast(list[str], delta.get("metadata_fields", [])))
-        or candidate.get("ci") is True
-        and delta.get("pipelines_changed") is True
+        or set(cast("list[str]", candidate.get("metadata_fields", [])))
+        & set(cast("list[str]", delta.get("metadata_fields", [])))
+        or (candidate.get("ci") is True and delta.get("pipelines_changed") is True)
     )
 
 
@@ -535,7 +536,7 @@ def incremental_context(
                 failures.append(f"{key} changed")
         old_head = old_evidence.get("head_sha")
         current_head = evidence.get("head_sha")
-        repo_root = Path(str(cast(dict[str, Any], context["exact_git"])["repo_root"]))
+        repo_root = Path(str(cast("dict[str, Any]", context["exact_git"])["repo_root"]))
         if not isinstance(old_head, str) or not isinstance(current_head, str):
             failures.append("head SHA is unavailable")
         elif old_head != current_head:
@@ -562,8 +563,8 @@ def incremental_context(
                 "--name-only",
                 "--find-renames",
                 "-z",
-                cast(str, old_head),
-                cast(str, current_head),
+                cast("str", old_head),
+                cast("str", current_head),
                 "--",
                 text=False,
             )
@@ -576,11 +577,11 @@ def incremental_context(
             )
         old_threads = {
             str(item.get("id")): item
-            for item in cast(list[dict[str, Any]], old_context.get("discussions", []))
+            for item in cast("list[dict[str, Any]]", old_context.get("discussions", []))
         }
         current_threads = {
             str(item.get("id")): item
-            for item in cast(list[dict[str, Any]], context.get("discussions", []))
+            for item in cast("list[dict[str, Any]]", context.get("discussions", []))
         }
         removed = sorted(set(old_threads) - set(current_threads))
         if removed:
@@ -598,12 +599,12 @@ def incremental_context(
         unchanged_threads = sorted(set(old_threads) & set(current_threads) - set(changed_threads))
         old_notes = {
             str(item.get("id")): item
-            for item in cast(list[dict[str, Any]], old_context.get("notes", []))
+            for item in cast("list[dict[str, Any]]", old_context.get("notes", []))
             if item.get("system") is not True
         }
         current_notes = {
             str(item.get("id")): item
-            for item in cast(list[dict[str, Any]], context.get("notes", []))
+            for item in cast("list[dict[str, Any]]", context.get("notes", []))
             if item.get("system") is not True
         }
         if set(old_notes) - set(current_notes):
@@ -620,8 +621,8 @@ def incremental_context(
             != json.dumps(note, sort_keys=True, ensure_ascii=False)
         )
         unchanged_notes = sorted(set(old_notes) & set(current_notes) - set(changed_notes))
-        old_object = cast(dict[str, Any], old_evidence.get("object", {}))
-        current_object = cast(dict[str, Any], evidence.get("object", {}))
+        old_object = cast("dict[str, Any]", old_evidence.get("object", {}))
+        current_object = cast("dict[str, Any]", evidence.get("object", {}))
         ignored_metadata = {
             "created_at",
             "updated_at",
@@ -657,23 +658,25 @@ def incremental_context(
             "metadata_fields": metadata_fields,
             "pipelines_changed": pipelines_changed,
         }
-        finding_ledger = cast(list[dict[str, Any]], plan.get("finding_ledger", []))
+        finding_ledger = cast("list[dict[str, Any]]", plan.get("finding_ledger", []))
         previous_findings = [
-            cast(dict[str, Any], item["record"])["finding"]
+            cast("dict[str, Any]", item["record"])["finding"]
             for item in finding_ledger
             if item.get("kind") == "finding"
         ]
         previous_finding_publications = [
-            cast(dict[str, Any], item["record"])["publication"]
+            cast("dict[str, Any]", item["record"])["publication"]
             for item in finding_ledger
             if item.get("kind") == "finding"
         ]
         previous_recommended_issues = [
-            cast(dict[str, Any], item["record"])["issue"]
+            cast("dict[str, Any]", item["record"])["issue"]
             for item in finding_ledger
             if item.get("kind") == "issue"
         ]
-        rejected_candidates = cast(list[dict[str, Any]], plan.get("rejected_candidate_ledger", []))
+        rejected_candidates = cast(
+            "list[dict[str, Any]]", plan.get("rejected_candidate_ledger", [])
+        )
         return {
             **empty,
             "mode": "incremental" if changed else "unchanged",
@@ -711,7 +714,7 @@ def annotate_discussion(value: dict[str, Any], web_url: str) -> dict[str, Any]:
     notes = value.get("notes")
     if not isinstance(notes, list) or not notes or not isinstance(notes[0], dict):
         raise portable.WorkflowError(f"discussion {value.get('id')!r} has no root note")
-    root = cast(dict[str, Any], notes[0])
+    root = cast("dict[str, Any]", notes[0])
     note_id = root.get("id")
     stable_id(note_id)
     position = root.get("position") if isinstance(root.get("position"), dict) else None
@@ -737,7 +740,7 @@ def server_changed_paths(evidence: dict[str, Any]) -> set[str]:
     if not isinstance(changed, dict) or changed.get("complete") is not True:
         raise portable.WorkflowError("GitLab changed-files evidence is incomplete")
     paths: set[str] = set()
-    for value in cast(list[object], changed.get("items", [])):
+    for value in cast("list[object]", changed.get("items", [])):
         if not isinstance(value, dict):
             raise portable.WorkflowError("GitLab changed-files entry is invalid")
         path = value.get("new_path") or value.get("old_path")
@@ -835,9 +838,9 @@ def exact_git_context(repo_root: str, evidence: dict[str, Any]) -> dict[str, Any
 def project_issue_templates(exact_git: dict[str, Any]) -> list[dict[str, Any]]:
     if exact_git.get("complete") is not True:
         raise portable.WorkflowError("exact Git context is unavailable for issue templates")
-    refs = cast(dict[str, Any], exact_git["refs"])
-    root = Path(cast(str, exact_git["repo_root"]))
-    head_sha = cast(str, refs["head_sha"])
+    refs = cast("dict[str, Any]", exact_git["refs"])
+    root = Path(cast("str", exact_git["repo_root"]))
+    head_sha = cast("str", refs["head_sha"])
     raw_paths = portable.git_read(
         root,
         "ls-tree",
@@ -907,31 +910,33 @@ def collect_context(
         project["hostname"],
         f"projects/{project['id']}/merge_requests/{target['iid']}/notes?sort=asc",
     )
-    errors = [portable.redact(value) for value in cast(list[str], notes_component["errors"])]
+    errors = [portable.redact(value) for value in cast("list[str]", notes_component["errors"])]
     if discussions_component.get("complete") is not True:
         errors.extend(
             portable.redact(value)
-            for value in cast(list[str], discussions_component.get("errors", []))
+            for value in cast("list[str]", discussions_component.get("errors", []))
         )
     try:
         discussions = [
             annotate_discussion(value, web_url)
             for value in deduplicate(
-                cast(list[object], discussions_component.get("items", [])), "discussion"
+                cast("list[object]", discussions_component.get("items", [])), "discussion"
             )
         ]
         nested_notes = [
             note
             for discussion in discussions
-            for note in cast(list[object], discussion.get("notes", []))
+            for note in cast("list[object]", discussion.get("notes", []))
         ]
-        notes = deduplicate([*nested_notes, *cast(list[object], notes_component["items"])], "note")
+        notes = deduplicate(
+            [*nested_notes, *cast("list[object]", notes_component["items"])], "note"
+        )
         notes = [{**note, "note_url": f"{web_url}#note_{note['id']}"} for note in notes]
     except portable.WorkflowError as exc:
         errors.append(str(exc))
         discussions, notes = [], []
     exact_git = exact_git_context(repo_root, evidence)
-    errors.extend(cast(list[str], exact_git["errors"]))
+    errors.extend(cast("list[str]", exact_git["errors"]))
     try:
         issue_templates = project_issue_templates(exact_git)
     except portable.WorkflowError as exc:
@@ -1004,16 +1009,16 @@ def prepare_context(
         raise portable.WorkflowError("review context requires the current evidence snapshot")
     context = collect_context(evidence, evidence_digest, repo_root, incremental)
     path, context_digest = portable.write_artifact(root, "review_context", context)
-    incremental_value = cast(dict[str, Any], context["incremental"])
-    delta = cast(dict[str, Any], incremental_value["incremental_delta"])
+    incremental_value = cast("dict[str, Any]", context["incremental"])
+    delta = cast("dict[str, Any]", incremental_value["incremental_delta"])
     selected_mode = (
         incremental_value["mode"]
         if incremental_value["mode"] in {"incremental", "unchanged"}
         else review_mode
     )
     critic_required = selected_mode in {"normal", "deep", "incremental"}
-    exact_git = cast(dict[str, Any], context["exact_git"])
-    resolved_repo = cast(str, exact_git["repo_root"])
+    exact_git = cast("dict[str, Any]", context["exact_git"])
+    resolved_repo = cast("str", exact_git["repo_root"])
     if context["complete"]:
         advance_progress(
             root,
@@ -1178,8 +1183,7 @@ def metadata_assessment(evidence: dict[str, Any], assessment: object) -> dict[st
     state = object_value.get("state")
     if (
         not isinstance(title, str)
-        or description is not None
-        and not isinstance(description, str)
+        or (description is not None and not isinstance(description, str))
         or not isinstance(labels, list)
         or not all(isinstance(item, str) for item in labels)
         or not portable.nonempty_string(state)
@@ -1260,7 +1264,7 @@ def validate_presentation(value: object, incremental_mode: str) -> dict[str, Any
         or not all(portable.nonempty_string(item) for item in severity_labels.values())
     ):
         raise portable.WorkflowError("localized severity labels are invalid")
-    return cast(dict[str, Any], value)
+    return cast("dict[str, Any]", value)
 
 
 def validate_chat_assessment(value: object) -> dict[str, Any]:
@@ -1280,7 +1284,7 @@ def validate_chat_assessment(value: object) -> dict[str, Any]:
         or not portable.nonempty_string(value.get("change"))
     ):
         raise portable.WorkflowError("review chat assessment is invalid")
-    return cast(dict[str, Any], value)
+    return cast("dict[str, Any]", value)
 
 
 def suggestion_blocks(body: str) -> list[re.Match[str]]:
@@ -1422,9 +1426,8 @@ def patch_paths(patch: str) -> list[str]:
             raise portable.WorkflowError("Git patch renames and copies are unsupported")
         if raw_line.startswith(("--- ", "+++ ")):
             values = tokens(raw_line[4:])
-            if (
-                len(values) != 1
-                or values[0] != "/dev/null"
+            if len(values) != 1 or (
+                values[0] != "/dev/null"
                 and not values[0].startswith("a/" if raw_line.startswith("--- ") else "b/")
             ):
                 raise portable.WorkflowError("Git patch file path escapes the repository")
@@ -1464,8 +1467,7 @@ def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
             read_tree = subprocess.run(
                 ["git", "-C", str(repo_root), "read-tree", head_sha],
                 env=environment,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 check=False,
                 timeout=45,
             )
@@ -1493,8 +1495,7 @@ def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
                 ],
                 env=environment,
                 input=patch.encode(),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 check=False,
                 timeout=45,
             )
@@ -1507,8 +1508,7 @@ def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
                 apply_command,
                 env=environment,
                 input=patch.encode(),
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 check=False,
                 timeout=45,
             )
@@ -1530,8 +1530,7 @@ def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
                     "--",
                 ],
                 env=environment,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 check=False,
                 timeout=45,
             )
@@ -1590,14 +1589,14 @@ def changed_diff_lines(
 
 
 def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    discussions = cast(list[dict[str, Any]], context.get("discussions", []))
+    discussions = cast("list[dict[str, Any]]", context.get("discussions", []))
     expected: dict[str, dict[str, Any]] = {}
     for item in discussions:
         if item.get("root_system") is True:
             continue
         meaningful = [
             note
-            for note in cast(list[dict[str, Any]], item.get("notes", []))
+            for note in cast("list[dict[str, Any]]", item.get("notes", []))
             if note.get("system") is not True and isinstance(note.get("body"), str)
         ]
         if not meaningful:
@@ -1613,16 +1612,16 @@ def expected_thread_bindings(context: dict[str, Any]) -> dict[str, dict[str, Any
             "url": item.get("root_note_url"),
             "last_note_id": last_note.get("id"),
             "last_note_body_sha256": hashlib.sha256(
-                cast(str, last_note["body"]).encode()
+                cast("str", last_note["body"]).encode()
             ).hexdigest(),
             "thread_sha256": hashlib.sha256(discussion_signature(item).encode()).hexdigest(),
         }
     discussion_note_ids = {
         str(note.get("id"))
         for discussion in discussions
-        for note in cast(list[dict[str, Any]], discussion.get("notes", []))
+        for note in cast("list[dict[str, Any]]", discussion.get("notes", []))
     }
-    for note in cast(list[dict[str, Any]], context.get("notes", [])):
+    for note in cast("list[dict[str, Any]]", context.get("notes", [])):
         note_id = str(note.get("id"))
         if note.get("system") is not True and note_id not in discussion_note_ids:
             body = note.get("body")
@@ -1682,13 +1681,13 @@ def validate_thread_fix(
             "an applicable current-line thread fix requires exactly one suggestion block"
         )
     if fix_mode == "suggestion":
-        exact_position = cast(dict[str, Any], position)
+        exact_position = cast("dict[str, Any]", position)
         validate_suggestion(
-            cast(str, response),
+            cast("str", response),
             repo_root=repo_root,
             head_sha=head_sha,
-            path=cast(str, exact_position["new_path"]),
-            line=cast(int, exact_position["new_line"]),
+            path=cast("str", exact_position["new_path"]),
+            line=cast("int", exact_position["new_line"]),
         )
     if fix_mode == "patch" and (
         item.get("outcome") == "no_publication"
@@ -1697,7 +1696,7 @@ def validate_thread_fix(
     ):
         raise portable.WorkflowError("thread patch fix is invalid")
     if fix_mode == "patch":
-        validate_git_patch(repo_root, head_sha, cast(str, item["patch"]))
+        validate_git_patch(repo_root, head_sha, cast("str", item["patch"]))
     if fix_mode == "not_required" and (item.get("patch") is not None or suggestion_count):
         raise portable.WorkflowError(
             "a thread without a code fix cannot contain suggestion or patch"
@@ -1729,13 +1728,13 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             or item.get("fix_mode") not in {"suggestion", "patch"}
         ):
             raise portable.WorkflowError("finding publication identity or body is invalid")
-        fix_mode = cast(str, item["fix_mode"])
+        fix_mode = cast("str", item["fix_mode"])
         patch = item.get("patch")
-        suggestion_count = len(suggestion_blocks(cast(str, item["body"])))
+        suggestion_count = len(suggestion_blocks(cast("str", item["body"])))
         if fix_mode == "patch":
             if not portable.nonempty_string(patch) or suggestion_count:
                 raise portable.WorkflowError("patch fix requires a patch and forbids suggestion")
-            patch_paths(cast(str, patch))
+            patch_paths(cast("str", patch))
         elif patch is not None or suggestion_count != 1:
             raise portable.WorkflowError("suggestion fix requires one suggestion and no patch")
         if publication_type in {"general", "local_fix"}:
@@ -1756,9 +1755,9 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
         elif old_line is not None and fix_mode != "patch":
             raise portable.WorkflowError("deleted-line finding fixes require a Git patch")
         elif fix_mode == "suggestion":
-            validate_suggestion(cast(str, item["body"]))
-        seen.add(cast(str, finding_id))
-        result.append(cast(dict[str, Any], item))
+            validate_suggestion(cast("str", item["body"]))
+        seen.add(cast("str", finding_id))
+        result.append(cast("dict[str, Any]", item))
     return result
 
 
@@ -1796,30 +1795,28 @@ def validate_previous_assessments(
             or item.get("kind") not in {"finding", "issue"}
             or item.get("status") not in PREVIOUS_FINDING_STATUSES
             or not isinstance(item.get("critic_required"), bool)
-            or item.get("status") in {"changed", "unverified"}
-            and item.get("critic_required") is not True
+            or (
+                item.get("status") in {"changed", "unverified"}
+                and item.get("critic_required") is not True
+            )
             or not all(
                 portable.nonempty_string(item.get(key))
                 for key in ("previous_status", "current_status", "rationale", "action")
             )
             or action not in {"no_publication", "reply", "resolve", "reopen", "update_issue"}
-            or item.get("kind") == "issue"
-            and action not in {"no_publication", "update_issue"}
-            or item.get("kind") == "finding"
-            and action == "update_issue"
-            or action == "resolve"
-            and item.get("status") not in {"fixed", "withdrawn"}
-            or action == "reopen"
-            and item.get("status") not in {"active", "changed", "unverified"}
+            or (item.get("kind") == "issue" and action not in {"no_publication", "update_issue"})
+            or (item.get("kind") == "finding" and action == "update_issue")
+            or (action == "resolve" and item.get("status") not in {"fixed", "withdrawn"})
             or (
-                action == "no_publication"
-                and body is not None
-                or action != "no_publication"
-                and not portable.nonempty_string(body)
+                action == "reopen" and item.get("status") not in {"active", "changed", "unverified"}
+            )
+            or (
+                (action == "no_publication" and body is not None)
+                or (action != "no_publication" and not portable.nonempty_string(body))
             )
         ):
             raise portable.WorkflowError("previous finding assessment is invalid")
-        actual[cast(str, item_id)] = cast(dict[str, Any], item)
+        actual[cast("str", item_id)] = cast("dict[str, Any]", item)
     if set(actual) != set(expected) or any(
         actual[item_id]["kind"] != kind for item_id, kind in expected.items()
     ):
@@ -1875,11 +1872,11 @@ def validate_recommended_issues(
         if not templates and template_path is not None:
             raise portable.WorkflowError("recommended issue template is unavailable")
         if template_path is not None and not all(
-            heading in item["body"] for heading in templates[cast(str, template_path)]["headings"]
+            heading in item["body"] for heading in templates[cast("str", template_path)]["headings"]
         ):
             raise portable.WorkflowError("recommended issue does not fill its selected template")
-        seen.add(cast(str, item_id))
-        result.append(cast(dict[str, Any], item))
+        seen.add(cast("str", item_id))
+        result.append(cast("dict[str, Any]", item))
     return result
 
 
@@ -1897,14 +1894,15 @@ def validate_rejected_candidates(value: object, decision: dict[str, Any]) -> lis
     if not isinstance(value, list):
         raise portable.WorkflowError("rejected candidates must be an array")
     primary = {
-        str(item["id"]): item for item in cast(list[dict[str, Any]], decision.get("findings", []))
+        str(item["id"]): item for item in cast("list[dict[str, Any]]", decision.get("findings", []))
     }
     critic = {
         str(item["id"]): item
-        for item in cast(list[dict[str, Any]], decision.get("critic_findings", []))
+        for item in cast("list[dict[str, Any]]", decision.get("critic_findings", []))
     }
     responses = {
-        str(item["id"]): item for item in cast(list[dict[str, Any]], decision.get("responses", []))
+        str(item["id"]): item
+        for item in cast("list[dict[str, Any]]", decision.get("responses", []))
     }
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -1930,7 +1928,7 @@ def validate_rejected_candidates(value: object, decision: dict[str, Any]) -> lis
         ):
             raise portable.WorkflowError("rejected candidate is invalid")
         seen.add(item_id)
-        result.append(cast(dict[str, Any], item))
+        result.append(cast("dict[str, Any]", item))
     rejected_ids = {
         item_id
         for item_id in set(primary) | set(critic)
@@ -1958,7 +1956,7 @@ def validate_rejected_candidate_assessments(
             or item["id"] in actual
         ):
             raise portable.WorkflowError("rejected candidate assessment is invalid")
-        actual[cast(str, item["id"])] = cast(dict[str, Any], item)
+        actual[cast("str", item["id"])] = cast("dict[str, Any]", item)
     if set(actual) != expected:
         raise portable.WorkflowError("every affected rejected candidate requires one assessment")
     return list(actual.values())
@@ -1966,15 +1964,15 @@ def validate_rejected_candidate_assessments(
 
 def previous_revisions(incremental: dict[str, Any]) -> dict[str, int]:
     result: dict[str, int] = {}
-    for item in cast(list[dict[str, Any]], incremental.get("previous_finding_ledger", [])):
+    for item in cast("list[dict[str, Any]]", incremental.get("previous_finding_ledger", [])):
         item_id, revision = item.get("id"), item.get("revision")
         if portable.nonempty_string(item_id) and isinstance(revision, int):
-            result[cast(str, item_id)] = max(result.get(cast(str, item_id), 0), revision)
+            result[cast("str", item_id)] = max(result.get(cast("str", item_id), 0), revision)
     for key in ("previous_finding_publications", "previous_recommended_issues"):
-        for item in cast(list[dict[str, Any]], incremental.get(key, [])):
+        for item in cast("list[dict[str, Any]]", incremental.get(key, [])):
             item_id, revision = item.get("finding_id") or item.get("id"), item.get("revision")
             if portable.nonempty_string(item_id) and isinstance(revision, int):
-                result[cast(str, item_id)] = max(result.get(cast(str, item_id), 0), revision)
+                result[cast("str", item_id)] = max(result.get(cast("str", item_id), 0), revision)
     return result
 
 
@@ -2016,25 +2014,25 @@ def structured_publication_preview(
     body_files: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
     markers: dict[str, dict[str, Any]] = {}
-    incremental = cast(dict[str, Any], context["incremental"])
+    incremental = cast("dict[str, Any]", context["incremental"])
     previous = previous_revisions(incremental)
     previous_allowed = set(previous)
     assessment_by_id = {str(item["id"]): item for item in assessments}
     finding_ids = {str(item["id"]) for item in findings}
     revisions = finding_revisions(incremental, assessments, finding_ids, markers)
     discussion_by_id = {
-        str(item["id"]): item for item in cast(list[dict[str, Any]], context["discussions"])
+        str(item["id"]): item for item in cast("list[dict[str, Any]]", context["discussions"])
     }
     discussion_by_root = {
         str(item["root_note_id"]): item
-        for item in cast(list[dict[str, Any]], context["discussions"])
+        for item in cast("list[dict[str, Any]]", context["discussions"])
         if item.get("root_system") is False
     }
-    project = cast(dict[str, Any], evidence["project"])
-    target = cast(dict[str, Any], evidence["target"])
-    hostname = cast(str, project["hostname"])
+    project = cast("dict[str, Any]", evidence["project"])
+    target = cast("dict[str, Any]", evidence["target"])
+    hostname = cast("str", project["hostname"])
     endpoint = f"projects/{project['id']}/merge_requests/{target['iid']}"
-    repository_url = str(cast(dict[str, Any], evidence["object"])["web_url"]).split(
+    repository_url = str(cast("dict[str, Any]", evidence["object"])["web_url"]).split(
         "/-/merge_requests/", 1
     )[0]
 
@@ -2054,7 +2052,7 @@ def structured_publication_preview(
     def body_with_fix(body: str, fix: dict[str, Any]) -> str:
         if fix.get("fix_mode") != "patch":
             return body
-        patch = cast(str, fix["patch"])
+        patch = cast("str", fix["patch"])
         return f"{body.rstrip()}\n\n```sh\ngit apply <<'PATCH'\n{patch.rstrip()}\nPATCH\n```"
 
     enriched_threads = [enrich_fix("thread", str(item["id"]), item) for item in thread_decisions]
@@ -2062,7 +2060,7 @@ def structured_publication_preview(
     def thread_expectation(source: dict[str, Any]) -> dict[str, Any]:
         meaningful = [
             note
-            for note in cast(list[dict[str, Any]], source.get("notes", []))
+            for note in cast("list[dict[str, Any]]", source.get("notes", []))
             if note.get("system") is not True and isinstance(note.get("body"), str)
         ]
         if not meaningful:
@@ -2075,7 +2073,9 @@ def structured_publication_preview(
             "resolvable": source.get("root_resolvable") is True,
             "resolved": source.get("root_resolved") is True,
             "last_note_id": latest.get("id"),
-            "last_note_body_sha256": hashlib.sha256(cast(str, latest["body"]).encode()).hexdigest(),
+            "last_note_body_sha256": hashlib.sha256(
+                cast("str", latest["body"]).encode()
+            ).hexdigest(),
             "path": position.get("new_path") or position.get("old_path")
             if isinstance(position, dict)
             else None,
@@ -2112,7 +2112,7 @@ def structured_publication_preview(
         publication_operation = "reply" if operation in {"resolve", "reopen"} else operation
         action_id = f"{kind}:{publication_id}:r{revision}:{publication_operation}"
         if publication_operation == "create_line":
-            path = cast(str, mutation_value["path"])
+            path = cast("str", mutation_value["path"])
             line = mutation_value["line"] or mutation_value["old_line"]
             line_option = "--line" if mutation_value["line"] is not None else "--old-line"
             command = (
@@ -2126,7 +2126,7 @@ def structured_publication_preview(
             )
         elif operation == "create_issue":
             issue_endpoint = f"projects/{project['id']}/issues"
-            issue_title = cast(str, cast(dict[str, Any], mutation)["title"])
+            issue_title = cast("str", cast("dict[str, Any]", mutation)["title"])
             command = (
                 f"glab api --hostname {shlex.quote(hostname)} --method POST "
                 f"{shlex.quote(issue_endpoint)} -f {shlex.quote(f'title={issue_title}')} "
@@ -2201,10 +2201,10 @@ def structured_publication_preview(
         if marker is not None:
             if assessment is None:
                 raise portable.WorkflowError("published baseline finding lacks an assessment")
-            operation = cast(str, assessment["publication_action"])
+            operation = cast("str", assessment["publication_action"])
             if operation == "no_publication":
                 continue
-            next_revision = max(revision, cast(int, marker["revision"]) + 1)
+            next_revision = max(revision, cast("int", marker["revision"]) + 1)
             discussion = (
                 discussion_by_id.get(str(marker["discussion_id"]))
                 if marker.get("discussion_id") is not None
@@ -2217,7 +2217,7 @@ def structured_publication_preview(
                 next_revision,
                 "finding",
                 operation,
-                body_with_fix(cast(str, assessment["publication_body"]), publication_spec),
+                body_with_fix(cast("str", assessment["publication_body"]), publication_spec),
                 mutation={
                     "desired_resolved": True
                     if operation == "resolve"
@@ -2236,7 +2236,7 @@ def structured_publication_preview(
             revision,
             "finding",
             operation,
-            body_with_fix(cast(str, publication_spec["body"]), publication_spec),
+            body_with_fix(cast("str", publication_spec["body"]), publication_spec),
             mutation={
                 "path": publication_spec["path"],
                 "line": publication_spec["line"],
@@ -2246,7 +2246,7 @@ def structured_publication_preview(
 
     previous_issue_by_id = {
         str(item.get("id")): item
-        for item in cast(list[dict[str, Any]], incremental.get("previous_recommended_issues", []))
+        for item in cast("list[dict[str, Any]]", incremental.get("previous_recommended_issues", []))
     }
     enriched_issues: list[dict[str, Any]] = []
     for issue_value in recommended_issues:
@@ -2286,7 +2286,7 @@ def structured_publication_preview(
             revision,
             "issue",
             operation,
-            cast(str, issue_value["body"]),
+            cast("str", issue_value["body"]),
             mutation={"title": issue_value["title"]},
         )
 
@@ -2295,7 +2295,7 @@ def structured_publication_preview(
         if assessment["kind"] != "finding" or assessment_id in finding_ids:
             continue
         marker = markers.get(assessment_id)
-        operation = cast(str, assessment["publication_action"])
+        operation = cast("str", assessment["publication_action"])
         if marker is None or operation == "no_publication":
             continue
         if marker.get("kind") != "finding":
@@ -2313,7 +2313,7 @@ def structured_publication_preview(
             revision,
             "finding",
             operation,
-            cast(str, assessment["publication_body"]),
+            cast("str", assessment["publication_body"]),
             mutation={
                 "desired_resolved": True
                 if operation == "resolve"
@@ -2325,7 +2325,7 @@ def structured_publication_preview(
         )
 
     for decision in enriched_threads:
-        operation = cast(str, decision["outcome"])
+        operation = cast("str", decision["outcome"])
         if operation in {"no_publication", "local_fix"}:
             continue
         root_note_id = str(decision["id"])
@@ -2342,7 +2342,7 @@ def structured_publication_preview(
             revision,
             "thread",
             operation,
-            body_with_fix(cast(str, decision["proposed_response"]), decision),
+            body_with_fix(cast("str", decision["proposed_response"]), decision),
             mutation={
                 "desired_resolved": True
                 if operation == "resolve"
@@ -2376,7 +2376,7 @@ def structured_publication_preview(
     if len(identities) != len(set(identities)):
         raise portable.WorkflowError("publication action IDs must be unique")
     result = {
-        "mr_state": cast(dict[str, Any], evidence["object"])["state"],
+        "mr_state": cast("dict[str, Any]", evidence["object"])["state"],
         "warning": "manual publication; no command was executed",
         "body_files": body_files,
         "actions": actions,
@@ -2394,19 +2394,19 @@ def review_markdown(
     metadata: dict[str, Any],
     publication: dict[str, Any],
 ) -> str:
-    assessment = cast(dict[str, dict[str, Any]], metadata["assessment"])
-    presentation = cast(dict[str, Any], content["presentation"])
-    previous = cast(list[dict[str, Any]], content["previous_finding_assessments"])
+    assessment = cast("dict[str, dict[str, Any]]", metadata["assessment"])
+    presentation = cast("dict[str, Any]", content["presentation"])
+    previous = cast("list[dict[str, Any]]", content["previous_finding_assessments"])
     finding_publications = {
         item["finding_id"]: item
-        for item in cast(list[dict[str, Any]], content["finding_publications"])
+        for item in cast("list[dict[str, Any]]", content["finding_publications"])
     }
-    recommended_issues = cast(list[dict[str, Any]], content["recommended_issues"])
+    recommended_issues = cast("list[dict[str, Any]]", content["recommended_issues"])
     bodies = {
         item["publication_id"]: item
-        for item in cast(list[dict[str, Any]], publication["body_files"])
+        for item in cast("list[dict[str, Any]]", publication["body_files"])
     }
-    publication_actions = cast(list[dict[str, Any]], publication["actions"])
+    publication_actions = cast("list[dict[str, Any]]", publication["actions"])
     actions_by_publication: dict[str, list[dict[str, Any]]] = {}
     for item in publication_actions:
         publication_id = item["publication_id"]
@@ -2434,26 +2434,26 @@ def review_markdown(
         lines.append(f"- **{labels[field]}:** {text}")
     lines.append("")
 
-    label_review = cast(dict[str, Any], content["label_review"])
+    label_review = cast("dict[str, Any]", content["label_review"])
     shown_actions: set[str] = set()
     lines.extend([f"## {presentation['labels_heading']}", ""])
     for field in ("add", "remove"):
-        values = cast(list[str], label_review[field])
+        values = cast("list[str]", label_review[field])
         rendered = (
             ", ".join(f"`{value}`" for value in values) if values else presentation["no_items"]
         )
         lines.append(f"- {portable.review_action_labels(content['locale'])[field]}: {rendered}")
     label_action = next((item for item in publication_actions if item["kind"] == "labels"), None)
     if label_action is not None:
-        shown_actions.add(cast(str, label_action["id"]))
-        lines.extend(["", "```shell", cast(str, label_action["command"]), "```"])
+        shown_actions.add(cast("str", label_action["id"]))
+        lines.extend(["", "```shell", cast("str", label_action["command"]), "```"])
     lines.append("")
 
     lines.extend([f"## {presentation['previous_findings_heading']}", ""])
     if not previous:
         lines.extend([presentation["no_items"], ""])
     else:
-        headers = cast(list[str], presentation["previous_table_headers"])
+        headers = cast("list[str]", presentation["previous_table_headers"])
         lines.extend(
             [
                 "| " + " | ".join(headers) + " |",
@@ -2486,7 +2486,7 @@ def review_markdown(
             [
                 "```sh",
                 "git apply <<'PATCH'",
-                cast(str, fix["patch"]).rstrip(),
+                cast("str", fix["patch"]).rstrip(),
                 "PATCH",
                 "```",
                 "",
@@ -2498,12 +2498,12 @@ def review_markdown(
             return
         publication_id = action["publication_id"]
         body = bodies.get(publication_id) if publication_id is not None else None
-        shown_actions.add(cast(str, action["id"]))
+        shown_actions.add(cast("str", action["id"]))
         if body is not None and action["operation"] not in {"resolve", "reopen"}:
             lines.extend(
                 [
                     portable.marked_preview(
-                        f"PUBLICATION {publication_id} BODY", cast(str, body["content"])
+                        f"PUBLICATION {publication_id} BODY", cast("str", body["content"])
                     ),
                     "",
                 ]
@@ -2511,7 +2511,7 @@ def review_markdown(
         label = portable.review_action_labels(content["locale"])[
             action["operation"] if action["operation"] in {"resolve", "reopen"} else "reply"
         ]
-        lines.extend([label, "", "```shell", cast(str, action["command"]), "```"])
+        lines.extend([label, "", "```shell", cast("str", action["command"]), "```"])
         lines.append("")
 
     def add_publication_action(publication_id: str) -> None:
@@ -2520,9 +2520,9 @@ def review_markdown(
 
     for item in previous:
         if item["publication_action"] != "no_publication":
-            add_publication_action(cast(str, item["id"]))
+            add_publication_action(cast("str", item["id"]))
 
-    thread_decisions = cast(list[dict[str, Any]], content["thread_decisions"])
+    thread_decisions = cast("list[dict[str, Any]]", content["thread_decisions"])
 
     def add_thread_section(heading: str, items: list[dict[str, Any]]) -> None:
         lines.extend([f"## {heading}", ""])
@@ -2534,7 +2534,7 @@ def review_markdown(
             add_publication_action(f"thread-{item['id']}")
 
     add_thread_section(
-        cast(str, presentation["open_threads_heading"]),
+        cast("str", presentation["open_threads_heading"]),
         [
             item
             for item in thread_decisions
@@ -2543,7 +2543,7 @@ def review_markdown(
         ],
     )
     add_thread_section(
-        cast(str, presentation["closed_threads_heading"]),
+        cast("str", presentation["closed_threads_heading"]),
         [
             item
             for item in thread_decisions
@@ -2552,7 +2552,7 @@ def review_markdown(
         ],
     )
 
-    findings = cast(list[dict[str, Any]], content["findings"])
+    findings = cast("list[dict[str, Any]]", content["findings"])
     local_threads = [item for item in thread_decisions if item["outcome"] == "local_fix"]
     lines.extend([f"## {presentation['local_fixes_heading']}", ""])
     if not local_threads and (context["role"] != "author" or not findings):
@@ -2564,7 +2564,7 @@ def review_markdown(
                 "",
                 item["rationale"],
                 "",
-                cast(str, item["proposed_response"]),
+                cast("str", item["proposed_response"]),
                 "",
             ]
         )
@@ -2614,7 +2614,7 @@ def review_markdown(
             ]
         )
         if finding["id"] in finding_publications:
-            add_publication_action(cast(str, finding["id"]))
+            add_publication_action(cast("str", finding["id"]))
 
     lines.extend([f"## {presentation['recommended_issues_heading']}", ""])
     if not recommended_issues:
@@ -2640,12 +2640,12 @@ def review_markdown(
                 "",
             ]
         )
-        add_publication_action(cast(str, issue["id"]))
+        add_publication_action(cast("str", issue["id"]))
 
     lines.extend([f"## {presentation['checked_heading']}", ""])
     without_publication = [
         item
-        for item in cast(list[dict[str, Any]], content["thread_decisions"])
+        for item in cast("list[dict[str, Any]]", content["thread_decisions"])
         if item["outcome"] == "no_publication"
     ]
     if not without_publication:
@@ -2664,7 +2664,7 @@ def review_markdown(
             "",
             f"## {presentation['semver_heading']}",
             "",
-            *review_semver.report_lines(content, cast(str, content["locale"])),
+            *review_semver.report_lines(content, cast("str", content["locale"])),
             "",
             f"## {presentation['checks_heading']}",
             "",
@@ -2841,14 +2841,14 @@ def build_finding_ledger(
 ) -> list[dict[str, Any]]:
     previous = {
         str(item["id"]): item
-        for item in cast(list[dict[str, Any]], incremental.get("previous_finding_ledger", []))
+        for item in cast("list[dict[str, Any]]", incremental.get("previous_finding_ledger", []))
     }
     assessment_by_id = {str(item["id"]): item for item in assessments}
     finding_by_id = {str(item["id"]): item for item in findings}
     publication_by_id = {str(item["finding_id"]): item for item in publications}
     issue_by_id = {str(item["id"]): item for item in issues}
     action_revisions: dict[str, int] = {}
-    for body in cast(list[dict[str, Any]], publication_preview.get("body_files", [])):
+    for body in cast("list[dict[str, Any]]", publication_preview.get("body_files", [])):
         item_id, revision = str(body["publication_id"]), int(body["revision"])
         action_revisions[item_id] = max(action_revisions.get(item_id, 0), revision)
     ledger: list[dict[str, Any]] = []
@@ -2864,7 +2864,7 @@ def build_finding_ledger(
             record = {"issue": issue_by_id[item_id]}
             revision = issue_by_id[item_id]["revision"]
         else:
-            record = dict(cast(dict[str, Any], old["record"]))
+            record = dict(cast("dict[str, Any]", old["record"]))
             revision = old["revision"]
             if old["kind"] == "finding" and assessment["publication_action"] != "no_publication":
                 publication = dict(record["publication"])
@@ -2914,7 +2914,9 @@ def build_rejected_candidate_ledger(
 ) -> list[dict[str, Any]]:
     previous = {
         str(item["id"]): item
-        for item in cast(list[dict[str, Any]], incremental.get("previous_rejected_candidates", []))
+        for item in cast(
+            "list[dict[str, Any]]", incremental.get("previous_rejected_candidates", [])
+        )
     }
     current = {str(item["id"]): item for item in rejected_candidates}
     assessment_by_id = {str(item["id"]): item for item in assessments}
@@ -2934,9 +2936,7 @@ def build_rejected_candidate_ledger(
             )
         else:
             ledger[item_id] = current[item_id]
-    for item_id, item in current.items():
-        if item_id not in previous:
-            ledger[item_id] = item
+    ledger.update({item_id: item for item_id, item in current.items() if item_id not in previous})
     return sorted(ledger.values(), key=lambda item: item["id"])
 
 
@@ -3014,7 +3014,7 @@ def scaffold_review(
             "review content locale does not match selected progress locale"
         )
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    findings = cast(list[dict[str, Any]], content["findings"])
+    findings = cast("list[dict[str, Any]]", content["findings"])
     finding_ids = [finding["id"] for finding in findings]
     if len(finding_ids) != len(set(finding_ids)) or any(
         str(finding_id).startswith("thread-")
@@ -3027,41 +3027,41 @@ def scaffold_review(
     if findings != sorted(findings, key=lambda item: severity_order[item["severity"]]):
         raise portable.WorkflowError("review findings must be ordered by severity")
     accepted_findings = cast(
-        list[dict[str, Any]], decision.get("accepted_findings", decision.get("findings", []))
+        "list[dict[str, Any]]", decision.get("accepted_findings", decision.get("findings", []))
     )
     if accepted_findings != findings:
         raise portable.WorkflowError("review plan findings do not match the review decision")
-    incremental = cast(dict[str, Any], context["incremental"])
+    incremental = cast("dict[str, Any]", context["incremental"])
     incremental_mode = str(incremental["mode"])
     if (incremental_mode == "incremental") != (decision.get("mode") == "incremental"):
         raise portable.WorkflowError("review decision mode does not match incremental context")
     chat_assessment = validate_chat_assessment(content["chat_assessment"])
     presentation = validate_presentation(
         localized_presentation(
-            cast(str, content["locale"]),
-            cast(str, context["role"]),
-            cast(str, decision["verdict"]),
+            cast("str", content["locale"]),
+            cast("str", context["role"]),
+            cast("str", decision["verdict"]),
             incremental_mode,
         ),
         incremental_mode,
     )
     label_review = validate_label_assessments(
-        evidence, content["label_assessments"], cast(str, content["semver_impact"])
+        evidence, content["label_assessments"], cast("str", content["semver_impact"])
     )
-    previous_findings = cast(list[dict[str, Any]], incremental["previous_findings"])
-    previous_issues = cast(list[dict[str, Any]], incremental["previous_recommended_issues"])
+    previous_findings = cast("list[dict[str, Any]]", incremental["previous_findings"])
+    previous_issues = cast("list[dict[str, Any]]", incremental["previous_recommended_issues"])
     previous_assessments = validate_previous_assessments(
         content["previous_finding_assessments"], previous_findings, previous_issues
     )
     reconsidered_rejected = cast(
-        list[dict[str, Any]], incremental["reconsidered_rejected_candidates"]
+        "list[dict[str, Any]]", incremental["reconsidered_rejected_candidates"]
     )
     rejected_candidate_assessments = validate_rejected_candidate_assessments(
         content["rejected_candidate_assessments"], reconsidered_rejected
     )
     rejected_candidates = validate_rejected_candidates(content["rejected_candidates"], decision)
     recommended_issues = validate_recommended_issues(
-        content["recommended_issues"], cast(list[dict[str, Any]], context["issue_templates"])
+        content["recommended_issues"], cast("list[dict[str, Any]]", context["issue_templates"])
     )
     issue_ids = [str(item["id"]) for item in recommended_issues]
     if (
@@ -3077,7 +3077,7 @@ def scaffold_review(
     assessment_by_id = {item["id"]: item for item in previous_assessments}
     previous_ledger_by_id = {
         str(item["id"]): item
-        for item in cast(list[dict[str, Any]], incremental["previous_finding_ledger"])
+        for item in cast("list[dict[str, Any]]", incremental["previous_finding_ledger"])
     }
     observed_markers: dict[str, dict[str, Any]] = {}
     previous_finding_ids = {str(item["id"]) for item in previous_findings}
@@ -3085,8 +3085,8 @@ def scaffold_review(
     current_finding_ids = set(finding_ids)
     current_issue_ids = set(issue_ids)
     for item_id, kind in {
-        **{value: "finding" for value in previous_finding_ids},
-        **{value: "issue" for value in previous_issue_ids},
+        **dict.fromkeys(previous_finding_ids, "finding"),
+        **dict.fromkeys(previous_issue_ids, "issue"),
     }.items():
         assessment_item = assessment_by_id[item_id]
         observed_marker = observed_markers.get(item_id)
@@ -3118,7 +3118,7 @@ def scaffold_review(
     targeted_previous_findings = {
         str(item["id"]) for item in previous_assessments if item["critic_required"] is True
     }
-    critic_targets = set(cast(list[str], decision.get("critic_target_finding_ids", [])))
+    critic_targets = set(cast("list[str]", decision.get("critic_target_finding_ids", [])))
     if not targeted_previous_findings.issubset(critic_targets):
         raise portable.WorkflowError(
             "changed or disputed previous findings require targeted critic coverage"
@@ -3126,28 +3126,28 @@ def scaffold_review(
     finding_publications = validate_finding_publications(
         content["finding_publications"], current_finding_ids
     )
-    exact_git = cast(dict[str, Any], context["exact_git"])
-    repo_root = Path(cast(str, exact_git["repo_root"]))
-    head_sha = cast(str, evidence["head_sha"])
-    base_sha = cast(str, evidence["base_sha"])
+    exact_git = cast("dict[str, Any]", context["exact_git"])
+    repo_root = Path(cast("str", exact_git["repo_root"]))
+    head_sha = cast("str", evidence["head_sha"])
+    base_sha = cast("str", evidence["base_sha"])
     for item in finding_publications:
         if item["type"] == "line":
             old_lines, new_lines = changed_diff_lines(
-                repo_root, base_sha, head_sha, cast(str, item["path"])
+                repo_root, base_sha, head_sha, cast("str", item["path"])
             )
             if item["line"] is not None and item["line"] not in new_lines:
                 raise portable.WorkflowError("finding new-line position is not in the exact diff")
             if item["old_line"] is not None and item["old_line"] not in old_lines:
                 raise portable.WorkflowError("finding old-line position is not in the exact diff")
         if item["fix_mode"] == "patch":
-            validate_git_patch(repo_root, head_sha, cast(str, item["patch"]))
+            validate_git_patch(repo_root, head_sha, cast("str", item["patch"]))
         else:
             validate_suggestion(
-                cast(str, item["body"]),
+                cast("str", item["body"]),
                 repo_root=repo_root,
                 head_sha=head_sha,
-                path=cast(str, item["path"]),
-                line=cast(int, item["line"]),
+                path=cast("str", item["path"]),
+                line=cast("int", item["line"]),
             )
     current_publication_by_id = {str(item["finding_id"]): item for item in finding_publications}
     current_issue_by_id = {str(item["id"]): item for item in recommended_issues}
@@ -3160,7 +3160,7 @@ def scaffold_review(
         if assessment_item["status"] not in {"active", "unverified"}:
             continue
         if old["kind"] == "finding" and item_id in current_finding_ids:
-            old_publication = dict(cast(dict[str, Any], old["record"])["publication"])
+            old_publication = dict(cast("dict[str, Any]", old["record"])["publication"])
             old_publication.pop("revision", None)
             old_publication.pop("patch_path", None)
             old_publication.pop("patch_sha256", None)
@@ -3170,7 +3170,7 @@ def scaffold_review(
                     "a changed finding publication must use changed status"
                 )
         if old["kind"] == "issue" and item_id in current_issue_ids:
-            old_issue = dict(cast(dict[str, Any], old["record"])["issue"])
+            old_issue = dict(cast("dict[str, Any]", old["record"])["issue"])
             old_issue.pop("revision", None)
             if old_issue != current_issue_by_id[item_id]:
                 raise portable.WorkflowError("a changed recommended issue must use changed status")
@@ -3196,7 +3196,7 @@ def scaffold_review(
     ):
         raise portable.WorkflowError("author findings require read-only local fix patches")
     expected_threads = expected_thread_bindings(context)
-    thread_decisions = cast(list[dict[str, Any]], content["thread_decisions"])
+    thread_decisions = cast("list[dict[str, Any]]", content["thread_decisions"])
     actual_threads = {item["id"]: item for item in thread_decisions}
     if len(actual_threads) != len(thread_decisions) or set(actual_threads) != set(expected_threads):
         raise portable.WorkflowError("review plan must account for every non-system thread")
@@ -3206,10 +3206,8 @@ def scaffold_review(
             raise portable.WorkflowError("thread decision state does not match review context")
         if source["state"] == "open" and item["outcome"] == "no_publication":
             raise portable.WorkflowError("an open thread requires an explicit outcome")
-        if (
-            item["outcome"] == "no_publication"
-            and item["proposed_response"] is not None
-            or item["outcome"] != "no_publication"
+        if (item["outcome"] == "no_publication" and item["proposed_response"] is not None) or (
+            item["outcome"] != "no_publication"
             and not portable.nonempty_string(item["proposed_response"])
         ):
             raise portable.WorkflowError("thread publication outcome and body disagree")
@@ -3239,8 +3237,8 @@ def scaffold_review(
         ):
             raise portable.WorkflowError("thread decision does not bind the complete discussion")
         validate_thread_fix(item, source, repo_root, head_sha)
-        assessment = cast(str, item["assessment"])
-        outcome = cast(str, item["outcome"])
+        assessment = cast("str", item["assessment"])
+        outcome = cast("str", item["outcome"])
         if assessment == "accepted":
             if item["fix_mode"] not in {"suggestion", "patch"}:
                 raise portable.WorkflowError("an accepted thread requires a validated code fix")
@@ -3371,8 +3369,8 @@ def scaffold_review(
         markdown,
         path,
         plan_digest,
-        cast(dict[str, Any], context["target"]),
-        cast(str | None, incremental["incremental_baseline"]["state_digest"]),
+        cast("dict[str, Any]", context["target"]),
+        cast("str | None", incremental["incremental_baseline"]["state_digest"]),
         {
             "stage": "content_missing",
             "evidence_path": str(evidence_path),
@@ -3425,29 +3423,29 @@ def progress_artifact(
     if path != expected or hashlib.sha256(path.read_bytes()).hexdigest() != digest_value:
         raise portable.WorkflowError("code-review progress artifact binding changed")
     _, payload = portable.artifact_payload(path, kind)
-    return path, payload, cast(str, digest_value)
+    return path, payload, cast("str", digest_value)
 
 
 def next_action_for_stage(
     stage: str, root: Path, progress: dict[str, Any]
 ) -> dict[str, Any] | None:
     if stage == "prepared":
-        repo_root = cast(str | None, progress.get("repo_root"))
-        mode = cast(str, progress.get("mode") or "normal")
+        repo_root = cast("str | None", progress.get("repo_root"))
+        mode = cast("str", progress.get("mode") or "normal")
         if mode in {"incremental", "unchanged"}:
             mode = "normal"
         return runner_action(
             "context",
             "--evidence",
-            cast(str, progress["evidence_path"]),
+            cast("str", progress["evidence_path"]),
             "--repo-root",
             repo_root or "<checkout>",
             "--incremental",
-            cast(str, progress.get("incremental") or "auto"),
+            cast("str", progress.get("incremental") or "auto"),
             "--review-mode",
             mode,
             "--locale",
-            cast(str, progress.get("locale") or "en"),
+            cast("str", progress.get("locale") or "en"),
             required_inputs=("repo_root",) if repo_root is None else (),
         )
     if stage == "critic_missing":
@@ -3470,7 +3468,7 @@ def restart_action(
     url = target.get("url") if isinstance(target, dict) else None
     if not portable.nonempty_string(url):
         return None
-    arguments = ["--url", cast(str, url)]
+    arguments = ["--url", cast("str", url)]
     repo_root = progress.get("repo_root") if progress is not None else None
     mode = progress.get("mode") if progress is not None else None
     locale = progress.get("locale") if progress is not None else None
@@ -3480,11 +3478,11 @@ def restart_action(
     arguments.extend(
         (
             "--review-mode",
-            cast(str, mode) if mode in {"fast", "normal", "deep"} else "normal",
+            cast("str", mode) if mode in {"fast", "normal", "deep"} else "normal",
             "--locale",
-            cast(str, locale) if locale in SUPPORTED_LOCALES else "en",
+            cast("str", locale) if locale in SUPPORTED_LOCALES else "en",
             "--incremental",
-            cast(str, incremental) if incremental in {"auto", "off"} else "auto",
+            cast("str", incremental) if incremental in {"auto", "off"} else "auto",
         )
     )
     return runner_action("prepare", *arguments)
@@ -3500,7 +3498,7 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
         or progress["evidence_digest"] != evidence_digest
     ):
         progress = empty_progress(evidence_path, evidence_digest)
-    locale = cast(str, progress.get("locale") or "en")
+    locale = cast("str", progress.get("locale") or "en")
     actual_stage = "prepared"
     reason = "review context has not been collected"
     context: dict[str, Any] | None = None
@@ -3529,7 +3527,7 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
                 if critic_artifact is not None:
                     _, critic, _ = critic_artifact
                     scope_digest = (
-                        cast(dict[str, Any], context["incremental"])["incremental_delta_digest"]
+                        cast("dict[str, Any]", context["incremental"])["incremental_delta_digest"]
                         if mode == "incremental"
                         else None
                     )
@@ -3592,7 +3590,7 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
         "stale" if stale_plan_reason is not None and actual_stage != "plan_ready" else actual_stage
     )
     next_stage = actual_stage if stage == "stale" else stage
-    result = {
+    return {
         "status": "ok" if actual_stage == "plan_ready" else "incomplete",
         "stage": stage,
         "resume_stage": next_stage if stage == "stale" else None,
@@ -3610,7 +3608,6 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
         "next_action": next_action_for_stage(next_stage, root, progress),
         "external_mutations": False,
     }
-    return result
 
 
 def review_status(artifact_root: str) -> dict[str, Any]:
@@ -3623,10 +3620,8 @@ def review_status(artifact_root: str) -> dict[str, Any]:
         except portable.WorkflowError:
             evidence = {}
         progress = None
-        try:
+        with suppress(portable.WorkflowError):
             progress = load_progress(root)
-        except portable.WorkflowError:
-            pass
         return {
             "status": "incomplete",
             "stage": "stale",
@@ -3659,17 +3654,18 @@ def write_review_draft(root: Path, name: str, identity: str, value: dict[str, An
 def content_template(
     evidence: dict[str, Any], context: dict[str, Any], decision: dict[str, Any], locale: str
 ) -> dict[str, Any]:
-    incremental = cast(dict[str, Any], context["incremental"])
-    accepted = cast(list[dict[str, Any]], decision.get("accepted_findings", []))
+    incremental = cast("dict[str, Any]", context["incremental"])
+    accepted = cast("list[dict[str, Any]]", decision.get("accepted_findings", []))
     primary_by_id = {
-        str(item["id"]): item for item in cast(list[dict[str, Any]], decision.get("findings", []))
+        str(item["id"]): item for item in cast("list[dict[str, Any]]", decision.get("findings", []))
     }
     critic_by_id = {
         str(item["id"]): item
-        for item in cast(list[dict[str, Any]], decision.get("critic_findings", []))
+        for item in cast("list[dict[str, Any]]", decision.get("critic_findings", []))
     }
     responses = {
-        str(item["id"]): item for item in cast(list[dict[str, Any]], decision.get("responses", []))
+        str(item["id"]): item
+        for item in cast("list[dict[str, Any]]", decision.get("responses", []))
     }
     rejected_candidates: list[dict[str, Any]] = []
     for item_id, finding in {**primary_by_id, **critic_by_id}.items():
@@ -3690,8 +3686,8 @@ def content_template(
         )
     previous_assessments = []
     for kind, values in (
-        ("finding", cast(list[dict[str, Any]], incremental["previous_findings"])),
-        ("issue", cast(list[dict[str, Any]], incremental["previous_recommended_issues"])),
+        ("finding", cast("list[dict[str, Any]]", incremental["previous_findings"])),
+        ("issue", cast("list[dict[str, Any]]", incremental["previous_recommended_issues"])),
     ):
         for item in values:
             previous_assessments.append(
@@ -3768,7 +3764,9 @@ def content_template(
         "rejected_candidates": rejected_candidates,
         "rejected_candidate_assessments": [
             {"id": item["id"], "decision": "still_rejected", "reason": ""}
-            for item in cast(list[dict[str, Any]], incremental["reconsidered_rejected_candidates"])
+            for item in cast(
+                "list[dict[str, Any]]", incremental["reconsidered_rejected_candidates"]
+            )
         ],
         "thread_decisions": threads,
     }
@@ -3792,7 +3790,7 @@ def ci_problem_jobs(evidence: dict[str, Any]) -> tuple[list[dict[str, Any]], boo
             continue
         for job in child.get("jobs", []):
             if isinstance(job, dict) and job.get("status") in {"failed", "canceled"}:
-                problems.append(cast(dict[str, Any], job))
+                problems.append(cast("dict[str, Any]", job))
     complete = pipelines.get("complete") is True and job_evidence.get("complete") is True
     return problems, complete, status
 
@@ -3830,7 +3828,7 @@ def ci_blocks_ready(evidence: dict[str, Any], assessments: object) -> bool:
     for raw in assessments:
         if not isinstance(raw, dict):
             raise portable.WorkflowError("CI job assessments are invalid")
-        item = cast(dict[str, Any], raw)
+        item = cast("dict[str, Any]", raw)
         key = (item.get("project_id"), item.get("pipeline_id"), item.get("job_id"))
         if (
             key in actual
@@ -3862,7 +3860,7 @@ def ci_blocks_ready(evidence: dict[str, Any], assessments: object) -> bool:
     if not complete or normalized_status not in {"success", "failed"}:
         return True
     pipeline = portable.select_exact_pipeline(
-        cast(dict[str, object], evidence["pipelines"]), cast(str, evidence["head_sha"])
+        cast("dict[str, object]", evidence["pipelines"]), cast("str", evidence["head_sha"])
     )
     job_evidence = pipeline.get("job_evidence") if pipeline is not None else None
     terminal_statuses = {"success", "skipped", "manual", "failed", "canceled"}
@@ -3882,20 +3880,20 @@ def ci_blocks_ready(evidence: dict[str, Any], assessments: object) -> bool:
 def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
     status = review_status(artifact_root)
     root = portable.artifact_root(Path(artifact_root))
-    progress = cast(dict[str, Any], load_progress(root))
+    progress = cast("dict[str, Any]", load_progress(root))
     evidence_path, evidence = review_evidence_from_root(root)
     evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
     context_artifact = progress_artifact(root, progress, "context", "review_context")
     if context_artifact is None:
         raise portable.WorkflowError("review context is required before template creation")
     context_path, context, context_digest = context_artifact
-    mode = cast(str, progress["mode"])
-    locale = cast(str, progress["locale"])
+    mode = cast("str", progress["mode"])
+    locale = cast("str", progress["locale"])
     if kind == "critic":
         expected_stage = status.get("resume_stage") or status["stage"]
         if expected_stage != "critic_missing":
             raise portable.WorkflowError("critic template is not the next review stage")
-        incremental = cast(dict[str, Any], context["incremental"])
+        incremental = cast("dict[str, Any]", context["incremental"])
         value: dict[str, Any] = {
             "schema": "portable-gitlab/critic-receipt/v2",
             "evidence_digest": evidence_digest,
@@ -3908,7 +3906,7 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
             value["scope_digest"] = incremental["incremental_delta_digest"]
             value["target_finding_ids"] = sorted(
                 str(item["id"])
-                for item in cast(list[dict[str, Any]], incremental["previous_findings"])
+                for item in cast("list[dict[str, Any]]", incremental["previous_findings"])
             )
         identity = evidence_digest
     elif kind == "decision":
@@ -3916,7 +3914,7 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
         if expected_stage != "decision_missing":
             raise portable.WorkflowError("decision template is not the next review stage")
         finalize_artifact = cast(
-            tuple[Path, dict[str, Any], str],
+            "tuple[Path, dict[str, Any], str]",
             progress_artifact(root, progress, "finalize_report", "finalize_report"),
         )
         _, _, finalize_digest = finalize_artifact
@@ -3964,7 +3962,7 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
         if expected_stage != "content_missing":
             raise portable.WorkflowError("content template is not the next review stage")
         decision_artifact = cast(
-            tuple[Path, dict[str, Any], str],
+            "tuple[Path, dict[str, Any], str]",
             progress_artifact(root, progress, "decision", "review_decision"),
         )
         _, decision, decision_digest = decision_artifact
@@ -3992,12 +3990,12 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
             "--context",
             str(context_path),
             "--finalize-report",
-            cast(str, progress["finalize_report_path"]),
+            cast("str", progress["finalize_report_path"]),
             "--mode",
             mode,
         ]
         if progress["critic_receipt_path"] is not None:
-            arguments.extend(("--critic-receipt", cast(str, progress["critic_receipt_path"])))
+            arguments.extend(("--critic-receipt", cast("str", progress["critic_receipt_path"])))
         next_action = runner_action("finalize-review", *arguments)
     else:
         next_action = runner_action(
@@ -4007,7 +4005,7 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
             "--context",
             str(context_path),
             "--decision",
-            cast(str, progress["decision_path"]),
+            cast("str", progress["decision_path"]),
             "--content",
             str(path),
         )
@@ -4038,9 +4036,9 @@ def validate_review_verdict(
     ):
         raise portable.WorkflowError("blocking finding IDs are invalid")
     else:
-        blocking_ids = set(cast(list[str], blocking_value))
+        blocking_ids = set(cast("list[str]", blocking_value))
     if (
-        len(blocking_ids) != len(cast(list[str], blocking_value or list(blocking_ids)))
+        len(blocking_ids) != len(cast("list[str]", blocking_value or list(blocking_ids)))
         or blocking_ids != expected_blocking_ids
         or report.get("blocking_findings") is not bool(blocking_ids)
     ):
@@ -4053,9 +4051,7 @@ def validate_review_verdict(
         raise portable.WorkflowError("blocking CI evidence requires an owner decision reason")
     if blocking_ids:
         expected = "not_ready"
-    elif ci_blocked:
-        expected = "blocked"
-    elif reasons:
+    elif ci_blocked or reasons:
         expected = "blocked"
     else:
         expected = "ready"
@@ -4066,7 +4062,7 @@ def validate_review_verdict(
 
 
 def blocked_chat(locale: str, stage: str, reason: str, action: object) -> str:
-    command = cast(dict[str, Any], action).get("command") if isinstance(action, dict) else None
+    command = cast("dict[str, Any]", action).get("command") if isinstance(action, dict) else None
     labels = portable.code_review_chat_labels(locale)
     lines = [
         labels["blocked_title"],
@@ -4081,22 +4077,22 @@ def blocked_chat(locale: str, stage: str, reason: str, action: object) -> str:
 
 def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -> str:
     assessment = validate_chat_assessment(plan.get("chat_assessment"))
-    presentation = cast(dict[str, Any], plan["presentation"])
-    locale = cast(str, plan["locale"])
-    metadata = cast(dict[str, Any], plan["mr_metadata_assessment"])["assessment"]["overall"]
+    presentation = cast("dict[str, Any]", plan["presentation"])
+    locale = cast("str", plan["locale"])
+    metadata = cast("dict[str, Any]", plan["mr_metadata_assessment"])["assessment"]["overall"]
     labels = portable.code_review_chat_labels(locale)
-    exact_git = cast(dict[str, Any], context["exact_git"])
-    necessity = cast(dict[str, Any], assessment["necessity"])
-    relevance = cast(dict[str, Any], assessment["relevance"])
-    necessity_values = cast(dict[str, str], labels["necessity_values"])
-    relevance_values = cast(dict[str, str], labels["relevance_values"])
-    metadata_values = cast(dict[str, str], labels["metadata_values"])
+    exact_git = cast("dict[str, Any]", context["exact_git"])
+    necessity = cast("dict[str, Any]", assessment["necessity"])
+    relevance = cast("dict[str, Any]", assessment["relevance"])
+    necessity_values = cast("dict[str, str]", labels["necessity_values"])
+    relevance_values = cast("dict[str, str]", labels["relevance_values"])
+    metadata_values = cast("dict[str, str]", labels["metadata_values"])
     lines = []
     if plan["mode"] == "incremental":
         lines.extend([presentation["incremental_notice"], ""])
     lines.extend(
         [
-            cast(str, labels["title"]),
+            cast("str", labels["title"]),
             "",
             f"- **{labels['role']}:** {presentation['role_value']}",
             f"- **{labels['necessity']}:** {necessity_values[necessity['status']]} - {necessity['rationale']}",
@@ -4121,7 +4117,7 @@ def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -
 
 def _report_review(artifact_root: str) -> dict[str, Any]:
     status = review_status(artifact_root)
-    locale = cast(str, status.get("locale") or "en")
+    locale = cast("str", status.get("locale") or "en")
     if status["stage"] != "plan_ready":
         return {
             "status": "blocked",
@@ -4129,8 +4125,8 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
             "reason": status["reason"],
             "chat": blocked_chat(
                 locale,
-                cast(str, status["stage"]),
-                cast(str, status["reason"]),
+                cast("str", status["stage"]),
+                cast("str", status["reason"]),
                 status["next_action"],
             ),
             "next_action": status["next_action"],
@@ -4147,7 +4143,7 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
         raise portable.WorkflowError("code-review progress is unavailable")
     recovery = restart_action(root, evidence, progress)
     current = portable.collect(
-        cast(dict[str, Any], evidence["target"]), "code-review", persist=False
+        cast("dict[str, Any]", evidence["target"]), "code-review", persist=False
     )
     if current.get("retrieval_complete") is not True or portable.fingerprint(
         current
@@ -4157,7 +4153,7 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
             "status": "blocked",
             "stage": "stale",
             "reason": blocked["reason"],
-            "chat": blocked_chat(locale, "stale", cast(str, blocked["reason"]), recovery),
+            "chat": blocked_chat(locale, "stale", cast("str", blocked["reason"]), recovery),
             "next_action": recovery,
             "external_mutations": False,
         }
@@ -4177,7 +4173,7 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
             "next_action": recovery,
             "external_mutations": False,
         }
-    chat = review_chat(plan, context, cast(str, pointer["markdown_path"]))
+    chat = review_chat(plan, context, cast("str", pointer["markdown_path"]))
     reject_visible_raw_refs(chat, evidence, context)
     return {
         "status": "ok",
@@ -4205,7 +4201,7 @@ def report_review(artifact_root: str) -> dict[str, Any]:
             except portable.WorkflowError:
                 progress = None
             if progress is not None and progress.get("locale") in SUPPORTED_LOCALES:
-                locale = cast(str, progress["locale"])
+                locale = cast("str", progress["locale"])
             next_action = restart_action(root, evidence, progress)
         except portable.WorkflowError:
             pass

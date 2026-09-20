@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
 from scripts import build_skills
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def isolated_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -136,7 +139,7 @@ def test_source_check_rejects_generated_copy_entrypoint_and_symlink(
 
     target.unlink()
     (sources / "foo/SKILL.md").write_text("generated\n", encoding="utf-8")
-    with pytest.raises(build_skills.BuildError, match="generated SKILL.md"):
+    with pytest.raises(build_skills.BuildError, match=r"generated SKILL\.md"):
         build_skills.check_sources(entries)
     (sources / "foo/SKILL.md").unlink()
 

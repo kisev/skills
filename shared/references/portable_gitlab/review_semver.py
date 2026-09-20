@@ -8,7 +8,6 @@ from urllib.parse import quote
 
 from . import contract as portable
 
-
 IMPACTS = {"major", "minor", "patch", "none", "not_applicable"}
 
 
@@ -122,7 +121,7 @@ def validate(value: object, evidence: dict[str, Any], context: dict[str, Any]) -
         raise portable.WorkflowError(
             "SemVer assessment requires a release basis or explicit target fallback"
         )
-    result = cast(dict[str, Any], value)
+    result = cast("dict[str, Any]", value)
     release = context["release_evidence"]
     expected_sha = release["target_sha"] or evidence["start_sha"]
     if (

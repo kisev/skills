@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import tempfile
@@ -93,10 +94,8 @@ def atomic_write_json(path: Path, root: Path, value: dict[str, Any]) -> None:
             os.fsync(handle.fileno())
         os.replace(temporary, path)
     finally:
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.unlink(temporary)
-        except FileNotFoundError:
-            pass
 
 
 def append_json_line(path: Path, root: Path, value: dict[str, Any]) -> None:

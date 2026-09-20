@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import copy
 import subprocess
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from shared.references.portable_gitlab import contract, review_semver
 from shared.references.portable_gitlab.label_assessment import validate_label_assessments
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def fallback_assessment(target_sha: str = "b") -> dict[str, Any]:

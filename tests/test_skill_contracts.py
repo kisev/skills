@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
-import re
 
 from scripts.build_skills import manifest_entries
 

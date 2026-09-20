@@ -17,7 +17,6 @@ import uuid
 from pathlib import Path
 from typing import Any, NoReturn
 
-
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_VERSION = 1
 SCENARIO_SCHEMA = "eval-scenario/v1"
@@ -177,7 +176,9 @@ def offline_runner_config(
         )
     if not all(isinstance(value, str) and value for value in (skill, script, target)):
         raise EvalError("malformed_scenario", f"{filename}: offline_runner values are invalid")
-    assert isinstance(skill, str) and isinstance(script, str) and isinstance(target, str)
+    assert isinstance(skill, str)
+    assert isinstance(script, str)
+    assert isinstance(target, str)
     skill_path = safe_relative(skill)
     script_path = safe_relative(script)
     if len(skill_path.parts) != 1 or script_path == Path("."):
@@ -603,7 +604,7 @@ def assertions_for_invariants(scenario: dict[str, Any], root: Path) -> list[dict
 def expected_assertions(
     scenario: dict[str, Any], observation: dict[str, Any]
 ) -> list[dict[str, Any]]:
-    selected = set(str(item) for item in observation.get("selected", []))
+    selected = {str(item) for item in observation.get("selected", [])}
     result: list[dict[str, Any]] = []
     for name in sorted(str(item) for item in scenario["expected"].get("selected", [])):
         result.append(
@@ -695,7 +696,7 @@ def offline_observation(scenario: dict[str, Any], root: Path) -> dict[str, Any]:
         state.write_text("fresh", encoding="utf-8")
         glab = sandbox / "glab"
         glab.write_text(
-            """#!%s
+            f"""#!{sys.executable}
 import json
 import os
 import sys
@@ -704,27 +705,26 @@ endpoint = sys.argv[-1]
 Path(os.environ["FAKE_GLAB_LOG"]).open("a", encoding="utf-8").write(json.dumps(sys.argv[1:]) + "\\n")
 changed = Path(os.environ["FAKE_GLAB_STATE"]).read_text(encoding="utf-8") == "changed"
 review_sha = os.environ["FAKE_REVIEW_SHA"]
-if endpoint.startswith("projects/group%%2Fproject"):
-    value = {"id": 19}
+if endpoint.startswith("projects/group%2Fproject"):
+    value = {{"id": 19}}
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "title": "Review fixture", "description": "Fixture", "source_branch": "feature", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": "author"}, "state": "opened", "labels": [], "updated_at": "changed" if changed else "fresh", "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
+    value = {{"iid": 7, "title": "Review fixture", "description": "Fixture", "source_branch": "feature", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {{"username": "author"}}, "state": "opened", "labels": [], "updated_at": "changed" if changed else "fresh", "diff_refs": {{"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}}}
 elif endpoint == "projects/19/merge_requests/7/changes":
-    value = {"changes": [], "diff_refs": {"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}
+    value = {{"changes": [], "diff_refs": {{"base_sha": review_sha, "start_sha": review_sha, "head_sha": review_sha}}}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
-    value = [{"id": review_sha}]
+    value = [{{"id": review_sha}}]
 elif endpoint.startswith("projects/19/pipelines?sha="):
-    value = [{"id": 41, "sha": review_sha, "status": "success"}]
+    value = [{{"id": 41, "sha": review_sha, "status": "success"}}]
 elif endpoint.startswith("projects/19/pipelines/41/jobs"):
-    value = [{"id": 51, "name": "test", "stage": "test", "status": "success"}]
+    value = [{{"id": 51, "name": "test", "stage": "test", "status": "success"}}]
 elif endpoint.startswith("projects/19/pipelines/41/bridges"):
     value = []
 elif endpoint == "user":
-    value = {"id": 23, "username": "reviewer"}
+    value = {{"id": 23, "username": "reviewer"}}
 else:
     value = []
 print(json.dumps(value))
-"""
-            % sys.executable,
+""",
             encoding="utf-8",
         )
         glab.chmod(0o755)
@@ -1295,7 +1295,8 @@ def run_host(
             "skipped",
             [],
         )
-    assert args.model is not None and args.timeout is not None
+    assert args.model is not None
+    assert args.timeout is not None
     sandbox_parent = Path(tempfile.mkdtemp(prefix="skills-eval-"))
     sandbox = sandbox_parent / "sandbox"
     project = sandbox / "project"
@@ -1420,7 +1421,8 @@ def result_for(scenario: dict[str, Any], args: argparse.Namespace, root: Path) -
     assertions.extend(observation.get("runner_assertions", []))
     effective_budgets = dict(scenario["budgets"])
     if not args.offline:
-        assert args.max_tokens is not None and args.max_cost is not None
+        assert args.max_tokens is not None
+        assert args.max_cost is not None
         effective_budgets["max_tokens"] = min(effective_budgets["max_tokens"], args.max_tokens)
         effective_budgets["max_cost"] = min(effective_budgets["max_cost"], args.max_cost)
     if args.offline:

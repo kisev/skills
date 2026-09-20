@@ -13,11 +13,12 @@ import urllib.request
 from functools import partial
 from pathlib import Path
 from subprocess import run
-
-import pytest
+from typing import TYPE_CHECKING
 
 from scripts import build_distribution
 
+if TYPE_CHECKING:
+    import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".build" / "packages" / "skills"

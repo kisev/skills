@@ -23,7 +23,6 @@ from scripts.eval_runner import (
     validate_scenario,
 )
 
-
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "eval_runner.py"
 GOAL_AUTHORIZATION = ROOT / ".build/skills/docs-prepare/scripts/goal_authorization.py"
@@ -97,12 +96,12 @@ def live_arguments(host: str, executable: Path, output: Path, *extra: str) -> tu
 
 
 def payload(result: subprocess.CompletedProcess[str]) -> dict[str, Any]:
-    return cast(dict[str, Any], json.loads(result.stdout))
+    return cast("dict[str, Any]", json.loads(result.stdout))
 
 
 def goal_scenario() -> dict[str, Any]:
     return cast(
-        dict[str, Any],
+        "dict[str, Any]",
         json.loads(
             (ROOT / "evals/scenarios/goal-mode-authorization.json").read_text(encoding="utf-8")
         ),
@@ -111,7 +110,7 @@ def goal_scenario() -> dict[str, Any]:
 
 def gitlab_scenario() -> dict[str, Any]:
     return cast(
-        dict[str, Any],
+        "dict[str, Any]",
         json.loads(
             (ROOT / "evals/scenarios/gitlab.evidence-contract.json").read_text(encoding="utf-8")
         ),
@@ -119,7 +118,7 @@ def gitlab_scenario() -> dict[str, Any]:
 
 
 def legacy_gitlab_scenario() -> dict[str, Any]:
-    return cast(dict[str, Any], json.loads(LEGACY_GITLAB_V2.read_text(encoding="utf-8")))
+    return cast("dict[str, Any]", json.loads(LEGACY_GITLAB_V2.read_text(encoding="utf-8")))
 
 
 def run_goal_authorization(
@@ -248,8 +247,8 @@ def test_portable_gitlab_uses_one_deadline_for_every_subprocess(
     commands: list[str] = []
 
     def recording_deadline(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        deadlines.append(cast(float, kwargs["deadline"]))
-        argv = cast(list[str], args[0])
+        deadlines.append(cast("float", kwargs["deadline"]))
+        argv = cast("list[str]", args[0])
         commands.append(
             next(
                 value

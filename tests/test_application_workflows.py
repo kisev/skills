@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import io
-import importlib.util
 import hashlib
+import importlib.util
+import io
 import json
 import os
 import shlex
@@ -10,13 +10,14 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from urllib.request import Request
+from contextlib import nullcontext, redirect_stdout
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
-from contextlib import nullcontext, redirect_stdout
 
+if TYPE_CHECKING:
+    from urllib.request import Request
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILT_SKILLS = ROOT / ".build" / "skills"
@@ -65,7 +66,7 @@ class PortableWorkflowTests(unittest.TestCase):
         state.write_text("fresh", encoding="utf-8")
         executable = directory / "glab"
         executable.write_text(
-            """#!%s
+            f"""#!{sys.executable}
 import json
 import os
 import sys
@@ -78,12 +79,12 @@ head_sha = os.environ.get("FAKE_HEAD_SHA", "c")
 base_sha = os.environ.get("FAKE_BASE_SHA", "a")
 start_sha = os.environ.get("FAKE_START_SHA", "b")
 changed_path = os.environ.get("FAKE_CHANGED_PATH")
-if endpoint.startswith("projects/group%%2Fproject"):
-    value = {"id": 19, "path_with_namespace": "group/project", "default_branch": "main", "merge_requests_template": os.environ.get("FAKE_MR_DEFAULT_TEMPLATE")}
+if endpoint.startswith("projects/group%2Fproject"):
+    value = {{"id": 19, "path_with_namespace": "group/project", "default_branch": "main", "merge_requests_template": os.environ.get("FAKE_MR_DEFAULT_TEMPLATE")}}
 elif endpoint == "projects/19/repository/commits/main":
-    value = {"id": "a"}
+    value = {{"id": "a"}}
 elif endpoint == "projects/19/repository/branches/main":
-    value = {"name": "main", "commit": {"id": os.environ["FAKE_TARGET_SHA"]}} if "FAKE_TARGET_SHA" in os.environ else []
+    value = {{"name": "main", "commit": {{"id": os.environ["FAKE_TARGET_SHA"]}}}} if "FAKE_TARGET_SHA" in os.environ else []
 elif endpoint.startswith("projects/19/releases?"):
     value = json.loads(os.environ.get("FAKE_RELEASES", "[]"))
 elif endpoint.startswith("projects/19/repository/tree?"):
@@ -95,40 +96,39 @@ elif endpoint.startswith("projects/19/repository/tree?"):
     if not templates:
         value = []
     elif path == "":
-        value = [{"type": "tree", "path": ".gitlab"}]
+        value = [{{"type": "tree", "path": ".gitlab"}}]
     elif path == ".gitlab":
-        value = [{"type": "tree", "path": ".gitlab/merge_request_templates"}]
+        value = [{{"type": "tree", "path": ".gitlab/merge_request_templates"}}]
     else:
-        value = [{"type": "blob", "path": ".gitlab/merge_request_templates/" + name} for name in templates]
+        value = [{{"type": "blob", "path": ".gitlab/merge_request_templates/" + name}} for name in templates]
 elif endpoint.startswith("projects/19/repository/files/"):
     import base64
     from urllib.parse import unquote
     path = unquote(endpoint.split("/files/", 1)[1].split("?", 1)[0])
-    value = {"file_path": path, "encoding": "base64", "content": base64.b64encode(b"## Context\\n\\n## Verification\\n").decode()}
+    value = {{"file_path": path, "encoding": "base64", "content": base64.b64encode(b"## Context\\n\\n## Verification\\n").decode()}}
 elif endpoint.startswith("projects/19/labels"):
-    value = json.loads(os.environ["FAKE_LABEL_CATALOG"]) if "FAKE_LABEL_CATALOG" in os.environ else [{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}, {"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}, {"name": "semver::major", "description": "Breaking compatibility"}, {"name": "semver::patch", "description": "Backward-compatible fix"}]
+    value = json.loads(os.environ["FAKE_LABEL_CATALOG"]) if "FAKE_LABEL_CATALOG" in os.environ else [{{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}}, {{"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}}, {{"name": "semver::major", "description": "Breaking compatibility"}}, {{"name": "semver::patch", "description": "Backward-compatible fix"}}]
 elif endpoint == "projects/19/merge_requests/7":
-    value = {"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {"username": os.environ.get("FAKE_AUTHOR_USER", "author")}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "updated_at": "changed" if changed else "fresh", "labels": json.loads(os.environ.get("FAKE_MR_LABELS", "[]")), "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
+    value = {{"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {{"username": os.environ.get("FAKE_AUTHOR_USER", "author")}}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "updated_at": "changed" if changed else "fresh", "labels": json.loads(os.environ.get("FAKE_MR_LABELS", "[]")), "diff_refs": {{"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}}}
 elif endpoint == "projects/19/merge_requests/7/changes":
-    value = {"changes": [{"old_path": changed_path, "new_path": changed_path}] if changed_path else [], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
+    value = {{"changes": [{{"old_path": changed_path, "new_path": changed_path}}] if changed_path else [], "diff_refs": {{"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
-    value = [{"id": head_sha}]
+    value = [{{"id": head_sha}}]
 elif "/repository/commits/" in endpoint and "/merge_requests?" in endpoint:
     sha = endpoint.split("/repository/commits/", 1)[1].split("/", 1)[0]
-    value = [{"id": 107, "iid": 17, "title": "Associated change", "description": "Component MR", "labels": ["type::feature"], "author": {"username": "developer"}, "web_url": "https://gitlab.example/group/project/-/merge_requests/17", "source_branch": "feature", "target_branch": "dev", "merge_commit_sha": None, "squash_commit_sha": sha, "merged_at": "2026-01-02T00:00:00Z", "state": "merged"}] if sha == os.environ.get("FAKE_ASSOCIATED_SHA") else []
+    value = [{{"id": 107, "iid": 17, "title": "Associated change", "description": "Component MR", "labels": ["type::feature"], "author": {{"username": "developer"}}, "web_url": "https://gitlab.example/group/project/-/merge_requests/17", "source_branch": "feature", "target_branch": "dev", "merge_commit_sha": None, "squash_commit_sha": sha, "merged_at": "2026-01-02T00:00:00Z", "state": "merged"}}] if sha == os.environ.get("FAKE_ASSOCIATED_SHA") else []
 elif "/repository/tags/" in endpoint:
-    value = {"name": endpoint.rsplit("/", 1)[-1], "created_at": "2026-01-01T00:00:00Z", "commit": {"created_at": "2026-01-01T00:00:00Z"}}
+    value = {{"name": endpoint.rsplit("/", 1)[-1], "created_at": "2026-01-01T00:00:00Z", "commit": {{"created_at": "2026-01-01T00:00:00Z"}}}}
 elif endpoint == "user":
-    value = {"id": 23, "username": os.environ.get("FAKE_CURRENT_USER", "reviewer")}
+    value = {{"id": 23, "username": os.environ.get("FAKE_CURRENT_USER", "reviewer")}}
 elif endpoint.startswith("projects/19/merge_requests/7/discussions"):
-    value = json.loads(os.environ["FAKE_DISCUSSIONS_JSON"]) if os.environ.get("FAKE_DISCUSSIONS_JSON") else ([{"id": "discussion-42", "notes": [{"id": 42, "system": False, "resolvable": True, "resolved": False, "author": {"username": "other-reviewer"}, "body": "Retry needs an idempotency key", "position": {"head_sha": head_sha, "new_path": changed_path, "new_line": 2}}]}] if os.environ.get("FAKE_DISCUSSION") else [])
+    value = json.loads(os.environ["FAKE_DISCUSSIONS_JSON"]) if os.environ.get("FAKE_DISCUSSIONS_JSON") else ([{{"id": "discussion-42", "notes": [{{"id": 42, "system": False, "resolvable": True, "resolved": False, "author": {{"username": "other-reviewer"}}, "body": "Retry needs an idempotency key", "position": {{"head_sha": head_sha, "new_path": changed_path, "new_line": 2}}}}]}}] if os.environ.get("FAKE_DISCUSSION") else [])
 elif endpoint.startswith("projects/19/merge_requests/7/notes"):
     value = json.loads(os.environ["FAKE_NOTES_JSON"]) if os.environ.get("FAKE_NOTES_JSON") else []
 else:
     value = []
 print(json.dumps(value))
-"""
-            % sys.executable,
+""",
             encoding="utf-8",
         )
         executable.chmod(0o755)
@@ -143,7 +143,7 @@ print(json.dumps(value))
         log = directory / "fake-publish.log"
         executable = directory / "glab"
         executable.write_text(
-            """#!%s
+            f"""#!{sys.executable}
 import json
 import os
 import sys
@@ -155,37 +155,37 @@ endpoint = arguments[-1]
 payload = json.load(sys.stdin) if "--input" in arguments else None
 state_path = Path(os.environ["FAKE_PUBLISH_STATE"])
 state = json.loads(state_path.read_text(encoding="utf-8"))
-Path(os.environ["FAKE_PUBLISH_LOG"]).open("a", encoding="utf-8").write(json.dumps({"argv": arguments, "inherited": os.environ.get("FAKE_INHERITED_OPTION")}) + "\\n")
+Path(os.environ["FAKE_PUBLISH_LOG"]).open("a", encoding="utf-8").write(json.dumps({{"argv": arguments, "inherited": os.environ.get("FAKE_INHERITED_OPTION")}}) + "\\n")
 catalog = json.loads(os.environ["FAKE_LABEL_CATALOG"])
 base_sha = os.environ["FAKE_BASE_SHA"]
 start_sha = os.environ["FAKE_START_SHA"]
 head_sha = os.environ["FAKE_HEAD_SHA"]
 if endpoint == "user":
-    value = {"id": 23, "username": "reviewer"}
-elif endpoint == "projects/group%%2Fproject":
-    value = {"id": 19, "path_with_namespace": "group/project"}
+    value = {{"id": 23, "username": "reviewer"}}
+elif endpoint == "projects/group%2Fproject":
+    value = {{"id": 19, "path_with_namespace": "group/project"}}
 elif endpoint.startswith("projects/19/labels"):
     value = catalog
 elif endpoint == "projects/19/merge_requests/7" and method == "GET":
-    value = {"iid": 7, "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "state": "merged", "labels": state["labels"], "diff_refs": {"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}
+    value = {{"iid": 7, "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "state": "merged", "labels": state["labels"], "diff_refs": {{"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}}}
 elif endpoint == "projects/19/merge_requests/7" and method == "PUT":
     add = [item for item in payload.get("add_labels", "").split(",") if item]
-    remove = {item for item in payload.get("remove_labels", "").split(",") if item}
+    remove = {{item for item in payload.get("remove_labels", "").split(",") if item}}
     state["labels"] = sorted((set(state["labels"]) - remove) | set(add), key=str.casefold)
     state_path.write_text(json.dumps(state), encoding="utf-8")
-    value = {"iid": 7, "labels": state["labels"]}
+    value = {{"iid": 7, "labels": state["labels"]}}
 elif endpoint.startswith("projects/19/merge_requests/7/discussions?"):
     value = state["discussions"]
 elif endpoint == "projects/19/merge_requests/7/discussions" and method == "POST":
-    note = {"id": 101, "system": False, "resolvable": False, "resolved": False, "author": {"id": 23, "username": "reviewer"}, "body": payload["body"], "position": payload.get("position")}
-    discussion = {"id": "finding-101", "notes": [note]}
+    note = {{"id": 101, "system": False, "resolvable": False, "resolved": False, "author": {{"id": 23, "username": "reviewer"}}, "body": payload["body"], "position": payload.get("position")}}
+    discussion = {{"id": "finding-101", "notes": [note]}}
     state["discussions"].append(discussion)
     state_path.write_text(json.dumps(state), encoding="utf-8")
     value = discussion
 elif endpoint.startswith("projects/19/merge_requests/7/notes?"):
     value = state["notes"]
 elif endpoint == "projects/19/merge_requests/7/discussions/discussion-42/notes" and method == "POST":
-    note = {"id": 100, "system": False, "resolvable": False, "resolved": False, "author": {"id": 23, "username": "reviewer"}, "body": payload["body"]}
+    note = {{"id": 100, "system": False, "resolvable": False, "resolved": False, "author": {{"id": 23, "username": "reviewer"}}, "body": payload["body"]}}
     state["discussions"][0]["notes"].append(note)
     state_path.write_text(json.dumps(state), encoding="utf-8")
     value = note
@@ -200,8 +200,7 @@ elif endpoint.startswith("projects/19/issues?"):
 else:
     value = []
 print(json.dumps(value))
-"""
-            % sys.executable,
+""",
             encoding="utf-8",
         )
         executable.chmod(0o755)
@@ -1766,9 +1765,8 @@ print(json.dumps(value))
             ],
         }
         for mode in ("normal", "deep"):
-            with self.subTest(mode=mode):
-                with self.assertRaises(module.WorkflowError):
-                    module.validate_decision(report, "evidence", None, mode)
+            with self.subTest(mode=mode), self.assertRaises(module.WorkflowError):
+                module.validate_decision(report, "evidence", None, mode)
         with self.assertRaises(module.WorkflowError):
             module.validate_decision(report, "evidence", None, "fast")
         report["low_risk"] = True
@@ -4047,9 +4045,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             "https://chat.example/team/unknown/general",
             "https://user@chat.example/team/pl/post-1",
         ):
-            with self.subTest(value=value):
-                with self.assertRaises(module.MattermostError):
-                    module.classify_url(value)
+            with self.subTest(value=value), self.assertRaises(module.MattermostError):
+                module.classify_url(value)
 
     def test_mattermost_pagination_deduplicates_and_marks_repeated_pages_partial(self) -> None:
         module = self.mattermost_module("pages")
@@ -4165,7 +4162,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                             )
             observed = json.loads(output.getvalue())
             self.assertIsInstance(observed, dict)
-            return cast(dict[str, object], observed)
+            return cast("dict[str, object]", observed)
 
         for client, max_pages, error_code in (
             (ErrorClient(), None, "page_unavailable"),
@@ -4174,7 +4171,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             with self.subTest(error_code=error_code):
                 observed = read_exit(client, max_pages=max_pages)
                 self.assertEqual(observed["status"], "partial")
-                errors = cast(list[dict[str, object]], observed["errors"])
+                errors = cast("list[dict[str, object]]", observed["errors"])
                 self.assertIsInstance(errors, list)
                 self.assertIsInstance(errors[0], dict)
                 self.assertEqual(errors[0]["code"], error_code)
@@ -4231,10 +4228,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(result["members"][0]["username"], "alice")
         self.assertEqual(result["unresolved_ids"], ["two"])
         self.assertTrue(
-            all(
-                "channel-id" in path or path.startswith("/teams/") or path.startswith("/users/")
-                for path in calls
-            )
+            all("channel-id" in path or path.startswith(("/teams/", "/users/")) for path in calls)
         )
 
     def test_mattermost_cache_is_identity_bound_expiring_and_revalidated(self) -> None:
@@ -4325,7 +4319,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             def read(self, _: int) -> bytes:
                 return b'{"id":"viewer"}'
 
-            def __enter__(self) -> "Response":
+            def __enter__(self) -> Response:
                 return self
 
             def __exit__(self, *arguments: object) -> None:
@@ -4460,8 +4454,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertTrue(
             all(
                 "channel-id" in path
-                or path.startswith("/teams/")
-                or path.startswith("/users/one")
+                or path.startswith(("/teams/", "/users/one"))
                 or path == "/users/me"
                 for path in calls
             )

@@ -47,8 +47,8 @@ def _pair(value: object, label: str) -> tuple[str, str]:
 
 
 def _records(root: Path, manifest: dict[str, object]) -> list[tuple[str, str, bool]]:
-    pairs = cast(list[object], manifest["pairs"])
-    patterns = cast(list[object], manifest["patterns"])
+    pairs = cast("list[object]", manifest["pairs"])
+    patterns = cast("list[object]", manifest["patterns"])
     records = [(*_pair(item, f"pair {index}"), True) for index, item in enumerate(pairs)]
     for index, item in enumerate(patterns):
         english, russian = _pair(item, f"pattern {index}")
@@ -140,7 +140,7 @@ def _block_signature(text: str) -> list[str]:
         if TABLE_ROW.fullmatch(line):
             if paragraph or quote:
                 flush()
-            columns = len([cell for cell in stripped.strip("|").split("|")])
+            columns = len(list(stripped.strip("|").split("|")))
             if table_columns is None:
                 table_columns = columns
             elif table_columns != columns:
@@ -219,7 +219,7 @@ def validate(root: Path = ROOT, built: Path | None = None) -> int:
     paths = [path for english, russian, _ in records for path in (english, russian)]
     if len(paths) != len(set(paths)):
         raise LocaleError("duplicate translated path")
-    neutral = cast(list[str], manifest["neutral"])
+    neutral = cast("list[str]", manifest["neutral"])
     if len(neutral) != len(set(neutral)):
         raise LocaleError("neutral paths must be unique")
     for english, russian, require_language_link in records:

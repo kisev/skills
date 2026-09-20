@@ -26,11 +26,27 @@ class VerificationError(Exception):
 
 
 def fetch(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "kisev-skills-release-check"})
-    with urllib.request.urlopen(request, timeout=20) as response:
+    require_https(url)
+    request = urllib.request.Request(  # noqa: S310
+        url, headers={"User-Agent": "kisev-skills-release-check"}
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+        require_https(response.geturl())
         if response.status != 200:
             raise VerificationError(f"HTTP {response.status}: {url}")
         return bytes(response.read())
+
+
+def require_https(url: str) -> None:
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+    ):
+        raise VerificationError("distribution URLs must use credential-free HTTPS")
 
 
 def verify_manifest_files(base: str, manifest_path: Path) -> int:

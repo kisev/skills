@@ -129,9 +129,9 @@ def validate(value: object) -> dict[str, Any]:
         if item["existing_iid"] is not None and not positive(item["existing_iid"]):
             raise WorkflowError("existing_iid must be an observed positive IID or null")
         checks = fields(item["checks"], CHECKS, "checks")
-        for check in checks.values():
-            check = fields(check, {"status", "detail"}, "check")
-            if check["status"] not in ("verified", "blocked") or not text(check["detail"]):
+        for raw_check in checks.values():
+            checked = fields(raw_check, {"status", "detail"}, "check")
+            if checked["status"] not in ("verified", "blocked") or not text(checked["detail"]):
                 raise WorkflowError("checks require verified/blocked status and evidence detail")
         metadata = item["metadata"]
         if not isinstance(metadata, dict) or set(metadata) - {
@@ -310,7 +310,7 @@ def write_bundle(root: Path, files: dict[str, bytes]) -> None:
         if parent.is_symlink():
             raise WorkflowError("publication directory must not use symlinks")
     if root.exists():
-        if not root.is_dir() or set(p.name for p in root.iterdir()) != set(files):
+        if not root.is_dir() or {p.name for p in root.iterdir()} != set(files):
             raise WorkflowError("publication directory already contains other work")
         for name, content in files.items():
             path = root / name

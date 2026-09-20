@@ -154,7 +154,7 @@ def test_npm_provenance_binds_artifact_workflow_and_revision(
 
 def test_trusted_publishing_rejects_an_old_npm(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(publish_npm_release, "command", lambda *_args: "11.5.0\n")
-    with pytest.raises(publish_npm_release.PublicationError, match="11.5.1"):
+    with pytest.raises(publish_npm_release.PublicationError, match=r"11\.5\.1"):
         publish_npm_release.require_trusted_publishing_npm()
 
 
@@ -170,6 +170,7 @@ def test_registry_tarball_download_retries_propagation(
             {
                 "__enter__": lambda self: self,
                 "__exit__": lambda self, *_args: None,
+                "geturl": lambda self: url,
                 "read": lambda self: b"tarball",
             },
         )(),
@@ -188,6 +189,58 @@ def test_registry_tarball_download_retries_propagation(
 
     assert publish_npm_release.download_registry_tarball(url, attempts=2, delay=0.01) == b"tarball"
     assert sleeps == [0.01]
+
+
+@pytest.mark.parametrize(
+    "registry",
+    ["https://registry.example/base?token=value", "https://registry.example/base#fragment"],
+)
+def test_registry_base_rejects_query_and_fragment(
+    monkeypatch: pytest.MonkeyPatch, registry: str
+) -> None:
+    monkeypatch.setenv("NPM_CONFIG_REGISTRY", registry)
+    with pytest.raises(publish_npm_release.PublicationError, match="credential-free HTTPS"):
+        publish_npm_release.registry_url("@example/package", "1.0.0")
+
+
+def test_registry_response_rejects_https_downgrade(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = type(
+        "Response",
+        (),
+        {
+            "__enter__": lambda self: self,
+            "__exit__": lambda self, *_args: None,
+            "geturl": lambda self: "http://registry.example/package",
+            "read": lambda self: b"{}",
+        },
+    )()
+    monkeypatch.setattr(
+        "scripts.publish_npm_release.urllib.request.urlopen", lambda *_args, **_kwargs: response
+    )
+
+    with pytest.raises(publish_npm_release.PublicationError, match="credential-free HTTPS"):
+        publish_npm_release.request_json("https://registry.example/package")
+
+
+def test_distribution_fetch_rejects_https_downgrade(monkeypatch: pytest.MonkeyPatch) -> None:
+    response = type(
+        "Response",
+        (),
+        {
+            "__enter__": lambda self: self,
+            "__exit__": lambda self, *_args: None,
+            "geturl": lambda self: "http://pages.example/index.json",
+            "read": lambda self: b"{}",
+            "status": 200,
+        },
+    )()
+    monkeypatch.setattr(
+        "scripts.verify_distribution_url.urllib.request.urlopen",
+        lambda *_args, **_kwargs: response,
+    )
+
+    with pytest.raises(verify_distribution_url.VerificationError, match="credential-free HTTPS"):
+        verify_distribution_url.fetch("https://pages.example/index.json")
 
 
 def test_registry_smoke_installs_the_optional_runtime_peer(

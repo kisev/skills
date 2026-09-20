@@ -15,7 +15,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE = ROOT / ".build" / "release"
@@ -33,7 +36,7 @@ class RegistryPending(PublicationError):
     """A read-only registry request can be retried."""
 
 
-def wait_for_registry(
+def wait_for_registry[T](
     stage: str,
     read: Callable[[], T | None],
     attempts: int,
@@ -71,9 +74,13 @@ def wait_for_registry(
 
 
 def request_json(url: str) -> dict[str, Any] | None:
-    request = urllib.request.Request(url, headers={"User-Agent": "kisev-skills-release-check"})
+    require_https(url)
+    request = urllib.request.Request(  # noqa: S310
+        url, headers={"User-Agent": "kisev-skills-release-check"}
+    )
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310
+            require_https(response.geturl())
             value = json.loads(response.read())
     except urllib.error.HTTPError as error:
         if error.code == 404:
@@ -124,7 +131,7 @@ def manifest() -> tuple[dict[str, Any], Path]:
     integrity = "sha512-" + base64.b64encode(hashlib.sha512(content).digest()).decode("ascii")
     if (
         len(content) != npm.get("size")
-        or hashlib.sha1(content).hexdigest() != npm.get("sha1")
+        or hashlib.sha1(content, usedforsecurity=False).hexdigest() != npm.get("sha1")
         or hashlib.sha512(content).hexdigest() != npm.get("sha512")
         or integrity != npm.get("integrity")
     ):
@@ -134,7 +141,29 @@ def manifest() -> tuple[dict[str, Any], Path]:
 
 def registry_url(name: str, version: str) -> str:
     registry = os.environ.get("NPM_CONFIG_REGISTRY", "https://registry.npmjs.org/").rstrip("/")
-    return f"{registry}/{urllib.parse.quote(name, safe='')}/{urllib.parse.quote(version, safe='')}"
+    parsed = require_https(registry, registry_base=True)
+    path = "/".join(
+        (
+            parsed.path.rstrip("/"),
+            urllib.parse.quote(name, safe=""),
+            urllib.parse.quote(version, safe=""),
+        )
+    )
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+def require_https(url: str, *, registry_base: bool = False) -> urllib.parse.SplitResult:
+    parsed = urllib.parse.urlsplit(url)
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.fragment
+        or (registry_base and parsed.query)
+    ):
+        raise PublicationError("registry URLs must use credential-free HTTPS")
+    return parsed
 
 
 def wait_for_metadata(
@@ -156,11 +185,15 @@ def download_registry_tarball(
     *,
     deadline: float | None = None,
 ) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "kisev-skills-release-check"})
+    require_https(url)
+    request = urllib.request.Request(  # noqa: S310
+        url, headers={"User-Agent": "kisev-skills-release-check"}
+    )
 
     def read() -> bytes | None:
         try:
-            with urllib.request.urlopen(request, timeout=30) as response:
+            with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+                require_https(response.geturl())
                 content = response.read()
                 if not isinstance(content, bytes):
                     raise PublicationError("registry tarball response is invalid")

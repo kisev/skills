@@ -6,8 +6,8 @@ import hashlib
 import json
 import shlex
 import sys
-from contextlib import contextmanager
 from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote
@@ -72,7 +72,7 @@ def collect_templates(host: str, project: dict[str, Any]) -> dict[str, Any]:
             )
             if not tree["complete"]:
                 raise portable.WorkflowError("template directory listing is incomplete")
-            entries = cast(list[object], tree["items"])
+            entries = cast("list[object]", tree["items"])
             if not all(
                 isinstance(item, dict)
                 and isinstance(item.get("path"), str)

@@ -496,7 +496,7 @@ class CacheStore:
                 database.close()
             raise CacheError(f"Mattermost cache is unavailable: {exc}") from exc
 
-    def __enter__(self) -> "CacheStore":
+    def __enter__(self) -> CacheStore:
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -1022,8 +1022,13 @@ class CacheStore:
     def status(self) -> dict[str, object]:
         try:
             counts = {
-                name: int(self.database.execute(f"SELECT COUNT(*) FROM {name}_v3").fetchone()[0])
-                for name in ("posts", "threads", "coverages")
+                "posts": int(self.database.execute("SELECT COUNT(*) FROM posts_v3").fetchone()[0]),
+                "threads": int(
+                    self.database.execute("SELECT COUNT(*) FROM threads_v3").fetchone()[0]
+                ),
+                "coverages": int(
+                    self.database.execute("SELECT COUNT(*) FROM coverages_v3").fetchone()[0]
+                ),
             }
             return {
                 "status": "ok",
@@ -1290,7 +1295,7 @@ def channel_post_page(
     clean_order = [item for item in order if IDENTIFIER.fullmatch(item)]
     malformed = malformed or len(clean_order) != len(order)
     malformed = malformed or len(clean_order) != len(set(clean_order))
-    malformed = malformed or bool(posts) and not clean_order
+    malformed = malformed or (bool(posts) and not clean_order)
     missing = [post_id for post_id in clean_order if post_id not in by_id]
     malformed = malformed or bool(missing)
     ordered = [by_id[post_id] for post_id in clean_order if post_id in by_id]
@@ -1713,7 +1718,8 @@ def read_one(
                 }
             )
         else:
-            assert access_channel is not None and period is not None
+            assert access_channel is not None
+            assert period is not None
             since_ms, until_ms = period_bounds(period, current_ms)
             (
                 posts,

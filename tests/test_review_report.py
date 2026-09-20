@@ -11,7 +11,6 @@ import pytest
 
 from tests.test_review_semver import fallback_assessment
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

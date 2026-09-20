@@ -146,14 +146,14 @@ def parse_diff(text: str) -> tuple[list[dict[str, object]], dict[str, list[str]]
                 raise ValueError("invalid hunk accumulator")
             hunks.append(hunk)
         elif line.startswith("+") and not line.startswith("+++"):
-            current["additions"] = cast(int, current["additions"]) + 1
+            current["additions"] = cast("int", current["additions"]) + 1
             added[str(current["path"])].append(line[1:])
             if hunk is not None:
-                hunk["additions"] = cast(int, hunk["additions"]) + 1
+                hunk["additions"] = cast("int", hunk["additions"]) + 1
         elif line.startswith("-") and not line.startswith("---"):
-            current["deletions"] = cast(int, current["deletions"]) + 1
+            current["deletions"] = cast("int", current["deletions"]) + 1
             if hunk is not None:
-                hunk["deletions"] = cast(int, hunk["deletions"]) + 1
+                hunk["deletions"] = cast("int", hunk["deletions"]) + 1
     return files, added
 
 
@@ -298,7 +298,7 @@ def build(
     step_by_path = {
         str(item["path"]): str(cluster["id"])
         for cluster in all_clusters
-        for item in cast(list[dict[str, object]], cluster["files"])
+        for item in cast("list[dict[str, object]]", cluster["files"])
     }
     relationships = [
         {
@@ -332,20 +332,20 @@ def build(
         },
         "statistics": {
             "files": len(files),
-            "hunks": sum(len(cast(list[object], item["hunks"])) for item in files),
-            "additions": sum(cast(int, item["additions"]) for item in files),
-            "deletions": sum(cast(int, item["deletions"]) for item in files),
+            "hunks": sum(len(cast("list[object]", item["hunks"])) for item in files),
+            "additions": sum(cast("int", item["additions"]) for item in files),
+            "deletions": sum(cast("int", item["deletions"]) for item in files),
         },
         "clusters": selected,
         "relationships": relationships,
         "coverage": {
             "files_total": len(files),
             "files_clustered": sum(
-                len(cast(list[object], cluster["files"])) for cluster in selected
+                len(cast("list[object]", cluster["files"])) for cluster in selected
             ),
             "complete": chunk_index is None,
             "uncovered_files": len(files)
-            - sum(len(cast(list[object], cluster["files"])) for cluster in selected),
+            - sum(len(cast("list[object]", cluster["files"])) for cluster in selected),
             "chunks": len(chunks),
             "chunk_size": chunk_size,
             "chunk_index": chunk_index,
@@ -357,7 +357,7 @@ def build(
                 "files": [
                     str(item["path"])
                     for cluster in chunk
-                    for item in cast(list[dict[str, object]], cluster["files"])
+                    for item in cast("list[dict[str, object]]", cluster["files"])
                 ],
             }
             for index, chunk in enumerate(chunks)
@@ -404,7 +404,9 @@ def main(argv: list[str] | None = None) -> int:
     ):
         return 0
     arguments = arguments_parser.parse_args(argv)
-    if arguments.chunk_size < 1 or arguments.chunk_index is not None and arguments.chunk_index < 0:
+    if arguments.chunk_size < 1 or (
+        arguments.chunk_index is not None and arguments.chunk_index < 0
+    ):
         arguments_parser.error("chunk size must be positive and chunk index must not be negative")
     try:
         repo = repository_root(arguments.repo_root)

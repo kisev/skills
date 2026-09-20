@@ -433,8 +433,7 @@ def inspect_profile(value: dict[str, Any], action: str) -> tuple[list[str], list
                     invalid.append(f"projects[{index}].{field}")
             if "id" in project and not (
                 is_text(project["id"])
-                or isinstance(project["id"], int)
-                and not isinstance(project["id"], bool)
+                or (isinstance(project["id"], int) and not isinstance(project["id"], bool))
             ):
                 invalid.append(f"projects[{index}].id")
             if "include" in project and not isinstance(project["include"], bool):
@@ -739,11 +738,14 @@ def inspect_action(value: Any, action: str, missing: list[str], invalid: list[st
     elif action == "roadmap":
         for field in ("document", "period", "history_policy"):
             inspect_text(action_value.get(field), f"{path}.{field}", missing, invalid)
-        if "status_legend" in action_value and not isinstance(action_value["status_legend"], dict):
-            invalid.append(f"{path}.status_legend")
-        elif "status_legend" in action_value and any(
-            not is_text(key) or not is_text(value)
-            for key, value in action_value["status_legend"].items()
+        if (
+            "status_legend" in action_value and not isinstance(action_value["status_legend"], dict)
+        ) or (
+            "status_legend" in action_value
+            and any(
+                not is_text(key) or not is_text(value)
+                for key, value in action_value["status_legend"].items()
+            )
         ):
             invalid.append(f"{path}.status_legend")
     elif action == "slides-prompts":

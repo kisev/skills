@@ -360,7 +360,7 @@ def write_json(path: Path, value: object) -> None:
 
 def write_bytes(path: Path, content: bytes) -> None:
     """Atomically replace a private mutable file."""
-    if path.is_symlink() or path.exists() and not path.is_file():
+    if path.is_symlink() or (path.exists() and not path.is_file()):
         raise WorkflowError("state path must be a regular non-symlink file")
     target = path.resolve()
     if target.parent != path.parent.resolve():
@@ -521,7 +521,7 @@ def findings_are_valid(value: object) -> bool:
 
 def detailed_findings_are_valid(value: object) -> bool:
     return findings_are_valid(value) and all(
-        isinstance(item, dict) and set(item) != {"id"} for item in cast(list[object], value)
+        isinstance(item, dict) and set(item) != {"id"} for item in cast("list[object]", value)
     )
 
 
@@ -529,9 +529,9 @@ def duplicate_detailed_finding_ids(value: object) -> list[list[str]]:
     if not detailed_findings_are_valid(value):
         return []
     groups: dict[str, list[str]] = {}
-    for finding in cast(list[dict[str, Any]], value):
+    for finding in cast("list[dict[str, Any]]", value):
         content = {key: item for key, item in finding.items() if key != "id"}
-        groups.setdefault(digest(content), []).append(cast(str, finding["id"]))
+        groups.setdefault(digest(content), []).append(cast("str", finding["id"]))
     return [item_ids for item_ids in groups.values() if len(item_ids) > 1]
 
 
@@ -563,37 +563,48 @@ def thread_decisions_are_valid(value: object) -> bool:
         )
         and (
             set(item) == legacy
-            or item.get("last_note_id") is not None
-            and is_digest(item.get("last_note_body_sha256"))
-            and is_digest(item.get("thread_sha256"))
+            or (
+                item.get("last_note_id") is not None
+                and is_digest(item.get("last_note_body_sha256"))
+                and is_digest(item.get("thread_sha256"))
+            )
         )
         and (set(item) != structured or isinstance(item.get("suggestion_applicable"), bool))
         and (
             set(item) not in (fix, materialized_fix)
-            or item.get("fix_mode") in {"suggestion", "patch", "not_required"}
-            and (
-                item.get("fixing_commit") is None
-                or isinstance(item.get("fixing_commit"), dict)
-                and set(item["fixing_commit"]) == {"title", "url"}
-                and all(nonempty_string(item["fixing_commit"].get(key)) for key in ("title", "url"))
-            )
-            and (
-                item.get("fix_mode") == "patch"
-                and nonempty_string(item.get("patch"))
-                or item.get("fix_mode") != "patch"
-                and item.get("patch") is None
+            or (
+                item.get("fix_mode") in {"suggestion", "patch", "not_required"}
+                and (
+                    item.get("fixing_commit") is None
+                    or (
+                        isinstance(item.get("fixing_commit"), dict)
+                        and set(item["fixing_commit"]) == {"title", "url"}
+                        and all(
+                            nonempty_string(item["fixing_commit"].get(key))
+                            for key in ("title", "url")
+                        )
+                    )
+                )
+                and (
+                    (item.get("fix_mode") == "patch" and nonempty_string(item.get("patch")))
+                    or (item.get("fix_mode") != "patch" and item.get("patch") is None)
+                )
             )
         )
         and (
             set(item) != materialized_fix
-            or item.get("fix_mode") == "patch"
-            and nonempty_string(item.get("patch_path"))
-            and Path(item["patch_path"]).is_absolute()
-            and is_digest(item.get("patch_sha256"))
-            and hashlib.sha256(item["patch"].encode()).hexdigest() == item["patch_sha256"]
-            or item.get("fix_mode") != "patch"
-            and item.get("patch_path") is None
-            and item.get("patch_sha256") is None
+            or (
+                item.get("fix_mode") == "patch"
+                and nonempty_string(item.get("patch_path"))
+                and Path(item["patch_path"]).is_absolute()
+                and is_digest(item.get("patch_sha256"))
+                and hashlib.sha256(item["patch"].encode()).hexdigest() == item["patch_sha256"]
+            )
+            or (
+                item.get("fix_mode") != "patch"
+                and item.get("patch_path") is None
+                and item.get("patch_sha256") is None
+            )
         )
         for item in value
     )
@@ -613,18 +624,25 @@ def finding_publications_are_valid(value: object, *, require_fixes: bool = False
         and nonempty_string(item.get("body"))
         and (
             set(item) == legacy
-            or item.get("fix_mode") in {"suggestion", "patch"}
-            and (
-                item.get("fix_mode") == "patch"
-                and nonempty_string(item.get("patch"))
-                and nonempty_string(item.get("patch_path"))
-                and Path(item["patch_path"]).is_absolute()
-                and is_digest(item.get("patch_sha256"))
-                and hashlib.sha256(item["patch"].encode()).hexdigest() == item["patch_sha256"]
-                or item.get("fix_mode") == "suggestion"
-                and item.get("patch") is None
-                and item.get("patch_path") is None
-                and item.get("patch_sha256") is None
+            or (
+                item.get("fix_mode") in {"suggestion", "patch"}
+                and (
+                    (
+                        item.get("fix_mode") == "patch"
+                        and nonempty_string(item.get("patch"))
+                        and nonempty_string(item.get("patch_path"))
+                        and Path(item["patch_path"]).is_absolute()
+                        and is_digest(item.get("patch_sha256"))
+                        and hashlib.sha256(item["patch"].encode()).hexdigest()
+                        == item["patch_sha256"]
+                    )
+                    or (
+                        item.get("fix_mode") == "suggestion"
+                        and item.get("patch") is None
+                        and item.get("patch_path") is None
+                        and item.get("patch_sha256") is None
+                    )
+                )
             )
         )
         for item in value
@@ -948,13 +966,13 @@ def review_publication_preview_is_valid(value: object) -> bool:
             )
         ):
             return False
-        action_ids = [item["id"] for item in cast(list[dict[str, Any]], actions)]
+        action_ids = [item["id"] for item in cast("list[dict[str, Any]]", actions)]
         manual_body_ids = {
-            item["publication_id"] for item in cast(list[dict[str, Any]], body_files)
+            item["publication_id"] for item in cast("list[dict[str, Any]]", body_files)
         }
         manual_action_body_ids = {
             item["publication_id"]
-            for item in cast(list[dict[str, Any]], actions)
+            for item in cast("list[dict[str, Any]]", actions)
             if item["publication_id"] is not None
         }
         return len(action_ids) == len(set(action_ids)) and manual_body_ids == manual_action_body_ids
@@ -1033,43 +1051,47 @@ def review_publication_preview_is_valid(value: object) -> bool:
             and set(item["spec"]["expected"]) == {"thread", "note", "prior_marker", "issue"}
             and isinstance(item["spec"].get("mutation"), dict)
             and (
-                item["kind"] == "labels"
-                and item["publication_id"] is None
-                and item["revision"] is None
-                and item["operation"] == "update_labels"
-                and item["spec"].get("publication") is None
-                and item["spec"].get("body") is None
-                and set(item["spec"]["mutation"]) == {"add", "remove", "proposed"}
-                and all(
-                    isinstance(item["spec"]["mutation"].get(key), list)
-                    and all(isinstance(label, str) for label in item["spec"]["mutation"][key])
-                    for key in ("add", "remove", "proposed")
+                (
+                    item["kind"] == "labels"
+                    and item["publication_id"] is None
+                    and item["revision"] is None
+                    and item["operation"] == "update_labels"
+                    and item["spec"].get("publication") is None
+                    and item["spec"].get("body") is None
+                    and set(item["spec"]["mutation"]) == {"add", "remove", "proposed"}
+                    and all(
+                        isinstance(item["spec"]["mutation"].get(key), list)
+                        and all(isinstance(label, str) for label in item["spec"]["mutation"][key])
+                        for key in ("add", "remove", "proposed")
+                    )
+                    and not set(item["spec"]["mutation"]["add"])
+                    & set(item["spec"]["mutation"]["remove"])
                 )
-                and not set(item["spec"]["mutation"]["add"])
-                & set(item["spec"]["mutation"]["remove"])
-                or item["kind"] in {"finding", "thread", "issue"}
-                and nonempty_string(item.get("publication_id"))
-                and isinstance(item.get("revision"), int)
-                and item["revision"] >= 1
-                and isinstance(item["spec"].get("publication"), dict)
-                and item["spec"]["publication"]
-                == {
-                    "id": item["publication_id"],
-                    "revision": item["revision"],
-                    "kind": item["kind"],
-                }
-                and isinstance(item["spec"].get("body"), dict)
-                and set(item["spec"]["body"]) == {"path", "sha256"}
-                and Path(item["spec"]["body"]["path"]).is_absolute()
-                and is_digest(item["spec"]["body"]["sha256"])
+                or (
+                    item["kind"] in {"finding", "thread", "issue"}
+                    and nonempty_string(item.get("publication_id"))
+                    and isinstance(item.get("revision"), int)
+                    and item["revision"] >= 1
+                    and isinstance(item["spec"].get("publication"), dict)
+                    and item["spec"]["publication"]
+                    == {
+                        "id": item["publication_id"],
+                        "revision": item["revision"],
+                        "kind": item["kind"],
+                    }
+                    and isinstance(item["spec"].get("body"), dict)
+                    and set(item["spec"]["body"]) == {"path", "sha256"}
+                    and Path(item["spec"]["body"]["path"]).is_absolute()
+                    and is_digest(item["spec"]["body"]["sha256"])
+                )
             )
             for item in actions
         ):
             return False
-        action_ids = [item["id"] for item in cast(list[dict[str, Any]], actions)]
+        action_ids = [item["id"] for item in cast("list[dict[str, Any]]", actions)]
         body_identities = {
             (item["publication_id"], item["revision"], item["kind"], item["path"], item["sha256"])
-            for item in cast(list[dict[str, Any]], body_files)
+            for item in cast("list[dict[str, Any]]", body_files)
         }
         action_identities = {
             (
@@ -1079,7 +1101,7 @@ def review_publication_preview_is_valid(value: object) -> bool:
                 item["spec"]["body"]["path"],
                 item["spec"]["body"]["sha256"],
             )
-            for item in cast(list[dict[str, Any]], actions)
+            for item in cast("list[dict[str, Any]]", actions)
             if item["kind"] != "labels"
         }
         return (
@@ -1095,11 +1117,13 @@ def review_publication_preview_is_valid(value: object) -> bool:
         not all(
             nonempty_string(value.get(key)) for key in ("mr_state", "warning", "preflight_command")
         )
-        or not legacy
-        and (
-            not nonempty_string(value.get("preflight_path"))
-            or not Path(value["preflight_path"]).is_absolute()
-            or not is_digest(value.get("preflight_sha256"))
+        or (
+            not legacy
+            and (
+                not nonempty_string(value.get("preflight_path"))
+                or not Path(value["preflight_path"]).is_absolute()
+                or not is_digest(value.get("preflight_sha256"))
+            )
         )
         or not isinstance(body_files, list)
         or not isinstance(commands, list)
@@ -1124,8 +1148,8 @@ def review_publication_preview_is_valid(value: object) -> bool:
             for item in commands
         ):
             return False
-        body_ids = [item["finding_id"] for item in cast(list[dict[str, Any]], body_files)]
-        command_ids = [item["finding_id"] for item in cast(list[dict[str, Any]], commands)]
+        body_ids = [item["finding_id"] for item in cast("list[dict[str, Any]]", body_files)]
+        command_ids = [item["finding_id"] for item in cast("list[dict[str, Any]]", commands)]
         return (
             len(body_ids) == len(set(body_ids))
             and len(command_ids) == len(set(command_ids))
@@ -1171,8 +1195,8 @@ def review_publication_preview_is_valid(value: object) -> bool:
         for item in commands
     ):
         return False
-    body_ids = [item["publication_id"] for item in cast(list[dict[str, Any]], body_files)]
-    command_ids = [item["publication_id"] for item in cast(list[dict[str, Any]], commands)]
+    body_ids = [item["publication_id"] for item in cast("list[dict[str, Any]]", body_files)]
+    command_ids = [item["publication_id"] for item in cast("list[dict[str, Any]]", commands)]
     return (
         len(body_ids) == len(set(body_ids))
         and len(command_ids) == len(set(command_ids))
@@ -1216,8 +1240,9 @@ def incremental_review_is_valid(value: object) -> bool:
         or not nonempty_string(value.get("reason"))
         or not isinstance(baseline, dict)
         or set(baseline) != {"plan_path", "plan_digest", "state_digest"}
-        or baseline.get("state_digest") is not None
-        and not is_digest(baseline.get("state_digest"))
+        or (
+            baseline.get("state_digest") is not None and not is_digest(baseline.get("state_digest"))
+        )
         or not isinstance(value.get("critic_required"), bool)
         or not isinstance(value.get("fallback_reasons"), list)
         or not all(isinstance(item, str) for item in value["fallback_reasons"])
@@ -1309,7 +1334,7 @@ def semantic_value(role: str, value: str) -> str | None:
 def label_semantics(value: object) -> tuple[str, str] | None:
     if not isinstance(value, dict) or not nonempty_string(value.get("name")):
         return None
-    name = cast(str, value["name"])
+    name = cast("str", value["name"])
     description = value.get("description")
     if isinstance(description, str):
         marker = re.search(
@@ -1337,7 +1362,7 @@ def label_intent_is_valid(value: object) -> bool:
     if not isinstance(value, dict) or set(value) != set(LABEL_ROLE_VALUES):
         return False
     return all(
-        item is None or isinstance(item, str) and item in LABEL_ROLE_VALUES[role]
+        item is None or (isinstance(item, str) and item in LABEL_ROLE_VALUES[role])
         for role, item in value.items()
     )
 
@@ -1350,9 +1375,9 @@ def review_labels(bundle: dict[str, Any], intent: dict[str, str | None]) -> dict
     raw_current = object_value.get("labels")
     if not isinstance(raw_current, list) or not all(isinstance(item, str) for item in raw_current):
         raise WorkflowError("current MR labels are invalid")
-    current = cast(list[str], raw_current)
+    current = cast("list[str]", raw_current)
     semantics_by_name: dict[str, set[tuple[str, str]]] = {}
-    for item in cast(list[object], labels_component.get("items", [])):
+    for item in cast("list[object]", labels_component.get("items", [])):
         semantics = label_semantics(item)
         if semantics is None or not isinstance(item, dict) or not isinstance(item.get("name"), str):
             continue
@@ -1471,7 +1496,7 @@ def label_review_is_valid(value: object) -> bool:
         or not isinstance(value["decisions"], list)
     ):
         return False
-    decisions = cast(list[object], value["decisions"])
+    decisions = cast("list[object]", value["decisions"])
     required = {"role", "intent", "current", "desired_label", "action", "reason"}
     if not all(
         isinstance(item, dict)
@@ -1480,8 +1505,10 @@ def label_review_is_valid(value: object) -> bool:
         and item["role"] in LABEL_ROLE_VALUES
         and (
             item.get("intent") is None
-            or isinstance(item.get("intent"), str)
-            and item["intent"] in LABEL_ROLE_VALUES[item["role"]]
+            or (
+                isinstance(item.get("intent"), str)
+                and item["intent"] in LABEL_ROLE_VALUES[item["role"]]
+            )
         )
         and isinstance(item.get("current"), list)
         and all(isinstance(name, str) for name in item["current"])
@@ -1491,11 +1518,11 @@ def label_review_is_valid(value: object) -> bool:
         for item in decisions
     ):
         return False
-    typed_decisions = cast(list[dict[str, Any]], decisions)
+    typed_decisions = cast("list[dict[str, Any]]", decisions)
     roles = [item["role"] for item in typed_decisions]
-    current = cast(list[str], value["current"])
-    add = cast(list[str], value["add"])
-    remove = cast(list[str], value["remove"])
+    current = cast("list[str]", value["current"])
+    add = cast("list[str]", value["add"])
+    remove = cast("list[str]", value["remove"])
     expected = [name for name in current if name not in remove]
     expected.extend(name for name in add if name not in expected)
     return (
@@ -1509,8 +1536,10 @@ def label_review_is_valid(value: object) -> bool:
         and len(remove) == len(set(remove))
         and (
             value["complete"] is False
-            or not value["unresolved"]
-            and all(item["action"] != "unresolved" for item in typed_decisions)
+            or (
+                not value["unresolved"]
+                and all(item["action"] != "unresolved" for item in typed_decisions)
+            )
         )
         and value["proposed"] == expected
     )
@@ -1554,8 +1583,8 @@ def code_review_label_review_is_valid(value: object) -> bool:
         )
     ):
         return False
-    catalog = cast(list[object], value["catalog"])
-    assessments = cast(list[object], value["assessments"])
+    catalog = cast("list[object]", value["catalog"])
+    assessments = cast("list[object]", value["assessments"])
     if not all(
         isinstance(item, dict)
         and set(item) == {"name", "description"}
@@ -1573,13 +1602,13 @@ def code_review_label_review_is_valid(value: object) -> bool:
         for item in assessments
     ):
         return False
-    catalog_names = [cast(dict[str, Any], item)["name"] for item in catalog]
+    catalog_names = [cast("dict[str, Any]", item)["name"] for item in catalog]
     assessment_by_name = {
-        cast(dict[str, Any], item)["name"]: cast(dict[str, Any], item) for item in assessments
+        cast("dict[str, Any]", item)["name"]: cast("dict[str, Any]", item) for item in assessments
     }
-    current = cast(list[str], value["current"])
-    add = cast(list[str], value["add"])
-    remove = cast(list[str], value["remove"])
+    current = cast("list[str]", value["current"])
+    add = cast("list[str]", value["add"])
+    remove = cast("list[str]", value["remove"])
     proposed = sorted((set(current) - set(remove)) | set(add), key=str.casefold)
     return (
         value["catalog_sha256"] == digest(value["catalog"])
@@ -1692,9 +1721,13 @@ def schema_valid(schema: dict[str, Any], value: object, root: dict[str, Any]) ->
                 datetime.fromisoformat(value)
             except ValueError:
                 return False
-    if isinstance(value, int) and not isinstance(value, bool):
-        if isinstance(schema.get("minimum"), int) and value < schema["minimum"]:
-            return False
+    if (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and isinstance(schema.get("minimum"), int)
+        and value < schema["minimum"]
+    ):
+        return False
     if isinstance(value, list):
         if isinstance(schema.get("minItems"), int) and len(value) < schema["minItems"]:
             return False
@@ -1718,7 +1751,7 @@ def schema_valid(schema: dict[str, Any], value: object, root: dict[str, Any]) ->
             return False
         if not all(
             not isinstance(properties.get(key), dict)
-            or schema_valid(cast(dict[str, Any], properties[key]), item, root)
+            or schema_valid(cast("dict[str, Any]", properties[key]), item, root)
             for key, item in value.items()
             if key in properties
         ):
@@ -1743,10 +1776,10 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
     ):
         raise WorkflowError("artifact schema is invalid")
     try:
-        datetime.fromisoformat(cast(str, envelope["created_at"]))
+        datetime.fromisoformat(cast("str", envelope["created_at"]))
     except ValueError as exc:
         raise WorkflowError("artifact timestamp is schema-invalid") from exc
-    payload = cast(dict[str, Any], envelope["payload"])
+    payload = cast("dict[str, Any]", envelope["payload"])
     if kind == "evidence_snapshot":
         exact_keys(
             payload,
@@ -1945,11 +1978,13 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or not isinstance(payload["target"], dict)
             or payload["role"] not in {"author", "reviewer"}
-            or structured_context
-            and (
-                not isinstance(payload["current_user_id"], int)
-                or isinstance(payload["current_user_id"], bool)
-                or payload["current_user_id"] < 1
+            or (
+                structured_context
+                and (
+                    not isinstance(payload["current_user_id"], int)
+                    or isinstance(payload["current_user_id"], bool)
+                    or payload["current_user_id"] < 1
+                )
             )
             or not all(
                 nonempty_string(payload[key])
@@ -1971,8 +2006,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 )
             )
             or not all(isinstance(item, str) for item in payload["errors"])
-            or not legacy_context
-            and not incremental_review_is_valid(payload["incremental"])
+            or (not legacy_context and not incremental_review_is_valid(payload["incremental"]))
             or not isinstance(payload["complete"], bool)
             or not isinstance(counts, dict)
             or set(counts)
@@ -1996,8 +2030,10 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not isinstance(exact_git.get("refs"), dict)
             or not isinstance(exact_git.get("changed_paths"), list)
             or not all(isinstance(item, str) for item in exact_git["changed_paths"])
-            or not is_digest(exact_git.get("diff_sha256"))
-            and exact_git.get("diff_sha256") is not None
+            or (
+                not is_digest(exact_git.get("diff_sha256"))
+                and exact_git.get("diff_sha256") is not None
+            )
             or not isinstance(exact_git.get("complete"), bool)
             or not isinstance(exact_git.get("errors"), list)
             or not all(isinstance(item, str) for item in exact_git["errors"])
@@ -2046,7 +2082,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 and (
                     not is_digest(payload.get("inventory_digest"))
                     or not isinstance(payload.get("release_version"), str)
-                    or SEMVER_RE.fullmatch(cast(str, payload.get("release_version"))) is None
+                    or SEMVER_RE.fullmatch(cast("str", payload.get("release_version"))) is None
                     or not companions_are_valid(payload.get("companions"))
                 )
             )
@@ -2152,11 +2188,13 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             raise WorkflowError("review plan SemVer assessment is invalid")
         if (
             payload["profile"] != "code-review"
-            or not legacy_plan
-            and (
-                payload["review_contract_version"] not in {2, 3, 4, 5, 6}
-                if structured_plan
-                else payload["review_contract_version"] != 1
+            or (
+                not legacy_plan
+                and (
+                    payload["review_contract_version"] not in {2, 3, 4, 5, 6}
+                    if structured_plan
+                    else payload["review_contract_version"] != 1
+                )
             )
             or final_plan != (payload.get("review_contract_version") in {4, 5, 6})
             or payload["external_mutations"] is not False
@@ -2172,8 +2210,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 if legacy_plan
                 else {"fast", "normal", "deep", "incremental", "unchanged"}
             )
-            or not legacy_plan
-            and not incremental_review_is_valid(payload["incremental"])
+            or (not legacy_plan and not incremental_review_is_valid(payload["incremental"]))
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not isinstance(payload["complete"], bool)
             or not all(
@@ -2189,55 +2226,64 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 else detailed_findings_are_valid(payload["findings"])
             )
             or not thread_decisions_are_valid(payload["thread_decisions"])
-            or structured_plan
-            and (
-                not code_review_label_review_is_valid(payload["label_review"])
-                or payload["review_contract_version"] == 2
-                and not all(
-                    isinstance(item, dict) and "suggestion_applicable" in item
-                    for item in payload["thread_decisions"]
-                )
-                or payload["review_contract_version"] in {3, 4, 5, 6}
+            or (
+                structured_plan
                 and (
-                    not finding_publications_are_valid(
-                        payload["finding_publications"], require_fixes=True
+                    not code_review_label_review_is_valid(payload["label_review"])
+                    or (
+                        payload["review_contract_version"] == 2
+                        and not all(
+                            isinstance(item, dict) and "suggestion_applicable" in item
+                            for item in payload["thread_decisions"]
+                        )
                     )
-                    or not all(
-                        isinstance(item, dict)
-                        and {"fix_mode", "patch", "patch_path", "patch_sha256"}.issubset(item)
-                        for item in payload["thread_decisions"]
+                    or (
+                        payload["review_contract_version"] in {3, 4, 5, 6}
+                        and (
+                            not finding_publications_are_valid(
+                                payload["finding_publications"], require_fixes=True
+                            )
+                            or not all(
+                                isinstance(item, dict)
+                                and {"fix_mode", "patch", "patch_path", "patch_sha256"}.issubset(
+                                    item
+                                )
+                                for item in payload["thread_decisions"]
+                            )
+                        )
                     )
                 )
             )
-            or not legacy_plan
-            and not all(
-                isinstance(payload[key], list)
-                for key in (
-                    "finding_publications",
-                    "previous_finding_assessments",
-                    "recommended_issues",
-                    "finding_ledger",
-                    "publication_ledger",
-                    "rejected_candidates",
-                    "rejected_candidate_assessments",
-                    "rejected_candidate_ledger",
+            or (
+                not legacy_plan
+                and not all(
+                    isinstance(payload[key], list)
+                    for key in (
+                        "finding_publications",
+                        "previous_finding_assessments",
+                        "recommended_issues",
+                        "finding_ledger",
+                        "publication_ledger",
+                        "rejected_candidates",
+                        "rejected_candidate_assessments",
+                        "rejected_candidate_ledger",
+                    )
                 )
             )
-            or not legacy_plan
-            and not isinstance(payload["presentation"], dict)
-            or final_plan
-            and not review_chat_assessment_is_valid(payload["chat_assessment"])
-            or final_plan
-            and payload.get("locale") not in {"en", "ru"}
+            or (not legacy_plan and not isinstance(payload["presentation"], dict))
+            or (final_plan and not review_chat_assessment_is_valid(payload["chat_assessment"]))
+            or (final_plan and payload.get("locale") not in {"en", "ru"})
             or not isinstance(payload["markdown"], str)
-            or not minimal_plan
-            and payload["semver_impact"] == "unknown"
-            or not minimal_plan
-            and not nonempty_string(payload["semver_rationale"])
-            or not minimal_plan
-            and not mr_metadata_assessment_is_valid(payload["mr_metadata_assessment"])
-            or not minimal_plan
-            and not review_publication_preview_is_valid(payload["publication_preview"])
+            or (not minimal_plan and payload["semver_impact"] == "unknown")
+            or (not minimal_plan and not nonempty_string(payload["semver_rationale"]))
+            or (
+                not minimal_plan
+                and not mr_metadata_assessment_is_valid(payload["mr_metadata_assessment"])
+            )
+            or (
+                not minimal_plan
+                and not review_publication_preview_is_valid(payload["publication_preview"])
+            )
         ):
             raise WorkflowError("review plan payload is schema-invalid")
     elif kind in {"analysis_report", "critic_receipt"}:
@@ -2261,10 +2307,12 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not findings_are_valid(payload["findings"])
             or payload["external_mutations"] is not False
             or ("scope_digest" in payload and not is_digest(payload["scope_digest"]))
-            or "target_finding_ids" in payload
-            and (
-                not isinstance(payload["target_finding_ids"], list)
-                or not all(nonempty_string(item) for item in payload["target_finding_ids"])
+            or (
+                "target_finding_ids" in payload
+                and (
+                    not isinstance(payload["target_finding_ids"], list)
+                    or not all(nonempty_string(item) for item in payload["target_finding_ids"])
+                )
             )
         ):
             raise WorkflowError(f"{kind} payload is schema-invalid")
@@ -2305,57 +2353,73 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not is_digest(payload["evidence_digest"])
             or not is_digest(payload["finalize_digest"])
             or ("context_digest" in payload and not is_digest(payload["context_digest"]))
-            or "critic_receipt_digest" in payload
-            and payload["critic_receipt_digest"] is not None
-            and not is_digest(payload["critic_receipt_digest"])
+            or (
+                "critic_receipt_digest" in payload
+                and payload["critic_receipt_digest"] is not None
+                and not is_digest(payload["critic_receipt_digest"])
+            )
             or payload["mode"] not in {"fast", "normal", "deep", "incremental", "unchanged"}
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
             or not findings_are_valid(payload["findings"])
-            or "critic_findings" in payload
-            and not detailed_findings_are_valid(payload["critic_findings"])
-            or "accepted_findings" in payload
-            and not detailed_findings_are_valid(payload["accepted_findings"])
-            or "critic_target_finding_ids" in payload
-            and (
-                not isinstance(payload["critic_target_finding_ids"], list)
-                or not all(nonempty_string(item) for item in payload["critic_target_finding_ids"])
+            or (
+                "critic_findings" in payload
+                and not detailed_findings_are_valid(payload["critic_findings"])
             )
-            or "blocking_finding_ids" in payload
-            and (
-                not isinstance(payload["blocking_finding_ids"], list)
-                or not all(nonempty_string(item) for item in payload["blocking_finding_ids"])
-                or len(payload["blocking_finding_ids"])
-                != len(set(cast(list[str], payload["blocking_finding_ids"])))
+            or (
+                "accepted_findings" in payload
+                and not detailed_findings_are_valid(payload["accepted_findings"])
             )
-            or "owner_decision_reasons" in payload
-            and (
-                not isinstance(payload["owner_decision_reasons"], list)
-                or not all(nonempty_string(item) for item in payload["owner_decision_reasons"])
-            )
-            or "ci_job_assessments" in payload
-            and (
-                not isinstance(payload["ci_job_assessments"], list)
-                or not all(
-                    isinstance(item, dict)
-                    and set(item)
-                    == {
-                        "project_id",
-                        "pipeline_id",
-                        "job_id",
-                        "classification",
-                        "rationale",
-                        "trace_evidence",
-                    }
-                    and all(
-                        isinstance(item.get(key), int)
-                        for key in ("project_id", "pipeline_id", "job_id")
+            or (
+                "critic_target_finding_ids" in payload
+                and (
+                    not isinstance(payload["critic_target_finding_ids"], list)
+                    or not all(
+                        nonempty_string(item) for item in payload["critic_target_finding_ids"]
                     )
-                    and item.get("classification")
-                    in {"process_gate", "code_failure", "infrastructure_failure", "unknown"}
-                    and nonempty_string(item.get("rationale"))
-                    and nonempty_string(item.get("trace_evidence"))
-                    for item in payload["ci_job_assessments"]
+                )
+            )
+            or (
+                "blocking_finding_ids" in payload
+                and (
+                    not isinstance(payload["blocking_finding_ids"], list)
+                    or not all(nonempty_string(item) for item in payload["blocking_finding_ids"])
+                    or len(payload["blocking_finding_ids"])
+                    != len(set(cast("list[str]", payload["blocking_finding_ids"])))
+                )
+            )
+            or (
+                "owner_decision_reasons" in payload
+                and (
+                    not isinstance(payload["owner_decision_reasons"], list)
+                    or not all(nonempty_string(item) for item in payload["owner_decision_reasons"])
+                )
+            )
+            or (
+                "ci_job_assessments" in payload
+                and (
+                    not isinstance(payload["ci_job_assessments"], list)
+                    or not all(
+                        isinstance(item, dict)
+                        and set(item)
+                        == {
+                            "project_id",
+                            "pipeline_id",
+                            "job_id",
+                            "classification",
+                            "rationale",
+                            "trace_evidence",
+                        }
+                        and all(
+                            isinstance(item.get(key), int)
+                            for key in ("project_id", "pipeline_id", "job_id")
+                        )
+                        and item.get("classification")
+                        in {"process_gate", "code_failure", "infrastructure_failure", "unknown"}
+                        and nonempty_string(item.get("rationale"))
+                        and nonempty_string(item.get("trace_evidence"))
+                        for item in payload["ci_job_assessments"]
+                    )
                 )
             )
             or not findings_are_valid(payload["unresolved_threads"])
@@ -2615,7 +2679,7 @@ def select_exact_pipeline(pipelines: dict[str, object], head_sha: str) -> dict[s
         value = item.get("id")
         return value if isinstance(value, int) else -1
 
-    return max(cast(list[dict[str, Any]], exact), key=pipeline_id)
+    return max(cast("list[dict[str, Any]]", exact), key=pipeline_id)
 
 
 def trace_excerpt(value: str) -> dict[str, object]:
@@ -2693,15 +2757,17 @@ def collect_pipeline_jobs(
             max_pages=MAX_CI_JOB_PAGES,
         )
         pipeline_errors = [
-            *cast(list[str], jobs["errors"]),
-            *cast(list[str], bridges["errors"]),
+            *cast("list[str]", jobs["errors"]),
+            *cast("list[str]", bridges["errors"]),
         ]
         normalized_jobs: list[dict[str, object]] = []
-        for raw in [*cast(list[object], jobs["items"]), *cast(list[object], bridges["items"])]:
+        for raw in [*cast("list[object]", jobs["items"]), *cast("list[object]", bridges["items"])]:
             if not isinstance(raw, dict) or not isinstance(raw.get("id"), int):
                 pipeline_errors.append("GitLab returned invalid CI job metadata")
                 continue
-            normalized = pipeline_job(cast(dict[str, Any], raw), current_project, current_pipeline)
+            normalized = pipeline_job(
+                cast("dict[str, Any]", raw), current_project, current_pipeline
+            )
             if raw.get("status") in {"failed", "canceled"}:
                 if traces >= MAX_CI_TRACES:
                     normalized["trace"] = {
@@ -2729,10 +2795,10 @@ def collect_pipeline_jobs(
                         }
                         pipeline_errors.append(str(exc))
             normalized_jobs.append(normalized)
-        for raw in cast(list[object], bridges["items"]):
+        for raw in cast("list[object]", bridges["items"]):
             if not isinstance(raw, dict) or not isinstance(raw.get("downstream_pipeline"), dict):
                 continue
-            downstream = cast(dict[str, Any], raw["downstream_pipeline"])
+            downstream = cast("dict[str, Any]", raw["downstream_pipeline"])
             downstream_id = downstream.get("id")
             downstream_project = downstream.get("project_id", current_project)
             if not isinstance(downstream_id, int) or not isinstance(downstream_project, int):
@@ -2820,7 +2886,7 @@ def collect(
             raise WorkflowError("GitLab target response is incomplete")
         discussions = paginated(hostname, f"projects/{project_id}/{kind}/{iid}/discussions")
         refs: dict[str, Any] = (
-            cast(dict[str, Any], object_value["diff_refs"])
+            cast("dict[str, Any]", object_value["diff_refs"])
             if isinstance(object_value.get("diff_refs"), dict)
             else {}
         )
@@ -2845,7 +2911,7 @@ def collect(
                     and not overflow
                     and changes_value.get("diff_refs") == refs
                 ):
-                    changed = component(cast(list[object], changes_value["changes"]), pages=1)
+                    changed = component(cast("list[object]", changes_value["changes"]), pages=1)
                 else:
                     changed = component(
                         complete=False,
@@ -2861,26 +2927,29 @@ def collect(
                 isinstance(value, str) and value for value in (base_sha, start_sha, head_sha)
             ):
                 changed = component(
-                    cast(list[object], changed["items"]),
+                    cast("list[object]", changed["items"]),
                     complete=False,
-                    errors=[*cast(list[str], changed["errors"]), "exact diff refs are unavailable"],
-                    pages=cast(int, changed["pages"]),
+                    errors=[
+                        *cast("list[str]", changed["errors"]),
+                        "exact diff refs are unavailable",
+                    ],
+                    pages=cast("int", changed["pages"]),
                     truncated=True,
                 )
             if isinstance(head_sha, str) and head_sha:
                 commits = paginated(hostname, f"projects/{project_id}/merge_requests/{iid}/commits")
                 if not any(
                     isinstance(commit, dict) and commit.get("id") == head_sha
-                    for commit in cast(list[object], commits["items"])
+                    for commit in cast("list[object]", commits["items"])
                 ):
                     commits = component(
-                        cast(list[object], commits["items"]),
+                        cast("list[object]", commits["items"]),
                         complete=False,
                         errors=[
-                            *cast(list[str], commits["errors"]),
+                            *cast("list[str]", commits["errors"]),
                             "commits do not bind exact head SHA",
                         ],
-                        pages=cast(int, commits["pages"]),
+                        pages=cast("int", commits["pages"]),
                         truncated=True,
                     )
                 pipelines = paginated(
@@ -2895,13 +2964,13 @@ def collect(
                         selected_pipeline["job_evidence"] = job_evidence
                         if job_evidence["complete"] is not True:
                             pipelines = component(
-                                cast(list[object], pipelines["items"]),
+                                cast("list[object]", pipelines["items"]),
                                 complete=False,
                                 errors=[
-                                    *cast(list[str], pipelines["errors"]),
-                                    *cast(list[str], job_evidence["errors"]),
+                                    *cast("list[str]", pipelines["errors"]),
+                                    *cast("list[str]", job_evidence["errors"]),
                                 ],
-                                pages=cast(int, pipelines["pages"]),
+                                pages=cast("int", pipelines["pages"]),
                                 truncated=bool(job_evidence["truncated"]),
                             )
             else:
@@ -2938,13 +3007,13 @@ def collect(
                 "discussions": bool(discussions["complete"]),
             },
         }
-    components_complete = cast(dict[str, bool], bundle["components_complete"])
+    components_complete = cast("dict[str, bool]", bundle["components_complete"])
     if profile == "mr-prepare":
         from .mr_publication import collect_templates
 
         if locale not in {"en", "ru"}:
             raise WorkflowError("MR locale must be en or ru")
-        cast(dict[str, Any], bundle["project"]).update(
+        cast("dict[str, Any]", bundle["project"]).update(
             {"locale": locale, "mr_templates": collect_templates(hostname, project)}
         )
     bundle["retrieval_complete"] = all(components_complete.values())
@@ -3004,7 +3073,7 @@ def pipeline_summary(bundle: dict[str, Any]) -> tuple[str, dict[str, Any] | None
         return "unverified: exact head SHA unavailable", None
     if not isinstance(pipelines.get("items"), list):
         return "unverified: pipeline data invalid", None
-    pipeline = select_exact_pipeline(cast(dict[str, object], pipelines), head_sha)
+    pipeline = select_exact_pipeline(cast("dict[str, object]", pipelines), head_sha)
     if pipeline is None:
         return "missing", None
     raw_status = pipeline.get("status")
@@ -3101,10 +3170,8 @@ def publication_markdown(
         raise WorkflowError("publication plan requires a semantic label review")
     current_title = object_value.get("title")
     current_description = object_value.get("description")
-    if (
-        not isinstance(current_title, str)
-        or current_description is not None
-        and not isinstance(current_description, str)
+    if not isinstance(current_title, str) or (
+        current_description is not None and not isinstance(current_description, str)
     ):
         raise WorkflowError("current title or description is invalid")
     current_description = current_description or ""
@@ -3224,9 +3291,9 @@ def scaffold(
     if profile in {"mr-prepare", "release-prepare"}:
         if not label_intent_is_valid(content.get("label_intent")):
             raise WorkflowError("content requires a complete semantic label_intent object")
-        label_review = review_labels(bundle, cast(dict[str, str | None], content["label_intent"]))
+        label_review = review_labels(bundle, cast("dict[str, str | None]", content["label_intent"]))
     if profile == "release-prepare":
-        release_label_intent = cast(dict[str, str | None], content["label_intent"])
+        release_label_intent = cast("dict[str, str | None]", content["label_intent"])
         if (
             not isinstance(content.get("version"), str)
             or SEMVER_RE.fullmatch(content["version"]) is None
@@ -3421,7 +3488,7 @@ def plan_context(
         companions = plan.get("companions")
         if not companions_are_valid(companions):
             raise WorkflowError("release publication companions are invalid")
-        for companion in cast(list[dict[str, str]], companions):
+        for companion in cast("list[dict[str, str]]", companions):
             companion_path = regular_file(
                 plan_path.with_name(f"{plan_digest}-{companion['name']}"),
                 "release publication companion",
@@ -3520,7 +3587,7 @@ def git_read(root: Path, *args: str, text: bool = True) -> str | bytes:
     )
     if completed.returncode:
         raise WorkflowError("local Git input can no longer be read")
-    return cast(str | bytes, completed.stdout)
+    return cast("str | bytes", completed.stdout)
 
 
 def local_section(root: Path, name: str, args: tuple[str, ...]) -> dict[str, object]:
@@ -3624,7 +3691,7 @@ def local_bundle(repo_root: str, profile: str, ref: str | None) -> dict[str, obj
         },
         "artifact_root": str(artifact),
     }
-    sections = cast(dict[str, dict[str, object]], bundle["sections"])
+    sections = cast("dict[str, dict[str, object]]", bundle["sections"])
     bundle["retrieval_complete"] = all(
         bool(section.get("complete")) for section in sections.values()
     )
@@ -3670,21 +3737,25 @@ def validate_critic(
         or not set(receipt).issubset(required | {"scope_digest", "target_finding_ids"})
         or receipt.get("evidence_digest") != evidence_digest
         or (
-            scope_digest is not None
-            and receipt.get("scope_digest") != scope_digest
-            or scope_digest is not None
-            and not isinstance(receipt.get("target_finding_ids"), list)
-            or scope_digest is None
-            and "scope_digest" in receipt
-            and not is_digest(receipt.get("scope_digest"))
+            (scope_digest is not None and receipt.get("scope_digest") != scope_digest)
+            or (
+                scope_digest is not None and not isinstance(receipt.get("target_finding_ids"), list)
+            )
+            or (
+                scope_digest is None
+                and "scope_digest" in receipt
+                and not is_digest(receipt.get("scope_digest"))
+            )
         )
         or not findings_are_valid(receipt.get("findings"))
-        or "target_finding_ids" in receipt
-        and (
-            not isinstance(receipt["target_finding_ids"], list)
-            or not all(nonempty_string(item) for item in receipt["target_finding_ids"])
-            or len(receipt["target_finding_ids"])
-            != len(set(cast(list[str], receipt["target_finding_ids"])))
+        or (
+            "target_finding_ids" in receipt
+            and (
+                not isinstance(receipt["target_finding_ids"], list)
+                or not all(nonempty_string(item) for item in receipt["target_finding_ids"])
+                or len(receipt["target_finding_ids"])
+                != len(set(cast("list[str]", receipt["target_finding_ids"])))
+            )
         )
         or receipt.get("external_mutations") is not False
     ):
@@ -3728,8 +3799,8 @@ def validate_decision(
     finding_subjects = [
         item
         for item in [
-            *cast(list[object], report.get("findings", [])),
-            *(cast(list[object], receipt["findings"]) if receipt is not None else []),
+            *cast("list[object]", report.get("findings", [])),
+            *(cast("list[object]", receipt["findings"]) if receipt is not None else []),
         ]
         if isinstance(item, dict)
     ]
@@ -3762,12 +3833,12 @@ def validate_decision(
             "review decision does not account for every finding and unresolved thread"
         )
     response_by_id = {
-        cast(str, item["id"]): item for item in cast(list[dict[str, Any]], response_values)
+        cast("str", item["id"]): item for item in cast("list[dict[str, Any]]", response_values)
     }
     accepted_findings = [
         item
         for item in finding_subjects
-        if response_by_id[cast(str, item["id"])]["decision"] == "accept"
+        if response_by_id[cast("str", item["id"])]["decision"] == "accept"
     ]
     if duplicate_detailed_finding_ids(accepted_findings):
         raise WorkflowError("review decision accepts structurally duplicate findings")
@@ -4092,9 +4163,9 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     if profile == "code-review":
                         context_module = importlib.import_module("review_context")
                         context_module.begin_review(
-                            cast(str, bundle["preview_artifact_path"]),
-                            cast(str, bundle["preview_digest"]),
-                            cast(str, bundle["artifact_root"]),
+                            cast("str", bundle["preview_artifact_path"]),
+                            cast("str", bundle["preview_digest"]),
+                            cast("str", bundle["artifact_root"]),
                             args.repo_root,
                             args.review_mode,
                             args.locale,
@@ -4104,7 +4175,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                         item["next_action"] = context_module.runner_action(
                             "context",
                             "--evidence",
-                            cast(str, bundle["preview_artifact_path"]),
+                            cast("str", bundle["preview_artifact_path"]),
                             "--repo-root",
                             str(Path(args.repo_root).resolve())
                             if args.repo_root is not None
@@ -4549,9 +4620,9 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 )
             decision_payload = report
             if profile == "code-review":
-                primary_findings = cast(list[dict[str, Any]], report["findings"])
+                primary_findings = cast("list[dict[str, Any]]", report["findings"])
                 critic_findings = (
-                    cast(list[dict[str, Any]], receipt["findings"]) if receipt is not None else []
+                    cast("list[dict[str, Any]]", receipt["findings"]) if receipt is not None else []
                 )
                 candidates = [*primary_findings, *critic_findings]
                 candidate_ids = [item["id"] for item in candidates]
@@ -4562,7 +4633,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     raise WorkflowError("primary and critic finding IDs must be unique")
                 responses = {
                     item["id"]: item
-                    for item in cast(list[dict[str, Any]], report["responses"])
+                    for item in cast("list[dict[str, Any]]", report["responses"])
                     if item["id"] in set(candidate_ids)
                 }
                 accepted_findings = [
