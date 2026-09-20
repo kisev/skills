@@ -61,6 +61,7 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "${{ inputs." not in live_command.group("run")
     assert "github.event.deleted != true" in ci
     assert 'test "$DELETED_REF" = true' in ci
+    assert "fetch-depth: 0" in ci
     for workflow in (ci, publish, live):
         for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", workflow):
             assert re.fullmatch(r"(?:[0-9a-f]{40}|v[0-9]+(?:\.[0-9]+){0,2})", reference)

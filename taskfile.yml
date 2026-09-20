@@ -238,6 +238,7 @@ tasks:
 
   distribution:check:
     desc: Check the reproducible GitHub Pages portable distribution
+    deps: [build:skills]
     cmds:
       - mise exec -- uv run --locked python scripts/build_distribution.py --check
 

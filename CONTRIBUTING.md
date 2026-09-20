@@ -40,10 +40,10 @@ The main public tasks divide the checks as follows:
 | - | - |
 | `install` | Install pinned tools, locked dependencies, and Git hooks. |
 | `tools` | Show the active pinned toolchain. |
-| `format`, `format:check` | Format sources and regenerate assets, or check formatting without writing. |
-| `lint`, `typecheck`, `test` | Run source, type, and test checks. |
+| `format` | Format maintained source files. |
+| `lint`, `typecheck`, `test` | Run source, formatting, type, and test checks. |
 | `generate`, `generate:check` | Build ignored artifacts or check their reproducibility. |
-| `skills:validate` | Run Agnix, `agentskills`, and internal skill contracts. |
+| `skills:validate` | Run Agnix and `agentskills` validation. |
 | `package:check` | Verify the complete OpenCode package lifecycle. |
 | `eval:check` | Validate evaluation data and run the hostless offline suite. |
 | `dependency:audit` | Audit the locked Python and npm dependency graphs. |
@@ -59,9 +59,10 @@ copied LSP catalog are generated only into `packages/opencode/dist/assets/`
 before packing; their sources are `packages/opencode/src/registry.ts` and
 `shared/references/`.
 
-`package:check` itself runs `npm ci`, Prettier, oxlint, tsc, Node.js tests,
-generated-asset drift checks, a smoke test through pinned OpenCode, and the npm
-pack allowlist. An ordinary check does not need separate npm commands.
+`package:check` installs locked npm dependencies, builds the package once, runs
+Node.js tests, performs a smoke test through pinned OpenCode, and checks the npm
+pack allowlist. Root lint and type-check tasks own the corresponding source
+checks, so the package lifecycle does not repeat them.
 
 `dependency:audit` checks the locked Python and npm dependency graphs.
 `task pre-push` runs it concurrently with `task check`; it remains separate from

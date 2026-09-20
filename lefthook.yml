@@ -65,7 +65,6 @@ pre-commit:
         jobs:
           - name: markdown
             glob:
-              - ".markdownlint-cli2.mjs"
               - ".markdownlint.yml"
               - ".remarkrc.yml"
             run: task lint:markdown
