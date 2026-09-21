@@ -148,8 +148,9 @@ WORKFLOW_CONTRACTS = {
         "this mode is completely read-only",
     ),
     "stopit": (
-        "operating system temporary directory, not in the",
-        "show the complete draft and temporary path",
+        "stable workspace-scoped path",
+        "show the complete draft and its exact output path",
+        "obtain explicit confirmation before writing",
     ),
     "goal": (
         "strictly read-only",

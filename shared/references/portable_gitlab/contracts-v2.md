@@ -100,6 +100,13 @@ private evidence; the user-facing plan does not display raw commit SHAs. Prepare
 and review never invoke publication commands. MR state is recorded but does not
 suppress actions for merged or closed MRs.
 
+Release preparation uses the same split between immutable evidence and a stable
+user-facing result. A complete scaffold atomically replaces the target-scoped
+`release-publication.md` and writes `release-publication.json` last as the pointer
+to the exact immutable plan. Finalization binds that pointer to the scaffold
+binding and rejects superseded or modified plans. Incomplete scaffolds do not
+replace the previous stable result.
+
 Contract 6 adds required `semver_assessment` to the content and plan. Existing
 `semver_impact`/`semver_rationale` describe only the MR contribution and select
 its compatibility label. The new assessment binds release policy and sources,

@@ -10,7 +10,8 @@ Routes exact release MR; near-miss: release review.
 
 ## Inputs/Outputs
 
-Arguments identify boundary; output is plan and announcement material.
+Arguments identify the boundary; output is stable target-scoped
+`release-publication.md` with announcement material.
 
 ## Workflow Stages
 
@@ -22,7 +23,7 @@ Select, pass, inventory, draft, finalize, report.
 
 ## Remote/Local Effects
 
-Read-only collection; no tag or publish.
+Read-only collection and atomic local plan replacement; no tag or publish.
 
 ## Errors/Partial/Escalation
 
@@ -36,7 +37,8 @@ Announcement sending is excluded.
 
 ### REQ-I-215 - Route the release-prepare command
 
-The command shall load exactly `release-prepare` without release mutation.
+The command shall load exactly `release-prepare`, report only its stable
+user-facing plan path, and perform no release mutation.
 
 ## Example
 

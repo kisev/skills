@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Create an anonymized handoff for the next session in a temporary OS directory.
+Create an anonymized handoff for the next session in stable workspace-scoped XDG state.
 
 ## Triggers and Near-Misses
 
@@ -10,35 +10,49 @@ Trigger when pausing or changing context; near-miss: committing project notes.
 
 ## Inputs and Outputs
 
-Input is current session context. Output is a temporary handoff with facts and next step.
+Input is current session context and an existing workspace. Output is a redacted
+handoff with facts and next step under the XDG state directory at
+`$XDG_STATE_HOME/agent-skills/stopit/<workspace-id>/handoff.md`; the runner uses
+the platform default state directory when the variable is unset.
 
 ## Workflow Stages
 
-Resolve scope, redact, write handoff, verify path, report.
+Resolve the canonical workspace and destination read-only, redact, show the full
+draft and exact path, confirm, require that path as the write binding, atomically
+write the approved standard input, report.
 
 ## Dependencies
 
-Current session and temporary directory.
+Current session, existing workspace, and XDG state directory.
 
 ## Remote/Local Effects
 
-Writes only the approved temporary handoff; no repository or remote effects.
+After explicit confirmation, privately and atomically replaces only the stable
+workspace handoff; no repository or remote effects.
 
 ## Errors, Partial, Escalation
 
-Redaction uncertainty blocks handoff creation.
+Redaction uncertainty, invalid input, or an unsafe or symlinked state path blocks
+handoff creation.
 
 ## Unique Constraints
 
-Handoff is not a durable repository artifact and must not expose private reasoning.
+Handoff is not a repository artifact and must not expose private reasoning. The
+workspace ID is a deterministic digest of the canonical existing workspace path.
 
 ## Requirement
 
-### REQ-F-121 - Keep handoffs temporary and redacted
+### REQ-F-121 - Keep handoffs stable, scoped, and redacted
 
-The skill shall write only anonymized context to the designated temporary directory.
+The skill shall preview the complete draft and exact read-only-resolved path,
+require explicit confirmation and the same path as the write binding, and then
+write only bounded, nonempty, valid UTF-8 approved content to the designated
+workspace-scoped XDG state file. The runner shall reject changed destinations,
+unsafe and symlinked state paths and use private directories, a private file, and
+atomic replacement without creating a separate draft artifact.
 
 ## Example
 
-`stopit` records a blocker and next step without copying secrets or chain of thought.
+`stopit` records a blocker and next step for one canonical workspace without
+copying secrets or chain of thought.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

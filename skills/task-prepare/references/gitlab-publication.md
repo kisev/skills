@@ -46,7 +46,8 @@ languages use English fixed headings while preserving the authored prose.
 
 ```json
 {
-  "version": 1,
+  "version": 2,
+  "plan_key": "configuration-contract",
   "locale": "en",
   "batch_agreement": "",
   "items": [
@@ -74,6 +75,9 @@ languages use English fixed headings while preserving the authored prose.
 - `batch_agreement`: empty for one task, otherwise quote or summarize the user's
   request for multiple tasks or agreement to this split. Do not infer approval
   from the number of repositories.
+- `plan_key`: stable lowercase identifier for this publication plan, up to 64
+  characters, using letters, digits, and hyphens and starting with a letter. It
+  selects the default local slot and must not be derived from draft content.
 - `key`: unique lowercase identifier, up to 64 characters, letters, digits, hyphens,
   starting with a letter. `task-publication` and `link-<number>` are reserved for
   bundle artifacts. It is local bookkeeping, never a fabricated GitLab ID.
@@ -108,17 +112,25 @@ Run the bundled script using its resolved installed path:
 python3 scripts/prepare_publication.py --input draft.json
 ```
 
-It creates `.task-prepare/<content-id>/task-publication.md` under the current
+It creates `.task-prepare/<plan_key>/task-publication.md` under the current
 workspace without requiring a filename from the user. Optionally pass
 `--output-dir <workspace-relative-directory>`. Keep this private bundle and input
 out of commits. Paths may contain spaces; generated commands quote them.
-The output is immutable: identical reruns reuse it, changed drafts get a new
-default directory, and existing different content is never overwritten. No
-preview confirmation is needed for these local files.
+The named slot is stable across draft changes. Identical reruns reuse it; changed
+drafts first install supporting files in a retained immutable
+`.task-publication/<content-hash>/` directory, then atomically replace only the
+stable Markdown under a slot-scoped lock. The stable plan therefore never
+disappears during an update, and a command copied from an older plan continues
+to reference that plan's retained payload. Failed Markdown replacement leaves
+the old plan in place; safely installed internal files remain for a retry. Unsafe
+keys, paths, symlinks, altered immutable content, and concurrent updates are
+rejected. No preview confirmation is needed for these local files.
 
 Each item contains its publication text, destination, check notes, and adjacent
-command when ready. The supporting `.md` holds only the description; `.json`
-holds the exact API request including metadata. Commands use explicit
+command when ready. Content-addressed supporting `.md` files hold only the
+descriptions; `.json` files hold the exact API requests including metadata.
+Old internal content directories are retained and must not be edited or removed
+while commands from their plans may still be used. Commands use explicit
 `glab api --hostname ... --method POST ... --input ...` with a JSON content type.
 This preserves Markdown, backticks, dollar signs, quotes, and newlines without
 shell interpolation. Do not hand-edit generated commands or payload files:

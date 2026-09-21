@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Expose temporary anonymized handoff creation.
+Expose stable workspace-scoped anonymized handoff creation.
 
 ## Triggers and Near-Misses
 
@@ -10,35 +10,41 @@ Routes session handoff; near-miss: repository notes.
 
 ## Inputs/Outputs
 
-Arguments provide session context; output is temporary handoff path.
+Arguments provide session context; output is the stable workspace-scoped XDG
+handoff path.
 
 ## Workflow Stages
 
-Select, pass, redact, write temp artifact, verify, report.
+Select, resolve the destination read-only, redact, preview draft and path,
+confirm, bind the write to that exact path, atomically write approved standard
+input, verify, report.
 
 ## Dependencies
 
-`stopit` and OS temporary directory.
+`stopit`, an existing workspace, and XDG state.
 
 ## Remote/Local Effects
 
-Temporary write only.
+One confirmed private XDG state write only; no repository or remote write.
 
 ## Errors/Partial/Escalation
 
-Redaction uncertainty blocks.
+Redaction uncertainty, invalid content, or unsafe state paths block the write.
 
 ## Unique Constraints
 
-No repository file is created.
+No repository or separate draft file is created. The same canonical workspace
+always resolves to the same path.
 
 ## Requirement
 
 ### REQ-I-221 - Route the stopit command
 
-The command shall load exactly `stopit` and preserve temporary-only storage.
+The command shall load exactly `stopit` and preserve its explicit-confirmation,
+workspace-scoped XDG storage contract.
 
 ## Example
 
-`/stopit` writes an anonymized handoff outside the repository.
+`/stopit` previews and then writes an approved anonymized handoff outside the
+repository.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

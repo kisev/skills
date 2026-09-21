@@ -10,7 +10,8 @@ Trigger for an exact release MR; near-miss: ordinary MR preparation.
 
 ## Inputs and Outputs
 
-Input is one exact MR URL and release boundary. Output is a verified plan.
+Input is one exact MR URL and release boundary. Output is a verified plan at the
+stable target-scoped `release-publication.md` path.
 
 ## Workflow Stages
 
@@ -22,7 +23,8 @@ Git, GitLab read access, and repository contracts.
 
 ## Remote/Local Effects
 
-Read-only remote collection and local plan artifact; no publish/send effects.
+Read-only remote collection and an atomically replaced local plan backed by
+immutable evidence and a private pointer; no publish/send effects.
 
 ## Errors, Partial, Escalation
 
@@ -36,7 +38,10 @@ Announcement remains separate and illustration prompts contain no logos or text.
 
 ### REQ-F-115 - Bound release preparation
 
-The skill shall prepare release evidence without publishing, tagging, or sending announcements.
+The skill shall prepare release evidence without publishing, tagging, or sending
+announcements. A complete preparation shall atomically replace the stable
+`release-publication.md`; incomplete and stale attempts shall not advertise or
+replace a previous successful result.
 
 ## Example
 

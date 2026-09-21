@@ -3265,11 +3265,48 @@ def publication_markdown(
                 *label_review_markdown(label_review),
                 *release_sections,
                 "",
-                "Before manual publication, run `finalize --plan` for this JSON envelope; stale or incomplete evidence blocks readiness.",
+                "Before manual publication, run `finalize` with the stable plan pointer and binding returned by scaffold; stale or incomplete evidence blocks readiness.",
             ]
         )
         + "\n"
     )
+
+
+def publish_stable_release(
+    root: Path, plan_path: Path, plan_digest: str, markdown: str
+) -> tuple[Path, Path]:
+    stable_markdown = root / "release-publication.md"
+    stable_plan = root / "release-publication.json"
+    lock = root / ".release-publication.lock"
+    try:
+        lock.mkdir(mode=0o700)
+    except FileExistsError as exc:
+        raise WorkflowError("another release publication update holds the lock") from exc
+    destinations = [stable_markdown, stable_plan]
+    try:
+        if any(item.is_symlink() for item in destinations):
+            raise WorkflowError("stable release publication paths must not be symlinks")
+        previous = [item.read_bytes() if item.exists() else None for item in destinations]
+        try:
+            write_bytes(stable_markdown, markdown.encode())
+            write_json(
+                stable_plan,
+                {
+                    "plan_path": str(plan_path),
+                    "digest": plan_digest,
+                    "binding": plan_digest,
+                },
+            )
+        except BaseException:
+            for destination, old in zip(destinations, previous, strict=True):
+                if old is None:
+                    destination.unlink(missing_ok=True)
+                else:
+                    write_bytes(destination, old)
+            raise
+    finally:
+        lock.rmdir()
+    return stable_plan, stable_markdown
 
 
 def scaffold(
@@ -3381,6 +3418,15 @@ def scaffold(
                 "digest": companion_digest,
             }
         )
+    stable_plan_path: Path | None = None
+    stable_markdown_path: Path | None = None
+    plan_binding: str | None = None
+    if profile == "release-prepare":
+        plan_binding = plan_digest
+        if complete:
+            stable_plan_path, stable_markdown_path = publish_stable_release(
+                root, path, plan_digest, markdown
+            )
     return {
         "status": "ok" if complete else "incomplete",
         "summary": {
@@ -3396,7 +3442,10 @@ def scaffold(
         },
         "artifact_path": str(path),
         "digest": plan_digest,
-        "markdown_path": str(markdown_path),
+        "plan_path": str(stable_plan_path) if stable_plan_path is not None else None,
+        "binding": plan_binding,
+        "markdown_path": str(stable_markdown_path) if stable_markdown_path is not None else None,
+        "immutable_markdown_path": str(markdown_path),
         "markdown_digest": markdown_digest,
         "companions": companion_outputs,
         "external_mutations": False,
@@ -3445,6 +3494,18 @@ def finalize(root_value: str, pointer_name: str = "current.json") -> dict[str, o
     }
 
 
+def resolve_release_plan(path: Path) -> Path:
+    pointer_path = regular_file(path, "release publication pointer")
+    pointer = read_json(pointer_path, "release publication pointer")
+    pointer_digest = pointer.get("digest")
+    if not is_digest(pointer_digest) or not is_digest(pointer.get("binding")):
+        raise WorkflowError("release publication pointer is invalid")
+    expected = pointer_path.parent / "artifacts" / "publication_plan" / f"{pointer_digest}.json"
+    if pointer.get("plan_path") != str(expected):
+        raise WorkflowError("release publication pointer escapes its collection")
+    return expected
+
+
 def plan_context(
     plan_value: str,
 ) -> tuple[Path, Path, dict[str, Any], str, Path, dict[str, Any], dict[str, Any] | None]:
@@ -3453,6 +3514,8 @@ def plan_context(
         from .mr_publication import resolve_plan
 
         candidate = resolve_plan(candidate)
+    elif candidate.name == "release-publication.json":
+        candidate = resolve_release_plan(candidate)
     plan_path = regular_file(candidate, "publication plan")
     _, plan = artifact_payload(plan_path, "publication_plan")
     plan_digest = hashlib.sha256(plan_path.read_bytes()).hexdigest()
@@ -3497,6 +3560,19 @@ def plan_context(
             raise WorkflowError("MR plan was superseded; prepare again")
         validate_plan(root, plan, baseline)
     if plan.get("profile") == "release-prepare":
+        pointer = read_json(
+            regular_file(root / "release-publication.json", "release publication pointer"),
+            "release publication pointer",
+        )
+        if pointer.get("plan_path") != str(plan_path) or pointer.get("digest") != plan_digest:
+            raise WorkflowError("release plan was superseded; prepare again")
+        stable_markdown = regular_file(
+            root / "release-publication.md", "stable release publication"
+        )
+        if stable_markdown.read_bytes() != markdown.encode():
+            raise WorkflowError(
+                "stable release publication does not match this plan; prepare again"
+            )
         inventory_digest = plan.get("inventory_digest")
         if not is_digest(inventory_digest):
             raise WorkflowError("release publication plan inventory digest is invalid")
@@ -3521,6 +3597,8 @@ def plan_context(
                 or hashlib.sha256(companion_path.read_bytes()).hexdigest() != companion["sha256"]
             ):
                 raise WorkflowError("release publication companion does not match the plan")
+        if pointer.get("binding") != plan_digest:
+            raise WorkflowError("release publication pointer binding is invalid")
     if (
         plan.get("profile") != baseline.get("profile")
         or plan.get("target") != baseline.get("target")
@@ -3536,15 +3614,20 @@ def finalize_plan(
 ) -> tuple[dict[str, object], Path, Path, dict[str, Any]]:
     root, _, plan, plan_digest, source, baseline, release_inventory = plan_context(plan_value)
     if expected_binding is not None:
-        if plan.get("profile") != "mr-prepare" or not is_digest(expected_binding):
-            raise WorkflowError("expected MR plan binding is invalid")
-        from .mr_publication import plan_binding
+        if not is_digest(expected_binding):
+            raise WorkflowError("expected publication plan binding is invalid")
+        if plan.get("profile") == "mr-prepare":
+            from .mr_publication import plan_binding
 
-        if (
-            plan_binding(plan["evidence_digest"], plan["mr_content"], plan["requests"])
-            != expected_binding
-        ):
-            raise WorkflowError("MR plan binding is stale; prepare again")
+            actual_binding = plan_binding(
+                plan["evidence_digest"], plan["mr_content"], plan["requests"]
+            )
+        elif plan.get("profile") == "release-prepare":
+            actual_binding = plan_digest
+        else:
+            raise WorkflowError("publication plan binding is not supported")
+        if actual_binding != expected_binding:
+            raise WorkflowError("publication plan binding is stale; prepare again")
     target = baseline.get("target")
     if not isinstance(target, dict):
         raise WorkflowError("evidence target is missing")
@@ -3587,6 +3670,11 @@ def finalize_plan(
 
         if resolve_plan(root / "mr-publication.json").stem != plan_digest:
             raise WorkflowError("MR plan was superseded during the freshness check")
+    if plan.get("profile") == "release-prepare":
+        # Recheck the stable pointer after remote collection for the same reason.
+        _, _, _, current_digest, _, _, _ = plan_context(plan_value)
+        if current_digest != plan_digest:
+            raise WorkflowError("release plan was superseded during the freshness check")
     return (
         {
             "status": "ok" if not changed and complete else "stale",
@@ -4011,8 +4099,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     final = subparsers.add_parser("finalize")
     if profile in {"mr-prepare", "release-prepare"}:
         final.add_argument("--plan", required=True)
-        if profile == "mr-prepare":
-            final.add_argument("--expected-binding")
+        final.add_argument("--expected-binding", required=profile == "release-prepare")
     else:
         final.add_argument("--artifact-root", required=True)
     final.add_argument("--report")
@@ -4062,6 +4149,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     from .mr_publication import resolve_plan
 
                     input_path = resolve_plan(input_path)
+                elif input_path.name == "release-publication.json":
+                    if profile != "release-prepare":
+                        raise WorkflowError("release publication pointers require release-prepare")
+                    input_path = resolve_release_plan(input_path)
                 _, input_payload = artifact_payload(input_path, "publication_plan")
             if input_payload.get("profile") != profile:
                 raise WorkflowError("artifact profile does not match the invoked skill")

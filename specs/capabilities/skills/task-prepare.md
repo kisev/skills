@@ -33,15 +33,24 @@ semantic checks. Local rendering uses Python 3.12+ and the standard library.
 
 Neutral output stays in chat unless a workspace-relative output is requested.
 GitLab intent automatically requests a bounded local publication bundle. New
-bundles are installed atomically; identical reruns reuse immutable artifacts,
-and changed existing files are rejected. No external mutation or publication.
+version 2 drafts name a safe lowercase `plan_key`; the default bundle path is
+`.task-prepare/<plan_key>/task-publication.md`, independent of draft content.
+Identical reruns reuse the slot. Changed drafts install retained immutable support
+files in a content-addressed internal directory before atomically replacing only
+the stable Markdown under a slot-scoped lock. Commands name their draft's internal
+payload, so later drafts cannot change the content consumed by copied commands.
+Explicit workspace-relative output directories remain supported. No external
+mutation or publication.
 
 ## Errors, Partial, Escalation
 
 Missing or unreadable material blocks preparation. Unresolved semantics, targets,
 or metadata remain explicit in a partial plan without creation commands for the
 affected item. Missing new IIDs defer link commands; malformed input, unsafe paths,
-dependency cycles, and unapproved batches fail before artifact writes.
+unsafe plan keys, symlinks, concurrent slot updates, dependency cycles, and
+unapproved batches fail before replacing the published Markdown. A failed
+Markdown replacement leaves the prior stable plan available and may leave the
+new immutable support directory retained for retry.
 
 ## Unique Constraints
 
@@ -66,7 +75,12 @@ target, template, metadata, duplicate, and semantic checks are verified.
 Unresolved targets and unsupported group APIs shall remain blocked. Dependencies
 shall use real observed IIDs or remain deferred, never executable placeholders.
 Existing objects shall not receive creation commands. The workflow shall never
-execute publication commands or mutate GitLab.
+execute publication commands or mutate GitLab. Each version 2 publication draft
+shall provide a safe lowercase `plan_key`; unless an output directory is explicit,
+the renderer shall retain content-addressed support files and atomically replace
+only the stable Markdown after its support files are present. It shall use a
+slot-scoped lock, reject symlinks and altered immutable content, and never remove
+the stable plan as an update step.
 
 ## Example
 

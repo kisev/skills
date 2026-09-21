@@ -6,12 +6,17 @@ import json
 import os
 import re
 import shlex
+import shutil
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from .contract import Parser, WorkflowError, atomic_write, digest, emit, output_path
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 CHECKS = {"target", "templates", "metadata", "duplicates", "semantics"}
 TEXT = {
@@ -95,9 +100,17 @@ def validate_target(value: object) -> None:
 
 
 def validate(value: object) -> dict[str, Any]:
-    plan = fields(value, {"version", "locale", "batch_agreement", "items", "links"}, "plan")
-    if plan["version"] != 1 or plan["locale"] not in TEXT:
+    plan = fields(
+        value,
+        {"version", "plan_key", "locale", "batch_agreement", "items", "links"},
+        "plan",
+    )
+    if plan["version"] != 2 or plan["locale"] not in TEXT:
         raise WorkflowError("unsupported publication version or locale")
+    if not isinstance(plan["plan_key"], str) or not re.fullmatch(
+        r"[a-z][a-z0-9-]{0,63}", plan["plan_key"]
+    ):
+        raise WorkflowError("plan_key must be a safe lowercase identifier")
     items = plan["items"]
     if not isinstance(items, list) or not 1 <= len(items) <= 50:
         raise WorkflowError("plan requires 1 to 50 items")
@@ -224,6 +237,8 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
     labels = TEXT[plan["locale"]]
     lines = [f"# {labels['title']}", "", labels["manual"], ""]
     files: dict[str, bytes] = {}
+    content_prefix = f".task-publication/{digest(plan)}"
+    content_root = root / content_prefix
     complete = True
     items = {item["key"]: item for item in plan["items"]}
     for item in items.values():
@@ -258,18 +273,20 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
             marker = "x" if check["status"] == "verified" else " "
             lines.append(f"- [{marker}] {labels['check_' + name]}: {check['detail']}")
         lines.append("")
-        files[f"{key}.md"] = item["description"].encode()
+        files[f"{content_prefix}/{key}.md"] = item["description"].encode()
         if is_ready and item["existing_iid"] is None:
             metadata = dict(item["metadata"])
             if "labels" in metadata:
                 metadata["labels"] = ",".join(metadata["labels"])
             payload = {"title": item["title"], "description": item["description"], **metadata}
             filename = f"{key}.json"
-            files[filename] = (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode()
+            files[f"{content_prefix}/{filename}"] = (
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+            ).encode()
             target = item["target"]
             collection = "projects" if item["type"] == "issue" else "groups"
             endpoint = f"{collection}/{target['id']}/{item['type']}s"
-            command = api_command(urlsplit(target["url"]).netloc, endpoint, root / filename)
+            command = api_command(urlsplit(target["url"]).netloc, endpoint, content_root / filename)
             lines.extend([code_block(command), ""])
     if plan["links"]:
         lines.extend([f"## {labels['links']}", ""])
@@ -295,35 +312,123 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
                 "link_type": "is_blocked_by",
             }
             filename = f"link-{index + 1}.json"
-            files[filename] = (json.dumps(payload, indent=2) + "\n").encode()
+            files[f"{content_prefix}/{filename}"] = (json.dumps(payload, indent=2) + "\n").encode()
             endpoint = f"projects/{source['target']['id']}/issues/{source['existing_iid']}/links"
             command = api_command(
-                urlsplit(source["target"]["url"]).netloc, endpoint, root / filename
+                urlsplit(source["target"]["url"]).netloc, endpoint, content_root / filename
             )
             lines.extend([code_block(command), ""])
     files["task-publication.md"] = ("\n".join(lines).rstrip() + "\n").encode()
     return files, complete
 
 
-def write_bundle(root: Path, files: dict[str, bytes]) -> None:
+def validate_bundle_path(root: Path) -> None:
     for parent in (root, *root.parents):
         if parent.is_symlink():
             raise WorkflowError("publication directory must not use symlinks")
     if root.exists():
-        if not root.is_dir() or {p.name for p in root.iterdir()} != set(files):
-            raise WorkflowError("publication directory already contains other work")
-        for name, content in files.items():
-            path = root / name
-            if path.is_symlink() or not path.is_file() or path.read_bytes() != content:
-                raise WorkflowError("publication artifact changed; choose a new directory")
-        return
+        if not root.is_dir():
+            raise WorkflowError("publication path must be a directory")
+        for path in root.iterdir():
+            if path.name == "task-publication.md":
+                if path.is_symlink() or not path.is_file():
+                    raise WorkflowError("publication plan must be a regular file")
+            elif path.name == ".task-publication":
+                if path.is_symlink() or not path.is_dir():
+                    raise WorkflowError("publication content path must be a directory")
+            else:
+                raise WorkflowError("publication directory contains an unexpected artifact")
+
+
+def split_bundle(files: dict[str, bytes]) -> tuple[str, dict[str, bytes], bytes]:
+    try:
+        markdown = files["task-publication.md"]
+    except KeyError as exc:
+        raise WorkflowError("publication bundle requires task-publication.md") from exc
+    support: dict[str, bytes] = {}
+    content_id: str | None = None
+    for name, content in files.items():
+        if name == "task-publication.md":
+            continue
+        parts = Path(name).parts
+        if (
+            len(parts) != 3
+            or parts[0] != ".task-publication"
+            or not re.fullmatch(r"[0-9a-f]{64}", parts[1])
+            or not re.fullmatch(r"(?:[a-z][a-z0-9-]{0,63}|link-[1-9][0-9]*)\.(?:md|json)", parts[2])
+        ):
+            raise WorkflowError("publication bundle contains an unsafe support path")
+        if content_id is not None and content_id != parts[1]:
+            raise WorkflowError("publication bundle must use one content directory")
+        content_id = parts[1]
+        support[parts[2]] = content
+    if content_id is None or not support:
+        raise WorkflowError("publication bundle requires immutable support files")
+    return content_id, support, markdown
+
+
+def validate_content(path: Path, files: dict[str, bytes]) -> None:
+    if path.is_symlink() or not path.is_dir():
+        raise WorkflowError("publication content path must be a regular directory")
+    if {item.name for item in path.iterdir()} != set(files):
+        raise WorkflowError("immutable publication content does not match its address")
+    for name, content in files.items():
+        artifact = path / name
+        if artifact.is_symlink() or not artifact.is_file() or artifact.read_bytes() != content:
+            raise WorkflowError("immutable publication content was changed")
+
+
+@contextmanager
+def slot_lock(root: Path) -> Iterator[None]:
+    lock = root.with_name(f".{root.name}.task-publication.lock")
+    if lock.is_symlink():
+        raise WorkflowError("publication lock must not be a symlink")
+    try:
+        lock.mkdir(mode=0o700)
+    except FileExistsError as exc:
+        raise WorkflowError("another publication update holds this slot lock") from exc
+    try:
+        yield
+    finally:
+        lock.rmdir()
+
+
+def write_bundle(root: Path, files: dict[str, bytes]) -> None:
+    content_id, support, markdown = split_bundle(files)
+    validate_bundle_path(root)
     root.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".task-publication-", dir=root.parent) as temporary:
-        staged = Path(temporary) / "bundle"
-        staged.mkdir(mode=0o700)
-        for name, content in files.items():
-            atomic_write(staged / name, content)
-        os.rename(staged, root)
+    validate_bundle_path(root)
+    with slot_lock(root):
+        validate_bundle_path(root)
+        root.mkdir(mode=0o700, exist_ok=True)
+        internal = root / ".task-publication"
+        if internal.is_symlink():
+            raise WorkflowError("publication content path must not be a symlink")
+        internal.mkdir(mode=0o700, exist_ok=True)
+        if internal.is_symlink() or not internal.is_dir():
+            raise WorkflowError("publication content path must be a regular directory")
+        content_root = internal / content_id
+        if content_root.exists() or content_root.is_symlink():
+            validate_content(content_root, support)
+        else:
+            staged = Path(tempfile.mkdtemp(prefix=f".{content_id}.stage-", dir=internal))
+            try:
+                for name, content in support.items():
+                    atomic_write(staged / name, content)
+                validate_content(staged, support)
+                try:
+                    os.rename(staged, content_root)
+                except FileExistsError:
+                    validate_content(content_root, support)
+            finally:
+                shutil.rmtree(staged, ignore_errors=True)
+            validate_content(content_root, support)
+        plan_path = root / "task-publication.md"
+        if plan_path.is_symlink() or (plan_path.exists() and not plan_path.is_file()):
+            raise WorkflowError("publication plan must be a regular file")
+        if plan_path.exists() and plan_path.read_bytes() == markdown:
+            return
+        atomic_write(plan_path, markdown)
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -334,7 +439,14 @@ def run(argv: list[str] | None = None) -> int:
     try:
         args = cli.parse_args(argv)
         if args.capabilities:
-            emit({"schema_version": 1, "mutation": "local", "external_mutations": False})
+            emit(
+                {
+                    "schema_version": 1,
+                    "publication_version": 2,
+                    "mutation": "local",
+                    "external_mutations": False,
+                }
+            )
             return 0
         if not args.input:
             raise WorkflowError("--input is required")
@@ -342,7 +454,7 @@ def run(argv: list[str] | None = None) -> int:
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
             raise WorkflowError("input must be a small regular non-symlink JSON file")
         plan = validate(json.loads(path.read_text(encoding="utf-8")))
-        directory = args.output_dir or f".task-prepare/{digest(plan)[:20]}"
+        directory = args.output_dir or f".task-prepare/{plan['plan_key']}"
         root = output_path(f"{directory}/task-publication.md").parent
         files, complete = render(plan, root)
         write_bundle(root, files)

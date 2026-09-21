@@ -631,7 +631,7 @@ print(json.dumps(value))
             self.assertEqual(markdown.stat().st_mode & 0o777, 0o600)
 
             finalized = self.run_runner("mr-prepare", "finalize", "--plan", plan, env=environment)
-            self.assertEqual(finalized.returncode, 0, finalized.stderr)
+            self.assertEqual(finalized.returncode, 0, finalized.stdout + finalized.stderr)
             self.assertEqual(
                 json.loads(finalized.stdout)["result"]["publication_plan_digest"],
                 scaffold["digest"],
@@ -1082,16 +1082,93 @@ print(json.dumps(value))
             scaffold = json.loads(scaffolded.stdout)
             self.assertEqual(len(scaffold["companions"]), 3)
             self.assertTrue(all(Path(item["path"]).is_file() for item in scaffold["companions"]))
-            plan = scaffold["artifact_path"]
-            plan_payload = json.loads(Path(plan).read_text(encoding="utf-8"))["payload"]
-            self.assertEqual(plan_payload["label_review"]["add"], ["ship-ready", "next-compatible"])
-            finalized = self.run_runner(
-                "release-prepare", "finalize", "--plan", plan, env=environment
+            stable_markdown = Path(scaffold["markdown_path"])
+            stable_plan = Path(scaffold["plan_path"])
+            self.assertEqual(stable_markdown.name, "release-publication.md")
+            self.assertEqual(stable_plan.name, "release-publication.json")
+            self.assertEqual(stable_markdown.parent, stable_plan.parent)
+            self.assertEqual(
+                json.loads(stable_plan.read_text(encoding="utf-8"))["binding"],
+                scaffold["binding"],
             )
-            self.assertEqual(finalized.returncode, 0, finalized.stderr)
+            plan = scaffold["artifact_path"]
+            pointer_payload = json.loads(stable_plan.read_text(encoding="utf-8"))
+            self.assertEqual(pointer_payload["plan_path"], plan)
+            plan_document = json.loads(Path(plan).read_text(encoding="utf-8"))
+            self.assertEqual(plan_document["schema"], "portable-gitlab/publication_plan/v2")
+            plan_payload = plan_document["payload"]
+            self.assertEqual(plan_payload["label_review"]["add"], ["ship-ready", "next-compatible"])
+            missing_binding = self.run_runner(
+                "release-prepare", "finalize", "--plan", str(stable_plan), env=environment
+            )
+            self.assertEqual(missing_binding.returncode, 2)
+            self.assertIn("--expected-binding", missing_binding.stdout)
+            finalized = self.run_runner(
+                "release-prepare",
+                "finalize",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env=environment,
+            )
+            self.assertEqual(finalized.returncode, 0, finalized.stdout + finalized.stderr)
+
+            first_markdown = stable_markdown.read_text(encoding="utf-8")
+            content_value = json.loads(content.read_text(encoding="utf-8"))
+            content_value["title"] = "Prepare updated release publication artifacts"
+            content.write_text(json.dumps(content_value), encoding="utf-8")
+            replacement_result = self.run_runner(
+                "release-prepare",
+                "scaffold",
+                "--bundle",
+                evidence,
+                "--inventory",
+                inventory["artifact_path"],
+                "--content",
+                str(content),
+                env=environment,
+            )
+            self.assertEqual(replacement_result.returncode, 0, replacement_result.stderr)
+            replacement = json.loads(replacement_result.stdout)
+            self.assertEqual(Path(replacement["markdown_path"]), stable_markdown)
+            self.assertEqual(Path(replacement["plan_path"]), stable_plan)
+            self.assertNotEqual(stable_markdown.read_text(encoding="utf-8"), first_markdown)
+            superseded = self.run_runner(
+                "release-prepare",
+                "finalize",
+                "--plan",
+                plan,
+                "--expected-binding",
+                scaffold["binding"],
+                env=environment,
+            )
+            self.assertEqual(superseded.returncode, 2)
+            self.assertIn("superseded", superseded.stdout)
+            wrong_binding = self.run_runner(
+                "release-prepare",
+                "finalize",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env=environment,
+            )
+            self.assertEqual(wrong_binding.returncode, 2)
+            self.assertIn("binding is stale", wrong_binding.stdout)
+            scaffold = replacement
+            plan = replacement["artifact_path"]
 
             subprocess.run(["git", "tag", "v1.1.0"], cwd=repository, check=True)
-            stale = self.run_runner("release-prepare", "finalize", "--plan", plan, env=environment)
+            stale = self.run_runner(
+                "release-prepare",
+                "finalize",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env=environment,
+            )
             self.assertEqual(stale.returncode, 2, stale.stderr)
             self.assertIn("release_inventory", json.loads(stale.stdout)["result"]["changed"])
             subprocess.run(["git", "tag", "-d", "v1.1.0"], cwd=repository, check=True)
@@ -1099,10 +1176,41 @@ print(json.dumps(value))
             companion = Path(scaffold["companions"][0]["path"])
             companion.write_text("modified", encoding="utf-8")
             modified = self.run_runner(
-                "release-prepare", "finalize", "--plan", plan, env=environment
+                "release-prepare",
+                "finalize",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env=environment,
             )
             self.assertEqual(modified.returncode, 2)
             self.assertEqual(json.loads(modified.stdout)["status"], "error")
+
+    def test_release_stable_publication_rolls_back_pointer_failure(self) -> None:
+        from shared.references.portable_gitlab import contract
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            stable_markdown = root / "release-publication.md"
+            stable_plan = root / "release-publication.json"
+            stable_markdown.write_text("previous markdown", encoding="utf-8")
+            stable_plan.write_text('{"previous":true}', encoding="utf-8")
+            previous = (stable_markdown.read_bytes(), stable_plan.read_bytes())
+
+            with (
+                patch.object(contract, "write_json", side_effect=OSError("simulated failure")),
+                self.assertRaisesRegex(OSError, "simulated failure"),
+            ):
+                contract.publish_stable_release(
+                    root,
+                    root / "artifacts" / "publication_plan" / f"{'a' * 64}.json",
+                    "a" * 64,
+                    "replacement markdown",
+                )
+
+            self.assertEqual((stable_markdown.read_bytes(), stable_plan.read_bytes()), previous)
+            self.assertFalse((root / ".release-publication.lock").exists())
 
     @unittest.skip("GitLab task adapter removed in stage 17")
     def test_pagination_deduplicates_and_preserves_partial_failure(self) -> None:

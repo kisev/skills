@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from shared.references.work_item_runtime import publication
 from shared.references.work_item_runtime.contract import WorkflowError
 from shared.references.work_item_runtime.publication import CHECKS, render, run, validate
 
@@ -19,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def draft() -> dict[str, Any]:
     return {
-        "version": 1,
+        "version": 2,
+        "plan_key": "configuration-contract",
         "locale": "ru",
         "batch_agreement": "",
         "items": [
@@ -72,13 +74,18 @@ def commands(files: dict[str, bytes]) -> list[str]:
     ]
 
 
+def support(files: dict[str, bytes], name: str) -> bytes:
+    matches = [content for path, content in files.items() if path.endswith(f"/{name}")]
+    assert len(matches) == 1
+    return matches[0]
+
+
 def test_creation_command_preserves_literal_markdown_and_pins_target(tmp_path: Path) -> None:
     root = tmp_path / "plan with 'quotes' and spaces"
     root.mkdir()
     plan = draft()
     files, complete = render(validate(plan), root)
-    for name, content in files.items():
-        (root / name).write_bytes(content)
+    publication.write_bundle(root, files)
     assert complete
     (command,) = commands(files)
     args = shlex.split(command)
@@ -98,7 +105,7 @@ def test_creation_command_preserves_literal_markdown_and_pins_target(tmp_path: P
     assert payload["labels"] == "type::feature"
     assert payload["assignee_ids"] == [7]
     assert "checks" not in payload
-    assert files["contract.md"].decode() == payload["description"]
+    assert support(files, "contract.md").decode() == payload["description"]
     # Execute only against a recording fake; shell parsing must not execute prose.
     fake = tmp_path / "glab"
     fake.write_text(f"#!{sys.executable}\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\n")
@@ -122,7 +129,7 @@ def test_incomplete_evidence_suppresses_creation(name: str, tmp_path: Path) -> N
     files, complete = render(validate(plan), tmp_path)
     assert not complete
     assert not commands(files)
-    assert "contract.json" not in files
+    assert not any(path.endswith("/contract.json") for path in files)
     assert "Evidence unavailable" in files["task-publication.md"].decode()
 
 
@@ -172,13 +179,13 @@ def test_resume_uses_real_iids_without_recreating_issues(tmp_path: Path) -> None
     assert complete
     (command,) = commands(files)
     assert "projects/43/issues/20/links" in command
-    payload = json.loads(files["link-1.json"])
+    payload = json.loads(support(files, "link-1.json"))
     assert payload == {
         "target_project_id": 42,
         "target_issue_iid": 10,
         "link_type": "is_blocked_by",
     }
-    assert "consumer.json" not in files and "contract.json" not in files
+    assert not any(path.endswith(("/consumer.json", "/contract.json")) for path in files)
     plan["items"][1]["target"]["url"] = "https://other.example.org/team/consumer"
     files, complete = render(validate(plan), tmp_path)
     assert not complete and not commands(files)
@@ -209,7 +216,7 @@ def test_invalid_dependencies_and_metadata_are_rejected() -> None:
         validate(plan)
 
 
-def test_atomic_default_bundle_is_repeatable_and_preserves_edits(
+def test_default_bundle_uses_stable_slot_and_replaces_changed_draft(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
@@ -218,17 +225,161 @@ def test_atomic_default_bundle_is_repeatable_and_preserves_edits(
     assert run(["--input", str(path)]) == 0
     report = json.loads(capsys.readouterr().out)
     output = Path(report["output"])
-    assert output.name == "task-publication.md"
-    assert output.parent.parent == tmp_path / ".task-prepare"
+    assert output == tmp_path / ".task-prepare/configuration-contract/task-publication.md"
     assert report["external_mutations"] is False
     before = output.stat().st_mtime_ns
     assert run(["--input", str(path)]) == 0
     assert output.stat().st_mtime_ns == before
     capsys.readouterr()
-    output.write_text("User edits")
+    changed = draft()
+    changed["items"][0]["description"] = "Changed publication body"
+    path.write_text(json.dumps(changed))
+    assert run(["--input", str(path)]) == 0
+    assert Path(json.loads(capsys.readouterr().out)["output"]) == output
+    assert "Changed publication body" in output.read_text()
+    assert len(list((tmp_path / ".task-prepare").iterdir())) == 1
+    internal = output.parent / ".task-publication"
+    assert len([path for path in internal.iterdir() if path.is_dir()]) == 2
+
+
+def test_stale_command_keeps_its_content_after_stable_plan_changes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "draft.json"
+    plan_a = draft()
+    path.write_text(json.dumps(plan_a))
+    assert run(["--input", str(path)]) == 0
+    output = Path(json.loads(capsys.readouterr().out)["output"])
+    command_a = next(
+        line for line in output.read_text().splitlines() if line.startswith("glab api ")
+    )
+    payload_a_path = Path(shlex.split(command_a)[-1])
+    payload_a = json.loads(payload_a_path.read_text())
+
+    plan_b = draft()
+    plan_b["items"][0]["title"] = "Replacement title"
+    plan_b["items"][0]["description"] = "Replacement body"
+    path.write_text(json.dumps(plan_b))
+    assert run(["--input", str(path)]) == 0
+    capsys.readouterr()
+    command_b = next(
+        line for line in output.read_text().splitlines() if line.startswith("glab api ")
+    )
+    payload_b_path = Path(shlex.split(command_b)[-1])
+
+    assert payload_a_path != payload_b_path
+    assert payload_a_path.is_file()
+    assert json.loads(payload_a_path.read_text()) == payload_a
+    assert payload_a["description"] == plan_a["items"][0]["description"]
+    assert json.loads(payload_b_path.read_text())["description"] == "Replacement body"
+    fake = tmp_path / "glab"
+    fake.write_text(
+        f"#!{sys.executable}\n"
+        "import json, pathlib, sys\n"
+        "path = pathlib.Path(sys.argv[sys.argv.index('--input') + 1])\n"
+        "print(json.dumps(json.loads(path.read_text())))\n"
+    )
+    fake.chmod(0o700)
+    result = subprocess.run(
+        ["sh", "-c", command_a],
+        cwd=tmp_path,
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert json.loads(result.stdout) == payload_a
+
+
+def test_plan_replacement_failure_keeps_stable_plan_and_new_content(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = tmp_path / ".task-prepare" / "configuration-contract"
+    old_files, _ = render(validate(draft()), root)
+    publication.write_bundle(root, old_files)
+    old_plan = (root / "task-publication.md").read_bytes()
+    changed = draft()
+    changed["items"][0]["description"] = "Replacement"
+    new_files, _ = render(validate(changed), root)
+    replace = os.replace
+
+    def fail_plan_replace(source: Path, destination: Path) -> None:
+        if destination == root / "task-publication.md":
+            raise OSError("simulated swap failure")
+        replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", fail_plan_replace)
+    with pytest.raises(OSError, match="simulated swap failure"):
+        publication.write_bundle(root, new_files)
+    assert (root / "task-publication.md").read_bytes() == old_plan
+    new_payload = Path(shlex.split(commands(new_files)[0])[-1])
+    assert json.loads(new_payload.read_text())["description"] == "Replacement"
+
+
+def test_held_slot_lock_prevents_replacement(tmp_path: Path) -> None:
+    root = tmp_path / ".task-prepare" / "configuration-contract"
+    old_files, _ = render(validate(draft()), root)
+    publication.write_bundle(root, old_files)
+    lock = root.with_name(".configuration-contract.task-publication.lock")
+    lock.mkdir()
+    changed = draft()
+    changed["items"][0]["description"] = "Replacement"
+    new_files, _ = render(validate(changed), root)
+    with pytest.raises(WorkflowError, match="holds this slot lock"):
+        publication.write_bundle(root, new_files)
+    assert (root / "task-publication.md").read_bytes() == old_files["task-publication.md"]
+
+
+@pytest.mark.parametrize("plan_key", ["../outside", "Uppercase", "two_words", "-leading", "a" * 65])
+def test_unsafe_plan_keys_are_rejected(plan_key: str) -> None:
+    plan = draft()
+    plan["plan_key"] = plan_key
+    with pytest.raises(WorkflowError, match="safe lowercase"):
+        validate(plan)
+
+
+def test_version_one_publication_draft_is_rejected() -> None:
+    plan = draft()
+    plan["version"] = 1
+    with pytest.raises(WorkflowError, match="unsupported publication version"):
+        validate(plan)
+
+
+def test_default_slot_rejects_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "draft.json"
+    path.write_text(json.dumps(draft()))
+    slots = tmp_path / ".task-prepare"
+    slots.mkdir()
+    (slots / "configuration-contract").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
     assert run(["--input", str(path)]) == 2
-    assert "artifact changed" in capsys.readouterr().out
-    assert output.read_text() == "User edits"
+    error = capsys.readouterr().out
+    assert "unsafe" in error or "symlink" in error
+    assert not (tmp_path / "elsewhere").exists()
+
+
+def test_internal_content_directory_rejects_symlinks(tmp_path: Path) -> None:
+    root = tmp_path / ".task-prepare" / "configuration-contract"
+    root.mkdir(parents=True)
+    (root / ".task-publication").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    files, _ = render(validate(draft()), root)
+    with pytest.raises(WorkflowError, match="content path"):
+        publication.write_bundle(root, files)
+    assert not (tmp_path / "elsewhere").exists()
+
+
+def test_explicit_output_directory_is_preserved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "draft.json"
+    path.write_text(json.dumps(draft()))
+    assert run(["--input", str(path), "--output-dir", "custom/publication"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert Path(report["output"]) == tmp_path / "custom/publication/task-publication.md"
 
 
 @pytest.mark.parametrize("directory", ["../outside", "/tmp/task-publication-outside", "link/out"])
@@ -246,7 +397,25 @@ def test_unsafe_output_paths_do_not_write(
 def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: Path) -> None:
     scripts = ROOT / ".build/skills/task-prepare/scripts"
     path = tmp_path / "draft.json"
-    path.write_text(json.dumps(draft()))
+    capabilities = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            str(scripts / "prepare_publication.py"),
+            "--capabilities",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    built_draft = draft()
+    if json.loads(capabilities.stdout).get("publication_version") != 2:
+        built_draft["version"] = 1
+        del built_draft["plan_key"]
+    path.write_text(json.dumps(built_draft))
     result = subprocess.run(
         [
             sys.executable,
