@@ -8,6 +8,50 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[6.0.0] - 2026-09-22
+
+### Added
+
+- `spec-manage` now supports one project-selected canonical language, natural
+  mode selection, indexed specification extensions, specialized requirement and
+  architecture profiles, deterministic audits, and a portable Python 3.12+
+  structural validator with explicit snapshot and lifecycle checks.
+- `release-prepare` now builds one stable pre-merge and post-merge publication
+  runbook bound to the exact release inventory, milestone, contributors,
+  reviewers, work-item decisions, immutable payloads, and manual `glab`
+  commands.
+- `stopit` now provides a standard-library runner for private, atomic,
+  workspace-scoped handoffs under the XDG state directory.
+
+### Changed
+
+- `task-prepare` publication drafts now use stable `plan_key` slots with
+  content-addressed immutable support files, atomic replacement, and slot-scoped
+  locking.
+- Behavioral evaluations can assert structured per-case outcomes and observed
+  mutation boundaries. Hostless evaluation now uses materialized skills and no
+  longer presents fixture expectations as observed model behavior.
+
+### Fixed
+
+- Portable skill artifact paths remain stable across reruns while changed
+  payloads are retained immutably and unsafe or stale writes fail closed.
+
+### Breaking Changes
+
+- `task-prepare` publication input is now version 2 and requires a safe
+  lowercase `plan_key`; regenerate version 1 bundles and update references from
+  content-derived directories to `.task-prepare/<plan_key>/`.
+- `stopit` replaces unique temporary handoff files with
+  `$XDG_STATE_HOME/agent-skills/stopit/<workspace-id>/handoff.md`; update tools
+  that retain old temporary paths.
+- Release publication plans and `artifact-contracts-v2` release records have new
+  required bindings and decisions. Regenerate existing release plans instead of
+  reusing older artifacts.
+- Existing canonical specification trees must declare `Canonical language:` in
+  `specs/README.md` and satisfy the new formal structure before validation can
+  pass. Resolve mixed-language trees explicitly before updating them.
+
 ## \[5.1.3] - 2026-09-21
 
 ### Fixed
