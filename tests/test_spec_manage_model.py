@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -241,3 +242,68 @@ def test_public_mode_help_and_bilingual_eval_cases_stay_aligned() -> None:
         ("ru", "spec-manage.planning-near-miss"),
     }
     assert all(item["expected"]["not_selected"] == ["skill:spec-manage"] for item in near_misses)
+
+
+def test_audit_contract_is_deterministic_and_scenario_complete() -> None:
+    audit = (SKILL / "references/auditing.md").read_text(encoding="utf-8")
+    normalized = " ".join(audit.split())
+
+    report_sections = (
+        "Scope",
+        "Formal validation",
+        "Quality findings",
+        "Drift",
+        "Unchecked boundaries",
+        "Critic",
+        "Overall",
+    )
+    report = section(audit, "Conversational report")
+    positions = [report.index(name) for name in report_sections]
+    assert positions == sorted(positions)
+
+    rows = re.findall(r"\| \d \| `([A-Z_]+)` \|", audit)
+    assert rows == [
+        "UNKNOWN",
+        "CONFLICT",
+        "SPEC_AHEAD",
+        "IMPLEMENTATION_AHEAD",
+        "OK",
+    ]
+    for severity in ("critical", "high", "medium", "low"):
+        assert f"`{severity}`:" in audit
+    for marker in (
+        "claim** is one observable behavior or one verifiable property",
+        "boundary** is one interface, ownership, trust, deployment, or dependency",
+        "first matching row",
+        "Absence of evidence is not automatically `SPEC_AHEAD`",
+        "Drift: OK (<exact scope>; checked: <evidence boundaries>)",
+        "same bounded evidence snapshot",
+        "primary reviewer's conclusions",
+        "`accepted`, `rejected`, or `duplicate`",
+        "A repeated pass in the primary context is not independent",
+        "`Overall: partial`",
+        "`Overall: findings`",
+        "`Overall: clean`",
+    ):
+        assert marker in normalized
+
+    scenario = json.loads(
+        (ROOT / "evals/scenarios/spec-manage.audit-determinism.json").read_text(encoding="utf-8")
+    )
+    cases = {case["id"]: case for case in scenario["input"]["fixture"]["cases"]}
+    assert set(cases) == {
+        "direct-contradiction",
+        "missing-implementation",
+        "undocumented-behavior",
+        "insufficient-evidence",
+        "quality-without-drift",
+        "critic-unavailable",
+    }
+    assert cases["direct-contradiction"]["drift"] == "CONFLICT"
+    assert cases["missing-implementation"]["drift"] == "SPEC_AHEAD"
+    assert cases["undocumented-behavior"]["drift"] == "IMPLEMENTATION_AHEAD"
+    assert cases["insufficient-evidence"]["drift"] == "UNKNOWN"
+    assert cases["insufficient-evidence"]["overall"] == "partial"
+    assert cases["quality-without-drift"]["overall"] == "findings"
+    assert cases["critic-unavailable"]["critic"] == "not_checked"
+    assert cases["critic-unavailable"]["overall"] == "partial"

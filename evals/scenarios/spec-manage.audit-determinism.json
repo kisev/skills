@@ -1,0 +1,88 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "spec-manage.audit-determinism",
+  "revision": 1,
+  "locale": "neutral",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Apply the deterministic spec-audit classification and aggregate contract to every case without writing files.",
+    "fixture": {
+      "selected": ["skill:spec-manage"],
+      "cases": [
+        {
+          "id": "direct-contradiction",
+          "evidence": "Reliable specification and implementation sources assert incompatible behavior.",
+          "drift": "CONFLICT",
+          "overall": "findings"
+        },
+        {
+          "id": "missing-implementation",
+          "evidence": "Complete bounded implementation evidence does not implement the canonical claim and establishes no contrary behavior.",
+          "drift": "SPEC_AHEAD",
+          "overall": "findings"
+        },
+        {
+          "id": "undocumented-behavior",
+          "evidence": "Material implementation behavior is absent from the canonical specification and contradicts no canonical claim.",
+          "drift": "IMPLEMENTATION_AHEAD",
+          "overall": "findings"
+        },
+        {
+          "id": "insufficient-evidence",
+          "evidence": "Evidence necessary to compare the claim is unavailable.",
+          "drift": "UNKNOWN",
+          "overall": "partial"
+        },
+        {
+          "id": "quality-without-drift",
+          "evidence": "One confirmed quality finding exists while every in-scope drift unit is OK.",
+          "drift": "OK",
+          "overall": "findings"
+        },
+        {
+          "id": "critic-unavailable",
+          "evidence": "A full audit completed primary review but no independent critic was available.",
+          "critic": "not_checked",
+          "overall": "partial"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "selected": ["skill:spec-manage"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "deterministic-audit-contract"
+  },
+  "invariants": [
+    {
+      "id": "audit-ordered-decision-table",
+      "path": "skills/spec-manage/references/auditing.md",
+      "contains": "For each unit, apply the first matching row"
+    },
+    {
+      "id": "audit-aggregate-precedence",
+      "path": "skills/spec-manage/references/auditing.md",
+      "contains": "Overall: partial"
+    },
+    {
+      "id": "audit-critic-fallback",
+      "path": "skills/spec-manage/references/auditing.md",
+      "contains": "Critic: not_checked"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 2000,
+    "max_cost": 1
+  },
+  "digest": "db12c1c3773e28fc141f3ae9f1da6eb60cff062736dbc2cd9515742371608cac"
+}

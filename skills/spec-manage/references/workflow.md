@@ -68,7 +68,14 @@ python3 -I -S -B scripts/spec_validate.py lifecycle \
 
 Do not substitute Git history or an inferred baseline. If no complete explicit baseline is available, report lifecycle as `not_checked`; never claim append-only lifecycle compliance from `check` alone. An input or execution error is not a validation finding and blocks a successful completion report.
 
-In a full `spec-audit`, run snapshot validation before semantic review and include its result as formal evidence. In a focused audit, run it only when the complete tree is available; otherwise report snapshot validation as `not_checked`. Lifecycle remains `not_checked` unless the user explicitly supplies a complete baseline. Continue with `references/auditing.md` regardless of a successful formal result because formal validation does not assess meaning or drift.
+In a full `spec-audit`, run snapshot validation before semantic review, mark it
+mandatory, and include its result as formal evidence. In a focused audit, run it
+only when the complete tree is available; otherwise report snapshot validation
+as `not_checked` and state whether it is required by the focused scope.
+Lifecycle remains `not_checked (not required)` unless the audit requires a
+user-supplied complete baseline. Continue with `references/auditing.md`
+regardless of a successful formal result because formal validation does not
+assess meaning or drift.
 
 ## Dialogue and writing
 
@@ -107,4 +114,16 @@ When selecting a durable design in writing modes, develop at least two materiall
 
 ### `spec-audit`
 
-This mode is completely read-only. Without an argument, formally validate and inspect all `specs/`; with a path, `REQ-*`, `ADR-*`, or area, inspect the specified object and related evidence and report formal validation as `not_checked` when the complete tree is unavailable. Check the declared canonical language while allowing the report to follow `references/language-policy.md`. Follow `references/auditing.md`: report ranked quality findings first, then drift statuses and unchecked boundaries. Do not create reports, ADRs, or temporary artifacts, and do not offer to apply fixes automatically.
+This mode is completely read-only. Without an argument, formally validate and
+inspect all `specs/`; with a path, `REQ-*`, `ADR-*`, or area, inspect the
+specified object and related evidence and report formal validation as
+`not_checked` when the complete tree is unavailable. Check the declared
+canonical language while allowing the report to follow
+`references/language-policy.md`. Follow `references/auditing.md`: use its atomic
+drift units, ordered decision table, severity scale, independent-critic protocol,
+aggregate precedence, and fixed conversational report order. A full audit
+requires one independent critic over the same bounded evidence snapshot; a
+focused audit requires one only when the user explicitly requests it. Critic
+unavailability makes a required audit partial but does not discard confirmed
+findings. Do not create reports, ADRs, temporary artifacts, or audit state, and
+do not offer to apply fixes automatically.

@@ -14,8 +14,10 @@ and user-facing documentation even when they mention requirements or architectur
 ## Inputs and Outputs
 
 Input is intent, repository scope and evidence, with an optional explicit mode.
-Output is canonical specs or read-only findings. Explicit mode and scope are
-preserved without reinterpretation.
+Output is canonical specs or a read-only audit report. Explicit mode and scope
+are preserved without reinterpretation. Audit reports separate formal
+validation, quality findings, atomic drift units, unchecked boundaries, critic
+results, and a deterministic aggregate result.
 
 ## Workflow Stages
 
@@ -40,7 +42,9 @@ external tools.
 When several modes remain plausible, one short question distinguishes their
 effects and no write occurs before the answer. Audit is always read-only.
 Unsafe, missing, non-regular, or non-UTF-8 validator inputs fail as input errors,
-not as validation findings.
+not as validation findings. A mandatory failed or unchecked audit step, an
+unchecked or `UNKNOWN` in-scope boundary, or an unavailable required critic
+produces a partial result without hiding confirmed findings.
 
 ## Unique Constraints
 
@@ -61,7 +65,12 @@ project-selected language, and free of roadmap artifacts while writing only
 validated files under `specs/`. It shall distinguish normative intent from
 evidence of current behavior according to the selected mode. It shall preserve
 explicit mode and scope, otherwise infer mode from intent and repository evidence,
-keep read-only intent read-only, and stop without writing when routing is ambiguous.
+keep read-only intent read-only, and stop without writing when routing is
+ambiguous. An audit shall classify atomic claims and boundaries by the first
+matching `UNKNOWN`, `CONFLICT`, `SPEC_AHEAD`, `IMPLEMENTATION_AHEAD`, or `OK`
+rule; use one severity scale for confirmed defects; preserve separate formal,
+quality, drift, boundary, and critic results; and derive `partial`, `findings`,
+or `clean` by fixed precedence.
 
 ### REQ-F-506 - Validate formal specification invariants
 

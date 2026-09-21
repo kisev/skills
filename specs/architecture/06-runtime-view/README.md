@@ -22,8 +22,13 @@ Pages source for later updates. No build command runs on the user's machine.
 Specification writing validates the complete candidate snapshot after bounded
 writes. Updates additionally compare it with an explicitly retained complete
 baseline; initialization and onboarding report lifecycle as `not_checked`.
-Audits treat formal results as structural evidence and continue with independent
-semantic quality and repository-drift review.
+Audits bind a bounded evidence snapshot, treat formal results as structural
+evidence, split drift into atomic claims or boundaries, and classify each unit
+by one ordered decision table. Full audits give the same snapshot, without
+primary conclusions, to one independent critic; focused audits do so only when
+requested. The report keeps formal validation, quality, drift, unchecked
+boundaries, critic dispositions, and aggregate status separate. Mandatory
+incompleteness takes aggregate precedence without hiding confirmed findings.
 
 Specification routing first preserves an explicit mode and scope or derives a
 mode from user intent. Before choosing initialization or onboarding it inspects
