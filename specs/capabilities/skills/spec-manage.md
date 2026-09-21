@@ -2,21 +2,27 @@
 
 ## Purpose
 
-Create, onboard, update, or audit the canonical project specification.
+Infer whether to create greenfield specs, describe an existing project, change
+the canonical target state, or audit specifications read-only.
 
 ## Triggers and Near-Misses
 
-Trigger for project specification work; near-miss: user-facing documentation or code change.
+Trigger for canonical project specification work expressed either naturally or
+with an explicit mode token. Near-misses include implementation, plans, roadmaps,
+and user-facing documentation even when they mention requirements or architecture.
 
 ## Inputs and Outputs
 
-Input is explicit mode and repository scope. Output is canonical specs or read-only findings.
+Input is intent, repository scope and evidence, with an optional explicit mode.
+Output is canonical specs or read-only findings. Explicit mode and scope are
+preserved without reinterpretation.
 
 ## Workflow Stages
 
-Resolve mode, inspect evidence, classify claims, write bounded specs, run formal
-validation, perform semantic review where required, and report checked and
-`not_checked` scopes.
+Resolve mode from intent and evidence, inspect code, tests, schemas,
+configuration, CI, and deployment before distinguishing initialization from
+onboarding, classify claims, write bounded specs, run formal validation, perform
+semantic review where required, and report checked and `not_checked` scopes.
 
 ## Dependencies
 
@@ -31,7 +37,8 @@ external tools.
 
 ## Errors, Partial, Escalation
 
-Ambiguous intent or conflicting evidence is escalated; audit is read-only.
+When several modes remain plausible, one short question distinguishes their
+effects and no write occurs before the answer. Audit is always read-only.
 Unsafe, missing, non-regular, or non-UTF-8 validator inputs fail as input errors,
 not as validation findings.
 
@@ -41,6 +48,9 @@ Each tree declares one project-selected canonical language independently from
 the conversation language. This repository selects English through `REQ-C-001`.
 The 19-file skeleton is a minimum; indexed, non-duplicating canonical semantic
 sections such as `specs/capabilities/` are allowed.
+Each required viewpoint contains a confirmed project fact, a concrete reason for
+inapplicability, or an explicitly accepted bounded `UNKNOWN`. Compact examples
+illustrate depth only and do not replace templates or semantic readiness.
 
 ## Requirement
 
@@ -49,7 +59,9 @@ sections such as `specs/capabilities/` are allowed.
 The skill shall keep canonical specs evidence-backed, compact, explicit about one
 project-selected language, and free of roadmap artifacts while writing only
 validated files under `specs/`. It shall distinguish normative intent from
-evidence of current behavior according to the selected mode.
+evidence of current behavior according to the selected mode. It shall preserve
+explicit mode and scope, otherwise infer mode from intent and repository evidence,
+keep read-only intent read-only, and stop without writing when routing is ambiguous.
 
 ### REQ-F-506 - Validate formal specification invariants
 
@@ -60,6 +72,7 @@ successful formal result as a substitute for semantic `spec-audit`.
 
 ## Example
 
-`spec-manage` onboards a brownfield repository in its explicitly selected
-canonical language and creates only canonical specs.
+“Document this existing service as canonical specs” selects `spec-onboard` when
+implementation evidence exists and `specs/` does not. “Check the specs without
+changing files” selects `spec-audit`.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

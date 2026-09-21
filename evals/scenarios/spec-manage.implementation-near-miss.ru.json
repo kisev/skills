@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "276caa81e82735edc8955ff670a90049dd8151362c2f95b4dfab88c514041724",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:spec-manage"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "spec-manage.implementation-near-miss.ru",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Реализуй требование о времени ожидания в HTTP-клиенте и добавь тесты; канонические specs не меняй."
+  },
+  "invariants": [
+    {
+      "id": "spec-manage.implementation-near-miss.source",
+      "path": ".build/skills/spec-manage/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "spec-manage.implementation-near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

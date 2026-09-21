@@ -28,7 +28,7 @@ of `@kisev/skills-opencode`.
 | `rtk` | Use RTK selectively to compress verbose command output. |
 | `skill-improve` | Check and improve one Agent Skill through an iterative loop. |
 | `slides-prompts-prepare` | Combine a chosen presentation theme with factual team and technology references. |
-| `spec-manage` | Initialize, onboard, update, or audit canonical project specifications. |
+| `spec-manage` | Create greenfield specs, describe an existing project, change canonical target state, or audit specs read-only; mode tokens are optional. |
 | `stopit` | Write a sanitized handoff for the next session. |
 | `briefing` | Turn transcripts, notes, or research into a structured factual summary. |
 | `task-prepare` | Prepare a task or agreed GitLab task set with a manual publication plan. |
@@ -41,6 +41,21 @@ of `@kisev/skills-opencode`.
 
 Exact active and retired names are recorded in the
 [Migration Inventory](../migration-inventory.md).
+
+## Specification Modes
+
+`spec-manage` accepts explicit `spec-init`, `spec-onboard`, `spec-update`, and
+`spec-audit` tokens, but ordinary requests can state intent naturally. It checks
+repository evidence before distinguishing a new project from an existing one and
+asks one short question without writing when more than one mode remains possible.
+
+- “Create the canonical specification for this new empty project” selects `spec-init` only when no meaningful code, tests, schemas, configuration, CI, or deployment exists.
+- “Document this existing service as canonical specs” selects `spec-onboard` when the repository already contains implementation evidence but no `specs/`.
+- “Change the canonical timeout target to 30 seconds” selects `spec-update` when `specs/` exists.
+- “Check these specs against the implementation without changing files” selects read-only `spec-audit`.
+
+Implementation, planning, roadmap, and user-documentation requests do not select
+`spec-manage` merely because they mention requirements or architecture.
 
 ## Team Profiles
 

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "10ee41557a46b863c3454a5e940a60d4b1115a9becb8bb5deadfe5969883cafb",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:spec-manage"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "spec-manage.planning-near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Prepare an architecture roadmap and implementation plan for the next quarter without changing canonical specs."
+  },
+  "invariants": [
+    {
+      "id": "spec-manage.planning-near-miss.source",
+      "path": ".build/skills/spec-manage/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "spec-manage.planning-near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

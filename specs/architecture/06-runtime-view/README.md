@@ -25,6 +25,12 @@ baseline; initialization and onboarding report lifecycle as `not_checked`.
 Audits treat formal results as structural evidence and continue with independent
 semantic quality and repository-drift review.
 
+Specification routing first preserves an explicit mode and scope or derives a
+mode from user intent. Before choosing initialization or onboarding it inspects
+source, tests, schemas, configuration, CI, and deployment. If multiple modes
+remain possible, it asks one bounded question and performs no write; read-only
+intent cannot enter a writing lifecycle.
+
 Code review preparation collects complete GitLab evidence and label catalogs,
 validates each actionable suggestion or unified patch against the exact reviewed
 head, creates immutable body and patch files plus closed publication actions,

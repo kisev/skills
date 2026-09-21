@@ -1,0 +1,91 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 2000,
+    "timeout_seconds": 20
+  },
+  "digest": "063e784ea744df3dfb2eea704cf8065d916a2c12ea9c08ebe0d61b31d988f05e",
+  "expected": {
+    "mutation_boundary": "case-defined",
+    "not_selected": [],
+    "selected": ["skill:spec-manage"],
+    "structured_outcome": "mode-selection-contract"
+  },
+  "host": "any",
+  "id": "spec-manage.mode-selection.ru",
+  "input": {
+    "fixture": {
+      "cases": [
+        {
+          "id": "natural-init",
+          "outcome": "spec-init",
+          "prompt": "Создай канонические спецификации для нового пустого проекта: в репозитории нет кода, тестов, схем, конфигурации, CI, deployment и specs."
+        },
+        {
+          "id": "natural-onboard",
+          "outcome": "spec-onboard",
+          "prompt": "Опиши этот существующий Python-сервис в канонических спецификациях: есть код, тесты, CI и deployment-конфигурация, но нет каталога specs."
+        },
+        {
+          "id": "natural-update",
+          "outcome": "spec-update",
+          "prompt": "Измени каноническое целевое время ожидания в существующих specs с 20 до 30 секунд."
+        },
+        {
+          "id": "natural-audit",
+          "outcome": "spec-audit",
+          "prompt": "Проверь существующие specs по коду и сообщи о проблемах, ничего не меняя."
+        },
+        {
+          "id": "evidence-init",
+          "outcome": "spec-init",
+          "prompt": "Подготовь каноническую спецификацию. Проверка репозитория подтвердила только пустой README: реализации и specs нет."
+        },
+        {
+          "id": "evidence-onboard",
+          "outcome": "spec-onboard",
+          "prompt": "Подготовь каноническую спецификацию. Каталога specs нет, но код, схемы, тесты, CI и deployment-файлы описывают работающий сервис."
+        },
+        {
+          "id": "ambiguous-update-audit",
+          "outcome": "ask-no-writes",
+          "prompt": "Посмотри требование о времени ожидания в specs и убедись, что оно правильное."
+        },
+        {
+          "id": "explicit-mode",
+          "outcome": "explicit-spec-audit",
+          "prompt": "spec-audit только requirements/quality; не переосмысливай режим и scope."
+        },
+        {
+          "id": "near-miss-implementation",
+          "outcome": "near-miss",
+          "prompt": "Реализуй требование о времени ожидания в HTTP-клиенте и добавь тесты."
+        },
+        {
+          "id": "near-miss-planning",
+          "outcome": "near-miss",
+          "prompt": "Подготовь архитектурный roadmap и план реализации на следующий квартал."
+        }
+      ],
+      "selected": ["skill:spec-manage"]
+    },
+    "prompt": "Примени контракт выбора режима spec-manage к каждому реалистичному запросу из fixture. Сохрани явные mode и scope, не превращай read-only намерение в запись и ничего не записывай при неоднозначности или near-miss."
+  },
+  "invariants": [
+    {
+      "id": "spec-manage.mode-selection.source",
+      "path": "skills/spec-manage/references/workflow.md"
+    }
+  ],
+  "kind": "golden",
+  "locale": "ru",
+  "pair_id": "spec-manage.mode-selection",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

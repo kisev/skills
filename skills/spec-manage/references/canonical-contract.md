@@ -65,7 +65,10 @@ leave it unresolved.
 
 The 19 `README.md` files represented by `templates/specs/` are the minimum
 canonical skeleton, not a closed allowlist. Keep all 19 files, including a brief
-inapplicability statement where needed.
+project-specific fact, concrete inapplicability reason, or explicitly accepted
+bounded `UNKNOWN` in every viewpoint. Apply `references/content-states.md`; do not
+use those forms as automatic placeholders or as a reason to weaken semantic
+readiness or audit criteria.
 
 An additional section is allowed only when all of these conditions hold:
 

@@ -1,0 +1,91 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 2000,
+    "timeout_seconds": 20
+  },
+  "digest": "5e854a3df8f3eb0b0764e8477c63b8a6ffef4f7134830c56413aa07ce03d2fba",
+  "expected": {
+    "mutation_boundary": "case-defined",
+    "not_selected": [],
+    "selected": ["skill:spec-manage"],
+    "structured_outcome": "mode-selection-contract"
+  },
+  "host": "any",
+  "id": "spec-manage.mode-selection.en",
+  "input": {
+    "fixture": {
+      "cases": [
+        {
+          "id": "natural-init",
+          "outcome": "spec-init",
+          "prompt": "Create canonical specs for this new empty project; the repository has no code, tests, schemas, configuration, CI, deployment, or specs."
+        },
+        {
+          "id": "natural-onboard",
+          "outcome": "spec-onboard",
+          "prompt": "Document this existing Python service as canonical specs; it has source, tests, CI, and deployment configuration but no specs directory."
+        },
+        {
+          "id": "natural-update",
+          "outcome": "spec-update",
+          "prompt": "Change the canonical target timeout in the existing specs from 20 to 30 seconds."
+        },
+        {
+          "id": "natural-audit",
+          "outcome": "spec-audit",
+          "prompt": "Check the existing specs against the code and report problems without changing any files."
+        },
+        {
+          "id": "evidence-init",
+          "outcome": "spec-init",
+          "prompt": "Set up the canonical specification. Repository inspection confirms only an empty README and no implementation evidence or specs."
+        },
+        {
+          "id": "evidence-onboard",
+          "outcome": "spec-onboard",
+          "prompt": "Set up the canonical specification. There is no specs directory, but source code, schemas, tests, CI, and deployment files describe a running service."
+        },
+        {
+          "id": "ambiguous-update-audit",
+          "outcome": "ask-no-writes",
+          "prompt": "Review the timeout requirement in specs and make sure it is right."
+        },
+        {
+          "id": "explicit-mode",
+          "outcome": "explicit-spec-audit",
+          "prompt": "spec-audit requirements/quality only; do not reinterpret the mode or scope."
+        },
+        {
+          "id": "near-miss-implementation",
+          "outcome": "near-miss",
+          "prompt": "Implement the timeout requirement in the HTTP client and add tests."
+        },
+        {
+          "id": "near-miss-planning",
+          "outcome": "near-miss",
+          "prompt": "Prepare an architecture roadmap and implementation plan for the next quarter."
+        }
+      ],
+      "selected": ["skill:spec-manage"]
+    },
+    "prompt": "Apply the spec-manage mode-selection contract to each realistic request in the fixture. Preserve explicit mode and scope, keep read-only intent read-only, and perform no writes for ambiguity or near-misses."
+  },
+  "invariants": [
+    {
+      "id": "spec-manage.mode-selection.source",
+      "path": "skills/spec-manage/references/workflow.md"
+    }
+  ],
+  "kind": "golden",
+  "locale": "en",
+  "pair_id": "spec-manage.mode-selection",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

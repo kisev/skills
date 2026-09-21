@@ -4,7 +4,26 @@ Maintain `specs/` as the shared source of truth for people and agents. Documents
 
 ## Mode selection
 
-The user must explicitly provide one mode: `spec-init`, `spec-onboard`, `spec-update`, or `spec-audit`. If no mode is provided, stop, briefly describe the four modes, and ask the user to choose. Do not guess the mode and do not proceed to implementation after the specification workflow.
+Literal mode tokens remain supported but are optional. If the user explicitly
+provides `spec-init`, `spec-onboard`, `spec-update`, or `spec-audit`, preserve that
+mode and any explicit scope without reinterpretation, then enforce that mode's
+safety preconditions. Otherwise select from intent and repository evidence:
+
+- `spec-audit`: inspect, review, check, or compare canonical specs without changing them. A clearly read-only request always stays read-only.
+- `spec-update`: change the agreed canonical target state in an existing `specs/` tree. Mentioning requirements or architecture is insufficient; the user must intend to change canonical specs.
+- `spec-init`: create canonical specs for a genuinely greenfield project with no `specs/` and no meaningful implementation evidence.
+- `spec-onboard`: describe an existing project that has no `specs/`, using repository evidence and confirmed intent.
+
+Before choosing between `spec-init` and `spec-onboard`, inspect the available
+repository for source code, tests, schemas, configuration, CLI/API surfaces, CI,
+and deployment material. Absence of `specs/` alone never proves greenfield. When
+several modes remain plausible after inspecting available facts, ask one short
+question that names the alternatives and their different effects, then stop
+without writing until the user answers.
+
+Requests to implement behavior, prepare a plan or roadmap, or write user
+documentation are near-misses even when they mention requirements or
+architecture. Do not proceed to implementation after a specification workflow.
 
 Read only the required resources under this skill's own root:
 
@@ -13,12 +32,15 @@ Read only the required resources under this skill's own root:
 - for ADR: `references/adr.md`;
 - for `spec-update`: `references/consolidation.md`;
 - for audit: `references/auditing.md`.
+- when judging sufficient content depth: `references/content-states.md` and, only as a compact illustration, `references/minimal-example.md`.
 
-Use `templates/` as content guidance. Do not copy placeholders or operational prompts into the final specification.
+Use `templates/` as normative content guidance. Use the example only to judge
+minimum meaningful depth; it is not a second template. Do not copy example facts,
+placeholders, or operational prompts into the final specification.
 
 ## Invariants
 
-- The canonical structure contains all 19 minimum required `README.md` files from `templates/specs/`. Additional sections follow `references/canonical-contract.md`; an empty or inapplicable minimum section briefly explains why.
+- The canonical structure contains all 19 minimum required `README.md` files from `templates/specs/`. Additional sections follow `references/canonical-contract.md`; every required viewpoint contains a project-specific confirmed fact, a concrete reason for inapplicability, or a user-accepted bounded `UNKNOWN` as defined in `references/content-states.md`.
 - Documents are compact, describe target state in present tense, and do not duplicate one fact in several viewpoints.
 - Canonical prose uses the single language declared in `specs/README.md`; conversation and reports independently follow `references/language-policy.md`. Resolve legacy trees and language changes only as specified in `references/canonical-contract.md`.
 - Requirements and architecture are organized by knowledge type, not feature, milestone, or issue. The machine-readable contract remains the source of truth for syntax; Markdown records semantics, errors, compatibility, and invariants.
@@ -62,7 +84,7 @@ When selecting a durable design in writing modes, develop at least two materiall
 
 ### `spec-init`
 
-1. Verify that `specs/` is absent and the project is truly greenfield. If meaningful source code, tests, schemas, configuration, CLI/API, CI, or deployment already exist, stop and propose `spec-onboard`.
+1. Verify that `specs/` is absent and inspect source code, tests, schemas, configuration, CLI/API, CI, and deployment evidence. Select this mode only when the project is truly greenfield. If meaningful implementation evidence exists, use `spec-onboard` unless the user explicitly supplied `spec-init`; for an explicit incompatible mode, stop and explain the failed precondition rather than reinterpreting it.
 2. Obtain the user's explicit project-language choice before preparing files. Treat confirmed user decisions as normative and record the chosen canonical language in `specs/README.md`.
 3. Conduct an adaptive interview using the areas in `references/interviewing.md`.
 4. Prepare the complete `specs/` file set, create all 19 minimum files and any justified indexed extension with rollback if any write fails, then run snapshot validation and report lifecycle as `not_checked`.
@@ -70,7 +92,7 @@ When selecting a durable design in writing modes, develop at least two materiall
 
 ### `spec-onboard`
 
-1. Verify that `specs/` is absent. Otherwise propose `spec-update` or `spec-audit`.
+1. Verify that `specs/` is absent and inspect source code, tests, schemas, configuration, CLI/API, CI, and deployment evidence. Existing meaningful implementation evidence distinguishes onboarding from initialization. If `specs/` exists, ask whether the user wants read-only `spec-audit` or target-state-changing `spec-update` unless intent already makes that distinction explicit.
 2. Investigate repository evidence according to `references/onboarding.md` before asking questions.
 3. Obtain the user's explicit project-language choice before preparing files and record it in `specs/README.md`.
 4. Classify individual claims as `KNOWN`, `AMBIGUOUS`, `UNKNOWN`, or `CONFLICT`. Explicit contract sources and confirmed decisions are normative; code and tests prove only current behavior.

@@ -82,7 +82,8 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "must not trigger installation",
         ),
         "spec-manage": (
-            "user must explicitly provide one mode",
+            "Literal mode tokens remain supported but are optional",
+            "Absence of `specs/` alone never proves greenfield",
             "spec-update",
             "mode is completely read-only",
             "scripts/spec_validate.py",

@@ -491,6 +491,8 @@ def test_list_selectors_and_capability_detection_are_machine_readable() -> None:
         {"id": "golden.core-contracts", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item.en", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"},
+        {"id": "spec-manage.mode-selection.en", "kind": "golden", "surface": "skill"},
+        {"id": "spec-manage.mode-selection.ru", "kind": "golden", "surface": "skill"},
     ]
     capabilities = run_eval("--capabilities")
     assert capabilities.returncode == 0

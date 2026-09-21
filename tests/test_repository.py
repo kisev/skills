@@ -143,11 +143,12 @@ WORKFLOW_CONTRACTS = {
         "report only confirmed findings",
     ),
     "spec-manage": (
-        "user must explicitly provide one mode",
+        "literal mode tokens remain supported but are optional",
         "`spec-init`",
         "`spec-onboard`",
         "`spec-update`",
         "`spec-audit`",
+        "absence of `specs/` alone never proves greenfield",
         "all 19 minimum required `readme.md`",
         "this mode is completely read-only",
     ),

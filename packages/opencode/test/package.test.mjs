@@ -372,6 +372,17 @@ test("code-review command is one logic-free skill adapter", () => {
   );
 });
 
+test("spec-manage command help explains intent-based safe mode selection", () => {
+  const command = COMMAND_REGISTRY.find((entry) => entry.name === "spec-manage");
+  assert.ok(command);
+  assert.match(command.description, /greenfield specs/);
+  const rendered = renderCommand(command);
+  for (const mode of ["spec-init", "spec-onboard", "spec-update", "spec-audit"])
+    assert.match(rendered, new RegExp(mode));
+  assert.match(rendered, /Explicit mode and scope arguments are passed unchanged/);
+  assert.match(rendered, /asks before writing if intent remains ambiguous/);
+});
+
 test("non-TTY install accepts an explicit skill command subset", () => {
   const directory = temporary();
   try {

@@ -1,7 +1,7 @@
 ---
 name: spec-manage
 description: >-
-  Create, onboard, update, or audit a canonical project specification in the project's declared language. Russian discovery terms: спецификация проекта.
+  Create specs for a greenfield project, describe an existing project, change an agreed canonical target state, or audit specs read-only. Infer spec-init, spec-onboard, spec-update, or spec-audit from intent and repository evidence; explicit mode tokens remain supported. Not for implementation, plans, roadmaps, or user documentation. Russian discovery terms: спецификация проекта, описать существующий проект, проверить спецификацию.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
