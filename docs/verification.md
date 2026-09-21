@@ -76,6 +76,24 @@ registration, configuration, installer ownership, archive/reconcile behavior,
 agent discovery, negative inputs, path escapes, malformed results, incomplete
 budgets, and secret leakage.
 
+For `spec-manage`, coverage has one primary deterministic owner per area. Hostless
+eval validates corpus contracts but does not observe model behavior:
+
+| Area | Deterministic owner | Hostless eval contract | Trusted-live behavior |
+| - | - | - | - |
+| Language, authority, extensions | `tests/test_spec_manage_contract.py` | bilingual case inventory and digests | language-before-write, preservation, conflicts, accepted/rejected extensions |
+| Snapshot and lifecycle validator | `tests/test_spec_validate.py` | runner and invariant safety only | not required |
+| Requirements, architecture, ADR, locale parity | `tests/test_spec_manage_model.py` | not required | not required |
+| Mode selection, ambiguity, near-misses, content states | `tests/test_spec_manage_evals.py` | bilingual case protocol | per-case mode/stop outcome and observed no-write boundary |
+| Audit classification, severity, critic, aggregate | `tests/test_spec_manage_evals.py` | bilingual case protocol | per-case audit outcome and observed no-write boundary |
+
+`tests/test_evals.py` owns the generic eval protocol and its negative cases.
+Stage 20 `spec-manage` scenarios prove routing declarations only. Legacy scenarios
+without `expected.case_outcomes` remain selection-only and do not prove mode or
+audit outcomes. Offline results use `observation_mode: hostless-contract`; only
+trusted-live results use `observation_mode: trusted-live` and may satisfy case
+outcome assertions.
+
 Compatibility checks exercise OpenCode `1.18.29` and `1.18.31` inside
 `>=1.18.29 <1.19.0` without credentials.
 
@@ -85,6 +103,12 @@ Live evaluation is not part of `task check`. It requires explicit trusted-live
 mode, host, model, timeout, token and cost budgets, and an output path. No model
 or baseline is selected by default, and untrusted CI does not receive
 credentials.
+
+Scenarios with `expected.case_outcomes` require one observed result for every
+case. Missing, extra, malformed, or incorrect outcomes fail the evaluation.
+Read-only boundaries are checked from the project sandbox diff; `specs-only`
+scenarios fail when a changed path is outside sandbox `specs/`. Live output is
+private run evidence and is not committed.
 
 Shared runtime copies exist only in ignored build outputs and are checked for
 parity. In a clean temporary checkout, build and check must leave `git status`

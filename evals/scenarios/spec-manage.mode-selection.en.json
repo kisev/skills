@@ -4,9 +4,24 @@
     "max_tokens": 2000,
     "timeout_seconds": 20
   },
-  "digest": "5e854a3df8f3eb0b0764e8477c63b8a6ffef4f7134830c56413aa07ce03d2fba",
+  "digest": "518d5d1f2a70dd99d14b87db6e0f2db4e4ce701cde6b4738ec8f470d54110dbc",
   "expected": {
-    "mutation_boundary": "case-defined",
+    "case_outcomes": [
+      { "id": "natural-init", "outcome": "spec-init" },
+      { "id": "natural-onboard", "outcome": "spec-onboard" },
+      { "id": "natural-update", "outcome": "spec-update" },
+      { "id": "natural-audit", "outcome": "spec-audit" },
+      { "id": "evidence-init", "outcome": "spec-init" },
+      { "id": "evidence-onboard", "outcome": "spec-onboard" },
+      { "id": "ambiguous-update-audit", "outcome": "ask-no-writes" },
+      { "id": "explicit-mode", "outcome": "explicit-spec-audit" },
+      { "id": "explicit-failed-precondition", "outcome": "stop-failed-precondition" },
+      { "id": "near-miss-user-docs", "outcome": "near-miss" },
+      { "id": "near-miss-implementation", "outcome": "near-miss" },
+      { "id": "near-miss-planning", "outcome": "near-miss" },
+      { "id": "ambiguous-review-and-fix", "outcome": "ask-no-writes" }
+    ],
+    "mutation_boundary": "no-writes",
     "not_selected": [],
     "selected": ["skill:spec-manage"],
     "structured_outcome": "mode-selection-contract"
@@ -57,6 +72,16 @@
           "prompt": "spec-audit requirements/quality only; do not reinterpret the mode or scope."
         },
         {
+          "id": "explicit-failed-precondition",
+          "outcome": "stop-failed-precondition",
+          "prompt": "Run spec-init for this repository even though it already contains source code, tests, deployment configuration, and an existing specs directory."
+        },
+        {
+          "id": "near-miss-user-docs",
+          "outcome": "near-miss",
+          "prompt": "Write a user guide that explains the requirements and architecture to operators."
+        },
+        {
           "id": "near-miss-implementation",
           "outcome": "near-miss",
           "prompt": "Implement the timeout requirement in the HTTP client and add tests."
@@ -65,6 +90,11 @@
           "id": "near-miss-planning",
           "outcome": "near-miss",
           "prompt": "Prepare an architecture roadmap and implementation plan for the next quarter."
+        },
+        {
+          "id": "ambiguous-review-and-fix",
+          "outcome": "ask-no-writes",
+          "prompt": "Review the canonical specs and fix whatever is wrong."
         }
       ],
       "selected": ["skill:spec-manage"]

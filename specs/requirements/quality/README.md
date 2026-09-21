@@ -4,6 +4,9 @@
 
 The deterministic test and eval suites shall produce stable, structured results
 for pass, fail, skipped, error, timeout, malformed, and budget-exceeded cases.
+Hostless eval results shall be distinguishable from trusted-live behavioral
+observations. Structured per-case evaluation shall fail on missing, extra,
+incorrect, or malformed observed outcomes.
 
 ### REQ-Q-002 - Mutation safety
 
@@ -23,7 +26,8 @@ or other secrets, including when inputs are malformed or external calls fail.
 
 A result shall not be declared complete when required inputs, pages, files,
 dependencies, checks, or revision bindings are partial, stale, unknown, or
-contradictory.
+contradictory. A fixture expectation shall not be reported as observed model
+behavior.
 
 ### REQ-Q-005 - Reproducible distribution
 

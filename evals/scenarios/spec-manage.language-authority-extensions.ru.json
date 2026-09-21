@@ -1,0 +1,82 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "spec-manage.language-authority-extensions.ru",
+  "revision": 1,
+  "locale": "ru",
+  "pair_id": "spec-manage.language-authority-extensions",
+  "kind": "golden",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Примени правила языка, нормативных источников и расширений к каждому случаю. Только классифицируй, не записывай файлы.",
+    "fixture": {
+      "selected": ["skill:spec-manage"],
+      "cases": [
+        {
+          "id": "init-language-first",
+          "prompt": "Создай канонические specs, но язык проекта еще не выбран.",
+          "outcome": "ask-language-before-write"
+        },
+        {
+          "id": "onboard-language-first",
+          "prompt": "Перенеси существующий сервис в specs, пока язык проекта не выбран.",
+          "outcome": "ask-language-before-write"
+        },
+        {
+          "id": "update-different-language",
+          "prompt": "Дерево объявляет Russian. Запрос полностью на английском: update the interface requirement.",
+          "outcome": "preserve-declared-language"
+        },
+        {
+          "id": "update-mixed-language",
+          "prompt": "Дерево объявляет Russian. Смешанный запрос: update требование для CLI output.",
+          "outcome": "preserve-declared-language"
+        },
+        {
+          "id": "mixed-legacy-tree",
+          "prompt": "Обнови legacy-дерево без декларации, где содержательный текст смешан на русском и английском.",
+          "outcome": "ask-language-no-write"
+        },
+        {
+          "id": "normative-conflict",
+          "prompt": "При onboarding явный API-контракт и подтвержденное продуктовое решение требуют несовместимого timeout.",
+          "outcome": "surface-conflict-no-write"
+        },
+        {
+          "id": "indexed-capabilities",
+          "prompt": "Оцени индексированный specs/capabilities/: он владеет перечнем публичных поверхностей и ссылается на общие требования.",
+          "outcome": "extension-allowed"
+        },
+        {
+          "id": "process-extension",
+          "prompt": "Оцени предлагаемое расширение specs/roadmap/ с этапами и статусом поставки.",
+          "outcome": "extension-rejected"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "selected": ["skill:spec-manage"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "case_outcomes": [
+      { "id": "init-language-first", "outcome": "ask-language-before-write" },
+      { "id": "onboard-language-first", "outcome": "ask-language-before-write" },
+      { "id": "update-different-language", "outcome": "preserve-declared-language" },
+      { "id": "update-mixed-language", "outcome": "preserve-declared-language" },
+      { "id": "mixed-legacy-tree", "outcome": "ask-language-no-write" },
+      { "id": "normative-conflict", "outcome": "surface-conflict-no-write" },
+      { "id": "indexed-capabilities", "outcome": "extension-allowed" },
+      { "id": "process-extension", "outcome": "extension-rejected" }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "language-authority-extension-contract",
+      "path": "skills/spec-manage/references/canonical-contract.md"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 2000, "max_cost": 1 },
+  "digest": "8f1c9ea557e103fdf8e1436fa79d8ff732307bba0c67de07d1d7ac2b784eff7d"
+}

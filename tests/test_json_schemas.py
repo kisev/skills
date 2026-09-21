@@ -745,7 +745,7 @@ def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
 def validate_eval_contract_instances() -> None:
     scenario_validator = validator("evals/schemas/scenario-v1.schema.json")
     scenarios = sorted((ROOT / "evals/scenarios").glob("*.json"))
-    assert len(scenarios) == 213
+    assert len(scenarios) == 217
     for path in scenarios:
         scenario_validator.validate(load(path.relative_to(ROOT)))
 

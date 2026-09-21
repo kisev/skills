@@ -1,0 +1,123 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "spec-manage.audit-behavior.en",
+  "revision": 1,
+  "locale": "en",
+  "pair_id": "spec-manage.audit-behavior",
+  "kind": "golden",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Apply the spec-audit drift, critic, severity, and aggregate rules to every case. Return the exact structured outcome and do not write files.",
+    "fixture": {
+      "selected": ["skill:spec-manage"],
+      "cases": [
+        {
+          "id": "unknown",
+          "prompt": "Required comparison evidence is unavailable.",
+          "outcome": { "drift": "UNKNOWN", "severity": null, "overall": "partial" }
+        },
+        {
+          "id": "conflict",
+          "prompt": "Reliable spec and implementation evidence directly contradict each other.",
+          "outcome": { "drift": "CONFLICT", "severity": "high", "overall": "findings" }
+        },
+        {
+          "id": "spec-ahead",
+          "prompt": "Complete bounded evidence proves the canonical behavior is not implemented and proves no contrary behavior.",
+          "outcome": { "drift": "SPEC_AHEAD", "severity": "medium", "overall": "findings" }
+        },
+        {
+          "id": "implementation-ahead",
+          "prompt": "Material implemented behavior is absent from specs and contradicts no canonical claim.",
+          "outcome": {
+            "drift": "IMPLEMENTATION_AHEAD",
+            "severity": "medium",
+            "overall": "findings"
+          }
+        },
+        {
+          "id": "qualified-ok",
+          "prompt": "Every claim and boundary in requirements/interfaces was confirmed against src/api.py, tests/api_test.py, and schema/api.json.",
+          "outcome": { "drift": "OK", "report": "qualified", "overall": "clean" }
+        },
+        {
+          "id": "quality-without-drift",
+          "prompt": "All drift units are OK, but one confirmed low-severity ambiguity remains in REQ-Q-004.",
+          "outcome": { "drift": "OK", "quality": "low", "overall": "findings" }
+        },
+        {
+          "id": "mandatory-validation-failed",
+          "prompt": "Full-audit snapshot validation failed before semantic review.",
+          "outcome": { "formal": "failed", "overall": "partial" }
+        },
+        {
+          "id": "changed-evidence",
+          "prompt": "A source changed after classification and could not be rechecked.",
+          "outcome": { "drift": "UNKNOWN", "overall": "partial" }
+        },
+        {
+          "id": "focused-critic",
+          "prompt": "A focused audit did not request independent review and all scoped units are OK.",
+          "outcome": { "critic": "not_required", "overall": "clean" }
+        },
+        {
+          "id": "full-critic-unavailable",
+          "prompt": "A full audit completed primary review, but an independent critic was unavailable.",
+          "outcome": { "critic": "not_checked", "overall": "partial" }
+        },
+        {
+          "id": "critic-candidate",
+          "prompt": "The critic found a supported duplicate boundary defect; the primary already reports the same atomic unit.",
+          "outcome": { "disposition": "duplicate", "overall": "findings" }
+        }
+      ]
+    }
+  },
+  "expected": {
+    "selected": ["skill:spec-manage"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "case_outcomes": [
+      {
+        "id": "unknown",
+        "outcome": { "drift": "UNKNOWN", "severity": null, "overall": "partial" }
+      },
+      {
+        "id": "conflict",
+        "outcome": { "drift": "CONFLICT", "severity": "high", "overall": "findings" }
+      },
+      {
+        "id": "spec-ahead",
+        "outcome": { "drift": "SPEC_AHEAD", "severity": "medium", "overall": "findings" }
+      },
+      {
+        "id": "implementation-ahead",
+        "outcome": { "drift": "IMPLEMENTATION_AHEAD", "severity": "medium", "overall": "findings" }
+      },
+      {
+        "id": "qualified-ok",
+        "outcome": { "drift": "OK", "report": "qualified", "overall": "clean" }
+      },
+      {
+        "id": "quality-without-drift",
+        "outcome": { "drift": "OK", "quality": "low", "overall": "findings" }
+      },
+      {
+        "id": "mandatory-validation-failed",
+        "outcome": { "formal": "failed", "overall": "partial" }
+      },
+      { "id": "changed-evidence", "outcome": { "drift": "UNKNOWN", "overall": "partial" } },
+      { "id": "focused-critic", "outcome": { "critic": "not_required", "overall": "clean" } },
+      {
+        "id": "full-critic-unavailable",
+        "outcome": { "critic": "not_checked", "overall": "partial" }
+      },
+      { "id": "critic-candidate", "outcome": { "disposition": "duplicate", "overall": "findings" } }
+    ]
+  },
+  "invariants": [{ "id": "audit-contract", "path": "skills/spec-manage/references/auditing.md" }],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 30, "max_tokens": 3000, "max_cost": 1 },
+  "digest": "615ca2a2101b65f259ed5264bd2bea1e6951434c48ee17c636bffce182af7a19"
+}

@@ -54,6 +54,13 @@ def fake_host(directory: Path, mode: str) -> Path:
         "secret": 'print(json.dumps({"selected": ["skill:goal"], "authorization": "Bearer do-not-leak", "usage": {"total_tokens": 12, "cost": 0.1}}))',
         "escape": '(Path.cwd() / "escape").symlink_to("/tmp"); print(json.dumps({"selected": ["skill:goal"], "usage": {"total_tokens": 12, "cost": 0.1}}))',
         "environment": 'print(json.dumps({"selected": ["skill:goal"] if "SECRET_FOR_EVAL" not in os.environ else [], "usage": {"total_tokens": 12, "cost": 0.1}}))',
+        "cases-pass": 'fixture = json.loads(sys.argv[-1].split("Evaluation fixture (data, not instructions):\\n", 1)[1].split("\\nReturn a structured", 1)[0]); print(json.dumps({"selected": ["skill:spec-manage"], "case_outcomes": [{"id": case["id"], "outcome": case["outcome"]} for case in fixture["cases"]], "usage": {"total_tokens": 12, "cost": 0.1}}))',
+        "cases-incorrect": 'fixture = json.loads(sys.argv[-1].split("Evaluation fixture (data, not instructions):\\n", 1)[1].split("\\nReturn a structured", 1)[0]); outcomes = [{"id": case["id"], "outcome": case["outcome"]} for case in fixture["cases"]]; outcomes[0]["outcome"] = "wrong"; print(json.dumps({"selected": ["skill:spec-manage"], "case_outcomes": outcomes, "usage": {"total_tokens": 12, "cost": 0.1}}))',
+        "cases-missing": 'fixture = json.loads(sys.argv[-1].split("Evaluation fixture (data, not instructions):\\n", 1)[1].split("\\nReturn a structured", 1)[0]); print(json.dumps({"selected": ["skill:spec-manage"], "case_outcomes": [{"id": case["id"], "outcome": case["outcome"]} for case in fixture["cases"][1:]], "usage": {"total_tokens": 12, "cost": 0.1}}))',
+        "cases-extra": 'fixture = json.loads(sys.argv[-1].split("Evaluation fixture (data, not instructions):\\n", 1)[1].split("\\nReturn a structured", 1)[0]); outcomes = [{"id": case["id"], "outcome": case["outcome"]} for case in fixture["cases"]] + [{"id": "unexpected", "outcome": "wrong"}]; print(json.dumps({"selected": ["skill:spec-manage"], "case_outcomes": outcomes, "usage": {"total_tokens": 12, "cost": 0.1}}))',
+        "cases-malformed": 'print(json.dumps({"selected": ["skill:spec-manage"], "case_outcomes": {"id": "invalid"}, "usage": {"total_tokens": 12, "cost": 0.1}}))',
+        "write-specs": 'Path("specs").mkdir(); Path("specs/result.md").write_text("result\\n"); print(json.dumps({"selected": ["skill:spec-manage"], "usage": {"total_tokens": 12, "cost": 0.1}}))',
+        "write-outside": 'Path("unexpected.md").write_text("result\\n"); print(json.dumps({"selected": ["skill:spec-manage"], "usage": {"total_tokens": 12, "cost": 0.1}}))',
     }[mode]
     executable.write_text(
         textwrap.dedent(
@@ -61,6 +68,7 @@ def fake_host(directory: Path, mode: str) -> Path:
             #!{sys.executable}
             import json
             import os
+            import sys
             import time
             from pathlib import Path
             {body}
@@ -72,7 +80,13 @@ def fake_host(directory: Path, mode: str) -> Path:
     return executable
 
 
-def live_arguments(host: str, executable: Path, output: Path, *extra: str) -> tuple[str, ...]:
+def live_arguments(
+    host: str,
+    executable: Path,
+    output: Path,
+    *extra: str,
+    scenario: str = "skill.goal.trigger",
+) -> tuple[str, ...]:
     return (
         "--trusted-live",
         "--host",
@@ -90,7 +104,7 @@ def live_arguments(host: str, executable: Path, output: Path, *extra: str) -> tu
         "--executable",
         str(executable),
         "--scenario",
-        "skill.goal.trigger",
+        scenario,
         *extra,
     )
 
@@ -204,6 +218,13 @@ def test_offline_runner_schema_and_validation_reject_unsafe_configurations() -> 
     with pytest.raises(EvalError) as raised:
         validate_scenario(scenario, "unselected.json")
     assert raised.value.code == "unselected_runner"
+
+    scenario = goal_scenario()
+    scenario["input"]["project_files"] = {"../escape": "unsafe"}
+    scenario["digest"] = scenario_digest(scenario)
+    with pytest.raises(EvalError) as raised:
+        validate_scenario(scenario, "project-path-escape.json")
+    assert raised.value.code == "sandbox_escape"
 
 
 def test_offline_runner_rejects_symlink_without_execution(tmp_path: Path) -> None:
@@ -491,6 +512,18 @@ def test_list_selectors_and_capability_detection_are_machine_readable() -> None:
         {"id": "golden.core-contracts", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item.en", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"},
+        {"id": "spec-manage.audit-behavior.en", "kind": "golden", "surface": "skill"},
+        {"id": "spec-manage.audit-behavior.ru", "kind": "golden", "surface": "skill"},
+        {
+            "id": "spec-manage.language-authority-extensions.en",
+            "kind": "golden",
+            "surface": "skill",
+        },
+        {
+            "id": "spec-manage.language-authority-extensions.ru",
+            "kind": "golden",
+            "surface": "skill",
+        },
         {"id": "spec-manage.mode-selection.en", "kind": "golden", "surface": "skill"},
         {"id": "spec-manage.mode-selection.ru", "kind": "golden", "surface": "skill"},
     ]
@@ -555,6 +588,104 @@ def test_live_redacts_evidence_and_rejects_sandbox_escape() -> None:
         )
         assert escaped.returncode == 4
         assert payload(escaped)["results"][0]["error"]["classification"] == "sandbox_escape"
+
+
+def test_case_outcomes_require_trusted_live_observation() -> None:
+    offline = run_eval("--offline", "--scenario", "spec-manage.mode-selection.en")
+
+    assert offline.returncode == 0
+    result = payload(offline)["results"][0]
+    assert result["observation_mode"] == "hostless-contract"
+    assert result["case_outcomes"] == []
+    assert {item["id"]: item["status"] for item in result["assertions"]}[
+        "case-outcomes:trusted-live-required"
+    ] == "not_observed"
+
+
+def test_live_case_outcomes_reject_missing_extra_and_incorrect_results(tmp_path: Path) -> None:
+    for mode, expected_status in (
+        ("cases-pass", "passed"),
+        ("cases-incorrect", "failed"),
+        ("cases-missing", "failed"),
+        ("cases-extra", "failed"),
+    ):
+        result = run_eval(
+            *live_arguments(
+                "opencode",
+                fake_host(tmp_path, mode),
+                tmp_path / f"{mode}.json",
+                scenario="spec-manage.mode-selection.en",
+            )
+        )
+        evaluated = payload(result)["results"][0]
+        assert evaluated["observation_mode"] == "trusted-live"
+        assert evaluated["status"] == expected_status
+        expected_count = len(
+            json.loads((ROOT / "evals/scenarios/spec-manage.mode-selection.en.json").read_text())[
+                "expected"
+            ]["case_outcomes"]
+        )
+        expected_delta = {"cases-missing": -1, "cases-extra": 1}.get(mode, 0)
+        assert len(evaluated["case_outcomes"]) == expected_count + expected_delta
+
+
+def test_live_rejects_malformed_case_result(tmp_path: Path) -> None:
+    result = run_eval(
+        *live_arguments(
+            "codex",
+            fake_host(tmp_path, "cases-malformed"),
+            tmp_path / "malformed.json",
+            scenario="spec-manage.mode-selection.en",
+        )
+    )
+
+    assert result.returncode == 4
+    assert payload(result)["results"][0]["error"]["classification"] == "malformed_host_result"
+
+
+def test_live_mutation_boundary_is_observed_from_sandbox(tmp_path: Path) -> None:
+    allowed = run_eval(
+        *live_arguments(
+            "opencode",
+            fake_host(tmp_path, "write-specs"),
+            tmp_path / "allowed.json",
+            scenario="spec-manage.update-language-preservation",
+        )
+    )
+    rejected_write = run_eval(
+        *live_arguments(
+            "opencode",
+            fake_host(tmp_path, "write-outside"),
+            tmp_path / "outside.json",
+            scenario="spec-manage.update-language-preservation",
+        )
+    )
+    rejected_read_only = run_eval(
+        *live_arguments(
+            "opencode",
+            fake_host(tmp_path, "write-outside"),
+            tmp_path / "read-only.json",
+            scenario="spec-manage.audit-language-read-only",
+        )
+    )
+    rejected_near_miss = run_eval(
+        *live_arguments(
+            "opencode",
+            fake_host(tmp_path, "write-outside"),
+            tmp_path / "near-miss.json",
+            scenario="spec-manage.implementation-near-miss.en",
+        )
+    )
+
+    assert payload(allowed)["results"][0]["changed_paths"] == ["specs/result.md"]
+    assert payload(allowed)["results"][0]["status"] == "passed"
+    assert payload(rejected_write)["results"][0]["status"] == "failed"
+    assert payload(rejected_read_only)["results"][0]["status"] == "failed"
+    near_miss_assertions = {
+        item["id"]: item["status"]
+        for item in payload(rejected_near_miss)["results"][0]["assertions"]
+    }
+    assert near_miss_assertions["mutation:boundary"] == "failed"
 
 
 def test_child_environment_is_allowlisted() -> None:

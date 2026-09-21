@@ -82,6 +82,25 @@ task dependency:audit
 `reconcile`, обнаружение агентов, недопустимые входные данные, выход за
 разрешённые пути, некорректные результаты, неполные бюджеты и утечки секретов.
 
+Для `spec-manage` у каждой области есть один основной владелец
+детерминированной проверки. Hostless eval проверяет контракт корпуса, но не
+наблюдает поведение модели:
+
+| Область | Детерминированный владелец | Hostless-контракт eval | Поведение trusted-live |
+| - | - | - | - |
+| Язык, нормативные источники и расширения | `tests/test_spec_manage_contract.py` | двуязычный набор случаев и digests | выбор языка до записи, сохранение языка, конфликты, допустимые и недопустимые расширения |
+| Validator snapshot и lifecycle | `tests/test_spec_validate.py` | только безопасность runner и invariants | не требуется |
+| Требования, архитектура, ADR и locale parity | `tests/test_spec_manage_model.py` | не требуется | не требуется |
+| Выбор режима, неоднозначность, near-miss и content states | `tests/test_spec_manage_evals.py` | двуязычный case protocol | outcome каждого случая и наблюдаемая граница без записи |
+| Audit classification, severity, critic и aggregate | `tests/test_spec_manage_evals.py` | двуязычный case protocol | audit outcome каждого случая и наблюдаемая граница без записи |
+
+Общим eval protocol и его отрицательными случаями владеет
+`tests/test_evals.py`. Сценарии stage 20 для `spec-manage` проверяют только
+декларации routing. Старые сценарии без `expected.case_outcomes` остаются
+selection-only и не доказывают mode или audit outcomes. Offline-результат имеет
+`observation_mode: hostless-contract`; только trusted-live использует
+`observation_mode: trusted-live` и может подтвердить case outcomes.
+
 Проверки совместимости запускаются для OpenCode `1.18.29` и `1.18.31` в диапазоне
 `>=1.18.29 <1.19.0` без учётных данных.
 
@@ -91,6 +110,12 @@ task dependency:audit
 режим `trusted-live`, среду, модель, тайм-аут, ограничения по токенам и стоимости,
 а также путь для результатов. Модель и эталон по умолчанию не заданы,
 недоверенная среда CI не получает учётные данные.
+
+Сценарии с `expected.case_outcomes` требуют наблюдаемый результат для каждого
+случая. Пропущенный, лишний, некорректный или malformed outcome проваливает eval.
+Read-only boundary проверяется по diff проектного sandbox; сценарий `specs-only`
+проваливается при изменении пути вне sandbox `specs/`. Live output является
+приватным свидетельством конкретного запуска и не сохраняется в Git.
 
 Общие копии среды выполнения существуют только в игнорируемых результатах сборки
 и проверяются на идентичность. В чистой временной рабочей копии сборка и проверки

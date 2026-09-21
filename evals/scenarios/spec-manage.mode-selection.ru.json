@@ -4,9 +4,24 @@
     "max_tokens": 2000,
     "timeout_seconds": 20
   },
-  "digest": "063e784ea744df3dfb2eea704cf8065d916a2c12ea9c08ebe0d61b31d988f05e",
+  "digest": "ad3d3a199a6441dc5faad532e3aafd7c25214e472f4f356d7785ff3d6fb93936",
   "expected": {
-    "mutation_boundary": "case-defined",
+    "case_outcomes": [
+      { "id": "natural-init", "outcome": "spec-init" },
+      { "id": "natural-onboard", "outcome": "spec-onboard" },
+      { "id": "natural-update", "outcome": "spec-update" },
+      { "id": "natural-audit", "outcome": "spec-audit" },
+      { "id": "evidence-init", "outcome": "spec-init" },
+      { "id": "evidence-onboard", "outcome": "spec-onboard" },
+      { "id": "ambiguous-update-audit", "outcome": "ask-no-writes" },
+      { "id": "explicit-mode", "outcome": "explicit-spec-audit" },
+      { "id": "explicit-failed-precondition", "outcome": "stop-failed-precondition" },
+      { "id": "near-miss-user-docs", "outcome": "near-miss" },
+      { "id": "near-miss-implementation", "outcome": "near-miss" },
+      { "id": "near-miss-planning", "outcome": "near-miss" },
+      { "id": "ambiguous-review-and-fix", "outcome": "ask-no-writes" }
+    ],
+    "mutation_boundary": "no-writes",
     "not_selected": [],
     "selected": ["skill:spec-manage"],
     "structured_outcome": "mode-selection-contract"
@@ -57,6 +72,16 @@
           "prompt": "spec-audit только requirements/quality; не переосмысливай режим и scope."
         },
         {
+          "id": "explicit-failed-precondition",
+          "outcome": "stop-failed-precondition",
+          "prompt": "Запусти spec-init для репозитория, хотя в нем уже есть код, тесты, deployment-конфигурация и каталог specs."
+        },
+        {
+          "id": "near-miss-user-docs",
+          "outcome": "near-miss",
+          "prompt": "Напиши руководство пользователя, которое объясняет требования и архитектуру операторам."
+        },
+        {
           "id": "near-miss-implementation",
           "outcome": "near-miss",
           "prompt": "Реализуй требование о времени ожидания в HTTP-клиенте и добавь тесты."
@@ -65,6 +90,11 @@
           "id": "near-miss-planning",
           "outcome": "near-miss",
           "prompt": "Подготовь архитектурный roadmap и план реализации на следующий квартал."
+        },
+        {
+          "id": "ambiguous-review-and-fix",
+          "outcome": "ask-no-writes",
+          "prompt": "Проверь канонические specs и исправь все, что не так."
         }
       ],
       "selected": ["skill:spec-manage"]

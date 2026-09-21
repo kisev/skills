@@ -94,6 +94,9 @@ def test_check_accepts_valid_snapshot_and_is_stable(
 ) -> None:
     specs = specs_factory("valid")
     add_requirement(specs, "REQ-F-001")
+    add_requirement(specs, "REQ-I-001")
+    add_requirement(specs, "REQ-Q-001")
+    add_requirement(specs, "REQ-C-001")
     add_adr(specs, 1)
     first = run_validator("check", "--path", str(specs))
     second = run_validator("check", "--path", str(specs))
@@ -179,6 +182,67 @@ def test_check_validates_extension_index_and_adr_correspondence(
     assert run_validator("check", "--path", str(specs)).returncode == 0
 
 
+@pytest.mark.parametrize("namespace", ["F", "I", "Q", "C"])
+def test_check_rejects_duplicate_and_malformed_requirement_in_every_namespace(
+    specs_factory: Callable[[str], Path], namespace: str
+) -> None:
+    specs = specs_factory(f"requirements-{namespace}")
+    add_requirement(specs, f"REQ-{namespace}-001")
+    target = specs / "requirements/quality/README.md"
+    with target.open("a", encoding="utf-8") as stream:
+        stream.write(
+            f"\n### REQ-{namespace}-001 - Duplicate\n\n### REQ-{namespace}-1 - Malformed\n"
+        )
+
+    result = parse_result(run_validator("check", "--path", str(specs)))
+
+    assert {item["code"] for item in result["findings"]} >= {
+        "SNAPSHOT_REQUIREMENT_DUPLICATE",
+        "SNAPSHOT_REQUIREMENT_DECLARATION_INVALID",
+    }
+
+
+def test_check_covers_language_extension_adr_and_supported_link_forms(
+    specs_factory: Callable[[str], Path],
+) -> None:
+    specs = specs_factory("cross-contracts")
+    readme = specs / "README.md"
+    readme.write_text(
+        "# Specs\n\nCanonical language: English\nCanonical language: Russian\n"
+        "\n## Extension Index\n\n"
+        "- [Missing](missing/README.md): Stale boundary.\n"
+        "- malformed extension entry\n",
+        encoding="utf-8",
+    )
+    capabilities = specs / "capabilities/README.md"
+    capabilities.parent.mkdir()
+    capabilities.write_text("# Capabilities\n", encoding="utf-8")
+    add_adr(specs, 1)
+    index = specs / "architecture/09-architecture-decisions/README.md"
+    with index.open("a", encoding="utf-8") as stream:
+        stream.write("\n- [ADR-0001: Duplicate](0001-test-decision.md)\n")
+    with (specs / "requirements/README.md").open("a", encoding="utf-8") as stream:
+        stream.write(
+            "\n[Anchor](#local) [External](https://example.invalid/spec) "
+            "[Mail](mailto:owner@example.invalid)\n"
+        )
+
+    result = parse_result(run_validator("check", "--path", str(specs)))
+    codes = {item["code"] for item in result["findings"]}
+
+    assert codes >= {
+        "SNAPSHOT_LANGUAGE_DECLARATION_AMBIGUOUS",
+        "SNAPSHOT_EXTENSION_NOT_INDEXED",
+        "SNAPSHOT_EXTENSION_INDEX_STALE",
+        "SNAPSHOT_EXTENSION_INDEX_ENTRY_INVALID",
+        "SNAPSHOT_ADR_INDEX_DUPLICATE",
+    }
+    assert not any(
+        item["code"].startswith("SNAPSHOT_LINK_") and item["path"] == "requirements/README.md"
+        for item in result["findings"]
+    )
+
+
 def test_lifecycle_accepts_preserved_ids_above_each_baseline_maximum(
     specs_factory: Callable[[str], Path],
 ) -> None:
@@ -222,6 +286,77 @@ def test_lifecycle_reports_removed_and_reused_ids(
         "LIFECYCLE_REQUIREMENT_NUMBER_REUSED",
         "LIFECYCLE_REQUIREMENT_REMOVED",
     }
+
+
+def test_lifecycle_tracks_an_independent_maximum_for_every_requirement_namespace(
+    specs_factory: Callable[[str], Path],
+) -> None:
+    baseline = specs_factory("namespace-baseline")
+    candidate = specs_factory("namespace-candidate")
+    maxima = {"F": 5, "I": 12, "Q": 9, "C": 2}
+    for namespace, maximum in maxima.items():
+        add_requirement(baseline, f"REQ-{namespace}-{maximum:03d}")
+        add_requirement(candidate, f"REQ-{namespace}-{maximum:03d}")
+        add_requirement(candidate, f"REQ-{namespace}-{maximum + 1:03d}")
+
+    accepted = run_validator(
+        "lifecycle", "--baseline", str(baseline), "--candidate", str(candidate)
+    )
+    assert accepted.returncode == 0
+
+    for namespace, maximum in maxima.items():
+        isolated_candidate = specs_factory(f"reused-{namespace}")
+        for preserved_namespace, preserved_maximum in maxima.items():
+            add_requirement(
+                isolated_candidate, f"REQ-{preserved_namespace}-{preserved_maximum:03d}"
+            )
+        add_requirement(isolated_candidate, f"REQ-{namespace}-{maximum - 1:03d}")
+        result = parse_result(
+            run_validator(
+                "lifecycle",
+                "--baseline",
+                str(baseline),
+                "--candidate",
+                str(isolated_candidate),
+            )
+        )
+        reused = [
+            item
+            for item in result["findings"]
+            if item["code"] == "LIFECYCLE_REQUIREMENT_NUMBER_REUSED"
+        ]
+        assert len(reused) == 1
+        assert f"new {namespace} requirement" in reused[0]["message"]
+
+
+def test_lifecycle_does_not_substitute_snapshot_validation(
+    specs_factory: Callable[[str], Path],
+) -> None:
+    baseline = specs_factory("separate-baseline")
+    candidate = specs_factory("separate-candidate")
+    add_requirement(baseline, "REQ-F-001")
+    add_requirement(candidate, "REQ-F-001")
+    (candidate / "architecture/12-glossary/README.md").unlink()
+
+    lifecycle = parse_result(
+        run_validator("lifecycle", "--baseline", str(baseline), "--candidate", str(candidate))
+    )
+    snapshot = parse_result(run_validator("check", "--path", str(candidate)))
+
+    assert lifecycle["status"] == "valid"
+    assert lifecycle["checks"] == {"snapshot": "not_checked", "lifecycle": "passed"}
+    assert snapshot["status"] == "invalid"
+    assert snapshot["checks"] == {"snapshot": "failed", "lifecycle": "not_checked"}
+
+
+def test_lifecycle_requires_an_explicit_baseline(specs_factory: Callable[[str], Path]) -> None:
+    candidate = specs_factory("no-baseline")
+    process = run_validator("lifecycle", "--candidate", str(candidate))
+
+    assert process.returncode == 2
+    result = parse_result(process)
+    assert result["status"] == "error"
+    assert result["checks"] == {"snapshot": "not_checked", "lifecycle": "not_checked"}
 
 
 @pytest.mark.parametrize("arguments", [(), ("check",), ("unknown",)])

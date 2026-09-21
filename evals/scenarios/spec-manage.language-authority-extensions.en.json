@@ -1,0 +1,82 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "spec-manage.language-authority-extensions.en",
+  "revision": 1,
+  "locale": "en",
+  "pair_id": "spec-manage.language-authority-extensions",
+  "kind": "golden",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Apply the language, normative-authority, and extension rules to every case. Classify only; do not write files.",
+    "fixture": {
+      "selected": ["skill:spec-manage"],
+      "cases": [
+        {
+          "id": "init-language-first",
+          "prompt": "Initialize canonical specs, but I have not selected their language.",
+          "outcome": "ask-language-before-write"
+        },
+        {
+          "id": "onboard-language-first",
+          "prompt": "Onboard this existing service into specs without choosing a project language yet.",
+          "outcome": "ask-language-before-write"
+        },
+        {
+          "id": "update-different-language",
+          "prompt": "The tree declares English. The request is entirely in Russian: обнови требование интерфейса.",
+          "outcome": "preserve-declared-language"
+        },
+        {
+          "id": "update-mixed-language",
+          "prompt": "The tree declares English. Mixed request: update требование для CLI output.",
+          "outcome": "preserve-declared-language"
+        },
+        {
+          "id": "mixed-legacy-tree",
+          "prompt": "Update a legacy tree with no declaration and substantive prose mixed between English and Russian.",
+          "outcome": "ask-language-no-write"
+        },
+        {
+          "id": "normative-conflict",
+          "prompt": "During onboarding, an explicit API contract and a confirmed product decision require incompatible timeout behavior.",
+          "outcome": "surface-conflict-no-write"
+        },
+        {
+          "id": "indexed-capabilities",
+          "prompt": "Assess an indexed specs/capabilities/ inventory that owns supported public surfaces and links shared requirements.",
+          "outcome": "extension-allowed"
+        },
+        {
+          "id": "process-extension",
+          "prompt": "Assess a proposed specs/roadmap/ extension containing milestones and delivery status.",
+          "outcome": "extension-rejected"
+        }
+      ]
+    }
+  },
+  "expected": {
+    "selected": ["skill:spec-manage"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "case_outcomes": [
+      { "id": "init-language-first", "outcome": "ask-language-before-write" },
+      { "id": "onboard-language-first", "outcome": "ask-language-before-write" },
+      { "id": "update-different-language", "outcome": "preserve-declared-language" },
+      { "id": "update-mixed-language", "outcome": "preserve-declared-language" },
+      { "id": "mixed-legacy-tree", "outcome": "ask-language-no-write" },
+      { "id": "normative-conflict", "outcome": "surface-conflict-no-write" },
+      { "id": "indexed-capabilities", "outcome": "extension-allowed" },
+      { "id": "process-extension", "outcome": "extension-rejected" }
+    ]
+  },
+  "invariants": [
+    {
+      "id": "language-authority-extension-contract",
+      "path": "skills/spec-manage/references/canonical-contract.md"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 2000, "max_cost": 1 },
+  "digest": "01bc132a408bc7e30326e3a094c746cbad2d016e55441fe8925c1e337018a300"
+}

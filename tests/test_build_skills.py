@@ -2,14 +2,11 @@ from __future__ import annotations
 
 import json
 import os
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import pytest
 
 from scripts import build_skills
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def isolated_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
@@ -209,3 +206,32 @@ def test_build_materializes_only_in_output(tmp_path: Path, monkeypatch: pytest.M
     assert (output / "foo/references/canonical.md").read_text(encoding="utf-8") == "canonical\n"
     assert not (sources / "foo/SKILL.md").exists()
     assert not (sources / "foo/references/canonical.md").exists()
+
+
+def test_spec_manage_portable_inventory_matches_all_authored_and_materialized_files() -> None:
+    source = build_skills.SOURCES / "spec-manage"
+    built = build_skills.ROOT / ".build/skills/spec-manage"
+    authored: dict[Path, bytes] = {}
+    for path in source.rglob("*"):
+        if not path.is_file() or any(
+            part in {"ru", "en"} for part in path.relative_to(source).parts
+        ):
+            continue
+        relative = path.relative_to(source)
+        if relative == Path("SKILL.source.md"):
+            relative = Path("SKILL.md")
+        authored[relative] = path.read_bytes()
+    generated = {
+        destination.relative_to("spec-manage"): shared.read_bytes()
+        for shared, destination in build_skills.manifest_entries()
+        if destination.parts[0] == "spec-manage"
+    }
+    expected = authored | generated
+    actual = {
+        path.relative_to(built): path.read_bytes()
+        for path in built.rglob("*")
+        if path.is_file() and "__pycache__" not in path.parts
+    }
+
+    assert actual == expected
+    assert not any("ru" in path.parts for path in actual)

@@ -38,7 +38,11 @@ selectable plugin modules: `rules-injector`, `rtk`, and `zed-bell`.
 ### REQ-I-005 - Evidence interface
 
 Tests and evals shall expose stable selectors, scenario IDs, invariant paths,
-and bounded hostless execution metadata.
+and bounded hostless execution metadata. A scenario may opt into structured
+per-case outcomes. For such a scenario, trusted-live observation shall contain
+exactly one correct outcome for every declared case, while hostless evaluation
+shall validate only the scenario contract and shall not present fixture outcomes
+as observed model behavior. Existing selection-only scenarios remain valid.
 
 ### REQ-I-006 - Compatibility interface
 
