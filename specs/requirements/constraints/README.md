@@ -38,7 +38,8 @@ Status: withdrawn. This requirement formerly mandated machine traceability,
 commit-impact trailers, and a deterministic specification gate. The automation
 was removed because it had no independent consumer and could not verify semantic
 correctness. Canonical Markdown maintenance and semantic review remain owned by
-`spec-manage`.
+`spec-manage`. This withdrawal does not prohibit bounded structural validation
+that explicitly disclaims semantic correctness and commit-impact traceability.
 
 ### REQ-C-007 - Separate version authorities
 

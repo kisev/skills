@@ -26,9 +26,9 @@ available; selectable plugins are `rules-injector`, `rtk`, and `zed-bell`.
 - [Capabilities](capabilities/README.md) indexes every public capability.
 - [Crosscutting concepts](architecture/08-crosscutting-concepts/README.md) hold shared behavior.
 
-`capabilities/` is an indexed additional canonical section with the named
-semantic boundary of public-surface inventory and capability-specific contracts.
-It references shared requirements and architecture rather than duplicating them.
+## Extension Index
+
+- [Capabilities](capabilities/README.md): Public-surface inventory and capability-specific contracts that reference shared requirements and architecture instead of duplicating them.
 
 ## Scope Boundary
 

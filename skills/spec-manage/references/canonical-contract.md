@@ -13,6 +13,11 @@ including requirements, architecture, ADRs, and additional sections. Preserve
 identifiers, paths, commands, schema fields, code, quotations, and established
 technical terms when translating them would change their meaning.
 
+For deterministic validation in every project language, use the fixed machine
+declaration `Canonical language: <non-empty language>.` exactly once. This marker
+does not assert that the remaining prose uses the declared language; that is a
+semantic `spec-audit` responsibility.
+
 The canonical language is a property of the tree, not of the session. Apply
 `references/language-policy.md` independently to conversation, questions, audit
 findings, and completion reports. A same-language, different-language, or
@@ -77,6 +82,12 @@ decomposition rules in their respective profiles. A `specs/capabilities/`
 section is valid when it is an indexed inventory of supported public surfaces
 with one clear ownership boundary and references shared requirements and
 architecture instead of restating them.
+
+Use the fixed `## Extension Index` heading for deterministic validation. Record
+each additional top-level directory exactly once as
+`- [Name](name/README.md): Non-empty semantic boundary.` The validator proves
+only index correspondence and non-empty boundary text; `spec-audit` determines
+whether the boundary is valid and non-duplicating.
 
 If a proposed or existing additional section has no unambiguous canonical
 semantic boundary, stop and ask the user in a writing mode; report it as a

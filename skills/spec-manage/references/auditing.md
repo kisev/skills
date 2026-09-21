@@ -2,6 +2,12 @@
 
 Audit is completely read-only. Independently check canonical-document quality, compliance with the language declared in `specs/README.md`, and correspondence to source code, tests, schemas, configuration, CLI/API, CI, and deployment. `specs/` states the claimed contract and repository evidence shows implementation behavior; do not resolve a conflict by silently preferring either. Do not fix anything or create report files. The conversational report may use a different language from the canonical tree.
 
+Treat the bundled validator's result as formal structural evidence only. Its
+successful result does not prove semantic quality, that prose follows the
+declared language, append-only history without an explicit baseline, or
+correspondence with repository behavior. Report `not_checked` for formal scopes
+that were not run; do not silently treat them as valid.
+
 A full audit requires one independent critic pass whose initial conclusions are
 hidden from the primary reviewer. The primary reviewer accepts or rejects critic
 findings against repository evidence.

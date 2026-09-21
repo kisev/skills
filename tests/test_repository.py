@@ -62,6 +62,7 @@ PROJECT_REFERENCES = tuple(
         "consolidation",
         "adr",
         "auditing",
+        "validation",
     )
 )
 SPEC_TEMPLATE_READMES = tuple(
@@ -97,6 +98,7 @@ PROJECT_REFERENCE_CONTRACTS = {
     "references/consolidation.md": "consolidation: required",
     "references/adr.md": "do not rewrite an old adr",
     "references/auditing.md": "`implementation_ahead`",
+    "references/validation.md": "spec-validate/v1",
 }
 PROJECT_TEMPLATE_SECTIONS = (
     "## purpose",

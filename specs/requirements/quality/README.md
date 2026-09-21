@@ -56,3 +56,13 @@ HTTP and transport failures may be retried only for reads. Integrity or provenan
 mismatches shall fail without retrying publication. Recovery shall reuse retained
 artifacts and immutable release identity rather than creating a replacement version
 for propagation alone.
+
+### REQ-Q-009 - Validate canonical specification structure deterministically
+
+The portable `spec-manage` skill shall provide a read-only, standard-library-only
+validator for the closed set of mechanically provable snapshot and explicit
+baseline lifecycle invariants. Every invocation shall emit one deterministic
+`spec-validate/v1` JSON document with relative POSIX paths and stable exit codes,
+without Git, network, external tools, writes, timestamps, absolute paths, or
+environment-dependent values. Snapshot success shall report historical lifecycle
+properties as `not_checked` and shall not claim semantic quality or drift coverage.

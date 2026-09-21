@@ -84,6 +84,8 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "user must explicitly provide one mode",
             "spec-update",
             "mode is completely read-only",
+            "scripts/spec_validate.py",
+            "lifecycle as `not_checked`",
         ),
         "commit-msg": ("git diff --cached", "exactly one line", "Do not run `git add`"),
         "docs-prepare": (

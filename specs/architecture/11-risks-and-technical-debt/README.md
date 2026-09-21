@@ -1,6 +1,10 @@
 # Risks and Technical Debt
 
 Semantic specification review can detect drift but cannot prove undocumented human intent.
+The structural specification validator intentionally cannot detect prose
+language, semantic duplication, requirement quality, architectural significance,
+extension-boundary correctness, process meaning, or repository drift. Treating
+its success as semantic proof remains a caller and reporting risk.
 External host APIs may be unavailable or change within the declared compatibility
 range. Live integrations remain bounded by hostless contracts and may require
 manual evidence. A malformed or inaccessible local state file is reported as

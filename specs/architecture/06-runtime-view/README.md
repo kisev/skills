@@ -19,6 +19,12 @@ Portable installation resolves the Pages well-known index, verifies an archive
 SHA-256 digest, extracts root `SKILL.md` plus local resources, and records the
 Pages source for later updates. No build command runs on the user's machine.
 
+Specification writing validates the complete candidate snapshot after bounded
+writes. Updates additionally compare it with an explicitly retained complete
+baseline; initialization and onboarding report lifecycle as `not_checked`.
+Audits treat formal results as structural evidence and continue with independent
+semantic quality and repository-drift review.
+
 Code review preparation collects complete GitLab evidence and label catalogs,
 validates each actionable suggestion or unified patch against the exact reviewed
 head, creates immutable body and patch files plus closed publication actions,

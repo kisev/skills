@@ -14,3 +14,6 @@
 - `evals/` contains machine-readable scenarios, fixtures, schemas, and negative
   corpus entries.
 - `specs/` is the canonical Markdown normative model.
+- `skills/spec-manage/scripts/spec_validate.py` is the self-contained read-only
+  formal validator shipped as an authored asset of that skill; it is not shared
+  through `shared/manifest.json` without another confirmed consumer.
