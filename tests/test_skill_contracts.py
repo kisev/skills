@@ -127,6 +127,45 @@ def test_project_spec_identifiers_and_decisions_are_append_only() -> None:
     assert "stable requirements and decisions" in workflow
 
 
+def test_project_spec_language_authority_and_extension_contract() -> None:
+    skill = ROOT / "skills/spec-manage"
+    entrypoint = (skill / "SKILL.source.md").read_text(encoding="utf-8")
+    contract = (skill / "references/canonical-contract.md").read_text(encoding="utf-8")
+    normalized_contract = " ".join(contract.split())
+    workflow = (skill / "references/workflow.md").read_text(encoding="utf-8")
+    audit = (skill / "references/auditing.md").read_text(encoding="utf-8")
+    root_template = (skill / "templates/specs/README.md").read_text(encoding="utf-8")
+
+    assert "English-only canonical project specification" not in entrypoint
+    assert "exactly one explicitly declared canonical prose language" in normalized_contract
+    assert (
+        "A same-language, different-language, or mixed-language user request" in normalized_contract
+    )
+    assert (
+        "obtain the user's explicit project-language choice before writing" in normalized_contract
+    )
+    assert (
+        "all substantive existing canonical prose unambiguously uses one language"
+        in normalized_contract
+    )
+    assert "Changing an existing tree's language requires an explicit" in normalized_contract
+    assert "confirmed user decisions are normative" in normalized_contract
+    assert (
+        "code, tests, configuration, CI, and deployment prove only current behavior"
+        in normalized_contract
+    )
+    assert "existing `specs/` tree is the normative baseline" in normalized_contract
+    assert "do not resolve them by silently preferring either side" in normalized_contract
+    assert "minimum canonical skeleton, not a closed allowlist" in normalized_contract
+    assert "`specs/capabilities/` section is valid" in normalized_contract
+    assert "explicit project-language choice before preparing files" in workflow
+    assert "Never select the canonical language from the current request" in workflow
+    assert "This mode is completely read-only" in workflow
+    assert "The conversational report may use a different language" in audit
+    assert "Canonical language: PROJECT-LANGUAGE." in root_template
+    assert "## Extension Index" in root_template
+
+
 def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None:
     expected_markers = {
         "team-retro": (

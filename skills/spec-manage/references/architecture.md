@@ -19,7 +19,7 @@ Use arc42 as taxonomy, but do not claim formal compliance with arc42, C4, or ISO
 
 ## Decomposition
 
-Additional Markdown files are allowed only in four places:
+Within the minimum architecture tree, additional Markdown files are allowed only in four places:
 
 - `05-building-block-view`: one file per real subsystem, service, component, module, layer, or package with an independent responsibility;
 - `06-runtime-view`: one file per meaningful end-to-end runtime scenario;
@@ -27,6 +27,10 @@ Additional Markdown files are allowed only in four places:
 - `09-architecture-decisions`: one file per ADR.
 
 Do not split architecture by feature and do not create `part-1.md`, `misc.md`, `other.md`, or similar files. Each section's root `README.md` remains the primary document and index for additional files.
+
+Additional top-level canonical sections are governed by
+`references/canonical-contract.md`; they do not weaken these architecture
+decomposition rules.
 
 ## Diagrams
 

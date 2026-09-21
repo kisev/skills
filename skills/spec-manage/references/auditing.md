@@ -1,6 +1,6 @@
 # Specification audit
 
-Audit is completely read-only. Independently check canonical-document quality and its correspondence to source code, tests, schemas, configuration, CLI/API, CI, and deployment. Do not fix anything or create report files.
+Audit is completely read-only. Independently check canonical-document quality, compliance with the language declared in `specs/README.md`, and correspondence to source code, tests, schemas, configuration, CLI/API, CI, and deployment. `specs/` states the claimed contract and repository evidence shows implementation behavior; do not resolve a conflict by silently preferring either. Do not fix anything or create report files. The conversational report may use a different language from the canonical tree.
 
 A full audit requires one independent critic pass whose initial conclusions are
 hidden from the primary reviewer. The primary reviewer accepts or rejects critic
@@ -9,9 +9,10 @@ findings against repository evidence.
 ## Order
 
 1. Determine scope. Without an argument, check the complete canonical `specs/`. With a path, `REQ-*`, `ADR-*`, or described area, check the selected object, related requirements, architecture/ADR, and necessary repository evidence.
-2. Check internal quality and consistency of requirements, architecture, and ADRs using the profiles below.
-3. Separately check drift between the canonical specification and repository evidence.
-4. Report ranked quality findings first, then drift statuses and unchecked boundaries. Do not mix a document defect with a drift status.
+2. Check that `specs/README.md` declares one canonical prose language and that the scoped canonical documents follow it. A missing declaration or mixed canonical prose is a quality finding, not permission to modify files.
+3. Check internal quality and consistency of requirements, architecture, ADRs, and indexed extensions using the profiles below.
+4. Separately check drift between the canonical specification and repository evidence.
+5. Report ranked quality findings first, then drift statuses and unchecked boundaries. Do not mix a document defect with a drift status.
 
 At the start, state `Scope: full` or the exact limited scope. For a focused audit, list unchecked boundaries. `OK` is allowed only with explicit `Scope: <scope>`; do not claim project-wide completeness or project-wide `OK`.
 

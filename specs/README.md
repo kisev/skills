@@ -1,5 +1,11 @@
 # Canonical Specification
 
+## Canonical Language
+
+Canonical language: English. This repository-specific choice is governed by
+[REQ-C-001](requirements/constraints/README.md#req-c-001---english-only-canonical-specification),
+not by a universal `spec-manage` language restriction.
+
 ## Target
 
 This English-only specification describes the current merged target of the
@@ -19,6 +25,10 @@ available; selectable plugins are `rules-injector`, `rtk`, and `zed-bell`.
 - [Architecture](architecture/README.md) describes boundaries and runtime views.
 - [Capabilities](capabilities/README.md) indexes every public capability.
 - [Crosscutting concepts](architecture/08-crosscutting-concepts/README.md) hold shared behavior.
+
+`capabilities/` is an indexed additional canonical section with the named
+semantic boundary of public-surface inventory and capability-specific contracts.
+It references shared requirements and architecture rather than duplicating them.
 
 ## Scope Boundary
 

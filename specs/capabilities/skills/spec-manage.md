@@ -30,16 +30,22 @@ Ambiguous intent or conflicting evidence is escalated; audit is read-only.
 
 ## Unique Constraints
 
-Onboarding describes current post-merge state and uses explicit English language selection.
+Each tree declares one project-selected canonical language independently from
+the conversation language. This repository selects English through `REQ-C-001`.
+The 19-file skeleton is a minimum; indexed, non-duplicating canonical semantic
+sections such as `specs/capabilities/` are allowed.
 
 ## Requirement
 
 ### REQ-F-120 - Maintain canonical current specifications
 
-The skill shall keep canonical specs evidence-backed, compact, language-explicit,
-and free of roadmap artifacts while writing only validated files under `specs/`.
+The skill shall keep canonical specs evidence-backed, compact, explicit about one
+project-selected language, and free of roadmap artifacts while writing only
+validated files under `specs/`. It shall distinguish normative intent from
+evidence of current behavior according to the selected mode.
 
 ## Example
 
-`spec-manage` onboards a brownfield repository in English and creates only canonical specs.
+`spec-manage` onboards a brownfield repository in its explicitly selected
+canonical language and creates only canonical specs.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

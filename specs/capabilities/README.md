@@ -1,8 +1,14 @@
 # Capability Index
 
+This additional canonical section has the named semantic boundary of supported
+public-surface inventory and capability-specific contracts. It is indexed from
+`specs/README.md`, contains no delivery or planning artifacts, and references
+shared requirements and architecture instead of duplicating their normative
+facts.
+
 This index contains the exact public inventory from
 `evals/contracts/public-surfaces.json`. Each capability record has one local
-requirement block and references the shared concepts in
+requirement block and references the shared concepts.
 
 ## Skills (27)
 

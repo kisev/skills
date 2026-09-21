@@ -57,6 +57,7 @@ PROJECT_REFERENCES = tuple(
         "requirements",
         "architecture",
         "interviewing",
+        "canonical-contract",
         "onboarding",
         "consolidation",
         "adr",
@@ -88,6 +89,7 @@ SPEC_TEMPLATE_READMES = tuple(
     )
 )
 PROJECT_REFERENCE_CONTRACTS = {
+    "references/canonical-contract.md": "normative authority by mode",
     "references/requirements.md": "append-only sequence",
     "references/architecture.md": "additional markdown files are allowed only",
     "references/interviewing.md": "readiness check",
@@ -144,7 +146,7 @@ WORKFLOW_CONTRACTS = {
         "`spec-onboard`",
         "`spec-update`",
         "`spec-audit`",
-        "all 19 required `readme.md`",
+        "all 19 minimum required `readme.md`",
         "this mode is completely read-only",
     ),
     "stopit": (

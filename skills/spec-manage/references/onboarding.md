@@ -2,13 +2,18 @@
 
 Before questions, investigate available repository evidence: instructions, README and documentation, ADR/RFC, source code, tests, schemas, configuration, CLI/API, dependencies, CI, deployment, and integrations. Use additional research only when needed; retain results in context, not the repository.
 
+Apply the `spec-onboard` authority rules in `references/canonical-contract.md`.
+Explicitly declared supported contracts and confirmed user decisions establish
+intent. Code, tests, configuration, CI, and deployment establish current
+behavior only; they do not become normative merely because they are executable.
+
 ## Evidence classification
 
 - Classify every individual claim, not a source file, subsystem, or whole project. The same evidence can confirm an implementation fact but not human intent or a compatibility guarantee.
 - `KNOWN`: a concrete claim is unambiguously confirmed. Do not ask the user.
 - `AMBIGUOUS`: evidence permits several interpretations. Show the options and ask the user.
 - `UNKNOWN`: the repository cannot establish intent. Ask the user.
-- `CONFLICT`: sources disagree. Show exact paths and differences, then ask what is normative.
+- `CONFLICT`: candidate normative sources disagree, or intent and current behavior differ. Show exact paths, claims, and differences, then ask what is normative; do not choose code, tests, schemas, configuration, or prose by default.
 
 For example, tests and source can make the claim "the CLI accepts `--timeout`" `KNOWN`, while "`--timeout` is a supported public contract" remains `UNKNOWN` unless confirmed by contract evidence or a person.
 

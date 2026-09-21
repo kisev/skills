@@ -30,7 +30,9 @@ Conflicts or ambiguous intent escalate.
 
 ## Unique Constraints
 
-Onboarding is English-only when explicitly selected here.
+The command does not infer canonical language from the request. It passes the
+mode and scope to the skill, which selects or preserves the project language
+under its mode contract.
 
 ## Requirement
 
@@ -40,5 +42,6 @@ The command shall load exactly `spec-manage` and preserve mode and language boun
 
 ## Example
 
-`/spec-manage` routes `spec-onboard` with English output.
+`/spec-manage` routes `spec-onboard`; the skill obtains the project language
+before writing while the conversational response follows the request language.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

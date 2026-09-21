@@ -1,0 +1,53 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "spec-manage.update-language-preservation",
+  "revision": 1,
+  "locale": "neutral",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Verify that spec-update preserves the declared canonical language independently from the request language.",
+    "fixture": {
+      "selected": ["skill:spec-manage"],
+      "cases": [
+        {
+          "id": "matching-request-language",
+          "canonical_language": "English",
+          "request": "Update the interface requirement."
+        },
+        {
+          "id": "different-request-language",
+          "canonical_language": "English",
+          "request": "Обнови требование интерфейса."
+        },
+        {
+          "id": "mixed-request-language",
+          "canonical_language": "English",
+          "request": "Update требование для CLI output."
+        }
+      ]
+    }
+  },
+  "expected": {
+    "selected": ["skill:spec-manage"],
+    "not_selected": [],
+    "mutation_boundary": "specs-only"
+  },
+  "invariants": [
+    {
+      "id": "request-language-does-not-override",
+      "path": "skills/spec-manage/references/canonical-contract.md",
+      "contains": "same-language, different-language, or\nmixed-language user request does not override the canonical language"
+    },
+    {
+      "id": "update-preserves-tree-language",
+      "path": "skills/spec-manage/references/workflow.md",
+      "contains": "Never select the canonical language from the current request"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "0de02fb37f02447c651c15999f7a1b596e2ce79f51f06c9ec7b3fdcd7c504b25"
+}

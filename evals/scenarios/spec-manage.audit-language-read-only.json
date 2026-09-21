@@ -1,0 +1,39 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "spec-manage.audit-language-read-only",
+  "revision": 1,
+  "locale": "neutral",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Audit an English-declared specs tree, report in Russian, and do not modify language violations.",
+    "fixture": { "selected": ["skill:spec-manage"] }
+  },
+  "expected": {
+    "selected": ["skill:spec-manage"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes"
+  },
+  "invariants": [
+    {
+      "id": "audit-read-only",
+      "path": "skills/spec-manage/references/workflow.md",
+      "contains": "This mode is completely read-only"
+    },
+    {
+      "id": "audit-checks-declared-language",
+      "path": "skills/spec-manage/references/auditing.md",
+      "contains": "compliance with the language declared in `specs/README.md`"
+    },
+    {
+      "id": "audit-report-language-independent",
+      "path": "skills/spec-manage/references/auditing.md",
+      "contains": "report may use a different language from the canonical tree"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
+  "digest": "5855195ff19d7541aa79db4d3c5be0cb7904901ecafa85b27eb05403d427cecb"
+}
