@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Describe the canonical target state supported by verified evidence.
+Define one canonical meaning for ambiguous domain, product, and architecture terms used in the specification.
 
 ## Included
 
-State the responsibilities, stable identifiers, and relevant interfaces.
+- Project-specific terms, overloaded words, abbreviations, and distinctions whose interpretation affects requirements or architecture.
 
 ## Excluded
 
-Do not record implementation plans, temporary research, or duplicate facts.
+- Common technology definitions, tutorials, duplicated requirement text, implementation names that need no explanation, and unused future vocabulary.
 
 ## Decomposition Rules
 
-Keep one semantic boundary per document and retain this README as its index.
+Keep the glossary in this `README.md`; do not create child files. Use one entry per concept and one preferred term per meaning.
 
 ## Expected Structure
 
-Use concise present-tense statements and link related canonical documents.
+Use an alphabetized or otherwise stable list with term, concise canonical definition, accepted aliases, and links where the distinction is material.
 
 ## Content Template
 
-Replace this guidance with verified project-specific content.
+Replace this guidance with only terms needed to remove a material ambiguity from the canonical target state.

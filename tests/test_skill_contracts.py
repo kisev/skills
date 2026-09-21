@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 import subprocess
 from pathlib import Path
@@ -264,6 +265,20 @@ def test_all_english_canonical_skill_material_is_cyrillic_free() -> None:
         text = path.read_text(encoding="utf-8")
         if path.name == "SKILL.source.md":
             text = text.split("---", 2)[2]
+        if relative == "skills/spec-manage/scripts/spec_validate.py":
+            tree = ast.parse(text)
+            placeholder_assignment = next(
+                node
+                for node in tree.body
+                if isinstance(node, ast.Assign)
+                and any(
+                    isinstance(target, ast.Name) and target.id == "PLACEHOLDERS"
+                    for target in node.targets
+                )
+            )
+            lines = text.splitlines()
+            del lines[placeholder_assignment.lineno - 1 : placeholder_assignment.end_lineno]
+            text = "\n".join(lines)
         assert not cyrillic.search(text), path
 
 

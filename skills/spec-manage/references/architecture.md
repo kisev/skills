@@ -17,6 +17,26 @@ Use arc42 as taxonomy, but do not claim formal compliance with arc42, C4, or ISO
 11. `11-risks-and-technical-debt` - known risks, debt, fragile areas, and expensive changes, but not a backlog.
 12. `12-glossary` - ambiguous and project-specific terms, but not a dictionary of common technologies.
 
+Each viewpoint owns only the information named above. Architecture explains
+target-state structures and mechanisms and links the requirements they provide;
+it does not repeat normative requirement text or describe implementation and
+delivery sequencing.
+
+Security and data concerns have explicit owners:
+
+- `03-context-and-scope` owns external subjects, neighboring systems, trust
+  boundaries, and exchanges across the system boundary;
+- `07-deployment-view` owns runtime boundaries, network exposure, deployed data
+  stores, and where secrets are held or injected;
+- `08-crosscutting-concepts` owns identity, authorization, sensitive-data
+  lifecycle, isolation, and auditability mechanisms;
+- `10-quality-requirements` owns the architectural response to measurable
+  security and reliability properties in `REQ-Q-*`.
+
+Link between these owners instead of repeating a concern. Record only applicable,
+material target-state knowledge; a brief reason is enough when a viewpoint is
+inapplicable.
+
 ## Decomposition
 
 Within the minimum architecture tree, additional Markdown files are allowed only in four places:
@@ -35,3 +55,10 @@ decomposition rules.
 ## Diagrams
 
 Use C4 concepts within arc42: System Context in 03, Container/Component in 05, Dynamic in 06, Deployment in 07. Do not require every level. Store diagrams in Markdown as broadly supported Mermaid `flowchart`, `sequenceDiagram`, or `stateDiagram`. Do not use experimental C4 notation or create a diagram when text is clearer.
+
+## Traceability
+
+Every material architecture mechanism directly links the `REQ-*` entries it
+provides. A direct link from the dependent statement is sufficient. Do not create
+traceability matrices, mapping files, mandatory requirement backlinks, or
+delivery artifacts.

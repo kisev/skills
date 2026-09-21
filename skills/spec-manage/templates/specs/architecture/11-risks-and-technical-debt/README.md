@@ -2,24 +2,25 @@
 
 ## Purpose
 
-Describe the canonical target state supported by verified evidence.
+Make known target-state architecture risks, fragile assumptions, and accepted technical debt visible.
 
 ## Included
 
-State the responsibilities, stable identifiers, and relevant interfaces.
+- Evidence-backed uncertainty, failure or change exposure, affected architecture and requirements, impact, accepted mitigation or containment, and review trigger.
+- Debt that materially constrains the target architecture.
 
 ## Excluded
 
-Do not record implementation plans, temporary research, or duplicate facts.
+- Feature requests, task queues, implementation sequencing, generic risk checklists, speculative improvements, and closed historical issues with no current consequence.
 
 ## Decomposition Rules
 
-Keep one semantic boundary per document and retain this README as its index.
+Keep all risks and debt in this `README.md`; do not create child files or turn the section into a delivery backlog.
 
 ## Expected Structure
 
-Use concise present-tense statements and link related canonical documents.
+For each material item, state evidence, affected target-state boundary, consequence, current mitigation or acceptance, and links to relevant requirements or ADRs.
 
 ## Content Template
 
-Replace this guidance with verified project-specific content.
+Replace this guidance with only confirmed risks, fragile assumptions, expensive changes, and accepted debt that remain relevant to the canonical target state.

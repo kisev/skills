@@ -7,11 +7,15 @@ Describe the system's external interaction surfaces and their normative semantic
 ## Included
 
 - Public CLI, API, configuration, and event contracts.
-- Compatibility guarantees, validation, errors, and references to formal schemas and declarations.
+- Commands, fields, messages, ordering, validation, protocol errors, versioning,
+  and compatibility semantics at those external surfaces.
+- References to formal schemas and declarations.
 
 ## Excluded
 
-- Internal module interfaces, future potential interfaces, or complete copies of OpenAPI, JSON Schema, or CLI declarations.
+- Transport-independent behavior owned by `REQ-F-*`, quality thresholds,
+  internal module interfaces, future potential interfaces, or complete copies of
+  OpenAPI, JSON Schema, or CLI declarations.
 
 ## Decomposition Rules
 
@@ -27,4 +31,4 @@ interfaces/
 
 ## Content Template
 
-List interfaces and related `REQ-I-*`. Each additional file states its source of truth, semantics, errors, compatibility, and invariants. If there are no external interfaces, explain that instead of creating files.
+List real external surfaces and related `REQ-I-*`. Each additional file states its source of truth, protocol semantics, errors, compatibility, and invariants, and links transport-independent behavior instead of repeating it. If there are no external interfaces, explain that instead of creating files.

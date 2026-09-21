@@ -2,15 +2,18 @@
 
 ## Purpose
 
-Record mandatory constraints that narrow permissible solutions.
+Record externally imposed mandatory constraints that narrow permissible solutions.
 
 ## Included
 
-- Required runtime, platform, and infrastructure; compatibility and policy constraints; required technologies and operational boundaries.
+- Required runtime, platform, infrastructure, technology, law, policy, standards,
+  and organizational boundaries whose authority is outside the solution design.
 
 ## Excluded
 
-- Preferences without normative force, architectural consequences, risks, or technical debt.
+- Chosen architecture, internally selected technologies, preferences without
+  normative force, behavior, quality targets, architectural consequences, risks,
+  or technical debt.
 
 ## Decomposition Rules
 
@@ -25,4 +28,4 @@ constraints/
 
 ## Content Template
 
-Use stable `REQ-C-NNN`, the basis for each constraint, and verification where it is not obvious. Architecture section 02 references these IDs and explains their consequences.
+Use stable `REQ-C-NNN`, name the external authority or basis for each constraint, and add verification where it is not obvious. Architecture section 02 references these IDs and explains consequences without restating the constraint.

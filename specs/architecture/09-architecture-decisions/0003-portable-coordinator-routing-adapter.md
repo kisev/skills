@@ -1,31 +1,64 @@
 # ADR-0003: Portable Coordinator and Routing Adapter
 
-- Status: superseded by [ADR-0006](0006-retire-generic-doit-coordinator.md)
+- Status: superseded
 - Date: 2026-09-10
 - Status changed: 2026-09-16
+- Supersedes: none
+- Superseded by: [ADR-0006](0006-retire-generic-doit-coordinator.md)
 
-## Context
+## Context and problem statement
 
-Workflows must remain portable while OpenCode needs host-aware orchestration.
+Workflows had to remain portable while OpenCode required host-aware orchestration.
 
-## Decision
+## Decision drivers
 
-`doit` remains the portable coordinator. The OpenCode package is a routing
-adapter that resolves host agents and enforces receipts around native Task calls.
+- Host-neutral portable skills.
+- Central enforcement of host routing receipts.
 
-## Alternatives
+## Considered options
 
-We rejected embedding host routing in every skill and replacing native Task with
-a package-specific executor because both fragment contracts and reduce portability.
+- Keep `doit` as portable coordinator and OpenCode as routing adapter.
+- Embed host routing in every skill.
+- Replace native Task with a package-specific executor.
+
+## Outcome
+
+The original decision kept `doit` as the portable coordinator and made the
+OpenCode package a routing adapter that resolved host agents and enforced
+receipts. ADR-0006 removed the generic portable coordinator and assigned
+OpenCode-specific coordination to `manager`.
 
 ## Consequences
 
-Skills stay host-neutral. The adapter must validate host inventory, receipt
-freshness, structured reports, and execution-card requirements.
+### Positive
 
-## Supersession
+- Skills remained host-neutral while routing validation stayed centralized.
 
-[ADR-0006](0006-retire-generic-doit-coordinator.md) removed the generic portable
-coordinator because it duplicated host engineering behavior and imposed a costly
-authorization workflow on ordinary development. OpenCode-specific coordination
-now belongs to `manager`.
+### Negative
+
+- The generic coordinator duplicated host engineering behavior and added authorization overhead.
+
+## Compatibility
+
+ADR-0006 removed the portable `doit` surface while retaining host-specific routing.
+
+## Migration
+
+The target state moves generic coordination to the host and keeps OpenCode-specific coordination in `manager`.
+
+## Rollback
+
+Restoring `doit` would require a new public capability and routing contract.
+
+## Reversibility
+
+Reversal is possible but costly because it would recreate a retired portable API and overlapping ownership.
+
+## Risks
+
+- Host behavior may differ where no domain-specific portable workflow owns coordination.
+
+## Links
+
+- Requirements: [REQ-F-002](../../requirements/functional/README.md#req-f-002---route-work-through-bounded-orchestration), [REQ-C-002](../../requirements/constraints/README.md#req-c-002---portable-distribution-boundary)
+- Related ADRs: [ADR-0006](0006-retire-generic-doit-coordinator.md)

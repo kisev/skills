@@ -2,24 +2,25 @@
 
 ## Purpose
 
-Describe the canonical target state supported by verified evidence.
+Orient readers to the system's target purpose, stakeholders, scope-level goals, and the requirements that define success.
 
 ## Included
 
-State the responsibilities, stable identifiers, and relevant interfaces.
+- Business or mission purpose, stakeholder concerns, architectural goals, explicit non-goals, and a linked requirement overview.
+- The few quality goals that materially shape the architecture, linked to their owning `REQ-Q-*` entries.
 
 ## Excluded
 
-Do not record implementation plans, temporary research, or duplicate facts.
+- Detailed requirement text, solution mechanisms, component structure, implementation sequencing, and roadmap commitments.
 
 ## Decomposition Rules
 
-Keep one semantic boundary per document and retain this README as its index.
+Keep this viewpoint in this `README.md`; link requirements and later viewpoints instead of creating child files or duplicating them.
 
 ## Expected Structure
 
-Use concise present-tense statements and link related canonical documents.
+Use concise sections for purpose, stakeholders, goals, non-goals, and requirement overview. Omit empty subsections only when a brief inapplicability reason remains clear.
 
 ## Content Template
 
-Replace this guidance with verified project-specific content.
+Replace this guidance with project purpose; stakeholder roles and concerns; target-state goals and non-goals; and direct links to the requirements that determine architectural success.

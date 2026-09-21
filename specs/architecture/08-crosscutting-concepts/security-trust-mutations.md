@@ -16,6 +16,17 @@ secret redaction, and atomic rollback or recovery remain mandatory. Package reco
 OpenCode assets and does not inspect or invoke the portable skill lifecycle.
 Read-only tools do not repair or install.
 
+Identity comes from the invoking host or explicitly configured external client;
+workflows do not create a second identity authority. Authorization remains bound
+to the exact user-approved action, owned path, scope, and revision. Sensitive
+inputs are retained only by their declared state owner, are excluded from public
+outputs and archives, and are redacted on success and failure paths. Project and
+global state are isolated by resolved scope; content digests and retained history
+provide auditability without copying credentials. These mechanisms provide
+[REQ-F-002](../../requirements/functional/README.md#req-f-002---route-work-through-bounded-orchestration),
+[REQ-Q-002](../../requirements/quality/README.md#req-q-002---mutation-safety), and
+[REQ-Q-003](../../requirements/quality/README.md#req-q-003---secret-safety).
+
 Code-review emits direct manual `glab` commands and body files but never invokes
 them. It does not retain publication markers, receipts, idempotency state, or
 postconditions. Prepared Git patches are textual,

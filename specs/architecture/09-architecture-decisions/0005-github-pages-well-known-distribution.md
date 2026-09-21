@@ -2,37 +2,67 @@
 
 - Status: accepted
 - Date: 2026-09-14
+- Status changed: none
 - Supersedes: [ADR-0001](0001-direct-git-self-contained-skills.md)
+- Superseded by: none
 
-## Context
+## Context and problem statement
 
-Portable skills must be autonomous after installation, while canonical shared
-contracts and runtimes should not be duplicated in the authored Git tree. The
+Portable skills must be autonomous after installation while canonical shared
+contracts and runtimes remain deduplicated in the authored Git tree. The
 `skills` CLI does not execute a repository build hook during installation.
 
-## Decision
+## Decision drivers
 
-Keep deduplicated authored definitions and shared material in Git. On an exact
-validated release tag, build every complete skill in an isolated output and
-deploy a standard agentskills.io well-known index plus one content-addressed,
-SHA-256-bound archive per skill to GitHub Pages. Use the stable Pages URL as the
-supported installation and update source. Keep Git tags as source provenance and
-the optional OpenCode npm package as an independently installed layer.
+- Self-contained portable archives from deduplicated authored sources.
+- Content integrity, one update source, and verifiable release provenance.
+- No install-time build hook or OpenCode package dependency.
 
-## Alternatives
+## Considered options
 
-We rejected committed generated copies because they obscure canonical ownership
-and create repository drift. We rejected install-time build hooks because the
-portable installer does not support them and they expand the consumer trust
-boundary. Direct GitHub Release archive URLs do not provide one catalog and
-tracked update source. A separate generated Git repository preserves Git install
-syntax but retains generated history without improving the artifact contract.
+- Publish a well-known Pages index and content-addressed archives.
+- Commit generated skill copies.
+- Use install-time build hooks.
+- Publish only direct GitHub Release archive URLs or a generated Git repository.
+
+## Outcome
+
+On an exact validated release tag, build every complete skill in isolation and
+deploy a standard agentskills.io well-known index plus one SHA-256-bound archive
+per skill to GitHub Pages. The stable Pages URL is the installation and update
+source; Git tags remain provenance and the OpenCode npm package remains separate.
 
 ## Consequences
 
-The authored repository is no longer an installation source. Release CI and
-GitHub Pages availability become part of publication, while deterministic
-content-addressed archives make cache and integrity failures observable. Existing
-Git-based installations must be rebound once by repeating `skills add` with the
-Pages URL. Historical release tags remain unchanged and installable under their
-original contract.
+### Positive
+
+- Authored sources stay deduplicated while published archives are self-contained and content-addressed.
+
+### Negative
+
+- Release CI and GitHub Pages availability become part of publication.
+
+## Compatibility
+
+Historical release tags retain their original direct-Git contract; current consumers use the Pages source.
+
+## Migration
+
+Existing Git-based installations require one rebinding by repeating `skills add` with the Pages URL.
+
+## Rollback
+
+Publication accepts only exact preflighted bytes; historical immutable tags remain the recovery boundary.
+
+## Reversibility
+
+Replacing Pages would require a new stable source, consumer rebinding contract, and superseding ADR.
+
+## Risks
+
+- Pages availability affects installation; content addressing and release verification detect stale or corrupted bytes.
+
+## Links
+
+- Requirements: [REQ-F-004](../../requirements/functional/README.md#req-f-004---publish-one-verified-release), [REQ-I-001](../../requirements/interfaces/README.md#req-i-001---skill-interface), [REQ-Q-005](../../requirements/quality/README.md#req-q-005---reproducible-distribution), [REQ-Q-008](../../requirements/quality/README.md#req-q-008---verify-release-promotion), [REQ-C-002](../../requirements/constraints/README.md#req-c-002---portable-distribution-boundary)
+- Related ADRs: [ADR-0001](0001-direct-git-self-contained-skills.md)

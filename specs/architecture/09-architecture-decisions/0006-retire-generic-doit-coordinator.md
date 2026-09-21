@@ -1,41 +1,66 @@
 # ADR-0006: Retire Generic Doit Coordinator
 
-- Status: superseded by [ADR-0007](0007-make-administration-cli-only.md)
+- Status: superseded
 - Date: 2026-09-16
 - Status changed: 2026-09-16
+- Supersedes: [ADR-0002](0002-target-public-surface.md), [ADR-0003](0003-portable-coordinator-routing-adapter.md)
+- Superseded by: [ADR-0007](0007-make-administration-cli-only.md)
 
-## Context
+## Context and problem statement
 
 The generic `doit` skill duplicated normal host engineering behavior and required
-a preview artifact and authorization lifecycle for ordinary local changes. This
-made development slower and left agents uncertain about when to select the skill.
+an authorization lifecycle for ordinary local changes, slowing development and
+making selection ambiguous.
 
-## Decision
+## Decision drivers
 
-Retire the portable `doit` skill and `/doit` command without a replacement.
-Normal engineering execution belongs to the host agent and repository guidance.
-The OpenCode `manager` owns its host-specific routed lifecycle, while reusable
-Goal Mode policy validation remains shared by the workflows that require it.
+- One clear owner for ordinary engineering execution.
+- Portable skills remain domain-specific and host-neutral.
+- Preserve reusable Goal Mode policy only where workflows require it.
 
-## Alternatives
+## Considered options
 
-We rejected keeping a slimmer generic skill because it would still overlap the
-host's primary role. We also rejected turning `doit` into a strict patch-apply
-runtime because that is a distinct capability without a current product need.
+- Retire `doit` and assign ordinary execution to the host.
+- Keep a slimmer generic coordinator.
+- Convert `doit` into a strict patch-apply runtime.
+
+## Outcome
+
+Retire the portable `doit` skill and command without a replacement. Ordinary
+engineering execution belongs to the host; OpenCode `manager` owns host-specific
+routing, and workflows retain reusable Goal Mode policy where required.
 
 ## Consequences
 
-The public inventory becomes `28/32/6/3/5`. Existing installed `doit` skills and
-commands are retired through migration inventory cleanup. Portable skills remain
-domain-specific, and default coding behavior follows the active host and
-repository instructions.
+### Positive
+
+- Portable capabilities have clearer ownership and no generic coordination overlap.
+
+### Negative
+
+- Default coding behavior depends on the active host and repository instructions.
+
+## Compatibility
+
+The public inventory changed to `28/32/6/3/5`; the retired `doit` interfaces are unsupported.
+
+## Migration
+
+Installed `doit` assets are classified as retired under the package ownership contract.
+
+## Rollback
+
+Restoring `doit` would require a new explicit portable capability and public-surface decision.
+
+## Reversibility
+
+The removal is reversible only by recreating the retired API and resolving its ownership overlap.
+
+## Risks
+
+- Host-specific behavior can diverge; repository guidance and domain workflows bound expected execution.
 
 ## Links
 
-Supersedes [ADR-0002](0002-target-public-surface.md) and
-[ADR-0003](0003-portable-coordinator-routing-adapter.md).
-
-## Supersession
-
-[ADR-0007](0007-make-administration-cli-only.md) further reduced the public
-surface by making package administration CLI-only and retiring `lsp-report`.
+- Requirements: [REQ-F-001](../../requirements/functional/README.md#req-f-001---expose-the-verified-capability-surface), [REQ-F-002](../../requirements/functional/README.md#req-f-002---route-work-through-bounded-orchestration), [REQ-C-005](../../requirements/constraints/README.md#req-c-005---bounded-distribution-change-in-this-target)
+- Related ADRs: [ADR-0002](0002-target-public-surface.md), [ADR-0003](0003-portable-coordinator-routing-adapter.md), [ADR-0007](0007-make-administration-cli-only.md)

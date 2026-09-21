@@ -2,24 +2,24 @@
 
 ## Purpose
 
-Describe the canonical target state supported by verified evidence.
+Explain how externally imposed `REQ-C-*` constraints narrow the architecture's permissible solution space.
 
 ## Included
 
-State the responsibilities, stable identifiers, and relevant interfaces.
+- Direct links to applicable `REQ-C-*` owners and the architectural consequences, trade-offs, or prohibited choices caused by each constraint.
 
 ## Excluded
 
-Do not record implementation plans, temporary research, or duplicate facts.
+- A second normative constraint list, internally chosen design decisions, preferences, risks, or implementation tasks.
 
 ## Decomposition Rules
 
-Keep one semantic boundary per document and retain this README as its index.
+Keep all constraint consequences in this `README.md`. Organize by owning requirement ID, not by feature or component, and do not create child files.
 
 ## Expected Structure
 
-Use concise present-tense statements and link related canonical documents.
+For each applicable constraint, pair one direct `REQ-C-*` link with its architectural effect. State briefly when no external architecture constraint applies.
 
 ## Content Template
 
-Replace this guidance with verified project-specific content.
+Replace this guidance with linked constraint IDs and only their target-state architectural consequences, including disallowed alternatives where material.

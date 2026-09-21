@@ -14,7 +14,7 @@ Do not ask what follows reliably from evidence or previous answers. Focus especi
 
 ## Readiness check
 
-The interview is ready for writing only when: material contradictions are resolved or explicitly retained as `UNKNOWN` by the user; critical unknowns about behavior, architecture, compatibility, security, and quality are absent or explicitly accepted as specification boundaries; scope and explicit non-scope are defined; main behaviors, failure behavior, invariants, and unsupported behavior are unambiguous; external interfaces and compatibility guarantees are defined or explicitly inapplicable; verification of nontrivial normative requirements is understood; architecture, runtime, and deployment are described enough for a consistent target state; and terminology has no material unresolved interpretations.
+The interview is ready for writing only when: material contradictions are resolved or explicitly retained as `UNKNOWN` by the user; critical unknowns about behavior, architecture, compatibility, security, data lifecycle, and quality are absent or explicitly accepted as specification boundaries; scope and explicit non-scope are defined; each normative fact has one unambiguous `REQ-F-*`, `REQ-I-*`, `REQ-Q-*`, or `REQ-C-*` owner; main behaviors, failure behavior, invariants, and unsupported behavior are unambiguous; external interfaces and compatibility guarantees are defined or explicitly inapplicable; verification of nontrivial normative requirements is understood; applicable direct requirement-to-architecture and requirement/ADR links are known; architecture, runtime, and deployment are described enough for a consistent target state; significant decisions have applicable compatibility, migration, rollback, reversibility, and risk implications understood; trust boundaries, runtime exposure, secret placement, identity, authorization, sensitive-data lifecycle, isolation, auditability, and measurable security/reliability properties have the canonical owners defined by the architecture profile; and terminology has no material unresolved interpretations.
 
 If any condition is not met, continue the adaptive interview. Do not use the readiness check as a fixed user questionnaire or show a service checklist instead of substantive questions.
 
@@ -22,4 +22,7 @@ If any condition is not met, continue the adaptive interview. Do not use the rea
 
 Cover applicable areas: problem, goal, users, stakeholders, scope, explicit non-scope, key behavior, external interfaces, constraints, compatibility, quality attributes, security, architecture, integrations, runtime, deployment, verification, risks, and terminology.
 
-For an inapplicable area, record a brief reason in the corresponding canonical document. Do not invent content merely to fill a section.
+Assess each area for applicability. For an inapplicable material area, record a
+brief reason in the corresponding canonical document. Do not produce a readiness
+checklist, copy the same concern into several documents, or invent content merely
+to fill a section.

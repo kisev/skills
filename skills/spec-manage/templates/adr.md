@@ -33,6 +33,27 @@
 
 - \[Negative consequence or trade-off.]
 
+## Compatibility
+
+\[Describe applicable compatibility effects, or `Not applicable` with a brief reason.]
+
+## Migration
+
+\[Describe an applicable target-state transition constraint, or `Not applicable` with a brief reason. Do not add implementation sequencing.]
+
+## Rollback
+
+\[Describe the rollback boundary or why rollback is not applicable.]
+
+## Reversibility
+
+\[State the cost and conditions of reversing this decision.]
+
+## Risks
+
+- \[Material risk and architectural mitigation, or `Not applicable` with a brief reason.]
+
 ## Links
 
-- \[REQ-\* or related ADR.]
+- Requirements: \[direct links to relevant `REQ-*`.]
+- Related ADRs: \[direct links to related ADRs, or `None` with a brief reason.]

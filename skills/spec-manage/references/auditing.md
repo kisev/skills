@@ -24,17 +24,25 @@ At the start, state `Scope: full` or the exact limited scope. For a focused audi
 
 ## Requirements quality
 
-Check goals and non-scope, terms, inputs and outputs, observable behavior, invariants, edge cases, failure behavior, unsupported behavior, security, compatibility, and verification. Where possible, normative requirements are atomic, unambiguous, necessary, consistent, verifiable, and traceable. Check that stable `REQ-*` IDs increase above the historical namespace maximum without filling gaps or reuse, retired IDs retain the required compact lifecycle record, machine-readable contracts are referenced, and syntax is not duplicated.
+Check goals and non-scope, terms, inputs and outputs, observable behavior, invariants, edge cases, failure behavior, unsupported behavior, security, compatibility, and verification. Where possible, normative requirements are atomic, unambiguous, necessary, consistent, verifiable, and traceable. Check that each normative fact has exactly one semantic owner: transport-independent behavior in `REQ-F-*`, external surface and protocol semantics in `REQ-I-*`, measurable or verifiable quality in `REQ-Q-*`, and externally imposed solution limits in `REQ-C-*`. Other documents must link rather than repeat the fact. Check that stable `REQ-*` IDs increase above the historical namespace maximum without filling gaps or reuse, inactive IDs use only `deprecated`, `superseded`, or `withdrawn` and retain the required compact `Changed`, `Reason`, and applicable `Replacement` fields and transitions, nontrivial active requirements contain verification, superseded records directly link replacements, machine-readable contracts are referenced, and syntax is not duplicated.
 
 Do not require artificial EARS form or rationale for a trivial requirement. Do not treat an implementation detail as a defect unless it changes an observable contract or architectural invariant.
 
 ## Architecture and ADR quality
 
-Check the 12 viewpoints against one another and requirements: system boundary, stakeholders, context, scope; real building-block responsibilities and boundaries; dependency direction, interfaces, ownership, locality; runtime flows, lifecycle, concurrency, failures, recovery; deployment, trust boundaries, security, observability; quality mechanisms; compatibility, migration, testability, risks, debt; feasibility under repository constraints and applicable migration, rollout/rollback mechanisms.
+Check the 12 viewpoints against one another and requirements: system boundary, stakeholders, context, scope; real building-block responsibilities and boundaries; dependency direction, interfaces, ownership, locality; runtime flows, lifecycle, concurrency, failures, recovery; deployment, trust boundaries, security, observability; quality mechanisms; compatibility, migration, testability, risks, debt; feasibility under repository constraints and applicable migration and rollback mechanisms. Material architecture mechanisms must directly link the `REQ-*` entries they provide. Do not require matrices, mapping files, reverse links, or delivery artifacts.
+
+Check security and data ownership without requiring content-free checklists:
+context and scope owns trust boundaries and external subjects; deployment owns
+runtime boundaries, network exposure, and secret placement; crosscutting concepts
+owns identity, authorization, sensitive-data lifecycle, isolation, and
+auditability; quality requirements owns measurable security and reliability
+properties. Require a brief inapplicability reason only where the concern was
+material enough to assess.
 
 An abstraction is justified only by a real responsibility or boundary. Do not present stylistic preference, potential improvement, or unverified future design as a defect. Do not require a diagram when it would not make architecture clearer.
 
-For every ADR, check architectural significance, context, decision drivers, materially different considered options, outcome rationale, positive and negative consequences, status, date, reversibility, compatibility, risks, linked requirements/ADRs, and supersession. Check that ADR numbers increase above the historical maximum without filling gaps or reuse. Do not rewrite or delete an old ADR as though the new decision always existed; replacement requires a new ADR, an explicit reason, links in both directions, and the required compact lifecycle record. Check that ADRs are not used for bugfixes or trivial implementation detail and that significant decisions are not left implicit in architecture prose.
+For every ADR, check architectural significance, context, decision drivers, materially different considered options, outcome rationale, positive and negative consequences, status, date, compatibility, migration, rollback, reversibility, risks, direct links to relevant requirements and related ADRs, and supersession. Detailed content is required only for applicable factors; each `Not applicable` statement needs a brief decision-specific reason. Check that ADR numbers increase above the historical maximum without filling gaps or reuse. Do not rewrite or delete an old ADR as though the new decision always existed; replacement requires a new ADR, an explicit reason, links in both directions, and the required compact lifecycle record. Check that ADRs are not used for bugfixes or trivial implementation detail and that significant decisions are not left implicit in architecture prose.
 
 ## Quality findings
 

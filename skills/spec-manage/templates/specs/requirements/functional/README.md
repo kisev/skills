@@ -3,6 +3,8 @@
 ## Purpose
 
 Record normative observable system behavior and conditions for its verification.
+The behavior remains the same regardless of whether it is reached through a CLI,
+HTTP API, event, or another transport.
 
 ## Included
 
@@ -12,7 +14,7 @@ Record normative observable system behavior and conditions for its verification.
 
 ## Excluded
 
-- Interface syntax covered by a formal schema.
+- External surface syntax and protocol semantics owned by `REQ-I-*`.
 - Quality goals, platform constraints, component design, and implementation detail.
 
 ## Decomposition Rules
@@ -28,7 +30,7 @@ functional/
 
 ## Content Template
 
-For each requirement, use a stable `REQ-F-NNN`, a clear normative statement, optional rationale, and verification when nontrivial.
+For each requirement, use a stable `REQ-F-NNN`, a clear normative statement, optional rationale, and verification when nontrivial. Link interface, quality, or constraint owners instead of repeating their normative facts.
 
 ```markdown
 ### REQ-F-001 - Retry a request

@@ -4,4 +4,11 @@ Create an ADR only for an architecturally significant decision: changed componen
 
 Treat ADR numbers as an append-only sequence. Before assigning a number, check the ADR index, ADR files, and available Git history, then use a number greater than the highest number ever assigned. Never fill a gap, renumber an ADR, reuse a number, or delete an ADR file or index entry. If the historical maximum cannot be determined safely, ask the user. Use `templates/adr.md`; one ADR is one file, `NNNN-short-title.md`. Supported statuses: `proposed`, `accepted`, `deprecated`, `superseded`.
 
+An ADR links the requirements that drive or are materially affected by the
+decision and links related ADRs directly. Evaluate compatibility, migration,
+rollback, reversibility, and risks for every significant decision. Give detailed
+content only where a factor applies; otherwise write `Not applicable` with a
+brief decision-specific reason. Migration describes a required target-state
+transition constraint, not implementation sequencing or a delivery plan.
+
 An ADR retains decision history. Do not rewrite an old ADR as though the new decision had always existed. For a replacement, create a new ADR, set the old one to `superseded`, record why it is no longer preferred, and link both documents. A deprecated or superseded ADR may be shortened later, but it must retain its ID and title, original date, current status and status-change date, a concise summary of the original context and decision, the reason for deprecation or supersession, still-relevant consequences, and the replacement link when one exists.
