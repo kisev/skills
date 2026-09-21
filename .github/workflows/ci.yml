@@ -56,8 +56,6 @@ jobs:
             task: security
           - name: Portable distribution
             task: distribution:check
-          - name: Offline evaluations
-            task: eval:check
           - name: OpenCode package
             task: package:check
     env:
@@ -85,6 +83,8 @@ jobs:
             task: locale:check
           - name: Skill validation
             task: skills:validate
+          - name: Offline evaluations
+            task: eval:check
     env:
       CHECK_TASK: ${{ matrix.task }}
     steps:

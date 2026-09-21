@@ -48,6 +48,10 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "path: .build/skills" in ci
     assert "actions/upload-artifact@" in ci
     assert "actions/download-artifact@" in ci
+    quality_job = ci[ci.index("  quality:") : ci.index("  built-quality:")]
+    built_quality_job = ci[ci.index("  built-quality:") : ci.index("  check:")]
+    assert "task: eval:check" not in quality_job
+    assert "task: eval:check" in built_quality_job
     for task in ("release:prepare", "release:pages:verify", "release:npm", "release:github"):
         assert task in publish
     assert "fetch-depth: 0" in publish
