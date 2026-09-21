@@ -9,6 +9,7 @@ import importlib
 import json
 import os
 import re
+import shlex
 import shutil
 import stat
 import subprocess
@@ -1666,6 +1667,160 @@ def companions_are_valid(value: object) -> bool:
     return True
 
 
+def release_content_shape_is_valid(value: object) -> bool:
+    required = {
+        "title",
+        "description",
+        "version",
+        "announcement",
+        "illustration_prompt",
+        "label_intent",
+        "milestone_title",
+        "contributors",
+        "reviewers",
+        "illustration_style",
+        "work_items",
+    }
+    if not isinstance(value, dict) or set(value) != required:
+        return False
+    style = value.get("illustration_style")
+    work_items = value.get("work_items")
+    contributors = value.get("contributors")
+    reviewers = value.get("reviewers")
+    return not (
+        not all(
+            nonempty_string(value.get(key))
+            for key in (
+                "title",
+                "description",
+                "announcement",
+                "illustration_prompt",
+                "milestone_title",
+            )
+        )
+        or not isinstance(value.get("version"), str)
+        or SEMVER_RE.fullmatch(cast("str", value["version"])) is None
+        or not label_intent_is_valid(value.get("label_intent"))
+        or not isinstance(contributors, list)
+        or not all(nonempty_string(item) for item in contributors)
+        or len(contributors) != len(set(contributors))
+        or not isinstance(reviewers, list)
+        or not all(
+            isinstance(item, str) and re.fullmatch(r"@[A-Za-z0-9_.-]+", item) is not None
+            for item in reviewers
+        )
+        or len(reviewers) != len(set(reviewers))
+        or not isinstance(style, dict)
+        or set(style) != {"preset", "reference", "custom"}
+        or style.get("preset") not in {"pixel_art", "literary", "neutral_abstract", "custom"}
+        or (style.get("reference") is not None and not nonempty_string(style["reference"]))
+        or (style.get("custom") is not None and not nonempty_string(style["custom"]))
+        or (style["preset"] == "literary") != nonempty_string(style.get("reference"))
+        or (style["preset"] == "custom") != nonempty_string(style.get("custom"))
+        or not isinstance(work_items, list)
+    )
+
+
+def release_content_is_valid(value: object, inventory: dict[str, Any]) -> bool:
+    if not release_content_shape_is_valid(value):
+        return False
+    content = cast("dict[str, Any]", value)
+    contributors = cast("list[str]", content["contributors"])
+    reviewers = cast("list[str]", content["reviewers"])
+    work_items = cast("list[dict[str, Any]]", content["work_items"])
+    contributor_values = {
+        item.get("display") for item in inventory.get("contributors", []) if isinstance(item, dict)
+    }
+    reviewer_values = {
+        f"@{item['username']}"
+        for item in inventory.get("reviewers", [])
+        if isinstance(item, dict) and nonempty_string(item.get("username"))
+    }
+    if not set(contributors).issubset(contributor_values) or not set(reviewers).issubset(
+        reviewer_values
+    ):
+        return False
+    candidates = {
+        (item.get("project_id"), item.get("iid"))
+        for item in inventory.get("work_item_candidates", [])
+        if isinstance(item, dict)
+    }
+    decisions: set[tuple[int, int]] = set()
+    for item in work_items:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"project_id", "iid", "action", "rationale", "uncertain", "comment"}
+            or not isinstance(item.get("project_id"), int)
+            or isinstance(item.get("project_id"), bool)
+            or not isinstance(item.get("iid"), int)
+            or isinstance(item.get("iid"), bool)
+            or item["project_id"] < 1
+            or item["iid"] < 1
+            or item.get("action") not in {"close", "comment", "no_action"}
+            or not nonempty_string(item.get("rationale"))
+            or not isinstance(item.get("uncertain"), bool)
+            or (item.get("comment") is not None and not nonempty_string(item["comment"]))
+            or (item["action"] == "comment") != nonempty_string(item.get("comment"))
+        ):
+            return False
+        identity = (item["project_id"], item["iid"])
+        if identity in decisions:
+            return False
+        decisions.add(identity)
+    return decisions == candidates
+
+
+def release_requests_are_valid(value: object) -> bool:
+    if not isinstance(value, list):
+        return False
+    request_ids: set[str] = set()
+    for item in value:
+        if (
+            not isinstance(item, dict)
+            or set(item) != {"id", "stage", "operation", "command", "assets"}
+            or not nonempty_string(item.get("id"))
+            or item["id"] in request_ids
+            or item.get("stage") not in {"pre_merge", "post_merge"}
+            or not nonempty_string(item.get("operation"))
+            or (item.get("command") is not None and not nonempty_string(item["command"]))
+            or not isinstance(item.get("assets"), list)
+        ):
+            return False
+        request_ids.add(item["id"])
+        for asset in item["assets"]:
+            if (
+                not isinstance(asset, dict)
+                or set(asset) != {"role", "name", "path", "sha256", "content"}
+                or not nonempty_string(asset.get("role"))
+                or not nonempty_string(asset.get("name"))
+                or not nonempty_string(asset.get("path"))
+                or not is_digest(asset.get("sha256"))
+                or not isinstance(asset.get("content"), str)
+                or not cast("str", asset["name"]).startswith(cast("str", asset["sha256"]))
+                or hashlib.sha256(cast("str", asset["content"]).encode()).hexdigest()
+                != asset["sha256"]
+            ):
+                return False
+    return True
+
+
+def release_target_state_is_valid(value: object, stage: object, post_merge_sha: object) -> bool:
+    if stage == "pre_merge":
+        return value is None and post_merge_sha is None
+    return (
+        stage == "post_merge"
+        and isinstance(value, dict)
+        and set(value) == {"tag_name", "tag_exists", "tag_sha", "release_exists"}
+        and nonempty_string(value.get("tag_name"))
+        and isinstance(value.get("tag_exists"), bool)
+        and is_sha(value.get("tag_sha"), nullable=True)
+        and isinstance(value.get("release_exists"), bool)
+        and value["tag_exists"] == (value["tag_sha"] is not None)
+        and value["tag_sha"] in {None, post_merge_sha}
+        and value["release_exists"] is False
+    )
+
+
 def artifact_schema() -> dict[str, Any]:
     """Load the only canonical schema from source or its materialized skill copy."""
     candidates = (
@@ -1905,6 +2060,11 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "commits",
             "merge_requests",
             "direct_commits",
+            "contributors",
+            "reviewers",
+            "milestone_candidates",
+            "work_item_candidates",
+            "collection_completeness",
             "errors",
             "warnings",
             "complete",
@@ -1940,13 +2100,40 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             )
             or not all(
                 isinstance(payload[key], list)
-                for key in ("commits", "merge_requests", "direct_commits", "errors", "warnings")
+                for key in (
+                    "commits",
+                    "merge_requests",
+                    "direct_commits",
+                    "contributors",
+                    "reviewers",
+                    "milestone_candidates",
+                    "work_item_candidates",
+                    "errors",
+                    "warnings",
+                )
+            )
+            or not isinstance(payload["collection_completeness"], dict)
+            or set(payload["collection_completeness"])
+            != {"component_merge_requests", "project_milestones", "work_items"}
+            or not all(
+                isinstance(item, bool) for item in payload["collection_completeness"].values()
             )
             or not isinstance(payload["complete"], bool)
             or not nonempty_string(payload["artifact_root"])
             or not nonempty_string(payload["prepared_at"])
             or not isinstance(counts, dict)
-            or set(counts) != {"commits", "merge_requests", "direct_commits", "errors", "warnings"}
+            or set(counts)
+            != {
+                "commits",
+                "merge_requests",
+                "direct_commits",
+                "contributors",
+                "reviewers",
+                "milestone_candidates",
+                "work_item_candidates",
+                "errors",
+                "warnings",
+            }
             or not all(
                 isinstance(item, int) and not isinstance(item, bool) and item >= 0
                 for item in counts.values()
@@ -2069,7 +2256,16 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             "plan_name",
             "external_mutations",
         }
-        release_fields = {"inventory_digest", "release_version", "companions"}
+        release_fields = {
+            "inventory_digest",
+            "release_version",
+            "companions",
+            "stage",
+            "release_content",
+            "requests",
+            "post_merge_sha",
+            "release_target_state",
+        }
         label_fields = {"label_review"}
         profile = payload.get("profile")
         actual_keys = set(payload)
@@ -2104,6 +2300,17 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                     or not isinstance(payload.get("release_version"), str)
                     or SEMVER_RE.fullmatch(cast("str", payload.get("release_version"))) is None
                     or not companions_are_valid(payload.get("companions"))
+                    or payload.get("stage") not in {"pre_merge", "post_merge"}
+                    or not release_content_shape_is_valid(payload.get("release_content"))
+                    or not release_requests_are_valid(payload.get("requests"))
+                    or not is_sha(payload.get("post_merge_sha"), nullable=True)
+                    or (payload.get("stage") == "pre_merge")
+                    != (payload.get("post_merge_sha") is None)
+                    or not release_target_state_is_valid(
+                        payload.get("release_target_state"),
+                        payload.get("stage"),
+                        payload.get("post_merge_sha"),
+                    )
                 )
             )
             or (
@@ -2560,7 +2767,7 @@ def allowed_endpoint(endpoint: str) -> bool:
         return True
     return bool(
         re.fullmatch(
-            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|pipelines|issues)(?:\?[^#]+)?|[0-9]+/pipelines/[1-9][0-9]*/(?:jobs|bridges)(?:\?[^#]+)?|[0-9]+/jobs/[1-9][0-9]*/trace|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:discussions|changes|commits|notes|pipelines))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",
+            r"(?:user|projects/(?:[^/?]+|[0-9]+/(?:labels|milestones|pipelines|issues)(?:\?[^#]+)?|[0-9]+/pipelines/[1-9][0-9]*/(?:jobs|bridges)(?:\?[^#]+)?|[0-9]+/jobs/[1-9][0-9]*/trace|[0-9]+/(?:issues|merge_requests)/[1-9][0-9]*(?:/(?:approvals|closes_issues|discussions|changes|commits|links|notes|pipelines))?(?:\?[^#]+)?|[0-9]+/repository/tags/[^/?#]+|[0-9]+/repository/commits/[0-9a-fA-F]{1,128}/merge_requests(?:\?[^#]+)?|[0-9]+/repository/commits/[^/?#]+|[0-9]+/repository/(?:tree|files/[^/?#]+)\?[^#]+))",
             endpoint,
         )
     )
@@ -2878,7 +3085,12 @@ def collect(
             "profile": profile,
             "external_mutations": False,
             "target": identity,
-            "project": {"id": project_id, "path": project_path, "hostname": hostname},
+            "project": {
+                "id": project_id,
+                "path": project_path,
+                "path_with_namespace": project_path,
+                "hostname": hostname,
+            },
             "object": {},
             "labels": labels,
             "changed_files": component(),
@@ -3008,7 +3220,12 @@ def collect(
             "profile": profile,
             "external_mutations": False,
             "target": identity,
-            "project": {"id": project_id, "path": project_path, "hostname": hostname},
+            "project": {
+                "id": project_id,
+                "path": project_path,
+                "path_with_namespace": project_path,
+                "hostname": hostname,
+            },
             "object": object_value,
             "labels": labels,
             "changed_files": changed,
@@ -3272,8 +3489,408 @@ def publication_markdown(
     )
 
 
+def release_asset(root: Path, role: str, suffix: str, content: str) -> dict[str, str]:
+    content_digest = hashlib.sha256(content.encode()).hexdigest()
+    name = f"{content_digest}-{role}.{suffix}"
+    path = root / "artifacts" / "release_requests" / name
+    return {
+        "role": role,
+        "name": name,
+        "path": str(path),
+        "sha256": content_digest,
+        "content": content,
+    }
+
+
+def release_request_specs(
+    root: Path,
+    bundle: dict[str, Any],
+    content: dict[str, Any],
+    inventory: dict[str, Any],
+    label_review: dict[str, Any],
+    stage: str,
+    post_merge_sha: str | None,
+    complete: bool,
+) -> list[dict[str, Any]]:
+    target = cast("dict[str, Any]", bundle["target"])
+    object_value = cast("dict[str, Any]", bundle["object"])
+    repo = f"https://{target['hostname']}/{target['project_path']}"
+    iid = str(target["iid"])
+    hostname = cast("str", target["hostname"])
+    project_id = cast("int", target["project_id"])
+    description = release_asset(root, "description", "md", content["description"])
+    requests: list[dict[str, Any]] = []
+
+    def request(
+        request_id: str,
+        operation: str,
+        command: list[str] | None,
+        assets: list[dict[str, str]] | None = None,
+    ) -> None:
+        requests.append(
+            {
+                "id": request_id,
+                "stage": stage,
+                "operation": operation,
+                "command": shlex.join(command) if complete and command is not None else None,
+                "assets": assets or [],
+            }
+        )
+
+    if stage == "pre_merge":
+        announcement = release_asset(root, "announcement", "md", content["announcement"])
+        prompt = release_asset(root, "illustration-prompt", "md", content["illustration_prompt"])
+        request(
+            "release-assets",
+            "record immutable release assets",
+            None,
+            [description, announcement, prompt],
+        )
+        milestone_exists = any(
+            isinstance(item, dict) and item.get("title") == content["milestone_title"]
+            for item in inventory["milestone_candidates"]
+        )
+        if not milestone_exists:
+            body = (
+                json.dumps(
+                    {"title": content["milestone_title"]}, ensure_ascii=False, sort_keys=True
+                )
+                + "\n"
+            )
+            asset = release_asset(root, "milestone", "json", body)
+            request(
+                "create-milestone",
+                "create milestone",
+                [
+                    "glab",
+                    "api",
+                    "--hostname",
+                    hostname,
+                    "--method",
+                    "POST",
+                    f"projects/{project_id}/milestones",
+                    "--header",
+                    "Content-Type: application/json",
+                    "--input",
+                    asset["path"],
+                ],
+                [asset],
+            )
+        update = ["glab", "mr", "update", iid, "-R", repo]
+        changed = False
+        if object_value.get("title") != content["title"]:
+            update.extend(("--title", content["title"]))
+            changed = True
+        if (object_value.get("description") or "") != content["description"]:
+            update.extend(("--description-file", description["path"]))
+            changed = True
+        for label in label_review["add"]:
+            update.extend(("--label", label))
+            changed = True
+        for label in label_review["remove"]:
+            update.extend(("--unlabel", label))
+            changed = True
+        current_milestone = object_value.get("milestone")
+        current_milestone_title = (
+            current_milestone.get("title") if isinstance(current_milestone, dict) else None
+        )
+        if current_milestone_title != content["milestone_title"]:
+            update.extend(("--milestone", content["milestone_title"]))
+            changed = True
+        if changed:
+            update.append("--yes")
+            request("update-release-mr", "update release merge request", update, [description])
+        request(
+            "publish-announcement",
+            "publish announcement and attach illustration prompt",
+            [
+                "glab",
+                "mr",
+                "note",
+                "create",
+                iid,
+                "-R",
+                repo,
+                "--unique",
+                "--resolvable=false",
+                "--message",
+                content["announcement"],
+                "--attach",
+                prompt["path"],
+            ],
+        )
+        request(
+            "merge-release-mr",
+            "merge release merge request",
+            [
+                "glab",
+                "mr",
+                "merge",
+                iid,
+                "-R",
+                repo,
+                "--sha",
+                cast("str", bundle["head_sha"]),
+                "--yes",
+                "--auto-merge=false",
+            ],
+        )
+        return requests
+
+    if stage != "post_merge" or not is_sha(post_merge_sha):
+        raise WorkflowError("release publication stage or post-merge SHA is invalid")
+    request(
+        "create-release",
+        "create release and close the milestone by default",
+        [
+            "glab",
+            "release",
+            "create",
+            f"v{content['version']}",
+            "--ref",
+            cast("str", post_merge_sha),
+            "--name",
+            content["title"],
+            "--notes-file",
+            description["path"],
+            "--milestone",
+            content["milestone_title"],
+            "--no-update",
+            "-R",
+            repo,
+        ],
+        [description],
+    )
+    for decision in content["work_items"]:
+        identity = f"{decision['project_id']}-{decision['iid']}"
+        if decision["action"] == "no_action":
+            request(f"work-item-{identity}", "no action", None)
+            continue
+        payload = (
+            {"state_event": "close"}
+            if decision["action"] == "close"
+            else {"body": decision["comment"]}
+        )
+        body = json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n"
+        asset = release_asset(root, f"work-item-{identity}", "json", body)
+        endpoint = f"projects/{decision['project_id']}/issues/{decision['iid']}"
+        if decision["action"] == "comment":
+            endpoint += "/notes"
+        request(
+            f"work-item-{identity}",
+            f"{decision['action']} work item",
+            [
+                "glab",
+                "api",
+                "--hostname",
+                hostname,
+                "--method",
+                "PUT" if decision["action"] == "close" else "POST",
+                endpoint,
+                "--header",
+                "Content-Type: application/json",
+                "--input",
+                asset["path"],
+            ],
+            [asset],
+        )
+    return requests
+
+
+def write_release_request_assets(root: Path, requests: list[dict[str, Any]]) -> None:
+    private_directory(root / "artifacts" / "release_requests")
+    written: set[Path] = set()
+    for request in requests:
+        for asset in request["assets"]:
+            path = Path(asset["path"])
+            if path in written:
+                continue
+            write_companion(path, asset["content"])
+            written.add(path)
+
+
+def release_binding(
+    evidence_digest: str,
+    inventory_digest: str,
+    content: dict[str, Any],
+    requests: list[dict[str, Any]],
+    stage: str,
+    post_merge_sha: str | None,
+    release_target_state: dict[str, Any] | None,
+) -> str:
+    return digest(
+        {
+            "evidence_digest": evidence_digest,
+            "inventory_digest": inventory_digest,
+            "release_content": content,
+            "requests": requests,
+            "stage": stage,
+            "post_merge_sha": post_merge_sha,
+            "release_target_state": release_target_state,
+        }
+    )
+
+
+def collect_release_target_state(
+    hostname: str, project_id: int, tag_name: str, post_merge_sha: str
+) -> dict[str, object]:
+    encoded_tag = urlquote(tag_name, safe="")
+    tags = paginated(hostname, f"projects/{project_id}/repository/tags?search={encoded_tag}")
+    releases = paginated(hostname, f"projects/{project_id}/releases?search={encoded_tag}")
+    if tags.get("complete") is not True or releases.get("complete") is not True:
+        raise WorkflowError("existing release tag or release could not be checked completely")
+    exact_tags = [
+        item
+        for item in cast("list[object]", tags.get("items", []))
+        if isinstance(item, dict) and item.get("name") == tag_name
+    ]
+    exact_releases = [
+        item
+        for item in cast("list[object]", releases.get("items", []))
+        if isinstance(item, dict) and item.get("tag_name") == tag_name
+    ]
+    if len(exact_tags) > 1 or len(exact_releases) > 1:
+        raise WorkflowError("existing release tag or release identity is ambiguous")
+    tag_sha: str | None = None
+    if exact_tags:
+        commit = exact_tags[0].get("commit")
+        if not isinstance(commit, dict) or not is_sha(commit.get("id")):
+            raise WorkflowError("existing release tag has no exact commit SHA")
+        tag_sha = cast("str", commit["id"])
+        if tag_sha != post_merge_sha:
+            raise WorkflowError("existing release tag points to a different commit")
+    if exact_releases:
+        raise WorkflowError("GitLab Release already exists for the selected version")
+    return {
+        "tag_name": tag_name,
+        "tag_exists": bool(exact_tags),
+        "tag_sha": tag_sha,
+        "release_exists": False,
+    }
+
+
+def release_publication_markdown(
+    root: Path,
+    bundle: dict[str, Any],
+    inventory: dict[str, Any],
+    content: dict[str, Any],
+    requests: list[dict[str, Any]],
+    stage: str,
+    post_merge_sha: str | None,
+    binding: str,
+    complete: bool,
+) -> str:
+    runner = Path(sys.argv[0]).resolve()
+    pointer = root / "release-publication.json"
+    finalize_command = shlex.join(
+        [
+            sys.executable,
+            str(runner),
+            "finalize",
+            "--plan",
+            str(pointer),
+            "--expected-binding",
+            binding,
+        ]
+    )
+    lines = [
+        "# Verified release publication plan",
+        "",
+        f"- Stage: `{stage}`",
+        "- Stages: `pre_merge` then `post_merge`",
+        f"- Target: {bundle['target']['url']}",
+        f"- Original head SHA: `{inventory['head_sha']}`",
+        f"- Post-merge SHA: `{post_merge_sha or 'not available'}`",
+        f"- Release: `v{content['version']}`",
+        f"- Milestone: {content['milestone_title']}",
+        f"- Contributors: {', '.join(content['contributors']) or 'none'}",
+        f"- Reviewers: {', '.join(content['reviewers']) or 'none'}",
+        f"- Illustration preset: `{content['illustration_style']['preset']}`",
+        f"- Illustration reference: {content['illustration_style']['reference'] or 'none'}",
+        f"- Illustration custom direction: {content['illustration_style']['custom'] or 'none'}",
+        "- `external_mutations=false` means every shown command is manual only; this helper never executes it.",
+        "",
+        "## Release content",
+        "",
+        f"### Title\n\n{content['title']}",
+        f"\n### Description\n\n{content['description']}",
+        f"\n### Announcement\n\n{content['announcement']}",
+        f"\n### Illustration prompt\n\n{content['illustration_prompt']}",
+        "",
+        "## Work-item decisions",
+        "",
+    ]
+    for decision in content["work_items"]:
+        uncertainty = "uncertain" if decision["uncertain"] else "certain"
+        lines.append(
+            f"- `{decision['project_id']}#{decision['iid']}`: `{decision['action']}`; "
+            f"{uncertainty}; {decision['rationale']}"
+        )
+    lines.extend(["", "## Finalize this stage", ""])
+    if complete:
+        lines.extend(["```sh", finalize_command, "```"])
+    else:
+        lines.append("Commands are withheld because the plan is incomplete.")
+    lines.extend(["", f"## {stage.replace('_', '-')} commands", ""])
+    for request in requests:
+        lines.append(f"### {request['operation']}")
+        if request["id"].startswith("work-item-"):
+            identity = request["id"].removeprefix("work-item-")
+            project_id, iid = (int(value) for value in identity.split("-", 1))
+            decision = next(
+                item
+                for item in content["work_items"]
+                if item["project_id"] == project_id and item["iid"] == iid
+            )
+            lines.extend(
+                [
+                    "",
+                    f"Rationale: {decision['rationale']}",
+                    f"Uncertain: `{'true' if decision['uncertain'] else 'false'}`",
+                ]
+            )
+        if request["command"] is not None:
+            lines.extend(["", "```sh", request["command"], "```"])
+        else:
+            lines.extend(["", "No command."])
+        lines.append("")
+    if stage == "pre_merge" and complete:
+        transition = shlex.join(
+            [
+                sys.executable,
+                str(runner),
+                "post-merge",
+                "--plan",
+                str(pointer),
+                "--expected-binding",
+                binding,
+            ]
+        )
+        lines.extend(
+            [
+                "## Post-merge transition",
+                "",
+                "After the manual merge command succeeds, collect the merged state and replace this plan:",
+                "",
+                "```sh",
+                transition,
+                "```",
+                "",
+            ]
+        )
+    if stage == "post_merge":
+        lines.extend(
+            [
+                "Creating the release closes the selected milestone by default.",
+                "Finalize this post-merge plan before running any post-merge command.",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def publish_stable_release(
-    root: Path, plan_path: Path, plan_digest: str, markdown: str
+    root: Path, plan_path: Path, plan_digest: str, binding: str, markdown: str
 ) -> tuple[Path, Path]:
     stable_markdown = root / "release-publication.md"
     stable_plan = root / "release-publication.json"
@@ -3294,7 +3911,7 @@ def publish_stable_release(
                 {
                     "plan_path": str(plan_path),
                     "digest": plan_digest,
-                    "binding": plan_digest,
+                    "binding": binding,
                 },
             )
         except BaseException:
@@ -3327,13 +3944,6 @@ def scaffold(
         from .mr_publication import scaffold as scaffold_mr
 
         return scaffold_mr(source, bundle, read_json(Path(content_file), "MR content"))
-    release_inventory: dict[str, Any] | None = None
-    inventory_digest: str | None = None
-    release_companions: list[dict[str, str]] = []
-    label_review: dict[str, Any] | None = None
-    content_fields = {"title", "description"}
-    if profile in {"mr-prepare", "release-prepare"}:
-        content_fields.add("label_intent")
     if profile == "release-prepare":
         if inventory_file is None:
             raise WorkflowError("release publication plan requires --inventory")
@@ -3341,51 +3951,123 @@ def scaffold(
         _, release_inventory, inventory_digest = inventory_module.validate_inventory_binding(
             inventory_file, source
         )
-        content_fields |= {"version", "announcement", "illustration_prompt"}
-    content_value = exact_keys(read_json(Path(content_file), "content"), content_fields, "content")
+        content = read_json(Path(content_file), "release content")
+        if not release_content_is_valid(content, release_inventory):
+            raise WorkflowError(
+                "release content is invalid or contains choices outside the exact inventory"
+            )
+        release_label_intent = cast("dict[str, str | None]", content["label_intent"])
+        if release_label_intent["change_type"] != "release" or release_label_intent[
+            "compatibility"
+        ] not in {"major", "minor", "patch"}:
+            raise WorkflowError("release content requires release and compatibility label intent")
+        label_review = review_labels(bundle, release_label_intent)
+        complete = (
+            bundle.get("retrieval_complete") is True
+            and release_inventory.get("complete") is True
+            and label_review.get("complete") is True
+            and cast("dict[str, Any]", bundle.get("object", {})).get("state") == "opened"
+        )
+        requests = release_request_specs(
+            root, bundle, content, release_inventory, label_review, "pre_merge", None, complete
+        )
+        write_release_request_assets(root, requests)
+        binding = release_binding(
+            evidence_digest, inventory_digest, content, requests, "pre_merge", None, None
+        )
+        markdown = release_publication_markdown(
+            root,
+            bundle,
+            release_inventory,
+            content,
+            requests,
+            "pre_merge",
+            None,
+            binding,
+            complete,
+        )
+        release_companions = [
+            {
+                "name": f"release-{role}-v{content['version']}.md",
+                "content": value,
+                "sha256": hashlib.sha256(value.encode()).hexdigest(),
+            }
+            for role, value in (
+                ("description", content["description"]),
+                ("announcement", content["announcement"]),
+                ("illustration-prompt", content["illustration_prompt"]),
+            )
+        ]
+        payload = {
+            "profile": "release-prepare",
+            "external_mutations": False,
+            "target": bundle["target"],
+            "evidence_digest": evidence_digest,
+            "complete": complete,
+            "markdown": markdown,
+            "plan_name": Path(plan_name).name,
+            "inventory_digest": inventory_digest,
+            "release_version": content["version"],
+            "companions": release_companions,
+            "label_review": label_review,
+            "stage": "pre_merge",
+            "release_content": content,
+            "requests": requests,
+            "post_merge_sha": None,
+            "release_target_state": None,
+        }
+        path, plan_digest = write_artifact(root, "publication_plan", payload)
+        markdown_path, markdown_digest = write_companion(path.with_suffix(".md"), markdown)
+        companion_outputs: list[dict[str, str]] = []
+        for companion in release_companions:
+            companion_path, companion_digest = write_companion(
+                path.with_name(f"{plan_digest}-{companion['name']}"), companion["content"]
+            )
+            companion_outputs.append(
+                {
+                    "name": companion["name"],
+                    "path": str(companion_path),
+                    "digest": companion_digest,
+                }
+            )
+        stable_plan_path: Path | None = None
+        stable_markdown_path: Path | None = None
+        if complete:
+            stable_plan_path, stable_markdown_path = publish_stable_release(
+                root, path, plan_digest, binding, markdown
+            )
+        return {
+            "status": "ok" if complete else "incomplete",
+            "summary": {
+                "tldr": "Prepared a local Markdown plan for manual release publication.",
+                "scope": [str(bundle.get("target", {}).get("url", "local"))],
+                "risks": [] if complete else ["collection, inventory, or label intent incomplete"],
+                "checks": ["schema-valid evidence", "exact release inventory", "semantic binding"],
+            },
+            "artifact_path": str(path),
+            "digest": plan_digest,
+            "plan_path": str(stable_plan_path) if stable_plan_path is not None else None,
+            "binding": binding,
+            "markdown_path": str(stable_markdown_path)
+            if stable_markdown_path is not None
+            else None,
+            "immutable_markdown_path": str(markdown_path),
+            "markdown_digest": markdown_digest,
+            "companions": companion_outputs,
+            "requests": requests,
+            "external_mutations": False,
+        }
+    content_value = exact_keys(
+        read_json(Path(content_file), "content"), {"title", "description"}, "content"
+    )
     if not nonempty_string(content_value["title"]) or not isinstance(
         content_value["description"], str
     ):
         raise WorkflowError("content requires a non-empty title and a description string")
     content = content_value
-    if profile in {"mr-prepare", "release-prepare"}:
-        if not label_intent_is_valid(content.get("label_intent")):
-            raise WorkflowError("content requires a complete semantic label_intent object")
-        label_review = review_labels(bundle, cast("dict[str, str | None]", content["label_intent"]))
-    if profile == "release-prepare":
-        release_label_intent = cast("dict[str, str | None]", content["label_intent"])
-        if (
-            not isinstance(content.get("version"), str)
-            or SEMVER_RE.fullmatch(content["version"]) is None
-            or not nonempty_string(content.get("description"))
-            or not nonempty_string(content.get("announcement"))
-            or not nonempty_string(content.get("illustration_prompt"))
-            or release_label_intent["change_type"] != "release"
-            or release_label_intent["compatibility"] not in {"major", "minor", "patch"}
-        ):
-            raise WorkflowError(
-                "release content requires SemVer, release/compatibility label intent, announcement, and illustration_prompt"
-            )
-        version = content["version"]
-        for name, value in (
-            (f"release-description-v{version}.md", content["description"]),
-            (f"release-announcement-v{version}.md", content["announcement"]),
-            (f"release-illustration-prompt-v{version}.md", content["illustration_prompt"]),
-        ):
-            release_companions.append(
-                {
-                    "name": name,
-                    "content": value,
-                    "sha256": hashlib.sha256(value.encode()).hexdigest(),
-                }
-            )
-    markdown = publication_markdown(bundle, content, release_inventory, label_review)
-    complete = (
-        bool(bundle.get("retrieval_complete"))
-        and (release_inventory is None or release_inventory.get("complete") is True)
-        and (label_review is None or label_review.get("complete") is True)
-    )
-    payload: dict[str, Any] = {
+    markdown = publication_markdown(bundle, content)
+    complete = bool(bundle.get("retrieval_complete"))
+    generic_payload: dict[str, Any] = {
         "profile": bundle.get("profile"),
         "external_mutations": False,
         "target": bundle.get("target"),
@@ -3394,39 +4076,8 @@ def scaffold(
         "markdown": markdown,
         "plan_name": Path(plan_name).name,
     }
-    if profile == "release-prepare":
-        payload.update(
-            {
-                "inventory_digest": inventory_digest,
-                "release_version": content["version"],
-                "companions": release_companions,
-            }
-        )
-    if label_review is not None:
-        payload["label_review"] = label_review
-    path, plan_digest = write_artifact(root, "publication_plan", payload)
+    path, plan_digest = write_artifact(root, "publication_plan", generic_payload)
     markdown_path, markdown_digest = write_companion(path.with_suffix(".md"), markdown)
-    companion_outputs: list[dict[str, str]] = []
-    for companion in release_companions:
-        companion_path, companion_digest = write_companion(
-            path.with_name(f"{plan_digest}-{companion['name']}"), companion["content"]
-        )
-        companion_outputs.append(
-            {
-                "name": companion["name"],
-                "path": str(companion_path),
-                "digest": companion_digest,
-            }
-        )
-    stable_plan_path: Path | None = None
-    stable_markdown_path: Path | None = None
-    plan_binding: str | None = None
-    if profile == "release-prepare":
-        plan_binding = plan_digest
-        if complete:
-            stable_plan_path, stable_markdown_path = publish_stable_release(
-                root, path, plan_digest, markdown
-            )
     return {
         "status": "ok" if complete else "incomplete",
         "summary": {
@@ -3436,18 +4087,16 @@ def scaffold(
             "checks": [
                 "schema-valid evidence",
                 "content-addressed publication plan",
-                *(["exact release inventory"] if release_inventory is not None else []),
-                *(["semantic label delta"] if label_review is not None else []),
             ],
         },
         "artifact_path": str(path),
         "digest": plan_digest,
-        "plan_path": str(stable_plan_path) if stable_plan_path is not None else None,
-        "binding": plan_binding,
-        "markdown_path": str(stable_markdown_path) if stable_markdown_path is not None else None,
+        "plan_path": None,
+        "binding": None,
+        "markdown_path": None,
         "immutable_markdown_path": str(markdown_path),
         "markdown_digest": markdown_digest,
-        "companions": companion_outputs,
+        "companions": [],
         "external_mutations": False,
     }
 
@@ -3583,6 +4232,9 @@ def plan_context(
         )
         if actual_inventory_digest != inventory_digest:
             raise WorkflowError("release inventory does not match the publication plan")
+        release_content = plan.get("release_content")
+        if not release_content_is_valid(release_content, release_inventory):
+            raise WorkflowError("release publication content does not match the inventory")
         expected_complete = bool(expected_complete) and release_inventory.get("complete") is True
         companions = plan.get("companions")
         if not companions_are_valid(companions):
@@ -3597,7 +4249,42 @@ def plan_context(
                 or hashlib.sha256(companion_path.read_bytes()).hexdigest() != companion["sha256"]
             ):
                 raise WorkflowError("release publication companion does not match the plan")
-        if pointer.get("binding") != plan_digest:
+        requests = plan.get("requests")
+        if not release_requests_are_valid(requests):
+            raise WorkflowError("release publication requests are invalid")
+        typed_requests = cast("list[dict[str, Any]]", requests)
+        expected_requests = release_request_specs(
+            root,
+            baseline,
+            cast("dict[str, Any]", release_content),
+            release_inventory,
+            cast("dict[str, Any]", label_review),
+            plan["stage"],
+            plan["post_merge_sha"],
+            plan["complete"],
+        )
+        if typed_requests != expected_requests:
+            raise WorkflowError("release publication requests do not match the bound evidence")
+        for request in typed_requests:
+            for asset in request["assets"]:
+                asset_path = regular_file(Path(asset["path"]), "release request asset")
+                expected_asset = root / "artifacts" / "release_requests" / asset["name"]
+                if (
+                    asset_path != expected_asset
+                    or asset_path.read_bytes() != asset["content"].encode()
+                    or hashlib.sha256(asset_path.read_bytes()).hexdigest() != asset["sha256"]
+                ):
+                    raise WorkflowError("release request asset does not match the plan")
+        actual_binding = release_binding(
+            plan["evidence_digest"],
+            inventory_digest,
+            cast("dict[str, Any]", release_content),
+            typed_requests,
+            plan["stage"],
+            plan["post_merge_sha"],
+            plan["release_target_state"],
+        )
+        if pointer.get("binding") != actual_binding:
             raise WorkflowError("release publication pointer binding is invalid")
     if (
         plan.get("profile") != baseline.get("profile")
@@ -3623,7 +4310,15 @@ def finalize_plan(
                 plan["evidence_digest"], plan["mr_content"], plan["requests"]
             )
         elif plan.get("profile") == "release-prepare":
-            actual_binding = plan_digest
+            actual_binding = release_binding(
+                plan["evidence_digest"],
+                plan["inventory_digest"],
+                plan["release_content"],
+                plan["requests"],
+                plan["stage"],
+                plan["post_merge_sha"],
+                plan["release_target_state"],
+            )
         else:
             raise WorkflowError("publication plan binding is not supported")
         if actual_binding != expected_binding:
@@ -3663,6 +4358,18 @@ def finalize_plan(
         ) != inventory_module.inventory_fingerprint(current_inventory):
             changed.append("release_inventory")
         complete = complete and current_inventory.get("complete") is True
+        if plan.get("stage") == "post_merge":
+            project = baseline.get("project")
+            if not isinstance(project, dict):
+                raise WorkflowError("post-merge release project identity is unavailable")
+            current_release_target = collect_release_target_state(
+                cast("str", project["hostname"]),
+                cast("int", project["id"]),
+                f"v{plan['release_content']['version']}",
+                cast("str", plan["post_merge_sha"]),
+            )
+            if current_release_target != plan.get("release_target_state"):
+                changed.append("release_target_state")
     if plan.get("profile") == "mr-prepare":
         # A concurrent successful scaffold must not let an older check report readiness.
         plan_context(plan_value)
@@ -3687,6 +4394,200 @@ def finalize_plan(
         source,
         baseline,
     )
+
+
+def release_inventory_semantics(value: dict[str, Any]) -> dict[str, Any]:
+    result = {
+        key: item
+        for key, item in value.items()
+        if key
+        not in {
+            "evidence_digest",
+            "artifact_root",
+            "prepared_at",
+            "milestone_candidates",
+        }
+    }
+    counts = result.get("counts")
+    if isinstance(counts, dict):
+        result["counts"] = {
+            key: item for key, item in counts.items() if key != "milestone_candidates"
+        }
+    return result
+
+
+def post_merge_plan(
+    plan_value: str, expected_binding: str, content_file: str | None = None
+) -> dict[str, object]:
+    root, _, plan, _, _, baseline, inventory = plan_context(plan_value)
+    if plan.get("profile") != "release-prepare" or plan.get("stage") not in {
+        "pre_merge",
+        "post_merge",
+    }:
+        raise WorkflowError("post-merge requires the current release plan")
+    if not is_digest(expected_binding):
+        raise WorkflowError("expected publication plan binding is invalid")
+    actual_binding = release_binding(
+        plan["evidence_digest"],
+        plan["inventory_digest"],
+        plan["release_content"],
+        plan["requests"],
+        plan["stage"],
+        plan["post_merge_sha"],
+        plan["release_target_state"],
+    )
+    if actual_binding != expected_binding:
+        raise WorkflowError("publication plan binding is stale; prepare again")
+    if inventory is None:
+        raise WorkflowError("release inventory is unavailable")
+    target = baseline.get("target")
+    if not isinstance(target, dict):
+        raise WorkflowError("release evidence target is missing")
+    current = collect(target, "release-prepare", persist=False)
+    current_object = current.get("object")
+    original_head = baseline.get("head_sha")
+    if (
+        current.get("retrieval_complete") is not True
+        or not isinstance(current_object, dict)
+        or current_object.get("state") != "merged"
+        or not nonempty_string(current_object.get("merged_at"))
+        or current.get("head_sha") != original_head
+    ):
+        raise WorkflowError(
+            "release merge request is not completely merged at the approved original head"
+        )
+    evidence_path, evidence_digest = write_artifact(root, "evidence_snapshot", current)
+    inventory_module = importlib.import_module("release_inventory")
+    previous_ref = inventory.get("previous_ref") if inventory.get("previous_ref_explicit") else None
+    current_inventory = inventory_module.collect_inventory(
+        current,
+        evidence_digest,
+        inventory["repo_root"],
+        previous_ref,
+        inventory_module.DEFAULT_WORKERS,
+    )
+    inventory_changed = release_inventory_semantics(inventory) != release_inventory_semantics(
+        current_inventory
+    )
+    if inventory_changed and content_file is None:
+        raise WorkflowError(
+            "release inventory changed after approval; provide refreshed approved --content"
+        )
+    inventory_path, inventory_digest = write_artifact(root, "release_inventory", current_inventory)
+    post_merge_sha = next(
+        (
+            value
+            for value in (
+                current_object.get("merge_commit_sha"),
+                current_object.get("squash_commit_sha"),
+                original_head,
+            )
+            if is_sha(value)
+        ),
+        None,
+    )
+    if not isinstance(post_merge_sha, str):
+        raise WorkflowError("merged release has no exact publication SHA")
+    content = (
+        read_json(Path(content_file), "refreshed release content")
+        if content_file is not None
+        else cast("dict[str, Any]", plan["release_content"])
+    )
+    if not release_content_is_valid(content, current_inventory):
+        raise WorkflowError("post-merge release content does not match the refreshed inventory")
+    previous_content = cast("dict[str, Any]", plan["release_content"])
+    refreshable_fields = {"contributors", "reviewers", "work_items"}
+    if any(
+        content[key] != previous_content[key] for key in content if key not in refreshable_fields
+    ):
+        raise WorkflowError(
+            "post-merge refreshed content may change only contributors, reviewers, and work_items"
+        )
+    label_review = cast("dict[str, Any]", plan["label_review"])
+    current_milestone = current_object.get("milestone")
+    current_milestone_title = (
+        current_milestone.get("title") if isinstance(current_milestone, dict) else None
+    )
+    current_labels = current_object.get("labels")
+    if (
+        current_object.get("title") != content["title"]
+        or (current_object.get("description") or "") != content["description"]
+        or current_milestone_title != content["milestone_title"]
+        or not isinstance(current_labels, list)
+        or set(current_labels) != set(label_review["proposed"])
+    ):
+        raise WorkflowError(
+            "merged release MR does not match the approved title, description, labels, and milestone"
+        )
+    current_project = cast("dict[str, Any]", current["project"])
+    release_target_state = collect_release_target_state(
+        cast("str", current_project["hostname"]),
+        cast("int", current_project["id"]),
+        f"v{content['version']}",
+        post_merge_sha,
+    )
+    requests = release_request_specs(
+        root,
+        current,
+        content,
+        current_inventory,
+        label_review,
+        "post_merge",
+        post_merge_sha,
+        True,
+    )
+    write_release_request_assets(root, requests)
+    binding = release_binding(
+        evidence_digest,
+        inventory_digest,
+        content,
+        requests,
+        "post_merge",
+        post_merge_sha,
+        release_target_state,
+    )
+    markdown = release_publication_markdown(
+        root,
+        current,
+        current_inventory,
+        content,
+        requests,
+        "post_merge",
+        post_merge_sha,
+        binding,
+        True,
+    )
+    payload = {
+        **plan,
+        "target": current["target"],
+        "evidence_digest": evidence_digest,
+        "inventory_digest": inventory_digest,
+        "markdown": markdown,
+        "stage": "post_merge",
+        "release_content": content,
+        "requests": requests,
+        "post_merge_sha": post_merge_sha,
+        "release_target_state": release_target_state,
+    }
+    path, plan_digest = write_artifact(root, "publication_plan", payload)
+    write_companion(path.with_suffix(".md"), markdown)
+    for companion in cast("list[dict[str, str]]", payload["companions"]):
+        write_companion(path.with_name(f"{plan_digest}-{companion['name']}"), companion["content"])
+    stable_plan, stable_markdown = publish_stable_release(
+        root, path, plan_digest, binding, markdown
+    )
+    return {
+        "status": "ok",
+        "stage": "post_merge",
+        "artifact_path": str(path),
+        "evidence_path": str(evidence_path),
+        "inventory_path": str(inventory_path),
+        "plan_path": str(stable_plan),
+        "markdown_path": str(stable_markdown),
+        "binding": binding,
+        "post_merge_sha": post_merge_sha,
+        "external_mutations": False,
+    }
 
 
 def git_read(root: Path, *args: str, text: bool = True) -> str | bytes:
@@ -4072,6 +4973,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         inventory.add_argument("--repo-root", required=True)
         inventory.add_argument("--previous-ref")
         inventory.add_argument("--workers", type=int, default=8)
+        post_merge = subparsers.add_parser("post-merge")
+        post_merge.add_argument("--plan", required=True)
+        post_merge.add_argument("--expected-binding", required=True)
+        post_merge.add_argument("--content")
     if profile == "code-review":
         context = subparsers.add_parser("context")
         context.add_argument("--evidence", required=True)
@@ -4138,6 +5043,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         if profile in {"mr-prepare", "release-prepare"} and args.command in {
             "scaffold",
             "finalize",
+            "post-merge",
         }:
             if args.command == "scaffold":
                 _, input_payload = artifact_payload(Path(args.bundle), "evidence_snapshot")
@@ -4226,6 +5132,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             )
             emit(inventory_result)
             return 0 if inventory_result["status"] == "ok" else 2
+        if args.command == "post-merge":
+            result = post_merge_plan(args.plan, args.expected_binding, args.content)
+            emit(result)
+            return 0
         if args.command == "prepare":
             if bool(args.url) == bool(args.project_url):
                 raise WorkflowError("provide exact --url target or --project-url, but not both")

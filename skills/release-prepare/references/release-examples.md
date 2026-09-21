@@ -1,6 +1,6 @@
 # Release description examples
 
-All projects, changes, people, tasks, and links below are fictional. Use these examples only as structure and detail guidance when the project has no release template. A project-specific format always has priority.
+All projects, changes, people, tasks, and links below are fictional. Preserve a useful current release MR structure first, then use an applicable local project template, and use these examples only as the built-in fallback.
 
 ## Minor release with several MRs
 
@@ -119,8 +119,9 @@ For a direct commit, resolve a GitLab username only from an exact verified email
 - Remove empty changelog sections.
 - Always include compatibility and migration, even when no action is required.
 - Link a direct commit by its seven-character SHA and full commit URL.
-- Collect contributors from component MRs and direct commits. Deduplicate by username, then normalized email or name.
-- Include reviewers only when approvals were actually collected. Exclude an MR author only from reviewers of that same MR.
+- Collect contributors from every non-merge commit author in the exact release range.
+- Collect reviewers from approvals and human discussion or note participation across all component MRs.
+- Deduplicate each list by verified username, then normalized email or name, and obtain the user's interactive approval of both final lists.
 
 ## Short announcement
 
@@ -155,4 +156,10 @@ An announcement is a short explanation of release outcomes, not a copy of the fu
 Horizontal editorial illustration, 16:9, about flexible and reliable CI caching: several independent build streams converge into a shared cache layer and then separate into completed artifacts. Calm technical composition, clean geometric forms, deep dark background, blue and warm orange accents, a sense of order and acceleration. No text, letters, numbers, code, logos, interfaces, screenshots, or recognizable brands.
 ```
 
-Represent one or two verified release outcomes through a clear visual metaphor. Do not depict the whole changelog or add claims absent from the inventory.
+Ask the user to choose `Pixel-art release quest`, `Literary world`, `Neutral abstract systems`, or `Custom`. `Literary world` requires a follow-up choice of book or series; `Custom` requires the intended style. Ground the prompt in one to three verified inventory changes. Do not depict the whole changelog or add claims absent from the inventory.
+
+## Runbook shape
+
+The single stable runbook first shows the immutable payloads and manual `glab` commands for the selected milestone, MR update, announcement comment with the illustration prompt attachment, and merge. After merge, the read-only helper refreshes that same runbook with the exact release command and approved work-item commands. Release notes are exactly the merged MR description, not a rewritten changelog.
+
+For each bounded work-item candidate, show `close`, `comment`, or `no action`, its rationale, and uncertainty. Do not ask interactive work-item questions; the user controls the outcome by skipping commands they reject. Commands are examples for manual execution only; the skill never runs them.

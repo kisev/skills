@@ -1006,11 +1006,25 @@
     },
     "release_counts": {
       "type": "object",
-      "required": ["commits", "merge_requests", "direct_commits", "errors", "warnings"],
+      "required": [
+        "commits",
+        "merge_requests",
+        "direct_commits",
+        "contributors",
+        "reviewers",
+        "milestone_candidates",
+        "work_item_candidates",
+        "errors",
+        "warnings"
+      ],
       "properties": {
         "commits": { "type": "integer", "minimum": 0 },
         "merge_requests": { "type": "integer", "minimum": 0 },
         "direct_commits": { "type": "integer", "minimum": 0 },
+        "contributors": { "type": "integer", "minimum": 0 },
+        "reviewers": { "type": "integer", "minimum": 0 },
+        "milestone_candidates": { "type": "integer", "minimum": 0 },
+        "work_item_candidates": { "type": "integer", "minimum": 0 },
         "errors": { "type": "integer", "minimum": 0 },
         "warnings": { "type": "integer", "minimum": 0 }
       },
@@ -1218,6 +1232,11 @@
                 "commits",
                 "merge_requests",
                 "direct_commits",
+                "contributors",
+                "reviewers",
+                "milestone_candidates",
+                "work_item_candidates",
+                "collection_completeness",
                 "errors",
                 "warnings",
                 "complete",
@@ -1247,6 +1266,20 @@
                 "commits": { "type": "array" },
                 "merge_requests": { "type": "array" },
                 "direct_commits": { "type": "array" },
+                "contributors": { "type": "array" },
+                "reviewers": { "type": "array" },
+                "milestone_candidates": { "type": "array" },
+                "work_item_candidates": { "type": "array" },
+                "collection_completeness": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["component_merge_requests", "project_milestones", "work_items"],
+                  "properties": {
+                    "component_merge_requests": { "type": "boolean" },
+                    "project_milestones": { "type": "boolean" },
+                    "work_items": { "type": "boolean" }
+                  }
+                },
                 "errors": { "type": "array" },
                 "warnings": { "type": "array" },
                 "complete": { "type": "boolean" },
@@ -1460,6 +1493,42 @@
                 "markdown",
                 "plan_name"
               ],
+              "allOf": [
+                {
+                  "if": { "properties": { "profile": { "const": "release-prepare" } } },
+                  "then": {
+                    "required": [
+                      "inventory_digest",
+                      "release_version",
+                      "companions",
+                      "label_review",
+                      "stage",
+                      "release_content",
+                      "requests",
+                      "post_merge_sha",
+                      "release_target_state"
+                    ]
+                  }
+                },
+                {
+                  "if": { "properties": { "stage": { "const": "pre_merge" } } },
+                  "then": {
+                    "properties": {
+                      "post_merge_sha": { "type": "null" },
+                      "release_target_state": { "type": "null" }
+                    }
+                  },
+                  "else": {
+                    "if": { "properties": { "stage": { "const": "post_merge" } } },
+                    "then": {
+                      "properties": {
+                        "post_merge_sha": { "$ref": "#/$defs/sha" },
+                        "release_target_state": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              ],
               "additionalProperties": false,
               "properties": {
                 "profile": { "type": "string", "minLength": 1 },
@@ -1470,8 +1539,139 @@
                 "markdown": { "type": "string" },
                 "plan_name": { "type": "string", "minLength": 1 },
                 "inventory_digest": { "$ref": "#/$defs/digest" },
-                "release_version": { "type": "string", "minLength": 1 },
+                "release_version": {
+                  "type": "string",
+                  "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+                },
                 "companions": { "type": "array", "items": { "$ref": "#/$defs/companion" } },
+                "stage": { "enum": ["pre_merge", "post_merge"] },
+                "post_merge_sha": {
+                  "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }]
+                },
+                "release_target_state": {
+                  "anyOf": [
+                    { "type": "null" },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["tag_name", "tag_exists", "tag_sha", "release_exists"],
+                      "properties": {
+                        "tag_name": { "type": "string", "minLength": 1 },
+                        "tag_exists": { "type": "boolean" },
+                        "tag_sha": {
+                          "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }]
+                        },
+                        "release_exists": { "const": false }
+                      }
+                    }
+                  ]
+                },
+                "release_content": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "title",
+                    "description",
+                    "version",
+                    "announcement",
+                    "illustration_prompt",
+                    "label_intent",
+                    "milestone_title",
+                    "contributors",
+                    "reviewers",
+                    "illustration_style",
+                    "work_items"
+                  ],
+                  "properties": {
+                    "title": { "type": "string", "minLength": 1 },
+                    "description": { "type": "string", "minLength": 1 },
+                    "version": {
+                      "type": "string",
+                      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+                    },
+                    "announcement": { "type": "string", "minLength": 1 },
+                    "illustration_prompt": { "type": "string", "minLength": 1 },
+                    "label_intent": { "$ref": "#/$defs/label_intent" },
+                    "milestone_title": { "type": "string", "minLength": 1 },
+                    "contributors": {
+                      "type": "array",
+                      "uniqueItems": true,
+                      "items": { "type": "string", "minLength": 1 }
+                    },
+                    "reviewers": {
+                      "type": "array",
+                      "uniqueItems": true,
+                      "items": { "type": "string", "pattern": "^@[A-Za-z0-9_.-]+$" }
+                    },
+                    "illustration_style": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": ["preset", "reference", "custom"],
+                      "properties": {
+                        "preset": {
+                          "enum": ["pixel_art", "literary", "neutral_abstract", "custom"]
+                        },
+                        "reference": { "type": ["string", "null"] },
+                        "custom": { "type": ["string", "null"] }
+                      },
+                      "allOf": [
+                        {
+                          "if": { "properties": { "preset": { "const": "literary" } } },
+                          "then": {
+                            "properties": {
+                              "reference": { "type": "string", "minLength": 1 },
+                              "custom": { "type": "null" }
+                            }
+                          },
+                          "else": {
+                            "properties": { "reference": { "type": "null" } }
+                          }
+                        },
+                        {
+                          "if": { "properties": { "preset": { "const": "custom" } } },
+                          "then": {
+                            "properties": { "custom": { "type": "string", "minLength": 1 } }
+                          },
+                          "else": { "properties": { "custom": { "type": "null" } } }
+                        }
+                      ]
+                    },
+                    "work_items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "project_id",
+                          "iid",
+                          "action",
+                          "rationale",
+                          "uncertain",
+                          "comment"
+                        ],
+                        "properties": {
+                          "project_id": { "type": "integer", "minimum": 1 },
+                          "iid": { "type": "integer", "minimum": 1 },
+                          "action": { "enum": ["close", "comment", "no_action"] },
+                          "rationale": { "type": "string", "minLength": 1 },
+                          "uncertain": { "type": "boolean" },
+                          "comment": { "type": ["string", "null"] }
+                        },
+                        "allOf": [
+                          {
+                            "if": { "properties": { "action": { "const": "comment" } } },
+                            "then": {
+                              "properties": {
+                                "comment": { "type": "string", "minLength": 1 }
+                              }
+                            },
+                            "else": { "properties": { "comment": { "type": "null" } } }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
                 "label_review": {
                   "oneOf": [
                     { "$ref": "#/$defs/label_review" },
@@ -1542,21 +1742,50 @@
                 },
                 "requests": {
                   "type": "array",
-                  "maxItems": 3,
                   "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["name", "content", "sha256", "field", "command"],
-                    "properties": {
-                      "name": {
-                        "type": "string",
-                        "pattern": "^[0-9a-f]{64}-(title|description|labels)\\.json$"
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["name", "content", "sha256", "field", "command"],
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}-(title|description|labels)\\.json$"
+                          },
+                          "content": { "type": "string" },
+                          "sha256": { "$ref": "#/$defs/digest" },
+                          "field": { "enum": ["title", "description", "labels"] },
+                          "command": { "type": "string", "minLength": 1 }
+                        }
                       },
-                      "content": { "type": "string" },
-                      "sha256": { "$ref": "#/$defs/digest" },
-                      "field": { "enum": ["title", "description", "labels"] },
-                      "command": { "type": "string", "minLength": 1 }
-                    }
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["id", "stage", "operation", "command", "assets"],
+                        "properties": {
+                          "id": { "type": "string", "minLength": 1 },
+                          "stage": { "enum": ["pre_merge", "post_merge"] },
+                          "operation": { "type": "string", "minLength": 1 },
+                          "command": { "type": ["string", "null"] },
+                          "assets": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": false,
+                              "required": ["role", "name", "path", "sha256", "content"],
+                              "properties": {
+                                "role": { "type": "string", "minLength": 1 },
+                                "name": { "type": "string", "minLength": 1 },
+                                "path": { "type": "string", "minLength": 1 },
+                                "sha256": { "$ref": "#/$defs/digest" },
+                                "content": { "type": "string" }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               }

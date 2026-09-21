@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from urllib.request import Request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,6 +88,8 @@ elif endpoint == "projects/19/repository/branches/main":
     value = {{"name": "main", "commit": {{"id": os.environ["FAKE_TARGET_SHA"]}}}} if "FAKE_TARGET_SHA" in os.environ else []
 elif endpoint.startswith("projects/19/releases?"):
     value = json.loads(os.environ.get("FAKE_RELEASES", "[]"))
+elif endpoint.startswith("projects/19/repository/tags?"):
+    value = json.loads(os.environ.get("FAKE_TAGS", "[]"))
 elif endpoint.startswith("projects/19/repository/tree?"):
     from urllib.parse import parse_qs, urlsplit
     path = parse_qs(urlsplit(endpoint).query).get("path", [""])[0]
@@ -109,14 +112,23 @@ elif endpoint.startswith("projects/19/repository/files/"):
 elif endpoint.startswith("projects/19/labels"):
     value = json.loads(os.environ["FAKE_LABEL_CATALOG"]) if "FAKE_LABEL_CATALOG" in os.environ else [{{"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"}}, {{"name": "next-compatible", "description": "semantic-role: compatibility; semantic-value: minor"}}, {{"name": "semver::major", "description": "Breaking compatibility"}}, {{"name": "semver::patch", "description": "Backward-compatible fix"}}]
 elif endpoint == "projects/19/merge_requests/7":
-    value = {{"iid": 7, "title": "Current merge request title", "description": "Current description", "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {{"username": os.environ.get("FAKE_AUTHOR_USER", "author")}}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "updated_at": "changed" if changed else "fresh", "labels": json.loads(os.environ.get("FAKE_MR_LABELS", "[]")), "diff_refs": {{"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}}}
+    value = {{"iid": 7, "title": os.environ.get("FAKE_MR_TITLE", "Current merge request title"), "description": os.environ.get("FAKE_MR_DESCRIPTION", "Current description"), "source_branch": "dev", "target_branch": "main", "web_url": "https://gitlab.example/group/project/-/merge_requests/7", "author": {{"username": os.environ.get("FAKE_AUTHOR_USER", "author")}}, "state": os.environ.get("FAKE_MR_STATE", "opened"), "merged_at": "2026-01-02T00:00:00Z" if os.environ.get("FAKE_MR_STATE") == "merged" else None, "merge_commit_sha": os.environ.get("FAKE_MERGE_SHA"), "squash_commit_sha": os.environ.get("FAKE_SQUASH_SHA"), "milestone": {{"id": 5, "title": os.environ["FAKE_MILESTONE_TITLE"]}} if "FAKE_MILESTONE_TITLE" in os.environ else None, "updated_at": "changed" if changed else "fresh", "labels": json.loads(os.environ.get("FAKE_MR_LABELS", "[]")), "diff_refs": {{"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}}}
 elif endpoint == "projects/19/merge_requests/7/changes":
     value = {{"changes": [{{"old_path": changed_path, "new_path": changed_path}}] if changed_path else [], "diff_refs": {{"base_sha": base_sha, "start_sha": start_sha, "head_sha": head_sha}}}}
 elif endpoint.startswith("projects/19/merge_requests/7/commits"):
     value = [{{"id": head_sha}}]
 elif "/repository/commits/" in endpoint and "/merge_requests?" in endpoint:
     sha = endpoint.split("/repository/commits/", 1)[1].split("/", 1)[0]
-    value = [{{"id": 107, "iid": 17, "title": "Associated change", "description": "Component MR", "labels": ["type::feature"], "author": {{"username": "developer"}}, "web_url": "https://gitlab.example/group/project/-/merge_requests/17", "source_branch": "feature", "target_branch": "dev", "merge_commit_sha": None, "squash_commit_sha": sha, "merged_at": "2026-01-02T00:00:00Z", "state": "merged"}}] if sha == os.environ.get("FAKE_ASSOCIATED_SHA") else []
+    value = [{{"id": 107, "iid": 17, "title": "Associated change", "description": os.environ.get("FAKE_COMPONENT_DESCRIPTION", "Component MR"), "labels": ["type::feature"], "author": {{"username": "developer"}}, "web_url": "https://gitlab.example/group/project/-/merge_requests/17", "source_branch": "feature", "target_branch": "dev", "merge_commit_sha": None, "squash_commit_sha": sha, "merged_at": "2026-01-02T00:00:00Z", "state": "merged"}}] if sha == os.environ.get("FAKE_ASSOCIATED_SHA") else []
+elif endpoint == "projects/19/merge_requests/17":
+    value = {{"id": 107, "iid": 17, "title": "Associated change", "description": os.environ.get("FAKE_COMPONENT_DESCRIPTION", "Component MR"), "labels": ["type::feature"], "author": {{"username": "developer"}}, "web_url": "https://gitlab.example/group/project/-/merge_requests/17", "source_branch": "feature", "target_branch": "dev", "merge_commit_sha": None, "squash_commit_sha": head_sha, "merged_at": "2026-01-02T00:00:00Z", "state": "merged", "milestone": None, "diff_refs": {{"head_sha": head_sha}}}}
+elif endpoint == "projects/19/merge_requests/17/approvals":
+    value = {{"approved_by": json.loads(os.environ.get("FAKE_APPROVED_BY", "[]"))}}
+elif endpoint.startswith("projects/19/issues/") and endpoint.endswith("/links?per_page=100&page=1"):
+    value = []
+elif endpoint.startswith("projects/19/issues/"):
+    iid = int(endpoint.split("/issues/", 1)[1].split("/", 1)[0])
+    value = {{"project_id": 19, "iid": iid, "title": f"Work item {{iid}}", "state": "opened"}}
 elif "/repository/tags/" in endpoint:
     value = {{"name": endpoint.rsplit("/", 1)[-1], "created_at": "2026-01-01T00:00:00Z", "commit": {{"created_at": "2026-01-01T00:00:00Z"}}}}
 elif endpoint == "user":
@@ -1016,6 +1028,7 @@ print(json.dumps(value))
                 "FAKE_GLAB_LOG": str(root / "glab.log"),
                 "FAKE_HEAD_SHA": head_sha,
                 "FAKE_ASSOCIATED_SHA": head_sha,
+                "FAKE_COMPONENT_DESCRIPTION": "Closes #21, follows up #22, and documents #23.",
             }
             target = "https://gitlab.example/group/project/-/merge_requests/7"
             prepared = self.run_runner(
@@ -1041,6 +1054,10 @@ print(json.dumps(value))
                     "commits": 2,
                     "merge_requests": 1,
                     "direct_commits": 1,
+                    "contributors": 1,
+                    "reviewers": 0,
+                    "milestone_candidates": 0,
+                    "work_item_candidates": 3,
                     "errors": 0,
                     "warnings": 0,
                 },
@@ -1055,6 +1072,40 @@ print(json.dumps(value))
                         "version": "1.1.0",
                         "announcement": "Three verified release outcomes.",
                         "illustration_prompt": "Horizontal 16:9 editorial illustration without text or logos.",
+                        "milestone_title": "Release 1.1.0",
+                        "contributors": ["Example Developer"],
+                        "reviewers": [],
+                        "illustration_style": {
+                            "preset": "literary",
+                            "reference": "A restrained technical editorial",
+                            "custom": None,
+                        },
+                        "work_items": [
+                            {
+                                "project_id": 19,
+                                "iid": 21,
+                                "action": "close",
+                                "rationale": "Delivered in this release.",
+                                "uncertain": False,
+                                "comment": None,
+                            },
+                            {
+                                "project_id": 19,
+                                "iid": 22,
+                                "action": "comment",
+                                "rationale": "Needs a release reference.",
+                                "uncertain": True,
+                                "comment": "Released in v1.1.0; follow-up remains open.",
+                            },
+                            {
+                                "project_id": 19,
+                                "iid": 23,
+                                "action": "no_action",
+                                "rationale": "Documentation reference only.",
+                                "uncertain": False,
+                                "comment": None,
+                            },
+                        ],
                         "label_intent": {
                             "change_type": "release",
                             "workflow_state": None,
@@ -1097,7 +1148,34 @@ print(json.dumps(value))
             plan_document = json.loads(Path(plan).read_text(encoding="utf-8"))
             self.assertEqual(plan_document["schema"], "portable-gitlab/publication_plan/v2")
             plan_payload = plan_document["payload"]
+            self.assertEqual(plan_payload["stage"], "pre_merge")
+            self.assertEqual(plan_payload["release_content"]["contributors"], ["Example Developer"])
             self.assertEqual(plan_payload["label_review"]["add"], ["ship-ready", "next-compatible"])
+            markdown_value = stable_markdown.read_text(encoding="utf-8")
+            self.assertIn("external_mutations=false", markdown_value)
+            self.assertIn(
+                "glab mr update 7 -R https://gitlab.example/group/project", markdown_value
+            )
+            self.assertIn(
+                "glab mr note create 7 -R https://gitlab.example/group/project", markdown_value
+            )
+            self.assertIn(
+                f"glab mr merge 7 -R https://gitlab.example/group/project --sha {head_sha}",
+                markdown_value,
+            )
+            request_assets = [
+                Path(asset["path"])
+                for request in scaffold["requests"]
+                for asset in request["assets"]
+            ]
+            self.assertTrue(request_assets)
+            self.assertTrue(all(path.parent.name == "release_requests" for path in request_assets))
+            self.assertTrue(
+                all(
+                    path.name.startswith(hashlib.sha256(path.read_bytes()).hexdigest())
+                    for path in request_assets
+                )
+            )
             missing_binding = self.run_runner(
                 "release-prepare", "finalize", "--plan", str(stable_plan), env=environment
             )
@@ -1187,6 +1265,164 @@ print(json.dumps(value))
             self.assertEqual(modified.returncode, 2)
             self.assertEqual(json.loads(modified.stdout)["status"], "error")
 
+            current_plan_payload = json.loads(Path(plan).read_text(encoding="utf-8"))["payload"]
+            companion_value = next(
+                item["content"]
+                for item in current_plan_payload["companions"]
+                if companion.name.endswith(item["name"])
+            )
+            companion.write_text(companion_value, encoding="utf-8")
+            participant_stale = self.run_runner(
+                "release-prepare",
+                "finalize",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env={
+                    **environment,
+                    "FAKE_APPROVED_BY": json.dumps(
+                        [{"user": {"username": "new-reviewer", "name": "New Reviewer"}}]
+                    ),
+                },
+            )
+            self.assertEqual(participant_stale.returncode, 2)
+            self.assertIn(
+                "release_inventory", json.loads(participant_stale.stdout)["result"]["changed"]
+            )
+
+            merge_sha = "d" * 40
+            unapplied = self.run_runner(
+                "release-prepare",
+                "post-merge",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env={**environment, "FAKE_MR_STATE": "merged", "FAKE_MERGE_SHA": merge_sha},
+            )
+            self.assertEqual(unapplied.returncode, 2)
+            self.assertIn("does not match the approved", unapplied.stdout)
+            merged_environment = {
+                **environment,
+                "FAKE_MR_STATE": "merged",
+                "FAKE_MERGE_SHA": merge_sha,
+                "FAKE_MR_TITLE": "Prepare updated release publication artifacts",
+                "FAKE_MR_DESCRIPTION": "### Compatibility and migration\n\n- Migration: none\n",
+                "FAKE_MR_LABELS": json.dumps(["ship-ready", "next-compatible"]),
+                "FAKE_MILESTONE_TITLE": "Release 1.1.0",
+            }
+            wrong_tag = self.run_runner(
+                "release-prepare",
+                "post-merge",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env={
+                    **merged_environment,
+                    "FAKE_TAGS": json.dumps([{"name": "v1.1.0", "commit": {"id": "e" * 40}}]),
+                },
+            )
+            self.assertEqual(wrong_tag.returncode, 2)
+            self.assertIn("different commit", wrong_tag.stdout)
+            post_merged = self.run_runner(
+                "release-prepare",
+                "post-merge",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                scaffold["binding"],
+                env=merged_environment,
+            )
+            self.assertEqual(post_merged.returncode, 0, post_merged.stdout + post_merged.stderr)
+            post_result = json.loads(post_merged.stdout)
+            self.assertEqual(post_result["stage"], "post_merge")
+            self.assertEqual(post_result["post_merge_sha"], merge_sha)
+            post_document = json.loads(
+                Path(post_result["artifact_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(post_document["payload"]["post_merge_sha"], merge_sha)
+            post_markdown = Path(post_result["markdown_path"]).read_text(encoding="utf-8")
+            self.assertIn(f"glab release create v1.1.0 --ref {merge_sha}", post_markdown)
+            self.assertIn("--method PUT projects/19/issues/21", post_markdown)
+            self.assertIn("--method POST projects/19/issues/22/notes", post_markdown)
+            self.assertIn("Documentation reference only.", post_markdown)
+            self.assertNotIn("projects/19/issues/23 --header", post_markdown)
+            post_finalized = self.run_runner(
+                "release-prepare",
+                "finalize",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                post_result["binding"],
+                env=merged_environment,
+            )
+            self.assertEqual(
+                post_finalized.returncode, 0, post_finalized.stdout + post_finalized.stderr
+            )
+            refreshed_content = root / "refreshed-release-content.json"
+            refreshed_content_value = json.loads(content.read_text(encoding="utf-8"))
+            refreshed_content_value["reviewers"] = ["@new-reviewer"]
+            refreshed_content.write_text(json.dumps(refreshed_content_value), encoding="utf-8")
+            changed_participants_environment = {
+                **merged_environment,
+                "FAKE_APPROVED_BY": json.dumps(
+                    [{"user": {"username": "new-reviewer", "name": "New Reviewer"}}]
+                ),
+            }
+            participant_refresh = self.run_runner(
+                "release-prepare",
+                "post-merge",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                post_result["binding"],
+                "--content",
+                str(refreshed_content),
+                env=changed_participants_environment,
+            )
+            self.assertEqual(
+                participant_refresh.returncode,
+                0,
+                participant_refresh.stdout + participant_refresh.stderr,
+            )
+            participant_result = json.loads(participant_refresh.stdout)
+            participant_document = json.loads(
+                Path(participant_result["artifact_path"]).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                participant_document["payload"]["release_content"]["reviewers"],
+                ["@new-reviewer"],
+            )
+            participant_finalized = self.run_runner(
+                "release-prepare",
+                "finalize",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                participant_result["binding"],
+                env=changed_participants_environment,
+            )
+            self.assertEqual(
+                participant_finalized.returncode,
+                0,
+                participant_finalized.stdout + participant_finalized.stderr,
+            )
+            refreshed_post = self.run_runner(
+                "release-prepare",
+                "post-merge",
+                "--plan",
+                str(stable_plan),
+                "--expected-binding",
+                participant_result["binding"],
+                env=changed_participants_environment,
+            )
+            self.assertEqual(
+                refreshed_post.returncode, 0, refreshed_post.stdout + refreshed_post.stderr
+            )
+            self.assertEqual(json.loads(refreshed_post.stdout)["stage"], "post_merge")
+
     def test_release_stable_publication_rolls_back_pointer_failure(self) -> None:
         from shared.references.portable_gitlab import contract
 
@@ -1206,6 +1442,7 @@ print(json.dumps(value))
                     root,
                     root / "artifacts" / "publication_plan" / f"{'a' * 64}.json",
                     "a" * 64,
+                    "b" * 64,
                     "replacement markdown",
                 )
 
@@ -1383,6 +1620,62 @@ print(json.dumps(value))
         self.assertFalse(unresolved["complete"])
         self.assertNotIn("customer-defect", unresolved["add"])
         self.assertNotIn("kind/feature", unresolved["remove"])
+
+    def test_release_content_requires_exact_inventory_choices(self) -> None:
+        from shared.references.portable_gitlab import contract
+
+        inventory = {
+            "contributors": [{"display": "@author"}],
+            "reviewers": [{"username": "reviewer"}],
+            "work_item_candidates": [{"project_id": 19, "iid": 21}],
+        }
+        content = {
+            "title": "Release 1.1.0",
+            "description": "Release notes",
+            "version": "1.1.0",
+            "announcement": "Release announcement",
+            "illustration_prompt": "A precise editorial illustration",
+            "label_intent": {
+                "change_type": "release",
+                "workflow_state": None,
+                "urgency": None,
+                "impact": None,
+                "compatibility": "minor",
+                "origin": None,
+            },
+            "milestone_title": "Release 1.1.0",
+            "contributors": ["@author"],
+            "reviewers": ["@reviewer"],
+            "illustration_style": {
+                "preset": "literary",
+                "reference": "Technical editorial",
+                "custom": None,
+            },
+            "work_items": [
+                {
+                    "project_id": 19,
+                    "iid": 21,
+                    "action": "comment",
+                    "rationale": "Keep open for verification.",
+                    "uncertain": True,
+                    "comment": "Released; verification remains.",
+                }
+            ],
+        }
+        self.assertTrue(contract.release_content_is_valid(content, inventory))
+
+        mutations: tuple[Callable[[dict[str, Any]], object], ...] = (
+            lambda value: value["contributors"].append("unknown"),
+            lambda value: value["reviewers"].append("@unknown"),
+            lambda value: value["work_items"].append(dict(value["work_items"][0])),
+            lambda value: value["work_items"][0].update({"iid": 22}),
+            lambda value: value["work_items"][0].update({"comment": None}),
+            lambda value: value["illustration_style"].update({"reference": None}),
+        )
+        for mutate in mutations:
+            invalid = json.loads(json.dumps(content))
+            mutate(invalid)
+            self.assertFalse(contract.release_content_is_valid(invalid, inventory))
 
     @unittest.skip("GitLab task adapter removed in stage 17")
     def test_glab_boundary_forces_get_without_shell_or_credentials(self) -> None:

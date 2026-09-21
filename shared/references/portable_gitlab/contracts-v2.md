@@ -105,7 +105,17 @@ user-facing result. A complete scaffold atomically replaces the target-scoped
 `release-publication.md` and writes `release-publication.json` last as the pointer
 to the exact immutable plan. Finalization binds that pointer to the scaffold
 binding and rejects superseded or modified plans. Incomplete scaffolds do not
-replace the previous stable result.
+replace the previous stable result. The release inventory also binds component-MR
+approvals and conversations, contributor and reviewer candidates, milestone
+candidates, and bounded work-item evidence. Release content records the approved
+people and milestone, illustration preset, and one rationale-backed decision for
+every candidate work item.
+
+The pre-merge release plan contains manual `glab` commands only. A read-only
+`post-merge` transition verifies the merged MR, refreshes evidence and inventory,
+then atomically replaces the same stable runbook with commands bound to the exact
+publication SHA. Request bodies and long content remain immutable and
+content-addressed. Neither phase executes a remote mutation.
 
 Contract 6 adds required `semver_assessment` to the content and plan. Existing
 `semver_impact`/`semver_rationale` describe only the MR contribution and select
