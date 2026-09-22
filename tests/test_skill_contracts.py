@@ -418,4 +418,7 @@ def test_stage_16_core_workflow_boundaries_are_observable() -> None:
     assert "structured Markdown rather than JSON" in goal
     assert "at or below 4000 characters" in goal
     assert "any human language" in humanize
+    assert "Do not invent facts" in humanize
+    assert "strong-versus-weak safeguard" in humanize
+    assert "punctuation rules below" in humanize
     assert "absence of real" in improve
