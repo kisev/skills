@@ -17,6 +17,11 @@
   ближайшему совместимому milestone GitLab, а отсутствующий, несовместимый или
   устаревший planning state остаётся явным.
 
+### Исправлено
+
+- Hostless evaluation сохраняет полный результат в `.build/evals` и печатает
+  только ограниченный summary, предотвращая сбои nonblocking pipe в pre-push hooks.
+
 ### Несовместимые изменения
 
 - Готовые планы GitLab issue теперь требуют актуальный принятый release plan и

@@ -16,6 +16,11 @@ All notable changes to this project are documented in this file. Entries follow
   planning: every accepted ready task is bound to the nearest compatible GitLab
   milestone, while missing, incompatible, and stale planning remains explicit.
 
+### Fixed
+
+- Hostless evaluation keeps its complete result under `.build/evals` and prints
+  only a bounded summary, avoiding nonblocking-pipe failures in pre-push hooks.
+
 ### Breaking Changes
 
 - Ready GitLab issue plans now require a current accepted release plan and an

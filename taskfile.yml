@@ -271,7 +271,12 @@ tasks:
     desc: Validate behavioral eval schemas and run the hostless deterministic suite
     cmds:
       - mise exec -- uv run --locked python scripts/eval_runner.py --validate
-      - mise exec -- uv run --locked python scripts/eval_runner.py --offline
+      - mkdir -p .build/evals
+      - mise exec -- uv run --locked python scripts/eval_runner.py --offline > .build/evals/offline.json
+      - >-
+        mise exec -- jq -c
+        '{schema: .schema, status: .status, results: (.results | length)}'
+        .build/evals/offline.json
 
   eval:live:
     desc: Run an explicitly configured trusted live evaluation
