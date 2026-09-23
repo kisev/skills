@@ -21,6 +21,9 @@ returns the exact verdicts `ready`, `needs_clarification`, or `blocked`.
 content-addressed collection evidence and analysis below XDG state, reuses
 per-issue analysis by source fingerprint, and atomically updates stable Markdown
 reports without changing GitLab.
+All three task skills receive one release-planning validator. Triage owns release
+and milestone evidence, review validates the shared sidecar, and preparation
+consumes current scoped triage instead of duplicating SemVer policy.
 
 The authored repository is not a portable installation source and does not ship
 a portable-skills CLI. Portable skills are installed from the GitHub Pages

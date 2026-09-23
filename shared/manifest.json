@@ -22,6 +22,30 @@
       "destination": "task-prepare/scripts/portable_runtime/publication.py"
     },
     {
+      "source": "references/work_item_runtime/release_planning.py",
+      "destination": "task-prepare/scripts/portable_runtime/release_planning.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_planning.py",
+      "destination": "task-review/scripts/portable_runtime/release_planning.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_planning.py",
+      "destination": "task-triage/scripts/portable_runtime/release_planning.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_plan.py",
+      "destination": "task-prepare/scripts/release_plan.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_plan.py",
+      "destination": "task-review/scripts/release_plan.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_plan.py",
+      "destination": "task-triage/scripts/release_plan.py"
+    },
+    {
       "source": "references/portable_gitlab/label_assessment.py",
       "destination": "mr-prepare/scripts/portable_runtime/label_assessment.py"
     },
@@ -52,6 +76,18 @@
     {
       "source": "references/work-item-contract.md",
       "destination": "task-triage/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/release-planning-contract.md",
+      "destination": "task-prepare/references/release-planning-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/release-planning-contract.md",
+      "destination": "task-review/references/release-planning-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/release-planning-contract.md",
+      "destination": "task-triage/references/release-planning-contract.md"
     },
     {
       "source": "references/work-item-contract.schema.json",

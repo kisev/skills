@@ -5,6 +5,11 @@
 Review one storage-neutral work item for quality without changing external state.
 The same assessment is reusable inside task preparation and triage without
 transferring durable-state ownership to the review workflow.
+For release-planned work, the shared assessment also validates the prospective
+task impact, selected release impact, and milestone compatibility. Missing
+planning evidence yields `needs_clarification`; a closed or incompatible
+milestone yields `blocked`. Semantic task readiness is assessed before triage
+assigns a milestone so planning requirements do not create a verdict cycle.
 
 ## Triggers and Near-Misses
 

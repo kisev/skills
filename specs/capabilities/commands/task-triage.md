@@ -12,7 +12,7 @@ Route one issue, an explicit issue list, or a filtered project collection; near-
 
 Arguments identify exact GitLab issue or project collection URLs and optional
 filters. Output names the stable XDG summary, per-issue reports, completeness,
-cache disposition, and any consolidated questions.
+cache disposition, planning decisions, release milestones, and any consolidated questions.
 
 ## Workflow Stages
 

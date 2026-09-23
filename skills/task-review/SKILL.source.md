@@ -1,8 +1,9 @@
 ---
 name: task-review
 description: >-
-  Review one work item for quality standalone or as the shared assessment used by
-  task preparation and triage. Russian discovery terms: проверить задачу.
+  Review one work item for semantic quality and release-milestone compatibility,
+  standalone or as the shared assessment used by task preparation and triage.
+  Russian discovery terms: проверить задачу.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

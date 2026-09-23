@@ -48,7 +48,12 @@ before one consolidated question round.
 
 Every issue reports actuality, duplicate candidates, task-review quality verdict,
 related issues, related MRs, linkage gaps, SemVer impact, severity, priority,
-confidence, and recommended manual changes. The collection reports at most five
+confidence, an autonomous planning decision, and release-milestone disposition.
+Only semantically ready current work may be accepted. Every accepted item binds
+the nearest compatible open milestone on its own project or component release
+line; `none` and `not_applicable` impact require at least a patch release.
+Deferred work has no milestone, while rejected, duplicate, and obsolete work is
+removed from an active release milestone. The collection reports at most five
 first tasks plus dependency and parallel-execution groups. Project-wide duplicate
 search is bounded to each member's project; external projects are followed only
 through explicit input or observed links.
@@ -64,7 +69,13 @@ reuse deep analysis only when its bound issue and related-MR fingerprint is
 current, apply the `task-review` quality contract, and persist private immutable
 evidence and analysis with atomic stable Markdown views. Each issue shall report
 actuality, duplicates, quality, links, related merge requests, SemVer, severity,
-priority, confidence, and safe manual update commands. The collection shall
+priority, confidence, `accepted`/`deferred`/`rejected`/`duplicate`/`obsolete`
+planning decision, release line, and milestone disposition. Accepted work shall
+require a `ready` quality verdict and the nearest compatible open milestone;
+`none` and `not_applicable` shall be treated as patch planning impact. Missing
+milestones shall produce a manual creation proposal. Non-accepted work shall not
+receive a new milestone, and rejected, duplicate, or obsolete work shall produce
+a removal proposal when currently assigned. The collection shall
 report dependencies, parallel work, and at most five first tasks. Partial or
 stale evidence shall remain explicit and shall not be reported as complete. The
 workflow shall never execute generated commands or mutate GitLab.

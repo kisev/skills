@@ -10,8 +10,8 @@ performs GET-only GitLab reads and private XDG writes; it never mutates GitLab.
 Accept one exact GitLab issue/work-item URL, an explicit list that may span
 projects, or one project `issues`/`work_items` collection URL. A collection
 defaults to open items. Apply explicit natural-language or URL filters only after
-normalizing them to the runner's bounded `--state`, `--label`, `--search`, and
-`--assignee` options. Reject unsupported filters rather than silently ignoring
+normalizing them to the runner's bounded `--state`, `--label`, `--search`,
+`--assignee`, and `--milestone` options. Reject unsupported filters rather than silently ignoring
 them. For duplicate discovery, inspect every issue in each selected project;
 follow other projects only through explicit input or observed links.
 
@@ -37,15 +37,33 @@ Every issue assessment must contain:
 - quality verdict and evidence-backed findings with minimal recommended changes;
 - related issues, dependency direction, and whether GitLab links already exist;
 - related and closing merge requests, their state, and whether the relationship is explicit;
-- `semver.level`: `major`, `minor`, `patch`, `none`, or `unknown`, with rationale and confidence;
+- one `release_plan` following `references/release-planning-contract.md`, including
+  the autonomous planning decision, task SemVer, selected release, and milestone;
 - existing severity and priority labels, or proposed severity and priority when absent;
 - recommendations and optional `proposed_changes` for title, description, labels,
   and issue links.
 
 SemVer describes the externally observable release impact if the task is
-implemented, not task urgency. Do not infer actuality from age alone. Verify
+implemented, not task urgency. Apply the release-aware method from `code-review`:
+establish project policy and the latest confirmed publication on the affected
+line, but keep the task's own contribution separate from the selected release's
+accumulated impact. Do not infer actuality from age alone. Verify
 implementation claims against available issue, MR, default-branch, discussion,
 and linked-task evidence; otherwise use `unknown`.
+
+Autonomously classify every item as `accepted`, `deferred`, `rejected`,
+`duplicate`, or `obsolete`. Accept only a current, non-duplicate task whose
+semantic quality verdict is `ready` and whose SemVer is known. Every accepted
+task, not only the first five, requires the nearest compatible open milestone on
+its project or independently versioned component release line. Patch tasks fit
+patch, minor, or major releases; minor tasks fit minor or major; major tasks fit
+major. Treat `none` and `not_applicable` as patch planning impact. Dates do not
+affect compatibility. Use documented project milestone naming conventions.
+
+If no compatible milestone exists, use `create` with the exact proposed title
+and version; the runner emits a manual creation command and keeps the package
+partial until recollection observes its ID. Use `remove` when a non-accepted task
+currently has a milestone. Never assign a milestone to non-accepted work.
 
 ## Collection analysis
 
@@ -55,6 +73,7 @@ clusters, true duplicate candidates, dependency edges, and independent parallel
 groups. Select at most five first tasks from observed severity/priority labels,
 impact, urgency, risk, cost of delay, dependency unblocking, and confidence.
 Explain every ordering; SemVer alone never determines priority.
+Only accepted tasks may appear in top-five or parallel execution groups.
 
 Continue all independent analysis before asking questions. If current business
 priority or actuality cannot be established from evidence, collect the minimum

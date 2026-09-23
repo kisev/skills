@@ -12,6 +12,16 @@ item and evidence must produce the same result. The default result is in chat;
 an explicitly requested workspace-relative output is written directly with
 atomic replacement. No publication or external mutation exists.
 
+For GitLab-backed or release-planned work, also read
+`references/release-planning-contract.md` and validate the sidecar through
+`scripts/release_plan.py`. First assess semantic quality without requiring an
+already assigned milestone. Then assess planning: missing release or milestone
+evidence yields `needs_clarification`; a closed, unobserved, or SemVer-incompatible
+milestone yields `blocked`. A selected active compatible milestone is required
+for final `ready`. Treat `none` and `not_applicable` as patch planning impact.
+Do not fetch or persist GitLab state in standalone review; consume caller-owned
+catalog evidence or report the missing evidence.
+
 The same assessment contract is reusable by `task-prepare` and `task-triage`.
 When a caller supplies a normalized item plus evidence binding, review that
 bounded material without refetching it and return the verdict and findings to the

@@ -16,6 +16,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn
 
+from .release_planning import PlanningError
+from .release_planning import validate as validate_release_plan
+
 ISSUE_RE = re.compile(
     r"https://(?P<host>[A-Za-z0-9.-]+)/(?P<project>.+?)/-/(?:issues|work_items)/(?P<iid>[1-9][0-9]*)/?$"
 )
@@ -25,7 +28,6 @@ COLLECTION_RE = re.compile(
 DIGEST_RE = re.compile(r"[a-f0-9]{64}")
 MAX_PAGES = 100
 MAX_ITEMS = 500
-SEMVER = {"major", "minor", "patch", "none", "unknown"}
 ACTUALITY = {"current", "implemented", "obsolete", "duplicate", "unknown"}
 VERDICTS = {"ready", "needs_clarification", "blocked"}
 
@@ -117,7 +119,14 @@ def parse_url(value: str) -> dict[str, Any]:
     if match is None or any(part in {"", ".", ".."} for part in match["project"].split("/")):
         raise WorkflowError("source must be an exact HTTPS GitLab issue or collection URL")
     query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
-    allowed = {"state", "label_name[]", "labels", "search", "assignee_username"}
+    allowed = {
+        "state",
+        "label_name[]",
+        "labels",
+        "search",
+        "assignee_username",
+        "milestone_title",
+    }
     if issue_match and query:
         raise WorkflowError("an exact GitLab issue URL must not contain a query")
     if set(query) - allowed or any(not entry for values in query.values() for entry in values):
@@ -201,21 +210,30 @@ def query_args(sources: list[dict[str, Any]], args: argparse.Namespace) -> dict[
     assignees = {
         value for source in sources for value in source["filters"].get("assignee_username", [])
     }
-    if len(searches) > 1 or len(assignees) > 1:
+    milestones = {
+        value for source in sources for value in source["filters"].get("milestone_title", [])
+    }
+    if len(searches) > 1 or len(assignees) > 1 or len(milestones) > 1:
         raise WorkflowError("collection sources contain conflicting filters")
     if args.search and searches and args.search not in searches:
         raise WorkflowError("collection sources contain conflicting search filters")
     if args.assignee and assignees and args.assignee not in assignees:
         raise WorkflowError("collection sources contain conflicting assignee filters")
+    requested_milestone = getattr(args, "milestone", None)
+    if requested_milestone and milestones and requested_milestone not in milestones:
+        raise WorkflowError("collection sources contain conflicting milestone filters")
     result = {"state": state}
     if labels:
         result["labels"] = ",".join(sorted(labels))
     search = args.search or next(iter(searches), None)
     assignee = args.assignee or next(iter(assignees), None)
+    milestone = requested_milestone or next(iter(milestones), None)
     if search:
         result["search"] = search
     if assignee:
         result["assignee_username"] = assignee
+    if milestone:
+        result["milestone"] = milestone
     return result
 
 
@@ -271,11 +289,27 @@ def project_context(targets: list[dict[str, Any]]) -> dict[str, Any]:
     for (hostname, project_id), target in sorted(projects.items()):
         issues = paginated(hostname, f"projects/{project_id}/issues?state=all")
         labels = paginated(hostname, f"projects/{project_id}/labels?include_ancestor_groups=true")
+        active_milestones = paginated(
+            hostname,
+            f"projects/{project_id}/milestones?state=active&include_parent_milestones=true",
+        )
+        closed_milestones = paginated(
+            hostname,
+            f"projects/{project_id}/milestones?state=closed&include_parent_milestones=true",
+        )
+        releases = paginated(hostname, f"projects/{project_id}/releases")
+        tags = paginated(hostname, f"projects/{project_id}/repository/tags")
         key = f"{hostname}:{project_id}"
         contexts[key] = {
             "project_path": target["project_path"],
             "issues": issues,
             "labels": labels,
+            "milestones": [
+                {**item, "project_id": project_id}
+                for item in [*active_milestones, *closed_milestones]
+            ],
+            "releases": releases,
+            "tags": tags,
         }
     return contexts
 
@@ -323,6 +357,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
             reusable = (
                 isinstance(cached, dict)
                 and cached.get("source_fingerprint") == evidence["source_fingerprint"]
+                and cached.get("context_digest") == context_digest
                 and isinstance(cached.get("analysis"), dict)
             )
             items.append(
@@ -332,6 +367,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
                     "evidence_path": str(artifact),
                     "evidence_digest": evidence_digest,
                     "source_fingerprint": evidence["source_fingerprint"],
+                    "context_digest": context_digest,
                     "analysis_required": not reusable,
                     "cached_analysis": cached.get("analysis") if reusable else None,
                 }
@@ -414,16 +450,32 @@ def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> l
         seen.add(evidence_digest)
         actuality = raw.get("actuality")
         quality = raw.get("quality")
-        semver = raw.get("semver")
         if not isinstance(actuality, dict) or actuality.get("status") not in ACTUALITY:
             raise WorkflowError("analysis actuality is invalid")
         if not isinstance(quality, dict) or quality.get("verdict") not in VERDICTS:
             raise WorkflowError("analysis quality verdict is invalid")
-        if not isinstance(semver, dict) or semver.get("level") not in SEMVER:
-            raise WorkflowError("analysis SemVer assessment is invalid")
         for field in ("severity", "priority"):
             text(raw.get(field), f"items[{position}].{field}")
-        result.append({**raw, "evidence": evidence[evidence_digest]})
+        evidence_item = evidence[evidence_digest]
+        target = evidence_item["target"]
+        context = collection["context"].get(f"{target['hostname']}:{target['project_id']}")
+        if not isinstance(context, dict) or not isinstance(context.get("milestones"), list):
+            raise WorkflowError("analysis milestone catalog is unavailable")
+        snapshot = read_object(Path(evidence_item["evidence_path"]), "issue evidence")
+        current = snapshot["issue"].get("milestone")
+        current_id = current.get("id") if isinstance(current, dict) else None
+        try:
+            release_plan = validate_release_plan(
+                raw.get("release_plan"),
+                quality_verdict=quality["verdict"],
+                milestone_catalog=context["milestones"],
+                current_milestone_id=current_id if isinstance(current_id, int) else None,
+            )
+        except PlanningError as exc:
+            raise WorkflowError(f"analysis release plan is invalid: {exc}") from exc
+        if release_plan["decision"]["status"] == "accepted" and actuality["status"] != "current":
+            raise WorkflowError("only a current issue may be accepted")
+        result.append({**raw, "release_plan": release_plan, "evidence": evidence_item})
     return result
 
 
@@ -436,11 +488,27 @@ def markdown_list(value: object) -> str:
 def command_for(root: Path, item: dict[str, Any]) -> list[str]:
     proposed = item.get("proposed_changes")
     if not isinstance(proposed, dict):
-        return []
+        proposed = {}
     target = item["evidence"]["target"]
     host, project_id, iid = target["hostname"], target["project_id"], target["iid"]
     commands: list[str] = []
-    update = {key: proposed[key] for key in ("title", "description", "labels") if key in proposed}
+    release_plan = item["release_plan"]
+    decision = release_plan["decision"]["status"]
+    milestone = release_plan["milestone"]
+    if decision == "accepted" and milestone["status"] == "create":
+        request, _ = write_artifact(root, "commands", {"title": milestone["candidate"]["title"]})
+        commands.append(
+            f'glab api --hostname "{host}" --method POST "projects/{project_id}/milestones" --input "{request}"'
+        )
+    update = (
+        {key: proposed[key] for key in ("title", "description", "labels") if key in proposed}
+        if decision == "accepted"
+        else {}
+    )
+    if decision == "accepted" and milestone["status"] == "selected":
+        update["milestone_id"] = milestone["candidate"]["id"]
+    elif decision != "accepted" and milestone["status"] == "remove":
+        update["milestone_id"] = 0
     if update:
         if isinstance(update.get("labels"), list):
             update["labels"] = ",".join(str(label) for label in update["labels"])
@@ -448,7 +516,7 @@ def command_for(root: Path, item: dict[str, Any]) -> list[str]:
         commands.append(
             f'glab api --hostname "{host}" --method PUT "projects/{project_id}/issues/{iid}" --input "{request}"'
         )
-    links = proposed.get("links", [])
+    links = proposed.get("links", []) if decision == "accepted" else []
     if not isinstance(links, list):
         raise WorkflowError("proposed links must be a list")
     for link in links:
@@ -468,14 +536,20 @@ def command_for(root: Path, item: dict[str, Any]) -> list[str]:
 def item_markdown(item: dict[str, Any], commands: list[str]) -> str:
     evidence = item["evidence"]
     issue = read_object(Path(evidence["evidence_path"]), "issue evidence")["issue"]
-    actuality, quality, semver = item["actuality"], item["quality"], item["semver"]
+    actuality, quality = item["actuality"], item["quality"]
+    release_plan = item["release_plan"]
+    semver = release_plan["semver"]
     sections = [
         f"# {issue.get('title', evidence['url'])}",
         "",
         f"- Source: {evidence['url']}",
         f"- Actuality: {actuality['status']}",
         f"- Quality: {quality['verdict']}",
+        f"- Planning decision: {release_plan['decision']['status']}",
+        f"- Planning verdict: {release_plan['planning_verdict']}",
         f"- SemVer: {semver['level']}",
+        f"- Target release: {release_plan['release']['target_version']}",
+        f"- Milestone: {release_plan['milestone']['status']}",
         f"- Severity: {item['severity']}",
         f"- Priority: {item['priority']}",
         "",
@@ -500,6 +574,12 @@ def item_markdown(item: dict[str, Any], commands: list[str]) -> str:
         "## SemVer",
         "",
         text(semver.get("rationale"), "SemVer rationale"),
+        "",
+        "## Release planning",
+        "",
+        text(release_plan["decision"].get("rationale"), "decision rationale"),
+        "",
+        text(release_plan["milestone"].get("rationale"), "milestone rationale"),
         "",
         "## Recommendations",
         "",
@@ -530,9 +610,14 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         report = reports / f"{target['hostname']}-{target['project_id']}-{target['iid']}.md"
         atomic_write(report, item_markdown(item, commands).encode())
         report_entries.append({"url": item["evidence"]["url"], "report": str(report)})
+        cached_analysis = {key: value for key, value in item.items() if key != "evidence"}
+        cached_analysis["release_plan"] = {
+            key: item["release_plan"][key] for key in ("decision", "semver", "release", "milestone")
+        }
         analysis_index[item_key(target)] = {
             "source_fingerprint": item["evidence"]["source_fingerprint"],
-            "analysis": {key: value for key, value in item.items() if key != "evidence"},
+            "context_digest": item["evidence"]["context_digest"],
+            "analysis": cached_analysis,
         }
     artifact_value = {
         "schema": "task-triage/analysis/v1",
@@ -546,12 +631,14 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         "questions": analysis.get("questions", []),
         "external_mutations": False,
     }
+    planning_complete = all(item["release_plan"]["planning_verdict"] == "ready" for item in items)
+    complete = collection["complete"] and not artifact_value["questions"] and planning_complete
     artifact, analysis_digest = write_artifact(root, "analysis", artifact_value)
     write_json(root / "analysis-index.json", {"items": analysis_index})
     summary_lines = [
         "# Task triage summary",
         "",
-        f"- Status: {'complete' if collection['complete'] and not artifact_value['questions'] else 'partial'}",
+        f"- Status: {'complete' if complete else 'partial'}",
         f"- Collection evidence: `{collection_digest}`",
         f"- Analysis: `{analysis_digest}`",
         "",
@@ -584,7 +671,7 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         },
     )
     return {
-        "status": "ok" if collection["complete"] and not artifact_value["questions"] else "partial",
+        "status": "ok" if complete else "partial",
         "summary": str(summary),
         "analysis_path": str(artifact),
         "analysis_digest": analysis_digest,
@@ -603,6 +690,7 @@ def parser() -> Parser:
     collect_parser.add_argument("--label", action="append")
     collect_parser.add_argument("--search")
     collect_parser.add_argument("--assignee")
+    collect_parser.add_argument("--milestone")
     publish_parser = subparsers.add_parser("publish")
     publish_parser.add_argument("--collection", required=True)
     publish_parser.add_argument("--analysis", required=True)

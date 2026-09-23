@@ -8,6 +8,8 @@ Confirmation. In `task-prepare`, intent to prepare GitLab tasks also requests th
 bounded local publication bundle, without requiring an explicit output filename.
 In `task-triage`, a GitLab issue or collection selects private XDG evidence and
 analysis state with stable Markdown views; this local state is not publication.
+Scoped single-item triage requested by `task-prepare` follows the same boundary
+and returns its current artifact to the caller without publishing.
 
 Evidence is complete only when every required input and check for the declared
 scope was observed. Do not declare a result complete when evidence is partial,

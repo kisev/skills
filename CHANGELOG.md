@@ -8,6 +8,12 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+### Changed
+
+- `task-prepare`, `task-review`, and `task-triage` now share release-aware task
+  planning: every accepted ready task is bound to the nearest compatible GitLab
+  milestone, while missing, incompatible, and stale planning remains explicit.
+
 ## \[7.0.0] - 2026-09-23
 
 ### Added

@@ -31,9 +31,9 @@ of `@kisev/skills-opencode`.
 | `spec-manage` | Create greenfield specs, describe an existing project, change canonical target state, or audit specs read-only; mode tokens are optional. |
 | `stopit` | Write a sanitized handoff for the next session. |
 | `briefing` | Turn transcripts, notes, or research into a structured factual summary. |
-| `task-prepare` | Prepare a task or agreed GitLab task set with a manual publication plan. |
-| `task-review` | Review a storage-neutral work item without changing external state. |
-| `task-triage` | Triage one GitLab issue or a bounded issue collection into persistent read-only analysis, priorities, dependencies, and manual update commands. |
+| `task-prepare` | Prepare tasks with shared review, scoped release planning, and manual GitLab publication commands. |
+| `task-review` | Review semantic quality and release-milestone compatibility standalone or inside other task workflows. |
+| `task-triage` | Triage GitLab issues into persistent decisions, release milestones, priorities, dependencies, and manual update commands. |
 | `team-retro` | Prepare an evidence-based retrospective or delivery presentation from a private profile. |
 | `team-roadmap` | Review or update an evidence-based roadmap from a private profile. |
 | `team-sprint-close` | Close one sprint cycle from a private profile or explicit context. |

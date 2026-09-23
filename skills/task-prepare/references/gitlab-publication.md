@@ -18,7 +18,8 @@ publication, not for neutral preparation or local rendering.
    selected template or the observed absence of templates. Keep the task
    self-contained and use full URLs for existing dependencies and related work.
 3. Verify selected labels (including inherited labels), eligible assignees,
-   milestone IDs, and confidentiality. Omit optional metadata without a factual
+   milestone IDs, and confidentiality. Milestone is mandatory for a ready issue
+   plan and must come from a current accepted scoped triage release plan. Omit optional metadata without a factual
    basis; never create labels or assign an owner from a guess. Missing access or
    incomplete pagination is missing evidence, not an empty catalog.
 4. Search for relevant existing issues/work items in the selected namespaces,
@@ -90,11 +91,14 @@ languages use English fixed headings while preserving the authored prose.
   explain the unsupported API and agree a supported target/type; never invent
   `groups/:id/issues` or a REST `work_items` endpoint.
 - `metadata`: optional `labels` (observed names without commas), `assignee_ids`
-  (numeric IDs), `milestone_id` (numeric ID), `confidential` (boolean). Epics
+  (numeric IDs), `milestone_id` (numeric ID), `confidential` (boolean).
+  `milestone_id` is required for every ready issue and must equal the selected
+  observed milestone in the scoped release plan. Epics
   support only labels and confidentiality in this renderer. Explain unsupported
   requested fields instead of silently dropping them.
 - `existing_iid`: observed IID for a reused or already created object, otherwise
-  `null`. With an IID the renderer omits creation; it does not update the object.
+  `null`. With an IID the renderer omits creation and emits only the required
+  milestone assignment update; it does not rewrite title or description.
 - `checks`: exactly `target`, `templates`, `metadata`, `duplicates`, `semantics`;
   each has `status` (`verified` or `blocked`) and nonempty `detail` containing
   evidence or a concrete blocker. Target evidence also verifies type, API support,

@@ -1,8 +1,8 @@
 ---
 name: task-prepare
 description: >-
-  Prepare a self-contained task or agreed GitLab task set, apply the shared task
-  review, and produce a local Markdown plan with manual glab commands.
+  Prepare a self-contained task or agreed GitLab task set, apply shared review
+  and scoped release planning, and produce a local Markdown plan with manual glab commands.
   Russian discovery terms: подготовить задачу, подготовить issue.
 license: MIT
 metadata:

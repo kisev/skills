@@ -545,6 +545,28 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertIn("collect", help_result.stdout)
         self.assertIn("publish", help_result.stdout)
 
+        planning_runtime = (
+            ROOT / "shared/references/work_item_runtime/release_planning.py"
+        ).read_bytes()
+        planning_contract = (
+            ROOT / "shared/references/work_item_runtime/release-planning-contract.md"
+        ).read_bytes()
+        planning_runner = (
+            ROOT / "shared/references/work_item_runtime/release_plan.py"
+        ).read_bytes()
+        for name in ("task-prepare", "task-review", "task-triage"):
+            with self.subTest(release_planning=name):
+                root = BUILT_SKILLS / name
+                self.assertEqual(
+                    (root / "scripts/portable_runtime/release_planning.py").read_bytes(),
+                    planning_runtime,
+                )
+                self.assertEqual((root / "scripts/release_plan.py").read_bytes(), planning_runner)
+                self.assertEqual(
+                    (root / "references/release-planning-contract.md").read_bytes(),
+                    planning_contract,
+                )
+
     def test_pinned_cli_lists_all_portable_skills(self) -> None:
         result = subprocess.run(
             [SKILLS_BINARY, "add", str(BUILT_SKILLS), "--list"],

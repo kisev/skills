@@ -122,6 +122,24 @@ def test_creation_command_preserves_literal_markdown_and_pins_target(tmp_path: P
     assert not (tmp_path / "injected").exists()
 
 
+def test_ready_issue_requires_milestone_and_existing_issue_gets_assignment(
+    tmp_path: Path,
+) -> None:
+    plan = draft()
+    plan["items"][0]["metadata"].pop("milestone_id")
+    with pytest.raises(WorkflowError, match="requires an observed milestone_id"):
+        validate(plan)
+
+    plan = draft()
+    plan["items"][0]["existing_iid"] = 17
+    files, complete = render(validate(plan), tmp_path)
+    assert complete
+    (command,) = commands(files)
+    assert "--method PUT" in command
+    assert "projects/42/issues/17" in command
+    assert json.loads(support(files, "contract-milestone.json")) == {"milestone_id": 9}
+
+
 @pytest.mark.parametrize("name", sorted(CHECKS))
 def test_incomplete_evidence_suppresses_creation(name: str, tmp_path: Path) -> None:
     plan = draft()
@@ -177,8 +195,12 @@ def test_resume_uses_real_iids_without_recreating_issues(tmp_path: Path) -> None
     plan["items"][1]["existing_iid"] = 20
     files, complete = render(validate(plan), tmp_path)
     assert complete
-    (command,) = commands(files)
-    assert "projects/43/issues/20/links" in command
+    generated = commands(files)
+    assert len(generated) == 3
+    assert all("--method PUT" in command for command in generated[:2])
+    assert "projects/42/issues/10" in generated[0]
+    assert "projects/43/issues/20" in generated[1]
+    assert "projects/43/issues/20/links" in generated[2]
     payload = json.loads(support(files, "link-1.json"))
     assert payload == {
         "target_project_id": 42,
@@ -188,7 +210,9 @@ def test_resume_uses_real_iids_without_recreating_issues(tmp_path: Path) -> None
     assert not any(path.endswith(("/consumer.json", "/contract.json")) for path in files)
     plan["items"][1]["target"]["url"] = "https://other.example.org/team/consumer"
     files, complete = render(validate(plan), tmp_path)
-    assert not complete and not commands(files)
+    assert not complete
+    assert len(commands(files)) == 2
+    assert not any("/links" in command for command in commands(files))
 
 
 @pytest.mark.parametrize("key", ["task-publication", "link-1", "link-42"])

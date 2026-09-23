@@ -54,6 +54,15 @@ SemVer findings as bounded evidence; do not independently mutate or replace
 triage state. A `blocked` review suppresses publication commands for that item,
 and `needs_clarification` keeps the plan partial.
 
+GitLab preparation must consume a current accepted `task-triage` release plan.
+If none is supplied, run scoped single-item triage through the shared
+release-planning contract; do not copy or approximate its SemVer, release-line,
+or milestone logic. A request to prepare a new task is its planning intent, but
+the task is accepted only after semantic review returns `ready`. Translate only
+an observed selected milestone ID into publication metadata. When triage proposes
+a new milestone, keep publication partial, point to its manual creation command,
+and recollect before generating the issue command.
+
 ## Report
 
 Neutral mode returns one short, self-contained task and its quality assessment.

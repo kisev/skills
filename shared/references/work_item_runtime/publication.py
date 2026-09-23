@@ -170,6 +170,13 @@ def validate(value: object) -> dict[str, Any]:
             raise WorkflowError("milestone_id must be an observed numeric ID")
         if "confidential" in metadata and type(metadata["confidential"]) is not bool:
             raise WorkflowError("confidential must be boolean")
+        if (
+            item["type"] == "issue"
+            and item["target"] is not None
+            and all(check["status"] == "verified" for check in checks.values())
+            and "milestone_id" not in metadata
+        ):
+            raise WorkflowError("a ready GitLab issue requires an observed milestone_id")
     if not isinstance(plan["links"], list):
         raise WorkflowError("links must be a list")
     edges: dict[str, list[str]] = {key: [] for key in ids}
@@ -210,7 +217,7 @@ def ready(item: dict[str, Any]) -> bool:
     )
 
 
-def api_command(host: str, endpoint: str, payload: Path) -> str:
+def api_command(host: str, endpoint: str, payload: Path, *, method: str = "POST") -> str:
     return shlex.join(
         [
             "glab",
@@ -218,7 +225,7 @@ def api_command(host: str, endpoint: str, payload: Path) -> str:
             "--hostname",
             host,
             "--method",
-            "POST",
+            method,
             endpoint,
             "--header",
             "Content-Type: application/json",
@@ -287,6 +294,21 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
             collection = "projects" if item["type"] == "issue" else "groups"
             endpoint = f"{collection}/{target['id']}/{item['type']}s"
             command = api_command(urlsplit(target["url"]).netloc, endpoint, content_root / filename)
+            lines.extend([code_block(command), ""])
+        elif is_ready and item["type"] == "issue" and item["existing_iid"] is not None:
+            payload = {"milestone_id": item["metadata"]["milestone_id"]}
+            filename = f"{key}-milestone.json"
+            files[f"{content_prefix}/{filename}"] = (
+                json.dumps(payload, ensure_ascii=False, indent=2) + "\n"
+            ).encode()
+            target = item["target"]
+            endpoint = f"projects/{target['id']}/issues/{item['existing_iid']}"
+            command = api_command(
+                urlsplit(target["url"]).netloc,
+                endpoint,
+                content_root / filename,
+                method="PUT",
+            )
             lines.extend([code_block(command), ""])
     if plan["links"]:
         lines.extend([f"## {labels['links']}", ""])

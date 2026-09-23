@@ -13,6 +13,12 @@ reuses current per-issue analysis, and atomically updates stable Markdown views.
 It composes the task-review quality contract and emits manual commands but never
 executes them or mutates GitLab.
 
+The three task workflows materialize one tracker-neutral release-planning
+validator. Task triage owns GitLab release and milestone evidence and persistent
+planning decisions. Task review validates the same sidecar without owning state.
+Task preparation consumes a current accepted decision or requests scoped
+single-item triage; it does not duplicate release-policy interpretation.
+
 Routing resolves host inventory, creates a receipt, consumes it once for a
 matching Task, validates the structured result, and expires the receipt.
 Installation and reconciliation validate ownership and digests before

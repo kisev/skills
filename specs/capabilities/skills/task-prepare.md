@@ -25,6 +25,11 @@ render local artifacts, report. A GitLab source link alone keeps neutral mode.
 Before reporting, each prepared item receives the same quality assessment as
 standalone `task-review`; explicitly supplied current triage findings may provide
 bounded duplicate, relationship, label, priority, and SemVer evidence.
+GitLab mode consumes a current accepted triage release plan. When none is
+supplied, it invokes the same shared release-planning contract through scoped
+single-item triage rather than implementing milestone selection independently.
+Ready issue creation requires an observed compatible milestone ID; a missing
+milestone keeps publication partial and points to the triage creation proposal.
 
 ## Dependencies
 
