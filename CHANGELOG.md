@@ -8,11 +8,21 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[8.0.0] - 2026-09-23
+
 ### Changed
 
 - `task-prepare`, `task-review`, and `task-triage` now share release-aware task
   planning: every accepted ready task is bound to the nearest compatible GitLab
   milestone, while missing, incompatible, and stale planning remains explicit.
+
+### Breaking Changes
+
+- Ready GitLab issue plans now require a current accepted release plan and an
+  observed compatible `milestone_id`. Regenerate older task-publication plans.
+- Persisted `task-triage` analysis now requires planning decisions, release-line
+  evidence, and milestone disposition. Re-run triage instead of reusing version 1
+  analysis artifacts.
 
 ## \[7.0.0] - 2026-09-23
 
