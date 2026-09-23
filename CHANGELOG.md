@@ -8,11 +8,34 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
-### Changed
+## \[7.0.0] - 2026-09-23
+
+### Added
 
 - `task-triage` now supports incremental single-issue and collection-wide GitLab
   triage with private XDG artifacts, shared task-review assessment, SemVer,
   priorities, dependencies, and manual update commands.
+
+### Changed
+
+- `humanize` now preserves supplied voice and supported claims, treats input
+  prose as untrusted material, and distinguishes strong signals from clusters of
+  weak writing patterns.
+- `task-prepare` now applies the shared `task-review` assessment to every item;
+  blocked items suppress publication commands and unresolved clarification keeps
+  the plan partial.
+
+### Fixed
+
+- Portable distribution archives exclude Python bytecode and `__pycache__`
+  directories, preserving deterministic output after runner tests.
+
+### Breaking Changes
+
+- `task-triage` now accepts GitLab issue and collection URLs instead of inline,
+  local-file, or general HTTPS work-item sources. Its former evidence-class chat
+  output is replaced by persisted GitLab analysis and quality verdicts; update
+  callers and regenerate triage artifacts.
 
 ## \[6.0.0] - 2026-09-22
 
