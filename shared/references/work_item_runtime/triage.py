@@ -8,13 +8,15 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import stat
 import subprocess
 import tempfile
 import urllib.parse
 from datetime import UTC, datetime
+from itertools import pairwise
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypeGuard
 
 from .release_planning import PlanningError
 from .release_planning import validate as validate_release_plan
@@ -30,6 +32,128 @@ MAX_PAGES = 100
 MAX_ITEMS = 500
 ACTUALITY = {"current", "implemented", "obsolete", "duplicate", "unknown"}
 VERDICTS = {"ready", "needs_clarification", "blocked"}
+INFORMATION_ACTIONS = {"none", "new", "ping_1", "ping_2", "close"}
+TEXT = {
+    "en": {
+        "summary": "Task triage summary",
+        "status": "Status",
+        "complete": "complete",
+        "partial": "partial",
+        "collection": "Collection evidence",
+        "analysis": "Analysis",
+        "first": "First tasks",
+        "parallel": "Parallel groups",
+        "questions": "Questions",
+        "reports": "Detailed reports",
+        "source": "Source",
+        "actuality": "Actuality",
+        "quality": "Quality",
+        "decision": "Planning decision",
+        "planning": "Planning verdict",
+        "release": "Target release",
+        "milestone": "Milestone",
+        "severity": "Severity",
+        "priority": "Priority",
+        "quality_findings": "Quality findings",
+        "relations": "Duplicates and relations",
+        "merge_requests": "Merge requests",
+        "release_planning": "Release planning",
+        "recommendations": "Recommendations",
+        "commands": "Manual commands",
+        "none": "None observed.",
+        "no_changes": "No GitLab changes are recommended.",
+        "preview": "Preview",
+        "command": "Command",
+        "action_title": "Update title",
+        "action_description": "Update description",
+        "action_labels": "Update labels",
+        "action_milestone": "Update milestone",
+        "action_create_milestone": "Create milestone",
+        "action_link": "Create issue link",
+        "action_message": "Publish message",
+        "action_information_new": "Publish information request",
+        "action_information_ping_1": "Publish first follow-up",
+        "action_information_ping_2": "Publish second follow-up",
+        "action_information_close": "Publish stale closure message",
+        "action_close": "Close issue",
+    },
+    "ru": {
+        "summary": "Сводка триажа задач",
+        "status": "Статус",
+        "complete": "завершён",
+        "partial": "частичный",
+        "collection": "Снимок коллекции",
+        "analysis": "Анализ",
+        "first": "Первые задачи",
+        "parallel": "Параллельные группы",
+        "questions": "Вопросы",
+        "reports": "Подробные отчёты",
+        "source": "Источник",
+        "actuality": "Актуальность",
+        "quality": "Качество",
+        "decision": "Решение по планированию",
+        "planning": "Готовность планирования",
+        "release": "Целевой релиз",
+        "milestone": "Майлстоун",
+        "severity": "Критичность",
+        "priority": "Приоритет",
+        "quality_findings": "Замечания к качеству",
+        "relations": "Дубликаты и связи",
+        "merge_requests": "Связанные MR",
+        "release_planning": "Планирование релиза",
+        "recommendations": "Рекомендации",
+        "commands": "Ручные команды",
+        "none": "Ничего не обнаружено.",
+        "no_changes": "Изменения в GitLab не рекомендуются.",
+        "preview": "Предпросмотр",
+        "command": "Команда",
+        "action_title": "Обновить заголовок",
+        "action_description": "Обновить описание",
+        "action_labels": "Обновить лейблы",
+        "action_milestone": "Обновить майлстоун",
+        "action_create_milestone": "Создать майлстоун",
+        "action_link": "Создать связь задач",
+        "action_message": "Опубликовать сообщение",
+        "action_information_new": "Опубликовать запрос информации",
+        "action_information_ping_1": "Опубликовать первый пинг",
+        "action_information_ping_2": "Опубликовать второй пинг",
+        "action_information_close": "Опубликовать финальное сообщение",
+        "action_close": "Закрыть задачу",
+    },
+}
+RU_VALUES: dict[str, dict[str | None, str]] = {
+    "actuality": {
+        "current": "актуальна",
+        "implemented": "реализована",
+        "obsolete": "устарела",
+        "duplicate": "дубликат",
+        "unknown": "неизвестна",
+    },
+    "quality": {
+        "ready": "готово",
+        "needs_clarification": "нужны уточнения",
+        "blocked": "заблокировано",
+    },
+    "decision": {
+        "accepted": "принято",
+        "deferred": "отложено",
+        "rejected": "отклонено",
+        "duplicate": "дубликат",
+        "obsolete": "устарело",
+    },
+    "planning": {
+        "ready": "готова",
+        "needs_clarification": "нужны уточнения",
+        "blocked": "заблокирована",
+    },
+    "milestone": {
+        "selected": "выбран",
+        "create": "требуется создать",
+        "remove": "требуется снять",
+        "none": "не назначен",
+    },
+    "release": {None: "не определён"},
+}
 
 
 class WorkflowError(ValueError):
@@ -272,6 +396,26 @@ def collect_issue(target: dict[str, Any]) -> dict[str, Any]:
     links = paginated(host, f"{base}/links")
     merge_requests = paginated(host, f"{base}/related_merge_requests")
     closed_by = paginated(host, f"{base}/closed_by")
+    mr_targets: dict[tuple[int, int], dict[str, Any]] = {}
+    for merge_request in [*merge_requests, *closed_by]:
+        project_value = merge_request.get("project_id")
+        iid_value = merge_request.get("iid")
+        if not positive(project_value) or not positive(iid_value):
+            raise WorkflowError("related merge request identity is incomplete")
+        mr_targets[(project_value, iid_value)] = merge_request
+    mr_conversations = []
+    for (mr_project_id, mr_iid), merge_request in sorted(mr_targets.items()):
+        mr_conversations.append(
+            {
+                "project_id": mr_project_id,
+                "iid": mr_iid,
+                "web_url": str(merge_request.get("web_url") or ""),
+                "discussions": paginated(
+                    host,
+                    f"projects/{mr_project_id}/merge_requests/{mr_iid}/discussions",
+                ),
+            }
+        )
     source = {
         "target": target,
         "issue": issue,
@@ -279,14 +423,26 @@ def collect_issue(target: dict[str, Any]) -> dict[str, Any]:
         "links": links,
         "merge_requests": merge_requests,
         "closed_by": closed_by,
+        "merge_request_conversations": mr_conversations,
     }
     return {**source, "source_fingerprint": digest(source)}
 
 
 def project_context(targets: list[dict[str, Any]]) -> dict[str, Any]:
     contexts: dict[str, Any] = {}
+    users: dict[str, dict[str, Any]] = {}
     projects = {(item["hostname"], item["project_id"]): item for item in targets}
     for (hostname, project_id), target in sorted(projects.items()):
+        if hostname not in users:
+            user = glab_json(hostname, "user")
+            if (
+                not isinstance(user, dict)
+                or not isinstance(user.get("id"), int)
+                or not isinstance(user.get("username"), str)
+                or not user["username"].strip()
+            ):
+                raise WorkflowError("authenticated GitLab user identity is incomplete")
+            users[hostname] = {"id": user["id"], "username": user["username"]}
         issues = paginated(hostname, f"projects/{project_id}/issues?state=all")
         labels = paginated(hostname, f"projects/{project_id}/labels?include_ancestor_groups=true")
         active_milestones = paginated(
@@ -302,6 +458,7 @@ def project_context(targets: list[dict[str, Any]]) -> dict[str, Any]:
         key = f"{hostname}:{project_id}"
         contexts[key] = {
             "project_path": target["project_path"],
+            "current_user": users[hostname],
             "issues": issues,
             "labels": labels,
             "milestones": [
@@ -336,9 +493,13 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         raise WorkflowError("at least one --source is required")
     sources = [parse_url(value) for value in args.source]
     filters = query_args(sources, args)
+    locale = getattr(args, "locale", "en")
+    if locale not in TEXT:
+        raise WorkflowError("locale must be en or ru")
     scope = {
         "sources": sorted(source["canonical_url"] for source in sources),
         "filters": filters,
+        "locale": locale,
     }
     root = state_root(scope)
     targets = issue_targets(sources, filters)
@@ -375,7 +536,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         except WorkflowError as exc:
             errors.append({"target": item_key(target), "message": str(exc)})
     payload = {
-        "schema": "task-triage/collection-evidence/v1",
+        "schema": "task-triage/collection-evidence/v2",
         "created_at": datetime.now(UTC).isoformat(),
         "scope": scope,
         "context": context,
@@ -387,7 +548,7 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     }
     artifact, artifact_digest = write_artifact(root, "collection", payload)
     pointer = {
-        "schema": "task-triage/current/v1",
+        "schema": "task-triage/current/v2",
         "collection_path": str(artifact),
         "collection_digest": artifact_digest,
         "context_digest": context_digest,
@@ -421,7 +582,7 @@ def resolve_collection(path: Path) -> tuple[dict[str, Any], str, Path]:
     ):
         raise WorkflowError("collection pointer binding is invalid")
     collection = read_object(artifact, "collection artifact")
-    if collection.get("schema") != "task-triage/collection-evidence/v1":
+    if collection.get("schema") != "task-triage/collection-evidence/v2":
         raise WorkflowError("collection artifact schema is invalid")
     return collection, digest_value, path.parent.resolve()
 
@@ -432,6 +593,221 @@ def text(value: object, label: str) -> str:
     return value.strip()
 
 
+def positive(value: object) -> TypeGuard[int]:
+    return type(value) is int and value > 0
+
+
+def conversation_for(
+    snapshot: dict[str, Any], target: object, label: str
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    if not isinstance(target, dict):
+        raise WorkflowError(f"{label} target must be an object")
+    kind = target.get("kind")
+    project_id = target.get("project_id")
+    iid = target.get("iid")
+    discussion_id = target.get("discussion_id")
+    if kind not in {"issue", "merge_request"} or not positive(project_id) or not positive(iid):
+        raise WorkflowError(f"{label} target identity is invalid")
+    if discussion_id is not None and (
+        not isinstance(discussion_id, str) or not discussion_id.strip()
+    ):
+        raise WorkflowError(f"{label} discussion identity is invalid")
+    if kind == "issue":
+        observed = snapshot["target"]
+        if project_id != observed["project_id"] or iid != observed["iid"]:
+            raise WorkflowError(f"{label} issue target was not observed")
+        discussions = snapshot.get("discussions", [])
+    else:
+        conversations = snapshot.get("merge_request_conversations", [])
+        match = next(
+            (
+                item
+                for item in conversations
+                if item.get("project_id") == project_id and item.get("iid") == iid
+            ),
+            None,
+        )
+        if match is None:
+            raise WorkflowError(f"{label} merge request target was not observed")
+        discussions = match.get("discussions", [])
+    if not isinstance(discussions, list):
+        raise WorkflowError(f"{label} discussions are invalid")
+    if discussion_id is not None and not any(
+        isinstance(discussion, dict) and str(discussion.get("id")) == discussion_id
+        for discussion in discussions
+    ):
+        raise WorkflowError(f"{label} discussion was not observed")
+    normalized = {
+        "kind": kind,
+        "project_id": project_id,
+        "iid": iid,
+        "discussion_id": discussion_id,
+    }
+    return normalized, discussions
+
+
+def discussion_notes(
+    discussions: list[dict[str, Any]], discussion_id: str | None
+) -> list[dict[str, Any]]:
+    notes: list[dict[str, Any]] = []
+    for discussion in discussions:
+        if not isinstance(discussion, dict) or (
+            discussion_id is not None and str(discussion.get("id")) != discussion_id
+        ):
+            continue
+        raw_notes = discussion.get("notes", [])
+        if isinstance(raw_notes, list):
+            notes.extend(note for note in raw_notes if isinstance(note, dict))
+    return sorted(notes, key=lambda note: (str(note.get("created_at") or ""), str(note.get("id"))))
+
+
+def validate_message(snapshot: dict[str, Any], value: object, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"target", "body"}:
+        raise WorkflowError(f"{label} must contain target and body")
+    target, _ = conversation_for(snapshot, value["target"], label)
+    return {"target": target, "body": text(value["body"], f"{label} body")}
+
+
+def validate_information_request(
+    snapshot: dict[str, Any], current_user: dict[str, Any], value: object, label: str
+) -> dict[str, Any]:
+    expected = {"action", "target", "body", "prior_note_ids", "rationale"}
+    if not isinstance(value, dict) or set(value) != expected:
+        raise WorkflowError(f"{label} fields are invalid")
+    action = value["action"]
+    if action not in INFORMATION_ACTIONS:
+        raise WorkflowError(f"{label} action is invalid")
+    rationale = text(value["rationale"], f"{label} rationale")
+    if action == "none":
+        if (
+            value["target"] is not None
+            or value["body"] is not None
+            or value["prior_note_ids"] != []
+        ):
+            raise WorkflowError(f"{label} with no action must not contain publication data")
+        return {
+            "action": action,
+            "target": None,
+            "body": None,
+            "prior_note_ids": [],
+            "rationale": rationale,
+        }
+    target, discussions = conversation_for(snapshot, value["target"], label)
+    if target["kind"] == "issue":
+        issue = snapshot.get("issue")
+        if not isinstance(issue, dict) or issue.get("state") != "opened":
+            raise WorkflowError(f"{label} target issue is not open")
+    body = text(value["body"], f"{label} body")
+    prior_note_ids = value["prior_note_ids"]
+    required = {"new": 0, "ping_1": 1, "ping_2": 2, "close": 3}[action]
+    if action != "new" and target["discussion_id"] is None:
+        raise WorkflowError(f"{label} follow-up must target the observed discussion")
+    if (
+        not isinstance(prior_note_ids, list)
+        or len(prior_note_ids) != required
+        or not all(positive(note_id) for note_id in prior_note_ids)
+        or len(set(prior_note_ids)) != len(prior_note_ids)
+    ):
+        raise WorkflowError(f"{label} does not follow the information-request sequence")
+    if action == "close" and target["kind"] != "issue":
+        raise WorkflowError(f"{label} may close only an issue")
+    notes = discussion_notes(discussions, target["discussion_id"])
+    if action == "new" and target["discussion_id"] is not None:
+        latest = next((note for note in reversed(notes) if note.get("system") is not True), None)
+        author = latest.get("author") if isinstance(latest, dict) else None
+        if not isinstance(author, dict) or author.get("id") == current_user["id"]:
+            raise WorkflowError(
+                f"{label} new cycle in an existing discussion requires a latest participant reply"
+            )
+    positions = {note.get("id"): index for index, note in enumerate(notes)}
+    if any(note_id not in positions for note_id in prior_note_ids) or any(
+        positions[left] >= positions[right] for left, right in pairwise(prior_note_ids)
+    ):
+        raise WorkflowError(f"{label} prior notes were not observed in order")
+    current_id = current_user["id"]
+    for note_id in prior_note_ids:
+        note = notes[positions[note_id]]
+        author = note.get("author")
+        if not isinstance(author, dict) or author.get("id") != current_id:
+            raise WorkflowError(f"{label} prior notes were not authored by the current user")
+    if prior_note_ids:
+        for note in notes[positions[prior_note_ids[-1]] + 1 :]:
+            if note.get("system") is True:
+                continue
+            raise WorkflowError(f"{label} has a later note that must be assessed")
+        last_other_note = -1
+        for index, note in enumerate(notes[: positions[prior_note_ids[-1]] + 1]):
+            if note.get("system") is True:
+                continue
+            author = note.get("author")
+            if not isinstance(author, dict) or author.get("id") != current_id:
+                last_other_note = index
+        cycle_ids = [
+            note.get("id")
+            for note in notes[last_other_note + 1 : positions[prior_note_ids[-1]] + 1]
+            if note.get("system") is not True
+        ]
+        if cycle_ids != prior_note_ids:
+            raise WorkflowError(f"{label} prior notes are not the complete latest cycle")
+    return {
+        "action": action,
+        "target": target,
+        "body": body,
+        "prior_note_ids": prior_note_ids,
+        "rationale": rationale,
+    }
+
+
+def validate_proposed_changes(snapshot: dict[str, Any], value: object) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict) or set(value) - {
+        "title",
+        "description",
+        "labels",
+        "links",
+        "messages",
+    }:
+        raise WorkflowError("proposed changes contain unsupported fields")
+    result: dict[str, Any] = {}
+    if "title" in value:
+        title = text(value["title"], "proposed title")
+        if "\n" in title or "\r" in title:
+            raise WorkflowError("proposed title must be one line")
+        result["title"] = title
+    if "description" in value:
+        result["description"] = text(value["description"], "proposed description")
+    if "labels" in value:
+        labels = value["labels"]
+        if not isinstance(labels, list) or not all(
+            isinstance(label, str) and label.strip() and "," not in label for label in labels
+        ):
+            raise WorkflowError("proposed labels are invalid")
+        result["labels"] = [label.strip() for label in labels]
+    links = value.get("links", [])
+    if not isinstance(links, list):
+        raise WorkflowError("proposed links must be a list")
+    for link in links:
+        if (
+            not isinstance(link, dict)
+            or not positive(link.get("target_project_id"))
+            or not positive(link.get("target_issue_iid"))
+            or link.get("link_type") not in {"relates_to", "blocks", "is_blocked_by"}
+        ):
+            raise WorkflowError("proposed issue link is invalid")
+    if links:
+        result["links"] = links
+    messages = value.get("messages", [])
+    if not isinstance(messages, list):
+        raise WorkflowError("proposed messages must be a list")
+    if messages:
+        result["messages"] = [
+            validate_message(snapshot, message, f"proposed messages[{index}]")
+            for index, message in enumerate(messages)
+        ]
+    return result
+
+
 def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> list[dict[str, Any]]:
     raw_items = analysis.get("items")
     if not isinstance(raw_items, list):
@@ -440,6 +816,7 @@ def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> l
     if len(raw_items) != len(evidence):
         raise WorkflowError("analysis must contain every collected issue exactly once")
     seen: set[str] = set()
+    request_targets: set[tuple[str, str, int, int, str | None]] = set()
     result: list[dict[str, Any]] = []
     for position, raw in enumerate(raw_items):
         if not isinstance(raw, dict):
@@ -475,128 +852,301 @@ def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> l
             raise WorkflowError(f"analysis release plan is invalid: {exc}") from exc
         if release_plan["decision"]["status"] == "accepted" and actuality["status"] != "current":
             raise WorkflowError("only a current issue may be accepted")
-        result.append({**raw, "release_plan": release_plan, "evidence": evidence_item})
+        proposed_changes = validate_proposed_changes(snapshot, raw.get("proposed_changes"))
+        requests = raw.get("information_requests", [])
+        if not isinstance(requests, list):
+            raise WorkflowError("information requests must be a list")
+        current_user = context.get("current_user")
+        if not isinstance(current_user, dict):
+            raise WorkflowError("authenticated GitLab user evidence is unavailable")
+        information_requests = [
+            validate_information_request(
+                snapshot,
+                current_user,
+                request,
+                f"information_requests[{index}]",
+            )
+            for index, request in enumerate(requests)
+        ]
+        for request in information_requests:
+            if request["action"] == "none":
+                continue
+            request_target = request["target"]
+            request_key = (
+                target["hostname"],
+                request_target["kind"],
+                request_target["project_id"],
+                request_target["iid"],
+                request_target["discussion_id"],
+            )
+            if request_key in request_targets:
+                raise WorkflowError("analysis contains multiple information actions for one target")
+            request_targets.add(request_key)
+        result.append(
+            {
+                **raw,
+                "release_plan": release_plan,
+                "proposed_changes": proposed_changes,
+                "information_requests": information_requests,
+                "evidence": evidence_item,
+            }
+        )
     return result
 
 
-def markdown_list(value: object) -> str:
+def markdown_list(value: object, locale: str) -> str:
     if not isinstance(value, list) or not value:
-        return "- None observed."
+        return f"- {TEXT[locale]['none']}"
     return "\n".join(f"- {item}" for item in value)
 
 
-def command_for(root: Path, item: dict[str, Any]) -> list[str]:
-    proposed = item.get("proposed_changes")
-    if not isinstance(proposed, dict):
-        proposed = {}
+def display(value: object, locale: str, field: str) -> str:
+    translations = RU_VALUES.get(field, {})
+    if locale == "ru" and (value is None or isinstance(value, str)) and value in translations:
+        return translations[value]
+    return str(value)
+
+
+def api_command(host: str, method: str, endpoint: str, request: Path) -> str:
+    return shlex.join(
+        [
+            "glab",
+            "api",
+            "--hostname",
+            host,
+            "--method",
+            method,
+            endpoint,
+            "--silent",
+            "--header",
+            "Content-Type: application/json",
+            "--input",
+            str(request),
+        ]
+    )
+
+
+def code_block(content: str, language: str) -> list[str]:
+    fence = "`" * max(3, max((len(match) + 1 for match in re.findall(r"`+", content)), default=3))
+    return [f"{fence}{language}", content, fence]
+
+
+def action(
+    root: Path,
+    host: str,
+    kind: str,
+    method: str,
+    endpoint: str,
+    payload: dict[str, Any],
+    preview: str,
+) -> dict[str, str]:
+    request, _ = write_artifact(root, "commands", payload)
+    return {
+        "kind": kind,
+        "preview": preview,
+        "command": api_command(host, method, endpoint, request),
+    }
+
+
+def message_action(
+    root: Path, host: str, target: dict[str, Any], body: str, kind: str = "message"
+) -> dict[str, str]:
+    collection = "issues" if target["kind"] == "issue" else "merge_requests"
+    endpoint = f"projects/{target['project_id']}/{collection}/{target['iid']}"
+    if target["discussion_id"] is None:
+        endpoint += "/notes"
+    else:
+        encoded = urllib.parse.quote(target["discussion_id"], safe="")
+        endpoint += f"/discussions/{encoded}/notes"
+    return action(root, host, kind, "POST", endpoint, {"body": body}, body)
+
+
+def commands_for(root: Path, item: dict[str, Any]) -> list[dict[str, str]]:
+    proposed = item["proposed_changes"]
     target = item["evidence"]["target"]
     host, project_id, iid = target["hostname"], target["project_id"], target["iid"]
-    commands: list[str] = []
+    issue_endpoint = f"projects/{project_id}/issues/{iid}"
+    commands: list[dict[str, str]] = []
+    for field, kind in (
+        ("title", "title"),
+        ("description", "description"),
+        ("labels", "labels"),
+    ):
+        if field not in proposed:
+            continue
+        value = proposed[field]
+        payload_value = ",".join(value) if field == "labels" else value
+        preview = json.dumps({field: value}, ensure_ascii=False, indent=2)
+        commands.append(
+            action(root, host, kind, "PUT", issue_endpoint, {field: payload_value}, preview)
+        )
     release_plan = item["release_plan"]
     decision = release_plan["decision"]["status"]
     milestone = release_plan["milestone"]
     if decision == "accepted" and milestone["status"] == "create":
-        request, _ = write_artifact(root, "commands", {"title": milestone["candidate"]["title"]})
+        title = milestone["candidate"]["title"]
         commands.append(
-            f'glab api --hostname "{host}" --method POST "projects/{project_id}/milestones" --silent --input "{request}"'
+            action(
+                root,
+                host,
+                "create_milestone",
+                "POST",
+                f"projects/{project_id}/milestones",
+                {"title": title},
+                title,
+            )
         )
-    update = (
-        {key: proposed[key] for key in ("title", "description", "labels") if key in proposed}
-        if decision == "accepted"
-        else {}
-    )
     if decision == "accepted" and milestone["status"] == "selected":
-        update["milestone_id"] = milestone["candidate"]["id"]
+        milestone_id = milestone["candidate"]["id"]
+        commands.append(
+            action(
+                root,
+                host,
+                "milestone",
+                "PUT",
+                issue_endpoint,
+                {"milestone_id": milestone_id},
+                str(milestone["candidate"]["title"]),
+            )
+        )
     elif decision != "accepted" and milestone["status"] == "remove":
-        update["milestone_id"] = 0
-    if update:
-        if isinstance(update.get("labels"), list):
-            update["labels"] = ",".join(str(label) for label in update["labels"])
-        request, _ = write_artifact(root, "commands", update)
         commands.append(
-            f'glab api --hostname "{host}" --method PUT "projects/{project_id}/issues/{iid}" --silent --input "{request}"'
+            action(
+                root,
+                host,
+                "milestone",
+                "PUT",
+                issue_endpoint,
+                {"milestone_id": 0},
+                json.dumps({"milestone_id": 0}, indent=2),
+            )
         )
-    links = proposed.get("links", []) if decision == "accepted" else []
-    if not isinstance(links, list):
-        raise WorkflowError("proposed links must be a list")
-    for link in links:
-        if (
-            not isinstance(link, dict)
-            or not isinstance(link.get("target_project_id"), int)
-            or not isinstance(link.get("target_issue_iid"), int)
-        ):
-            raise WorkflowError("proposed issue link is invalid")
-        request, _ = write_artifact(root, "commands", link)
+    for link in proposed.get("links", []):
         commands.append(
-            f'glab api --hostname "{host}" --method POST "projects/{project_id}/issues/{iid}/links" --silent --input "{request}"'
+            action(
+                root,
+                host,
+                "link",
+                "POST",
+                f"{issue_endpoint}/links",
+                link,
+                json.dumps(link, ensure_ascii=False, indent=2),
+            )
         )
+    for message in proposed.get("messages", []):
+        commands.append(message_action(root, host, message["target"], message["body"]))
+    for request in item["information_requests"]:
+        if request["action"] == "none":
+            continue
+        commands.append(
+            message_action(
+                root,
+                host,
+                request["target"],
+                request["body"],
+                f"information_{request['action']}",
+            )
+        )
+        if request["action"] == "close":
+            request_target = request["target"]
+            endpoint = f"projects/{request_target['project_id']}/issues/{request_target['iid']}"
+            commands.append(
+                action(
+                    root,
+                    host,
+                    "close",
+                    "PUT",
+                    endpoint,
+                    {"state_event": "close"},
+                    request["rationale"],
+                )
+            )
     return commands
 
 
-def item_markdown(item: dict[str, Any], commands: list[str]) -> str:
+def item_markdown(item: dict[str, Any], commands: list[dict[str, str]], locale: str) -> str:
     evidence = item["evidence"]
     issue = read_object(Path(evidence["evidence_path"]), "issue evidence")["issue"]
     actuality, quality = item["actuality"], item["quality"]
     release_plan = item["release_plan"]
     semver = release_plan["semver"]
+    labels = TEXT[locale]
     sections = [
         f"# {issue.get('title', evidence['url'])}",
         "",
-        f"- Source: {evidence['url']}",
-        f"- Actuality: {actuality['status']}",
-        f"- Quality: {quality['verdict']}",
-        f"- Planning decision: {release_plan['decision']['status']}",
-        f"- Planning verdict: {release_plan['planning_verdict']}",
+        f"- {labels['source']}: {evidence['url']}",
+        f"- {labels['actuality']}: {display(actuality['status'], locale, 'actuality')}",
+        f"- {labels['quality']}: {display(quality['verdict'], locale, 'quality')}",
+        f"- {labels['decision']}: {display(release_plan['decision']['status'], locale, 'decision')}",
+        f"- {labels['planning']}: {display(release_plan['planning_verdict'], locale, 'planning')}",
         f"- SemVer: {semver['level']}",
-        f"- Target release: {release_plan['release']['target_version']}",
-        f"- Milestone: {release_plan['milestone']['status']}",
-        f"- Severity: {item['severity']}",
-        f"- Priority: {item['priority']}",
+        f"- {labels['release']}: {display(release_plan['release']['target_version'], locale, 'release')}",
+        f"- {labels['milestone']}: {display(release_plan['milestone']['status'], locale, 'milestone')}",
+        f"- {labels['severity']}: {item['severity']}",
+        f"- {labels['priority']}: {item['priority']}",
         "",
-        "## Actuality",
+        f"## {labels['actuality']}",
         "",
         text(actuality.get("rationale"), "actuality rationale"),
         "",
-        "## Quality findings",
+        f"## {labels['quality_findings']}",
         "",
-        markdown_list(quality.get("findings")),
+        markdown_list(quality.get("findings"), locale),
         "",
-        "## Duplicates and relations",
+        f"## {labels['relations']}",
         "",
-        markdown_list(item.get("duplicates")),
+        markdown_list(item.get("duplicates"), locale),
         "",
-        markdown_list(item.get("related_issues")),
+        markdown_list(item.get("related_issues"), locale),
         "",
-        "## Merge requests",
+        f"## {labels['merge_requests']}",
         "",
-        markdown_list(item.get("merge_requests")),
+        markdown_list(item.get("merge_requests"), locale),
         "",
         "## SemVer",
         "",
         text(semver.get("rationale"), "SemVer rationale"),
         "",
-        "## Release planning",
+        f"## {labels['release_planning']}",
         "",
         text(release_plan["decision"].get("rationale"), "decision rationale"),
         "",
         text(release_plan["milestone"].get("rationale"), "milestone rationale"),
         "",
-        "## Recommendations",
+        f"## {labels['recommendations']}",
         "",
-        markdown_list(item.get("recommendations")),
+        markdown_list(item.get("recommendations"), locale),
         "",
-        "## Manual commands",
+        f"## {labels['commands']}",
         "",
     ]
     if commands:
-        sections.extend(["```sh", *commands, "```"])
+        for command in commands:
+            sections.extend(
+                [
+                    f"### {labels['action_' + command['kind']]}",
+                    "",
+                    f"**{labels['preview']}**",
+                    "",
+                    *code_block(command["preview"], "text"),
+                    "",
+                    f"**{labels['command']}**",
+                    "",
+                    *code_block(command["command"], "sh"),
+                    "",
+                ]
+            )
     else:
-        sections.append("No GitLab changes are recommended.")
+        sections.append(labels["no_changes"])
     return "\n".join(sections) + "\n"
 
 
 def publish(args: argparse.Namespace) -> dict[str, Any]:
     collection, collection_digest, root = resolve_collection(Path(args.collection).resolve())
+    locale = collection.get("scope", {}).get("locale")
+    if locale not in TEXT:
+        raise WorkflowError("collection locale is invalid")
+    labels = TEXT[locale]
     analysis = read_object(Path(args.analysis).resolve(), "triage analysis")
     if analysis.get("collection_digest") != collection_digest:
         raise WorkflowError("analysis is stale for the selected collection")
@@ -605,10 +1155,10 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
     report_entries: list[dict[str, str]] = []
     analysis_index = load_analysis_index(root)["items"]
     for item in items:
-        commands = command_for(root, item)
+        commands = commands_for(root, item)
         target = item["evidence"]["target"]
         report = reports / f"{target['hostname']}-{target['project_id']}-{target['iid']}.md"
-        atomic_write(report, item_markdown(item, commands).encode())
+        atomic_write(report, item_markdown(item, commands, locale).encode())
         report_entries.append({"url": item["evidence"]["url"], "report": str(report)})
         cached_analysis = {key: value for key, value in item.items() if key != "evidence"}
         cached_analysis["release_plan"] = {
@@ -620,7 +1170,7 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
             "analysis": cached_analysis,
         }
     artifact_value = {
-        "schema": "task-triage/analysis/v1",
+        "schema": "task-triage/analysis/v2",
         "created_at": datetime.now(UTC).isoformat(),
         "collection_digest": collection_digest,
         "items": [
@@ -632,31 +1182,39 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         "external_mutations": False,
     }
     planning_complete = all(item["release_plan"]["planning_verdict"] == "ready" for item in items)
-    complete = collection["complete"] and not artifact_value["questions"] and planning_complete
+    pending_requests = any(
+        request["action"] != "none" for item in items for request in item["information_requests"]
+    )
+    complete = (
+        collection["complete"]
+        and not artifact_value["questions"]
+        and planning_complete
+        and not pending_requests
+    )
     artifact, analysis_digest = write_artifact(root, "analysis", artifact_value)
     write_json(root / "analysis-index.json", {"items": analysis_index})
     summary_lines = [
-        "# Task triage summary",
+        f"# {labels['summary']}",
         "",
-        f"- Status: {'complete' if complete else 'partial'}",
-        f"- Collection evidence: `{collection_digest}`",
-        f"- Analysis: `{analysis_digest}`",
+        f"- {labels['status']}: {labels['complete'] if complete else labels['partial']}",
+        f"- {labels['collection']}: `{collection_digest}`",
+        f"- {labels['analysis']}: `{analysis_digest}`",
         "",
-        "## First tasks",
+        f"## {labels['first']}",
         "",
-        markdown_list(artifact_value["top_five"][:5]),
+        markdown_list(artifact_value["top_five"][:5], locale),
         "",
-        "## Parallel groups",
+        f"## {labels['parallel']}",
         "",
-        markdown_list(artifact_value["parallel_groups"]),
+        markdown_list(artifact_value["parallel_groups"], locale),
         "",
-        "## Questions",
+        f"## {labels['questions']}",
         "",
-        markdown_list(artifact_value["questions"]),
+        markdown_list(artifact_value["questions"], locale),
         "",
-        "## Detailed reports",
+        f"## {labels['reports']}",
         "",
-        *[f"- [{entry['url']}]({entry['report']})" for entry in report_entries],
+        *[f"- {entry['report']}" for entry in report_entries],
         "",
     ]
     summary = root / "triage-summary.md"
@@ -691,6 +1249,7 @@ def parser() -> Parser:
     collect_parser.add_argument("--search")
     collect_parser.add_argument("--assignee")
     collect_parser.add_argument("--milestone")
+    collect_parser.add_argument("--locale", choices=("en", "ru"), default="en")
     publish_parser = subparsers.add_parser("publish")
     publish_parser.add_argument("--collection", required=True)
     publish_parser.add_argument("--analysis", required=True)
@@ -705,7 +1264,7 @@ def run(argv: list[str] | None = None) -> int:
                 json.dumps(
                     {
                         "schema_version": 1,
-                        "payload_version": "1.0.0",
+                        "payload_version": "2.0.0",
                         "input": ["gitlab-issue", "gitlab-issue-list", "gitlab-collection"],
                         "mutation": "private-local-write",
                         "external_mutations": False,

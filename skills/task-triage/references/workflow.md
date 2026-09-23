@@ -15,11 +15,15 @@ normalizing them to the runner's bounded `--state`, `--label`, `--search`,
 them. For duplicate discovery, inspect every issue in each selected project;
 follow other projects only through explicit input or observed links.
 
-Run `scripts/triage_task.py collect --source <URL> ...`. Repeated `--source`
-values form one package. The result points to immutable evidence and marks each
-issue `analysis_required`. Read the collection artifact and every required issue
-artifact. Reuse `cached_analysis` only when the runner marks it reusable. A
-single-issue request still uses its project context.
+Select `--locale en|ru` from the user's requested language, then run
+`scripts/triage_task.py collect --source <URL> ... --locale <locale>`. Repeated
+`--source` values form one package. The result points to immutable evidence and
+marks each issue `analysis_required`. Read the collection artifact and every
+required issue artifact. Reuse `cached_analysis` only when the runner marks it
+reusable. A single-issue request still uses its project context. The evidence
+includes the authenticated GitLab user and complete discussions for observed
+related MRs so publication authorship and replies can be assessed from GitLab,
+not local command history.
 
 ## Per-issue analysis
 
@@ -41,7 +45,9 @@ Every issue assessment must contain:
   the autonomous planning decision, task SemVer, selected release, and milestone;
 - existing severity and priority labels, or proposed severity and priority when absent;
 - recommendations and optional `proposed_changes` for title, description, labels,
-  and issue links.
+  issue links, and role-authored issue or MR messages;
+- `information_requests` for questions, follow-up pings, and stale closure, each
+  bound to observed GitLab notes from the authenticated user.
 
 SemVer describes the externally observable release impact if the task is
 implemented, not task urgency. Apply the release-aware method from `code-review`:
@@ -75,10 +81,25 @@ impact, urgency, risk, cost of delay, dependency unblocking, and confidence.
 Explain every ordering; SemVer alone never determines priority.
 Only accepted tasks may appear in top-five or parallel execution groups.
 
-Continue all independent analysis before asking questions. If current business
-priority or actuality cannot be established from evidence, collect the minimum
-independent questions into one interaction round. Preserve them in the partial
-artifact and resume from persisted state after answers.
+Continue all independent analysis before asking questions. Collect the minimum
+independent questions into one interaction round whenever the user may know the
+missing context or provide further evidence, including quality, actuality,
+ownership, priority, and acceptable-risk gaps. Continue the same invocation
+after the answers. If the user does not know or the answer remains insufficient,
+identify the most relevant issue or MR participant from the observed authors and
+conversation, draft a concise question from the authenticated user's role, and
+prepare its manual publication command. Do not ask about immaterial details.
+
+Determine prior publication only from current GitLab discussions and notes by
+the authenticated user; a command shown in an earlier artifact proves nothing.
+For an unanswered information request, follow the strict sequence `question ->
+first ping -> second ping -> closure proposal`. Never skip a stage after a long
+gap between runs. Rough waiting guidance is 5 days before the first ping, 14 days
+before the second, and 30 days before closure, but context and run cadence take
+precedence over exact timing. Any substantive reply must be assessed before the
+next action. A sufficient answer ends the cycle; an insufficient answer starts a
+new question and a fresh two-ping cycle. Closure consists of a final message and
+a separate issue-close command. Never close an MR through this workflow.
 
 ## Stable artifacts
 
@@ -93,10 +114,39 @@ python3 -I -S -B scripts/triage_task.py publish \
 
 The runner validates evidence bindings, retains immutable JSON and command
 inputs, atomically replaces `triage-summary.md` and stable per-issue Markdown,
-and updates the analysis cache. Generated commands may update issue title,
-description, labels, and links through `glab api --input`; never execute them.
-Describe MR linkage changes in the report when GitLab has no direct safe API.
+and updates the analysis cache. Generated prose, headings, status labels,
+questions, and empty-state text use the selected locale; exact code, enum values,
+commands, paths, IDs, quotations, and source titles remain unchanged.
 
-Return only a compact status, material blockers or questions, skipped/reused
-counts, and the absolute summary path. Do not repeat detailed reports or commands
-in chat. A partial collection or unanswered question is never complete.
+Prepare one directly runnable command per action: title, description, complete
+label set, milestone, issue link, message, and stale closure. Keep every command
+beside its preview. Metadata improvements apply independently to accepted,
+deferred, blocked, rejected, duplicate, and obsolete work; only milestone
+assignment remains restricted by the release plan. Use the issue-link API for
+issue relationships. When GitLab has no direct safe MR-link API, prepare a
+contextual issue or MR message instead, and propose a closing relationship only
+when intent is confirmed. Never execute generated commands.
+
+Each `proposed_changes.messages[]` contains exactly `target` and `body`. Each
+`information_requests[]` contains exactly `action`, `target`, `body`,
+`prior_note_ids`, and `rationale`. A target contains `kind` (`issue` or
+`merge_request`), observed numeric `project_id` and `iid`, and an observed
+`discussion_id` or `null` for a new standalone note. Actions are `none`, `new`,
+`ping_1`, `ping_2`, or `close`; they bind respectively zero, zero, one, two, or
+three current-user note IDs, except `none`, which has no publication data. All
+bound notes must form the latest uninterrupted cycle and match the authenticated
+user's stable numeric ID; any intervening or later non-system note requires fresh
+assessment. Emit at most one lifecycle action for the same target and discussion
+in one package. Do not publish an information-request action to a closed issue.
+A `new` action either starts a standalone note with `discussion_id=null` or
+follows the latest non-system reply from another participant in an existing
+discussion; it cannot reset an unanswered current-user question. All follow-ups
+target the observed discussion. `close` is valid only for an issue and generates
+the final message before the separate close command. Keep `questions` only for
+user decisions that remain unanswered after the interaction round.
+
+The summary's detailed-report section contains plain absolute paths, never
+Markdown links. Return only a compact localized status, material blockers or
+questions, skipped/reused counts, and the absolute summary path. Do not repeat
+detailed reports or commands in chat. A partial collection or unanswered user
+question is never complete.

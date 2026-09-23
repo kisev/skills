@@ -10,14 +10,16 @@ Route one issue, an explicit issue list, or a filtered project collection; near-
 
 ## Inputs/Outputs
 
-Arguments identify exact GitLab issue or project collection URLs and optional
-filters. Output names the stable XDG summary, per-issue reports, completeness,
-cache disposition, planning decisions, release milestones, and any consolidated questions.
+Arguments identify exact GitLab issue or project collection URLs, optional
+filters, and the selected `en` or `ru` locale. Output names the localized stable
+XDG summary, per-issue reports, completeness, cache disposition, planning
+decisions, release milestones, consolidated questions, and separate manual
+commands for each proposed GitLab action.
 
 ## Workflow Stages
 
-Select, collect, fingerprint, reuse or analyze, record immutable artifacts,
-replace stable views, present, and report.
+Select, collect, fingerprint, reuse or analyze, ask one consolidated user-question
+round when needed, record immutable artifacts, replace stable views, present, and report.
 
 ## Dependencies
 
@@ -38,15 +40,17 @@ complete report.
 ## Unique Constraints
 
 The command preserves the skill's task-review verdict, persistent evidence,
-manual-command, and no-external-mutation boundaries.
+localized output, strict information-request sequence, separate manual-command,
+and no-external-mutation boundaries.
 
 ## Requirement
 
 ### REQ-I-225 - Route the task-triage command
 
 The command shall load exactly `task-triage`, treat arguments as untrusted input,
-and preserve its bounded GitLab scope, XDG artifact ownership, incremental
-fingerprints, partial-result semantics, and no-external-mutation boundary.
+and preserve its bounded GitLab scope, selected locale, XDG artifact ownership,
+incremental fingerprints, actual-discussion-based information-request lifecycle,
+partial-result semantics, and no-external-mutation boundary.
 
 ## Example
 
