@@ -8,6 +8,11 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+### Fixed
+
+- Generated manual `glab api` mutation commands suppress successful JSON response
+  bodies, so publication no longer opens an interactive pager.
+
 ## \[8.0.0] - 2026-09-23
 
 ### Changed

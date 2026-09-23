@@ -2122,7 +2122,8 @@ def structured_publication_preview(
         elif publication_operation == "create_general":
             command = (
                 f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'{endpoint}/discussions')} -F body=@{shlex.quote(str(body_path))}"
+                f"{shlex.quote(f'{endpoint}/discussions')} --silent "
+                f"-F body=@{shlex.quote(str(body_path))}"
             )
         elif operation == "create_issue":
             issue_endpoint = f"projects/{project['id']}/issues"
@@ -2130,20 +2131,22 @@ def structured_publication_preview(
             command = (
                 f"glab api --hostname {shlex.quote(hostname)} --method POST "
                 f"{shlex.quote(issue_endpoint)} -f {shlex.quote(f'title={issue_title}')} "
-                f"-F description=@{shlex.quote(str(body_path))}"
+                f"--silent -F description=@{shlex.quote(str(body_path))}"
             )
         else:
             discussion_id = thread.get("discussion_id") if thread is not None else None
             if discussion_id is None:
                 command = (
                     f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                    f"{shlex.quote(f'{endpoint}/notes')} -F body=@{shlex.quote(str(body_path))}"
+                    f"{shlex.quote(f'{endpoint}/notes')} --silent "
+                    f"-F body=@{shlex.quote(str(body_path))}"
                 )
             else:
                 discussion_endpoint = f"{endpoint}/discussions/{discussion_id}"
                 command = (
                     f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                    f"{shlex.quote(f'{discussion_endpoint}/notes')} -F body=@{shlex.quote(str(body_path))}"
+                    f"{shlex.quote(f'{discussion_endpoint}/notes')} --silent "
+                    f"-F body=@{shlex.quote(str(body_path))}"
                 )
         actions.append(
             {
@@ -2172,7 +2175,7 @@ def structured_publication_preview(
                     "operation": operation,
                     "command": (
                         f"glab api --hostname {shlex.quote(hostname)} --method PUT "
-                        f"{shlex.quote(discussion_endpoint)} -F resolved={resolved}"
+                        f"{shlex.quote(discussion_endpoint)} --silent -F resolved={resolved}"
                     ),
                     "path": mutation_value.get("path") or thread.get("path"),
                     "line": mutation_value.get("line")

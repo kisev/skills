@@ -30,8 +30,9 @@ project collection and normalizes every issue separately. Its read-only lifecycl
 may persist private evidence, semantic analysis, stable Markdown views, and
 immutable command inputs under XDG state without Confirmation. Generated `glab`
 mutation commands remain external publication and are never executed by the
-workflow. Partial collection does not replace a previously trusted complete
-summary as complete.
+workflow. Generated `glab api` mutation commands suppress successful response
+bodies while preserving exit status and error output. Partial collection does
+not replace a previously trusted complete summary as complete.
 
 A code-review publication plan is read-only. It contains direct manual `glab`
 commands and the generated body files they consume. Publication remains an
@@ -39,4 +40,6 @@ external mutation under the normal confirmation boundary, but the skill creates
 no helper, local receipt, marker, retry record, idempotency state, or
 postcondition protocol. A thread explanation and its following `resolve` or
 `reopen` operation are separate ordered manual actions; the plan never presents a
-state change without the explanation that justifies it.
+state change without the explanation that justifies it. Direct `glab api`
+mutation commands suppress successful response bodies without suppressing
+errors.

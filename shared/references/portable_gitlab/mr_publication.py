@@ -341,6 +341,7 @@ def request_specs(
                 "--method",
                 "PUT",
                 endpoint,
+                "--silent",
                 "--header",
                 "Content-Type: application/json",
                 "--input",

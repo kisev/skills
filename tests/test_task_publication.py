@@ -98,6 +98,7 @@ def test_creation_command_preserves_literal_markdown_and_pins_target(tmp_path: P
         "POST",
         "projects/42/issues",
     ]
+    assert args.count("--silent") == 1
     payload_path = Path(args[-1])
     payload = json.loads(payload_path.read_text())
     assert payload["description"] == plan["items"][0]["description"]
@@ -197,6 +198,7 @@ def test_resume_uses_real_iids_without_recreating_issues(tmp_path: Path) -> None
     assert complete
     generated = commands(files)
     assert len(generated) == 3
+    assert all(command.count("--silent") == 1 for command in generated)
     assert all("--method PUT" in command for command in generated[:2])
     assert "projects/42/issues/10" in generated[0]
     assert "projects/43/issues/20" in generated[1]

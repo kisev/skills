@@ -498,7 +498,7 @@ def command_for(root: Path, item: dict[str, Any]) -> list[str]:
     if decision == "accepted" and milestone["status"] == "create":
         request, _ = write_artifact(root, "commands", {"title": milestone["candidate"]["title"]})
         commands.append(
-            f'glab api --hostname "{host}" --method POST "projects/{project_id}/milestones" --input "{request}"'
+            f'glab api --hostname "{host}" --method POST "projects/{project_id}/milestones" --silent --input "{request}"'
         )
     update = (
         {key: proposed[key] for key in ("title", "description", "labels") if key in proposed}
@@ -514,7 +514,7 @@ def command_for(root: Path, item: dict[str, Any]) -> list[str]:
             update["labels"] = ",".join(str(label) for label in update["labels"])
         request, _ = write_artifact(root, "commands", update)
         commands.append(
-            f'glab api --hostname "{host}" --method PUT "projects/{project_id}/issues/{iid}" --input "{request}"'
+            f'glab api --hostname "{host}" --method PUT "projects/{project_id}/issues/{iid}" --silent --input "{request}"'
         )
     links = proposed.get("links", []) if decision == "accepted" else []
     if not isinstance(links, list):
@@ -528,7 +528,7 @@ def command_for(root: Path, item: dict[str, Any]) -> list[str]:
             raise WorkflowError("proposed issue link is invalid")
         request, _ = write_artifact(root, "commands", link)
         commands.append(
-            f'glab api --hostname "{host}" --method POST "projects/{project_id}/issues/{iid}/links" --input "{request}"'
+            f'glab api --hostname "{host}" --method POST "projects/{project_id}/issues/{iid}/links" --silent --input "{request}"'
         )
     return commands
 

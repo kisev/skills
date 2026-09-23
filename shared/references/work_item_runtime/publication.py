@@ -227,6 +227,7 @@ def api_command(host: str, endpoint: str, payload: Path, *, method: str = "POST"
             "--method",
             method,
             endpoint,
+            "--silent",
             "--header",
             "Content-Type: application/json",
             "--input",

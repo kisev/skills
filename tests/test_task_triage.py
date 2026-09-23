@@ -193,6 +193,7 @@ def test_collect_publish_and_reuse_bound_analysis(
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
     assert "--method PUT" in report
     assert "--method POST" in report
+    assert report.count("--silent") == 2
     assert "$(touch unsafe)" not in report
     command_payloads = list(
         (Path(first["artifact_root"]) / "artifacts" / "commands").glob("*.json")
@@ -339,6 +340,7 @@ def test_missing_milestone_generates_creation_command_and_partial_report(
     assert published["status"] == "partial"
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
     assert '--method POST "projects/19/milestones"' in report
+    assert '--method POST "projects/19/milestones" --silent' in report
 
 
 def test_rejected_issue_removes_existing_milestone(
@@ -375,6 +377,7 @@ def test_rejected_issue_removes_existing_milestone(
     )
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
     assert "--method PUT" in report
+    assert report.count("--silent") == 1
     command_payloads = list(
         (Path(result["artifact_root"]) / "artifacts" / "commands").glob("*.json")
     )
@@ -426,3 +429,4 @@ def test_glab_boundary_uses_get_without_shell(monkeypatch: pytest.MonkeyPatch) -
     assert observed == [
         ["glab", "api", "--hostname", "gitlab.example", "--method", "GET", "projects/19"]
     ]
+    assert "--silent" not in observed[0]
