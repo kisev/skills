@@ -3,6 +3,8 @@
 ## Purpose
 
 Review one storage-neutral work item for quality without changing external state.
+The same assessment is reusable inside task preparation and triage without
+transferring durable-state ownership to the review workflow.
 
 ## Triggers and Near-Misses
 
@@ -30,7 +32,9 @@ A missing, multiple, non-regular, or unreadable source blocks review; unresolved
 
 ## Unique Constraints
 
-The same normalized item and evidence produce the same verdict; tracker metadata is never invented.
+The same normalized item and evidence produce the same verdict; tracker metadata
+is never invented. Callers may persist the returned verdict only with their own
+evidence binding.
 
 ## Requirement
 

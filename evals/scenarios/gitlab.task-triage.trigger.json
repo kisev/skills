@@ -1,25 +1,25 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.task-triage.trigger",
-  "revision": 1,
+  "revision": 2,
   "kind": "trigger",
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Разбери work-item без verdict.",
+    "prompt": "Проведи триаж всех открытых задач проекта GitLab, найди дубли и предложи первые пять задач.",
     "fixture": {
       "selected": ["skill:task-triage"]
     }
   },
   "expected": {
     "selected": ["skill:task-triage"],
-    "not_selected": ["skill:task-review"]
+    "not_selected": ["skill:task-prepare"]
   },
   "invariants": [
     {
-      "id": "triage-no-verdict",
+      "id": "triage-persistent-collection",
       "path": "skills/task-triage/references/workflow.md",
-      "contains": "Mark unknown data as unknown"
+      "contains": "Select at most five first tasks"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "0d9e65498f512c0e5151dcd00e09529bdaedf5c412ac8aa4e0cc8bbc36559398",
+  "digest": "4762ec084406cc82e93bd31512febc9906b6215283acf3b7329a7e424a1cb378",
   "locale": "ru",
   "pair_id": "gitlab.task-triage.trigger"
 }

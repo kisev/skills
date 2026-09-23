@@ -63,7 +63,12 @@ def archive(skill: Path) -> bytes:
         tarfile.open(fileobj=compressed, mode="w") as document,
     ):
         for source in sorted(skill.rglob("*")):
-            if source.is_symlink() or not source.is_file():
+            if (
+                source.is_symlink()
+                or not source.is_file()
+                or "__pycache__" in source.parts
+                or source.suffix in {".pyc", ".pyo"}
+            ):
                 continue
             info = tarfile.TarInfo(source.relative_to(skill).as_posix())
             content = source.read_bytes()

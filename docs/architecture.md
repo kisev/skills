@@ -17,6 +17,10 @@ The work-item family illustrates this materialization boundary.
 `work-item-contract.schema.json` is copied into the same set except
 `task-triage`. Each installed skill uses its own copies. The shared validator
 returns the exact verdicts `ready`, `needs_clarification`, or `blocked`.
+`task-triage` additionally receives a focused GitLab runner. It stores
+content-addressed collection evidence and analysis below XDG state, reuses
+per-issue analysis by source fingerprint, and atomically updates stable Markdown
+reports without changing GitLab.
 
 The authored repository is not a portable installation source and does not ship
 a portable-skills CLI. Portable skills are installed from the GitHub Pages

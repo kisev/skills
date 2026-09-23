@@ -8,6 +8,12 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+### Changed
+
+- `task-triage` now supports incremental single-issue and collection-wide GitLab
+  triage with private XDG artifacts, shared task-review assessment, SemVer,
+  priorities, dependencies, and manual update commands.
+
 ## \[6.0.0] - 2026-09-22
 
 ### Added

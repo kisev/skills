@@ -12,12 +12,12 @@ import tempfile
 import unittest
 from contextlib import nullcontext, redirect_stdout
 from pathlib import Path
-from types import ModuleType, SimpleNamespace
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import ModuleType
     from urllib.request import Request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1449,96 +1449,6 @@ print(json.dumps(value))
             self.assertEqual((stable_markdown.read_bytes(), stable_plan.read_bytes()), previous)
             self.assertFalse((root / ".release-publication.lock").exists())
 
-    @unittest.skip("GitLab task adapter removed in stage 17")
-    def test_pagination_deduplicates_and_preserves_partial_failure(self) -> None:
-        module = load_module(
-            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
-            "portable_gitlab_contract",
-        )
-        pages = [list(range(100)), [99, 100]]
-        with patch.object(module, "glab_json", side_effect=pages):
-            result = module.paginated("gitlab.example", "projects/1/labels")
-        self.assertTrue(result["complete"])
-        self.assertEqual(len(result["items"]), 101)
-        with patch.object(
-            module, "glab_json", side_effect=module.WorkflowError("temporary failure")
-        ):
-            partial = module.paginated("gitlab.example", "projects/1/labels")
-        self.assertFalse(partial["complete"])
-        self.assertTrue(partial["errors"])
-
-    @unittest.skip("GitLab task adapter removed in stage 17")
-    def test_collection_calls_only_get_and_batch_failure_is_isolated(self) -> None:
-        module = load_module(
-            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py", "portable_gitlab_get"
-        )
-        calls: list[tuple[str, str]] = []
-        target = {
-            "url": "https://gitlab.example/group/project/-/issues/7",
-            "hostname": "gitlab.example",
-            "project_path": "group/project",
-            "kind": "issues",
-            "iid": 7,
-        }
-
-        def fake(hostname: str, endpoint: str) -> object:
-            calls.append((hostname, endpoint))
-            if endpoint.startswith("projects/group%2Fproject"):
-                return {"id": 1}
-            if endpoint == "projects/1/issues/7":
-                return {"iid": 7, "updated_at": "2026-01-01T00:00:00Z", "labels": []}
-            return []
-
-        with tempfile.TemporaryDirectory() as temporary:
-            with patch.dict(os.environ, {"XDG_STATE_HOME": temporary}):
-                with patch.object(module, "glab_json", side_effect=fake):
-                    bundle = module.collect(target, "task-triage")
-        self.assertTrue(bundle["retrieval_complete"])
-        self.assertTrue(bundle["discussions"]["complete"])
-        self.assertTrue(calls)
-        self.assertTrue(all("projects/" in endpoint for _, endpoint in calls))
-
-    @unittest.skip("GitLab task adapter removed in stage 17")
-    def test_gitlab_read_only_prepare_returns_compact_artifact_without_confirmation(self) -> None:
-        module = load_module(
-            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
-            "portable_gitlab_preview",
-        )
-
-        def fake(hostname: str, endpoint: str) -> object:
-            if endpoint.startswith("projects/group%2Fproject"):
-                return {"id": 1}
-            if endpoint.startswith("projects/1/labels"):
-                return []
-            if endpoint == "projects/1/issues/7":
-                return {"iid": 7, "updated_at": "2026-01-01T00:00:00Z", "labels": []}
-            if endpoint.startswith("projects/1/issues/7/discussions"):
-                return []
-            return []
-
-        with (
-            tempfile.TemporaryDirectory() as temporary,
-            patch.dict(os.environ, {"XDG_STATE_HOME": temporary}),
-            patch.object(module, "glab_json", side_effect=fake),
-            redirect_stdout(io.StringIO()) as output,
-        ):
-            exit_code = module.run(
-                "task-triage",
-                {"issues"},
-                ["prepare", "--url", "https://gitlab.example/group/project/-/issues/7"],
-            )
-            payload = json.loads(output.getvalue())
-            artifact_exists = Path(str(payload["items"][0]["artifact_path"])).is_file()
-        self.assertEqual(exit_code, 0)
-        item = payload["items"][0]
-        self.assertEqual(payload["status"], "ok")
-        self.assertTrue(artifact_exists)
-        self.assertEqual(len(str(item["digest"])), 64)
-        self.assertEqual(
-            payload["summary"]["tldr"], "Completed GET-only GitLab evidence preparation."
-        )
-        self.assertNotIn("confirmation", payload)
-
     def test_publication_plan_uses_english_human_prose(self) -> None:
         module = load_module(
             ROOT / "shared/references/portable_gitlab/contract.py",
@@ -1676,21 +1586,6 @@ print(json.dumps(value))
             invalid = json.loads(json.dumps(content))
             mutate(invalid)
             self.assertFalse(contract.release_content_is_valid(invalid, inventory))
-
-    @unittest.skip("GitLab task adapter removed in stage 17")
-    def test_glab_boundary_forces_get_without_shell_or_credentials(self) -> None:
-        module = load_module(
-            BUILT_SKILLS / "task-triage/scripts/portable_runtime/contract.py",
-            "portable_gitlab_boundary",
-        )
-        completed = SimpleNamespace(returncode=0, stdout="{}", stderr="token=hidden")
-        with patch.object(module.shutil, "which", return_value="/fake/glab"):
-            with patch.object(module.subprocess, "run", return_value=completed) as run:
-                self.assertEqual(module.glab_json("gitlab.example", "projects/1"), {})
-        command = run.call_args.args[0]
-        self.assertIn("GET", command)
-        self.assertNotIn("hidden", " ".join(command))
-        self.assertFalse(run.call_args.kwargs.get("shell", False))
 
     def test_code_review_requires_real_independent_critic_capability(self) -> None:
         result = self.run_runner("code-review", "assess-mode", "--mode", "deep")
@@ -4211,126 +4106,6 @@ print(json.dumps(value))
                     },
                     evidence_digest,
                 )
-
-    @unittest.skip("GitLab task adapter removed in stage 17")
-    def test_runner_scaffold_record_rejections_and_v1_finalize_contracts(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            _glab, _state = self.fake_glab(root)
-            log = root / "glab.log"
-            environment = {
-                "XDG_STATE_HOME": str(root / "state"),
-                "PATH": f"{root}:{os.environ['PATH']}",
-                "FAKE_GLAB_STATE": str(root / "fake-glab-state"),
-                "FAKE_GLAB_LOG": str(log),
-            }
-            target = "https://gitlab.example/group/project/-/merge_requests/7"
-            prepared = self.run_runner("code-review", "prepare", "--url", target, env=environment)
-            self.assertEqual(prepared.returncode, 0, prepared.stderr)
-            item = json.loads(prepared.stdout)["items"][0]
-            content = root / "content.json"
-            content.write_text('{"title":"Title","description":"Body"}', encoding="utf-8")
-            for command in ("scaffold", "scaffold-batch"):
-                with self.subTest(command=command):
-                    result = self.run_runner(
-                        "code-review",
-                        command,
-                        "--bundle",
-                        str(item["artifact_path"]),
-                        "--content",
-                        str(content),
-                        env=environment,
-                    )
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    self.assertFalse(json.loads(result.stdout)["external_mutations"])
-            analysis = root / "analysis.json"
-            evidence_digest = hashlib.sha256(
-                Path(str(item["artifact_path"])).read_bytes()
-            ).hexdigest()
-            analysis.write_text(
-                json.dumps(
-                    {
-                        "schema": "portable-gitlab/analysis-report/v2",
-                        "external_mutations": False,
-                        "evidence_digest": evidence_digest,
-                        "run_id": "analysis-run",
-                        "session_id": "analysis-session",
-                        "findings": [],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            recorded = self.run_runner(
-                "code-review",
-                "record-artifact",
-                "--kind",
-                "analysis_report",
-                "--evidence",
-                str(item["artifact_path"]),
-                "--input",
-                str(analysis),
-                env=environment,
-            )
-            self.assertEqual(recorded.returncode, 0, recorded.stderr)
-            self.assertEqual(
-                self.run_runner(
-                    "code-review",
-                    "record-artifact",
-                    "--kind",
-                    "review_decision",
-                    "--evidence",
-                    str(item["artifact_path"]),
-                    "--input",
-                    str(analysis),
-                    env=environment,
-                ).returncode,
-                2,
-            )
-            self.assertEqual(
-                self.run_runner(
-                    "task-triage", "prepare", "--url", target, env=environment
-                ).returncode,
-                2,
-            )
-            self.assertEqual(
-                self.run_runner(
-                    "code-review",
-                    "prepare",
-                    "--project-url",
-                    "https://gitlab.example/group/project",
-                    env=environment,
-                ).returncode,
-                2,
-            )
-            legacy = Path(str(item["artifact_root"])) / "bundle.json"
-            legacy.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "profile": "code-review",
-                        "target": {
-                            "url": target,
-                            "hostname": "gitlab.example",
-                            "project_path": "group/project",
-                            "project_id": 19,
-                            "kind": "merge_requests",
-                            "iid": 7,
-                        },
-                        "retrieval_complete": False,
-                    }
-                ),
-                encoding="utf-8",
-            )
-            (Path(str(item["artifact_root"])) / "current.json").unlink()
-            legacy_final = self.run_runner(
-                "code-review",
-                "finalize",
-                "--artifact-root",
-                str(item["artifact_root"]),
-                env=environment,
-            )
-            self.assertEqual(legacy_final.returncode, 2)
-            self.assertEqual(json.loads(legacy.read_text(encoding="utf-8"))["schema_version"], 1)
 
 
 class MattermostAndTeamTests(unittest.TestCase):

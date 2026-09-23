@@ -470,12 +470,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                     ).read_bytes(),
                 )
 
-    def test_generic_task_skills_are_storage_neutral_and_share_runtime(self) -> None:
+    def test_task_skills_materialize_their_declared_runtimes(self) -> None:
         runtime = (ROOT / "shared/references/work_item_runtime/contract.py").read_bytes()
         for name, command, marker in (
             ("task-prepare", "prepare", "verification"),
             ("task-review", "review", "verdict"),
-            ("task-triage", "triage", "dependencies"),
         ):
             with self.subTest(skill=name):
                 root = BUILT_SKILLS / name
@@ -529,6 +528,22 @@ class PortableSkillValidationTests(unittest.TestCase):
                     self.assertEqual(written.returncode, 0, written.stderr)
                     self.assertEqual(json.loads(written.stdout)["status"], "written")
                     self.assertTrue(output.is_file())
+
+        triage = BUILT_SKILLS / "task-triage"
+        self.assertEqual(
+            (triage / "scripts/portable_runtime/triage.py").read_bytes(),
+            (ROOT / "shared/references/work_item_runtime/triage.py").read_bytes(),
+        )
+        self.assertFalse((triage / "scripts/portable_runtime/contract.py").exists())
+        help_result = subprocess.run(
+            [sys.executable, str(triage / "scripts/triage_task.py"), "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(help_result.returncode, 0, help_result.stderr)
+        self.assertIn("collect", help_result.stdout)
+        self.assertIn("publish", help_result.stdout)
 
     def test_pinned_cli_lists_all_portable_skills(self) -> None:
         result = subprocess.run(

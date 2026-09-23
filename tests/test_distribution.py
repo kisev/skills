@@ -35,6 +35,18 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
         return
 
 
+def test_skill_archive_excludes_python_cache(tmp_path: Path) -> None:
+    skill = tmp_path / "skill"
+    cache = skill / "scripts" / "__pycache__"
+    cache.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("# skill\n", encoding="utf-8")
+    (cache / "runner.cpython-312.pyc").write_bytes(b"cache")
+    with tarfile.open(
+        fileobj=io.BytesIO(build_distribution.archive(skill)), mode="r:gz"
+    ) as archive:
+        assert archive.getnames() == ["SKILL.md"]
+
+
 def test_distribution_requires_materialized_skills(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -33,7 +33,7 @@ of `@kisev/skills-opencode`.
 | `briefing` | Turn transcripts, notes, or research into a structured factual summary. |
 | `task-prepare` | Prepare a task or agreed GitLab task set with a manual publication plan. |
 | `task-review` | Review a storage-neutral work item without changing external state. |
-| `task-triage` | Triage explicit storage-neutral work-item material read-only. |
+| `task-triage` | Triage one GitLab issue or a bounded issue collection into persistent read-only analysis, priorities, dependencies, and manual update commands. |
 | `team-retro` | Prepare an evidence-based retrospective or delivery presentation from a private profile. |
 | `team-roadmap` | Review or update an evidence-based roadmap from a private profile. |
 | `team-sprint-close` | Close one sprint cycle from a private profile or explicit context. |

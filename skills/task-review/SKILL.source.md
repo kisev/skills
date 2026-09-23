@@ -1,7 +1,8 @@
 ---
 name: task-review
 description: >-
-  Review a storage-neutral work item for quality without changing external state. Russian discovery terms: проверить задачу.
+  Review one work item for quality standalone or as the shared assessment used by
+  task preparation and triage. Russian discovery terms: проверить задачу.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

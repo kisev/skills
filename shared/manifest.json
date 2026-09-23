@@ -207,8 +207,8 @@
       "destination": "task-triage/scripts/portable_runtime/__init__.py"
     },
     {
-      "source": "references/work_item_runtime/contract.py",
-      "destination": "task-triage/scripts/portable_runtime/contract.py"
+      "source": "references/work_item_runtime/triage.py",
+      "destination": "task-triage/scripts/portable_runtime/triage.py"
     },
     {
       "source": "references/work_item_runtime/__init__.py",

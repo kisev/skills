@@ -18,12 +18,20 @@ action and boundary and checked before success. A matching synthetic continuatio
 preserves that gate, while unrelated exact frozen-objective actions remain
 authorized.
 
-Storage-neutral work-item workflows accept exactly one explicit source: inline
-text, a local regular file, or an exact HTTPS link readable by the host. They
-normalize source content to `work-item/v1` before semantic processing. Their
-default result is returned in chat. Explicitly requested workspace-relative file
-output writes directly with atomic replacement; these workflows have no external
-publication adapter.
+Storage-neutral task preparation and standalone task review accept exactly one
+explicit source: inline text, a local regular file, or an exact HTTPS link
+readable by the host. They normalize source content to `work-item/v1` before
+semantic processing. Their default result is returned in chat, and explicitly
+requested workspace-relative output is replaced atomically. GitLab task
+preparation may instead render its documented manual publication bundle.
+
+Task triage accepts one exact GitLab issue, an explicit issue list, or a bounded
+project collection and normalizes every issue separately. Its read-only lifecycle
+may persist private evidence, semantic analysis, stable Markdown views, and
+immutable command inputs under XDG state without Confirmation. Generated `glab`
+mutation commands remain external publication and are never executed by the
+workflow. Partial collection does not replace a previously trusted complete
+summary as complete.
 
 A code-review publication plan is read-only. It contains direct manual `glab`
 commands and the generated body files they consume. Publication remains an

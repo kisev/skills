@@ -6,6 +6,8 @@ only before `prepare`. Write an explicitly requested workspace-relative output
 directly with atomic replacement; do not create a preview artifact or request
 Confirmation. In `task-prepare`, intent to prepare GitLab tasks also requests the
 bounded local publication bundle, without requiring an explicit output filename.
+In `task-triage`, a GitLab issue or collection selects private XDG evidence and
+analysis state with stable Markdown views; this local state is not publication.
 
 Evidence is complete only when every required input and check for the declared
 scope was observed. Do not declare a result complete when evidence is partial,
@@ -14,4 +16,5 @@ structured missing evidence and a safe next step instead of guessing.
 
 Reject absolute, traversal, symlink, and unsafe-parent output paths before
 writing. Every durable state has one explicit owner. Manual-plan preparation does
-not publish or change external state; stop after `report`.
+not publish or change external state; stop after `report`. Generated triage
+commands are manual publication plans and are never executed by the workflow.

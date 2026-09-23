@@ -11,3 +11,4 @@ items.
 - [ADR-0005: GitHub Pages well-known distribution](0005-github-pages-well-known-distribution.md) - accepted
 - [ADR-0006: Retire generic doit coordinator](0006-retire-generic-doit-coordinator.md) - superseded
 - [ADR-0007: Make administration CLI-only](0007-make-administration-cli-only.md) - accepted
+- [ADR-0008: Compose persistent GitLab task triage](0008-compose-persistent-gitlab-task-triage.md) - accepted

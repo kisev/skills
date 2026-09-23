@@ -38,6 +38,9 @@ unresolved.
   `task-publication.md` plan with manual commands. It makes no external mutation.
   One task is the default; a requested or agreed set normalizes each task separately.
 - `task-review` returns evidence-backed findings without reviewing implementation.
+- `task-triage` normalizes every selected GitLab issue separately, composes the
+  `task-review` verdict, and owns private collection evidence and analysis state.
+  It may prepare manual commands but never executes them.
 - `goal` does not turn an invalid item into `running` and binds completion evidence.
 - One workflow owns each durable state; these workflows do not create a shared
   lifecycle behind the caller's back.

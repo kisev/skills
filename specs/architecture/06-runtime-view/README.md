@@ -5,8 +5,13 @@ Shared read-only and mutating lifecycles follow
 The `goal` path researches available facts, normalizes a `work-item/v1`
 internally, optionally performs one independent premortem, and presents at most
 4000 characters of structured Markdown without executing or persisting the goal.
-Storage-neutral task workflows normalize one supported source and then prepare,
-review, or triage it; they present chat output by default and never publish.
+Storage-neutral task preparation and review normalize one supported source and
+present chat output by default. GitLab task preparation may render a bounded
+manual publication plan. Task triage resolves one issue or a bounded issue
+collection, stores private content-addressed evidence and analysis in XDG state,
+reuses current per-issue analysis, and atomically updates stable Markdown views.
+It composes the task-review quality contract and emits manual commands but never
+executes them or mutates GitLab.
 
 Routing resolves host inventory, creates a receipt, consumes it once for a
 matching Task, validates the structured result, and expires the receipt.

@@ -47,6 +47,13 @@ continue preparation. Keep unresolved publication details separate from task
 meaning: a useful draft may exist before its GitLab target is known. Do not call
 it ready to publish until the target and checks are verified.
 
+Before final output, apply the complete `task-review` contract to every prepared
+item and retain its evidence-backed verdict. When current `task-triage` artifacts
+are explicitly supplied, use their duplicate, relationship, label, priority, and
+SemVer findings as bounded evidence; do not independently mutate or replace
+triage state. A `blocked` review suppresses publication commands for that item,
+and `needs_clarification` keeps the plan partial.
+
 ## Report
 
 Neutral mode returns one short, self-contained task and its quality assessment.

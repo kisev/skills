@@ -22,6 +22,9 @@ one `task-publication.md` bundle with adjacent manual commands and body files.
 Select by intent, resolve evidence, normalize each task to `work-item/v1`, assess
 semantic feasibility, resolve GitLab publication metadata when applicable,
 render local artifacts, report. A GitLab source link alone keeps neutral mode.
+Before reporting, each prepared item receives the same quality assessment as
+standalone `task-review`; explicitly supplied current triage findings may provide
+bounded duplicate, relationship, label, priority, and SemVer evidence.
 
 ## Dependencies
 
@@ -59,6 +62,8 @@ Project issues and supported group epics have distinct targets. Other group work
 items require clarification rather than invented REST endpoints. Several tasks
 require a user request or agreed split. Existing IIDs suppress creation commands;
 cross-project blocking links require observed IIDs on the same instance.
+Blocked review suppresses publication commands for that item, while
+`needs_clarification` keeps its plan partial.
 
 ## Requirement
 
