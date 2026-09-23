@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -225,7 +226,9 @@ def test_collect_publish_and_reuse_bound_analysis(
     assert "--method POST" in report
     assert report.count("--silent") == 4
     assert "$(touch unsafe)" in report
-    command_blocks = [line for line in report.splitlines() if line.startswith("glab api")]
+    command_blocks = [line for line in report.splitlines() if " marker-run " in line]
+    assert len(command_blocks) == 4
+    assert report.count("# execution-status=not_run") == 4
     assert all("$(touch unsafe)" not in line for line in command_blocks)
     command_payloads = list(
         (Path(first["artifact_root"]) / "artifacts" / "commands").glob("*.json")
@@ -236,6 +239,21 @@ def test_collect_publish_and_reuse_bound_analysis(
     assert {"labels": "priority::high,type::bug"} in payloads
     assert {"milestone_id": 9} in payloads
     assert not any("title" in payload and "labels" in payload for payload in payloads)
+
+    fake_glab = tmp_path / "glab"
+    fake_glab.write_text("#!/bin/sh\nexit 0\n")
+    fake_glab.chmod(0o700)
+    executed = subprocess.run(
+        ["sh", "-c", command_blocks[0]],
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+        check=False,
+    )
+    assert executed.returncode == 0
+    republished = triage.publish(
+        argparse.Namespace(collection=str(collection_path), analysis=str(analysis_path))
+    )
+    refreshed = Path(republished["reports"][0]["report"]).read_text(encoding="utf-8")
+    assert "# execution-status=run_unverified" in refreshed
 
     second = triage.collect(arguments(source))
     assert second["items"][0]["analysis_required"] is False

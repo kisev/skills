@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shlex
 import shutil
 import tempfile
 from contextlib import contextmanager
@@ -17,6 +16,13 @@ from .contract import Parser, WorkflowError, atomic_write, digest, emit, output_
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from ..state_artifacts import render_mutation_command, versioned_markdown, xdg_state_home
+else:
+    try:
+        from ..state_artifacts import render_mutation_command, versioned_markdown, xdg_state_home
+    except ImportError:
+        from .state_artifacts import render_mutation_command, versioned_markdown, xdg_state_home
 
 CHECKS = {"target", "templates", "metadata", "duplicates", "semantics"}
 TEXT = {
@@ -59,6 +65,11 @@ TEXT = {
         "check_semantics": "Смысл задачи и проверка результата",
     },
 }
+
+
+def marker_helper() -> Path:
+    sibling = Path(__file__).with_name("state_artifacts.py")
+    return sibling if sibling.exists() else Path(__file__).parents[1] / "state_artifacts.py"
 
 
 def fields(value: object, keys: set[str], name: str) -> dict[str, Any]:
@@ -217,22 +228,35 @@ def ready(item: dict[str, Any]) -> bool:
     )
 
 
-def api_command(host: str, endpoint: str, payload: Path, *, method: str = "POST") -> str:
-    return shlex.join(
-        [
-            "glab",
-            "api",
-            "--hostname",
-            host,
-            "--method",
-            method,
-            endpoint,
-            "--silent",
-            "--header",
-            "Content-Type: application/json",
-            "--input",
-            str(payload),
-        ]
+def api_command(
+    host: str,
+    endpoint: str,
+    payload: Path,
+    *,
+    action: str,
+    binding: str,
+    method: str = "POST",
+) -> str:
+    argv = [
+        "glab",
+        "api",
+        "--hostname",
+        host,
+        "--method",
+        method,
+        endpoint,
+        "--silent",
+        "--header",
+        "Content-Type: application/json",
+        "--input",
+        str(payload),
+    ]
+    return render_mutation_command(
+        argv,
+        skill="task-prepare",
+        action=action,
+        binding=binding,
+        helper=marker_helper(),
     )
 
 
@@ -245,7 +269,8 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
     labels = TEXT[plan["locale"]]
     lines = [f"# {labels['title']}", "", labels["manual"], ""]
     files: dict[str, bytes] = {}
-    content_prefix = f".task-publication/{digest(plan)}"
+    binding = digest(plan)
+    content_prefix = f".task-publication/{binding}"
     content_root = root / content_prefix
     complete = True
     items = {item["key"]: item for item in plan["items"]}
@@ -294,7 +319,13 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
             target = item["target"]
             collection = "projects" if item["type"] == "issue" else "groups"
             endpoint = f"{collection}/{target['id']}/{item['type']}s"
-            command = api_command(urlsplit(target["url"]).netloc, endpoint, content_root / filename)
+            command = api_command(
+                urlsplit(target["url"]).netloc,
+                endpoint,
+                content_root / filename,
+                action=f"item:{key}:create",
+                binding=binding,
+            )
             lines.extend([code_block(command), ""])
         elif is_ready and item["type"] == "issue" and item["existing_iid"] is not None:
             payload = {"milestone_id": item["metadata"]["milestone_id"]}
@@ -308,6 +339,8 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
                 urlsplit(target["url"]).netloc,
                 endpoint,
                 content_root / filename,
+                action=f"item:{key}:milestone",
+                binding=binding,
                 method="PUT",
             )
             lines.extend([code_block(command), ""])
@@ -338,7 +371,11 @@ def render(plan: dict[str, Any], root: Path) -> tuple[dict[str, bytes], bool]:
             files[f"{content_prefix}/{filename}"] = (json.dumps(payload, indent=2) + "\n").encode()
             endpoint = f"projects/{source['target']['id']}/issues/{source['existing_iid']}/links"
             command = api_command(
-                urlsplit(source["target"]["url"]).netloc, endpoint, content_root / filename
+                urlsplit(source["target"]["url"]).netloc,
+                endpoint,
+                content_root / filename,
+                action=f"link:{index + 1}",
+                binding=binding,
             )
             lines.extend([code_block(command), ""])
     files["task-publication.md"] = ("\n".join(lines).rstrip() + "\n").encode()
@@ -356,7 +393,7 @@ def validate_bundle_path(root: Path) -> None:
             if path.name == "task-publication.md":
                 if path.is_symlink() or not path.is_file():
                     raise WorkflowError("publication plan must be a regular file")
-            elif path.name == ".task-publication":
+            elif path.name in {".task-publication", "history"}:
                 if path.is_symlink() or not path.is_dir():
                     raise WorkflowError("publication content path must be a directory")
             else:
@@ -416,7 +453,7 @@ def slot_lock(root: Path) -> Iterator[None]:
         lock.rmdir()
 
 
-def write_bundle(root: Path, files: dict[str, bytes]) -> None:
+def write_bundle(root: Path, files: dict[str, bytes], *, legacy: bytes | None = None) -> None:
     content_id, support, markdown = split_bundle(files)
     validate_bundle_path(root)
     root.parent.mkdir(parents=True, exist_ok=True)
@@ -449,9 +486,16 @@ def write_bundle(root: Path, files: dict[str, bytes]) -> None:
         plan_path = root / "task-publication.md"
         if plan_path.is_symlink() or (plan_path.exists() and not plan_path.is_file()):
             raise WorkflowError("publication plan must be a regular file")
-        if plan_path.exists() and plan_path.read_bytes() == markdown:
+        stable_markdown = versioned_markdown(plan_path, markdown, legacy=legacy)
+        if plan_path.exists() and plan_path.read_bytes() == stable_markdown:
             return
-        atomic_write(plan_path, markdown)
+        atomic_write(plan_path, stable_markdown)
+
+
+def default_root(plan_key: str) -> Path:
+    workspace = Path.cwd().resolve(strict=True)
+    workspace_id = digest({"workspace": os.fsdecode(os.fsencode(workspace))})
+    return xdg_state_home() / "agent-skills" / "task-prepare" / workspace_id / plan_key
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -477,10 +521,16 @@ def run(argv: list[str] | None = None) -> int:
         if path.is_symlink() or not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
             raise WorkflowError("input must be a small regular non-symlink JSON file")
         plan = validate(json.loads(path.read_text(encoding="utf-8")))
-        directory = args.output_dir or f".task-prepare/{plan['plan_key']}"
-        root = output_path(f"{directory}/task-publication.md").parent
+        legacy = None
+        if args.output_dir:
+            root = output_path(f"{args.output_dir}/task-publication.md").parent
+        else:
+            root = default_root(plan["plan_key"])
+            legacy_path = output_path(f".task-prepare/{plan['plan_key']}/task-publication.md")
+            if legacy_path.exists() and not legacy_path.is_symlink() and legacy_path.is_file():
+                legacy = legacy_path.read_bytes()
         files, complete = render(plan, root)
-        write_bundle(root, files)
+        write_bundle(root, files, legacy=legacy)
         emit(
             {
                 "status": "ready" if complete else "partial",

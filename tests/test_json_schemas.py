@@ -31,6 +31,7 @@ SCHEMA_PATHS = {
     "packages/opencode/contracts/routing-receipt-v1.schema.json",
     "packages/opencode/contracts/worker-report-v1.schema.json",
     "shared/references/portable_gitlab/artifact-contracts-v2.schema.json",
+    "shared/references/post-success-marker.schema.json",
     "shared/references/team_runtime/team-context.schema.json",
     "shared/references/work-item-contract.schema.json",
 }
@@ -734,7 +735,9 @@ def artifact_instances() -> list[dict[str, Any]]:
 def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
     paths = set(
         subprocess.check_output(
-            ["git", "ls-files", "*.schema.json"], cwd=ROOT, text=True
+            ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.schema.json"],
+            cwd=ROOT,
+            text=True,
         ).splitlines()
     )
     assert paths == SCHEMA_PATHS
@@ -756,6 +759,18 @@ def validate_eval_contract_instances() -> None:
 
 
 def validate_shared_contract_instances() -> None:
+    validator("shared/references/post-success-marker.schema.json").validate(
+        {
+            "schema": "agent-skills/post-success-marker/v1",
+            "marker_id": DIGEST,
+            "skill": "code-review",
+            "action_id": "finding:example:create",
+            "binding_digest": DIGEST,
+            "mutation_digest": DIGEST,
+            "exit_status": 0,
+            "succeeded_at": CREATED_AT,
+        }
+    )
     validator("shared/references/team_runtime/team-context.schema.json").validate(
         load("shared/references/team_runtime/team-context.example.json")
     )

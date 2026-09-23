@@ -49,8 +49,10 @@ The skill shall require one exact MR boundary and never publish or mutate GitLab
 It produces a localized metadata-edit TL;DR, proposed values, and explicit-host
 manual commands without repeating old descriptions or exposing raw revisions.
 Commands consume immutable payloads matching the preview and update labels by
-delta. Stable Markdown and its plan pointer are replaced with locking and rollback;
-finalize checks their binding and rejects modified or superseded plans.
+delta, and each mutation records an advisory post-success XDG marker. Stable
+Markdown retains body-only content-addressed history; it and its plan pointer are
+replaced with locking and rollback. Finalize checks the latest body binding and
+rejects modified or superseded plans. Markers never replace remote verification.
 
 Project defaults and `.gitlab/merge_request_templates/` are collected at an exact
 target-project default-branch revision. Explicit user choice, applicable default,

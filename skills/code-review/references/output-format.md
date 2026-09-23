@@ -105,7 +105,9 @@ publishable item has a body file and a directly runnable `glab` command. For an
 incremental review, determine whether content is already published from actual
 GitLab discussions, notes, and issues authored by the current `glab` user and a
 semantic comparison of the content. Never infer publication from local state,
-markers, receipts, or a command that was previously shown.
+receipts, a command that was previously shown, or the advisory marker recording
+that the exact command exited zero. Use that marker only to require remote
+revalidation before deciding whether a retry is needed.
 
 Severity and internal review bookkeeping must not appear in publication bodies.
 Published prose is concise without losing the evidence or required action. Apply
@@ -117,6 +119,8 @@ restating it. A fix
 on an applicable current new-line position contains exactly one single-line or
 bounded multi-line `suggestion`; general, deleted, outdated, non-contiguous, and
 otherwise unanchorable fixes contain the exact validated unified patch inside one
-copy-ready `sh` block using `git apply <<'PATCH'`. The same patch is available as
+copy-ready `sh` block using `git apply <<'PATCH'`. A body intended for GitLab must
+not contain a local checkout path, interpreter path, runtime helper, or local
+marker command. The same patch is available as
 an immutable local `.patch` artifact for manual use. A thread-state command is
 shown separately after the command that publishes its explanation.

@@ -126,7 +126,16 @@ def test_compact_report_keeps_one_decision_and_copyable_local_fix(review: Module
         }
     }
     report = review.review_markdown(
-        {}, {"role": "author", "target": {"url": url}}, {}, content, metadata, publication
+        {"target": {"url": url}, "head_sha": "a" * 40},
+        {
+            "role": "author",
+            "target": {"url": url},
+            "exact_git": {"repo_root": str(ROOT)},
+        },
+        {},
+        content,
+        metadata,
+        publication,
     )
     release = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
     assert f"code-review: {release} · contract: 6" in report
@@ -135,7 +144,9 @@ def test_compact_report_keeps_one_decision_and_copyable_local_fix(review: Module
     for action in actions:
         assert report.count(action["command"]) == 1
     assert report.index("Publish reply:") < report.index("After successful publication, reopen")
-    assert report.count("git apply <<'PATCH'") == 2
+    assert report.count("git apply <<'PATCH'") == 1
+    assert "marker-run --skill code-review --action patch:" in report
+    assert "git -C " in report and " apply --check <<'PATCH_CHECK_" in report
     assert "Existing explanation confirmed" in report
     assert "Applied suggestion verified" in report
     for noise in (
@@ -175,3 +186,26 @@ def test_model_label_assessment_replaces_semantic_plain_alias(review: ModuleType
     delta = review.validate_label_assessments(evidence, assessed, "none")
     assert delta["add"] == ["type::feature"]
     assert delta["remove"] == ["enhancement"]
+
+
+def test_patch_markers_are_isolated_by_review_checkout(review: ModuleType, tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    evidence = {
+        "target": {"url": "https://gitlab.example/team/chart/-/merge_requests/1"},
+        "head_sha": "a" * 40,
+    }
+    fix = {"patch": "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-old\n+new\n"}
+
+    first_command = review.render_patch_command(
+        evidence, {"exact_git": {"repo_root": str(first)}}, fix
+    )
+    second_command = review.render_patch_command(
+        evidence, {"exact_git": {"repo_root": str(second)}}, fix
+    )
+
+    assert first_command != second_command
+    assert str(first) in first_command and str(second) not in first_command
+    assert str(second) in second_command and str(first) not in second_command

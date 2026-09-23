@@ -84,8 +84,9 @@ addressable and cannot silently reuse an ID. Publication bodies are plain files
 and the plan provides direct manual `glab` commands that consume them. Incremental
 review determines whether content is already published only by reading current
 GitLab discussions, notes, and issues authored by the authenticated user and
-comparing their meaning. It does not use local publication state, receipts,
-markers, idempotency records, or postconditions.
+comparing their meaning. A digest-bound post-success marker records only that a
+manual command exited zero locally; it can require remote revalidation but cannot
+serve as publication state, a receipt, an idempotency record, or a postcondition.
 For contract 5, the review-state activation lock protects only local review
 artifacts. A concurrent `prepare` cannot
 leave the superseded plan executable.

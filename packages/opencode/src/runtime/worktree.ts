@@ -3,7 +3,14 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { chmod, lstat, mkdir, readFile, readdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { digest, listState, readState, stateRoot, withStateLock } from "./state.js";
+import {
+  digest,
+  listState,
+  readState,
+  stateRoot,
+  withStateLock,
+  writeVersionedState,
+} from "./state.js";
 import { appendPrivate, writeAtomic } from "../lifecycle.js";
 
 const run = promisify(execFile);
@@ -59,10 +66,11 @@ async function marker(path: string): Promise<Record<string, unknown> | undefined
 async function saveRecord(item: WorktreeRecord, event: string): Promise<void> {
   const state = root(item.project);
   item.updated_at = new Date().toISOString();
-  await writeAtomic(
+  await writeVersionedState(
     recordPath(item.project, item.workspace_id),
-    Buffer.from(`${JSON.stringify(item)}\n`),
-    0o600,
+    state,
+    `workspace:${item.workspace_id}`,
+    item,
   );
   await appendPrivate(join(state, "receipts.jsonl"), {
     schema_version: 1,

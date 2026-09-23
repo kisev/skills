@@ -26,6 +26,11 @@ if TYPE_CHECKING:
         label_catalog,
         validate_label_assessments,
     )
+    from shared.references.state_artifacts import (
+        markdown_body,
+        render_mutation_command,
+        versioned_markdown,
+    )
 else:
     from portable_runtime import contract as portable
     from portable_runtime import review_semver
@@ -33,11 +38,71 @@ else:
         label_catalog,
         validate_label_assessments,
     )
+    from portable_runtime.state_artifacts import (
+        markdown_body,
+        render_mutation_command,
+        versioned_markdown,
+    )
 
 
 INCREMENTAL_CONTRACT_VERSION = 1
 REVIEW_CONTRACT_VERSION = 6
 SKILL_VERSION = "@PORTABLE_RELEASE_VERSION@"
+
+
+def patch_repository(context: dict[str, Any]) -> Path:
+    exact_git = context.get("exact_git")
+    if not isinstance(exact_git, dict) or not isinstance(exact_git.get("repo_root"), str):
+        raise portable.WorkflowError("review checkout is unavailable for patch commands")
+    root = Path(exact_git["repo_root"])
+    if not root.is_absolute() or root != root.resolve(strict=True):
+        raise portable.WorkflowError("review checkout path is unsafe")
+    return root
+
+
+def render_patch_check(context: dict[str, Any], fix: dict[str, Any]) -> str:
+    patch = cast("str", fix["patch"])
+    patch_digest = hashlib.sha256(patch.encode()).hexdigest()
+    delimiter = f"PATCH_CHECK_{patch_digest[:16].upper()}"
+    command = shlex.join(["git", "-C", str(patch_repository(context)), "apply", "--check"])
+    return f"{command} <<'{delimiter}'\n{patch.rstrip()}\n{delimiter}"
+
+
+def render_publication_patch_command(fix: dict[str, Any]) -> str:
+    patch = cast("str", fix["patch"])
+    patch_digest = hashlib.sha256(patch.encode()).hexdigest()
+    delimiter = f"PATCH_{patch_digest[:16].upper()}"
+    return f"git apply <<'{delimiter}'\n{patch.rstrip()}\n{delimiter}"
+
+
+def render_patch_command(
+    evidence: dict[str, Any], context: dict[str, Any], fix: dict[str, Any]
+) -> str:
+    patch = cast("str", fix["patch"])
+    patch_digest = hashlib.sha256(patch.encode()).hexdigest()
+    delimiter = f"PATCH_{patch_digest[:16].upper()}"
+    target = cast("dict[str, Any]", evidence["target"])
+    repo_root = patch_repository(context)
+    command = render_mutation_command(
+        ["git", "-C", str(repo_root), "apply"],
+        skill="code-review",
+        action=f"patch:{patch_digest}",
+        binding=portable.digest(
+            {
+                "target": target,
+                "head_sha": evidence["head_sha"],
+                "patch_sha256": patch_digest,
+                "repo_root": str(repo_root),
+            }
+        ),
+        helper=Path(__file__).with_name("portable_runtime") / "state_artifacts.py",
+        stdin_sha256=patch_digest,
+        cwd=repo_root,
+        git_head=cast("str", evidence["head_sha"]),
+    )
+    return f"{command} <<'{delimiter}'\n{patch.rstrip()}\n{delimiter}"
+
+
 BASELINE_NAME = "review-baseline.json"
 PROGRESS_NAME = "review-current.json"
 REVIEW_EVIDENCE_NAME = "review-evidence.json"
@@ -397,14 +462,13 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
         raise portable.WorkflowError("code-review baseline Markdown identity is invalid")
     source = portable.regular_file(markdown_path, "code-review baseline Markdown")
     try:
-        markdown = source.read_text(encoding="utf-8")
+        markdown = markdown_body(source).decode("utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise portable.WorkflowError("code-review baseline Markdown is unreadable") from exc
-    if (
-        hashlib.sha256(source.read_bytes()).hexdigest() != pointer["markdown_digest"]
-        or plan.get("markdown") != markdown
-    ):
-        raise portable.WorkflowError("code-review baseline Markdown changed")
+    if hashlib.sha256(markdown.encode()).hexdigest() != pointer["markdown_digest"]:
+        raise portable.WorkflowError("code-review baseline Markdown digest changed")
+    if plan.get("markdown") != markdown:
+        raise portable.WorkflowError("code-review baseline Markdown body changed")
     return pointer, plan
 
 
@@ -2036,6 +2100,25 @@ def structured_publication_preview(
         "/-/merge_requests/", 1
     )[0]
 
+    def marked_command(
+        argv: list[str], action_id: str, value: object, *, stdin_sha256: str | None = None
+    ) -> str:
+        return render_mutation_command(
+            argv,
+            skill="code-review",
+            action=action_id,
+            binding=portable.digest(
+                {
+                    "target": target,
+                    "head_sha": evidence["head_sha"],
+                    "action": action_id,
+                    "value": value,
+                }
+            ),
+            helper=Path(__file__).with_name("portable_runtime") / "state_artifacts.py",
+            stdin_sha256=stdin_sha256,
+        )
+
     def enrich_fix(owner_kind: str, owner_id: str, item: dict[str, Any]) -> dict[str, Any]:
         patch = item.get("patch")
         if item.get("fix_mode") != "patch":
@@ -2052,8 +2135,7 @@ def structured_publication_preview(
     def body_with_fix(body: str, fix: dict[str, Any]) -> str:
         if fix.get("fix_mode") != "patch":
             return body
-        patch = cast("str", fix["patch"])
-        return f"{body.rstrip()}\n\n```sh\ngit apply <<'PATCH'\n{patch.rstrip()}\nPATCH\n```"
+        return f"{body.rstrip()}\n\n```sh\n{render_publication_patch_command(fix)}\n```"
 
     enriched_threads = [enrich_fix("thread", str(item["id"]), item) for item in thread_decisions]
 
@@ -2097,7 +2179,7 @@ def structured_publication_preview(
         body = raw_body.rstrip() + "\n"
         identity_digest = hashlib.sha256(publication_id.encode()).hexdigest()[:12]
         content_digest = hashlib.sha256(body.encode()).hexdigest()[:12]
-        body_path, _ = portable.write_companion(
+        body_path, body_digest = portable.write_companion(
             body_directory / f"{identity_digest}-{content_digest}.md", body
         )
         body_record = {
@@ -2115,38 +2197,96 @@ def structured_publication_preview(
             path = cast("str", mutation_value["path"])
             line = mutation_value["line"] or mutation_value["old_line"]
             line_option = "--line" if mutation_value["line"] is not None else "--old-line"
-            command = (
-                f"glab mr note create {target['iid']} --repo {shlex.quote(repository_url)} "
-                f"--file {shlex.quote(path)} {line_option} {line} < {shlex.quote(str(body_path))}"
+            command = marked_command(
+                [
+                    "glab",
+                    "mr",
+                    "note",
+                    "create",
+                    str(target["iid"]),
+                    "--repo",
+                    repository_url,
+                    "--file",
+                    path,
+                    line_option,
+                    str(line),
+                ],
+                action_id,
+                {"body_sha256": body_digest},
+                stdin_sha256=body_digest,
             )
+            command += f" < {shlex.quote(str(body_path))}"
         elif publication_operation == "create_general":
-            command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(f'{endpoint}/discussions')} --silent "
-                f"-F body=@{shlex.quote(str(body_path))}"
+            command = marked_command(
+                [
+                    "glab",
+                    "api",
+                    "--hostname",
+                    hostname,
+                    "--method",
+                    "POST",
+                    f"{endpoint}/discussions",
+                    "--silent",
+                    "-F",
+                    f"body=@{body_path}",
+                ],
+                action_id,
+                {"body_sha256": body_digest},
             )
         elif operation == "create_issue":
             issue_endpoint = f"projects/{project['id']}/issues"
             issue_title = cast("str", cast("dict[str, Any]", mutation)["title"])
-            command = (
-                f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                f"{shlex.quote(issue_endpoint)} -f {shlex.quote(f'title={issue_title}')} "
-                f"--silent -F description=@{shlex.quote(str(body_path))}"
+            command = marked_command(
+                [
+                    "glab",
+                    "api",
+                    "--hostname",
+                    hostname,
+                    "--method",
+                    "POST",
+                    issue_endpoint,
+                    "-f",
+                    f"title={issue_title}",
+                    "--silent",
+                    "-F",
+                    f"description=@{body_path}",
+                ],
+                action_id,
+                {"body_sha256": body_digest, "title": issue_title},
             )
         else:
             discussion_id = thread.get("discussion_id") if thread is not None else None
             if discussion_id is None:
-                command = (
-                    f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                    f"{shlex.quote(f'{endpoint}/notes')} --silent "
-                    f"-F body=@{shlex.quote(str(body_path))}"
-                )
+                argv = [
+                    "glab",
+                    "api",
+                    "--hostname",
+                    hostname,
+                    "--method",
+                    "POST",
+                    f"{endpoint}/notes",
+                    "--silent",
+                    "-F",
+                    f"body=@{body_path}",
+                ]
+                command = marked_command(argv, action_id, {"body_sha256": body_digest})
             else:
                 discussion_endpoint = f"{endpoint}/discussions/{discussion_id}"
-                command = (
-                    f"glab api --hostname {shlex.quote(hostname)} --method POST "
-                    f"{shlex.quote(f'{discussion_endpoint}/notes')} --silent "
-                    f"-F body=@{shlex.quote(str(body_path))}"
+                command = marked_command(
+                    [
+                        "glab",
+                        "api",
+                        "--hostname",
+                        hostname,
+                        "--method",
+                        "POST",
+                        f"{discussion_endpoint}/notes",
+                        "--silent",
+                        "-F",
+                        f"body=@{body_path}",
+                    ],
+                    action_id,
+                    {"body_sha256": body_digest},
                 )
         actions.append(
             {
@@ -2173,9 +2313,21 @@ def structured_publication_preview(
                     "kind": kind,
                     "publication_id": publication_id,
                     "operation": operation,
-                    "command": (
-                        f"glab api --hostname {shlex.quote(hostname)} --method PUT "
-                        f"{shlex.quote(discussion_endpoint)} --silent -F resolved={resolved}"
+                    "command": marked_command(
+                        [
+                            "glab",
+                            "api",
+                            "--hostname",
+                            hostname,
+                            "--method",
+                            "PUT",
+                            discussion_endpoint,
+                            "--silent",
+                            "-F",
+                            f"resolved={resolved}",
+                        ],
+                        f"{kind}:{publication_id}:r{revision}:{operation}",
+                        {"resolved": resolved},
                     ),
                     "path": mutation_value.get("path") or thread.get("path"),
                     "line": mutation_value.get("line")
@@ -2358,11 +2510,12 @@ def structured_publication_preview(
 
     if label_review["add"] or label_review["remove"]:
         action_id = "labels:update"
-        label_command = f"glab mr update {target['iid']} --repo {shlex.quote(repository_url)}"
+        label_argv = ["glab", "mr", "update", str(target["iid"]), "--repo", repository_url]
         if label_review["add"]:
-            label_command += f" --label {shlex.quote(','.join(label_review['add']))}"
+            label_argv.extend(["--label", ",".join(label_review["add"])])
         if label_review["remove"]:
-            label_command += f" --unlabel {shlex.quote(','.join(label_review['remove']))}"
+            label_argv.extend(["--unlabel", ",".join(label_review["remove"])])
+        label_command = marked_command(label_argv, action_id, label_review)
         actions.append(
             {
                 "id": action_id,
@@ -2488,9 +2641,11 @@ def review_markdown(
         lines.extend(
             [
                 "```sh",
-                "git apply <<'PATCH'",
-                cast("str", fix["patch"]).rstrip(),
-                "PATCH",
+                render_patch_check(context, fix),
+                "```",
+                "",
+                "```sh",
+                render_patch_command(evidence, context, fix),
                 "```",
                 "",
             ]
@@ -2616,6 +2771,9 @@ def review_markdown(
                 "",
             ]
         )
+        publication_spec = finding_publications[finding["id"]]
+        if publication_spec["fix_mode"] == "patch":
+            lines.extend(["```sh", render_patch_check(context, publication_spec), "```", ""])
         if finding["id"] in finding_publications:
             add_publication_action(cast("str", finding["id"]))
 
@@ -2755,7 +2913,9 @@ def publish_review_state(
         }
         validate_progress(next_progress, root)
         try:
-            replace_private_bytes(markdown_path, markdown.encode())
+            replace_private_bytes(
+                markdown_path, versioned_markdown(markdown_path, markdown.encode())
+            )
             portable.write_json(current_progress_path, next_progress)
             portable.write_json(
                 baseline_path,
@@ -3568,9 +3728,9 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
     plan: dict[str, Any] | None = None
     try:
         baseline = baseline_pointer(root)
-    except portable.WorkflowError:
+    except portable.WorkflowError as error:
         baseline = None
-        stale_plan_reason = "the stable publication plan is invalid"
+        stale_plan_reason = f"the stable publication plan is invalid: {error}"
     if baseline is not None:
         pointer, candidate = baseline
         current = (

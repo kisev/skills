@@ -8,18 +8,39 @@ import hashlib
 import json
 import os
 import re
-import shlex
-import stat
 import subprocess
 import tempfile
 import urllib.parse
 from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, NoReturn, TypeGuard
+from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
 
 from .release_planning import PlanningError
 from .release_planning import validate as validate_release_plan
+
+if TYPE_CHECKING:
+    from ..state_artifacts import (
+        ensure_private_directory,
+        render_mutation_command,
+        versioned_markdown,
+        xdg_state_home,
+    )
+else:
+    try:
+        from ..state_artifacts import (
+            ensure_private_directory,
+            render_mutation_command,
+            versioned_markdown,
+            xdg_state_home,
+        )
+    except ImportError:
+        from .state_artifacts import (
+            ensure_private_directory,
+            render_mutation_command,
+            versioned_markdown,
+            xdg_state_home,
+        )
 
 ISSUE_RE = re.compile(
     r"https://(?P<host>[A-Za-z0-9.-]+)/(?P<project>.+?)/-/(?:issues|work_items)/(?P<iid>[1-9][0-9]*)/?$"
@@ -28,6 +49,13 @@ COLLECTION_RE = re.compile(
     r"https://(?P<host>[A-Za-z0-9.-]+)/(?P<project>.+?)/-/(?:issues|work_items)/?$"
 )
 DIGEST_RE = re.compile(r"[a-f0-9]{64}")
+
+
+def marker_helper() -> Path:
+    sibling = Path(__file__).with_name("state_artifacts.py")
+    return sibling if sibling.exists() else Path(__file__).parents[1] / "state_artifacts.py"
+
+
 MAX_PAGES = 100
 MAX_ITEMS = 500
 ACTUALITY = {"current", "implemented", "obsolete", "duplicate", "unknown"}
@@ -174,12 +202,10 @@ def digest(value: object) -> str:
 
 
 def private_directory(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
-    metadata = path.lstat()
-    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-        raise WorkflowError("state directory must be a real directory")
-    path.chmod(0o700)
-    return path.resolve()
+    try:
+        return ensure_private_directory(path, xdg_state_home())
+    except (OSError, ValueError) as error:
+        raise WorkflowError("state directory must be a private real directory") from error
 
 
 def atomic_write(path: Path, content: bytes) -> None:
@@ -472,7 +498,7 @@ def project_context(targets: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def state_root(scope: dict[str, Any]) -> Path:
-    home = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    home = xdg_state_home()
     return private_directory(home / "agent-skills" / "task-triage" / digest(scope)[:32])
 
 
@@ -907,8 +933,16 @@ def display(value: object, locale: str, field: str) -> str:
     return str(value)
 
 
-def api_command(host: str, method: str, endpoint: str, request: Path) -> str:
-    return shlex.join(
+def api_command(
+    host: str,
+    method: str,
+    endpoint: str,
+    request: Path,
+    *,
+    action_id: str,
+    binding: str,
+) -> str:
+    return render_mutation_command(
         [
             "glab",
             "api",
@@ -922,7 +956,11 @@ def api_command(host: str, method: str, endpoint: str, request: Path) -> str:
             "Content-Type: application/json",
             "--input",
             str(request),
-        ]
+        ],
+        skill="task-triage",
+        action=action_id,
+        binding=binding,
+        helper=marker_helper(),
     )
 
 
@@ -940,11 +978,25 @@ def action(
     payload: dict[str, Any],
     preview: str,
 ) -> dict[str, str]:
-    request, _ = write_artifact(root, "commands", payload)
+    request, request_digest = write_artifact(root, "commands", payload)
     return {
         "kind": kind,
         "preview": preview,
-        "command": api_command(host, method, endpoint, request),
+        "command": api_command(
+            host,
+            method,
+            endpoint,
+            request,
+            action_id=f"{kind}:{request_digest}",
+            binding=digest(
+                {
+                    "kind": kind,
+                    "method": method,
+                    "endpoint": endpoint,
+                    "request_digest": request_digest,
+                }
+            ),
+        ),
     }
 
 
@@ -1158,7 +1210,8 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         commands = commands_for(root, item)
         target = item["evidence"]["target"]
         report = reports / f"{target['hostname']}-{target['project_id']}-{target['iid']}.md"
-        atomic_write(report, item_markdown(item, commands, locale).encode())
+        report_body = item_markdown(item, commands, locale).encode()
+        atomic_write(report, versioned_markdown(report, report_body))
         report_entries.append({"url": item["evidence"]["url"], "report": str(report)})
         cached_analysis = {key: value for key, value in item.items() if key != "evidence"}
         cached_analysis["release_plan"] = {
@@ -1218,7 +1271,7 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         "",
     ]
     summary = root / "triage-summary.md"
-    atomic_write(summary, "\n".join(summary_lines).encode())
+    atomic_write(summary, versioned_markdown(summary, "\n".join(summary_lines).encode()))
     write_json(
         root / "analysis-current.json",
         {

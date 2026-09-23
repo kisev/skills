@@ -5,12 +5,30 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import os
 import secrets
 import stat
 import sys
 from pathlib import Path
-from typing import NoReturn
+from typing import TYPE_CHECKING, NoReturn
+
+if TYPE_CHECKING:
+    from shared.references.state_artifacts import versioned_markdown
+else:
+    _state_path = Path(__file__).with_name("state_artifacts.py")
+    if not _state_path.exists():
+        _state_path = next(
+            parent / "shared" / "references" / "state_artifacts.py"
+            for parent in Path(__file__).resolve().parents
+            if (parent / "shared" / "references" / "state_artifacts.py").is_file()
+        )
+    _state_spec = importlib.util.spec_from_file_location("state_artifacts", _state_path)
+    if _state_spec is None or _state_spec.loader is None:
+        raise ImportError("state_artifacts runtime is unavailable") from None
+    _state_module = importlib.util.module_from_spec(_state_spec)
+    _state_spec.loader.exec_module(_state_module)
+    versioned_markdown = _state_module.versioned_markdown
 
 MAX_HANDOFF_BYTES = 256 * 1024
 PRIVATE_DIRECTORY_MODE = 0o700
@@ -157,6 +175,7 @@ def atomic_write(path: Path, state_parts: int, content: bytes) -> None:
     descriptor = -1
     try:
         validate_existing_handoff(directory, path.name)
+        content = versioned_markdown(path, content)
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
         descriptor = os.open(temporary_name, flags, PRIVATE_FILE_MODE, dir_fd=directory)
         os.fchmod(descriptor, PRIVATE_FILE_MODE)
@@ -207,8 +226,7 @@ def main() -> int:
         else:
             if Path(arguments.expected_path) != path:
                 raise HandoffError("handoff destination changed after confirmation")
-            content = read_handoff()
-            atomic_write(path, state_parts, content)
+            atomic_write(path, state_parts, read_handoff())
     except HandoffError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

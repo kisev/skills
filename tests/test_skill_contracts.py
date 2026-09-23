@@ -318,7 +318,8 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "complete absolute filesystem paths",
         "label_assessments",
         "direct manual `glab` commands",
-        "Do not add hidden markers",
+        "advisory XDG marker",
+        "not a publication receipt or postcondition",
         "fix_mode=patch",
         "temporary index",
         "runner-owned stages",
@@ -326,7 +327,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "On every invocation, read every non-system discussion and every reply",
         "resolved thread uses `no_publication`",
         "first publish the explanation, then change thread state",
-        "git apply <<'PATCH'",
+        "`git apply`",
         "thread_sha256",
         "accepted` requires a valid `suggestion` or `patch`",
     ):

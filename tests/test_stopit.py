@@ -92,7 +92,10 @@ def test_write_privately_creates_and_atomically_replaces_handoff(tmp_path: Path)
 
     assert second.returncode == 0, second.stderr.decode()
     assert second.stdout == first.stdout
-    assert destination.read_bytes() == b"# Second\n"
+    content = destination.read_text()
+    assert content.startswith("# Second\n\n## History\n\n")
+    snapshots = list((destination.parent / "history" / "handoff").glob("*.md"))
+    assert {path.read_bytes() for path in snapshots} == {b"# First\n"}
     assert destination.stat().st_ino != first_inode
     assert stat.S_IMODE(destination.stat().st_mode) == 0o600
     for directory in (

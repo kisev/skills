@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
-import { lstat, mkdir, readFile, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -27,6 +27,7 @@ import {
   worktreeRelease,
   worktreeStatus,
 } from "../dist/runtime/worktree.js";
+import { stateRoot } from "../dist/runtime/state.js";
 import zedBell from "../dist/plugins/zed-bell.js";
 import { InstallerError, apply, preview } from "../dist/installer.js";
 import { renderReconcile, shellCommand } from "../dist/cli-output.js";
@@ -1457,6 +1458,13 @@ test("managed worktree lifecycle rejects unknown and dirty paths without deletin
     const first = await worktreeCreate({ project, workspace_id: "managed" });
     const repeated = await worktreeCreate({ project, workspace_id: "managed" });
     assert.equal(repeated.path, first.path);
+    const stateEntries = await readdir(join(directory, "state", "opencode", "skills", "worktree"), {
+      recursive: true,
+    });
+    const history = stateEntries.filter(
+      (name) => name.includes("history/") && name.endsWith(".json"),
+    );
+    assert.equal(history.length, 1);
     await writeFile(join(first.path, "changed.txt"), "dirty\n");
     assert.equal((await worktreeStatus(project, "managed")).status, "blocked");
     assert.equal((await worktreeRelease(project, "managed")).status, "blocked");
@@ -1465,6 +1473,17 @@ test("managed worktree lifecycle rejects unknown and dirty paths without deletin
     if (originalState === undefined) delete process.env.XDG_STATE_HOME;
     else process.env.XDG_STATE_HOME = originalState;
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("runtime state rejects relative XDG_STATE_HOME", () => {
+  const originalState = process.env.XDG_STATE_HOME;
+  try {
+    process.env.XDG_STATE_HOME = "relative-state";
+    assert.throws(() => stateRoot("worktree"), /absolute safe path/);
+  } finally {
+    if (originalState === undefined) delete process.env.XDG_STATE_HOME;
+    else process.env.XDG_STATE_HOME = originalState;
   }
 });
 

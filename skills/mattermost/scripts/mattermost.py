@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -19,7 +20,26 @@ import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
+
+if TYPE_CHECKING:
+    from shared.references.state_artifacts import canonical_json, content_digest, record_success
+else:
+    _state_path = Path(__file__).with_name("state_artifacts.py")
+    if not _state_path.exists():
+        _state_path = next(
+            parent / "shared" / "references" / "state_artifacts.py"
+            for parent in Path(__file__).resolve().parents
+            if (parent / "shared" / "references" / "state_artifacts.py").is_file()
+        )
+    _state_spec = importlib.util.spec_from_file_location("state_artifacts", _state_path)
+    if _state_spec is None or _state_spec.loader is None:
+        raise ImportError("state_artifacts runtime is unavailable") from None
+    _state_module = importlib.util.module_from_spec(_state_spec)
+    _state_spec.loader.exec_module(_state_module)
+    canonical_json = _state_module.canonical_json
+    content_digest = _state_module.content_digest
+    record_success = _state_module.record_success
 
 AUTH_REQUIRED = 3
 CACHE_ERROR_EXIT = 4
@@ -1936,6 +1956,18 @@ def canonical(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
 
 
+def mark_local_mutation(action: str, confirmation_digest: str, value: object) -> None:
+    mutation = content_digest(canonical_json({"action": action, "value": value}))
+    try:
+        record_success("mattermost", action, confirmation_digest, mutation)
+    except (OSError, ValueError) as error:
+        print(
+            "warning: mutation exited 0, but its advisory marker was not written; "
+            f"revalidate the target before retrying ({error})",
+            file=sys.stderr,
+        )
+
+
 def receipt_path(digest: str) -> Path:
     if not re.fullmatch(r"[a-f0-9]{64}", digest):
         raise MattermostError("confirmation digest is invalid")
@@ -2173,6 +2205,7 @@ def main(argv: list[str] | None = None) -> int:
             token = agent_browser_token(origin) if args.browser_consent else cookie_token(origin)
             consume_receipt(args.confirm, "auth", origin=origin)
             save_token(origin, token)
+            mark_local_mutation(f"auth:{args.confirm}", args.confirm, {"origin": origin})
             emit({"status": "ok", "origin": origin, "external_mutations": False})
             return 0
         if args.command == "cache":
@@ -2216,6 +2249,7 @@ def main(argv: list[str] | None = None) -> int:
                         raise CacheError(
                             f"Mattermost cache could not be cleared safely: {exc}"
                         ) from exc
+            mark_local_mutation(f"cache-clear:{args.confirm}", args.confirm, {"path": str(path)})
             emit(
                 {
                     "status": "ok",

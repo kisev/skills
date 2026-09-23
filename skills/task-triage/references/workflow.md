@@ -114,7 +114,8 @@ python3 -I -S -B scripts/triage_task.py publish \
 
 The runner validates evidence bindings, retains immutable JSON and command
 inputs, atomically replaces `triage-summary.md` and stable per-issue Markdown,
-and updates the analysis cache. Generated prose, headings, status labels,
+retains changed body-only versions, and updates the analysis cache. Current
+Markdown ends with only paths to earlier versions. Generated prose, headings, status labels,
 questions, and empty-state text use the selected locale; exact code, enum values,
 commands, paths, IDs, quotations, and source titles remain unchanged.
 
@@ -125,7 +126,12 @@ deferred, blocked, rejected, duplicate, and obsolete work; only milestone
 assignment remains restricted by the release plan. Use the issue-link API for
 issue relationships. When GitLab has no direct safe MR-link API, prepare a
 contextual issue or MR message instead, and propose a closing relationship only
-when intent is confirmed. Never execute generated commands.
+when intent is confirmed. Each mutation records an advisory XDG marker after exit
+zero; refresh GitLab before suppressing or retrying it. Never execute generated
+commands.
+Regenerated commands expose `not_run` or `run_unverified`; keep the latter visible
+until refreshed issue, MR, milestone, or discussion evidence confirms the target
+state.
 
 Each `proposed_changes.messages[]` contains exactly `target` and `body`. Each
 `information_requests[]` contains exactly `action`, `target`, `body`,

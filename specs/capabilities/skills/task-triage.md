@@ -79,7 +79,8 @@ filtered project collection; default a collection to open issues; select an
 It shall collect complete GET-only evidence, including the authenticated user and
 observed related-MR discussions, reuse deep analysis only when its fingerprint is
 current, apply the `task-review` quality contract, and persist private immutable
-evidence and analysis with localized atomic stable Markdown views. Each issue shall report
+evidence and analysis with localized atomic stable Markdown views and retained
+body-only content-addressed history. Each issue shall report
 actuality, duplicates, quality, links, related merge requests, SemVer, severity,
 priority, confidence, `accepted`/`deferred`/`rejected`/`duplicate`/`obsolete`
 planning decision, release line, and milestone disposition. Accepted work shall
@@ -93,7 +94,8 @@ the user one consolidated round of material questions before drafting unresolved
 questions for relevant GitLab participants. Every proposed title, description,
 label set, milestone, issue link, message, and stale closure shall have a separate
 manual command beside its preview, independent of the issue's planning decision
-except for milestone assignment. Information-request actions shall be derived
+except for milestone assignment. Each mutation command shall record an advisory
+post-success XDG marker and require target revalidation before retry. Information-request actions shall be derived
 from actual GitLab notes and advance without skipped stages through a question,
 two pings, and a final message plus separate issue-close command; any reply shall
 be reassessed, and an insufficient reply shall start a new cycle. The stable

@@ -48,7 +48,9 @@ The skill shall prepare release evidence and exact manual `glab` commands withou
 executing them. A complete preparation shall atomically replace one stable
 `release-publication.md`; a read-only post-merge helper shall refresh that same
 runbook. Incomplete and stale attempts shall not advertise or replace a previous
-successful result.
+successful result. Changed stable runbooks shall retain body-only
+content-addressed history. Each mutation command shall write an advisory XDG
+marker after exit zero without treating it as a remote postcondition.
 
 Before merge, the runbook shall cover milestone creation when selected, MR and
 milestone update, an announcement comment with the illustration prompt attachment,

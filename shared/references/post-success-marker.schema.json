@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kisev/skills/shared/references/post-success-marker.schema.json",
+  "title": "Agent Skills post-success marker",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "marker_id",
+    "skill",
+    "action_id",
+    "binding_digest",
+    "mutation_digest",
+    "exit_status",
+    "succeeded_at"
+  ],
+  "properties": {
+    "schema": { "const": "agent-skills/post-success-marker/v1" },
+    "marker_id": { "$ref": "#/$defs/digest" },
+    "skill": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+    "action_id": { "type": "string", "minLength": 1, "maxLength": 512 },
+    "binding_digest": { "$ref": "#/$defs/digest" },
+    "mutation_digest": { "$ref": "#/$defs/digest" },
+    "exit_status": { "const": 0 },
+    "succeeded_at": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

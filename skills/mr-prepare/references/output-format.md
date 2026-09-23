@@ -26,6 +26,11 @@ remain in private JSON. A freshness check is not a certification of prose qualit
 Each command belongs beside its action. The runner generates directly runnable
 `glab api` commands with explicit host/project/MR and immutable JSON request
 files. Preserve their exact text. Their payloads must match the visible previews.
+Each mutation records an advisory XDG marker after exit zero. The marker does not
+replace the freshness command or verification of current GitLab state.
+Regeneration shows `execution-status=not_run` or
+`execution-status=run_unverified` before each mutation. A marker never turns an
+unverified metadata edit into an unchanged field.
 There are no commands for unchanged fields. Label requests contain only add/remove
 delta, never an overwrite of unrelated labels. Nothing is executed by the skill.
 The generated freshness command includes an expected binding. Preserve it so an
@@ -34,4 +39,6 @@ older open document cannot validate a newer replacement plan by mistake.
 Successful generation replaces the stable document and its pointer under a
 target-scoped lock with rollback. Old immutable plans and request files remain
 bound to their own content. A failed generation must not advertise an older plan
-as its result. Superseded plans require fresh preparation before publication.
+as its result. Changed stable Markdown retains body-only content-addressed history
+and ends with only paths to earlier versions. Superseded plans require fresh
+preparation before publication.

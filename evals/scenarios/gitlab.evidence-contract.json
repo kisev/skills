@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 12,
+  "revision": 13,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
@@ -113,9 +113,9 @@
       "contains": "action IDs, operations, body paths"
     },
     {
-      "id": "no-publication-state",
+      "id": "advisory-publication-marker",
       "path": "skills/code-review/references/workflow.md",
-      "contains": "local publication receipts"
+      "contains": "advisory XDG marker"
     },
     {
       "id": "issue-templates",
@@ -153,7 +153,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "35df98ca6a32743d6af843d5e1c4183aeb60f2a95869fe434f29311d2652a286",
+  "digest": "dffba39214739b9a0802a4e30e5e92a6ec619122e46d726fa98eb127de1d4995",
   "locale": "neutral",
   "pair_id": null
 }

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -12,18 +13,49 @@ import stat
 import sys
 import time
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from ..state_artifacts import (
+        archive_json,
+        canonical_json,
+        content_digest,
+        ensure_private_directory,
+        inspect_private_directory,
+        record_success,
+        xdg_state_home,
+    )
+else:
+    _state_path = Path(__file__).with_name("state_artifacts.py")
+    if not _state_path.exists():
+        _state_path = Path(__file__).parents[1] / "state_artifacts.py"
+    _state_spec = importlib.util.spec_from_file_location("state_artifacts", _state_path)
+    if _state_spec is None or _state_spec.loader is None:
+        raise ImportError("state_artifacts runtime is unavailable")
+    _state_module = importlib.util.module_from_spec(_state_spec)
+    _state_spec.loader.exec_module(_state_module)
+    archive_json = _state_module.archive_json
+    canonical_json = _state_module.canonical_json
+    content_digest = _state_module.content_digest
+    ensure_private_directory = _state_module.ensure_private_directory
+    inspect_private_directory = _state_module.inspect_private_directory
+    record_success = _state_module.record_success
+    xdg_state_home = _state_module.xdg_state_home
 
 MAX_BYTES = 2 * 1024 * 1024
 TTL_SECONDS = 600
-FIXED_ACTION = {
+SKILL_ACTIONS = {
     "team-sprint-start": "planning",
     "team-sprint-close": "sprint-close",
     "team-retro": "retro",
     "team-roadmap": "roadmap",
     "slides-prompts-prepare": "slides-prompts",
-}.get(Path(__file__).resolve().parents[1].name, "planning")
+}
+SKILL_NAME = Path(__file__).resolve().parents[1].name
+if SKILL_NAME not in SKILL_ACTIONS:
+    SKILL_NAME = "team-workflow"
+FIXED_ACTION = SKILL_ACTIONS.get(SKILL_NAME, "planning")
 FORBIDDEN = frozenset(
     {
         "access_token",
@@ -100,12 +132,10 @@ def setup_required(missing: list[str]) -> int:
 
 
 def private_directory(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
-    metadata = path.lstat()
-    if path.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
-        raise WorkflowError("state directory must be a real directory")
-    path.chmod(0o700)
-    return path.resolve()
+    try:
+        return ensure_private_directory(path, config_home())
+    except (OSError, ValueError) as error:
+        raise WorkflowError("team profile directory is unsafe") from error
 
 
 def existing_private_directory(path: Path, label: str) -> Path:
@@ -123,19 +153,32 @@ def existing_private_directory(path: Path, label: str) -> Path:
 
 
 def state_root(*, create: bool = True) -> Path:
-    home = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    home = xdg_state_home()
     path = home / "agent-skills" / "team-workflow"
     if create:
-        return private_directory(path)
+        return ensure_private_directory(path, home)
     if not path.exists():
         return path
-    return existing_private_directory(path, "state directory")
+    try:
+        return inspect_private_directory(path, home)
+    except (OSError, ValueError) as error:
+        raise WorkflowError("state directory is unsafe") from error
+
+
+def state_private_directory(path: Path) -> Path:
+    try:
+        return ensure_private_directory(path, xdg_state_home())
+    except (OSError, ValueError) as error:
+        raise WorkflowError("state directory is unsafe") from error
 
 
 def config_home() -> Path:
     configured = os.environ.get("XDG_CONFIG_HOME")
-    if configured and Path(configured).is_absolute():
-        return Path(configured)
+    if configured:
+        path = Path(configured)
+        if not path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts[1:]):
+            raise WorkflowError("XDG_CONFIG_HOME must be an absolute normalized path")
+        return path
     return Path.home() / ".config"
 
 
@@ -145,7 +188,10 @@ def profile_root(*, create: bool = False) -> Path:
         return private_directory(path)
     if not path.exists():
         return path
-    return existing_private_directory(path, "team profile directory")
+    try:
+        return inspect_private_directory(path, config_home())
+    except (OSError, ValueError) as error:
+        raise WorkflowError("team profile directory is unsafe") from error
 
 
 def regular(path: Path, label: str) -> Path:
@@ -217,6 +263,26 @@ def atomic(path: Path, content: bytes) -> None:
         path.chmod(0o600)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def versioned_json_write(path: Path, content: bytes, history_root: Path) -> None:
+    if path.exists():
+        archive_json(path, path.read_bytes(), history_root)
+    atomic(path, content)
+
+
+def mark_save(action: str, binding: str, content: bytes) -> None:
+    mutation = content_digest(
+        canonical_json({"action": action, "binding": binding, "content": content_digest(content)})
+    )
+    try:
+        record_success(SKILL_NAME, action, binding, mutation)
+    except (OSError, ValueError) as error:
+        print(
+            "warning: mutation exited 0, but its advisory marker was not written; "
+            f"revalidate the target before retrying ({error})",
+            file=sys.stderr,
+        )
 
 
 def assert_safe_context(value: dict[str, Any]) -> None:
@@ -935,7 +1001,7 @@ def write_once(path: Path, content: bytes) -> None:
 
 def prepare_plan(payload: dict[str, Any]) -> tuple[str, Path, float]:
     plan_digest = digest(payload)
-    path = private_directory(state_root() / "plans") / f"{plan_digest}.json"
+    path = state_private_directory(state_root() / "plans") / f"{plan_digest}.json"
     if path.exists():
         document, _ = read_json(path, "prepared plan")
         expires_at = document.get("expires_at")
@@ -969,7 +1035,7 @@ def consume(plan_digest: str, payload: dict[str, Any]) -> None:
         or document["expires_at"] < time.time()
     ):
         raise WorkflowError("prepared plan is stale or expired")
-    receipt = private_directory(state_root() / "receipts") / f"{plan_digest}.json"
+    receipt = state_private_directory(state_root() / "receipts") / f"{plan_digest}.json"
     try:
         descriptor = os.open(receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError as exc:
@@ -988,7 +1054,7 @@ def report(plan_digest: str, result: dict[str, object]) -> tuple[Path, str]:
         "checks": ["digest", "expiry", "single_use", "safe_path"],
     }
     report_digest = digest(document)
-    path = private_directory(state_root() / "reports") / f"{report_digest}.json"
+    path = state_private_directory(state_root() / "reports") / f"{report_digest}.json"
     write_once(path, canonical_bytes(document))
     return path, report_digest
 
@@ -1178,11 +1244,12 @@ def main(argv: list[str] | None = None) -> int:
             validate_context(context)
             payload = context_change_payload(args.name, raw)
             consume(args.digest, payload)
-            root = private_directory(state_root() / "contexts")
-            atomic(root / f"{args.name}.json", raw)
+            root = state_private_directory(state_root() / "contexts")
+            versioned_json_write(root / f"{args.name}.json", raw, root)
             report_path, report_digest = report(
                 args.digest, {"status": "applied", "name": args.name}
             )
+            mark_save(f"context-save:{args.name}", args.digest, raw)
             emit(
                 {
                     "status": "applied",
@@ -1276,7 +1343,11 @@ def main(argv: list[str] | None = None) -> int:
             payload = profile_change_payload(name, raw, set_default=args.set_default)
             consume(args.digest, payload)
             root = profile_root(create=True)
-            atomic(root / f"{name}.json", raw)
+            versioned_json_write(
+                root / f"{name}.json",
+                raw,
+                state_private_directory(state_root() / "profiles"),
+            )
             if args.set_default:
                 atomic(
                     root / "settings.json",
@@ -1286,6 +1357,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.digest,
                 {"status": "applied", "profile": name, "default": args.set_default},
             )
+            mark_save(f"profile-save:{name}", args.digest, raw)
             emit(
                 {
                     "status": "applied",

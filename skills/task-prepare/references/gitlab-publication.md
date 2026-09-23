@@ -116,10 +116,10 @@ Run the bundled script using its resolved installed path:
 python3 scripts/prepare_publication.py --input draft.json
 ```
 
-It creates `.task-prepare/<plan_key>/task-publication.md` under the current
-workspace without requiring a filename from the user. Optionally pass
-`--output-dir <workspace-relative-directory>`. Keep this private bundle and input
-out of commits. Paths may contain spaces; generated commands quote them.
+By default it creates `task-publication.md` in a workspace-scoped private slot
+below `$XDG_STATE_HOME/agent-skills/task-prepare/`. Optionally pass `--output-dir <workspace-relative-directory>` for an explicit workspace bundle. Keep the input
+and any explicit workspace bundle out of commits. Paths may contain spaces;
+generated commands quote them.
 The named slot is stable across draft changes. Identical reruns reuse it; changed
 drafts first install supporting files in a retained immutable
 `.task-publication/<content-hash>/` directory, then atomically replace only the
@@ -129,6 +129,8 @@ to reference that plan's retained payload. Failed Markdown replacement leaves
 the old plan in place; safely installed internal files remain for a retry. Unsafe
 keys, paths, symlinks, altered immutable content, and concurrent updates are
 rejected. No preview confirmation is needed for these local files.
+Changed stable plans retain body-only content-addressed Markdown versions. The
+current plan ends with paths to earlier versions; identical reruns add nothing.
 
 Each item contains its publication text, destination, check notes, and adjacent
 command when ready. Content-addressed supporting `.md` files hold only the
@@ -145,6 +147,11 @@ edit the draft and regenerate, keeping the preview and payload consistent.
 The agent stops after preparing the plan. The user manually runs each creation
 command at most once and inspects its response, including the new URL and IID.
 After a timeout or lost response, inspect GitLab before retrying to avoid duplicates.
+After exit zero, each mutation command writes an advisory XDG marker. The marker
+does not prove that GitLab reached the expected state and never makes a retry safe.
+Regenerated command blocks show `execution-status=not_run` or
+`execution-status=run_unverified`. Reconcile `run_unverified` creation actions
+against GitLab before adding an IID or considering any retry.
 
 For dependencies between new tasks, the initial plan shows the intended order
 and marks link commands deferred. After the user supplies creation results or

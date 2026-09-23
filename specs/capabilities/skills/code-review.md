@@ -117,8 +117,10 @@ unified patch validated against the exact reviewed head without changing the
 checkout; a thread without a code correction shall explicitly use
 `not_required`, and every open thread shall use an explicit reply, closure, or
 author local-fix outcome rather than `no_publication`. It shall prepare direct
-manual `glab` commands with explicit body files and shall not track command
-execution, publication receipts, hidden markers, retries, or postconditions;
+manual `glab` and `git apply` commands with explicit body files. Each mutation
+command shall record a digest-bound advisory XDG marker after exit zero, while
+remote GitLab content or checkout inspection remains the only postcondition;
+markers shall not authorize retries or count as publication evidence;
 preparation shall never invoke those commands. Every invocation shall read every
 open and resolved non-system discussion and all replies, including an unchanged
 incremental scope. A thread closed by any user shall receive a concise reply only

@@ -9,11 +9,34 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote
 
 from . import contract as portable
 from .label_assessment import validate_label_assessments
+
+if TYPE_CHECKING:
+    from ..state_artifacts import (
+        command_without_execution_status,
+        markdown_body,
+        render_mutation_command,
+        versioned_markdown,
+    )
+else:
+    try:
+        from ..state_artifacts import (
+            command_without_execution_status,
+            markdown_body,
+            render_mutation_command,
+            versioned_markdown,
+        )
+    except ImportError:
+        from .state_artifacts import (
+            command_without_execution_status,
+            markdown_body,
+            render_mutation_command,
+            versioned_markdown,
+        )
 
 CONTENT_FIELDS = {
     "locale",
@@ -332,21 +355,26 @@ def request_specs(
         digest = hashlib.sha256(body.encode()).hexdigest()
         name = f"{digest}-{field}.json"
         path = root / "artifacts" / "mr_requests" / name
-        command = shlex.join(
-            [
-                "glab",
-                "api",
-                "--hostname",
-                target["hostname"],
-                "--method",
-                "PUT",
-                endpoint,
-                "--silent",
-                "--header",
-                "Content-Type: application/json",
-                "--input",
-                str(path),
-            ]
+        argv = [
+            "glab",
+            "api",
+            "--hostname",
+            target["hostname"],
+            "--method",
+            "PUT",
+            endpoint,
+            "--silent",
+            "--header",
+            "Content-Type: application/json",
+            "--input",
+            str(path),
+        ]
+        command = render_mutation_command(
+            argv,
+            skill="mr-prepare",
+            action=f"mr:{field}:{digest}",
+            binding=portable.digest({"target": target, "field": field, "sha256": digest}),
+            helper=Path(__file__).with_name("state_artifacts.py"),
         )
         result.append(
             {"name": name, "content": body, "sha256": digest, "field": field, "command": command}
@@ -478,7 +506,9 @@ def scaffold_locked(source: Path, bundle: dict[str, Any], content_value: object)
         previous = [item.read_bytes() if item.exists() else None for item in destinations]
         try:
             portable.write_json(destinations[1], {"plan_path": str(path), "digest": digest})
-            portable.write_bytes(destinations[0], body.encode())
+            portable.write_bytes(
+                destinations[0], versioned_markdown(destinations[0], body.encode())
+            )
         except BaseException:
             for destination, old in zip(destinations, previous, strict=True):
                 if old is None:
@@ -517,8 +547,12 @@ def resolve_plan(path: Path) -> Path:
 def plan_binding(
     evidence_digest: str, content: dict[str, Any], requests: list[dict[str, str]]
 ) -> str:
+    bound_requests = [
+        {**request, "command": command_without_execution_status(request.get("command"))}
+        for request in requests
+    ]
     return portable.digest(
-        {"evidence_digest": evidence_digest, "content": content, "requests": requests}
+        {"evidence_digest": evidence_digest, "content": content, "requests": bound_requests}
     )
 
 
@@ -526,10 +560,19 @@ def validate_plan(root: Path, plan: dict[str, Any], baseline: dict[str, Any]) ->
     content, labels = validate_content(baseline, plan["mr_content"])
     if labels != plan["label_review"]:
         raise portable.WorkflowError("MR label assessment does not match the evidence")
-    if request_specs(root, baseline, content, labels) != plan["requests"]:
+    expected_requests = request_specs(root, baseline, content, labels)
+    actual_requests = [
+        {**request, "command": command_without_execution_status(request.get("command"))}
+        for request in plan["requests"]
+    ]
+    comparable_expected = [
+        {**request, "command": command_without_execution_status(request.get("command"))}
+        for request in expected_requests
+    ]
+    if comparable_expected != actual_requests:
         raise portable.WorkflowError("MR request commands do not match the evidence and preview")
     stable = portable.regular_file(root / "mr-publication.md", "stable MR publication")
-    if stable.read_text(encoding="utf-8") != plan["markdown"]:
+    if markdown_body(stable).decode("utf-8") != plan["markdown"]:
         raise portable.WorkflowError(
             "stable MR publication does not match this plan; prepare again"
         )

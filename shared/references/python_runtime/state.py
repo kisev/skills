@@ -20,7 +20,12 @@ def _home() -> Path:
 
 def _xdg(name: str, fallback: str) -> Path:
     value = os.environ.get(name)
-    return Path(value).expanduser().resolve() if value else _home() / fallback
+    if value:
+        path = Path(value).expanduser()
+        if not path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts[1:]):
+            raise StateError(f"{name} must be an absolute normalized path")
+        return path
+    return _home() / fallback
 
 
 def skill_state_root(skill: str) -> Path:

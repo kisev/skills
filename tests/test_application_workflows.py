@@ -738,7 +738,10 @@ print(json.dumps(value))
                 self.assertIn(description, original.decode())
                 payloads = {}
                 for request in plan["requests"]:
-                    args = shlex.split(request["command"])
+                    self.assertTrue(request["command"].startswith("# execution-status=not_run\n"))
+                    args = shlex.split(request["command"].splitlines()[-1])
+                    self.assertEqual(args[5:8], ["marker-run", "--skill", "mr-prepare"])
+                    args = args[args.index("--") + 1 :]
                     self.assertEqual(
                         args[:7],
                         [
@@ -764,7 +767,9 @@ print(json.dumps(value))
                 )
                 final = self.run_runner("mr-prepare", *finalize_args[2:], env=environment)
                 self.assertEqual(final.returncode, 0, final.stdout)
-                request_path = Path(shlex.split(plan["requests"][0]["command"])[-1])
+                request_path = Path(
+                    shlex.split(plan["requests"][0]["command"].splitlines()[-1])[-1]
+                )
                 request_bytes = request_path.read_bytes()
                 request_path.write_text("{}")
                 modified = self.run_runner(
@@ -1149,6 +1154,13 @@ print(json.dumps(value))
             plan_document = json.loads(Path(plan).read_text(encoding="utf-8"))
             self.assertEqual(plan_document["schema"], "portable-gitlab/publication_plan/v2")
             plan_payload = plan_document["payload"]
+            self.assertTrue(
+                all(
+                    request["command"] is None
+                    or request["command"].startswith("# execution-status=not_run\n")
+                    for request in plan_payload["requests"]
+                )
+            )
             self.assertEqual(plan_payload["stage"], "pre_merge")
             self.assertEqual(plan_payload["release_content"]["contributors"], ["Example Developer"])
             self.assertEqual(plan_payload["label_review"]["add"], ["ship-ready", "next-compatible"])
@@ -1313,6 +1325,22 @@ print(json.dumps(value))
                 "FAKE_MR_LABELS": json.dumps(["ship-ready", "next-compatible"]),
                 "FAKE_MILESTONE_TITLE": "Release 1.1.0",
             }
+            merge_command = next(
+                request["command"]
+                for request in current_plan_payload["requests"]
+                if request["command"] is not None and " glab mr merge " in request["command"]
+            )
+            executed_merge = subprocess.run(
+                ["sh", "-c", merge_command],
+                cwd=repository,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(
+                executed_merge.returncode, 0, executed_merge.stdout + executed_merge.stderr
+            )
             wrong_tag = self.run_runner(
                 "release-prepare",
                 "post-merge",
@@ -3101,7 +3129,9 @@ print(json.dumps(value))
             self.assertTrue(Path(plan_result["markdown_path"]).is_file())
             markdown = Path(plan_result["markdown_path"]).read_text(encoding="utf-8")
             outline = "\n".join(
-                line for line in markdown.splitlines() if line.startswith(("# ", "## "))
+                line
+                for line in markdown.splitlines()
+                if line.startswith(("# ", "## ")) and not line.startswith("# execution-status=")
             )
             self.assertEqual(
                 outline,
@@ -3118,7 +3148,9 @@ print(json.dumps(value))
             self.assertIn(f"{target}#note_42", markdown)
             self.assertIn("MR metadata", markdown)
             self.assertIn("The fix changes behavior without changing the public API.", markdown)
-            self.assertIn("git apply <<'PATCH'", markdown)
+            self.assertNotIn("marker-run --skill code-review --action patch:", markdown)
+            self.assertIn("git apply <<'PATCH_", markdown)
+            self.assertIn(" apply --check <<'PATCH_CHECK_", markdown)
             release = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
             self.assertIn(f"code-review: {release} · contract: 6", markdown)
             self.assertNotIn("`operation:", markdown)
@@ -3136,12 +3168,19 @@ print(json.dumps(value))
             ]
             self.assertTrue(all("<!-- code-review:id=" not in value for value in bodies))
             patch_body = next(value for value in bodies if "diff --git" in value)
-            self.assertIn("```sh\ngit apply <<'PATCH'\n", patch_body)
-            self.assertIn("\nPATCH\n```", patch_body)
+            self.assertIn("```sh\n", patch_body)
+            self.assertIn("git apply <<'PATCH_", patch_body)
+            self.assertNotIn("marker-run", patch_body)
+            self.assertNotIn(str(artifact_root), patch_body)
+            self.assertNotIn(str(ROOT), patch_body)
             self.assertNotIn("```diff", patch_body)
             commands = plan_result["publication_commands"]
             self.assertEqual(len(commands), 5)
-            self.assertTrue(all(value.startswith("glab ") for value in commands))
+            self.assertTrue(
+                all(value.startswith("# execution-status=not_run\n") for value in commands)
+            )
+            self.assertTrue(all(" marker-run " in value for value in commands))
+            self.assertTrue(all(" -- glab " in value for value in commands))
             self.assertTrue(all("review_publish.py" not in value for value in commands))
             plan_document = json.loads(
                 Path(plan_result["artifact_path"]).read_text(encoding="utf-8")
@@ -3165,7 +3204,7 @@ print(json.dumps(value))
             report = self.run_runner(
                 "code-review", "report-review", "--artifact-root", artifact_root, env=environment
             )
-            self.assertEqual(report.returncode, 0, report.stderr)
+            self.assertEqual(report.returncode, 0, report.stderr or report.stdout)
             report_payload = json.loads(report.stdout)
             self.assertEqual(report_payload["stage"], "plan_ready")
             self.assertIn(plan_result["markdown_path"], report_payload["chat"])
@@ -3932,7 +3971,9 @@ print(json.dumps(value))
                 json.loads(incremental_plan.stdout)["markdown_path"]
             ).read_text(encoding="utf-8")
             incremental_outline = "\n".join(
-                line for line in incremental_markdown.splitlines() if line.startswith(("# ", "## "))
+                line
+                for line in incremental_markdown.splitlines()
+                if line.startswith(("# ", "## ")) and not line.startswith("# execution-status=")
             )
             self.assertEqual(
                 incremental_outline,

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, readFile, readdir } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, readdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
@@ -18,9 +18,10 @@ function inside(root: string, target: string): boolean {
 
 export function stateRoot(name: string, homePath?: string): string {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) throw new Error("unsafe state name");
-  const base = process.env.XDG_STATE_HOME
-    ? resolve(process.env.XDG_STATE_HOME)
-    : join(home(homePath), ".local", "state");
+  const configured = process.env.XDG_STATE_HOME;
+  if (configured && (!isAbsolute(configured) || configured.split(sep).includes("..")))
+    throw new Error("XDG_STATE_HOME must be an absolute safe path");
+  const base = configured ? resolve(configured) : join(home(homePath), ".local", "state");
   return join(base, "opencode", "skills", name);
 }
 
@@ -95,6 +96,82 @@ export async function writeState(path: string, boundary: string, value: unknown)
     await safeDirectory(dirname(path), boundary, true);
     await writeAtomic(path, Buffer.from(`${JSON.stringify(value)}\n`), 0o600);
   });
+}
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value !== null && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, stableValue(item)]),
+    );
+  return value;
+}
+
+async function immutableState(path: string, boundary: string, content: Buffer): Promise<void> {
+  await safeDirectory(dirname(path), boundary, true);
+  let created = false;
+  try {
+    const file = await open(path, "wx", 0o600);
+    created = true;
+    try {
+      await file.writeFile(content);
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+    const directory = await open(dirname(path), "r");
+    try {
+      await directory.sync();
+    } finally {
+      await directory.close();
+    }
+  } catch (error) {
+    if (created) {
+      try {
+        await rm(path, { force: true });
+        const directory = await open(dirname(path), "r");
+        try {
+          await directory.sync();
+        } finally {
+          await directory.close();
+        }
+      } catch {
+        // Preserve the write failure; a later immutable-content check remains fail-closed.
+      }
+      throw error;
+    }
+    if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink() || !(await readFile(path)).equals(content))
+      throw new Error("immutable state history was changed");
+  }
+}
+
+export async function writeVersionedState(
+  path: string,
+  boundary: string,
+  logicalName: string,
+  value: unknown,
+): Promise<void> {
+  if (!inside(boundary, path)) throw new Error("state path escapes its boundary");
+  const body = Buffer.from(`${JSON.stringify(stableValue(value))}\n`);
+  const history = join(boundary, "history", digest({ logicalName }));
+  try {
+    const info = await lstat(path);
+    if (!info.isFile() || info.isSymbolicLink()) throw new Error("state file is unsafe");
+    const previous = await readFile(path);
+    await immutableState(
+      join(history, `${createHash("sha256").update(previous).digest("hex")}.json`),
+      boundary,
+      previous,
+    );
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  await safeDirectory(dirname(path), boundary, true);
+  await writeAtomic(path, body, 0o600);
 }
 
 export async function appendState(path: string, boundary: string, value: unknown): Promise<void> {

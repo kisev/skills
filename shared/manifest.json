@@ -2,6 +2,58 @@
   "version": 1,
   "files": [
     {
+      "source": "references/state_artifacts.py",
+      "destination": "code-review/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "mr-prepare/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "release-prepare/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "release-review/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "task-prepare/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "task-triage/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "stopit/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "mattermost/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-sprint-start/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-sprint-close/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-retro/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-roadmap/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "slides-prompts-prepare/scripts/state_artifacts.py"
+    },
+    {
       "source": "references/portable_gitlab/review_semver.py",
       "destination": "code-review/scripts/portable_runtime/review_semver.py"
     },

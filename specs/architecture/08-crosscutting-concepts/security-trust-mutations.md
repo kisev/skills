@@ -27,13 +27,21 @@ provide auditability without copying credentials. These mechanisms provide
 [REQ-Q-002](../../requirements/quality/README.md#req-q-002---mutation-safety), and
 [REQ-Q-003](../../requirements/quality/README.md#req-q-003---secret-safety).
 
-Code-review emits direct manual `glab` commands and body files but never invokes
-them. It does not retain publication markers, receipts, idempotency state, or
-postconditions. Prepared Git patches are textual,
+Code-review emits manual `glab` and `git apply` commands and body files but never
+invokes them. Each mutation command records an advisory post-success XDG marker;
+current GitLab content and checkout state remain the only publication and patch
+postconditions. The marker never suppresses an action by itself and is distinct
+from confirmation receipts, idempotency state, and retry authorization. Prepared Git patches are textual,
 content-addressed, path-bounded, and checked against the exact reviewed head in a
 temporary index; binary, symlink, rename, traversal, and oversized patches are
 rejected without changing the checkout. Publication diagnostics are bounded and
 redacted before reaching stderr or structured output. A patch embedded in a
-publication body uses one copy-ready quoted `git apply` heredoc. Thread replies
+publication body uses one copy-ready, digest-bound quoted `git apply` heredoc. Thread replies
 and state changes remain separate commands so a close or reopen cannot hide the
 required explanation.
+Local patch commands bind the canonical review worktree and expected head. They
+show an unmarked `git apply --check` preflight, and the marked mutation refuses to
+run if that worktree has moved to another head.
+Patch blocks embedded in GitLab publication prose remain checkout-independent and
+contain no local paths or runtime helpers; only local application commands carry
+the post-success marker.

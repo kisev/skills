@@ -41,14 +41,16 @@ semantic checks. Local rendering uses Python 3.12+ and the standard library.
 
 Neutral output stays in chat unless a workspace-relative output is requested.
 GitLab intent automatically requests a bounded local publication bundle. New
-version 2 drafts name a safe lowercase `plan_key`; the default bundle path is
-`.task-prepare/<plan_key>/task-publication.md`, independent of draft content.
+version 2 drafts name a safe lowercase `plan_key`; the default bundle is isolated
+by canonical workspace and `plan_key` below XDG state, independent of draft
+content. An explicit workspace-relative output directory remains supported.
 Identical reruns reuse the slot. Changed drafts install retained immutable support
 files in a content-addressed internal directory before atomically replacing only
 the stable Markdown under a slot-scoped lock. Commands name their draft's internal
 payload, so later drafts cannot change the content consumed by copied commands.
-Explicit workspace-relative output directories remain supported. No external
-mutation or publication.
+Changed stable Markdown keeps content-addressed body-only history indefinitely.
+Manual mutation commands write advisory post-success XDG markers but are never
+executed by preparation. No external mutation or publication.
 
 ## Errors, Partial, Escalation
 
@@ -87,10 +89,12 @@ shall use real observed IIDs or remain deferred, never executable placeholders.
 Existing objects shall not receive creation commands. The workflow shall never
 execute publication commands or mutate GitLab. Each version 2 publication draft
 shall provide a safe lowercase `plan_key`; unless an output directory is explicit,
-the renderer shall retain content-addressed support files and atomically replace
-only the stable Markdown after its support files are present. It shall use a
-slot-scoped lock, reject symlinks and altered immutable content, and never remove
-the stable plan as an update step.
+the renderer shall use a canonical-workspace-scoped XDG slot, retain
+content-addressed support and Markdown history, and atomically replace only the
+stable Markdown after its support files are present. It shall use a slot-scoped
+lock, reject symlinks and altered immutable content, and never remove the stable
+plan as an update step. Generated mutations shall leave advisory post-success XDG
+markers without treating them as publication proof.
 
 ## Example
 

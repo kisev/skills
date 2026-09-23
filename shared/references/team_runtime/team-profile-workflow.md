@@ -42,7 +42,8 @@ python3 scripts/team_workflow.py profile-prepare \
 
 After explicit confirmation, run the returned digest-bound `profile-save`
 command. Profile setup is complete only when the requested action passes
-`action-check` with the saved profile.
+`action-check` with the saved profile. A successful save records an advisory XDG
+marker; inspect the saved profile rather than treating the marker as a postcondition.
 
 ## Remember and Update
 
@@ -53,6 +54,8 @@ preserve unrelated fields, and validate it with `profile-inspect`. Show the
 exact fields being added, changed, or removed without dumping unrelated private
 values. Use `profile-prepare`, confirmation, and `profile-save`; the runtime
 binds the update to both the candidate digest and previous profile digest.
+Changed profiles and saved contexts retain content-addressed JSON versions in
+private XDG state. Settings pointers and one-use receipts are not duplicated.
 
 Contradictory or ambiguous updates require one focused question. Time-dependent
 membership or policy changes should use effective dates or provenance rather

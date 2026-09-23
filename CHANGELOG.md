@@ -8,6 +8,20 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+### Changed
+
+- Stable substantive XDG state now retains content-addressed history indefinitely;
+  current Markdown shows only the latest body and paths to earlier versions.
+- `task-prepare` now stores its default publication bundle in workspace-scoped XDG
+  state. `--output-dir` remains the explicit workspace override.
+- Generated mutation commands now record a digest-bound advisory XDG marker after
+  exit zero. Incremental workflows still revalidate GitLab or local state before
+  suppressing or retrying an action; regenerated commands expose `not_run` or
+  `run_unverified` status for the exact action.
+- Marker status is excluded from publication integrity bindings, patch markers are
+  bound to the exact worktree and head, and all XDG state roots reject relative or
+  symlinked paths.
+
 ### Fixed
 
 - Generated manual `glab api` mutation commands suppress successful JSON response

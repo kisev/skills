@@ -33,7 +33,8 @@ the preview as `<CONFIRMED_PATH>` so a changed workspace alias or state root
 cannot redirect the approved write. The runner rejects a changed destination,
 missing workspaces, unsafe or symlinked state paths, empty, invalid UTF-8, or
 oversized content. It creates private directories and atomically replaces
-`handoff.md` with a private file.
+`handoff.md` with a private file. A changed handoff retains a content-addressed,
+body-only snapshot; the current file ends with paths to earlier snapshots.
 
 ## Procedure
 
@@ -55,5 +56,6 @@ oversized content. It creates private directories and atomically replaces
 - The handoff is usable by the next session without hidden state.
 - Completed, current, next, and blocking work are explicitly separated.
 - Repeated handoffs for the same canonical workspace atomically replace the same
-  XDG state file; different canonical workspaces use different IDs.
+  XDG state file while retaining changed versions; different canonical workspaces
+  use different IDs.
 - There are no Git or external-system changes.

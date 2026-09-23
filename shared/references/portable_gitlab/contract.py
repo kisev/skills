@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import re
@@ -19,6 +20,31 @@ from pathlib import Path
 from typing import Any, NoReturn, cast
 from urllib.parse import quote as urlquote
 from urllib.parse import urlsplit
+
+try:
+    from ..state_artifacts import (
+        command_without_execution_status,
+        ensure_private_directory,
+        markdown_body,
+        render_mutation_command,
+        versioned_markdown,
+        xdg_state_home,
+    )
+except ImportError:
+    _state_path = Path(__file__).with_name("state_artifacts.py")
+    if not _state_path.exists():
+        _state_path = Path(__file__).parents[1] / "state_artifacts.py"
+    _state_spec = importlib.util.spec_from_file_location("state_artifacts", _state_path)
+    if _state_spec is None or _state_spec.loader is None:
+        raise ImportError("state_artifacts runtime is unavailable")
+    _state_module = importlib.util.module_from_spec(_state_spec)
+    _state_spec.loader.exec_module(_state_module)
+    markdown_body = _state_module.markdown_body
+    command_without_execution_status = _state_module.command_without_execution_status
+    ensure_private_directory = _state_module.ensure_private_directory
+    render_mutation_command = _state_module.render_mutation_command
+    versioned_markdown = _state_module.versioned_markdown
+    xdg_state_home = _state_module.xdg_state_home
 
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PAGES = 1_000
@@ -307,19 +333,17 @@ def parse_project(value: str) -> dict[str, object]:
 
 
 def private_directory(path: Path) -> Path:
-    path.mkdir(parents=True, exist_ok=True)
-    metadata = path.lstat()
-    if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
-        raise WorkflowError("artifact directory must be a real directory")
-    path.chmod(0o700)
-    return path.resolve()
+    try:
+        return ensure_private_directory(path, xdg_state_home())
+    except (OSError, ValueError) as error:
+        raise WorkflowError("artifact directory must be a private real directory") from error
 
 
 def state_directory(profile: str, target: dict[str, object]) -> Path:
     """Collection ownership is target identity, never the calling profile."""
     if profile not in PROFILES:
         raise WorkflowError("workflow profile is unsafe")
-    home = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    home = xdg_state_home()
     identity = f"{target.get('hostname', 'local')}:{target.get('project_id', target.get('project_path', 'local'))}:{target.get('kind', 'local')}:{target.get('iid', 'local')}"
     return private_directory(
         home / "agent-skills" / "gitlab" / hashlib.sha256(identity.encode()).hexdigest()[:32]
@@ -327,7 +351,7 @@ def state_directory(profile: str, target: dict[str, object]) -> Path:
 
 
 def artifact_root(path: Path) -> Path:
-    home = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    home = xdg_state_home()
     state_base = private_directory(home / "agent-skills")
     base = private_directory(state_base / "gitlab")
     candidate = private_directory(path)
@@ -3527,12 +3551,29 @@ def release_request_specs(
         command: list[str] | None,
         assets: list[dict[str, str]] | None = None,
     ) -> None:
+        rendered_command = None
+        if complete and command is not None:
+            rendered_command = render_mutation_command(
+                command,
+                skill="release-prepare",
+                action=f"{stage}:{request_id}",
+                binding=digest(
+                    {
+                        "target": target,
+                        "stage": stage,
+                        "request_id": request_id,
+                        "assets": [item["sha256"] for item in assets or []],
+                        "argv": command,
+                    }
+                ),
+                helper=Path(__file__).with_name("state_artifacts.py"),
+            )
         requests.append(
             {
                 "id": request_id,
                 "stage": stage,
                 "operation": operation,
-                "command": shlex.join(command) if complete and command is not None else None,
+                "command": rendered_command,
                 "assets": assets or [],
             }
         )
@@ -3720,12 +3761,16 @@ def release_binding(
     post_merge_sha: str | None,
     release_target_state: dict[str, Any] | None,
 ) -> str:
+    bound_requests = [
+        {**request, "command": command_without_execution_status(request.get("command"))}
+        for request in requests
+    ]
     return digest(
         {
             "evidence_digest": evidence_digest,
             "inventory_digest": inventory_digest,
             "release_content": content,
-            "requests": requests,
+            "requests": bound_requests,
             "stage": stage,
             "post_merge_sha": post_merge_sha,
             "release_target_state": release_target_state,
@@ -3907,7 +3952,7 @@ def publish_stable_release(
             raise WorkflowError("stable release publication paths must not be symlinks")
         previous = [item.read_bytes() if item.exists() else None for item in destinations]
         try:
-            write_bytes(stable_markdown, markdown.encode())
+            write_bytes(stable_markdown, versioned_markdown(stable_markdown, markdown.encode()))
             write_json(
                 stable_plan,
                 {
@@ -4220,7 +4265,7 @@ def plan_context(
         stable_markdown = regular_file(
             root / "release-publication.md", "stable release publication"
         )
-        if stable_markdown.read_bytes() != markdown.encode():
+        if markdown_body(stable_markdown) != markdown.encode():
             raise WorkflowError(
                 "stable release publication does not match this plan; prepare again"
             )
@@ -4265,7 +4310,15 @@ def plan_context(
             plan["post_merge_sha"],
             plan["complete"],
         )
-        if typed_requests != expected_requests:
+        comparable_requests = [
+            {**request, "command": command_without_execution_status(request.get("command"))}
+            for request in typed_requests
+        ]
+        comparable_expected = [
+            {**request, "command": command_without_execution_status(request.get("command"))}
+            for request in expected_requests
+        ]
+        if comparable_requests != comparable_expected:
             raise WorkflowError("release publication requests do not match the bound evidence")
         for request in typed_requests:
             for asset in request["assets"]:

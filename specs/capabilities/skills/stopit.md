@@ -28,7 +28,8 @@ Current session, existing workspace, and XDG state directory.
 ## Remote/Local Effects
 
 After explicit confirmation, privately and atomically replaces only the stable
-workspace handoff; no repository or remote effects.
+workspace handoff and retains changed body-only versions in content-addressed
+XDG history; no repository or remote effects.
 
 ## Errors, Partial, Escalation
 
@@ -49,7 +50,8 @@ require explicit confirmation and the same path as the write binding, and then
 write only bounded, nonempty, valid UTF-8 approved content to the designated
 workspace-scoped XDG state file. The runner shall reject changed destinations,
 unsafe and symlinked state paths and use private directories, a private file, and
-atomic replacement without creating a separate draft artifact.
+atomic replacement without creating a separate draft artifact. The current file
+shall list only paths to earlier body-only snapshots after its latest handoff.
 
 ## Example
 

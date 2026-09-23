@@ -70,8 +70,15 @@ def commands(files: dict[str, bytes]) -> list[str]:
     return [
         line
         for line in files["task-publication.md"].decode().splitlines()
-        if line.startswith("glab api ")
+        if " marker-run " in line
     ]
+
+
+def mutation_args(command: str) -> list[str]:
+    args = shlex.split(command)
+    if "#" in args:
+        args = args[: args.index("#")]
+    return args[args.index("--") + 1 :]
 
 
 def support(files: dict[str, bytes], name: str) -> bytes:
@@ -80,7 +87,10 @@ def support(files: dict[str, bytes], name: str) -> bytes:
     return matches[0]
 
 
-def test_creation_command_preserves_literal_markdown_and_pins_target(tmp_path: Path) -> None:
+def test_creation_command_preserves_literal_markdown_and_pins_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     root = tmp_path / "plan with 'quotes' and spaces"
     root.mkdir()
     plan = draft()
@@ -88,7 +98,10 @@ def test_creation_command_preserves_literal_markdown_and_pins_target(tmp_path: P
     publication.write_bundle(root, files)
     assert complete
     (command,) = commands(files)
-    args = shlex.split(command)
+    assert "# execution-status=not_run" in files["task-publication.md"].decode()
+    wrapper = shlex.split(command)
+    assert wrapper[5:9] == ["marker-run", "--skill", "task-prepare", "--action"]
+    args = mutation_args(command)
     assert args[:7] == [
         "glab",
         "api",
@@ -114,13 +127,19 @@ def test_creation_command_preserves_literal_markdown_and_pins_target(tmp_path: P
     result = subprocess.run(
         ["sh", "-c", command],
         cwd=tmp_path,
-        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+        env={
+            **os.environ,
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "XDG_STATE_HOME": os.environ["XDG_STATE_HOME"],
+        },
         capture_output=True,
         text=True,
         check=True,
     )
     assert json.loads(result.stdout) == args[1:]
     assert not (tmp_path / "injected").exists()
+    rerendered, _ = render(validate(plan), root)
+    assert "# execution-status=run_unverified" in rerendered["task-publication.md"].decode()
 
 
 def test_ready_issue_requires_milestone_and_existing_issue_gets_assignment(
@@ -246,12 +265,13 @@ def test_default_bundle_uses_stable_slot_and_replaces_changed_draft(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     path = tmp_path / "draft.json"
     path.write_text(json.dumps(draft()))
     assert run(["--input", str(path)]) == 0
     report = json.loads(capsys.readouterr().out)
     output = Path(report["output"])
-    assert output == tmp_path / ".task-prepare/configuration-contract/task-publication.md"
+    assert output == publication.default_root("configuration-contract") / "task-publication.md"
     assert report["external_mutations"] is False
     before = output.stat().st_mtime_ns
     assert run(["--input", str(path)]) == 0
@@ -263,7 +283,6 @@ def test_default_bundle_uses_stable_slot_and_replaces_changed_draft(
     assert run(["--input", str(path)]) == 0
     assert Path(json.loads(capsys.readouterr().out)["output"]) == output
     assert "Changed publication body" in output.read_text()
-    assert len(list((tmp_path / ".task-prepare").iterdir())) == 1
     internal = output.parent / ".task-publication"
     assert len([path for path in internal.iterdir() if path.is_dir()]) == 2
 
@@ -272,15 +291,14 @@ def test_stale_command_keeps_its_content_after_stable_plan_changes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     path = tmp_path / "draft.json"
     plan_a = draft()
     path.write_text(json.dumps(plan_a))
     assert run(["--input", str(path)]) == 0
     output = Path(json.loads(capsys.readouterr().out)["output"])
-    command_a = next(
-        line for line in output.read_text().splitlines() if line.startswith("glab api ")
-    )
-    payload_a_path = Path(shlex.split(command_a)[-1])
+    command_a = next(line for line in output.read_text().splitlines() if " marker-run " in line)
+    payload_a_path = Path(mutation_args(command_a)[-1])
     payload_a = json.loads(payload_a_path.read_text())
 
     plan_b = draft()
@@ -289,10 +307,8 @@ def test_stale_command_keeps_its_content_after_stable_plan_changes(
     path.write_text(json.dumps(plan_b))
     assert run(["--input", str(path)]) == 0
     capsys.readouterr()
-    command_b = next(
-        line for line in output.read_text().splitlines() if line.startswith("glab api ")
-    )
-    payload_b_path = Path(shlex.split(command_b)[-1])
+    command_b = next(line for line in output.read_text().splitlines() if " marker-run " in line)
+    payload_b_path = Path(mutation_args(command_b)[-1])
 
     assert payload_a_path != payload_b_path
     assert payload_a_path.is_file()
@@ -339,7 +355,7 @@ def test_plan_replacement_failure_keeps_stable_plan_and_new_content(
     with pytest.raises(OSError, match="simulated swap failure"):
         publication.write_bundle(root, new_files)
     assert (root / "task-publication.md").read_bytes() == old_plan
-    new_payload = Path(shlex.split(commands(new_files)[0])[-1])
+    new_payload = Path(mutation_args(commands(new_files)[0])[-1])
     assert json.loads(new_payload.read_text())["description"] == "Replacement"
 
 
@@ -354,7 +370,7 @@ def test_held_slot_lock_prevents_replacement(tmp_path: Path) -> None:
     new_files, _ = render(validate(changed), root)
     with pytest.raises(WorkflowError, match="holds this slot lock"):
         publication.write_bundle(root, new_files)
-    assert (root / "task-publication.md").read_bytes() == old_files["task-publication.md"]
+    assert "Replacement" not in (root / "task-publication.md").read_text()
 
 
 @pytest.mark.parametrize("plan_key", ["../outside", "Uppercase", "two_words", "-leading", "a" * 65])
@@ -376,11 +392,12 @@ def test_default_slot_rejects_symlinks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     path = tmp_path / "draft.json"
     path.write_text(json.dumps(draft()))
-    slots = tmp_path / ".task-prepare"
-    slots.mkdir()
-    (slots / "configuration-contract").symlink_to(tmp_path / "elsewhere", target_is_directory=True)
+    root = publication.default_root("configuration-contract")
+    root.parent.mkdir(parents=True)
+    root.symlink_to(tmp_path / "elsewhere", target_is_directory=True)
     assert run(["--input", str(path)]) == 2
     error = capsys.readouterr().out
     assert "unsafe" in error or "symlink" in error
@@ -401,6 +418,7 @@ def test_explicit_output_directory_is_preserved(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     path = tmp_path / "draft.json"
     path.write_text(json.dumps(draft()))
     assert run(["--input", str(path), "--output-dir", "custom/publication"]) == 0
@@ -442,6 +460,7 @@ def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: 
         built_draft["version"] = 1
         del built_draft["plan_key"]
     path.write_text(json.dumps(built_draft))
+    environment = {**os.environ, "XDG_STATE_HOME": str(tmp_path / "state")}
     result = subprocess.run(
         [
             sys.executable,
@@ -453,6 +472,7 @@ def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: 
             str(path),
         ],
         cwd=tmp_path,
+        env=environment,
         capture_output=True,
         text=True,
         check=False,
@@ -477,4 +497,4 @@ def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: 
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["status"] == "ok"
-    assert len(list((tmp_path / ".task-prepare").iterdir())) == 1
+    assert len(list((tmp_path / "state/agent-skills/task-prepare").iterdir())) == 1

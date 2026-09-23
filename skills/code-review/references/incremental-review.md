@@ -121,8 +121,13 @@ a contextual reply and validated fix.
 If a prior finding was not published, revalidate it and include its current body
 in the new plan. Determine whether it is already published only by reading the
 current GitLab discussions, notes, and project issues authored by the current
-`glab` user and comparing their meaning to the finding. Do not use markers,
-receipts, command history, or a local publication state.
+`glab` user and comparing their meaning to the finding. A post-success XDG marker
+may show that the exact command exited zero locally, but it is not publication
+state: refresh GitLab before deciding whether to suppress or repeat the action.
+Do not treat confirmation receipts or command history as publication evidence.
+Generated command blocks show `not_run` or `run_unverified` from the exact local
+marker. Keep a `run_unverified` action visible until semantic GitLab evidence
+confirms it; marker presence alone cannot advance the publication ledger.
 
 The baseline pointer, exact refs, delta, and previous findings remain private
 technical JSON. User-facing reports omit raw SHAs. A prior manual command never
