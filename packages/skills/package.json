@@ -1,6 +1,6 @@
 {
   "name": "@kisev/skills",
-  "version": "8.0.0",
+  "version": "9.0.0",
   "private": true,
   "description": "Private version manifest for the CI-built GitHub Pages portable-skill distribution.",
   "license": "MIT"

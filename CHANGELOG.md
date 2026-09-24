@@ -8,6 +8,8 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[9.0.0] - 2026-09-24
+
 ### Changed
 
 - Stable substantive XDG state now retains content-addressed history indefinitely;
@@ -38,6 +40,15 @@ All notable changes to this project are documented in this file. Entries follow
 
 - Generated manual `glab api` mutation commands suppress successful JSON response
   bodies, so publication no longer opens an interactive pager.
+
+### Breaking Changes
+
+- Release preparation accepts only a stable annotated tag or an exact full commit
+  SHA as an explicit boundary. Regenerate release inventories that used branches,
+  shortened SHAs, revision expressions, prerelease tags, or build-metadata tags.
+- Confirmed local state mutations and bounded GitLab collectors now require POSIX
+  locking, process-group, and directory-sync primitives. Run these write and
+  collection paths on a POSIX host; read-only preparation remains portable.
 
 ## \[8.0.0] - 2026-09-23
 
