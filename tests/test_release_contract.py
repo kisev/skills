@@ -166,8 +166,10 @@ def test_git_timeout_kills_real_descendant_process(
             except ProcessLookupError:
                 break
             status_path = Path(f"/proc/{descendant_pid}/stat")
-            if status_path.exists() and status_path.read_text().split()[2] == "Z":
-                break
+            # Reaping may remove /proc state after the liveness check.
+            with suppress(FileNotFoundError):
+                if status_path.read_text().split()[2] == "Z":
+                    break
             time.sleep(0.01)
         else:
             pytest.fail("git descendant remained alive after timeout cleanup")
@@ -215,8 +217,9 @@ def test_successful_git_cleans_real_descendant_and_keeps_result(
             except ProcessLookupError:
                 break
             status_path = Path(f"/proc/{descendant_pid}/stat")
-            if status_path.exists() and status_path.read_text().split()[2] == "Z":
-                break
+            with suppress(FileNotFoundError):
+                if status_path.read_text().split()[2] == "Z":
+                    break
             time.sleep(0.01)
         else:
             pytest.fail("git descendant remained alive after successful cleanup")
