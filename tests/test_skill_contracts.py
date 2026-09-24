@@ -54,6 +54,29 @@ def test_built_skill_files_match_canonical_sources() -> None:
         assert destination.read_bytes() == source.read_bytes(), destination
 
 
+def test_review_followups_preserve_the_decision_boundary() -> None:
+    askme = (BUILT_SKILLS / "askme/references/workflow.md").read_text(encoding="utf-8")
+    review = (BUILT_SKILLS / "code-review/references/workflow.md").read_text(encoding="utf-8")
+    local = (BUILT_SKILLS / "code-review/references/local-review.md").read_text(encoding="utf-8")
+    examples = (BUILT_SKILLS / "code-review/references/finding-examples.md").read_text(
+        encoding="utf-8"
+    )
+    assert "necessity check below" in askme
+    assert "before asking how to implement" in askme
+    assert "a candidate, not an agreed requirement" in askme
+    assert "Independent reviewers receive these decisions" in review
+    assert "fault injection alone" in review
+    assert "Do not automatically recommend another broad review" in review
+    assert "previous finalized local report and snapshot" in review
+    assert "not an implementation regression" in local
+    assert "cannot prove" in local
+    assert "do not launch a new broad technical audit" in local
+    assert "regardless of round count or severity" in local
+    assert "unlinked reference inside a Markdown table" in examples
+    assert "Corrupting that table is" in examples
+    assert "does not prove the model chose" in examples
+
+
 def test_portable_skill_build_output_is_ignored() -> None:
     result = subprocess.run(
         ["git", "check-ignore", ".build/skills"],
@@ -365,12 +388,13 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
     ):
         assert marker in state_machine
     for marker in (
-        "Local WIP always receives",
+        "local-review.md",
         "delta-triggered scope",
         "Revalidate every previously accepted finding",
         "independent critic",
     ):
         assert marker in incremental
+    assert "Local WIP always receives" not in incremental
     author_snapshot = (
         (ROOT / "tests/fixtures/code-review/author-chat.snapshot.md")
         .read_text(encoding="utf-8")

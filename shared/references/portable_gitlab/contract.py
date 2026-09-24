@@ -224,6 +224,7 @@ ARTIFACT_KINDS = {
     "release_readiness",
     "finalize_report",
     "local_wip_snapshot",
+    "local_review_report",
 }
 
 
@@ -2052,6 +2053,9 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
     except ValueError as exc:
         raise WorkflowError("artifact timestamp is schema-invalid") from exc
     payload = cast("dict[str, Any]", envelope["payload"])
+    if kind == "local_review_report":
+        # Shape is enforced by the schema; local finalization checks ledger continuity.
+        return
     if kind == "evidence_snapshot":
         exact_keys(
             payload,
@@ -4990,7 +4994,7 @@ def finalize_local(bundle_file: str) -> dict[str, object]:
     current = local_bundle(root, str(baseline.get("profile", "code-review")), ref)
     changed = [
         key
-        for key in ("head_sha", "sections", "retrieval_complete")
+        for key in ("base_sha", "head_sha", "ref", "sections", "retrieval_complete")
         if baseline.get(key) != current.get(key)
     ]
     return {
@@ -5280,8 +5284,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
     local = subparsers.add_parser("prepare-local")
     local.add_argument("--repo-root", required=True)
     local.add_argument("--ref")
+    local.add_argument("--incremental", choices=("auto", "off"), default="auto")
     local_final = subparsers.add_parser("finalize-local")
     local_final.add_argument("--bundle", required=True)
+    local_final.add_argument("--report")
     mode = subparsers.add_parser("assess-mode")
     mode.add_argument("--mode", choices=("fast", "normal", "deep"), required=True)
     mode.add_argument("--critic-available", action="store_true")
@@ -5638,6 +5644,9 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             bundle = local_bundle(args.repo_root, profile, args.ref)
             root = artifact_root(Path(str(bundle["artifact_root"])))
             path, artifact_digest = write_artifact(root, "local_wip_snapshot", bundle)
+            from .local_review import prepare_followup
+
+            review = prepare_followup(root, bundle, artifact_digest, args.incremental)
             write_json(
                 root / "current-local.json",
                 {"evidence_path": str(path), "evidence_digest": artifact_digest},
@@ -5664,16 +5673,24 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     "digest": artifact_digest,
                     "head_sha": bundle["head_sha"],
                     "complete": bundle["retrieval_complete"],
+                    "review": review,
                     "external_mutations": False,
                 }
             )
             return 0 if bundle["retrieval_complete"] else 2
         if args.command == "finalize-local":
+            if profile != "code-review":
+                raise WorkflowError("local WIP finalization is only available for code review")
             result = finalize_local(args.bundle)
             _, bundle = artifact_payload(Path(args.bundle), "local_wip_snapshot")
             root = artifact_root(Path(str(bundle["artifact_root"])))
             result = finalize_payload(result, Path(args.bundle), bundle, "local_wip_snapshot")
             path, artifact_digest = write_artifact(root, "finalize_report", result)
+            local_review_result = None
+            if args.report is not None and result["status"] == "ok":
+                from .local_review import record_review
+
+                local_review_result = record_review(root, Path(args.bundle), Path(args.report))
             emit(
                 {
                     "status": result["status"],
@@ -5686,6 +5703,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                     "artifact_path": str(path),
                     "digest": artifact_digest,
                     "result": result,
+                    "review": local_review_result,
                     "external_mutations": False,
                 }
             )

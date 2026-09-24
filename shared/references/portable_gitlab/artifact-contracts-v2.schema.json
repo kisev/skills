@@ -5,6 +5,7 @@
   "oneOf": [
     { "$ref": "#/$defs/evidence_snapshot" },
     { "$ref": "#/$defs/local_wip_snapshot" },
+    { "$ref": "#/$defs/local_review_report" },
     { "$ref": "#/$defs/release_inventory" },
     { "$ref": "#/$defs/review_context" },
     { "$ref": "#/$defs/publication_plan" },
@@ -16,6 +17,132 @@
     { "$ref": "#/$defs/finalize_report" }
   ],
   "$defs": {
+    "local_review_report": {
+      "type": "object",
+      "required": ["schema", "schema_version", "kind", "created_at", "payload"],
+      "properties": {
+        "schema": { "const": "portable-gitlab/local_review_report/v2" },
+        "schema_version": { "const": 2 },
+        "kind": { "const": "local_review_report" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "payload": { "$ref": "#/$defs/local_review_payload" }
+      },
+      "additionalProperties": false
+    },
+    "local_review_text": { "type": "string", "minLength": 1 },
+    "local_review_texts": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/local_review_text" }
+    },
+    "local_review_payload": {
+      "type": "object",
+      "required": [
+        "evidence_digest",
+        "previous_review_digest",
+        "mode",
+        "task",
+        "task_change_reason",
+        "findings",
+        "checks",
+        "assessment",
+        "verdict",
+        "external_mutations"
+      ],
+      "properties": {
+        "evidence_digest": { "$ref": "#/$defs/digest" },
+        "previous_review_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "mode": { "enum": ["full", "incremental", "unchanged"] },
+        "task": {
+          "type": "object",
+          "required": [
+            "goal",
+            "acceptance_criteria",
+            "constraints",
+            "accepted_risks",
+            "deferred",
+            "decision_evidence"
+          ],
+          "properties": {
+            "goal": { "$ref": "#/$defs/local_review_text" },
+            "acceptance_criteria": {
+              "allOf": [{ "$ref": "#/$defs/local_review_texts" }, { "minItems": 1 }]
+            },
+            "constraints": { "$ref": "#/$defs/local_review_texts" },
+            "accepted_risks": { "$ref": "#/$defs/local_review_texts" },
+            "deferred": { "$ref": "#/$defs/local_review_texts" },
+            "decision_evidence": { "$ref": "#/$defs/local_review_text" }
+          },
+          "additionalProperties": false
+        },
+        "task_change_reason": {
+          "anyOf": [{ "$ref": "#/$defs/local_review_text" }, { "type": "null" }]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "severity",
+              "status",
+              "summary",
+              "requirement",
+              "scenario",
+              "evidence",
+              "consequence",
+              "origin",
+              "minimum_fix",
+              "blocking",
+              "rationale",
+              "decision_evidence",
+              "reopen_reason"
+            ],
+            "properties": {
+              "id": { "$ref": "#/$defs/local_review_text" },
+              "severity": { "enum": ["critical", "high", "medium", "low"] },
+              "status": { "enum": ["open", "fixed", "accepted_risk", "deferred", "rejected"] },
+              "summary": { "$ref": "#/$defs/local_review_text" },
+              "requirement": { "$ref": "#/$defs/local_review_text" },
+              "scenario": { "$ref": "#/$defs/local_review_text" },
+              "evidence": { "$ref": "#/$defs/local_review_text" },
+              "consequence": { "$ref": "#/$defs/local_review_text" },
+              "origin": {
+                "enum": ["regression", "missed_requirement", "pre_existing", "new_requirement"]
+              },
+              "minimum_fix": { "$ref": "#/$defs/local_review_text" },
+              "blocking": { "type": "boolean" },
+              "rationale": { "$ref": "#/$defs/local_review_text" },
+              "decision_evidence": {
+                "anyOf": [{ "$ref": "#/$defs/local_review_text" }, { "type": "null" }]
+              },
+              "reopen_reason": {
+                "anyOf": [{ "$ref": "#/$defs/local_review_text" }, { "type": "null" }]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "status", "required", "evidence"],
+            "properties": {
+              "name": { "$ref": "#/$defs/local_review_text" },
+              "status": { "enum": ["passed", "failed", "not_run"] },
+              "required": { "type": "boolean" },
+              "evidence": { "$ref": "#/$defs/local_review_text" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "assessment": { "$ref": "#/$defs/local_review_text" },
+        "verdict": { "enum": ["ready", "not_ready", "blocked"] },
+        "external_mutations": { "const": false }
+      },
+      "additionalProperties": false
+    },
     "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "sha": { "type": "string", "pattern": "^[0-9a-fA-F]{1,128}$" },
     "identity": {

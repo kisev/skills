@@ -24,7 +24,7 @@ operations, positions, body paths, and digests.
 
 ## Workflow Stages
 
-Resolve boundary, select full or GitLab-only incremental scope, inspect code and
+Resolve boundary, select full or target-specific incremental scope, inspect code and
 contracts, revalidate previous findings, inspect every available project and
 inherited-group label, record the critic when required, finalize evidence and the
 decision, scaffold a contract-6 plan, and render chat from that plan. The runner
@@ -76,7 +76,9 @@ postconditions.
 Reviewer findings stay out of the compact chat response. Exact refs remain in
 private JSON rather than user-facing reports, and artifact paths are plain
 absolute paths.
-Incremental review is limited to GitLab MRs; local WIP is always reviewed in full.
+Local WIP uses a separate finalized report and snapshot baseline; its repeated
+review defaults to fix verification and delta-triggered analysis of affected
+consumers. GitLab publication artifacts are not created for local WIP.
 Every GitLab body is authored from the authenticated user's factual role and
 uses natural informal second person when addressing another participant. An
 applicable current-line fix contains exactly one single-line or bounded
@@ -164,6 +166,39 @@ shall appear once beside it, and actions shall have human-readable captions.
 Local fixes shall retain copy-ready patch previews. Semantically equivalent
 labels shall prefer namespaced labels based on their names and descriptions,
 replacing existing plain equivalents without hardcoded alias matching.
+
+For local WIP, `prepare-local --incremental auto` shall select `full`,
+`incremental`, or `unchanged` using a compatible finalized `local_review_report`.
+Compatibility requires complete evidence and unchanged checkout, HEAD, base, and
+comparison ref. A changed boundary, missing or invalid baseline, or explicit
+`--incremental off` shall select full review with a reason. An independent or
+repeated review request alone shall not discard the baseline. Legacy snapshots
+remain finalizable but do not establish a review baseline.
+`finalize-local --report` shall bind the report to a fresh immutable snapshot,
+validate cumulative finding IDs and dispositions, and atomically replace a
+private pointer only after successful validation. Failed or stale finalization
+shall preserve the previous baseline. A finalized report may be not ready.
+
+The local report shall retain the agreed goal, acceptance criteria, constraints,
+accepted risks, deferred work, decision evidence, checks, and findings. Each
+finding shall distinguish severity from blocking status and record the violated
+requirement, reachable scenario, evidence, consequence, change origin, minimum
+remedy, and rationale. Closed or non-blocking dispositions shall not become
+blocking without an explicit explanation and changed facts or user decision.
+New requirements and pre-existing debt shall not block without explicit scope
+approval. Required unrun checks shall block completion, and failed required
+checks or open blocking findings shall prevent readiness regardless of severity.
+Unchanged evidence shall not trigger another broad audit automatically.
+
+For either target, the reviewer shall assess necessity and proportionality before
+promoting candidates, preserve agreed limitations, give independent reviewers
+the task decisions, and separate optional hardening from required corrections.
+Reproduction alone shall not establish practical reachability or priority.
+Repeated edge-case patches shall prompt consideration of a simpler supported
+behavior, not automatic expansion. Structural fields shall not be presented as
+proof of semantic judgment. Completion shall be based on agreed acceptance,
+closed required findings, affected regressions, and named limitations, without
+an automatic final broad audit, fixed round limit, or severity-only cutoff.
 
 ## Example
 

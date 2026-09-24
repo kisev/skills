@@ -1,7 +1,7 @@
 ---
 name: code-review
 description: >-
-  Review one GitLab merge request or local WIP for concrete risks, exhaustive project-label applicability, SemVer metadata, role-authored manual GitLab commands, incremental GitLab follow-ups, architecture, and minimum fixes. Russian discovery terms: ревью кода.
+  Review one GitLab merge request or local WIP for concrete risks and proportionate fixes, preserving agreed scope and prior decisions in follow-ups. Include GitLab labels, SemVer, and manual publication commands for remote reviews. Russian discovery terms: ревью кода.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

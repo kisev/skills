@@ -105,3 +105,24 @@ describe the author as an independent reviewer.
 - `Tests are missing` is not a finding until a concrete unverified behavior is identified.
 - `This may be slow` is speculation without a path, scale, or measurement.
 - `Move this to another service` is not a fix without an ownership or failure-mode advantage.
+
+## Follow-up calibration
+
+- A user accepts the narrow race caused by switching a local account during one
+  operation. A new reviewer receives that decision and does not demand credential
+  capture without changed facts. A regression that sends every request under the
+  wrong account is different and remains actionable.
+- The agreed renderer links only wholly plain-text values and leaves mixed
+  Markdown untouched. An unlinked reference inside a Markdown table is within
+  the accepted boundary, not a new parser requirement. Corrupting that table is
+  a regression that must still be reported.
+- Requiring a list of examined discussion IDs does not prove the model chose the
+  right discussion. Do not promote this structural preference to a blocking
+  validator change without a concrete violated requirement.
+- A generated execution summary includes a deferred item as ready to execute.
+  Explain the planning consequence and fix the evidence binding; do not label it
+  High solely because an invalid input can be constructed.
+- An API rejects a second relation between the same pair of items. Rejecting the
+  conflicting proposal can satisfy the existing contract. Replacing the old
+  relation with delete/create is a separate feature with partial-failure cost,
+  and becomes required only when the user chooses that scope.

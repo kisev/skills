@@ -11,6 +11,9 @@ technical prose. Keep code, IDs, paths, API fields, and commands unchanged.
 
 ## Chat
 
+For local WIP, use the report and completion format in `local-review.md`.
+The runner-rendered chat and publication-plan rules below apply to GitLab MRs.
+
 Keep the chat result compact. `report-review` owns the labels and layout; print
 its `chat` field verbatim rather than composing the result manually. A missing,
 incomplete, or stale contract-6 plan produces only a localized blocked report

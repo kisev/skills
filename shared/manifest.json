@@ -2,6 +2,10 @@
   "version": 1,
   "files": [
     {
+      "source": "references/portable_gitlab/local_review.py",
+      "destination": "code-review/scripts/portable_runtime/local_review.py"
+    },
+    {
       "source": "references/state_artifacts.py",
       "destination": "code-review/scripts/portable_runtime/state_artifacts.py"
     },

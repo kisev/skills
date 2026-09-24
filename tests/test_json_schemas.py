@@ -14,6 +14,7 @@ from jsonschema.validators import validator_for
 
 from scripts import eval_runner
 from shared.references.portable_gitlab.contract import WorkflowError, validate_v2_artifact
+from tests.test_local_review import report_payload as local_review_payload
 from tests.test_review_semver import fallback_assessment, release_assessment
 from tests.test_work_item_contract import item as work_item
 
@@ -778,13 +779,14 @@ def validate_shared_contract_instances() -> None:
     artifact_validator = validator(
         "shared/references/portable_gitlab/artifact-contracts-v2.schema.json"
     )
-    instances = artifact_instances()
+    instances = [*artifact_instances(), envelope("local_review_report", local_review_payload())]
     assert {instance["kind"] for instance in instances} == {
         "analysis_report",
         "critic_receipt",
         "evidence_snapshot",
         "finalize_report",
         "local_wip_snapshot",
+        "local_review_report",
         "publication_plan",
         "release_inventory",
         "release_readiness",

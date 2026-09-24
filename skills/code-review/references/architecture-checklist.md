@@ -7,6 +7,9 @@ Use only the groups relevant to the change, but make each group an explicit deci
 - Identify the observable problem, affected user, and success condition.
 - Verify that the change solves the cause rather than masking a symptom.
 - Identify unrelated scope that increases risk.
+- Preserve the agreed supported scenarios, accepted risks, and completion checks.
+- Separate reachable contract failures from optional hardening and new features;
+  reproduction alone does not establish that a remedy is proportionate.
 
 ## Ownership and boundaries
 
@@ -45,3 +48,5 @@ Use only the groups relevant to the change, but make each group an explicit deci
 - Propose an alternative only after finding existing project patterns.
 - Compare ownership, compatibility, failure modes, implementation cost, maintenance, rollout, and verification.
 - Do not request an abstraction or refactor without a concrete risk reduction.
+- If repeated fixes expand one mechanism, consider a simpler supported behavior
+  before adding another layer; explain the tradeoff against the agreed goal.

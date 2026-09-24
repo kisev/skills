@@ -1,7 +1,7 @@
 # Incremental GitLab review
 
-Incremental review applies only to one exact GitLab MR. Local WIP always receives
-a fresh full review and never creates or reads an incremental baseline.
+This document describes incremental review of one exact GitLab MR. Local WIP
+uses its own snapshot and decision ledger in `local-review.md`.
 
 ## Selection
 

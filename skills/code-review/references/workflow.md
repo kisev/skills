@@ -9,13 +9,45 @@ Select every thread outcome explicitly after analysis. The draft's `reply` is
 not an instruction to publish. When no new information is needed, choose
 `no_publication` and explain that decision privately.
 
-Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, `references/incremental-review.md`, `references/review-state-machine.md`, and `references/semver.md`.
+Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, and `references/semver.md`. Apply the necessity and completion rules below to both targets. For local WIP follow `references/local-review.md`, then stop; the remote stages below do not apply. For a GitLab MR also read `references/incremental-review.md` and `references/review-state-machine.md`.
 
 `/code-review` distinguishes a remote-MR target from local-WIP input.
 
 For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter URLs, and branch inference before any API call or artifact creation. Run `scripts/review_mr.py prepare --url <mr-url> --repo-root <checkout> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto`, then execute the returned fully bound `context` action. Use `--incremental off` only for an explicit request such as "without incremental review", "start from scratch", or "ignore the previous review"; "full review" alone is not an opt-out. The context must bind the numeric ID and username of the current GitLab user, MR author, role, all paginated discussions and notes, project issue templates from the exact MR head, exact note permalinks, and a local repository containing the exact base/start/head commits. Do not duplicate canonical collection with direct `glab mr view` or parallel MR reads.
 
-For local WIP, use only the current existing checkout and `prepare-local`; do not clone, fetch, checkout, stash, reset, clean, or create a worktree. The role is `author`, there is no GitLab publication target, and unavailable remote context must remain explicit.
+For local WIP, use only the current existing checkout and `prepare-local --incremental auto`; do not clone, fetch, checkout, stash, reset, clean, or create a worktree. The role is `author`, there is no GitLab publication target, and unavailable remote context must remain explicit. A repeated review starts from the previous finalized local report and snapshot, not from a new zero-context audit.
+
+## Necessity and completion
+
+Before promoting any candidate, establish the agreed requirement, reachable
+scenario and its assumptions, user consequence, relation to the reviewed change,
+and proportionate minimum fix. Reproduction or fault injection alone proves
+neither practical reachability nor priority. Distinguish a regression, a missed
+requirement, pre-existing debt, and a new requirement. Report optional hardening
+and scope expansion separately from acceptance blockers. Use risk and evidence
+to calibrate severity; do not raise it to justify doing more work.
+
+Carry the user's accepted risks, supported scenarios, exclusions, and acceptance
+checks into every review. Independent reviewers receive these decisions even
+when previous reviewer conclusions are withheld to avoid anchoring. Do not
+reopen an accepted limitation or rejected candidate without changed facts or an
+explicit user decision. Describe that basis when reopening it. Extra structured
+fields cannot prove semantic reasoning quality; require a concrete contract
+failure before proposing a new validator or state machine.
+
+A follow-up checks agreed fixes, the delta, and affected consumers and failure
+paths. New regressions and consequential missed requirements remain actionable;
+unrelated improvements do not automatically extend the task. When successive
+fixes expand one mechanism, assess simplification against the agreed goal before
+requesting another layer. A new feature needs a separate scope decision with its
+cost explained. Do not prescribe a fixed round limit or a severity-only cutoff.
+
+Finish when acceptance checks and required findings are satisfied and affected
+regressions have been checked. State residual limitations and incomplete checks.
+Do not automatically recommend another broad review after successful completion,
+or describe a targeted check as proof that all possible defects are absent.
+
+## Remote MR stages
 
 For a remote MR, derive role only from `MR.author.username` and `GET /user`: equal means `author`, otherwise `reviewer`. If either identity is unavailable, stop rather than guess. A reviewer reports findings and proposed fixes without promising to edit another person's MR. An author receives concrete local fixes and must not be presented as an independent reviewer of their own MR.
 
@@ -73,7 +105,7 @@ Use the runner-owned stages and generated templates in `references/review-state-
 
 For a remote MR, generate the model-ready content draft through `template-review --kind content`, complete every empty field, and run its exact `scaffold-review` action. The content JSON contains exactly `locale`, `chat_assessment`, `summary`, `architecture_assessment`, `semver_impact`, `semver_rationale`, `semver_assessment`, `mr_metadata_assessment`, `label_assessments`, `checks`, `findings`, `finding_publications`, `previous_finding_assessments`, `issue_templates`, `recommended_issues`, `rejected_candidates`, `rejected_candidate_assessments`, and `thread_decisions`. The draft includes `.gitlab/issue_templates` from the exact MR head. Each recommended issue must select and fill its nearest template; when only one exists, it must use it. `label_assessments` covers every exact catalog name once; assess semantic equivalence from each label's name and description, prefer a namespaced label to a plain equivalent, and replace a current plain equivalent with the chosen namespaced label. The runner owns descriptions, current membership, exhaustive ledger, SemVer invariant, add/remove delta, standard presentation labels, and compact chat layout. `mr_metadata_assessment` must give `ok`, `needs_change`, or `unverified`, rationale, and an optional recommendation for title, description, labels, workflow state, and overall formatting. Observed values come from evidence, not model input.
 
-Scaffold writes body files and content-addressed `.patch` files for required thread actions, reviewer findings, recommended issues, and one label delta, then atomically replaces the stable `<artifact-root>/review-publication.md` and review baseline. Show absolute paths, exact body previews, full patches in collapsed details, `git apply --check` and `git apply`, and direct manual `glab` commands that consume the body files. A `resolve` or `reopen` outcome produces two ordered commands: first publish the explanation, then change thread state; never combine them or prepare a state change without the explanation. Warn that nothing was executed. Every mutation command records a digest-bound advisory XDG marker only after exit zero. The marker is not a publication receipt or postcondition: inspect GitLab or the checkout before suppressing or retrying an action. Do not generate retry commands or local idempotency state. For local WIP, report against its immutable snapshot and explicitly omit incremental, remote role/thread, and publication artifacts.
+Scaffold writes body files and content-addressed `.patch` files for required thread actions, reviewer findings, recommended issues, and one label delta, then atomically replaces the stable `<artifact-root>/review-publication.md` and review baseline. Show absolute paths, exact body previews, full patches in collapsed details, `git apply --check` and `git apply`, and direct manual `glab` commands that consume the body files. A `resolve` or `reopen` outcome produces two ordered commands: first publish the explanation, then change thread state; never combine them or prepare a state change without the explanation. Warn that nothing was executed. Every mutation command records a digest-bound advisory XDG marker only after exit zero. The marker is not a publication receipt or postcondition: inspect GitLab or the checkout before suppressing or retrying an action. Do not generate retry commands or local idempotency state.
 
 Bind every local patch command to the canonical review checkout and exact reviewed
 head. Show the read-only `git apply --check` command first. The marked `git apply`

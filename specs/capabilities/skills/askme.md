@@ -17,6 +17,9 @@ without a separate invitation to interview the user.
 
 Input is a goal and repository facts. Output is ordered decision answers or an
 explicit statement that no clarification questions remain, followed by a stop.
+The final decision boundary names the expected result, supported scenarios,
+acceptance checks, constraints, accepted risks, deferred work, and the basis of
+user decisions. It stays in chat and does not create an artifact.
 
 ## Workflow Stages
 
@@ -50,6 +53,16 @@ The skill shall recognize direct and conditional invitations to clarify by inten
 ask only questions whose answers determine the next safe decision, explicitly
 report when no clarification questions remain, and always stop for explicit
 manual continuation before another workflow or the calling task resumes.
+For review follow-ups, the skill shall assess the agreed requirement, reachable
+scenario, user impact, relation to changes, and proportionate remedy before
+asking implementation questions. It shall distinguish mandatory corrections,
+optional hardening, pre-existing debt, and new features; reproduction and
+severity alone shall not make a candidate mandatory. It shall preserve accepted
+limitations until facts or user decisions change, explain the cost of an approved
+scope expansion, and consider simplification when repeated fixes expand one
+mechanism. Extra structural fields shall not be presented as proof of semantic
+reasoning quality. Completion shall mean satisfying the agreed result and checks,
+not proving the absence of every possible defect or reaching a fixed round limit.
 
 ## Example
 
