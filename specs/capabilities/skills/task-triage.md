@@ -23,8 +23,9 @@ private XDG state.
 Resolve the bounded collection, collect GET-only GitLab evidence, reuse current
 per-issue analysis when its issue and related-MR fingerprint is unchanged,
 normalize each issue to `work-item/v1`, invoke the task-review quality contract,
-assess the collection, ask one consolidated user-question round when the user may
-supply missing context, persist immutable evidence and analysis, atomically
+assess the collection, ask one consolidated user-question round only for authority,
+private context, or a bounded reversible technical choice, persist immutable
+evidence and analysis, atomically
 replace stable Markdown views, present, and report.
 
 ## Dependencies
@@ -42,22 +43,28 @@ beside its preview. The workflow never executes those commands or mutates GitLab
 ## Errors, Partial, Escalation
 
 Target failures are isolated per issue. Incomplete pagination, unavailable issue
-or MR evidence, stale bindings, and unanswered business-priority questions make
-the collection partial and remain explicit. Independent analysis continues
-before one consolidated question round. Missing task facts that the user cannot
-supply become role-authored GitLab question proposals rather than silent blockers.
+or MR evidence, stale bindings, and unanswered user questions make analysis
+partial and remain explicit. Non-ready planning and prepared information requests
+instead make follow-up pending, with counts and affected issues. Independent
+analysis continues before one consolidated question round. Missing task facts
+that the user cannot supply become role-authored GitLab question proposals rather
+than silent blockers.
 
 ## Unique Constraints
 
 Every issue reports actuality, duplicate candidates, task-review quality verdict,
 related issues, related MRs, linkage gaps, SemVer impact, severity, priority,
 confidence, an autonomous planning decision, and release-milestone disposition.
+Each assessment also contains one primary agent recommendation with its rationale,
+assumptions, confidence, alternatives, and reconsideration evidence.
 Only semantically ready current work may be accepted. Every accepted item binds
 the nearest compatible open milestone on its own project or component release
 line; `none` and `not_applicable` impact require at least a patch release.
 Deferred work has no milestone, while rejected, duplicate, and obsolete work is
 removed from an active release milestone. The collection reports at most five
-first tasks plus dependency and parallel-execution groups. Project-wide duplicate
+first tasks plus dependency and parallel-execution groups. Every execution-plan
+entry binds accepted collected evidence by digest and includes rationale; digests
+are unique in top-five and across parallel groups. Project-wide duplicate
 search is bounded to each member's project; external projects are followed only
 through explicit input or observed links.
 
@@ -72,16 +79,34 @@ Generated information-message helpers revalidate the authenticated user and
 fresh discussion, serialize the lifecycle with a bounded POSIX lock, and durably
 reserve every POST. They distinguish a proven pre-start failure from an unknown
 post-start outcome and an applied mutation; an unknown outcome blocks replay.
-Guard v2 for a new standalone note binds the stable ordered IDs and digest of the
-complete observed non-system conversation and rejects any fresh addition, removal,
-or change before POST. Persisted guard v1 commands fail closed and require
-regeneration. Equal-timestamp notes use numeric note-ID ordering; nonnumeric IDs
+Guard v4 binds a new standalone note to the complete observed non-system
+conversation and a new existing-discussion reply to the complete selected
+discussion. It rejects any fresh addition, removal, or change before POST.
+Persisted guard v1, v2, and v3 commands fail closed and require regeneration.
+Equal-timestamp notes use numeric note-ID ordering; nonnumeric IDs
 retain their API order.
 Issue closure uses the same durable transition before PUT, restores the message
 receipt only for a proven pre-start failure, retains ambiguous reservations, and
 records an irreversible local terminal receipt only after a fresh exact-issue GET
 confirms the closed state. Lifecycle lock descriptors are validated as private,
 owned, regular, singly linked files before permission repair or locking.
+Every assessment explicitly supplies one structured `issue_relations` list,
+including an empty list; legacy free-form relation fields are invalid. Every
+relation is bound to an observed issue on the same GitLab host, including targets
+returned by collected issue-link evidence. Missing relations and relation-type
+replacements correspond exactly to proposed links; extra, duplicate, self,
+existing, or unobserved proposals are invalid. A replacement uses guarded delete
+and receipt-dependent create commands with fresh evidence checks. Unknown deletion
+is reconciled only when fresh evidence proves absence or the exact original link;
+missing or unsupported observed link types fail closed. A relation also
+produces a contextual comment only when a concrete
+decision, constraint, or research result should be transferred. New information
+requests prefer the most specific relevant observed discussion and may start a
+standalone note only with an explicit reason. The authenticated user's authorship
+is considered so the workflow never proposes asking that user to ask themselves.
+The author of an observed related or closing MR is a valid fallback participant.
+A non-null fallback binds that participant, an observed target, and a body to one
+matching non-`none` information request and its manual publication command.
 
 ## Requirement
 
@@ -104,8 +129,21 @@ milestones shall produce a manual creation proposal. Non-accepted work shall not
 receive a new milestone, and rejected, duplicate, or obsolete work shall produce
 a removal proposal when currently assigned. The collection shall
 report dependencies, parallel work, and at most five first tasks. It shall ask
-the user one consolidated round of material questions before drafting unresolved
-questions for relevant GitLab participants. Every proposed title, description,
+the user one consolidated round only for authority, private context, or bounded
+technical choices between concrete, understood, reversible alternatives. Each
+question shall link the issue, summarize its context, explain why the answer
+changes planning, and include a reasoned recommendation with directly selectable
+answers. Open-ended technical uncertainty shall become an agent recommendation or
+research step. Priority questions use `authority`; questions about already-made
+decisions use `private_context`. The authenticated user's observed authorship shall prevent a
+proposal to ask that user to ask themselves. Before drafting unresolved questions
+for relevant GitLab participants, the workflow shall prefer the most specific
+relevant observed discussion and require an explicit reason for a standalone note.
+Every item shall contain one primary recommendation with rationale, assumptions,
+confidence, alternatives, and reconsideration evidence. Every structured issue
+relation shall bind observed evidence, correspond exactly to any proposed link,
+use receipt-dependent replacement commands for a conflicting existing type, and
+add a contextual comment only to transfer a concrete useful result. Every proposed title, description,
 label set, milestone, issue link, message, and stale closure shall have a separate
 manual command beside its preview, independent of the issue's planning decision
 except for milestone assignment. Each mutation command shall record an advisory
@@ -126,8 +164,17 @@ fresh GET verifies the exact project ID, issue IID, and closed state. GET failur
 identity mismatch, or an open issue shall remain ambiguous. A replay shall fail
 even if the issue was reopened. Source-layout
 commands shall run under `python -I -S -B` before materialization while built
-archives remain self-contained. The stable summary shall list
-detailed reports as plain absolute paths. Partial or stale evidence shall remain
+archives remain self-contained. The stable summary shall separate analysis
+completeness from pending follow-up, group report links by planning decision,
+subdivide accepted work by planning readiness, include a reason and next step per
+issue, and report both active information-request and affected-issue counts. It
+shall accept modern and legacy same-host evidence URLs, emit canonical modern URLs,
+and escape untrusted Markdown titles in both summaries and per-issue reports. It
+shall link unambiguous observed issue and merge-request references only when the
+complete analyzed value is plain text; values containing Markdown, code, HTML,
+URLs, any backslash, or reference-like syntax shall remain unchanged. Reference
+numbers followed by a word character shall remain plain, and conflicting
+`references.full` and `web_url` identities shall remain unresolved. Partial or stale evidence shall remain
 explicit and shall not be reported as complete. The workflow shall never execute
 generated commands or mutate GitLab.
 

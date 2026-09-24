@@ -13,8 +13,15 @@ Route one issue, an explicit issue list, or a filtered project collection; near-
 Arguments identify exact GitLab issue or project collection URLs, optional
 filters, and the selected `en` or `ru` locale. Output names the localized stable
 XDG summary, per-issue reports, completeness, cache disposition, planning
-decisions, release milestones, consolidated questions, and separate manual
-commands for each proposed GitLab action.
+decisions, pending follow-up, release milestones, structured consolidated
+questions, grouped linked reports subdivided by planning readiness for accepted
+work, digest-bound accepted-only top-five and parallel groups, separate request and affected-issue counts, and separate manual commands for
+each proposed GitLab action. Summary links use canonical observed identity,
+normalize modern or legacy evidence URLs to the modern form, and are added only
+when the complete value is plain text; conflicting identity fields remain
+unresolved, values with any backslash remain unchanged, and numeric references
+followed by a word character remain plain. Summaries and per-issue reports escape
+untrusted titles.
 
 ## Workflow Stages
 
@@ -57,9 +64,14 @@ immediately before mutation, verify the authenticated user, serialize replay
 protection, and reject stale lifecycle evidence. Stale closure uses separate
 manual message and close commands, but the close command requires the successful
 message receipt and verifies that no later non-system reply was posted before
-closing. Guard v2 for a new standalone note binds stable ordered IDs and a digest
-of all non-system notes in the prepared snapshot and rejects any fresh addition,
-removal, or change; persisted guard v1 commands fail closed and require regeneration.
+closing. Guard v4 binds a new standalone note to all observed non-system notes and
+a new existing-discussion reply to all non-system notes in the selected discussion.
+It rejects any fresh addition, removal, or change; persisted guard v1, v2, and v3
+commands fail closed and require regeneration. A standalone request also records
+why no observed discussion carries the relevant context.
+An issue-link type replacement is emitted as guarded delete and create commands.
+Delete binds the observed link ID and stores a durable receipt; create requires
+that receipt and freshly verifies the old link is absent before mutation.
 Every information-message POST stores a durable guard-bound in-progress
 reservation first. Only a proven process-start failure removes it; timeout,
 nonzero exit, bounded-output failure, or malformed response after start reports

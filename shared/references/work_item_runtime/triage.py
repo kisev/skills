@@ -89,12 +89,23 @@ MAX_ITEMS = 500
 ACTUALITY = {"current", "implemented", "obsolete", "duplicate", "unknown"}
 VERDICTS = {"ready", "needs_clarification", "blocked"}
 INFORMATION_ACTIONS = {"none", "new", "ping_1", "ping_2", "close"}
+CONFIDENCE = {"low", "medium", "high"}
+DECISIONS = ("accepted", "deferred", "rejected", "duplicate", "obsolete")
+ANALYSIS_INDEX_SCHEMA = "task-triage/analysis-index/v4"
 TEXT = {
     "en": {
         "summary": "Task triage summary",
-        "status": "Status",
+        "analysis_status": "Analysis status",
+        "follow_up_status": "Follow-up status",
         "complete": "complete",
         "partial": "partial",
+        "clear": "clear",
+        "pending": "pending",
+        "collection_errors": "Collection errors",
+        "unanswered_questions": "Unanswered user questions",
+        "planning_pending": "Non-ready planning",
+        "requests_pending": "Information requests to publish",
+        "request_issues": "Affected issues",
         "collection": "Collection evidence",
         "analysis": "Analysis",
         "first": "First tasks",
@@ -111,10 +122,36 @@ TEXT = {
         "severity": "Severity",
         "priority": "Priority",
         "quality_findings": "Quality findings",
-        "relations": "Duplicates and relations",
+        "duplicates": "Duplicates",
+        "issue_relations": "Issue relations",
+        "relation_existing": "existing link",
+        "relation_proposed": "link proposed",
         "merge_requests": "Merge requests",
         "release_planning": "Release planning",
         "recommendations": "Recommendations",
+        "recommendation": "Agent recommendation",
+        "proposal": "Primary proposal",
+        "rationale": "Rationale",
+        "assumptions": "Assumptions",
+        "confidence": "Confidence",
+        "alternatives": "Alternatives",
+        "reconsider_if": "Reconsider if",
+        "reason": "Reason",
+        "next_step": "Next step",
+        "why_now": "Why now",
+        "question_evidence": "Evidence",
+        "missing_decision": "Decision needed",
+        "planning_effect": "Planning effect",
+        "options": "Options",
+        "fallback": "Fallback",
+        "report": "Report",
+        "decision_accepted": "Accepted",
+        "decision_accepted_ready": "Fully planned",
+        "decision_accepted_pending": "Awaiting planning action",
+        "decision_deferred": "Deferred",
+        "decision_rejected": "Rejected",
+        "decision_duplicate": "Duplicates",
+        "decision_obsolete": "Obsolete",
         "commands": "Manual commands",
         "none": "None observed.",
         "no_changes": "No GitLab changes are recommended.",
@@ -126,6 +163,8 @@ TEXT = {
         "action_milestone": "Update milestone",
         "action_create_milestone": "Create milestone",
         "action_link": "Create issue link",
+        "action_replace_link_delete": "Delete conflicting issue link",
+        "action_replace_link_create": "Create replacement issue link",
         "action_message": "Publish message",
         "action_information_new": "Publish information request",
         "action_information_ping_1": "Publish first follow-up",
@@ -135,9 +174,17 @@ TEXT = {
     },
     "ru": {
         "summary": "Сводка триажа задач",
-        "status": "Статус",
+        "analysis_status": "Статус анализа",
+        "follow_up_status": "Статус дальнейших действий",
         "complete": "завершён",
         "partial": "частичный",
+        "clear": "действия не требуются",
+        "pending": "требуются действия",
+        "collection_errors": "Ошибки сбора",  # noqa: RUF001
+        "unanswered_questions": "Неотвеченные вопросы пользователю",
+        "planning_pending": "Неготовое планирование",
+        "requests_pending": "Запросы информации к публикации",
+        "request_issues": "Затронутые задачи",
         "collection": "Снимок коллекции",
         "analysis": "Анализ",
         "first": "Первые задачи",
@@ -154,10 +201,36 @@ TEXT = {
         "severity": "Критичность",
         "priority": "Приоритет",
         "quality_findings": "Замечания к качеству",
-        "relations": "Дубликаты и связи",
+        "duplicates": "Дубликаты",
+        "issue_relations": "Связи с задачами",  # noqa: RUF001
+        "relation_existing": "связь существует",
+        "relation_proposed": "связь предложена",
         "merge_requests": "Связанные MR",
         "release_planning": "Планирование релиза",
         "recommendations": "Рекомендации",
+        "recommendation": "Рекомендация агента",
+        "proposal": "Основной вариант",
+        "rationale": "Обоснование",
+        "assumptions": "Допущения",
+        "confidence": "Уверенность",
+        "alternatives": "Альтернативы",
+        "reconsider_if": "Пересмотреть, если",
+        "reason": "Причина",
+        "next_step": "Следующий шаг",
+        "why_now": "Почему сейчас",
+        "question_evidence": "Факты",
+        "missing_decision": "Требуемое решение",
+        "planning_effect": "Влияние на планирование",
+        "options": "Варианты",
+        "fallback": "Следующее обращение",
+        "report": "Отчёт",
+        "decision_accepted": "Приняты",
+        "decision_accepted_ready": "Полностью распланированы",
+        "decision_accepted_pending": "Ожидают действия по планированию",
+        "decision_deferred": "Отложены",
+        "decision_rejected": "Отклонены",
+        "decision_duplicate": "Дубликаты",
+        "decision_obsolete": "Устарели",
         "commands": "Ручные команды",
         "none": "Ничего не обнаружено.",
         "no_changes": "Изменения в GitLab не рекомендуются.",
@@ -169,6 +242,8 @@ TEXT = {
         "action_milestone": "Обновить майлстоун",
         "action_create_milestone": "Создать майлстоун",
         "action_link": "Создать связь задач",
+        "action_replace_link_delete": "Удалить конфликтующую связь задач",
+        "action_replace_link_create": "Создать заменяющую связь задач",
         "action_message": "Опубликовать сообщение",
         "action_information_new": "Опубликовать запрос информации",
         "action_information_ping_1": "Опубликовать первый пинг",
@@ -571,7 +646,9 @@ def load_analysis_index(root: Path) -> dict[str, Any]:
     if not path.exists():
         return {"items": {}}
     value = read_object(path, "analysis index")
-    return value if isinstance(value.get("items"), dict) else {"items": {}}
+    if value.get("schema") != ANALYSIS_INDEX_SCHEMA or not isinstance(value.get("items"), dict):
+        return {"items": {}}
+    return value
 
 
 def item_key(target: dict[str, Any]) -> str:
@@ -773,8 +850,14 @@ def discussion_notes(
     return result
 
 
-def conversation_state(discussions: list[dict[str, Any]]) -> dict[str, Any]:
-    notes = [note for note in discussion_notes(discussions, None) if note.get("system") is not True]
+def conversation_state(
+    discussions: list[dict[str, Any]], discussion_id: str | None = None
+) -> dict[str, Any]:
+    notes = [
+        note
+        for note in discussion_notes(discussions, discussion_id)
+        if note.get("system") is not True
+    ]
     note_ids = [note.get("id") for note in notes]
     if not all(positive(note_id) for note_id in note_ids) or len(set(note_ids)) != len(note_ids):
         raise WorkflowError("information conversation has invalid stable note IDs")
@@ -791,7 +874,14 @@ def validate_message(snapshot: dict[str, Any], value: object, label: str) -> dic
 def validate_information_request(
     snapshot: dict[str, Any], current_user: dict[str, Any], value: object, label: str
 ) -> dict[str, Any]:
-    expected = {"action", "target", "body", "prior_note_ids", "rationale"}
+    expected = {
+        "action",
+        "target",
+        "body",
+        "prior_note_ids",
+        "rationale",
+        "standalone_reason",
+    }
     if not isinstance(value, dict) or set(value) != expected:
         raise WorkflowError(f"{label} fields are invalid")
     action = value["action"]
@@ -803,6 +893,7 @@ def validate_information_request(
             value["target"] is not None
             or value["body"] is not None
             or value["prior_note_ids"] != []
+            or value["standalone_reason"] is not None
         ):
             raise WorkflowError(f"{label} with no action must not contain publication data")
         return {
@@ -811,6 +902,7 @@ def validate_information_request(
             "body": None,
             "prior_note_ids": [],
             "rationale": rationale,
+            "standalone_reason": None,
         }
     target, discussions = conversation_for(snapshot, value["target"], label)
     if target["kind"] == "issue":
@@ -822,6 +914,11 @@ def validate_information_request(
     required = {"new": 0, "ping_1": 1, "ping_2": 2, "close": 3}[action]
     if action != "new" and target["discussion_id"] is None:
         raise WorkflowError(f"{label} follow-up must target the observed discussion")
+    standalone_reason = value["standalone_reason"]
+    if action == "new" and target["discussion_id"] is None:
+        standalone_reason = text(standalone_reason, f"{label} standalone_reason")
+    elif standalone_reason is not None:
+        raise WorkflowError(f"{label} standalone_reason is valid only for a standalone new action")
     if (
         not isinstance(prior_note_ids, list)
         or len(prior_note_ids) != required
@@ -875,6 +972,7 @@ def validate_information_request(
         "body": body,
         "prior_note_ids": prior_note_ids,
         "rationale": rationale,
+        "standalone_reason": standalone_reason,
     }
 
 
@@ -910,11 +1008,17 @@ def validate_proposed_changes(snapshot: dict[str, Any], value: object) -> dict[s
     for link in links:
         if (
             not isinstance(link, dict)
+            or set(link) != {"target_project_id", "target_issue_iid", "link_type"}
             or not positive(link.get("target_project_id"))
             or not positive(link.get("target_issue_iid"))
             or link.get("link_type") not in {"relates_to", "blocks", "is_blocked_by"}
         ):
             raise WorkflowError("proposed issue link is invalid")
+    link_keys = {
+        (link["target_project_id"], link["target_issue_iid"], link["link_type"]) for link in links
+    }
+    if len(link_keys) != len(links):
+        raise WorkflowError("proposed issue links contain duplicates")
     if links:
         result["links"] = links
     messages = value.get("messages", [])
@@ -928,6 +1032,397 @@ def validate_proposed_changes(snapshot: dict[str, Any], value: object) -> dict[s
     return result
 
 
+def text_list(value: object, label: str) -> list[str]:
+    if not isinstance(value, list):
+        raise WorkflowError(f"{label} must be a list")
+    return [text(item, f"{label}[{index}]") for index, item in enumerate(value)]
+
+
+def validate_agent_recommendation(value: object) -> dict[str, Any]:
+    expected = {
+        "proposal",
+        "rationale",
+        "assumptions",
+        "confidence",
+        "alternatives",
+        "reconsider_if",
+    }
+    if not isinstance(value, dict) or set(value) != expected:
+        raise WorkflowError("agent recommendation fields are invalid")
+    confidence = value["confidence"]
+    if confidence not in CONFIDENCE:
+        raise WorkflowError("agent recommendation confidence is invalid")
+    return {
+        "proposal": text(value["proposal"], "agent recommendation proposal"),
+        "rationale": text(value["rationale"], "agent recommendation rationale"),
+        "assumptions": text_list(value["assumptions"], "agent recommendation assumptions"),
+        "confidence": confidence,
+        "alternatives": text_list(value["alternatives"], "agent recommendation alternatives"),
+        "reconsider_if": text(value["reconsider_if"], "agent recommendation reconsider_if"),
+    }
+
+
+def observed_issue_targets(collection: dict[str, Any]) -> set[tuple[str, int, int]]:
+    targets = {
+        (
+            item["target"]["hostname"],
+            item["target"]["project_id"],
+            item["target"]["iid"],
+        )
+        for item in collection["items"]
+    }
+    for key, context in collection["context"].items():
+        if not isinstance(context, dict) or not isinstance(context.get("issues"), list):
+            continue
+        hostname = key.rsplit(":", 1)[0]
+        try:
+            project_id = int(key.rsplit(":", 1)[1])
+        except (IndexError, ValueError):
+            continue
+        for issue in context["issues"]:
+            if isinstance(issue, dict) and positive(issue.get("iid")):
+                targets.add((hostname, project_id, issue["iid"]))
+    for item in collection["items"]:
+        hostname = item["target"]["hostname"]
+        snapshot = read_object(Path(item["evidence_path"]), "issue evidence")
+        for link in snapshot.get("links", []):
+            if not isinstance(link, dict):
+                continue
+            for candidate in (link, link.get("source_issue"), link.get("target_issue")):
+                if (
+                    isinstance(candidate, dict)
+                    and positive(candidate.get("project_id"))
+                    and positive(candidate.get("iid"))
+                ):
+                    targets.add((hostname, candidate["project_id"], candidate["iid"]))
+    return targets
+
+
+def validate_observed_link_evidence(snapshot: dict[str, Any]) -> None:
+    links = snapshot.get("links", [])
+    if not isinstance(links, list):
+        raise WorkflowError("observed issue links are invalid")
+    for link in links:
+        if (
+            not isinstance(link, dict)
+            or not positive(link.get("id"))
+            or link.get("link_type") not in {"relates_to", "blocks", "is_blocked_by"}
+        ):
+            raise WorkflowError("observed issue link evidence is incomplete")
+        candidates = [link, link.get("source_issue"), link.get("target_issue")]
+        if not any(
+            isinstance(candidate, dict)
+            and positive(candidate.get("project_id"))
+            and positive(candidate.get("iid"))
+            for candidate in candidates
+        ):
+            raise WorkflowError("observed issue link identity is invalid")
+
+
+def observed_issue_links(
+    snapshot: dict[str, Any], project_id: int, iid: int
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for link in snapshot.get("links", []):
+        if not isinstance(link, dict):
+            continue
+        candidates = [link, link.get("source_issue"), link.get("target_issue")]
+        if any(
+            isinstance(candidate, dict)
+            and candidate.get("project_id") == project_id
+            and candidate.get("iid") == iid
+            for candidate in candidates
+        ):
+            relation_type = link.get("link_type")
+            if relation_type not in {"relates_to", "blocks", "is_blocked_by"}:
+                raise WorkflowError("observed issue link type is invalid")
+            link_id = link.get("id")
+            if not positive(link_id):
+                matching = next(
+                    (
+                        candidate
+                        for candidate in candidates
+                        if isinstance(candidate, dict)
+                        and candidate.get("project_id") == project_id
+                        and candidate.get("iid") == iid
+                    ),
+                    None,
+                )
+                link_id = matching.get("id") if isinstance(matching, dict) else None
+            if not positive(link_id):
+                raise WorkflowError("observed issue link has no stable numeric ID")
+            result.append({"id": link_id, "relation_type": relation_type})
+    return result
+
+
+def validate_issue_relations(
+    value: object,
+    *,
+    snapshot: dict[str, Any],
+    evidence_target: dict[str, Any],
+    observed_targets: set[tuple[str, int, int]],
+    proposed_changes: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise WorkflowError("issue relations must be a list")
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, int, int]] = set()
+    links = proposed_changes.get("links", [])
+    messages = proposed_changes.get("messages", [])
+    for index, relation in enumerate(value):
+        expected = {
+            "target_hostname",
+            "target_project_id",
+            "target_issue_iid",
+            "relation_type",
+            "rationale",
+            "existing_link",
+            "comment",
+        }
+        if not isinstance(relation, dict) or set(relation) != expected:
+            raise WorkflowError(f"issue_relations[{index}] fields are invalid")
+        hostname = relation["target_hostname"]
+        project_id = relation["target_project_id"]
+        iid = relation["target_issue_iid"]
+        if (
+            not isinstance(hostname, str)
+            or not hostname
+            or hostname != evidence_target["hostname"]
+            or not positive(project_id)
+            or not positive(iid)
+        ):
+            raise WorkflowError(f"issue_relations[{index}] target is invalid")
+        target = (hostname, project_id, iid)
+        if (
+            target not in observed_targets
+            or target
+            == (
+                evidence_target["hostname"],
+                evidence_target["project_id"],
+                evidence_target["iid"],
+            )
+            or target in seen
+        ):
+            raise WorkflowError(f"issue_relations[{index}] target is invalid")
+        seen.add(target)
+        relation_type = relation["relation_type"]
+        if relation_type not in {"relates_to", "blocks", "is_blocked_by"}:
+            raise WorkflowError(f"issue_relations[{index}].relation_type is invalid")
+        observed_links = observed_issue_links(snapshot, project_id, iid)
+        if len(observed_links) > 1:
+            raise WorkflowError("multiple observed links exist for one issue relation target")
+        existing_link = relation["existing_link"]
+        if existing_link is not None and (
+            not isinstance(existing_link, dict)
+            or set(existing_link) != {"id", "relation_type"}
+            or not positive(existing_link.get("id"))
+            or existing_link.get("relation_type") not in {"relates_to", "blocks", "is_blocked_by"}
+        ):
+            raise WorkflowError(f"issue_relations[{index}].existing_link is invalid")
+        observed_link = observed_links[0] if observed_links else None
+        if existing_link != observed_link:
+            raise WorkflowError("issue relation existing_link does not match collected evidence")
+        comment = relation["comment"]
+        if comment is not None:
+            comment = text(comment, f"issue_relations[{index}].comment")
+            if not any(
+                message["body"] == comment
+                and message["target"]["kind"] == "issue"
+                and message["target"]["project_id"] == evidence_target["project_id"]
+                and message["target"]["iid"] == evidence_target["iid"]
+                for message in messages
+            ):
+                raise WorkflowError("an issue relation comment requires a matching issue message")
+        result.append(
+            {
+                "target_hostname": hostname,
+                "target_project_id": project_id,
+                "target_issue_iid": iid,
+                "relation_type": relation_type,
+                "rationale": text(relation["rationale"], f"issue_relations[{index}].rationale"),
+                "existing_link": existing_link,
+                "comment": comment,
+            }
+        )
+    expected_links = {
+        (
+            relation["target_project_id"],
+            relation["target_issue_iid"],
+            relation["relation_type"],
+        )
+        for relation in result
+        if relation["existing_link"] is None
+        or relation["existing_link"]["relation_type"] != relation["relation_type"]
+    }
+    proposed_links = {
+        (link["target_project_id"], link["target_issue_iid"], link["link_type"]) for link in links
+    }
+    if proposed_links != expected_links:
+        raise WorkflowError("proposed issue links must exactly match missing issue relations")
+    return result
+
+
+def observed_participants(snapshot: dict[str, Any]) -> set[str]:
+    usernames: set[str] = set()
+    issue = snapshot.get("issue")
+    if isinstance(issue, dict):
+        assignees = issue.get("assignees")
+        people = [issue.get("author"), *(assignees if isinstance(assignees, list) else [])]
+        for person in people:
+            if isinstance(person, dict) and isinstance(person.get("username"), str):
+                usernames.add(person["username"])
+    for merge_request in [*snapshot.get("merge_requests", []), *snapshot.get("closed_by", [])]:
+        if not isinstance(merge_request, dict):
+            continue
+        author = merge_request.get("author")
+        if isinstance(author, dict) and isinstance(author.get("username"), str):
+            usernames.add(author["username"])
+    conversations = [snapshot.get("discussions", [])]
+    conversations.extend(
+        item.get("discussions", [])
+        for item in snapshot.get("merge_request_conversations", [])
+        if isinstance(item, dict)
+    )
+    for discussions in conversations:
+        if not isinstance(discussions, list):
+            continue
+        for note in discussion_notes(discussions, None):
+            author = note.get("author")
+            if isinstance(author, dict) and isinstance(author.get("username"), str):
+                usernames.add(author["username"])
+    return usernames
+
+
+def validate_questions(
+    collection: dict[str, Any], value: object, items: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise WorkflowError("analysis questions must be a list")
+    evidence = {item["evidence_digest"]: item for item in collection["items"]}
+    result: list[dict[str, Any]] = []
+    for index, question in enumerate(value):
+        expected = {
+            "evidence_digest",
+            "kind",
+            "tldr",
+            "evidence",
+            "decision",
+            "why_now",
+            "planning_effect",
+            "recommendation",
+            "options",
+            "fallback",
+        }
+        if not isinstance(question, dict) or set(question) != expected:
+            raise WorkflowError(f"questions[{index}] fields are invalid")
+        evidence_digest = text(question["evidence_digest"], f"questions[{index}].evidence_digest")
+        if evidence_digest not in evidence:
+            raise WorkflowError(f"questions[{index}] evidence binding is invalid")
+        kind = question["kind"]
+        if kind not in {"authority", "private_context", "bounded_technical"}:
+            raise WorkflowError(f"questions[{index}] kind is invalid")
+        options = question["options"]
+        if not isinstance(options, list) or not 2 <= len(options) <= 5:
+            raise WorkflowError(f"questions[{index}] options are invalid")
+        if kind == "bounded_technical" and len(options) > 3:
+            raise WorkflowError("bounded technical questions require two or three options")
+        normalized_options = []
+        option_labels: set[str] = set()
+        for option_index, option in enumerate(options):
+            if not isinstance(option, dict) or set(option) != {"label", "description"}:
+                raise WorkflowError(f"questions[{index}].options[{option_index}] is invalid")
+            label = text(option["label"], f"questions[{index}].options[{option_index}].label")
+            if label in option_labels:
+                raise WorkflowError(f"questions[{index}] option labels must be unique")
+            option_labels.add(label)
+            normalized_options.append(
+                {
+                    "label": label,
+                    "description": text(
+                        option["description"],
+                        f"questions[{index}].options[{option_index}].description",
+                    ),
+                }
+            )
+        recommendation = question["recommendation"]
+        if not isinstance(recommendation, dict) or set(recommendation) != {
+            "option",
+            "rationale",
+        }:
+            raise WorkflowError(f"questions[{index}] recommendation is invalid")
+        recommended_option = text(
+            recommendation["option"], f"questions[{index}].recommendation.option"
+        )
+        if recommended_option not in option_labels:
+            raise WorkflowError(f"questions[{index}] recommended option was not offered")
+        evidence_item = evidence[evidence_digest]
+        snapshot = read_object(Path(evidence_item["evidence_path"]), "issue evidence")
+        target = evidence_item["target"]
+        context = collection["context"].get(f"{target['hostname']}:{target['project_id']}")
+        current_user = context.get("current_user") if isinstance(context, dict) else None
+        if not isinstance(current_user, dict):
+            raise WorkflowError("authenticated GitLab user evidence is unavailable")
+        fallback = question["fallback"]
+        participants = observed_participants(snapshot)
+        normalized_fallback = None
+        if fallback is not None:
+            if not isinstance(fallback, dict) or set(fallback) != {"participant", "target", "body"}:
+                raise WorkflowError(f"questions[{index}] fallback fields are invalid")
+            participant = fallback["participant"]
+            if (
+                not isinstance(participant, str)
+                or participant not in participants
+                or participant == current_user["username"]
+            ):
+                raise WorkflowError(f"questions[{index}] fallback participant is invalid")
+            fallback_target, _ = conversation_for(
+                snapshot, fallback["target"], f"questions[{index}] fallback"
+            )
+            fallback_body = text(fallback["body"], f"questions[{index}] fallback body")
+            item = next(
+                candidate
+                for candidate in items
+                if candidate["evidence"]["evidence_digest"] == evidence_digest
+            )
+            if not any(
+                request["action"] != "none"
+                and request["target"] == fallback_target
+                and request["body"] == fallback_body
+                for request in item["information_requests"]
+            ):
+                raise WorkflowError(
+                    f"questions[{index}] fallback must match an information request"
+                )
+            normalized_fallback = {
+                "participant": participant,
+                "target": fallback_target,
+                "body": fallback_body,
+            }
+        result.append(
+            {
+                "evidence_digest": evidence_digest,
+                "kind": kind,
+                "tldr": text(question["tldr"], f"questions[{index}].tldr"),
+                "evidence": text(question["evidence"], f"questions[{index}].evidence"),
+                "decision": text(question["decision"], f"questions[{index}].decision"),
+                "why_now": text(question["why_now"], f"questions[{index}].why_now"),
+                "planning_effect": text(
+                    question["planning_effect"], f"questions[{index}].planning_effect"
+                ),
+                "recommendation": {
+                    "option": recommended_option,
+                    "rationale": text(
+                        recommendation["rationale"],
+                        f"questions[{index}].recommendation.rationale",
+                    ),
+                },
+                "options": normalized_options,
+                "fallback": normalized_fallback,
+            }
+        )
+    return result
+
+
 def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> list[dict[str, Any]]:
     raw_items = analysis.get("items")
     if not isinstance(raw_items, list):
@@ -937,6 +1432,7 @@ def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> l
         raise WorkflowError("analysis must contain every collected issue exactly once")
     seen: set[str] = set()
     request_targets: set[tuple[str, str, int, int, str | None]] = set()
+    observed_targets = observed_issue_targets(collection)
     result: list[dict[str, Any]] = []
     for position, raw in enumerate(raw_items):
         if not isinstance(raw, dict):
@@ -959,6 +1455,7 @@ def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> l
         if not isinstance(context, dict) or not isinstance(context.get("milestones"), list):
             raise WorkflowError("analysis milestone catalog is unavailable")
         snapshot = read_object(Path(evidence_item["evidence_path"]), "issue evidence")
+        validate_observed_link_evidence(snapshot)
         current = snapshot["issue"].get("milestone")
         current_id = current.get("id") if isinstance(current, dict) else None
         try:
@@ -973,6 +1470,18 @@ def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> l
         if release_plan["decision"]["status"] == "accepted" and actuality["status"] != "current":
             raise WorkflowError("only a current issue may be accepted")
         proposed_changes = validate_proposed_changes(snapshot, raw.get("proposed_changes"))
+        agent_recommendation = validate_agent_recommendation(raw.get("agent_recommendation"))
+        if "related_issues" in raw or "partial_relations" in raw:
+            raise WorkflowError("legacy issue relation fields are not supported")
+        if "issue_relations" not in raw:
+            raise WorkflowError("analysis issue_relations field is required")
+        issue_relations = validate_issue_relations(
+            raw["issue_relations"],
+            snapshot=snapshot,
+            evidence_target=target,
+            observed_targets=observed_targets,
+            proposed_changes=proposed_changes,
+        )
         requests = raw.get("information_requests", [])
         if not isinstance(requests, list):
             raise WorkflowError("information requests must be a list")
@@ -1006,12 +1515,69 @@ def validate_analysis(collection: dict[str, Any], analysis: dict[str, Any]) -> l
             {
                 **raw,
                 "release_plan": release_plan,
+                "agent_recommendation": agent_recommendation,
+                "issue_relations": issue_relations,
                 "proposed_changes": proposed_changes,
                 "information_requests": information_requests,
                 "evidence": evidence_item,
             }
         )
     return result
+
+
+def validate_execution_plan(
+    top_value: object, parallel_value: object, items: list[dict[str, Any]]
+) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    accepted = {
+        item["evidence"]["evidence_digest"]
+        for item in items
+        if item["release_plan"]["decision"]["status"] == "accepted"
+    }
+    if not isinstance(top_value, list) or len(top_value) > 5:
+        raise WorkflowError("top_five must contain at most five items")
+    top: list[dict[str, str]] = []
+    top_seen: set[str] = set()
+    for index, value in enumerate(top_value):
+        if not isinstance(value, dict) or set(value) != {"evidence_digest", "rationale"}:
+            raise WorkflowError(f"top_five[{index}] fields are invalid")
+        evidence_digest = text(value["evidence_digest"], f"top_five[{index}].evidence_digest")
+        if evidence_digest not in accepted or evidence_digest in top_seen:
+            raise WorkflowError(f"top_five[{index}] must bind a unique accepted item")
+        top_seen.add(evidence_digest)
+        top.append(
+            {
+                "evidence_digest": evidence_digest,
+                "rationale": text(value["rationale"], f"top_five[{index}].rationale"),
+            }
+        )
+    if not isinstance(parallel_value, list):
+        raise WorkflowError("parallel_groups must be a list")
+    groups: list[dict[str, Any]] = []
+    grouped: set[str] = set()
+    for index, value in enumerate(parallel_value):
+        if not isinstance(value, dict) or set(value) != {"evidence_digests", "rationale"}:
+            raise WorkflowError(f"parallel_groups[{index}] fields are invalid")
+        evidence_digests = value["evidence_digests"]
+        if not isinstance(evidence_digests, list) or not evidence_digests:
+            raise WorkflowError(f"parallel_groups[{index}].evidence_digests must be non-empty")
+        normalized = [
+            text(digest_value, f"parallel_groups[{index}].evidence_digests[{item_index}]")
+            for item_index, digest_value in enumerate(evidence_digests)
+        ]
+        if (
+            len(set(normalized)) != len(normalized)
+            or any(digest_value not in accepted for digest_value in normalized)
+            or any(digest_value in grouped for digest_value in normalized)
+        ):
+            raise WorkflowError(f"parallel_groups[{index}] must bind unique accepted items")
+        grouped.update(normalized)
+        groups.append(
+            {
+                "evidence_digests": normalized,
+                "rationale": text(value["rationale"], f"parallel_groups[{index}].rationale"),
+            }
+        )
+    return top, groups
 
 
 def markdown_list(value: object, locale: str) -> str:
@@ -1025,6 +1591,32 @@ def display(value: object, locale: str, field: str) -> str:
     if locale == "ru" and (value is None or isinstance(value, str)) and value in translations:
         return translations[value]
     return str(value)
+
+
+def recommendation_markdown(value: dict[str, Any], locale: str) -> list[str]:
+    labels = TEXT[locale]
+    return [
+        f"- {labels['proposal']}: {value['proposal']}",
+        f"- {labels['rationale']}: {value['rationale']}",
+        f"- {labels['assumptions']}: "
+        + ("; ".join(value["assumptions"]) if value["assumptions"] else labels["none"]),
+        f"- {labels['confidence']}: {value['confidence']}",
+        f"- {labels['alternatives']}: "
+        + ("; ".join(value["alternatives"]) if value["alternatives"] else labels["none"]),
+        f"- {labels['reconsider_if']}: {value['reconsider_if']}",
+    ]
+
+
+def issue_relations_markdown(value: list[dict[str, Any]], locale: str) -> str:
+    if not value:
+        return f"- {TEXT[locale]['none']}"
+    return "\n".join(
+        f"- {relation['target_hostname']}:{relation['target_project_id']}"
+        f"#{relation['target_issue_iid']} [{relation['relation_type']}; "
+        f"{TEXT[locale]['relation_existing'] if relation['existing_link'] and relation['existing_link']['relation_type'] == relation['relation_type'] else TEXT[locale]['relation_proposed']}]: "
+        f"{relation['rationale']}"
+        for relation in value
+    )
 
 
 def api_command(
@@ -1141,6 +1733,70 @@ def information_command(guard: Path, guard_digest: str, stage: str) -> str:
     )
 
 
+def link_command(guard: Path, guard_digest: str, stage: str) -> str:
+    argv = [
+        sys.executable,
+        "-I",
+        "-S",
+        "-B",
+        str(triage_runner()),
+        "apply-link",
+        "--guard",
+        str(guard),
+        "--stage",
+        stage,
+    ]
+    return render_mutation_command(
+        argv,
+        skill="task-triage",
+        action=f"link:{stage}:{guard_digest}",
+        binding=digest({"guard_digest": guard_digest, "stage": stage}),
+        helper=marker_helper(),
+    )
+
+
+def replacement_link_actions(
+    root: Path,
+    host: str,
+    source: dict[str, Any],
+    current_user: dict[str, Any],
+    relation: dict[str, Any],
+) -> list[dict[str, str]]:
+    guard_value = {
+        "schema": "task-triage/link-guard/v1",
+        "host": host,
+        "current_user": current_user,
+        "source": {"project_id": source["project_id"], "iid": source["iid"]},
+        "target": {
+            "project_id": relation["target_project_id"],
+            "iid": relation["target_issue_iid"],
+        },
+        "existing_link": relation["existing_link"],
+        "desired_type": relation["relation_type"],
+    }
+    guard, guard_digest = write_artifact(root, "link-guards", guard_value)
+    return [
+        {
+            "kind": "replace_link_delete",
+            "preview": json.dumps(relation["existing_link"], ensure_ascii=False, indent=2),
+            "command": link_command(guard, guard_digest, "delete"),
+        },
+        {
+            "kind": "replace_link_create",
+            "preview": json.dumps(
+                {
+                    "target_project_id": relation["target_project_id"],
+                    "target_issue_iid": relation["target_issue_iid"],
+                    "link_type": relation["relation_type"],
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            "command": link_command(guard, guard_digest, "create"),
+        },
+    ]
+
+
 def information_actions(
     root: Path,
     host: str,
@@ -1150,15 +1806,15 @@ def information_actions(
 ) -> list[dict[str, str]]:
     target, discussions = conversation_for(snapshot, request["target"], "information guard")
     observed_conversation = (
-        conversation_state(discussions)
-        if request["action"] == "new" and target["discussion_id"] is None
+        conversation_state(discussions, target["discussion_id"])
+        if request["action"] == "new"
         else None
     )
     guard, guard_digest = write_artifact(
         root,
         "information-guards",
         {
-            "schema": "task-triage/information-guard/v2",
+            "schema": "task-triage/information-guard/v4",
             "host": host,
             "current_user": current_user,
             "request": request,
@@ -1210,16 +1866,26 @@ def read_information_guard(path: Path) -> tuple[dict[str, Any], str]:
     guard = parse_object(raw, "information guard")
     schema = guard.get("schema")
     expected_fields = {"schema", "host", "current_user", "request"}
-    if schema == "task-triage/information-guard/v2":
+    if schema in {
+        "task-triage/information-guard/v2",
+        "task-triage/information-guard/v3",
+        "task-triage/information-guard/v4",
+    }:
         expected_fields.add("conversation_state")
     if set(guard) != expected_fields or schema not in {
         "task-triage/information-guard/v1",
         "task-triage/information-guard/v2",
+        "task-triage/information-guard/v3",
+        "task-triage/information-guard/v4",
     }:
         raise WorkflowError("information guard fields are invalid")
     if not isinstance(guard.get("host"), str) or not isinstance(guard.get("current_user"), dict):
         raise WorkflowError("information guard identity is invalid")
-    if schema == "task-triage/information-guard/v2":
+    if schema in {
+        "task-triage/information-guard/v2",
+        "task-triage/information-guard/v3",
+        "task-triage/information-guard/v4",
+    }:
         state = guard["conversation_state"]
         request = guard.get("request")
         target = request.get("target") if isinstance(request, dict) else None
@@ -1227,7 +1893,9 @@ def read_information_guard(path: Path) -> tuple[dict[str, Any], str]:
             isinstance(request, dict)
             and request.get("action") == "new"
             and isinstance(target, dict)
-            and target.get("discussion_id") is None
+            and (
+                schema == "task-triage/information-guard/v4" or target.get("discussion_id") is None
+            )
         )
         if requires_state:
             if (
@@ -1535,7 +2203,7 @@ def apply_information(guard_path: Path, stage: str) -> None:
 def apply_information_locked(
     guard: dict[str, Any], guard_digest: str, receipt: Path, stage: str
 ) -> None:
-    if guard["schema"] == "task-triage/information-guard/v1":
+    if guard["schema"] != "task-triage/information-guard/v4":
         raise WorkflowError("legacy information guard must be regenerated")
     request = guard["request"]
     if not isinstance(request, dict):
@@ -1570,15 +2238,18 @@ def apply_information_locked(
     if not isinstance(target, dict):
         raise WorkflowError("information guard target is invalid")
     if stage == "message":
-        validated = validate_information_request(
-            snapshot, current_user, request, "information guard"
-        )
-        if request["action"] == "new" and target["discussion_id"] is None:
+        if request["action"] == "new":
             _, discussions = conversation_for(snapshot, target, "information guard")
-            if conversation_state(discussions) != guard["conversation_state"]:
+            if (
+                conversation_state(discussions, target["discussion_id"])
+                != guard["conversation_state"]
+            ):
                 raise WorkflowError(
                     "information conversation changed; regenerate the triage action"
                 )
+        validated = validate_information_request(
+            snapshot, current_user, request, "information guard"
+        )
         collection = "issues" if target["kind"] == "issue" else "merge_requests"
         endpoint = f"projects/{target['project_id']}/{collection}/{target['iid']}"
         if target["discussion_id"] is None:
@@ -1694,6 +2365,169 @@ def apply_information_locked(
         ) from exc
 
 
+def read_link_guard(path: Path) -> tuple[dict[str, Any], str]:
+    if len(path.parents) < 3:
+        raise WorkflowError("link guard path is invalid")
+    scope = path.parents[2].name
+    if re.fullmatch(r"[a-f0-9]{32}", scope) is None:
+        raise WorkflowError("link guard scope is invalid")
+    expected = (
+        xdg_state_home() / "agent-skills" / "task-triage" / scope / "artifacts" / "link-guards"
+    )
+    if path.parent != expected:
+        raise WorkflowError("link guard is outside the task-triage state root")
+    private_directory(expected)
+    if path.suffix != ".json" or not DIGEST_RE.fullmatch(path.stem):
+        raise WorkflowError("link guard path is invalid")
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != path.stem:
+        raise WorkflowError("link guard digest does not match")
+    guard = parse_object(raw, "link guard")
+    if (
+        set(guard)
+        != {
+            "schema",
+            "host",
+            "current_user",
+            "source",
+            "target",
+            "existing_link",
+            "desired_type",
+        }
+        or guard.get("schema") != "task-triage/link-guard/v1"
+    ):
+        raise WorkflowError("link guard fields are invalid")
+    for field in ("source", "target"):
+        identity = guard.get(field)
+        if (
+            not isinstance(identity, dict)
+            or set(identity) != {"project_id", "iid"}
+            or not positive(identity.get("project_id"))
+            or not positive(identity.get("iid"))
+        ):
+            raise WorkflowError("link guard identity is invalid")
+    existing = guard.get("existing_link")
+    if (
+        not isinstance(existing, dict)
+        or set(existing) != {"id", "relation_type"}
+        or not positive(existing.get("id"))
+        or existing.get("relation_type") not in {"relates_to", "blocks", "is_blocked_by"}
+        or guard.get("desired_type") not in {"relates_to", "blocks", "is_blocked_by"}
+        or existing.get("relation_type") == guard.get("desired_type")
+        or not isinstance(guard.get("host"), str)
+        or not isinstance(guard.get("current_user"), dict)
+    ):
+        raise WorkflowError("link guard relation is invalid")
+    return guard, path.stem
+
+
+def link_receipt_path(guard_path: Path, guard_digest: str) -> Path:
+    root = guard_path.parents[2]
+    return private_directory(root / "receipts" / "links") / f"{guard_digest}.json"
+
+
+def fresh_target_links(guard: dict[str, Any]) -> list[dict[str, Any]]:
+    source = guard["source"]
+    links = paginated(
+        guard["host"], f"projects/{source['project_id']}/issues/{source['iid']}/links"
+    )
+    return observed_issue_links(
+        {"links": links}, guard["target"]["project_id"], guard["target"]["iid"]
+    )
+
+
+def apply_link(path: Path, stage: str) -> bool:
+    resolved = path.resolve()
+    if resolved != path or path.is_symlink():
+        raise WorkflowError("link guard path is invalid")
+    guard, guard_digest = read_link_guard(resolved)
+    current_user = glab_json(guard["host"], "user")
+    if (
+        not isinstance(current_user, dict)
+        or current_user.get("id") != guard["current_user"].get("id")
+        or current_user.get("username") != guard["current_user"].get("username")
+    ):
+        raise WorkflowError("authenticated GitLab user changed since link preparation")
+    receipt = link_receipt_path(resolved, guard_digest)
+    lock = lock_information_lifecycle(receipt.with_suffix(".lock"))
+    try:
+        return apply_link_locked(guard, guard_digest, receipt, stage)
+    finally:
+        os.close(lock)
+
+
+def apply_link_locked(guard: dict[str, Any], guard_digest: str, receipt: Path, stage: str) -> bool:
+    source = guard["source"]
+    existing = guard["existing_link"]
+    issue_endpoint = f"projects/{source['project_id']}/issues/{source['iid']}"
+    if stage == "delete":
+        current_links: list[dict[str, Any]] | None = None
+        if receipt.exists():
+            receipt_value = read_object(receipt, "link replacement receipt")
+            if receipt_value != {"status": "deleting", "guard_digest": guard_digest}:
+                raise WorkflowError("link replacement delete was already completed or superseded")
+            current_links = fresh_target_links(guard)
+            if not current_links:
+                write_json(receipt, {"status": "deleted", "guard_digest": guard_digest})
+                return False
+        if (current_links if current_links is not None else fresh_target_links(guard)) != [
+            existing
+        ]:
+            raise WorkflowError("existing issue link changed; regenerate the replacement")
+        write_json(receipt, {"status": "deleting", "guard_digest": guard_digest})
+        try:
+            glab_mutation(guard["host"], "DELETE", f"{issue_endpoint}/links/{existing['id']}", {})
+        except MutationNotAttempted:
+            durable_unlink(receipt)
+            raise
+        try:
+            if fresh_target_links(guard):
+                raise MutationOutcomeUnknown("deleted issue link is still observed")
+            write_json(receipt, {"status": "deleted", "guard_digest": guard_digest})
+        except (OSError, UnicodeError, WorkflowError) as exc:
+            raise MutationOutcomeUnknown(
+                "issue link deletion could not be verified; inspect the target"
+            ) from exc
+        return True
+    if stage != "create":
+        raise WorkflowError("link replacement stage is invalid")
+    if not receipt.exists():
+        raise WorkflowError("link replacement create requires a delete receipt")
+    receipt_value = read_object(receipt, "link replacement receipt")
+    if receipt_value != {"status": "deleted", "guard_digest": guard_digest}:
+        raise WorkflowError("link replacement delete receipt is invalid")
+    if fresh_target_links(guard):
+        raise WorkflowError("issue link reappeared after deletion; regenerate the replacement")
+    write_json(receipt, {"status": "creating", "guard_digest": guard_digest})
+    payload = {
+        "target_project_id": guard["target"]["project_id"],
+        "target_issue_iid": guard["target"]["iid"],
+        "link_type": guard["desired_type"],
+    }
+    try:
+        glab_mutation(guard["host"], "POST", f"{issue_endpoint}/links", payload)
+    except MutationNotAttempted:
+        write_json(receipt, {"status": "deleted", "guard_digest": guard_digest})
+        raise
+    try:
+        created = fresh_target_links(guard)
+        if len(created) != 1 or created[0]["relation_type"] != guard["desired_type"]:
+            raise MutationOutcomeUnknown("replacement issue link is not observed")
+        write_json(
+            receipt,
+            {
+                "status": "created",
+                "guard_digest": guard_digest,
+                "link_id": created[0]["id"],
+            },
+        )
+    except (OSError, UnicodeError, WorkflowError) as exc:
+        raise MutationOutcomeUnknown(
+            "issue link creation could not be verified; inspect the target"
+        ) from exc
+    return True
+
+
 def commands_for(
     root: Path, item: dict[str, Any], current_user: dict[str, Any]
 ) -> list[dict[str, str]]:
@@ -1757,7 +2591,22 @@ def commands_for(
                 json.dumps({"milestone_id": 0}, indent=2),
             )
         )
+    relation_by_link = {
+        (
+            relation["target_project_id"],
+            relation["target_issue_iid"],
+            relation["relation_type"],
+        ): relation
+        for relation in item["issue_relations"]
+    }
     for link in proposed.get("links", []):
+        relation = relation_by_link[
+            (link["target_project_id"], link["target_issue_iid"], link["link_type"])
+        ]
+        existing_link = relation["existing_link"]
+        if existing_link is not None and existing_link["relation_type"] != link["link_type"]:
+            commands.extend(replacement_link_actions(root, host, target, current_user, relation))
+            continue
         commands.append(
             action(
                 root,
@@ -1778,7 +2627,9 @@ def commands_for(
     return commands
 
 
-def item_markdown(item: dict[str, Any], commands: list[dict[str, str]], locale: str) -> str:
+def item_markdown(
+    item: dict[str, Any], commands: list[dict[str, str]], locale: str, source_url: str
+) -> str:
     evidence = item["evidence"]
     issue = read_object(Path(evidence["evidence_path"]), "issue evidence")["issue"]
     actuality, quality = item["actuality"], item["quality"]
@@ -1786,9 +2637,9 @@ def item_markdown(item: dict[str, Any], commands: list[dict[str, str]], locale: 
     semver = release_plan["semver"]
     labels = TEXT[locale]
     sections = [
-        f"# {issue.get('title', evidence['url'])}",
+        f"# {markdown_link_label(str(issue.get('title') or source_url))}",
         "",
-        f"- {labels['source']}: {evidence['url']}",
+        f"- {labels['source']}: {source_url}",
         f"- {labels['actuality']}: {display(actuality['status'], locale, 'actuality')}",
         f"- {labels['quality']}: {display(quality['verdict'], locale, 'quality')}",
         f"- {labels['decision']}: {display(release_plan['decision']['status'], locale, 'decision')}",
@@ -1807,11 +2658,13 @@ def item_markdown(item: dict[str, Any], commands: list[dict[str, str]], locale: 
         "",
         markdown_list(quality.get("findings"), locale),
         "",
-        f"## {labels['relations']}",
+        f"## {labels['duplicates']}",
         "",
         markdown_list(item.get("duplicates"), locale),
         "",
-        markdown_list(item.get("related_issues"), locale),
+        f"## {labels['issue_relations']}",
+        "",
+        issue_relations_markdown(item["issue_relations"], locale),
         "",
         f"## {labels['merge_requests']}",
         "",
@@ -1826,6 +2679,10 @@ def item_markdown(item: dict[str, Any], commands: list[dict[str, str]], locale: 
         text(release_plan["decision"].get("rationale"), "decision rationale"),
         "",
         text(release_plan["milestone"].get("rationale"), "milestone rationale"),
+        "",
+        f"## {labels['recommendation']}",
+        "",
+        *recommendation_markdown(item["agent_recommendation"], locale),
         "",
         f"## {labels['recommendations']}",
         "",
@@ -1855,6 +2712,211 @@ def item_markdown(item: dict[str, Any], commands: list[dict[str, str]], locale: 
     return "\n".join(sections) + "\n"
 
 
+def summary_reference_maps(
+    collection: dict[str, Any], items: list[dict[str, Any]]
+) -> dict[str, dict[int, str]]:
+    candidates: dict[str, dict[int, set[str]]] = {"#": {}, "!": {}}
+    unresolved = "<unresolved>"
+
+    def add(kind: str, iid: object, url: object) -> None:
+        if positive(iid):
+            candidate = url if isinstance(url, str) and url else unresolved
+            candidates[kind].setdefault(iid, set()).add(candidate)
+
+    for evidence in collection["items"]:
+        target = evidence["target"]
+        context = collection["context"].get(f"{target['hostname']}:{target['project_id']}")
+        project_path = context.get("project_path") if isinstance(context, dict) else None
+        add(
+            "#",
+            target["iid"],
+            canonical_project_item_url(target["hostname"], project_path, "issues", target["iid"]),
+        )
+    for key, context in collection["context"].items():
+        if not isinstance(context, dict):
+            continue
+        host = key.rsplit(":", 1)[0]
+        project_path = context.get("project_path")
+        for issue in context.get("issues", []):
+            if not isinstance(issue, dict):
+                continue
+            add(
+                "#",
+                issue.get("iid"),
+                canonical_project_item_url(host, project_path, "issues", issue.get("iid")),
+            )
+    for item in items:
+        target = item["evidence"]["target"]
+        host = target["hostname"]
+        snapshot = read_object(Path(item["evidence"]["evidence_path"]), "issue evidence")
+        for link in snapshot.get("links", []):
+            if not isinstance(link, dict):
+                continue
+            for candidate in (link, link.get("source_issue"), link.get("target_issue")):
+                if not isinstance(candidate, dict) or (
+                    candidate.get("project_id") == target["project_id"]
+                    and candidate.get("iid") == target["iid"]
+                ):
+                    continue
+                add("#", candidate.get("iid"), canonical_linked_issue_url(host, candidate))
+        for merge_request in [
+            *snapshot.get("merge_requests", []),
+            *snapshot.get("closed_by", []),
+        ]:
+            if isinstance(merge_request, dict):
+                add("!", merge_request.get("iid"), canonical_merge_request_url(host, merge_request))
+    return {
+        kind: {
+            iid: next(iter(urls))
+            for iid, urls in values.items()
+            if len(urls) == 1 and unresolved not in urls
+        }
+        for kind, values in candidates.items()
+    }
+
+
+def canonical_project_item_url(
+    host: object, project_path: object, collection: str, iid: object
+) -> str | None:
+    if (
+        not isinstance(host, str)
+        or not host
+        or not isinstance(project_path, str)
+        or not project_path.strip("/")
+        or collection not in {"issues", "merge_requests"}
+        or not positive(iid)
+    ):
+        return None
+    parts = project_path.strip("/").split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        return None
+    encoded_path = "/".join(urllib.parse.quote(part, safe="") for part in parts)
+    return f"https://{host}/{encoded_path}/-/{collection}/{iid}"
+
+
+def canonical_merge_request_url(host: str, merge_request: dict[str, Any]) -> str | None:
+    iid = merge_request.get("iid")
+    if not positive(iid):
+        return None
+    references = merge_request.get("references")
+    full_reference = references.get("full") if isinstance(references, dict) else None
+    reference_url = canonical_full_reference_url(host, full_reference, "!", "merge_requests", iid)
+    web_url = merge_request.get("web_url")
+    web_candidate = canonical_item_web_url(host, web_url, "merge_requests", iid)
+    if full_reference is not None and reference_url is None:
+        return None
+    if web_url is not None and web_candidate is None:
+        return None
+    if reference_url is not None and web_candidate is not None and reference_url != web_candidate:
+        return None
+    return reference_url or web_candidate
+
+
+def canonical_same_host_path(host: str, web_url: str) -> str | None:
+    try:
+        parsed = urllib.parse.urlsplit(web_url)
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "https"
+        or parsed.hostname is None
+        or parsed.hostname.casefold() != host.casefold()
+        or port not in {None, 443}
+        or parsed.query
+        or parsed.fragment
+        or parsed.username is not None
+        or parsed.password is not None
+    ):
+        return None
+    return urllib.parse.unquote(parsed.path).rstrip("/")
+
+
+def canonical_full_reference_url(
+    host: str, value: object, sigil: str, collection: str, iid: int
+) -> str | None:
+    if not isinstance(value, str) or sigil not in value:
+        return None
+    project_path, reference_iid = value.rsplit(sigil, 1)
+    if not reference_iid.isdigit() or int(reference_iid) != iid:
+        return None
+    return canonical_project_item_url(host, project_path, collection, iid)
+
+
+def canonical_item_web_url(host: str, value: object, collection: str, iid: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    decoded_path = canonical_same_host_path(host, value)
+    if decoded_path is None:
+        return None
+    for suffix in (f"/-/{collection}/{iid}", f"/{collection}/{iid}"):
+        if decoded_path.endswith(suffix):
+            return canonical_project_item_url(host, decoded_path[: -len(suffix)], collection, iid)
+    return None
+
+
+def canonical_linked_issue_url(host: str, issue: dict[str, Any]) -> str | None:
+    iid = issue.get("iid")
+    if not positive(iid):
+        return None
+    references = issue.get("references")
+    full_reference = references.get("full") if isinstance(references, dict) else None
+    reference_url = canonical_full_reference_url(host, full_reference, "#", "issues", iid)
+    web_url = issue.get("web_url")
+    web_candidate = canonical_item_web_url(host, web_url, "issues", iid)
+    if full_reference is not None and reference_url is None:
+        return None
+    if web_url is not None and web_candidate is None:
+        return None
+    if reference_url is not None and web_candidate is not None and reference_url != web_candidate:
+        return None
+    return reference_url or web_candidate
+
+
+def is_plain_text_reference_value(value: str) -> bool:
+    if re.search(r"(?:\b[a-z][a-z0-9+.-]*://|mailto:|\bwww\.)", value, re.IGNORECASE):
+        return False
+    if any(character in value for character in "`[]<>*_~"):
+        return False
+    if "\\" in value or "|" in value or re.search(r"[ \t]{2,}\r?\n", value):
+        return False
+    if re.search(r"(?m)^ {0,3}(?:=+|-{3,})[ \t]*$", value):
+        return False
+    return not re.search(
+        r"(?m)^(?: {4}|\t| {0,3}(?:#{1,6}(?:[ \t]+|$)|>|[-+][ \t]+|\d+[.)][ \t]+|`{3,}|~{3,}))",
+        value,
+    )
+
+
+def link_summary_references(value: str, references: dict[str, dict[int, str]]) -> str:
+    if not is_plain_text_reference_value(value):
+        return value
+    pattern = re.compile(r"(?<![\w/\\])([#!])([1-9][0-9]*)(?![\w/\\])")
+
+    def replace(match: re.Match[str]) -> str:
+        kind, iid_text = match.groups()
+        url = references[kind].get(int(iid_text))
+        return f"[{kind}{iid_text}]({url})" if url else match.group(0)
+
+    return pattern.sub(replace, value)
+
+
+def markdown_link_label(value: str) -> str:
+    normalized = " ".join(value.split())
+    return (
+        normalized.replace("\\", "\\\\")
+        .replace("[", "\\[")
+        .replace("]", "\\]")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+def issue_summary_link(entry: dict[str, str]) -> str:
+    label = markdown_link_label(f"#{entry['iid']} {entry['title']}")
+    return f"[{label}]({entry['url']})"
+
+
 def publish(args: argparse.Namespace) -> dict[str, Any]:
     collection, collection_digest, root = resolve_collection(Path(args.collection).resolve())
     locale = collection.get("scope", {}).get("locale")
@@ -1865,6 +2927,10 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
     if analysis.get("collection_digest") != collection_digest:
         raise WorkflowError("analysis is stale for the selected collection")
     items = validate_analysis(collection, analysis)
+    questions = validate_questions(collection, analysis.get("questions", []), items)
+    top_five, parallel_groups = validate_execution_plan(
+        analysis.get("top_five", []), analysis.get("parallel_groups", []), items
+    )
     reports = private_directory(root / "reports")
     report_entries: list[dict[str, str]] = []
     analysis_index = load_analysis_index(root)["items"]
@@ -1874,10 +2940,26 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         if not isinstance(context, dict) or not isinstance(context.get("current_user"), dict):
             raise WorkflowError("authenticated GitLab user evidence is unavailable")
         commands = commands_for(root, item, context["current_user"])
+        issue = read_object(Path(item["evidence"]["evidence_path"]), "issue evidence")["issue"]
+        canonical_url = canonical_project_item_url(
+            target["hostname"], context.get("project_path"), "issues", target["iid"]
+        )
+        if canonical_url is None:
+            raise WorkflowError("canonical issue URL is unavailable")
         report = reports / f"{target['hostname']}-{target['project_id']}-{target['iid']}.md"
-        report_body = item_markdown(item, commands, locale).encode()
+        report_body = item_markdown(item, commands, locale, canonical_url).encode()
         atomic_write(report, versioned_markdown(report, report_body))
-        report_entries.append({"url": item["evidence"]["url"], "report": str(report)})
+        report_entries.append(
+            {
+                "url": canonical_url,
+                "report": str(report),
+                "iid": str(target["iid"]),
+                "title": str(issue.get("title") or item["evidence"]["url"]),
+                "decision": item["release_plan"]["decision"]["status"],
+                "reason": item["release_plan"]["decision"]["rationale"],
+                "next_step": item["agent_recommendation"]["proposal"],
+            }
+        )
         cached_analysis = {key: value for key, value in item.items() if key != "evidence"}
         cached_analysis["release_plan"] = {
             key: item["release_plan"][key] for key in ("decision", "semver", "release", "milestone")
@@ -1888,53 +2970,200 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
             "analysis": cached_analysis,
         }
     artifact_value = {
-        "schema": "task-triage/analysis/v2",
+        "schema": "task-triage/analysis/v5",
         "created_at": datetime.now(UTC).isoformat(),
         "collection_digest": collection_digest,
         "items": [
             {key: value for key, value in item.items() if key != "evidence"} for item in items
         ],
-        "top_five": analysis.get("top_five", []),
-        "parallel_groups": analysis.get("parallel_groups", []),
-        "questions": analysis.get("questions", []),
+        "top_five": top_five,
+        "parallel_groups": parallel_groups,
+        "questions": questions,
         "external_mutations": False,
     }
-    planning_complete = all(item["release_plan"]["planning_verdict"] == "ready" for item in items)
-    pending_requests = any(
-        request["action"] != "none" for item in items for request in item["information_requests"]
-    )
-    complete = (
-        collection["complete"]
-        and not artifact_value["questions"]
-        and planning_complete
-        and not pending_requests
-    )
+    pending_planning = [
+        item for item in items if item["release_plan"]["planning_verdict"] != "ready"
+    ]
+    active_requests = [
+        (item, request)
+        for item in items
+        for request in item["information_requests"]
+        if request["action"] != "none"
+    ]
+    pending_request_items = [
+        item
+        for item in items
+        if any(request["action"] != "none" for request in item["information_requests"])
+    ]
+    complete = collection["complete"] and not artifact_value["questions"]
+    follow_up_pending = bool(pending_planning or active_requests)
     artifact, analysis_digest = write_artifact(root, "analysis", artifact_value)
-    write_json(root / "analysis-index.json", {"items": analysis_index})
+    write_json(
+        root / "analysis-index.json",
+        {"schema": ANALYSIS_INDEX_SCHEMA, "items": analysis_index},
+    )
+    references = summary_reference_maps(collection, items)
+
+    entries = {
+        item["evidence"]["evidence_digest"]: entry
+        for item, entry in zip(items, report_entries, strict=True)
+    }
+
+    def question_entry(question: dict[str, Any]) -> dict[str, str]:
+        return entries[question["evidence_digest"]]
+
+    def plan_entry(evidence_digest: str) -> dict[str, str]:
+        return entries[evidence_digest]
+
+    top_markdown = markdown_list(
+        [
+            f"{issue_summary_link(plan_entry(value['evidence_digest']))} - "
+            f"{link_summary_references(value['rationale'], references)}"
+            for value in top_five
+        ],
+        locale,
+    )
+    parallel_markdown = markdown_list(
+        [
+            f"{', '.join(issue_summary_link(plan_entry(digest_value)) for digest_value in value['evidence_digests'])} - "
+            f"{link_summary_references(value['rationale'], references)}"
+            for value in parallel_groups
+        ],
+        locale,
+    )
+
+    def linked_question_field(question: dict[str, Any], field: str) -> str:
+        return link_summary_references(question[field], references)
+
+    def question_options(question: dict[str, Any]) -> str:
+        return "; ".join(
+            f"{link_summary_references(option['label'], references)}: "
+            f"{link_summary_references(option['description'], references)}"
+            for option in question["options"]
+        )
+
+    def issue_detail(item: dict[str, Any], reason: str) -> str:
+        entry = entries[item["evidence"]["evidence_digest"]]
+        return f"{issue_summary_link(entry)}: {link_summary_references(reason, references)}"
+
+    collection_error_details = "; ".join(
+        f"{error['target']}: {error['message']}" for error in collection["errors"]
+    )
+    question_details = "; ".join(
+        f"{issue_summary_link(question_entry(question))}: "
+        f"{labels['question_evidence']}: {linked_question_field(question, 'evidence')}; "
+        f"{labels['missing_decision']}: {linked_question_field(question, 'decision')}; "
+        f"{labels['why_now']}: {linked_question_field(question, 'why_now')}; "
+        f"{labels['planning_effect']}: {linked_question_field(question, 'planning_effect')}"
+        for question in questions
+    )
+    planning_details = "; ".join(
+        issue_detail(
+            item,
+            f"{item['release_plan']['decision']['rationale']} "
+            f"{item['release_plan']['milestone']['rationale']}",
+        )
+        for item in pending_planning
+    )
+    request_details = "; ".join(
+        issue_detail(
+            item,
+            "; ".join(
+                request["rationale"]
+                for request in item["information_requests"]
+                if request["action"] != "none"
+            ),
+        )
+        for item in pending_request_items
+    )
+
     summary_lines = [
         f"# {labels['summary']}",
         "",
-        f"- {labels['status']}: {labels['complete'] if complete else labels['partial']}",
+        f"- {labels['analysis_status']}: {labels['complete'] if complete else labels['partial']}",
+        f"- {labels['follow_up_status']}: {labels['pending'] if follow_up_pending else labels['clear']}",
         f"- {labels['collection']}: `{collection_digest}`",
         f"- {labels['analysis']}: `{analysis_digest}`",
+        f"- {labels['collection_errors']}: {len(collection['errors'])}"
+        + (f" - {collection_error_details}" if collection_error_details else ""),
+        f"- {labels['unanswered_questions']}: {len(questions)}"
+        + (f" - {question_details}" if question_details else ""),
+        f"- {labels['planning_pending']}: {len(pending_planning)}"
+        + (f" - {planning_details}" if planning_details else ""),
+        f"- {labels['requests_pending']}: {len(active_requests)}; "
+        f"{labels['request_issues']}: {len(pending_request_items)}"
+        + (f" - {request_details}" if request_details else ""),
         "",
         f"## {labels['first']}",
         "",
-        markdown_list(artifact_value["top_five"][:5], locale),
+        top_markdown,
         "",
         f"## {labels['parallel']}",
         "",
-        markdown_list(artifact_value["parallel_groups"], locale),
+        parallel_markdown,
         "",
         f"## {labels['questions']}",
         "",
-        markdown_list(artifact_value["questions"], locale),
+        markdown_list(
+            [
+                f"{issue_summary_link(question_entry(question))} - "
+                f"{linked_question_field(question, 'tldr')} "
+                f"{labels['question_evidence']}: {linked_question_field(question, 'evidence')}; "
+                f"{labels['missing_decision']}: {linked_question_field(question, 'decision')}; "
+                f"{labels['why_now']}: {linked_question_field(question, 'why_now')}; "
+                f"{labels['planning_effect']}: "
+                f"{linked_question_field(question, 'planning_effect')}; "
+                f"{labels['recommendation']}: "
+                f"{link_summary_references(question['recommendation']['option'], references)} - "
+                f"{link_summary_references(question['recommendation']['rationale'], references)}; "
+                f"{labels['options']}: {question_options(question)}; "
+                f"{labels['fallback']}: "
+                f"{question['fallback']['participant'] if question['fallback'] else labels['none']}"
+                for question in questions
+            ],
+            locale,
+        ),
         "",
         f"## {labels['reports']}",
         "",
-        *[f"- {entry['report']}" for entry in report_entries],
-        "",
     ]
+
+    def append_report_entries(values: list[dict[str, str]]) -> None:
+        if not values:
+            summary_lines.extend([f"- {labels['none']}", ""])
+            return
+        for entry in values:
+            reason = link_summary_references(entry["reason"], references)
+            next_step = link_summary_references(entry["next_step"], references)
+            summary_lines.append(
+                f"- {issue_summary_link(entry)} - {labels['reason']}: {reason} "
+                f"{labels['next_step']}: {next_step} "
+                f"[{labels['report']}]({Path(entry['report']).as_uri()})"
+            )
+        summary_lines.append("")
+
+    planning_ready = {
+        item["evidence"]["evidence_digest"]: item["release_plan"]["planning_verdict"] == "ready"
+        for item in items
+    }
+    entry_ready = {
+        entry["report"]: planning_ready[item["evidence"]["evidence_digest"]]
+        for item, entry in zip(items, report_entries, strict=True)
+    }
+    for decision in DECISIONS:
+        summary_lines.extend([f"### {labels['decision_' + decision]}", ""])
+        decision_entries = [entry for entry in report_entries if entry["decision"] == decision]
+        if decision == "accepted":
+            summary_lines.extend([f"#### {labels['decision_accepted_ready']}", ""])
+            append_report_entries(
+                [entry for entry in decision_entries if entry_ready[entry["report"]]]
+            )
+            summary_lines.extend([f"#### {labels['decision_accepted_pending']}", ""])
+            append_report_entries(
+                [entry for entry in decision_entries if not entry_ready[entry["report"]]]
+            )
+            continue
+        append_report_entries(decision_entries)
     summary = root / "triage-summary.md"
     atomic_write(summary, versioned_markdown(summary, "\n".join(summary_lines).encode()))
     write_json(
@@ -1948,6 +3177,7 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
     )
     return {
         "status": "ok" if complete else "partial",
+        "follow_up_status": "pending" if follow_up_pending else "clear",
         "summary": str(summary),
         "analysis_path": str(artifact),
         "analysis_digest": analysis_digest,
@@ -1974,6 +3204,9 @@ def parser() -> Parser:
     apply_parser = subparsers.add_parser("apply-information")
     apply_parser.add_argument("--guard", required=True)
     apply_parser.add_argument("--stage", choices=("message", "close"), required=True)
+    link_parser = subparsers.add_parser("apply-link")
+    link_parser.add_argument("--guard", required=True)
+    link_parser.add_argument("--stage", choices=("delete", "create"), required=True)
     return cli
 
 
@@ -2005,6 +3238,20 @@ def run(argv: list[str] | None = None) -> int:
                         "stage": args.stage,
                         "external_mutations": True,
                         "mutation_outcome": "applied",
+                    },
+                    sort_keys=True,
+                )
+            )
+            return 0
+        if args.command == "apply-link":
+            mutated = apply_link(Path(args.guard), args.stage)
+            print(
+                json.dumps(
+                    {
+                        "status": "applied" if mutated else "reconciled",
+                        "stage": args.stage,
+                        "external_mutations": mutated,
+                        "mutation_outcome": "applied" if mutated else "none",
                     },
                     sort_keys=True,
                 )
