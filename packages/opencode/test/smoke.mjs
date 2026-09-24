@@ -124,7 +124,7 @@ try {
   const opencodeEnvironment = { ...environment, OPENCODE_CONFIG: join(project, "opencode.json") };
   const agents = run(binary, ["agent", "list"], { cwd: project, env: opencodeEnvironment });
   assert.match(agents, /manager \(primary\)/);
-  assert.match(agents, /review \(primary\)/);
+  assert.match(agents, /review \(all\)/);
   const config = run(binary, ["debug", "config"], { cwd: project, env: opencodeEnvironment });
   assert.match(config, /@kisev\/skills-opencode/);
   const manifest = JSON.parse(

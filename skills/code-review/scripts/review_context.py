@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, cast
 
+import review_publication
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -2099,23 +2101,19 @@ def structured_publication_preview(
     repository_url = str(cast("dict[str, Any]", evidence["object"])["web_url"]).split(
         "/-/merge_requests/", 1
     )[0]
+    publication_dependencies: dict[str, str] = {}
 
     def marked_command(
         argv: list[str], action_id: str, value: object, *, stdin_sha256: str | None = None
     ) -> str:
-        return render_mutation_command(
+        return review_publication.make_command(
+            root,
+            evidence,
+            context,
+            action_id,
             argv,
-            skill="code-review",
-            action=action_id,
-            binding=portable.digest(
-                {
-                    "target": target,
-                    "head_sha": evidence["head_sha"],
-                    "action": action_id,
-                    "value": value,
-                }
-            ),
-            helper=Path(__file__).with_name("portable_runtime") / "state_artifacts.py",
+            value,
+            publication_dependencies,
             stdin_sha256=stdin_sha256,
         )
 
@@ -2215,7 +2213,6 @@ def structured_publication_preview(
                 {"body_sha256": body_digest},
                 stdin_sha256=body_digest,
             )
-            command += f" < {shlex.quote(str(body_path))}"
         elif publication_operation == "create_general":
             command = marked_command(
                 [

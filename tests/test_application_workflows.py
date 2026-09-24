@@ -3486,26 +3486,58 @@ print(json.dumps(value))
             commands = plan_result["publication_commands"]
             self.assertEqual(len(commands), 5)
             self.assertTrue(
-                all(value.startswith("# execution-status=not_run\n") for value in commands)
+                all("review_publication.py apply --action " in value for value in commands)
             )
-            self.assertTrue(all(" marker-run " in value for value in commands))
-            self.assertTrue(all(" -- glab " in value for value in commands))
-            self.assertTrue(all("review_publish.py" not in value for value in commands))
+            self.assertTrue(
+                all("--confirm " in value and " -- glab " not in value for value in commands)
+            )
             plan_document = json.loads(
                 Path(plan_result["artifact_path"]).read_text(encoding="utf-8")
             )
             preview = plan_document["payload"]["publication_preview"]
             thread_actions = [item for item in preview["actions"] if item["kind"] == "thread"]
             self.assertEqual([item["operation"] for item in thread_actions], ["reply", "resolve"])
-            self.assertIn("--method POST", thread_actions[0]["command"])
-            self.assertEqual(thread_actions[0]["command"].count("--silent"), 1)
-            self.assertIn("/notes", thread_actions[0]["command"])
-            self.assertIn("--method PUT", thread_actions[1]["command"])
-            self.assertEqual(thread_actions[1]["command"].count("--silent"), 1)
-            self.assertIn("resolved=true", thread_actions[1]["command"])
+
+            def guarded_action(command: str) -> dict[str, Any]:
+                argv = shlex.split(command)
+                path = Path(argv[argv.index("--action") + 1])
+                self.assertEqual(path.stem, argv[argv.index("--confirm") + 1])
+                return cast("dict[str, Any]", json.loads(path.read_text()))
+
+            reply_guard = guarded_action(thread_actions[0]["command"])
+            close_guard = guarded_action(thread_actions[1]["command"])
+            binding_check = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-B",
+                    "-c",
+                    (
+                        "import sys,json; from pathlib import Path; "
+                        "sys.path.insert(0, sys.argv[1]); import review_publication; "
+                        "review_publication.finalized_action(Path(sys.argv[2]), json.loads(sys.argv[3]), sys.argv[4])"
+                    ),
+                    str(BUILT_SKILLS / "code-review/scripts"),
+                    str(artifact_root),
+                    json.dumps(reply_guard),
+                    shlex.split(thread_actions[0]["command"])[-1],
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(binding_check.returncode, 0, binding_check.stderr)
+            self.assertEqual(reply_guard["method"], "POST")
+            self.assertTrue(reply_guard["endpoint"].endswith("/notes"))
+            self.assertEqual(close_guard["method"], "PUT")
+            self.assertEqual(close_guard["payload"], {"resolved": True})
+            self.assertTrue(close_guard["dependency"])
             self.assertTrue(all("&&" not in item["command"] for item in thread_actions))
             label_action = next(item for item in preview["actions"] if item["kind"] == "labels")
-            self.assertIn("--label semver::patch", label_action["command"])
+            self.assertIn(
+                "semver::patch", guarded_action(label_action["command"])["payload"]["labels"]
+            )
             self.assertEqual(
                 plan_document["payload"]["label_review"]["semver"]["selected"], "semver::patch"
             )

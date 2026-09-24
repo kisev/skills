@@ -91,7 +91,7 @@ content-addressed receipt can advance the workflow. Only a fresh contract-5 plan
 can render final chat.
 Each new plan carries a cumulative finding ledger. Closed findings remain
 addressable and cannot silently reuse an ID. Publication bodies are plain files
-and the plan provides direct manual `glab` commands that consume them. Incremental
+and new code-review plans provide guarded one-action helper commands. Incremental
 review determines whether content is already published only by reading current
 GitLab discussions, notes, and issues authored by the authenticated user and
 comparing their meaning. A digest-bound post-success marker records only that a
@@ -104,8 +104,8 @@ leave the superseded plan executable.
 The immutable review-plan envelope embeds the complete Markdown. A successful
 scaffold atomically replaces the target-scoped `review-publication.md` and a
 private pointer to that immutable plan. Contract 1 through 5 plans remain readable
-as historical baselines, but their helper commands are not executable after the
-move to direct manual `glab` commands. Older plans fall back to a full review
+as historical baselines, but their old helper commands are not supported. Direct-command
+plans require regeneration for guarded publication. Older plans fall back to a full review
 rather than becoming a contract-6 incremental baseline. Exact refs live in
 private evidence; the user-facing plan does not display raw commit SHAs. Prepare
 and review never invoke publication commands. MR state is recorded but does not

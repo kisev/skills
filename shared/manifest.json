@@ -2,6 +2,14 @@
   "version": 1,
   "files": [
     {
+      "source": "references/mutation_process.py",
+      "destination": "code-review/scripts/portable_runtime/mutation_process.py"
+    },
+    {
+      "source": "references/mutation_process.py",
+      "destination": "task-triage/scripts/portable_runtime/mutation_process.py"
+    },
+    {
       "source": "references/portable_gitlab/local_review.py",
       "destination": "code-review/scripts/portable_runtime/local_review.py"
     },

@@ -2512,6 +2512,7 @@ def test_source_layout_runner_executes_without_generated_runtime(tmp_path: Path)
         shared / "work_item_runtime",
     )
     shutil.copy2(ROOT / "shared/references/state_artifacts.py", shared / "state_artifacts.py")
+    shutil.copy2(ROOT / "shared/references/mutation_process.py", shared / "mutation_process.py")
     assert not (runner.parent / "portable_runtime").exists()
 
     result = subprocess.run(

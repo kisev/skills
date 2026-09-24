@@ -402,6 +402,54 @@ test("agent deselection removes managed profiles and preserves profile configura
   }
 });
 
+test("manager can delegate to review and review can complete an independent nested critic", async () => {
+  const context = await roots();
+  try {
+    await confirmedInstall(context.project, context.home);
+    const manager = await readFile(join(context.root, "agents", "manager.md"), "utf8");
+    const reviewer = await readFile(join(context.root, "agents", "review.md"), "utf8");
+    assert.match(manager, /review: allow/);
+    assert.match(reviewer, /mode: all/);
+    assert.match(reviewer, /critic: allow/);
+    const { RoutingGate } = await import("../dist/routing.js");
+    const gate = new RoutingGate();
+    const agents = ["review", "critic"].map((agent) => ({
+      agent,
+      capabilities: ["read", "review"],
+      tools: ["read", "glob", "grep"],
+    }));
+    const input = {
+      category: "review",
+      task: "Audit the exact snapshot",
+      requirements: [],
+      agents,
+    };
+    const decision = gate.preview(input);
+    assert.equal(decision.agent, "review");
+    gate.grant("manager-session", decision);
+    gate.consume("manager-session", "review");
+    const second = gate.preview({ ...input, override: "critic" });
+    gate.grant("review-session", second);
+    gate.consume("review-session", "critic");
+    const report = {
+      review_report: {
+        schema_version: 1,
+        status: "APPROVED",
+        target: "exact snapshot",
+        findings: [],
+        evidence: ["source"],
+        checks: ["contract"],
+        risks: [],
+      },
+    };
+    gate.complete("review-session", "critic", report);
+    gate.complete("manager-session", "review", report);
+    assert.throws(() => gate.consume("review-session", "critic"), /receipt/);
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
 test("additional critic atomically changes the exact manager and review pools", async () => {
   const context = await roots();
   try {

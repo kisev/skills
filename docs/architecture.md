@@ -73,9 +73,8 @@ journaled rollback path. Stale, expired, superseded, or replayed confirmations
 fail before mutation; user-owned files and unrelated durable state remain
 outside package ownership. Scope-aware direct commands default to the current
 directory; one `--global` flag selects global state. Direct CLI administration
-uses the same project default. Portable cleanup snapshots preview-bound paths before invoking
-the pinned external CLI directly; rollback for concurrent unplanned paths is
-best-effort. Global archive state is shared globally; project archives are
+uses the same project default. Portable cleanup belongs to the external `skills`
+CLI and has no package-managed snapshots or rollback. Global archive state is shared globally; project archives are
 isolated by project-root digest.
 
 ## Routing Contracts
@@ -83,8 +82,12 @@ isolated by project-root digest.
 The OpenCode `manager` owns the evidence -> plan -> authorization -> execution ->
 checks -> report lifecycle for routed work. The `route` tool has four categories: `exploration` to
 `mapper`, `architecture` to `architect`, `implementation` to `worker`, and
-`review` to `review` or one selected `critic`. The manager handles read-only quick
-requests directly and routes write-capable documentation as implementation.
+`review` to `review` or one selected `critic`. The manager delegates all substantive
+work, including read-only quick requests, and routes write-capable documentation as implementation.
+The `review` agent is available directly and as a subagent; it performs the primary
+review and delegates independent passes to critics according to the selected skill.
+It may fix project files only after an explicit user request and a visible transition
+out of the read-only review phase.
 
 Routing inventory comes from resolved host configuration; callers cannot inject
 agents, capabilities, tools, models, or availability. A routing decision records

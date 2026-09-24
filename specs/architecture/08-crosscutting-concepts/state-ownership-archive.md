@@ -21,7 +21,7 @@ pointer is not copied when its complete history remains reachable through verifi
 immutable artifacts. Locks, caches, transaction journals, one-use receipts, and
 credentials are not versioned as stable state.
 
-Every generated target-mutation command records an advisory marker below
+Direct target-mutation commands outside guarded code-review publication record an advisory marker below
 `$XDG_STATE_HOME/agent-skills/post-success/v1/` only after its process exits zero.
 The marker binds the skill, action, target or plan binding, and exact argv/stdin
 digest. It has no TTL and is not publication proof, authorization, a postcondition,
@@ -37,6 +37,12 @@ The status projection is excluded from immutable publication bindings, so record
 a marker cannot invalidate the approved command or block its required follow-up.
 Configured XDG roots must be absolute and normalized; state traversal rejects
 symlink components and state snapshots are durable before current-state replacement.
+
+Code-review owns its one-action guards under `artifacts/publication_actions` and
+its serialized publication ledger under `code-review-publication` within the
+target collection root. The ledger retains successful postconditions and an
+in-progress reservation after ambiguous results. It is separate from advisory
+markers and governed by [the code-review contract](../../capabilities/skills/code-review.md).
 
 This ownership and isolation mechanism provides
 [REQ-F-005](../../requirements/functional/README.md#req-f-005---archive-owned-retired-assets),

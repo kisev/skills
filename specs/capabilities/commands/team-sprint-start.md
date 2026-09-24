@@ -1,45 +1,10 @@
 # `/team-sprint-start`
 
-## Purpose
-
-Expose one fixed sprint-start action.
-
-## Triggers and Near-Misses
-
-Routes sprint start; near-miss: sprint close.
-
-## Inputs/Outputs
-
-Arguments may override automatic default-profile resolution; the action remains
-fixed and output is validated start status.
-
-## Workflow Stages
-
-Select, pass, inspect prerequisites, execute, report.
-
-## Dependencies
-
-`team-sprint-start` shared runtime.
-
-## Remote/Local Effects
-
-Declared local state effects.
-
-## Errors/Partial/Escalation
-
-Invalid prerequisites block.
-
-## Unique Constraints
-
-No replacement state is inferred.
-
-## Requirement
-
 ### REQ-I-229 - Route the sprint-start command
 
-The command shall load exactly `team-sprint-start` and preserve prerequisite checks.
+The command shall load [team-sprint-start](../skills/team-sprint-start.md) through the
+[shared command interface](../../requirements/interfaces/README.md#req-i-002---command-interface).
 
-## Example
+#### Verification
 
-`/team-sprint-start` reports missing context without writing a substitute.
-See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).
+Generated adapter tests verify the exact skill binding and untrusted arguments.

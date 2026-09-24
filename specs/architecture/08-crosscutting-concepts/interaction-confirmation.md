@@ -34,12 +34,11 @@ workflow. Generated `glab api` mutation commands suppress successful response
 bodies while preserving exit status and error output. Partial collection does
 not replace a previously trusted complete summary as complete.
 
-A code-review publication plan is read-only. It contains direct manual `glab`
-commands and the generated body files they consume. Publication remains an
-external mutation under the normal confirmation boundary, but the skill creates
-no helper, local receipt, marker, retry record, idempotency state, or
-postcondition protocol. A thread explanation and its following `resolve` or
-`reopen` operation are separate ordered manual actions; the plan never presents a
-state change without the explanation that justifies it. Direct `glab api`
-mutation commands suppress successful response bodies without suppressing
-errors.
+A code-review plan is prepared without external writes. Publication starts only
+when the user invokes its separate one-action helper with the exact action digest.
+The authoritative guarantees and legacy transition are owned by
+[the code-review requirement](../../capabilities/skills/code-review.md).
+
+An explicit `askme` invocation ends with manual continuation. Internal clarification
+returns to its already-authorized caller, preserving scope and pending mutation gates,
+as defined by [REQ-F-102](../../capabilities/skills/askme.md#req-f-102---ask-dependency-bounded-questions).

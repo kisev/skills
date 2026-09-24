@@ -100,17 +100,14 @@ separate artifact copy of a patch. Those bindings remain in private JSON.
 The model supplies semantic assessment prose, natural role-authored publication
 bodies, template selections, and exhaustive label-applicability rationales. The
 runner owns standard localized presentation labels, observed label descriptions,
-paths, exact GitLab identity, body files, direct commands, and chat rendering.
+paths, exact GitLab identity, body files, guarded commands, and chat rendering.
 Do not hand-edit generated commands or final chat.
 
-The publication plan is a manual checklist, not a publication protocol. Each
-publishable item has a body file and a directly runnable `glab` command. For an
-incremental review, determine whether content is already published from actual
-GitLab discussions, notes, and issues authored by the current `glab` user and a
-semantic comparison of the content. Never infer publication from local state,
-receipts, a command that was previously shown, or the advisory marker recording
-that the exact command exited zero. Use that marker only to require remote
-revalidation before deciding whether a retry is needed.
+The plan presents one guarded helper command per remote action, beside its exact
+body preview. Follow `references/publication.md` for execution and recovery.
+For incremental review, compare current GitLab discussions, notes, and issues
+with the finding's meaning. Historical receipts or advisory markers do not replace
+fresh semantic assessment, authorize changed content, or justify automatic retry.
 
 Severity and internal review bookkeeping must not appear in publication bodies.
 Published prose is concise without losing the evidence or required action. Apply

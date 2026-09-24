@@ -41,13 +41,6 @@ def section(text: str, heading: str) -> str:
     return match.group("body").strip()
 
 
-def document_shape(text: str) -> tuple[list[int], int, int]:
-    headings = [len(match.group(1)) for match in re.finditer(r"^(#{1,6}) ", text, re.MULTILINE)]
-    bullets = len(re.findall(r"^- ", text, re.MULTILINE))
-    fences = len(re.findall(r"^```", text, re.MULTILINE))
-    return headings, bullets, fences
-
-
 def test_all_architecture_view_templates_are_specialized_and_mirrored() -> None:
     expected = set(VIEWPOINTS)
     english = {path.parent.name for path in ARCHITECTURE.glob("*/README.md")}
@@ -76,7 +69,6 @@ def test_all_architecture_view_templates_are_specialized_and_mirrored() -> None:
             "Шаблон содержания",
         ):
             assert section(russian_text, heading)
-        assert document_shape(english_text) == document_shape(russian_text), name
         assert english_text.startswith(f"# {name[:2]} "), name
         assert russian_text.startswith(f"# {name[:2]} "), name
         purposes.add(section(english_text, "Purpose"))
@@ -86,7 +78,8 @@ def test_all_architecture_view_templates_are_specialized_and_mirrored() -> None:
     assert len(content_templates) == 12
 
 
-def test_every_english_and_russian_template_has_the_same_document_shape() -> None:
+def test_every_template_has_a_translation_with_the_same_machine_placeholders() -> None:
+    # Translation may restructure prose; stable identifiers remain shared contracts.
     templates = SKILL / "templates"
     english = {
         path.relative_to(templates): path
@@ -98,9 +91,11 @@ def test_every_english_and_russian_template_has_the_same_document_shape() -> Non
     }
     assert set(english) == set(russian)
     for relative, english_path in english.items():
-        assert document_shape(english_path.read_text(encoding="utf-8")) == document_shape(
-            russian[relative].read_text(encoding="utf-8")
-        ), relative
+        source = english_path.read_text(encoding="utf-8")
+        translated = russian[relative].read_text(encoding="utf-8")
+        assert translated.strip(), relative
+        for marker in re.findall(r"(?:REQ-[FIQC]-[0-9]+|ADR-[0-9]+|spec-validate/v[0-9]+)", source):
+            assert marker in translated, (relative, marker)
 
 
 def test_architecture_decomposition_matches_viewpoint_contract() -> None:

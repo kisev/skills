@@ -1,44 +1,10 @@
 # `/code-explain`
 
-## Purpose
-
-Expose the `code-explain` skill as a thin command adapter.
-
-## Triggers and Near-Misses
-
-Routes bounded explanation; near-miss: code implementation.
-
-## Inputs/Outputs
-
-Untrusted range arguments become skill input; output is evidence-linked prose.
-
-## Workflow Stages
-
-Select, pass, explain, report.
-
-## Dependencies
-
-`code-explain` and native Skill loading.
-
-## Remote/Local Effects
-
-Local reads inherited from the skill.
-
-## Errors/Partial/Escalation
-
-Missing range or unreadable file remains partial.
-
-## Unique Constraints
-
-The command preserves revision and coverage bounds.
-
-## Requirement
-
 ### REQ-I-204 - Route the code-explain command
 
-The command shall load exactly `code-explain` and preserve its evidence boundary.
+The command shall load [code-explain](../skills/code-explain.md) through the
+[shared command interface](../../requirements/interfaces/README.md#req-i-002---command-interface).
 
-## Example
+#### Verification
 
-`/code-explain` routes a current diff range.
-See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).
+Generated adapter tests verify the exact skill binding and untrusted arguments.

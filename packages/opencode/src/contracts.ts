@@ -63,6 +63,10 @@ function strings(value: unknown): value is string[] {
 
 export function validateAgentReport(agent: string, report: unknown, card?: ExecutionCard): void {
   if (!object(report)) throw new Error("agent report must be an object");
+  if (agent === "critic" && !card && "review_report" in report) {
+    validateAgentReport("review", report);
+    return;
+  }
   const reportKey = agent === "architect" ? "execution_card" : `${agent}_report`;
   if (Object.keys(report).length !== 1 || !(reportKey in report))
     throw new Error(`${agent} report has an invalid envelope`);

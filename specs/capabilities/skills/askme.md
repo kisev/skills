@@ -16,7 +16,7 @@ without a separate invitation to interview the user.
 ## Inputs and Outputs
 
 Input is a goal and repository facts. Output is ordered decision answers or an
-explicit statement that no clarification questions remain, followed by a stop.
+explicit statement that no clarification questions remain, followed by the invocation-specific boundary below.
 The final decision boundary names the expected result, supported scenarios,
 acceptance checks, constraints, accepted risks, deferred work, and the basis of
 user decisions. It stays in chat and does not create an artifact.
@@ -24,7 +24,7 @@ user decisions. It stays in chat and does not create an artifact.
 ## Workflow Stages
 
 Resolve dependencies, inspect facts, present the proposed task, ask the next
-independent question if needed, report, and wait for manual continuation.
+independent question if needed, report, and stop or return decisions to the caller.
 
 ## Dependencies
 
@@ -42,8 +42,7 @@ Unknown prerequisites block dependent questions; unresolved answers escalate.
 
 Questions follow dependency order and do not repeat answered decisions. Do not
 invent questions or require redundant confirmation when facts suffice. Interview
-answers alone do not authorize implementation or automatic resumption of a
-calling workflow, including `task-prepare`.
+answers do not expand authorization or clear pending publication gates.
 
 ## Requirement
 
@@ -51,8 +50,12 @@ calling workflow, including `task-prepare`.
 
 The skill shall recognize direct and conditional invitations to clarify by intent,
 ask only questions whose answers determine the next safe decision, explicitly
-report when no clarification questions remain, and always stop for explicit
-manual continuation before another workflow or the calling task resumes.
+report when no clarification questions remain, and distinguish invocation contexts.
+An explicit user invocation, including a conditional invitation, shall stop for
+manual continuation. Internal clarification of an already-authorized workflow
+shall return decisions to that caller, including `task-prepare`, which may resume
+within the agreed scope. Explicit interview intent takes precedence; ambiguity
+shall stop. Neither mode shall expand scope or clear pending mutation gates.
 For review follow-ups, the skill shall assess the agreed requirement, reachable
 scenario, user impact, relation to changes, and proportionate remedy before
 asking implementation questions. It shall distinguish mandatory corrections,

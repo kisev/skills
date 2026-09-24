@@ -19,11 +19,21 @@ When an OpenCode task is dispatched, the package shall resolve an eligible host
 agent and require a one-use receipt bound to task, requirements, card, revision,
 and expiry before execution.
 
+#### Verification
+
+Routing tests reject stale and replayed receipts and validate independent nested
+manager-to-review-to-critic sessions with the installed profile permissions.
+
 ### REQ-F-003 - Preserve useful partial results
 
 When required evidence is missing, stale, malformed, or contradictory, a
 workflow shall return a structured `partial`, `blocked`, or `error` outcome and
 shall identify the missing evidence and safe escalation.
+
+#### Verification
+
+Runner regression tests inject incomplete pages, malformed evidence, and stale
+bindings and assert non-success outcomes with retained useful partial results.
 
 ### REQ-F-004 - Publish one verified release
 
@@ -33,6 +43,11 @@ and bind both to one release manifest. CI shall verify deployed Pages bytes, npm
 integrity, signatures, provenance, imports, and CLI before creating the GitHub
 Release. The distribution version and source revision shall match the immutable
 tag, and a rerun shall accept only identical previously published bytes.
+
+#### Verification
+
+Release contract tests reject version, tag, provenance, and digest mismatches.
+The tag workflow verifies both remote channels before GitHub Release creation.
 
 ### REQ-F-005 - Archive owned retired assets
 
@@ -51,18 +66,38 @@ supersede the previous unconsumed receipt across installer, reconcile, profile,
 and critic domains; deterministic plan and unique confirmation digests are
 separate, and superseded confirmation fails closed.
 
+#### Verification
+
+Package lifecycle tests cover exact ownership, modified files, portable-tree
+independence, no-op previews, and cross-domain confirmation supersession.
+
 ### REQ-F-006 - Manage package-owned profiles safely
 
 Profile mutations shall use preview and confirmed apply phases, exact ownership,
 atomic rollback, and restart semantics defined by the package contract.
+
+#### Verification
+
+Agent-profile tests exercise confirmed changes, retained model selections,
+collisions, replay, and rollback after injected write failures.
 
 ### REQ-F-007 - Provide observational health and inventory
 
 The direct CLI shall expose capability and doctor observations without installing,
 repairing, or mutating runtime state.
 
+#### Verification
+
+Doctor tests compare state before and after observations and reject incomplete
+facts without repair or receipt creation.
+
 ### REQ-F-008 - Support compatible host integration
 
 The package shall support the declared OpenCode compatibility range and expose
 the route tool, plugin exports, and CLI behavior defined by the package
 contract.
+
+#### Verification
+
+Package smoke tests load rendered assets through pinned OpenCode versions and
+verify exports, CLI help, and agent discovery without provider credentials.

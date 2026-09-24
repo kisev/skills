@@ -1,35 +1,26 @@
 # User Documentation Workflow
 
-Read applicable `AGENTS.md`, the existing target document, source, tests, configuration, and related canonical specifications. Without a path or section argument, the scope is the complete user-facing documentation set. An explicit path or section narrows the scope. Do not invent paths, commands, versions, APIs, or behavior; label unverified claims as assumptions or external facts. Do not overwrite a document whose purpose or audience does not match the request, and do not change `specs/` in this workflow.
+Read applicable `AGENTS.md`, the existing target document, source code, tests,
+configuration, and related canonical specifications. Without a path or section,
+inspect the complete user-facing documentation set to select the relevant document.
 
-Before drafting, choose one reader and one document type: a tutorial guides a new user through learning, a how-to guide reaches a concrete result, reference records exact commands/API/configuration, and explanation gives concepts, rationale, and context. Create or improve one document using repository conventions, or the appropriate Diataxis directory in `docs/` when none exists. Do not create an empty four-directory tree or mix document types.
+## Document selection
 
-Follow `references/interaction-contract.md`. Verify each claim against source and tests, prepare the complete new file or exact existing-file change, validate the target under the workspace, write it directly with atomic replacement, and report the resulting path, diff summary, verified sources, checks, and limits. Do not create a private preview artifact or pause for confirmation before writing project files. If the document reveals a specification mismatch, separately offer `spec-manage` `spec-audit` or `spec-update`; never combine workflows.
-
-## Boundary
-
-- Read applicable `AGENTS.md`, the existing target document, source code, tests, configuration, and related specifications.
-- Do not invent paths, commands, versions, APIs, or behavior. Explicitly mark unverifiable claims as assumptions or external facts.
-- Do not overwrite an existing document if its purpose or audience does not match the request.
-- Do not modify `specs/` in this workflow.
-
-## Document Selection
-
-Before drafting, determine the reader and one goal:
-
-- a tutorial guides a new user through a learning path;
-- a how-to guide leads to a specific result;
-- a reference describes exact commands, APIs, or configuration;
-- an explanation presents concepts, rationale, and context.
-
-Create or improve one document according to repository conventions. If there are no conventions, use an appropriate Diataxis directory in `docs/`. Do not create an empty tree of four directories and do not mix document types.
+Choose one reader and one purpose: a tutorial teaches through a guided path, a
+how-to reaches a concrete result, reference describes commands/API/configuration,
+and explanation gives concepts and rationale. Create or improve one document
+using repository conventions or the appropriate Diataxis directory in `docs/`.
+Do not create an empty four-directory tree or overwrite a document with a different
+purpose or audience.
 
 ## Preparation
 
-Read `references/interaction-contract.md` and follow its lifecycle.
+Follow `references/interaction-contract.md`. Verify claims, paths, commands,
+versions, and examples against source and tests; label unverified claims explicitly.
+Prepare the complete content and validate its bounded workspace path, then
+write it directly with atomic replacement. Do not create a private preview artifact or
+pause for confirmation before ordinary project-file edits.
 
-1. Confirm every claim against source code, tests, and canonical specifications.
-2. Prepare the complete new content, validate that the target remains a regular workspace path, and write it with atomic replacement.
-3. Report the resulting path, diff summary, verified sources, checks, and limitations separately.
-
-If the document reveals a mismatch with a canonical specification, separately propose running `spec-manage` in `spec-audit` or `spec-update` mode; do not modify specs or combine these workflows.
+Report the resulting path, diff summary, verified sources, checks, and limitations.
+Do not modify `specs/`. If documentation reveals a specification mismatch,
+separately propose `spec-manage` audit or update; never combine workflows.

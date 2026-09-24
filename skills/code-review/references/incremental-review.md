@@ -125,17 +125,19 @@ current GitLab discussions, notes, and project issues authored by the current
 may show that the exact command exited zero locally, but it is not publication
 state: refresh GitLab before deciding whether to suppress or repeat the action.
 Do not treat confirmation receipts or command history as publication evidence.
-Generated command blocks show `not_run` or `run_unverified` from the exact local
-marker. Keep a `run_unverified` action visible until semantic GitLab evidence
-confirms it; marker presence alone cannot advance the publication ledger.
+New publication commands use the separate guarded protocol in
+`references/publication.md`. Its verified receipts prevent replay of exact actions,
+but do not replace fresh semantic assessment in a later review.
 
 The baseline pointer, exact refs, delta, and previous findings remain private
 technical JSON. User-facing reports omit raw SHAs. A prior manual command never
 authorizes a changed publication or label delta.
 Review-contract 1 through 5 plans remain readable as historical baselines, but
-their helper commands are not executable after migration to direct manual
-`glab` commands. They cannot be reused incrementally as a contract-6 baseline;
+their old helper commands are not supported by the current publication helper.
+They cannot be reused incrementally as a contract-6 baseline;
 context selection falls back to a full review instead.
+Direct-command plans must also be regenerated before guarded publication;
+their advisory markers are not migrated into receipts.
 
 Release/tag catalogs and the current target revision are part of the context
 fingerprint. A change to this evidence forces full review even if the MR head

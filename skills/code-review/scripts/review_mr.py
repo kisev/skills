@@ -16,4 +16,6 @@ else:
 
 
 if __name__ == "__main__":
-    raise SystemExit(run("code-review", {"merge_requests"}))
+    import review_workflow
+
+    raise SystemExit(run("code-review", {"merge_requests"}, review_workflow=review_workflow))

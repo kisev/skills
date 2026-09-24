@@ -47,13 +47,8 @@ source, tests, schemas, configuration, CI, and deployment. If multiple modes
 remain possible, it asks one bounded question and performs no write; read-only
 intent cannot enter a writing lifecycle.
 
-Code review preparation collects complete GitLab evidence and label catalogs,
-validates each actionable suggestion or unified patch against the exact reviewed
-head, creates immutable body and patch files plus closed publication actions,
-and atomically publishes a non-mutating plan. Each optional publication command
-starts a separate lifecycle for exactly one action: confirm its digest, reload
-the immutable plan, revalidate bounded files and live GitLab state, invoke `glab`
-without a shell, verify the postcondition, and record an atomic receipt. A
-definitive non-mutating rejection permits an evidence-bound retry; an uncertain
-result remains partial and cannot be replayed. Review preparation never invokes
-that helper, and no command applies a batch or edits the reviewed checkout.
+Code-review's skill-owned `review_workflow.py` coordinates collection, independent
+review, finalization, and plan creation using shared GitLab primitives. Its separate
+`review_publication.py` implements the one-action lifecycle owned by
+[the code-review requirement](../../capabilities/skills/code-review.md). Preparation
+never starts that lifecycle. Manual local patches remain a separate operation.

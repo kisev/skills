@@ -57,6 +57,25 @@ asks one short question without writing when more than one mode remains possible
 Implementation, planning, roadmap, and user-documentation requests do not select
 `spec-manage` merely because they mention requirements or architecture.
 
+## Review and Publication
+
+The OpenCode `review` agent can be selected directly or called by `manager`.
+It performs the primary review and calls independent critics when the selected
+skill requires them. Fixing project sources requires an explicit request and a
+separate fixing phase. Portable `code-review` also works without this agent layer.
+
+1. Request a code review and read the resulting `review-publication.md`.
+2. Inspect each proposed action and its exact body before running its command.
+3. Run one generated `review_publication.py apply` command at a time. A thread
+   closure requires the successful receipt for its preceding explanation.
+4. If the result is `unknown`, replace `apply` with `inspect` in that exact command
+   to check GitLab without another write. An unresolved result blocks further writes.
+5. Regenerate stale or expired plans. Old direct-command plans do not acquire
+   these guarantees retroactively, and advisory markers are not publication receipts.
+
+Explicit `/askme` requests end with manual continuation. Internal clarification
+returns to the already-authorized workflow without expanding its scope.
+
 ## Team Profiles
 
 Team skills resolve a default private profile from

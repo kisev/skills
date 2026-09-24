@@ -196,35 +196,11 @@ It may follow the latest non-system reply from another participant in an existin
 discussion and cannot reset an unanswered current-user question. Answer an
 already-addressed question before introducing a new one. All follow-ups target
 the observed discussion. `close` is valid only for an issue and generates
-the final message before the receipt-dependent close command. Every generated
-information-request command fetches the current target and discussion immediately
-before mutation, verifies the authenticated user, acquires a bounded POSIX
-nonblocking lifecycle lock, and rejects stale bound notes or a later non-system
-reply. Guard v4 binds a new standalone note to every observed non-system note and
-a new reply to every non-system note in its selected discussion. The fresh bound
-conversation must match exactly before POST. Persisted guard v1, v2, and v3
-commands fail closed and require regeneration. Before every information-message
-POST it durably writes an `in_progress`
-reservation. It removes that reservation only when the mutation process is
-proven not to have started; timeout, nonzero exit, oversized output, or malformed
-response, including selector or stream cleanup failure after start, keeps the
-reservation and requires a fresh assessment. A successful
-POST replaces the reservation with an exact guard-, body-, and note-ID-bound
-receipt. The bounded mutation runner uses one deadline, limited stdout and
-stderr, a dedicated POSIX process group, and forced cleanup and reap. The public
-helper reports `mutation_outcome` as `none`, `unknown`, or `applied` and sets
-`external_mutations` consistently. The close command repeats the freshness and
-identity checks, verifies the exact published final message, and cannot run
-before its successful message command. Before its PUT, it durably transitions
-that message receipt to a close reservation. A proven pre-start failure restores
-the message receipt, an ambiguous post-start result leaves the reservation as a
-blocker, and only a fresh GET that confirms the exact project, issue IID, and
-`closed` state permits an exact terminal `closed` receipt. The lifecycle lock
-rejects non-regular, foreign-owned, multiply linked, or group/other-accessible
-files before changing permissions or acquiring the lock. That terminal
-receipt rejects every replay even if the issue is later reopened. In a source
-checkout before materialization, the maintained runner resolves only the bounded
-repository-relative shared runtime; built archives use their bundled runtime.
+the final message before the receipt-dependent close command. Generated helpers
+enforce freshness, identity, dependency, and replay checks. Treat an `unknown`
+mutation outcome as unresolved and never retry automatically. Read
+`references/publication-protocol.md` only when explaining or diagnosing helper
+behavior; do not reproduce its low-level checks in model output.
 Keep `questions` only for user decisions that remain unanswered after the
 interaction round. Each question contains exactly `evidence_digest`, `kind`,
 `tldr`, `evidence`, `decision`, `why_now`, `planning_effect`,

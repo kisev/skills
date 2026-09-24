@@ -6,7 +6,7 @@ Identify the target reader and purpose in scope. Check claims, commands, APIs, c
 
 ## Boundary
 
-- Input is a path or area. Without either, first clarify the boundary using the host's standard interactive mechanism, or ask in chat if the host has none.
+- Input is a path or area. Without either, review the complete user-facing documentation set in the current project and report any unchecked boundaries explicitly.
 - If the area is in `specs/`, stop and propose `spec-manage` in `spec-audit` mode.
 - Do not modify the repository, documents, external systems, or create artifacts.
 - Output findings only in chat; do not publish them to external systems.

@@ -45,7 +45,9 @@ const plugin = (async (input: PluginInput) => {
       return {
         agent: agent.name,
         available: true,
-        capabilities: capabilities[agent.name] ?? ["read"],
+        capabilities:
+          capabilities[agent.name] ??
+          (/^critic-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agent.name) ? ["read", "review"] : ["read"]),
         tools: [
           "read",
           ...(agent.permission?.edit !== "deny" ? ["edit"] : []),

@@ -29,8 +29,8 @@ contracts, revalidate previous findings, inspect every available project and
 inherited-group label, record the critic when required, finalize evidence and the
 decision, scaffold a contract-6 plan, and render chat from that plan. The runner
 exposes the current stage and exact next action so interrupted reviews can resume
-without guessing. Publication remains a separate manual step through the direct
-`glab` commands shown in the plan.
+without guessing. Publication remains a separate user-invoked step governed by
+the requirement below.
 
 ## Dependencies
 
@@ -43,8 +43,8 @@ Review preparation performs local reads, writes private immutable artifacts,
 bodies, and validated patches, maintains one atomic pointer to the latest
 finalized GitLab review, and reads external state for the exact target. It never
 invokes publication or edits reviewed files. The plan instead gives the user
-direct manual `glab` commands for each discussion, issue, thread-state, or label
-change and the body file consumed by that command.
+one-action guarded commands for discussion, issue, thread-state, or label changes
+and their exact body previews.
 
 ## Errors, Partial, Escalation
 
@@ -124,11 +124,22 @@ unified patch validated against the exact reviewed head without changing the
 checkout; a thread without a code correction shall explicitly use
 `not_required`, and every open thread shall use an explicit reply, closure, or
 author local-fix outcome rather than `no_publication`. It shall prepare direct
-manual `glab` and `git apply` commands with explicit body files. Each mutation
-command shall record a digest-bound advisory XDG marker after exit zero, while
-remote GitLab content or checkout inspection remains the only postcondition;
-markers shall not authorize retries or count as publication evidence;
-preparation shall never invoke those commands. Every invocation shall read every
+manual one-action publication-helper commands and local `git apply` commands with
+explicit body files. Each remote action shall bind the current finalized plan,
+exact payload, body digest, user, MR identity and refs, conversation, labels, and
+a 24-hour expiry. The separately invoked helper shall serialize publication,
+revalidate before writing, persist an in-progress reservation, and require a fresh
+GitLab postcondition before recording success. Thread state shall depend on the
+successful explanation receipt. Known successful effects from the same evidence
+snapshot may satisfy freshness checks; unrelated conversation or label changes
+shall require regeneration. Successful action replay shall not write again.
+Only a proven process-start failure shall clear a reservation without a remote
+postcondition. Ambiguous outcomes shall block further writes; explicit inspection
+may resolve them through read-only GitLab observations but shall not retry writes.
+Old direct-command plans shall remain readable history and require regeneration
+for guarded publication. Local patches retain advisory markers and exact-head
+checks; markers shall not count as publication evidence. Preparation shall never
+invoke publication or patch commands. Every invocation shall read every
 open and resolved non-system discussion and all replies, including an unchanged
 incremental scope. A thread closed by any user shall receive a concise reply only
 when it adds information after checking the full conversation and current code.

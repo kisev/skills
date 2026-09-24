@@ -1,44 +1,10 @@
 # `/release-review`
 
-## Purpose
-
-Expose exact release readiness review.
-
-## Triggers and Near-Misses
-
-Routes release review; near-miss: release publication.
-
-## Inputs/Outputs
-
-Arguments identify one release MR; output is findings/status.
-
-## Workflow Stages
-
-Select, pass, inspect, classify, report.
-
-## Dependencies
-
-`release-review` and fresh CI evidence.
-
-## Remote/Local Effects
-
-Read-only effects.
-
-## Errors/Partial/Escalation
-
-Missing freshness blocks readiness.
-
-## Unique Constraints
-
-No version or tag mutation.
-
-## Requirement
-
 ### REQ-I-216 - Route the release-review command
 
-The command shall load exactly `release-review` and preserve read-only verdicts.
+The command shall load [release-review](../skills/release-review.md) through the
+[shared command interface](../../requirements/interfaces/README.md#req-i-002---command-interface).
 
-## Example
+#### Verification
 
-`/release-review` reports a stale pipeline as not ready.
-See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).
+Generated adapter tests verify the exact skill binding and untrusted arguments.

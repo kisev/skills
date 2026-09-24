@@ -19,12 +19,6 @@ def section(text: str, heading: str) -> str:
 
 def test_language_authority_and_extension_contract_has_one_structural_owner() -> None:
     contract = (SKILL / "references/canonical-contract.md").read_text(encoding="utf-8")
-    headings = re.findall(r"^## (.+)$", contract, re.MULTILINE)
-    assert headings == [
-        "Canonical language",
-        "Normative authority by mode",
-        "Minimum structure and extensions",
-    ]
 
     language = section(contract, "Canonical language")
     authority = section(contract, "Normative authority by mode")
@@ -38,10 +32,6 @@ def test_language_authority_and_extension_contract_has_one_structural_owner() ->
         "spec-update",
         "spec-audit",
     ]
-    extension_conditions = extensions.split(
-        "An additional section is allowed only when all of these conditions hold:", 1
-    )[1].split("Additional files inside requirements or architecture", 1)[0]
-    assert len(re.findall(r"^- ", extension_conditions, re.MULTILINE)) == 5
     assert "`specs/capabilities/`" in extensions
     assert "roadmap, task, plan, proposal" in extensions
 

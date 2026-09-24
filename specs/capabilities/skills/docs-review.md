@@ -37,6 +37,9 @@ Canonical specs are redirected to `spec-manage` audit mode.
 ### REQ-F-108 - Keep documentation review read-only
 
 The skill shall report documentation findings without changing repository files.
+Without an explicit path or area it shall inspect the complete current project's
+user-facing documentation set and name every unchecked boundary. Canonical specs
+remain the responsibility of `spec-manage` audit mode.
 
 ## Example
 

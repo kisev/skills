@@ -1,8 +1,9 @@
 ---
 name: askme
 description: >-
-  Clarify a task, plan, or decision through dependency-bounded questions, then stop
-  for manual continuation. Use when the user invites questions or clarification,
+  Clarify a task, plan, or decision through dependency-bounded questions. Explicit
+  invocation stops for manual continuation; internal clarification returns to its caller.
+  Use when the user invites questions or clarification,
   including "ask me" and "askme", even conditionally ("if you have questions, ask me").
   Match equivalent intent, not
   just these phrases. Do not trigger on quoted text, negated requests, or discussion

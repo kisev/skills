@@ -13,3 +13,4 @@ items.
 - [ADR-0007: Make administration CLI-only](0007-make-administration-cli-only.md) - accepted
 - [ADR-0008: Compose persistent GitLab task triage](0008-compose-persistent-gitlab-task-triage.md) - accepted
 - [ADR-0009: Share task release planning](0009-share-task-release-planning.md) - accepted
+- [ADR-0010: Separate review orchestration and guarded publication](0010-separate-review-and-publication.md) - accepted

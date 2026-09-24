@@ -10,15 +10,12 @@ import importlib
 import json
 import os
 import re
-import selectors
-import signal
 import stat
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.parse
-from contextlib import suppress
 from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
@@ -26,6 +23,14 @@ from typing import TYPE_CHECKING, Any, NoReturn, Protocol, TypeGuard, cast
 
 from .release_planning import PlanningError
 from .release_planning import validate as validate_release_plan
+
+if TYPE_CHECKING:
+    from .. import mutation_process
+else:
+    try:
+        from .. import mutation_process
+    except ImportError:
+        from . import mutation_process
 
 if TYPE_CHECKING:
     from ..state_artifacts import (
@@ -1948,161 +1953,19 @@ def fresh_information_snapshot(guard: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def process_group_exists(process_group: int) -> bool:
-    try:
-        os.killpg(process_group, 0)
-    except ProcessLookupError:
-        return False
-    except OSError:
-        return True
-    return True
-
-
-def terminate_mutation_process(process: subprocess.Popen[bytes]) -> None:
-    process_group = process.pid
-    try:
-        os.killpg(process_group, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    except OSError:
-        with suppress(ProcessLookupError):
-            process.kill()
-    deadline = time.monotonic() + MUTATION_TERMINATION_GRACE_SECONDS
-    while process_group_exists(process_group):
-        process.poll()
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            break
-        time.sleep(min(0.01, remaining))
-    if process_group_exists(process_group):
-        try:
-            os.killpg(process_group, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        except OSError:
-            with suppress(ProcessLookupError):
-                process.kill()
-    if process.poll() is None:
-        with suppress(ProcessLookupError):
-            process.kill()
-    try:
-        process.wait(timeout=MUTATION_REAP_TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired as exc:
-        raise MutationOutcomeUnknown("GitLab mutation cleanup failed; inspect the target") from exc
-
-
 def run_mutation_process(command: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
-    if os.name != "posix" or not callable(getattr(os, "killpg", None)):
-        raise MutationNotAttempted("GitLab mutation requires POSIX process groups")
     try:
-        process = subprocess.Popen(  # noqa: S603 - fixed executable and validated endpoint
+        return mutation_process.run_mutation_process(
             command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            start_new_session=True,
+            payload,
+            timeout=MUTATION_TIMEOUT_SECONDS,
+            output_limit=MUTATION_OUTPUT_LIMIT,
+            grace=MUTATION_TERMINATION_GRACE_SECONDS,
         )
-    except (OSError, ValueError, NotImplementedError) as exc:
-        raise MutationNotAttempted("GitLab mutation was not attempted; retry is safe") from exc
-
-    selector: selectors.BaseSelector | None = None
-    streams: dict[int, bytearray] = {}
-    stdout_fd = stderr_fd = -1
-    deadline = time.monotonic() + MUTATION_TIMEOUT_SECONDS
-    try:
-        if process.stdin is None or process.stdout is None or process.stderr is None:
-            raise MutationOutcomeUnknown(
-                "GitLab mutation pipes are unavailable; inspect the target"
-            )
-        stdin_fd = process.stdin.fileno()
-        stdout_fd = process.stdout.fileno()
-        stderr_fd = process.stderr.fileno()
-        streams = {stdout_fd: bytearray(), stderr_fd: bytearray()}
-        selector = selectors.DefaultSelector()
-        selector.register(stdin_fd, selectors.EVENT_WRITE, "stdin")
-        selector.register(stdout_fd, selectors.EVENT_READ, "stdout")
-        selector.register(stderr_fd, selectors.EVENT_READ, "stderr")
-        written = 0
-        while selector.get_map():
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target")
-            events = selector.select(remaining)
-            if not events:
-                raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target")
-            for key, _ in events:
-                descriptor = key.fd
-                if key.data == "stdin":
-                    try:
-                        count = os.write(descriptor, payload[written : written + 64 * 1024])
-                    except BrokenPipeError:
-                        count = len(payload) - written
-                    written += count
-                    if written >= len(payload):
-                        selector.unregister(descriptor)
-                        process.stdin.close()
-                    continue
-                chunk = os.read(descriptor, 64 * 1024)
-                if not chunk:
-                    selector.unregister(descriptor)
-                    continue
-                buffer = streams[descriptor]
-                buffer.extend(chunk)
-                if len(buffer) > MUTATION_OUTPUT_LIMIT:
-                    raise MutationOutcomeUnknown(
-                        "GitLab mutation output exceeds the size limit; inspect the target"
-                    )
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target")
-        try:
-            returncode = process.wait(timeout=remaining)
-        except subprocess.TimeoutExpired as exc:
-            raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target") from exc
-        if process_group_exists(process.pid):
-            terminate_mutation_process(process)
-    except MutationOutcomeUnknown as exc:
-        try:
-            terminate_mutation_process(process)
-        except MutationOutcomeUnknown as cleanup_exc:
-            raise cleanup_exc from exc
-        raise
-    except (OSError, ValueError, NotImplementedError) as exc:
-        try:
-            terminate_mutation_process(process)
-        except MutationOutcomeUnknown as cleanup_exc:
-            raise cleanup_exc from exc
-        raise MutationOutcomeUnknown("GitLab mutation process failed; inspect the target") from exc
-    except BaseException:
-        terminate_mutation_process(process)
-        raise
-    finally:
-        cleanup_failure: OSError | ValueError | NotImplementedError | None = None
-        if selector is not None:
-            try:
-                selector.close()
-            except (OSError, ValueError, NotImplementedError) as exc:
-                cleanup_failure = exc
-        for stream in (process.stdin, process.stdout, process.stderr):
-            if stream is not None:
-                try:
-                    stream.close()
-                except (OSError, ValueError, NotImplementedError) as exc:
-                    if cleanup_failure is None:
-                        cleanup_failure = exc
-        if cleanup_failure is not None:
-            primary_failure = sys.exception()
-            outcome = MutationOutcomeUnknown("GitLab mutation cleanup failed; inspect the target")
-            if primary_failure is not None:
-                outcome.add_note(f"cleanup failure: {cleanup_failure!r}")
-                raise outcome from primary_failure
-            raise outcome from cleanup_failure
-    return subprocess.CompletedProcess(
-        command,
-        returncode,
-        bytes(streams[stdout_fd]),
-        bytes(streams[stderr_fd]),
-    )
+    except mutation_process.MutationNotAttempted as exc:
+        raise MutationNotAttempted(str(exc)) from exc
+    except mutation_process.MutationOutcomeUnknown as exc:
+        raise MutationOutcomeUnknown(str(exc)) from exc
 
 
 def glab_mutation(host: str, method: str, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:

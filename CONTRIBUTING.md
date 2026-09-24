@@ -12,8 +12,11 @@ and plugins belong only in `packages/opencode/`.
 
 Agree on a material behavior, compatibility, or security-boundary change before
 implementing it. A new runner needs an observable contract: JSON on `stdout`,
-diagnostics on `stderr`, defined exit codes, `--help`, `--capabilities`, and a
-confirmed two-phase write when it changes files.
+diagnostics on `stderr`, defined exit codes, `--help`, and `--capabilities`.
+Use the [shared interaction contract](shared/references/interaction-contract.md)
+to classify writes: bounded project-file edits are direct; external publication,
+user configuration, destructive cleanup, history changes, releases, and package
+lifecycle mutations require exact preview and confirmation.
 
 ## Local Validation
 

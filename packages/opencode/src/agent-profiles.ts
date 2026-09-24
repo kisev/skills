@@ -430,7 +430,7 @@ export function renderAgentProfile(
   let rendered = withSelection(canonical[role].toString("utf8"), selection);
   const pool = ["critic", ...Object.keys(config.additional_critics)].sort();
   if (name === "manager")
-    rendered = replaceTaskAllowlist(rendered, ["architect", "worker", "mapper", ...pool]);
+    rendered = replaceTaskAllowlist(rendered, ["architect", "worker", "mapper", "review", ...pool]);
   if (name === "review") rendered = replaceTaskAllowlist(rendered, pool);
   return Buffer.from(rendered);
 }

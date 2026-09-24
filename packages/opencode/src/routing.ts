@@ -279,6 +279,7 @@ export function resolveRouting(input: RoutingInput): RoutingDecision {
   if (
     input.override &&
     !input.trusted_override &&
+    !dynamicCritics.includes(input.override) &&
     !category.profiles.includes(input.override as never)
   )
     throw new Error("Unknown or user-owned profile requires a trusted override");
@@ -694,12 +695,15 @@ export class RoutingGate {
     if (Date.now() > active.expiresAt) throw new Error("Task result routing receipt has expired");
     const report =
       output && typeof output === "object" ? (output as Record<string, unknown>) : undefined;
+    const role = /^critic-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agent) ? "critic" : agent;
     const value =
-      report?.[agent === "architect" ? "execution_card" : `${agent}_report`] ?? report?.report;
+      report?.[role === "architect" ? "execution_card" : `${role}_report`] ??
+      (role === "critic" && !active.card ? report?.review_report : undefined) ??
+      report?.report;
     if (!value || typeof value !== "object" || Array.isArray(value))
       throw new Error("Task result is missing a structured agent report");
     const result = value as Record<string, unknown>;
-    validateAgentReport(agent, report, active.card);
+    validateAgentReport(role, report, active.card);
     if (
       active.card &&
       (result.card_id !== active.card.card_id || result.revision !== active.card.revision)

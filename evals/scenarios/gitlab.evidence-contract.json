@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "gitlab.evidence-contract",
-  "revision": 13,
+  "revision": 14,
   "kind": "deterministic",
   "surface": "skill",
   "host": "any",
@@ -60,7 +60,7 @@
     {
       "id": "manual-publication",
       "path": "skills/code-review/references/workflow.md",
-      "contains": "direct manual `glab` commands"
+      "contains": "one-action publication"
     },
     {
       "id": "all-discussions",
@@ -75,7 +75,7 @@
     {
       "id": "separate-thread-state",
       "path": "skills/code-review/references/workflow.md",
-      "contains": "first publish the explanation, then change thread state"
+      "contains": "ordered explanation and state commands"
     },
     {
       "id": "copy-ready-patch",
@@ -113,9 +113,9 @@
       "contains": "action IDs, operations, body paths"
     },
     {
-      "id": "advisory-publication-marker",
-      "path": "skills/code-review/references/workflow.md",
-      "contains": "advisory XDG marker"
+      "id": "guarded-publication",
+      "path": "skills/code-review/scripts/review_publication.py",
+      "contains": "def postcondition("
     },
     {
       "id": "issue-templates",
@@ -129,8 +129,8 @@
     },
     {
       "id": "out-of-order-gate",
-      "path": "shared/references/portable_gitlab/contract.py",
-      "contains": "finalize-review is out of order"
+      "path": "skills/code-review/scripts/review_workflow.py",
+      "contains": "review command is out of order"
     },
     {
       "id": "verbatim-chat",
@@ -153,7 +153,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "dffba39214739b9a0802a4e30e5e92a6ec619122e46d726fa98eb127de1d4995",
+  "digest": "d8e1873c809a04d750cea759a6a49db50eca1b7f73465a1f47caf889e7bbbfdc",
   "locale": "neutral",
   "pair_id": null
 }
