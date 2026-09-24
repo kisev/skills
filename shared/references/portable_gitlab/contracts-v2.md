@@ -34,6 +34,11 @@ requests contain only changed fields; labels use add/remove delta. No command is
 executed by a runner. Legacy MR plans remain readable but require fresh preparation
 before finalize. Release preparation retains its existing content contract.
 
+Failed-job trace collection streams response headers and content under one
+absolute deadline and a hard byte bound. It terminates the child process group
+on timeout, overflow, or collection failure, and reports unsupported POSIX
+streaming capabilities as a controlled workflow error.
+
 MR evidence stores locale and template discovery in `project`. Discovery reads
 the project default description and bounded repository templates from an exact
 default-branch revision; failure is distinct from absence and is shown as a

@@ -10,11 +10,15 @@ import importlib.util
 import json
 import os
 import re
+import selectors
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import sys
+import time
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn, cast
@@ -52,6 +56,10 @@ MAX_CI_PIPELINES = 20
 MAX_CI_JOB_PAGES = 5
 MAX_CI_TRACES = 50
 MAX_TRACE_BYTES = 64 * 1024
+MAX_TRACE_HEADER_BYTES = 64 * 1024
+MAX_HTTP_SEPARATOR_BYTES = len(b"\r\n\r\n")
+TRACE_TIMEOUT_SECONDS = 45
+PROCESS_CLEANUP_TIMEOUT_SECONDS = 1
 MAX_PIPELINE_DEPTH = 5
 ARTIFACT_VERSION = 2
 ARTIFACT_SCHEMA_NAME = "artifact-contracts-v2.schema.json"
@@ -73,9 +81,6 @@ URL_CREDENTIAL_RE = re.compile(r"(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^@\s/]+@
 PRIVATE_KEY_RE = re.compile(
     r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
     re.DOTALL,
-)
-SEMVER_RE = re.compile(
-    r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?"
 )
 LABEL_ROLE_VALUES = {
     "change_type": {"release", "feature", "bug", "maintenance", "documentation", "security"},
@@ -229,6 +234,46 @@ class WorkflowError(ValueError):
 class ContractArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise WorkflowError(message)
+
+
+def parse_semver(
+    value: object,
+) -> tuple[int, int, int, tuple[str, ...], tuple[str, ...]] | None:
+    if not isinstance(value, str) or not value or value.strip() != value:
+        return None
+    if value.count("+") > 1:
+        return None
+    version, separator, build_value = value.partition("+")
+    if separator and not build_value:
+        return None
+    core, separator, prerelease_value = version.partition("-")
+    if separator and not prerelease_value:
+        return None
+    core_values = core.split(".")
+    if len(core_values) != 3 or any(
+        len(item) > 64 or re.fullmatch(r"0|[1-9][0-9]*", item) is None for item in core_values
+    ):
+        return None
+
+    def identifiers(raw: str, *, prerelease: bool) -> tuple[str, ...] | None:
+        if not raw:
+            return ()
+        values = tuple(raw.split("."))
+        if any(re.fullmatch(r"[0-9A-Za-z-]+", item) is None for item in values):
+            return None
+        if prerelease and any(
+            re.fullmatch(r"[0-9]+", item) is not None and len(item) > 1 and item.startswith("0")
+            for item in values
+        ):
+            return None
+        return values
+
+    prerelease_values = identifiers(prerelease_value, prerelease=True)
+    build_values = identifiers(build_value, prerelease=False)
+    if prerelease_values is None or build_values is None:
+        return None
+    major, minor, patch = (int(item) for item in core_values)
+    return major, minor, patch, prerelease_values, build_values
 
 
 def redact(value: str) -> str:
@@ -1722,8 +1767,7 @@ def release_content_shape_is_valid(value: object) -> bool:
                 "milestone_title",
             )
         )
-        or not isinstance(value.get("version"), str)
-        or SEMVER_RE.fullmatch(cast("str", value["version"])) is None
+        or parse_semver(value.get("version")) is None
         or not label_intent_is_valid(value.get("label_intent"))
         or not isinstance(contributors, list)
         or not all(nonempty_string(item) for item in contributors)
@@ -1752,6 +1796,35 @@ def release_content_is_valid(value: object, inventory: dict[str, Any]) -> bool:
     contributors = cast("list[str]", content["contributors"])
     reviewers = cast("list[str]", content["reviewers"])
     work_items = cast("list[dict[str, Any]]", content["work_items"])
+    version = parse_semver(content["version"])
+    previous_ref = inventory.get("previous_ref")
+    compatibility = cast("dict[str, object]", content["label_intent"]).get("compatibility")
+    if version is None or version[3] or version[4] or version[0] < 1:
+        return False
+    if previous_ref is None:
+        if version[:3] != (1, 0, 0) or compatibility != "major":
+            return False
+    elif isinstance(previous_ref, str) and re.fullmatch(r"[0-9a-fA-F]{40}", previous_ref):
+        if compatibility not in {"major", "minor", "patch"}:
+            return False
+    else:
+        previous = (
+            parse_semver(previous_ref[1:])
+            if isinstance(previous_ref, str) and previous_ref.startswith("v")
+            else None
+        )
+        if previous is None or previous[3] or previous[4] or previous[0] < 1:
+            return False
+        expected_versions = {
+            "major": (previous[0] + 1, 0, 0),
+            "minor": (previous[0], previous[1] + 1, 0),
+            "patch": (previous[0], previous[1], previous[2] + 1),
+        }
+        if (
+            not isinstance(compatibility, str)
+            or expected_versions.get(compatibility) != version[:3]
+        ):
+            return False
     contributor_values = {
         item.get("display") for item in inventory.get("contributors", []) if isinstance(item, dict)
     }
@@ -2321,11 +2394,12 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 payload.get("profile") == "release-prepare"
                 and (
                     not is_digest(payload.get("inventory_digest"))
-                    or not isinstance(payload.get("release_version"), str)
-                    or SEMVER_RE.fullmatch(cast("str", payload.get("release_version"))) is None
+                    or parse_semver(payload.get("release_version")) is None
                     or not companions_are_valid(payload.get("companions"))
                     or payload.get("stage") not in {"pre_merge", "post_merge"}
                     or not release_content_shape_is_valid(payload.get("release_content"))
+                    or payload.get("release_version")
+                    != cast("dict[str, object]", payload.get("release_content"))["version"]
                     or not release_requests_are_valid(payload.get("requests"))
                     or not is_sha(payload.get("post_merge_sha"), nullable=True)
                     or (payload.get("stage") == "pre_merge")
@@ -2825,36 +2899,172 @@ def glab_json(hostname: str, endpoint: str) -> object:
         raise WorkflowError("GitLab returned invalid JSON") from exc
 
 
-def glab_text(hostname: str, endpoint: str) -> str:
+def stop_process_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        with suppress(ProcessLookupError):
+            process.kill()
+    try:
+        process.wait(timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        with suppress(ProcessLookupError):
+            process.kill()
+        try:
+            process.wait(timeout=PROCESS_CLEANUP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            raise WorkflowError("GitLab job trace process could not be reaped") from exc
+
+
+def split_glab_trace_response(response: bytes | bytearray) -> tuple[bytes, bytes] | None:
+    boundaries = [
+        (position, separator)
+        for separator in (b"\r\n\r\n", b"\n\n")
+        if (position := response.find(separator)) >= 0
+    ]
+    if not boundaries:
+        return None
+    position, separator = min(boundaries, key=lambda boundary: boundary[0])
+    return bytes(response[:position]), bytes(response[position + len(separator) :])
+
+
+def streamed_glab_trace(arguments: list[str]) -> tuple[bytes, bytes]:
+    if os.name != "posix" or not hasattr(os, "killpg"):
+        raise WorkflowError("GitLab job trace streaming requires POSIX process capabilities")
+    process: subprocess.Popen[bytes] | None = None
+    selector: selectors.BaseSelector | None = None
+    primary_error: BaseException | None = None
+    stdout = bytearray()
+    stderr = bytearray()
+    deadline = time.monotonic() + TRACE_TIMEOUT_SECONDS
+    try:
+        process = subprocess.Popen(
+            arguments,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+        if process.stdout is None or process.stderr is None:
+            raise WorkflowError("GitLab job trace streaming pipes are unavailable")
+        selector = selectors.DefaultSelector()
+        selector.register(process.stdout, selectors.EVENT_READ, stdout)
+        selector.register(process.stderr, selectors.EVENT_READ, stderr)
+        stdout_limit = MAX_TRACE_HEADER_BYTES + MAX_HTTP_SEPARATOR_BYTES + MAX_TRACE_BYTES
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise WorkflowError("GitLab job trace request timed out")
+            events = selector.select(remaining)
+            if not events:
+                raise WorkflowError("GitLab job trace request timed out")
+            for key, _ in events:
+                target = cast("bytearray", key.data)
+                target_limit = stdout_limit if target is stdout else MAX_TRACE_HEADER_BYTES
+                available = target_limit - len(target)
+                chunk = os.read(key.fd, min(64 * 1024, available + 1))
+                if not chunk:
+                    selector.unregister(key.fileobj)
+                    continue
+                target.extend(chunk)
+                if len(stdout) > stdout_limit or len(stderr) > MAX_TRACE_HEADER_BYTES:
+                    raise WorkflowError("GitLab job trace response exceeds the size limit")
+                response_parts = split_glab_trace_response(stdout)
+                if response_parts is None:
+                    if len(stdout) > MAX_TRACE_HEADER_BYTES:
+                        raise WorkflowError(
+                            "GitLab job trace response headers exceed the size limit"
+                        )
+                else:
+                    headers, body = response_parts
+                    if len(headers) > MAX_TRACE_HEADER_BYTES or len(body) > MAX_TRACE_BYTES:
+                        raise WorkflowError("GitLab job trace response exceeds the size limit")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise WorkflowError("GitLab job trace request timed out")
+        try:
+            returncode = process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired as exc:
+            raise WorkflowError("GitLab job trace request timed out") from exc
+        if returncode:
+            raise WorkflowError(f"GitLab job trace request failed with status {returncode}")
+        return bytes(stdout), bytes(stderr)
+    except WorkflowError as exc:
+        primary_error = exc
+        raise
+    except (OSError, ValueError, NotImplementedError) as exc:
+        error = WorkflowError("GitLab job trace POSIX streaming is unavailable")
+        primary_error = error
+        raise error from exc
+    except BaseException as exc:
+        primary_error = exc
+        raise
+    finally:
+        if selector is not None:
+            with suppress(OSError, ValueError, NotImplementedError):
+                selector.close()
+        if process is not None:
+            try:
+                stop_process_group(process)
+            except WorkflowError as cleanup_error:
+                if primary_error is not None:
+                    raise cleanup_error from primary_error
+                raise
+
+
+def parse_glab_trace(response: bytes) -> tuple[str, bool]:
+    response_parts = split_glab_trace_response(response)
+    if response_parts is None:
+        raise WorkflowError("GitLab job trace response headers are unavailable")
+    header_bytes, body = response_parts
+    if len(header_bytes) > MAX_TRACE_HEADER_BYTES or len(body) > MAX_TRACE_BYTES:
+        raise WorkflowError("GitLab job trace exceeds the response size limit")
+    headers = header_bytes.decode("latin-1").splitlines()
+    status_match = re.fullmatch(r"HTTP/\S+ ([0-9]{3})(?: .*)?", headers[0]) if headers else None
+    if status_match is None:
+        raise WorkflowError("GitLab job trace response status is unavailable")
+    status = int(status_match.group(1))
+    content_range = next(
+        (
+            line.split(":", 1)[1].strip()
+            for line in headers[1:]
+            if line.lower().startswith("content-range:")
+        ),
+        None,
+    )
+    complete = status == 200 and content_range is None
+    if status in {200, 206} and content_range is not None:
+        range_match = re.fullmatch(r"bytes ([0-9]+)-([0-9]+)/([0-9]+)", content_range)
+        if range_match is not None:
+            start, end, total = (int(item) for item in range_match.groups())
+            complete = start == 0 and end + 1 == total and len(body) == total
+    elif status not in {200, 206}:
+        raise WorkflowError(f"GitLab job trace request returned HTTP {status}")
+    return body.decode(errors="replace"), complete
+
+
+def glab_text(hostname: str, endpoint: str) -> tuple[str, bool]:
     if not re.fullmatch(r"[a-z0-9.-]+", hostname) or not allowed_endpoint(endpoint):
         raise WorkflowError("GitLab endpoint is outside the collection allowlist")
     glab = shutil.which("glab")
     if glab is None:
         raise WorkflowError("glab is unavailable; install and authenticate it outside this skill")
-    try:
-        completed = subprocess.run(
-            [
-                glab,
-                "api",
-                "--hostname",
-                hostname,
-                "--method",
-                "GET",
-                "--header",
-                f"Range: bytes=-{MAX_TRACE_BYTES}",
-                endpoint,
-            ],
-            check=False,
-            capture_output=True,
-            timeout=45,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise WorkflowError("GitLab job trace could not be completed") from exc
-    if completed.returncode:
-        raise WorkflowError(f"GitLab job trace request failed with status {completed.returncode}")
-    if len(completed.stdout) > MAX_BYTES:
-        raise WorkflowError("GitLab job trace exceeds the response size limit")
-    return completed.stdout.decode(errors="replace")
+    stdout, _stderr = streamed_glab_trace(
+        [
+            glab,
+            "api",
+            "--hostname",
+            hostname,
+            "--method",
+            "GET",
+            "--include",
+            "--header",
+            f"Range: bytes=-{MAX_TRACE_BYTES}",
+            endpoint,
+        ]
+    )
+    return parse_glab_trace(stdout)
 
 
 def paginated(hostname: str, endpoint: str, *, max_pages: int = MAX_PAGES) -> dict[str, object]:
@@ -2933,15 +3143,15 @@ def select_exact_pipeline(pipelines: dict[str, object], head_sha: str) -> dict[s
     return max(cast("list[dict[str, Any]]", exact), key=pipeline_id)
 
 
-def trace_excerpt(value: str) -> dict[str, object]:
+def trace_excerpt(value: str, source_complete: bool = True) -> dict[str, object]:
     sanitized = redact(re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", value)).replace("\r", "")
     encoded = sanitized.encode()
-    truncated = len(encoded) > MAX_TRACE_BYTES
+    truncated = not source_complete or len(encoded) > MAX_TRACE_BYTES
     if truncated:
         encoded = encoded[-MAX_TRACE_BYTES:]
         sanitized = encoded.decode(errors="replace")
     return {
-        "complete": True,
+        "complete": not truncated,
         "truncated": truncated,
         "excerpt": sanitized,
         "sha256": hashlib.sha256(value.encode()).hexdigest(),
@@ -3032,11 +3242,15 @@ def collect_pipeline_jobs(
                 else:
                     traces += 1
                     try:
-                        normalized["trace"] = trace_excerpt(
-                            glab_text(
-                                hostname, f"projects/{current_project}/jobs/{raw['id']}/trace"
-                            )
+                        trace, trace_complete = glab_text(
+                            hostname, f"projects/{current_project}/jobs/{raw['id']}/trace"
                         )
+                        trace_value = trace_excerpt(trace, trace_complete)
+                        normalized["trace"] = trace_value
+                        if trace_value["complete"] is not True:
+                            pipeline_errors.append(
+                                "CI job trace completeness could not be confirmed"
+                            )
                     except WorkflowError as exc:
                         normalized["trace"] = {
                             "complete": False,

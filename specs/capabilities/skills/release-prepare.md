@@ -33,7 +33,17 @@ immutable evidence and payloads. The skill and helper execute no remote mutation
 
 Unavailable tags, pagination, exact merge state, CI freshness, component MR
 conversations, or required user decisions are blocking gaps. Any changed binding
-or payload makes the runbook stale.
+or payload makes the runbook stale. Version preparation from a stable `v*`
+inventory boundary at or above `1.0.0` accepts only the exact stable SemVer bump
+matching the selected compatibility impact. A full-SHA boundary requires an
+independently confirmed stable version and compatibility impact and shall not be
+treated as a first release or force major impact. A first release is limited to
+`1.0.0` with major impact; prerelease, build metadata, and pre-1.0 versions fail
+closed.
+An explicit previous boundary shall resolve either the peeled commit of the exact
+local `refs/tags/<name>` stable SemVer tag or an exact full 40-hex local commit
+SHA. A same-name branch, short SHA, or revision expression shall not satisfy the
+boundary.
 
 ## Unique Constraints
 

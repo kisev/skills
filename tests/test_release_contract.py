@@ -3,9 +3,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
+import signal
 import subprocess
 import time
 import urllib.error
+from contextlib import suppress
 from email.message import Message
 from pathlib import Path
 
@@ -40,6 +43,11 @@ def test_current_release_metadata_is_aligned() -> None:
     )
 
 
+@pytest.mark.parametrize("version", ["01.2.3", "1.02.3", "1.2.03"])
+def test_release_version_rejects_leading_zeroes(version: str) -> None:
+    assert check_release.SEMVER.fullmatch(version) is None
+
+
 def test_release_check_rejects_package_version_drift(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -69,19 +77,177 @@ def test_pre_tag_check_validates_name_without_requiring_tag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     tag = f"v{RELEASE_VERSION}"
-    monkeypatch.setattr(
-        check_release,
-        "git",
-        lambda *arguments: (
-            subprocess.run(
-                ["git", *arguments], cwd=ROOT, capture_output=True, text=True, check=True
-            ).stdout.strip()
-            if arguments == ("rev-parse", "HEAD")
-            else pytest.fail(f"unexpected published-tag lookup: {arguments}")
-        ),
-    )
+    real_git = check_release.git
+
+    def git(*arguments: str) -> str:
+        empty_results = {
+            ("tag", "--list", tag),
+            (
+                "ls-remote",
+                "--tags",
+                "origin",
+                f"refs/tags/{tag}",
+                f"refs/tags/{tag}^{{}}",
+            ),
+        }
+        if arguments in empty_results:
+            return ""
+        return real_git(*arguments)
+
+    monkeypatch.setattr(check_release, "git", git)
 
     assert check_release.validate(tag)["version"] == RELEASE_VERSION
+
+
+@pytest.mark.parametrize("location", ["locally", "on origin"])
+def test_pre_tag_check_rejects_existing_tag(monkeypatch: pytest.MonkeyPatch, location: str) -> None:
+    tag = f"v{RELEASE_VERSION}"
+    real_git = check_release.git
+
+    def git(*arguments: str) -> str:
+        if arguments == ("tag", "--list", tag):
+            return tag if location == "locally" else ""
+        if arguments[:3] == ("ls-remote", "--tags", "origin"):
+            return f"{'a' * 40}\trefs/tags/{tag}" if location == "on origin" else ""
+        return real_git(*arguments)
+
+    monkeypatch.setattr(check_release, "git", git)
+    with pytest.raises(check_release.ReleaseError, match=location):
+        check_release.validate(tag)
+
+
+def test_network_git_timeout_is_bounded_and_controlled(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    executable = tmp_path / "git"
+    executable.write_text("#!/bin/sh\nsleep 10\n", encoding="utf-8")
+    executable.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    monkeypatch.setattr(check_release, "NETWORK_GIT_TIMEOUT_SECONDS", 0.05)
+
+    with pytest.raises(check_release.ReleaseError, match=r"ls-remote.*timed out"):
+        check_release.git("ls-remote", "--tags", "origin")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups are required")
+def test_git_timeout_kills_real_descendant_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pid_path = tmp_path / "descendant-pid"
+    executable = tmp_path / "git"
+    executable.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, pathlib, signal, time\n"
+        "pid = os.fork()\n"
+        f"path = pathlib.Path({str(pid_path)!r})\n"
+        "if pid == 0:\n"
+        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "    path.write_text(str(os.getpid()))\n"
+        "    time.sleep(10)\n"
+        "while not path.exists():\n"
+        "    time.sleep(0.01)\n"
+        "time.sleep(10)\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    monkeypatch.setattr(check_release, "LOCAL_GIT_TIMEOUT_SECONDS", 0.1)
+    monkeypatch.setattr(check_release, "GIT_TERMINATION_GRACE_SECONDS", 0.05)
+
+    with pytest.raises(check_release.ReleaseError, match="timed out"):
+        check_release.git("status")
+
+    descendant_pid = int(pid_path.read_text(encoding="utf-8"))
+    deadline = time.monotonic() + 2
+    try:
+        while time.monotonic() < deadline:
+            try:
+                os.kill(descendant_pid, 0)
+            except ProcessLookupError:
+                break
+            status_path = Path(f"/proc/{descendant_pid}/stat")
+            if status_path.exists() and status_path.read_text().split()[2] == "Z":
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("git descendant remained alive after timeout cleanup")
+    finally:
+        with suppress(ProcessLookupError):
+            os.kill(descendant_pid, signal.SIGKILL)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups are required")
+def test_successful_git_cleans_real_descendant_and_keeps_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pid_path = tmp_path / "descendant-pid"
+    executable = tmp_path / "git"
+    executable.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, pathlib, signal, sys, time\n"
+        "pid = os.fork()\n"
+        f"path = pathlib.Path({str(pid_path)!r})\n"
+        "if pid == 0:\n"
+        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        "    path.write_text(str(os.getpid()))\n"
+        "    time.sleep(10)\n"
+        "while not path.exists():\n"
+        "    time.sleep(0.01)\n"
+        "sys.stdout.write('completed stdout')\n"
+        "sys.stderr.write('completed stderr')\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    monkeypatch.setattr(check_release, "GIT_TERMINATION_GRACE_SECONDS", 0.05)
+
+    result = check_release.run_git(("status",), 1)
+
+    assert result.returncode == 0
+    assert result.stdout == "completed stdout"
+    assert result.stderr == "completed stderr"
+    descendant_pid = int(pid_path.read_text(encoding="utf-8"))
+    try:
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            try:
+                os.kill(descendant_pid, 0)
+            except ProcessLookupError:
+                break
+            status_path = Path(f"/proc/{descendant_pid}/stat")
+            if status_path.exists() and status_path.read_text().split()[2] == "Z":
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail("git descendant remained alive after successful cleanup")
+    finally:
+        with suppress(ProcessLookupError):
+            os.kill(descendant_pid, signal.SIGKILL)
+
+
+def test_git_reports_unsupported_process_group_capability(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("scripts.check_release.os.name", "nt")
+    with pytest.raises(check_release.ReleaseError, match="requires POSIX"):
+        check_release.git("status")
+
+
+@pytest.mark.parametrize("descriptor", [1, 2])
+def test_git_bounds_stdout_and_stderr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, descriptor: int
+) -> None:
+    executable = tmp_path / "git"
+    executable.write_text(
+        f"#!/usr/bin/env python3\nimport os\nos.write({descriptor}, b'x' * 17)\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
+    monkeypatch.setattr(check_release, "MAX_GIT_OUTPUT_BYTES", 16)
+
+    with pytest.raises(check_release.ReleaseError, match="size limit"):
+        check_release.git("status")
 
 
 def test_published_release_check_requires_tag() -> None:
@@ -440,6 +606,18 @@ def test_github_release_creation_binds_tag_revision_and_notes(
 ) -> None:
     calls: list[tuple[str, str, dict[str, object] | None]] = []
     release_notes = "### Added\n\n- Exact release notes.\n"
+    tag = f"v{RELEASE_VERSION}"
+    revision = "a" * 40
+    expected_release = {
+        "html_url": "https://github.example/release",
+        "tag_name": tag,
+        "name": tag,
+        "draft": False,
+        "prerelease": False,
+        "body": release_notes,
+    }
+    release_lookups = 0
+    tag_object = "b" * 40
 
     def api(
         method: str,
@@ -447,23 +625,180 @@ def test_github_release_creation_binds_tag_revision_and_notes(
         _token: str,
         payload: dict[str, object] | None = None,
     ) -> tuple[int, object]:
+        nonlocal release_lookups
         calls.append((method, path, payload))
+        if path.endswith(f"/git/ref/tags/{tag}"):
+            return 200, {"object": {"type": "tag", "sha": tag_object}}
+        if path.endswith(f"/git/tags/{tag_object}"):
+            return 200, {"object": {"type": "commit", "sha": revision}}
         if method == "GET":
-            return 404, {}
-        return 201, {"html_url": "https://github.example/release"}
+            release_lookups += 1
+            return (404, {}) if release_lookups == 1 else (200, expected_release)
+        return 201, expected_release
 
     monkeypatch.setenv("GH_TOKEN", "test-token")
     monkeypatch.setenv("GITHUB_REPOSITORY", "kisev/skills")
-    monkeypatch.setenv("RELEASE_TAG", f"v{RELEASE_VERSION}")
-    monkeypatch.setenv("RELEASE_REVISION", "a" * 40)
+    monkeypatch.setenv("RELEASE_TAG", tag)
+    monkeypatch.setenv("RELEASE_REVISION", revision)
     monkeypatch.setattr(create_github_release, "api", api)
     monkeypatch.setattr(create_github_release, "changelog", lambda _version: release_notes)
     assert create_github_release.create()["html_url"] == "https://github.example/release"
-    payload = calls[-1][2]
+    payload = next(payload for method, _path, payload in calls if method == "POST")
     assert payload is not None
-    assert payload["tag_name"] == f"v{RELEASE_VERSION}"
-    assert payload["target_commitish"] == "a" * 40
+    assert payload["tag_name"] == tag
+    assert payload["target_commitish"] == revision
     assert payload["body"] == release_notes
+
+
+def test_existing_github_release_verifies_peeled_tag_and_postcondition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tag = "v1.2.3"
+    revision = "a" * 40
+    tag_object = "b" * 40
+    release = {
+        "tag_name": tag,
+        "name": tag,
+        "draft": False,
+        "prerelease": False,
+        "body": "notes\n",
+    }
+
+    def api(method: str, path: str, _token: str, _payload: object = None) -> tuple[int, object]:
+        assert method == "GET"
+        if "/git/ref/tags/" in path:
+            return 200, {"object": {"type": "tag", "sha": tag_object}}
+        if "/git/tags/" in path:
+            return 200, {"object": {"type": "commit", "sha": revision}}
+        return 200, release
+
+    monkeypatch.setenv("GH_TOKEN", "test-token")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "kisev/skills")
+    monkeypatch.setenv("RELEASE_TAG", tag)
+    monkeypatch.setenv("RELEASE_REVISION", revision)
+    monkeypatch.setattr(create_github_release, "api", api)
+    monkeypatch.setattr(create_github_release, "changelog", lambda _version: "notes\n")
+    assert create_github_release.create() == release
+
+    monkeypatch.setenv("RELEASE_REVISION", "c" * 40)
+    with pytest.raises(create_github_release.ReleaseError, match="RELEASE_REVISION"):
+        create_github_release.create()
+
+
+def test_remote_tag_commit_rejects_lightweight_tag_even_at_expected_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    revision = "a" * 40
+    monkeypatch.setattr(
+        create_github_release,
+        "api",
+        lambda *_args: (200, {"object": {"type": "commit", "sha": revision}}),
+    )
+    with pytest.raises(create_github_release.ReleaseError, match="must be annotated"):
+        create_github_release.remote_tag_commit("kisev/skills", "v1.2.3", "token")
+
+
+def test_remote_tag_commit_peels_annotated_tag_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+    outer = "b" * 40
+    inner = "c" * 40
+    revision = "a" * 40
+
+    def api(_method: str, path: str, _token: str) -> tuple[int, object]:
+        if "/git/ref/tags/" in path:
+            return 200, {"object": {"type": "tag", "sha": outer}}
+        if path.endswith(outer):
+            return 200, {"object": {"type": "tag", "sha": inner}}
+        return 200, {"object": {"type": "commit", "sha": revision}}
+
+    monkeypatch.setattr(create_github_release, "api", api)
+    assert create_github_release.remote_tag_commit("kisev/skills", "v1.2.3", "token") == revision
+
+
+def test_new_github_release_rejects_failed_postcondition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tag = "v1.2.3"
+    revision = "a" * 40
+    tag_object = "b" * 40
+    release_lookups = 0
+
+    def api(method: str, path: str, _token: str, _payload: object = None) -> tuple[int, object]:
+        nonlocal release_lookups
+        if "/git/ref/tags/" in path:
+            return 200, {"object": {"type": "tag", "sha": tag_object}}
+        if "/git/tags/" in path:
+            return 200, {"object": {"type": "commit", "sha": revision}}
+        if method == "POST":
+            return 201, {"tag_name": tag}
+        release_lookups += 1
+        if release_lookups == 1:
+            return 404, {}
+        return 200, {
+            "tag_name": tag,
+            "name": tag,
+            "draft": False,
+            "prerelease": False,
+            "body": "different notes\n",
+        }
+
+    monkeypatch.setenv("GH_TOKEN", "test-token")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "kisev/skills")
+    monkeypatch.setenv("RELEASE_TAG", tag)
+    monkeypatch.setenv("RELEASE_REVISION", revision)
+    monkeypatch.setattr(create_github_release, "api", api)
+    monkeypatch.setattr(create_github_release, "changelog", lambda _version: "notes\n")
+    with pytest.raises(create_github_release.ReleaseError, match="differs"):
+        create_github_release.create()
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_github_release_rechecks_peeled_tag_after_final_get(
+    monkeypatch: pytest.MonkeyPatch, existing: bool
+) -> None:
+    tag = "v1.2.3"
+    revision = "a" * 40
+    release = {
+        "tag_name": tag,
+        "name": tag,
+        "draft": False,
+        "prerelease": False,
+        "body": "notes\n",
+    }
+    tag_lookups = 0
+    tag_object_lookups = 0
+    release_lookups = 0
+    calls: list[tuple[str, str]] = []
+
+    def api(method: str, path: str, _token: str, _payload: object = None) -> tuple[int, object]:
+        nonlocal release_lookups, tag_object_lookups, tag_lookups
+        calls.append((method, path))
+        if "/git/ref/tags/" in path:
+            tag_lookups += 1
+            return 200, {"object": {"type": "tag", "sha": "b" * 40}}
+        if "/git/tags/" in path:
+            tag_object_lookups += 1
+            sha = revision if tag_object_lookups == 1 else "c" * 40
+            return 200, {"object": {"type": "commit", "sha": sha}}
+        if method == "POST":
+            return 201, release
+        release_lookups += 1
+        if not existing and release_lookups == 1:
+            return 404, {}
+        return 200, release
+
+    monkeypatch.setenv("GH_TOKEN", "test-token")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "kisev/skills")
+    monkeypatch.setenv("RELEASE_TAG", tag)
+    monkeypatch.setenv("RELEASE_REVISION", revision)
+    monkeypatch.setattr(create_github_release, "api", api)
+    monkeypatch.setattr(create_github_release, "changelog", lambda _version: "notes\n")
+
+    with pytest.raises(create_github_release.ReleaseError, match="RELEASE_REVISION"):
+        create_github_release.create()
+    assert tag_lookups == 2
+    assert tag_object_lookups == 2
+    assert "/git/ref/tags/" in calls[-2][1]
+    assert "/git/tags/" in calls[-1][1]
 
 
 def test_release_environment_revision_must_match_head(monkeypatch: pytest.MonkeyPatch) -> None:

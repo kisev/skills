@@ -57,29 +57,79 @@ def api(
         return error.code, value
 
 
+def remote_tag_commit(repository: str, tag: str, token: str) -> str:
+    encoded_tag = urllib.parse.quote(tag, safe="")
+    status, reference = api("GET", f"/repos/{repository}/git/ref/tags/{encoded_tag}", token)
+    if status != 200 or not isinstance(reference, dict):
+        raise ReleaseError(f"GitHub tag lookup failed with HTTP {status}: {reference}")
+    value: object = reference.get("object")
+    if not isinstance(value, dict) or value.get("type") != "tag":
+        raise ReleaseError("GitHub release tag must be annotated")
+    seen: set[str] = set()
+    for _ in range(8):
+        if not isinstance(value, dict):
+            break
+        object_type = value.get("type")
+        sha = value.get("sha")
+        if not isinstance(sha, str) or re.fullmatch(r"[0-9a-fA-F]{40}", sha) is None:
+            break
+        if object_type == "commit":
+            return sha.lower()
+        if object_type != "tag" or sha in seen:
+            break
+        seen.add(sha)
+        status, tag_object = api("GET", f"/repos/{repository}/git/tags/{sha}", token)
+        if status != 200 or not isinstance(tag_object, dict):
+            raise ReleaseError(
+                f"GitHub annotated tag lookup failed with HTTP {status}: {tag_object}"
+            )
+        value = tag_object.get("object")
+    raise ReleaseError("GitHub tag does not peel to an exact commit")
+
+
+def verify_release(value: object, tag: str, body: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or any(
+        (
+            value.get("tag_name") != tag,
+            value.get("name") != tag,
+            value.get("draft") is not False,
+            value.get("prerelease") is not False,
+            value.get("body") != body,
+        )
+    ):
+        raise ReleaseError("GitHub Release differs from the expected release")
+    return value
+
+
+def verify_release_and_tag(
+    value: object, repository: str, tag: str, revision: str, body: str, token: str
+) -> dict[str, Any]:
+    release = verify_release(value, tag, body)
+    if remote_tag_commit(repository, tag, token) != revision.lower():
+        raise ReleaseError("GitHub tag does not reference RELEASE_REVISION")
+    return release
+
+
 def create() -> dict[str, Any]:
     token = os.environ.get("GH_TOKEN", "")
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     tag = os.environ.get("RELEASE_TAG", "")
     revision = os.environ.get("RELEASE_REVISION", "")
-    if not token or repository != "kisev/skills" or not tag.startswith("v") or not revision:
+    if (
+        not token
+        or repository != "kisev/skills"
+        or not tag.startswith("v")
+        or re.fullmatch(r"[0-9a-fA-F]{40}", revision) is None
+    ):
         raise ReleaseError("GitHub release environment is invalid")
     version = tag.removeprefix("v")
     body = changelog(version)
     encoded_tag = urllib.parse.quote(tag, safe="")
+    if remote_tag_commit(repository, tag, token) != revision.lower():
+        raise ReleaseError("GitHub tag does not reference RELEASE_REVISION")
     status, existing = api("GET", f"/repos/{repository}/releases/tags/{encoded_tag}", token)
     if status == 200:
-        if not isinstance(existing, dict) or any(
-            (
-                existing.get("tag_name") != tag,
-                existing.get("name") != tag,
-                existing.get("draft") is not False,
-                existing.get("prerelease") is not False,
-                existing.get("body") != body,
-            )
-        ):
-            raise ReleaseError("existing GitHub Release differs from the expected release")
-        return existing
+        return verify_release_and_tag(existing, repository, tag, revision, body, token)
     if status != 404:
         raise ReleaseError(f"GitHub release lookup failed with HTTP {status}: {existing}")
     status, created = api(
@@ -98,7 +148,10 @@ def create() -> dict[str, Any]:
     )
     if status != 201 or not isinstance(created, dict):
         raise ReleaseError(f"GitHub release creation failed with HTTP {status}: {created}")
-    return created
+    status, current = api("GET", f"/repos/{repository}/releases/tags/{encoded_tag}", token)
+    if status != 200:
+        raise ReleaseError(f"GitHub release postcondition failed with HTTP {status}: {current}")
+    return verify_release_and_tag(current, repository, tag, revision, body, token)
 
 
 def main() -> int:

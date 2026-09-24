@@ -8,6 +8,8 @@ from typing import Any, cast
 
 import pytest
 
+from shared.references.portable_gitlab import contract as portable_contract
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills/release-prepare/scripts/release_inventory.py"
 
@@ -23,6 +25,7 @@ def inventory(monkeypatch: pytest.MonkeyPatch) -> Any:
         MAX_BYTES=1_000_000,
         WorkflowError=WorkflowError,
         redact=lambda value: str(value).replace("secret", "[REDACTED]"),
+        parse_semver=portable_contract.parse_semver,
     )
     runtime = types.ModuleType("portable_runtime")
     cast("Any", runtime).contract = contract
@@ -54,6 +57,165 @@ def test_commit_details_uses_mailmap_aware_author_format(inventory: Any, tmp_pat
         "--format=%aE%x00%aN%x00%s%x00%B%x00%P",
         "a" * 40,
     )
+
+
+def test_first_parent_tag_skips_ineligible_tags_and_selects_nearest_stable_semver(
+    inventory: Any, tmp_path: Path
+) -> None:
+    head = "a" * 40
+    previous = "b" * 40
+    older = "c" * 40
+    tags = "\n".join(
+        (
+            f"v2.0.0-rc.1\0\0{head}",
+            f"v1.9.0+build.1\0\0{head}",
+            f"v0.9.0\0\0{head}",
+            f"v01.2.3\0\0{head}",
+            f"v1.4.0\0{'d' * 40}\0{'e' * 40}",
+            f"v1.3.0\0\0{older}",
+        )
+    )
+    calls: list[tuple[str, ...]] = []
+
+    def git_read(_root: Path, *arguments: str) -> str:
+        calls.append(arguments)
+        return (
+            tags if arguments[0] == "for-each-ref" else f"{head}\n{previous}\n{'d' * 40}\n{older}\n"
+        )
+
+    inventory.portable.git_read = git_read
+    assert inventory.first_parent_tag(tmp_path, head) == "v1.4.0"
+    assert calls == [
+        (
+            "for-each-ref",
+            f"--count={inventory.MAX_RELEASE_TAGS + 1}",
+            "--format=%(refname:strip=2)%00%(*objectname)%00%(objectname)",
+            "refs/tags/v*",
+        ),
+        (
+            "rev-list",
+            "--first-parent",
+            f"--max-count={inventory.MAX_RELEASE_COMMITS + 1}",
+            head,
+        ),
+    ]
+
+
+def test_first_parent_tag_chooses_highest_stable_version_on_nearest_commit(
+    inventory: Any, tmp_path: Path
+) -> None:
+    head = "a" * 40
+    outputs = iter(
+        (
+            f"v1.2.3\0\0{head}\nv2.0.0\0\0{head}\n",
+            f"{head}\n",
+        )
+    )
+    inventory.portable.git_read = lambda *_args: next(outputs)
+    assert inventory.first_parent_tag(tmp_path, head) == "v2.0.0"
+
+
+def test_first_parent_tag_returns_none_without_eligible_tags(
+    inventory: Any, tmp_path: Path
+) -> None:
+    head = "a" * 40
+    inventory.portable.git_read = lambda *_args: (
+        f"v0.9.0\0\0{head}\nv1.0.0-rc.1\0\0{head}\nv1.0.0+build\0\0{head}\n"
+    )
+    assert inventory.first_parent_tag(tmp_path, head) is None
+
+
+def test_first_parent_tag_bounds_local_tag_list(inventory: Any, tmp_path: Path) -> None:
+    line = f"v1.0.0\0\0{'a' * 40}"
+    inventory.portable.MAX_BYTES = 10_000_000
+    inventory.portable.git_read = lambda *_args: "\n".join(
+        [line] * (inventory.MAX_RELEASE_TAGS + 1)
+    )
+    with pytest.raises(WorkflowError, match="tag list exceeds the protective limit"):
+        inventory.first_parent_tag(tmp_path, "a" * 40)
+
+
+def test_first_parent_tag_bounds_first_parent_history(inventory: Any, tmp_path: Path) -> None:
+    head = "a" * 40
+    outputs = iter(
+        (
+            f"v1.0.0\0\0{'b' * 40}\n",
+            "\n".join([head] * (inventory.MAX_RELEASE_COMMITS + 1)),
+        )
+    )
+    inventory.portable.MAX_BYTES = 10_000_000
+    inventory.portable.git_read = lambda *_args: next(outputs)
+    with pytest.raises(WorkflowError, match="history exceeds the protective limit"):
+        inventory.first_parent_tag(tmp_path, head)
+
+
+def test_explicit_previous_ref_resolves_exact_peeled_local_tag(
+    inventory: Any, tmp_path: Path
+) -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def git_read(_root: Path, *arguments: str) -> str:
+        calls.append(arguments)
+        return "a" * 40
+
+    inventory.portable.git_read = git_read
+    assert inventory.explicit_previous_commit(tmp_path, "v1.2.3") == "a" * 40
+    assert calls == [("rev-parse", "--verify", "refs/tags/v1.2.3^{commit}")]
+
+
+def test_explicit_previous_ref_rejects_same_name_branch(inventory: Any, tmp_path: Path) -> None:
+    def git_read(_root: Path, *arguments: str) -> str:
+        assert arguments == ("rev-parse", "--verify", "refs/tags/v1.2.3^{commit}")
+        raise WorkflowError("missing tag")
+
+    inventory.portable.git_read = git_read
+    with pytest.raises(WorkflowError, match="exact local tag"):
+        inventory.explicit_previous_commit(tmp_path, "v1.2.3")
+
+
+def test_explicit_previous_ref_accepts_exact_full_sha(inventory: Any, tmp_path: Path) -> None:
+    reference = "A" * 40
+    calls: list[tuple[str, ...]] = []
+
+    def git_read(_root: Path, *arguments: str) -> str:
+        calls.append(arguments)
+        return reference.lower()
+
+    inventory.portable.git_read = git_read
+    assert inventory.explicit_previous_commit(tmp_path, reference) == reference.lower()
+    assert calls == [("rev-parse", "--verify", f"{reference}^{{commit}}")]
+
+
+def test_explicit_previous_ref_rejects_sha_resolving_elsewhere(
+    inventory: Any, tmp_path: Path
+) -> None:
+    inventory.portable.git_read = lambda *_args: "b" * 40
+    with pytest.raises(WorkflowError, match="exact commit SHA"):
+        inventory.explicit_previous_commit(tmp_path, "a" * 40)
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "main",
+        "a" * 39,
+        "HEAD~1",
+        "refs/tags/v1.2.3",
+        "v0.9.0",
+        "v1.2.3-rc.1",
+        "v1.2.3+build",
+    ],
+)
+def test_explicit_previous_ref_rejects_unsupported_revision(
+    inventory: Any, tmp_path: Path, reference: str
+) -> None:
+    inventory.portable.git_read = lambda *_args: pytest.fail("invalid boundary must not reach Git")
+    with pytest.raises(WorkflowError, match=r"stable SemVer tag.*full 40-hex"):
+        inventory.explicit_previous_commit(tmp_path, reference)
+
+
+def test_semver_parser_rejects_unbounded_numeric_identifiers() -> None:
+    assert portable_contract.parse_semver(f"{'9' * 65}.0.0") is None
 
 
 def test_participants_apply_human_approval_comment_and_author_rules(inventory: Any) -> None:

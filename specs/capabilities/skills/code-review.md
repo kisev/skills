@@ -49,7 +49,8 @@ change and the body file consumed by that command.
 ## Errors, Partial, Escalation
 
 Missing exact evidence, complete MR-bound exact-head job metadata, required
-failed-job trace excerpts, or a required critic is blocked, not silently ignored.
+failed-job trace excerpts with HTTP-confirmed range completeness, or a required
+critic is blocked, not silently ignored.
 Missing or stale context, critic, finalize, decision, content, plan, baseline, or
 Markdown bindings make the final report blocked; findings are never reported as
 a best-effort substitute. Failed/canceled jobs are classified from bounded,
@@ -57,6 +58,10 @@ redacted trace evidence across child/downstream pipelines rather than from job
 names. Only clearly proven approval or equivalent manual process gates may avoid
 blocking `ready`; code, infrastructure, unknown, and incomplete failures remain
 blocking, while low findings are non-blocking.
+Job-trace collection shall stream response headers and content under one bounded
+deadline and hard byte limit, clean up and reap the process group within bounded
+waits on every exit, and fail with a controlled error when cleanup or the
+required POSIX capability is unavailable.
 Irrecoverable loss of the current evidence remains blocked without a synthesized
 next action because the target can no longer be trusted.
 Changed comparison boundaries, rewritten history, incompatible state, or

@@ -30,7 +30,7 @@ class DistributionError(Exception):
 
 
 DESCRIPTION = re.compile(r"^description:\s*>-?\s*\n\s+(.+)$", re.MULTILINE)
-SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 
 
 def skill_description(skill: Path) -> str:

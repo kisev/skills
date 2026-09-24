@@ -19,6 +19,7 @@ else:
 DEFAULT_WORKERS = 8
 MAX_WORKERS = 32
 MAX_RELEASE_COMMITS = 10_000
+MAX_RELEASE_TAGS = 10_000
 MAX_COMPONENT_MRS = 1_000
 MAX_WORK_ITEMS = 250
 COMMIT_METADATA_FIELDS = 5
@@ -65,30 +66,58 @@ def resolve_commit(root: Path, revision: str) -> str:
 
 
 def first_parent_tag(root: Path, head_sha: str) -> str | None:
-    try:
-        value = str(
-            portable.git_read(
-                root,
-                "describe",
-                "--first-parent",
-                "--tags",
-                "--match",
-                "v[0-9]*",
-                "--abbrev=0",
-                head_sha,
-            )
-        ).strip()
-    except portable.WorkflowError:
-        return None
-    if (
-        re.fullmatch(
-            r"v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?",
-            value,
+    raw_tags = str(
+        portable.git_read(
+            root,
+            "for-each-ref",
+            f"--count={MAX_RELEASE_TAGS + 1}",
+            "--format=%(refname:strip=2)%00%(*objectname)%00%(objectname)",
+            "refs/tags/v*",
         )
-        is None
-    ):
-        raise portable.WorkflowError("nearest first-parent v* tag is not valid SemVer")
-    return value
+    )
+    if len(raw_tags.encode()) > portable.MAX_BYTES:
+        raise portable.WorkflowError("local tag list exceeds the size limit")
+    tag_lines = raw_tags.splitlines()
+    if len(tag_lines) > MAX_RELEASE_TAGS:
+        raise portable.WorkflowError("local tag list exceeds the protective limit")
+
+    tags_by_commit: dict[str, list[tuple[tuple[int, int, int], str]]] = {}
+    for line in tag_lines:
+        fields = line.split("\0")
+        if len(fields) != 3:
+            raise portable.WorkflowError("Git returned an invalid local tag list")
+        name, peeled_sha, object_sha = fields
+        version = portable.parse_semver(name[1:]) if name.startswith("v") else None
+        if version is None or version[0] < 1 or version[3] or version[4]:
+            continue
+        commit_sha = peeled_sha or object_sha
+        if re.fullmatch(r"[0-9a-fA-F]{1,128}", commit_sha) is None:
+            raise portable.WorkflowError("Git returned an invalid tagged object SHA")
+        tags_by_commit.setdefault(commit_sha.lower(), []).append((version[:3], name))
+    if not tags_by_commit:
+        return None
+
+    raw_commits = str(
+        portable.git_read(
+            root,
+            "rev-list",
+            "--first-parent",
+            f"--max-count={MAX_RELEASE_COMMITS + 1}",
+            head_sha,
+        )
+    )
+    if len(raw_commits.encode()) > portable.MAX_BYTES:
+        raise portable.WorkflowError("first-parent history exceeds the size limit")
+    commits = [line for line in raw_commits.splitlines() if line]
+    if len(commits) > MAX_RELEASE_COMMITS:
+        raise portable.WorkflowError("first-parent history exceeds the protective limit")
+    for commit_sha in commits:
+        if re.fullmatch(r"[0-9a-fA-F]{1,128}", commit_sha) is None:
+            raise portable.WorkflowError("Git returned an invalid first-parent commit SHA")
+        candidates = tags_by_commit.get(commit_sha.lower())
+        if candidates:
+            return max(candidates)[1]
+    return None
 
 
 def exact_local_tag(root: Path, reference: str, expected_sha: str) -> bool:
@@ -96,6 +125,33 @@ def exact_local_tag(root: Path, reference: str, expected_sha: str) -> bool:
         return resolve_commit(root, f"refs/tags/{reference}") == expected_sha
     except portable.WorkflowError:
         return False
+
+
+def explicit_previous_commit(root: Path, reference: str) -> str:
+    version = portable.parse_semver(reference[1:]) if reference.startswith("v") else None
+    if version is not None and not version[3] and not version[4] and version[0] >= 1:
+        try:
+            return resolve_commit(root, f"refs/tags/{reference}")
+        except portable.WorkflowError as exc:
+            raise portable.WorkflowError(
+                "explicit previous release boundary must be an exact local tag"
+            ) from exc
+    if re.fullmatch(r"[0-9a-fA-F]{40}", reference) is not None:
+        try:
+            resolved = resolve_commit(root, reference)
+        except portable.WorkflowError as exc:
+            raise portable.WorkflowError(
+                "explicit previous release boundary must be an exact local commit"
+            ) from exc
+        if resolved.lower() != reference.lower():
+            raise portable.WorkflowError(
+                "explicit previous release boundary must resolve to the exact commit SHA"
+            )
+        return resolved
+    raise portable.WorkflowError(
+        "explicit previous release boundary must be a stable SemVer tag at or above v1.0.0 "
+        "or a full 40-hex commit SHA"
+    )
 
 
 def commit_details(root: Path, sha: str) -> dict[str, Any]:
@@ -840,10 +896,15 @@ def collect_inventory(
         raise portable.WorkflowError("local checkout does not resolve the exact release head")
 
     previous_ref_explicit = previous_ref is not None
-    selected_previous_ref = previous_ref or first_parent_tag(root, head_sha)
-    previous_sha = (
-        resolve_commit(root, selected_previous_ref) if selected_previous_ref is not None else None
+    selected_previous_ref = (
+        previous_ref if previous_ref_explicit else first_parent_tag(root, head_sha)
     )
+    if previous_ref_explicit:
+        previous_sha = explicit_previous_commit(root, cast("str", selected_previous_ref))
+    elif selected_previous_ref is not None:
+        previous_sha = resolve_commit(root, f"refs/tags/{selected_previous_ref}")
+    else:
+        previous_sha = None
     if previous_sha is not None:
         try:
             portable.git_read(root, "merge-base", "--is-ancestor", previous_sha, head_sha)
