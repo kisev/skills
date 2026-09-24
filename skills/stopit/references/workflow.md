@@ -14,6 +14,12 @@
 
 ## Runner
 
+The bundled runner is POSIX-only because safe traversal and workspace locking
+require POSIX file-descriptor operations and `fcntl`. Lock acquisition uses
+non-blocking retries with a bounded five-second deadline; contention beyond the
+deadline fails without writing the handoff. A lock file with multiple hard links
+is unsafe and rejected before its mode is changed or a lock is acquired.
+
 Run from the skill directory. Before preparing or showing the draft, resolve the
 exact destination without writing any state:
 
@@ -56,6 +62,7 @@ body-only snapshot; the current file ends with paths to earlier snapshots.
 - The handoff is usable by the next session without hidden state.
 - Completed, current, next, and blocking work are explicitly separated.
 - Repeated handoffs for the same canonical workspace atomically replace the same
-  XDG state file while retaining changed versions; different canonical workspaces
-  use different IDs.
+  XDG state file while retaining changed versions. A workspace lock serializes
+  the read, history snapshot, and replacement so concurrent writes do not lose
+  versions; different canonical workspaces use different IDs.
 - There are no Git or external-system changes.

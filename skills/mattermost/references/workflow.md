@@ -40,7 +40,10 @@ The SQLite cache is isolated by normalized origin and current user ID. Access to
 the exact post or channel is revalidated before every cache read.
 
 - Coverage newer than seven days is reusable for 300 seconds.
-- Coverage wholly older than seven days is stable and has no freshness expiry.
+- Coverage wholly older than seven days is intentionally treated as immutable
+  and stable, with no freshness expiry. This is a deliberate
+  performance/freshness tradeoff that avoids repeated historical API reads;
+  late edits and deletes are not observed unless the caller uses `--refresh`.
 - Thread composition is reusable for 300 seconds.
 - Reactions are never cached and are fetched again unless `--no-reactions` is set.
 - Partial reads may cache individual posts but never mark an interval or thread
@@ -49,6 +52,10 @@ the exact post or channel is revalidated before every cache read.
 - `--no-cache` does not open or modify the cache.
 - Cache corruption, unsafe paths, I/O errors, or unsupported schemas stop the
   operation with `cache_error`; do not silently continue through the API.
+
+Stable cache can therefore retain and return content that was later edited or
+deleted, including for security or compliance reasons. Use `--refresh` whenever
+the current redaction or deletion state matters.
 
 Inspect the cache with:
 

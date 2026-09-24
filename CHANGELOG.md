@@ -21,6 +21,18 @@ All notable changes to this project are documented in this file. Entries follow
 - Marker status is excluded from publication integrity bindings, patch markers are
   bound to the exact worktree and head, and all XDG state roots reject relative or
   symlinked paths.
+- Release preparation now selects the nearest stable SemVer first-parent boundary
+  at or above `v1.0.0`, supports only exact stable tags or full commit SHAs as
+  explicit boundaries, and verifies an annotated GitHub tag before and after
+  release publication.
+- Local state mutations that require locking or crash durability now fail closed
+  without the required POSIX `fcntl`, process-group, and directory-sync primitives.
+- `task-triage` information-request lifecycles now use bounded locks and subprocesses,
+  durable pre-mutation reservations, exact receipts, and fresh remote checks before
+  follow-up or closure.
+- Team profile saves now use schema v3 durable journals with content-addressed
+  backups and exact postcondition recovery; interrupted schema v2 journals remain
+  recoverable during migration.
 
 ### Fixed
 

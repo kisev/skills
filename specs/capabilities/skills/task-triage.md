@@ -68,6 +68,20 @@ API use contextual messages. Information requests are derived only from actual
 GitLab discussions by the authenticated user and advance strictly through a
 question, two pings, and a final message plus separate closure proposal. Replies
 are reassessed before advancing, and an insufficient reply begins a new cycle.
+Generated information-message helpers revalidate the authenticated user and
+fresh discussion, serialize the lifecycle with a bounded POSIX lock, and durably
+reserve every POST. They distinguish a proven pre-start failure from an unknown
+post-start outcome and an applied mutation; an unknown outcome blocks replay.
+Guard v2 for a new standalone note binds the stable ordered IDs and digest of the
+complete observed non-system conversation and rejects any fresh addition, removal,
+or change before POST. Persisted guard v1 commands fail closed and require
+regeneration. Equal-timestamp notes use numeric note-ID ordering; nonnumeric IDs
+retain their API order.
+Issue closure uses the same durable transition before PUT, restores the message
+receipt only for a proven pre-start failure, retains ambiguous reservations, and
+records an irreversible local terminal receipt only after a fresh exact-issue GET
+confirms the closed state. Lifecycle lock descriptors are validated as private,
+owned, regular, singly linked files before permission repair or locking.
 
 ## Requirement
 
@@ -98,10 +112,24 @@ except for milestone assignment. Each mutation command shall record an advisory
 post-success XDG marker and require target revalidation before retry. Information-request actions shall be derived
 from actual GitLab notes and advance without skipped stages through a question,
 two pings, and a final message plus separate issue-close command; any reply shall
-be reassessed, and an insufficient reply shall start a new cycle. The stable
-summary shall list detailed reports as plain absolute paths. Partial or stale
-evidence shall remain explicit and shall not be reported as complete. The
-workflow shall never execute generated commands or mutate GitLab.
+be reassessed, and an insufficient reply shall start a new cycle. Each generated
+information POST shall have a durable pre-POST reservation removed only when the
+process provably did not start. The mutation helper shall use one bounded
+deadline, bounded stdout and stderr, POSIX process-group cleanup and reap, and
+shall report `none`, `unknown`, or `applied` mutation outcomes without treating
+an ambiguous post-start failure, including selector or stream cleanup failure, as
+mutation-free. Before an issue-close PUT, the
+helper shall durably replace the exact message receipt with a close reservation,
+restore that receipt only for a proven pre-start failure, preserve the blocker
+for an ambiguous outcome, and write an exact terminal closed receipt only after a
+fresh GET verifies the exact project ID, issue IID, and closed state. GET failure,
+identity mismatch, or an open issue shall remain ambiguous. A replay shall fail
+even if the issue was reopened. Source-layout
+commands shall run under `python -I -S -B` before materialization while built
+archives remain self-contained. The stable summary shall list
+detailed reports as plain absolute paths. Partial or stale evidence shall remain
+explicit and shall not be reported as complete. The workflow shall never execute
+generated commands or mutate GitLab.
 
 ## Example
 

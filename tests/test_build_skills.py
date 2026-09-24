@@ -9,6 +9,24 @@ import pytest
 from scripts import build_skills
 
 
+def portable_file_inventory(
+    root: Path, *, excluded_parts: frozenset[str] = frozenset()
+) -> dict[Path, bytes]:
+    inventory: dict[Path, bytes] = {}
+    for path in root.rglob("*"):
+        relative = path.relative_to(root)
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or "__pycache__" in relative.parts
+            or path.suffix in {".pyc", ".pyo"}
+            or any(part in excluded_parts for part in relative.parts)
+        ):
+            continue
+        inventory[relative] = path.read_bytes()
+    return inventory
+
+
 def isolated_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     shared = tmp_path / "shared"
     sources = tmp_path / "skills"
@@ -208,30 +226,37 @@ def test_build_materializes_only_in_output(tmp_path: Path, monkeypatch: pytest.M
     assert not (sources / "foo/references/canonical.md").exists()
 
 
+def test_portable_file_inventory_ignores_python_bytecode(tmp_path: Path) -> None:
+    (tmp_path / "kept.py").write_text("kept\n", encoding="utf-8")
+    (tmp_path / "orphan.pyc").write_bytes(b"bytecode")
+    (tmp_path / "legacy.pyo").write_bytes(b"optimized bytecode")
+    cache = tmp_path / "__pycache__"
+    cache.mkdir()
+    (cache / "cached.pyc").write_bytes(b"cached bytecode")
+
+    assert portable_file_inventory(tmp_path) == {Path("kept.py"): b"kept\n"}
+
+
+def test_portable_file_inventory_ignores_symlinks(tmp_path: Path) -> None:
+    target = tmp_path / "target.py"
+    target.write_text("target\n", encoding="utf-8")
+    (tmp_path / "linked.py").symlink_to(target)
+
+    assert portable_file_inventory(tmp_path) == {Path("target.py"): b"target\n"}
+
+
 def test_spec_manage_portable_inventory_matches_all_authored_and_materialized_files() -> None:
     source = build_skills.SOURCES / "spec-manage"
     built = build_skills.ROOT / ".build/skills/spec-manage"
-    authored: dict[Path, bytes] = {}
-    for path in source.rglob("*"):
-        if not path.is_file() or any(
-            part in {"ru", "en"} for part in path.relative_to(source).parts
-        ):
-            continue
-        relative = path.relative_to(source)
-        if relative == Path("SKILL.source.md"):
-            relative = Path("SKILL.md")
-        authored[relative] = path.read_bytes()
+    authored = portable_file_inventory(source, excluded_parts=frozenset({"ru", "en"}))
+    authored[Path("SKILL.md")] = authored.pop(Path("SKILL.source.md"))
     generated = {
         destination.relative_to("spec-manage"): shared.read_bytes()
         for shared, destination in build_skills.manifest_entries()
         if destination.parts[0] == "spec-manage"
     }
     expected = authored | generated
-    actual = {
-        path.relative_to(built): path.read_bytes()
-        for path in built.rglob("*")
-        if path.is_file() and "__pycache__" not in path.parts
-    }
+    actual = portable_file_inventory(built)
 
     assert actual == expected
     assert not any("ru" in path.parts for path in actual)

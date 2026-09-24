@@ -52,6 +52,41 @@ and preserve its bounded GitLab scope, selected locale, XDG artifact ownership,
 incremental fingerprints, actual-discussion-based information-request lifecycle,
 partial-result semantics, and no-external-mutation boundary.
 
+Generated information-request commands re-read the target and discussion
+immediately before mutation, verify the authenticated user, serialize replay
+protection, and reject stale lifecycle evidence. Stale closure uses separate
+manual message and close commands, but the close command requires the successful
+message receipt and verifies that no later non-system reply was posted before
+closing. Guard v2 for a new standalone note binds stable ordered IDs and a digest
+of all non-system notes in the prepared snapshot and rejects any fresh addition,
+removal, or change; persisted guard v1 commands fail closed and require regeneration.
+Every information-message POST stores a durable guard-bound in-progress
+reservation first. Only a proven process-start failure removes it; timeout,
+nonzero exit, bounded-output failure, or malformed response after start reports
+`external_mutations: true` with `mutation_outcome: unknown` and keeps the blocker.
+A pre-start failure reports `external_mutations: false` with
+`mutation_outcome: none`, while success reports `external_mutations: true` with
+`mutation_outcome: applied` and stores the exact receipt. The helper uses bounded
+nonblocking POSIX lifecycle locking and a bounded streaming process-group runner.
+Selector or stream cleanup failure after process start is an unknown mutation
+outcome. Before permission repair or locking, the lock descriptor must identify a
+regular, current-user-owned, singly linked file with no group or other access.
+Closure accepts only a receipt whose exact guard digest, positive note ID, and
+body match the guard request. Guard paths are accepted only from the validated
+`${XDG_STATE_HOME}/agent-skills/task-triage/<scope>/artifacts/information-guards/`
+tree and are parsed from the same bytes whose digest was verified. Before the
+close PUT, the helper durably replaces the message receipt with a close
+in-progress reservation. It restores the message receipt only when process start
+provably failed, retains the reservation after any ambiguous post-start outcome,
+and replaces it with an exact terminal closed receipt only after a separate GET
+returns the exact project ID and issue IID with `state: closed`. A failed GET,
+identity mismatch, or non-closed state retains the reservation and reports an
+unknown mutation outcome. A terminal
+receipt rejects replay regardless of the issue's later state. Commands emitted
+from a maintained source checkout execute through a bounded repository-relative
+shared-runtime fallback under `python -I -S -B`; built archives remain
+self-contained and use their bundled runtime.
+
 ## Example
 
 `/task-triage https://gitlab.example/group/project/-/issues` triages open issues,

@@ -23,7 +23,8 @@ write the approved standard input, report.
 
 ## Dependencies
 
-Current session, existing workspace, and XDG state directory.
+Current session, existing workspace, XDG state directory, and POSIX file
+descriptor traversal and `fcntl` locking.
 
 ## Remote/Local Effects
 
@@ -34,7 +35,9 @@ XDG history; no repository or remote effects.
 ## Errors, Partial, Escalation
 
 Redaction uncertainty, invalid input, or an unsafe or symlinked state path blocks
-handoff creation.
+handoff creation. Unsupported platforms or unavailable `fcntl` locking produce a
+controlled error rather than an import failure. Lock contention is retried
+non-blockingly only until a bounded deadline, then fails without writing.
 
 ## Unique Constraints
 
@@ -52,6 +55,11 @@ workspace-scoped XDG state file. The runner shall reject changed destinations,
 unsafe and symlinked state paths and use private directories, a private file, and
 atomic replacement without creating a separate draft artifact. The current file
 shall list only paths to earlier body-only snapshots after its latest handoff.
+A workspace lock shall serialize stable-file reads, history creation, and
+replacement so concurrent successful writes retain every version, and lock
+acquisition shall use non-blocking bounded retries. The runner shall reject a
+lock file whose link count is not exactly one before changing its mode or
+acquiring its lock.
 
 ## Example
 

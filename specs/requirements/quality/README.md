@@ -54,6 +54,8 @@ Release promotion shall preserve the exact preflighted npm tarball and compare
 every deployed Pages file with the release manifest. Registry verification shall
 bind npm integrity, signatures, provenance, imports, and CLI behavior to the
 release revision before the GitHub Release is created.
+The final GitHub Release read shall be followed by a fresh peeled-tag comparison
+to that revision, including when an existing release is accepted.
 Registry metadata, tarball, and provenance propagation shall share a bounded
 10-minute polling budget with increasing delays and visible progress. Transient
 HTTP and transport failures may be retried only for reads. Integrity or provenance

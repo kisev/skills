@@ -545,6 +545,31 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertIn("collect", help_result.stdout)
         self.assertIn("publish", help_result.stdout)
 
+        with tempfile.TemporaryDirectory() as temporary:
+            isolated = Path(temporary) / "task-triage"
+            shutil.copytree(triage, isolated)
+            probe = subprocess.run(
+                [
+                    sys.executable,
+                    "-I",
+                    "-S",
+                    "-B",
+                    "-c",
+                    (
+                        "import sys; "
+                        f"sys.path.insert(0, {str(isolated / 'scripts')!r}); "
+                        "from portable_runtime.triage import triage_runner; "
+                        "print(triage_runner())"
+                    ),
+                ],
+                cwd=temporary,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(probe.returncode, 0, probe.stderr)
+            self.assertEqual(Path(probe.stdout.strip()), isolated / "scripts/triage_task.py")
+
         planning_runtime = (
             ROOT / "shared/references/work_item_runtime/release_planning.py"
         ).read_bytes()

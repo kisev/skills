@@ -98,8 +98,10 @@ gap between runs. Rough waiting guidance is 5 days before the first ping, 14 day
 before the second, and 30 days before closure, but context and run cadence take
 precedence over exact timing. Any substantive reply must be assessed before the
 next action. A sufficient answer ends the cycle; an insufficient answer starts a
-new question and a fresh two-ping cycle. Closure consists of a final message and
-a separate issue-close command. Never close an MR through this workflow.
+new question and a fresh two-ping cycle. Closure consists of a final-message
+command and a dependent issue-close command. The close command requires the
+local receipt created only after the message was published successfully. Never
+close an MR through this workflow.
 
 ## Stable artifacts
 
@@ -148,8 +150,36 @@ A `new` action either starts a standalone note with `discussion_id=null` or
 follows the latest non-system reply from another participant in an existing
 discussion; it cannot reset an unanswered current-user question. All follow-ups
 target the observed discussion. `close` is valid only for an issue and generates
-the final message before the separate close command. Keep `questions` only for
-user decisions that remain unanswered after the interaction round.
+the final message before the receipt-dependent close command. Every generated
+information-request command fetches the current target and discussion immediately
+before mutation, verifies the authenticated user, acquires a bounded POSIX
+nonblocking lifecycle lock, and rejects stale bound notes or a later non-system
+reply. For a new standalone note, guard v2 binds the stable ordered IDs and digest
+of every non-system note in the prepared conversation snapshot; the fresh snapshot
+must match exactly before POST. Persisted guard v1 commands fail closed and require
+regeneration. Before every information-message POST it durably writes an `in_progress`
+reservation. It removes that reservation only when the mutation process is
+proven not to have started; timeout, nonzero exit, oversized output, or malformed
+response, including selector or stream cleanup failure after start, keeps the
+reservation and requires a fresh assessment. A successful
+POST replaces the reservation with an exact guard-, body-, and note-ID-bound
+receipt. The bounded mutation runner uses one deadline, limited stdout and
+stderr, a dedicated POSIX process group, and forced cleanup and reap. The public
+helper reports `mutation_outcome` as `none`, `unknown`, or `applied` and sets
+`external_mutations` consistently. The close command repeats the freshness and
+identity checks, verifies the exact published final message, and cannot run
+before its successful message command. Before its PUT, it durably transitions
+that message receipt to a close reservation. A proven pre-start failure restores
+the message receipt, an ambiguous post-start result leaves the reservation as a
+blocker, and only a fresh GET that confirms the exact project, issue IID, and
+`closed` state permits an exact terminal `closed` receipt. The lifecycle lock
+rejects non-regular, foreign-owned, multiply linked, or group/other-accessible
+files before changing permissions or acquiring the lock. That terminal
+receipt rejects every replay even if the issue is later reopened. In a source
+checkout before materialization, the maintained runner resolves only the bounded
+repository-relative shared runtime; built archives use their bundled runtime.
+Keep `questions` only for user decisions that remain unanswered after the
+interaction round.
 
 The summary's detailed-report section contains plain absolute paths, never
 Markdown links. Return only a compact localized status, material blockers or

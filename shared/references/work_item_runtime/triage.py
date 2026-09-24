@@ -4,17 +4,25 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
+import importlib
 import json
 import os
 import re
+import selectors
+import signal
+import stat
 import subprocess
+import sys
 import tempfile
+import time
 import urllib.parse
+from contextlib import suppress
 from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard
+from typing import TYPE_CHECKING, Any, NoReturn, Protocol, TypeGuard, cast
 
 from .release_planning import PlanningError
 from .release_planning import validate as validate_release_plan
@@ -49,6 +57,26 @@ COLLECTION_RE = re.compile(
     r"https://(?P<host>[A-Za-z0-9.-]+)/(?P<project>.+?)/-/(?:issues|work_items)/?$"
 )
 DIGEST_RE = re.compile(r"[a-f0-9]{64}")
+MUTATION_TIMEOUT_SECONDS = 60.0
+MUTATION_OUTPUT_LIMIT = 1024 * 1024
+MUTATION_TERMINATION_GRACE_SECONDS = 0.5
+MUTATION_REAP_TIMEOUT_SECONDS = 0.5
+LOCK_TIMEOUT_SECONDS = 5.0
+LOCK_RETRY_SECONDS = 0.05
+
+
+class FileLocking(Protocol):
+    LOCK_EX: int
+    LOCK_NB: int
+
+    def flock(self, descriptor: int, operation: int) -> None: ...
+
+
+fcntl: FileLocking | None
+try:
+    fcntl = cast("FileLocking", importlib.import_module("fcntl"))
+except ImportError:
+    fcntl = None
 
 
 def marker_helper() -> Path:
@@ -188,6 +216,14 @@ class WorkflowError(ValueError):
     """Expected safe workflow failure."""
 
 
+class MutationNotAttempted(WorkflowError):
+    """The mutation process could not start, so no external write was possible."""
+
+
+class MutationOutcomeUnknown(WorkflowError):
+    """The mutation process started, but its external outcome cannot be proven."""
+
+
 class Parser(argparse.ArgumentParser):
     def error(self, message: str) -> NoReturn:
         raise WorkflowError(message)
@@ -221,8 +257,28 @@ def atomic_write(path: Path, content: bytes) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(temporary_path, path)
+        fsync_directory(path.parent)
     finally:
         temporary_path.unlink(missing_ok=True)
+
+
+def fsync_directory(path: Path) -> None:
+    flags = getattr(os, "O_DIRECTORY", 0)
+    if os.name != "posix" or not flags:
+        raise WorkflowError("durable state updates require POSIX directory fsync")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | flags)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    except (AttributeError, NotImplementedError, OSError) as exc:
+        raise WorkflowError("durable state updates require POSIX directory fsync") from exc
+
+
+def durable_unlink(path: Path) -> None:
+    path.unlink()
+    fsync_directory(path.parent)
 
 
 def write_json(path: Path, value: object) -> None:
@@ -246,16 +302,24 @@ def write_artifact(root: Path, kind: str, value: object) -> tuple[Path, str]:
     return path.resolve(), content_digest
 
 
-def read_object(path: Path, label: str) -> dict[str, Any]:
-    if path.is_symlink() or not path.is_file():
-        raise WorkflowError(f"{label} must be a regular non-symlink file")
+def parse_object(raw: bytes, label: str) -> dict[str, Any]:
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        value = json.loads(raw)
+    except (UnicodeError, json.JSONDecodeError) as exc:
         raise WorkflowError(f"{label} must contain one JSON object") from exc
     if not isinstance(value, dict):
         raise WorkflowError(f"{label} must contain one JSON object")
     return value
+
+
+def read_object(path: Path, label: str) -> dict[str, Any]:
+    if path.is_symlink() or not path.is_file():
+        raise WorkflowError(f"{label} must be a regular non-symlink file")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise WorkflowError(f"{label} must contain one JSON object") from exc
+    return parse_object(raw, label)
 
 
 def parse_url(value: str) -> dict[str, Any]:
@@ -684,7 +748,37 @@ def discussion_notes(
         raw_notes = discussion.get("notes", [])
         if isinstance(raw_notes, list):
             notes.extend(note for note in raw_notes if isinstance(note, dict))
-    return sorted(notes, key=lambda note: (str(note.get("created_at") or ""), str(note.get("id"))))
+
+    def numeric_id(note: dict[str, Any]) -> int | None:
+        note_id = note.get("id")
+        if type(note_id) is int:
+            return note_id
+        if isinstance(note_id, str) and note_id.isdecimal():
+            return int(note_id)
+        return None
+
+    ordered = sorted(notes, key=lambda note: str(note.get("created_at") or ""))
+    result: list[dict[str, Any]] = []
+    start = 0
+    while start < len(ordered):
+        timestamp = str(ordered[start].get("created_at") or "")
+        end = start + 1
+        while end < len(ordered) and str(ordered[end].get("created_at") or "") == timestamp:
+            end += 1
+        group = ordered[start:end]
+        if all(numeric_id(note) is not None for note in group):
+            group.sort(key=lambda note: cast("int", numeric_id(note)))
+        result.extend(group)
+        start = end
+    return result
+
+
+def conversation_state(discussions: list[dict[str, Any]]) -> dict[str, Any]:
+    notes = [note for note in discussion_notes(discussions, None) if note.get("system") is not True]
+    note_ids = [note.get("id") for note in notes]
+    if not all(positive(note_id) for note_id in note_ids) or len(set(note_ids)) != len(note_ids):
+        raise WorkflowError("information conversation has invalid stable note IDs")
+    return {"note_ids": note_ids, "digest": digest(notes)}
 
 
 def validate_message(snapshot: dict[str, Any], value: object, label: str) -> dict[str, Any]:
@@ -1013,10 +1107,600 @@ def message_action(
     return action(root, host, kind, "POST", endpoint, {"body": body}, body)
 
 
-def commands_for(root: Path, item: dict[str, Any]) -> list[dict[str, str]]:
+def triage_runner() -> Path:
+    runtime = Path(__file__).resolve()
+    bundled = runtime.parents[1] / "triage_task.py"
+    if bundled.is_file():
+        return bundled
+    for parent in runtime.parents:
+        source = parent / "skills" / "task-triage" / "scripts" / "triage_task.py"
+        if source.is_file():
+            return source
+    raise WorkflowError("task-triage runner is unavailable")
+
+
+def information_command(guard: Path, guard_digest: str, stage: str) -> str:
+    argv = [
+        sys.executable,
+        "-I",
+        "-S",
+        "-B",
+        str(triage_runner()),
+        "apply-information",
+        "--guard",
+        str(guard),
+        "--stage",
+        stage,
+    ]
+    return render_mutation_command(
+        argv,
+        skill="task-triage",
+        action=f"information:{stage}:{guard_digest}",
+        binding=digest({"guard_digest": guard_digest, "stage": stage}),
+        helper=marker_helper(),
+    )
+
+
+def information_actions(
+    root: Path,
+    host: str,
+    request: dict[str, Any],
+    current_user: dict[str, Any],
+    snapshot: dict[str, Any],
+) -> list[dict[str, str]]:
+    target, discussions = conversation_for(snapshot, request["target"], "information guard")
+    observed_conversation = (
+        conversation_state(discussions)
+        if request["action"] == "new" and target["discussion_id"] is None
+        else None
+    )
+    guard, guard_digest = write_artifact(
+        root,
+        "information-guards",
+        {
+            "schema": "task-triage/information-guard/v2",
+            "host": host,
+            "current_user": current_user,
+            "request": request,
+            "conversation_state": observed_conversation,
+        },
+    )
+    message = {
+        "kind": f"information_{request['action']}",
+        "preview": request["body"],
+        "command": information_command(guard, guard_digest, "message"),
+    }
+    if request["action"] != "close":
+        return [message]
+    return [
+        message,
+        {
+            "kind": "close",
+            "preview": request["rationale"],
+            "command": information_command(guard, guard_digest, "close"),
+        },
+    ]
+
+
+def read_information_guard(path: Path) -> tuple[dict[str, Any], str]:
+    if len(path.parents) < 3:
+        raise WorkflowError("information guard path is invalid")
+    scope = path.parents[2].name
+    if re.fullmatch(r"[a-f0-9]{32}", scope) is None:
+        raise WorkflowError("information guard scope is invalid")
+    expected = (
+        xdg_state_home()
+        / "agent-skills"
+        / "task-triage"
+        / scope
+        / "artifacts"
+        / "information-guards"
+    )
+    if path.parent != expected:
+        raise WorkflowError("information guard is outside the task-triage state root")
+    private_directory(expected)
+    if path.suffix != ".json" or not DIGEST_RE.fullmatch(path.stem):
+        raise WorkflowError("information guard path is invalid")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise WorkflowError("information guard is unavailable") from exc
+    if hashlib.sha256(raw).hexdigest() != path.stem:
+        raise WorkflowError("information guard digest does not match")
+    guard = parse_object(raw, "information guard")
+    schema = guard.get("schema")
+    expected_fields = {"schema", "host", "current_user", "request"}
+    if schema == "task-triage/information-guard/v2":
+        expected_fields.add("conversation_state")
+    if set(guard) != expected_fields or schema not in {
+        "task-triage/information-guard/v1",
+        "task-triage/information-guard/v2",
+    }:
+        raise WorkflowError("information guard fields are invalid")
+    if not isinstance(guard.get("host"), str) or not isinstance(guard.get("current_user"), dict):
+        raise WorkflowError("information guard identity is invalid")
+    if schema == "task-triage/information-guard/v2":
+        state = guard["conversation_state"]
+        request = guard.get("request")
+        target = request.get("target") if isinstance(request, dict) else None
+        requires_state = (
+            isinstance(request, dict)
+            and request.get("action") == "new"
+            and isinstance(target, dict)
+            and target.get("discussion_id") is None
+        )
+        if requires_state:
+            if (
+                not isinstance(state, dict)
+                or set(state) != {"note_ids", "digest"}
+                or not isinstance(state.get("note_ids"), list)
+                or not all(positive(note_id) for note_id in state["note_ids"])
+                or len(set(state["note_ids"])) != len(state["note_ids"])
+                or not isinstance(state.get("digest"), str)
+                or DIGEST_RE.fullmatch(state["digest"]) is None
+            ):
+                raise WorkflowError("information guard conversation state is invalid")
+        elif state is not None:
+            raise WorkflowError("information guard conversation state is invalid")
+    return guard, path.stem
+
+
+def fresh_information_snapshot(guard: dict[str, Any]) -> dict[str, Any]:
+    target = guard["request"].get("target")
+    if not isinstance(target, dict):
+        raise WorkflowError("information guard target is invalid")
+    project_id, iid = target.get("project_id"), target.get("iid")
+    if not positive(project_id) or not positive(iid):
+        raise WorkflowError("information guard target identity is invalid")
+    kind = target.get("kind")
+    collection = (
+        "issues" if kind == "issue" else "merge_requests" if kind == "merge_request" else None
+    )
+    if collection is None:
+        raise WorkflowError("information guard target kind is invalid")
+    base = f"projects/{project_id}/{collection}/{iid}"
+    subject = glab_json(guard["host"], base)
+    if not isinstance(subject, dict) or subject.get("iid") not in {None, iid}:
+        raise WorkflowError("fresh information target is incomplete")
+    discussions = paginated(guard["host"], f"{base}/discussions")
+    if kind == "issue":
+        return {
+            "target": {"project_id": project_id, "iid": iid},
+            "issue": subject,
+            "discussions": discussions,
+            "merge_request_conversations": [],
+        }
+    return {
+        "target": {"project_id": -1, "iid": -1},
+        "issue": {"state": "opened"},
+        "discussions": [],
+        "merge_request_conversations": [
+            {"project_id": project_id, "iid": iid, "discussions": discussions}
+        ],
+    }
+
+
+def process_group_exists(process_group: int) -> bool:
+    try:
+        os.killpg(process_group, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
+def terminate_mutation_process(process: subprocess.Popen[bytes]) -> None:
+    process_group = process.pid
+    try:
+        os.killpg(process_group, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except OSError:
+        with suppress(ProcessLookupError):
+            process.kill()
+    deadline = time.monotonic() + MUTATION_TERMINATION_GRACE_SECONDS
+    while process_group_exists(process_group):
+        process.poll()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(0.01, remaining))
+    if process_group_exists(process_group):
+        try:
+            os.killpg(process_group, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError:
+            with suppress(ProcessLookupError):
+                process.kill()
+    if process.poll() is None:
+        with suppress(ProcessLookupError):
+            process.kill()
+    try:
+        process.wait(timeout=MUTATION_REAP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as exc:
+        raise MutationOutcomeUnknown("GitLab mutation cleanup failed; inspect the target") from exc
+
+
+def run_mutation_process(command: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
+    if os.name != "posix" or not callable(getattr(os, "killpg", None)):
+        raise MutationNotAttempted("GitLab mutation requires POSIX process groups")
+    try:
+        process = subprocess.Popen(  # noqa: S603 - fixed executable and validated endpoint
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            start_new_session=True,
+        )
+    except (OSError, ValueError, NotImplementedError) as exc:
+        raise MutationNotAttempted("GitLab mutation was not attempted; retry is safe") from exc
+
+    selector: selectors.BaseSelector | None = None
+    streams: dict[int, bytearray] = {}
+    stdout_fd = stderr_fd = -1
+    deadline = time.monotonic() + MUTATION_TIMEOUT_SECONDS
+    try:
+        if process.stdin is None or process.stdout is None or process.stderr is None:
+            raise MutationOutcomeUnknown(
+                "GitLab mutation pipes are unavailable; inspect the target"
+            )
+        stdin_fd = process.stdin.fileno()
+        stdout_fd = process.stdout.fileno()
+        stderr_fd = process.stderr.fileno()
+        streams = {stdout_fd: bytearray(), stderr_fd: bytearray()}
+        selector = selectors.DefaultSelector()
+        selector.register(stdin_fd, selectors.EVENT_WRITE, "stdin")
+        selector.register(stdout_fd, selectors.EVENT_READ, "stdout")
+        selector.register(stderr_fd, selectors.EVENT_READ, "stderr")
+        written = 0
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target")
+            events = selector.select(remaining)
+            if not events:
+                raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target")
+            for key, _ in events:
+                descriptor = key.fd
+                if key.data == "stdin":
+                    try:
+                        count = os.write(descriptor, payload[written : written + 64 * 1024])
+                    except BrokenPipeError:
+                        count = len(payload) - written
+                    written += count
+                    if written >= len(payload):
+                        selector.unregister(descriptor)
+                        process.stdin.close()
+                    continue
+                chunk = os.read(descriptor, 64 * 1024)
+                if not chunk:
+                    selector.unregister(descriptor)
+                    continue
+                buffer = streams[descriptor]
+                buffer.extend(chunk)
+                if len(buffer) > MUTATION_OUTPUT_LIMIT:
+                    raise MutationOutcomeUnknown(
+                        "GitLab mutation output exceeds the size limit; inspect the target"
+                    )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target")
+        try:
+            returncode = process.wait(timeout=remaining)
+        except subprocess.TimeoutExpired as exc:
+            raise MutationOutcomeUnknown("GitLab mutation timed out; inspect the target") from exc
+        if process_group_exists(process.pid):
+            terminate_mutation_process(process)
+    except MutationOutcomeUnknown as exc:
+        try:
+            terminate_mutation_process(process)
+        except MutationOutcomeUnknown as cleanup_exc:
+            raise cleanup_exc from exc
+        raise
+    except (OSError, ValueError, NotImplementedError) as exc:
+        try:
+            terminate_mutation_process(process)
+        except MutationOutcomeUnknown as cleanup_exc:
+            raise cleanup_exc from exc
+        raise MutationOutcomeUnknown("GitLab mutation process failed; inspect the target") from exc
+    except BaseException:
+        terminate_mutation_process(process)
+        raise
+    finally:
+        cleanup_failure: OSError | ValueError | NotImplementedError | None = None
+        if selector is not None:
+            try:
+                selector.close()
+            except (OSError, ValueError, NotImplementedError) as exc:
+                cleanup_failure = exc
+        for stream in (process.stdin, process.stdout, process.stderr):
+            if stream is not None:
+                try:
+                    stream.close()
+                except (OSError, ValueError, NotImplementedError) as exc:
+                    if cleanup_failure is None:
+                        cleanup_failure = exc
+        if cleanup_failure is not None:
+            primary_failure = sys.exception()
+            outcome = MutationOutcomeUnknown("GitLab mutation cleanup failed; inspect the target")
+            if primary_failure is not None:
+                outcome.add_note(f"cleanup failure: {cleanup_failure!r}")
+                raise outcome from primary_failure
+            raise outcome from cleanup_failure
+    return subprocess.CompletedProcess(
+        command,
+        returncode,
+        bytes(streams[stdout_fd]),
+        bytes(streams[stderr_fd]),
+    )
+
+
+def glab_mutation(host: str, method: str, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+    if not re.fullmatch(r"[A-Za-z0-9._~%/?=&,+:-]+", endpoint) or ".." in endpoint:
+        raise WorkflowError("generated GitLab endpoint is unsafe")
+    command = [
+        "glab",
+        "api",
+        "--hostname",
+        host,
+        "--method",
+        method,
+        endpoint,
+        "--header",
+        "Content-Type: application/json",
+        "--input",
+        "-",
+    ]
+    result = run_mutation_process(command, canonical(payload))
+    if result.returncode != 0:
+        raise MutationOutcomeUnknown("GitLab mutation failed; inspect the target before retrying")
+    try:
+        response = json.loads(result.stdout) if result.stdout.strip() else {}
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise MutationOutcomeUnknown(
+            "GitLab mutation returned invalid JSON; inspect the target"
+        ) from exc
+    if not isinstance(response, dict):
+        raise MutationOutcomeUnknown("GitLab mutation response is incomplete; inspect the target")
+    return response
+
+
+def information_receipt_path(guard_path: Path, guard_digest: str) -> Path:
+    root = guard_path.parents[2]
+    return private_directory(root / "receipts" / "information") / f"{guard_digest}.json"
+
+
+def lock_information_lifecycle(path: Path) -> int:
+    if (
+        os.name != "posix"
+        or fcntl is None
+        or not callable(getattr(fcntl, "flock", None))
+        or not isinstance(getattr(fcntl, "LOCK_EX", None), int)
+        or not isinstance(getattr(fcntl, "LOCK_NB", None), int)
+    ):
+        raise WorkflowError("information lifecycle locking requires POSIX fcntl")
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if not no_follow:
+        raise WorkflowError("information lifecycle locking requires POSIX O_NOFOLLOW")
+    flags = os.O_RDWR | os.O_CREAT | no_follow
+    try:
+        descriptor = os.open(path, flags, 0o600)
+        lock_stat = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(lock_stat.st_mode)
+            or lock_stat.st_uid != os.geteuid()
+            or lock_stat.st_nlink != 1
+            or lock_stat.st_mode & 0o077
+        ):
+            raise WorkflowError("information lifecycle lock must be a private owned regular file")
+        os.fchmod(descriptor, 0o600)
+        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                if exc.errno not in {errno.EACCES, errno.EAGAIN}:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise WorkflowError(
+                        "timed out waiting for the information lifecycle lock"
+                    ) from exc
+                time.sleep(min(LOCK_RETRY_SECONDS, remaining))
+            else:
+                return descriptor
+    except WorkflowError:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise
+    except OSError as exc:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise WorkflowError("information lifecycle lock is unavailable") from exc
+
+
+def apply_information(guard_path: Path, stage: str) -> None:
+    resolved_guard = guard_path.resolve()
+    guard, guard_digest = read_information_guard(resolved_guard)
+    receipt = information_receipt_path(resolved_guard, guard_digest)
+    lock = lock_information_lifecycle(receipt.with_suffix(".lock"))
+    try:
+        apply_information_locked(guard, guard_digest, receipt, stage)
+    finally:
+        os.close(lock)
+
+
+def apply_information_locked(
+    guard: dict[str, Any], guard_digest: str, receipt: Path, stage: str
+) -> None:
+    if guard["schema"] == "task-triage/information-guard/v1":
+        raise WorkflowError("legacy information guard must be regenerated")
+    request = guard["request"]
+    if not isinstance(request, dict):
+        raise WorkflowError("information guard request is invalid")
+    action_name = request.get("action")
+    if stage not in {"message", "close"} or (stage == "close" and action_name != "close"):
+        raise WorkflowError("information lifecycle stage is invalid")
+    if receipt.exists():
+        receipt_value = read_object(receipt, "information lifecycle receipt")
+        if receipt_value.get("status") == "closed":
+            raise WorkflowError("information lifecycle closure was already applied")
+        if stage == "message" and receipt_value.get("status") == "in_progress":
+            raise WorkflowError(
+                "information publication outcome is unknown; refresh and create a new assessment"
+            )
+        if stage == "message":
+            raise WorkflowError("information lifecycle message was already published")
+        if receipt_value.get("status") == "in_progress":
+            raise WorkflowError(
+                "information closure outcome is unknown; inspect the target before retrying"
+            )
+    current_user = guard["current_user"]
+    authenticated_user = glab_json(guard["host"], "user")
+    if (
+        not isinstance(authenticated_user, dict)
+        or authenticated_user.get("id") != current_user.get("id")
+        or authenticated_user.get("username") != current_user.get("username")
+    ):
+        raise WorkflowError("authenticated GitLab user changed; regenerate the triage action")
+    snapshot = fresh_information_snapshot(guard)
+    target = request.get("target")
+    if not isinstance(target, dict):
+        raise WorkflowError("information guard target is invalid")
+    if stage == "message":
+        validated = validate_information_request(
+            snapshot, current_user, request, "information guard"
+        )
+        if request["action"] == "new" and target["discussion_id"] is None:
+            _, discussions = conversation_for(snapshot, target, "information guard")
+            if conversation_state(discussions) != guard["conversation_state"]:
+                raise WorkflowError(
+                    "information conversation changed; regenerate the triage action"
+                )
+        collection = "issues" if target["kind"] == "issue" else "merge_requests"
+        endpoint = f"projects/{target['project_id']}/{collection}/{target['iid']}"
+        if target["discussion_id"] is None:
+            endpoint += "/notes"
+        else:
+            endpoint += f"/discussions/{urllib.parse.quote(target['discussion_id'], safe='')}/notes"
+        payload = {"body": validated["body"]}
+        write_json(
+            receipt,
+            {
+                "status": "in_progress",
+                "guard_digest": guard_digest,
+                "body": request["body"],
+            },
+        )
+        try:
+            response = glab_mutation(guard["host"], "POST", endpoint, payload)
+        except MutationNotAttempted:
+            durable_unlink(receipt)
+            raise
+        note_id = response.get("id")
+        if not positive(note_id):
+            raise MutationOutcomeUnknown(
+                "information message response has no stable note ID; inspect the target"
+            )
+        try:
+            write_json(
+                receipt,
+                {"guard_digest": guard_digest, "note_id": note_id, "body": request["body"]},
+            )
+        except (OSError, WorkflowError) as exc:
+            raise MutationOutcomeUnknown(
+                "information message was applied but its receipt could not be stored"
+            ) from exc
+        return
+
+    receipt_value = read_object(receipt, "information lifecycle receipt")
+    if (
+        set(receipt_value) != {"guard_digest", "note_id", "body"}
+        or receipt_value.get("guard_digest") != guard_digest
+        or receipt_value.get("body") != request.get("body")
+        or not positive(receipt_value.get("note_id"))
+    ):
+        raise WorkflowError("information lifecycle receipt is invalid")
+    note_id = receipt_value.get("note_id")
+    notes = discussion_notes(snapshot["discussions"], target["discussion_id"])
+    positions = {note.get("id"): index for index, note in enumerate(notes)}
+    if note_id not in positions:
+        raise WorkflowError("closure message was not observed in the fresh discussion")
+    final_note = notes[positions[note_id]]
+    author = final_note.get("author")
+    if (
+        not isinstance(author, dict)
+        or author.get("id") != current_user.get("id")
+        or final_note.get("body") != receipt_value["body"]
+    ):
+        raise WorkflowError("closure message does not match the fresh discussion")
+    for note in notes[positions[note_id] + 1 :]:
+        if note.get("system") is not True:
+            raise WorkflowError("closure message has a later note that must be assessed")
+    filtered = []
+    for discussion in snapshot["discussions"]:
+        copied = dict(discussion)
+        copied["notes"] = [
+            note for note in discussion.get("notes", []) if note.get("id") != note_id
+        ]
+        filtered.append(copied)
+    validate_information_request(
+        {**snapshot, "discussions": filtered}, current_user, request, "information guard"
+    )
+    endpoint = f"projects/{target['project_id']}/issues/{target['iid']}"
+    close_reservation = {
+        "status": "in_progress",
+        "stage": "close",
+        "guard_digest": guard_digest,
+        "note_id": note_id,
+        "body": request["body"],
+    }
+    write_json(receipt, close_reservation)
+    try:
+        glab_mutation(guard["host"], "PUT", endpoint, {"state_event": "close"})
+    except MutationNotAttempted:
+        write_json(receipt, receipt_value)
+        raise
+    try:
+        closed_issue = glab_json(guard["host"], endpoint)
+    except (OSError, WorkflowError) as exc:
+        raise MutationOutcomeUnknown(
+            "information closure could not be verified; inspect the target"
+        ) from exc
+    if (
+        not isinstance(closed_issue, dict)
+        or closed_issue.get("project_id") != target["project_id"]
+        or closed_issue.get("iid") != target["iid"]
+        or closed_issue.get("state") != "closed"
+    ):
+        raise MutationOutcomeUnknown(
+            "information closure is not confirmed by a fresh exact issue response; inspect the target"
+        )
+    try:
+        write_json(
+            receipt,
+            {
+                "status": "closed",
+                "guard_digest": guard_digest,
+                "note_id": note_id,
+                "body": request["body"],
+            },
+        )
+    except (OSError, WorkflowError) as exc:
+        raise MutationOutcomeUnknown(
+            "information closure was applied but its receipt could not be stored"
+        ) from exc
+
+
+def commands_for(
+    root: Path, item: dict[str, Any], current_user: dict[str, Any]
+) -> list[dict[str, str]]:
     proposed = item["proposed_changes"]
     target = item["evidence"]["target"]
     host, project_id, iid = target["hostname"], target["project_id"], target["iid"]
+    snapshot = read_object(Path(item["evidence"]["evidence_path"]), "issue evidence")
     issue_endpoint = f"projects/{project_id}/issues/{iid}"
     commands: list[dict[str, str]] = []
     for field, kind in (
@@ -1090,29 +1774,7 @@ def commands_for(root: Path, item: dict[str, Any]) -> list[dict[str, str]]:
     for request in item["information_requests"]:
         if request["action"] == "none":
             continue
-        commands.append(
-            message_action(
-                root,
-                host,
-                request["target"],
-                request["body"],
-                f"information_{request['action']}",
-            )
-        )
-        if request["action"] == "close":
-            request_target = request["target"]
-            endpoint = f"projects/{request_target['project_id']}/issues/{request_target['iid']}"
-            commands.append(
-                action(
-                    root,
-                    host,
-                    "close",
-                    "PUT",
-                    endpoint,
-                    {"state_event": "close"},
-                    request["rationale"],
-                )
-            )
+        commands.extend(information_actions(root, host, request, current_user, snapshot))
     return commands
 
 
@@ -1207,8 +1869,11 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
     report_entries: list[dict[str, str]] = []
     analysis_index = load_analysis_index(root)["items"]
     for item in items:
-        commands = commands_for(root, item)
         target = item["evidence"]["target"]
+        context = collection["context"].get(f"{target['hostname']}:{target['project_id']}")
+        if not isinstance(context, dict) or not isinstance(context.get("current_user"), dict):
+            raise WorkflowError("authenticated GitLab user evidence is unavailable")
+        commands = commands_for(root, item, context["current_user"])
         report = reports / f"{target['hostname']}-{target['project_id']}-{target['iid']}.md"
         report_body = item_markdown(item, commands, locale).encode()
         atomic_write(report, versioned_markdown(report, report_body))
@@ -1306,6 +1971,9 @@ def parser() -> Parser:
     publish_parser = subparsers.add_parser("publish")
     publish_parser.add_argument("--collection", required=True)
     publish_parser.add_argument("--analysis", required=True)
+    apply_parser = subparsers.add_parser("apply-information")
+    apply_parser.add_argument("--guard", required=True)
+    apply_parser.add_argument("--stage", choices=("message", "close"), required=True)
     return cli
 
 
@@ -1328,9 +1996,37 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         if args.command is None:
             raise WorkflowError("a command is required")
+        if args.command == "apply-information":
+            apply_information(Path(args.guard), args.stage)
+            print(
+                json.dumps(
+                    {
+                        "status": "applied",
+                        "stage": args.stage,
+                        "external_mutations": True,
+                        "mutation_outcome": "applied",
+                    },
+                    sort_keys=True,
+                )
+            )
+            return 0
         result = collect(args) if args.command == "collect" else publish(args)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if result["status"] == "ok" else 1
+    except MutationOutcomeUnknown as exc:
+        print(
+            json.dumps(
+                {
+                    "status": "error",
+                    "error": {"code": "mutation_outcome_unknown", "message": str(exc)},
+                    "external_mutations": True,
+                    "mutation_outcome": "unknown",
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+            )
+        )
+        return 2
     except (OSError, UnicodeError, WorkflowError) as exc:
         print(
             json.dumps(
@@ -1338,6 +2034,7 @@ def run(argv: list[str] | None = None) -> int:
                     "status": "error",
                     "error": {"code": "triage_failed", "message": str(exc)},
                     "external_mutations": False,
+                    "mutation_outcome": "none",
                 },
                 ensure_ascii=False,
                 sort_keys=True,

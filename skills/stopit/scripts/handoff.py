@@ -4,14 +4,31 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hashlib
 import importlib.util
 import os
 import secrets
 import stat
 import sys
+import time
+from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn
+from typing import TYPE_CHECKING, NoReturn, Protocol, cast
+
+
+class FileLocking(Protocol):
+    LOCK_EX: int
+    LOCK_NB: int
+
+    def flock(self, descriptor: int, operation: int) -> None: ...
+
+
+fcntl: FileLocking | None
+try:
+    fcntl = cast("FileLocking", import_module("fcntl"))
+except ImportError:
+    fcntl = None
 
 if TYPE_CHECKING:
     from shared.references.state_artifacts import versioned_markdown
@@ -33,6 +50,8 @@ else:
 MAX_HANDOFF_BYTES = 256 * 1024
 PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
+LOCK_TIMEOUT_SECONDS = 5.0
+LOCK_RETRY_SECONDS = 0.05
 
 
 class HandoffError(ValueError):
@@ -142,6 +161,57 @@ def validate_existing_handoff(directory: int, name: str) -> None:
         raise HandoffError("handoff path is unsafe")
 
 
+def require_locking() -> FileLocking:
+    if (
+        os.name != "posix"
+        or fcntl is None
+        or not callable(getattr(fcntl, "flock", None))
+        or not isinstance(getattr(fcntl, "LOCK_EX", None), int)
+        or not isinstance(getattr(fcntl, "LOCK_NB", None), int)
+    ):
+        raise HandoffError("stopit handoff locking requires POSIX fcntl")
+    return fcntl
+
+
+def lock_workspace(directory: int) -> int:
+    locking = require_locking()
+    name = ".handoff.lock"
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(name, flags, PRIVATE_FILE_MODE, dir_fd=directory)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or metadata.st_nlink != 1
+            or metadata.st_mode & 0o077
+        ):
+            raise HandoffError("handoff lock is unsafe")
+        os.fchmod(descriptor, PRIVATE_FILE_MODE)
+        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                locking.flock(descriptor, locking.LOCK_EX | locking.LOCK_NB)
+                break
+            except OSError as error:
+                if error.errno not in {errno.EACCES, errno.EAGAIN}:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise HandoffError("timed out waiting for the handoff lock") from error
+                time.sleep(min(LOCK_RETRY_SECONDS, remaining))
+    except HandoffError:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise
+    except OSError as error:
+        if "descriptor" in locals():
+            os.close(descriptor)
+        raise HandoffError("failed to lock the handoff") from error
+    else:
+        return descriptor
+
+
 def inspect_path(path: Path, state_parts: int) -> None:
     directory = open_handoff_directory(path, state_parts, create=False)
     if directory is None:
@@ -168,12 +238,15 @@ def read_handoff() -> bytes:
 
 
 def atomic_write(path: Path, state_parts: int, content: bytes) -> None:
+    require_locking()
     directory = open_handoff_directory(path, state_parts, create=True)
     if directory is None:
         raise HandoffError("failed to create the handoff directory")
     temporary_name = f".handoff.{os.getpid()}.{secrets.token_hex(8)}.tmp"
     descriptor = -1
+    lock = -1
     try:
+        lock = lock_workspace(directory)
         validate_existing_handoff(directory, path.name)
         content = versioned_markdown(path, content)
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -202,6 +275,8 @@ def atomic_write(path: Path, state_parts: int, content: bytes) -> None:
         except FileNotFoundError:
             pass
         finally:
+            if lock >= 0:
+                os.close(lock)
             os.close(directory)
 
 

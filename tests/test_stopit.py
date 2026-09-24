@@ -1,16 +1,36 @@
 from __future__ import annotations
 
+import errno
+import importlib.util
 import os
 import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "skills" / "stopit" / "scripts" / "handoff.py"
 MAX_HANDOFF_BYTES = 256 * 1024
+
+
+def load_handoff_without_fcntl(monkeypatch: pytest.MonkeyPatch) -> Any:
+    monkeypatch.setitem(sys.modules, "fcntl", None)
+    spec = importlib.util.spec_from_file_location("handoff_without_fcntl", RUNNER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_handoff() -> Any:
+    spec = importlib.util.spec_from_file_location("handoff_for_test", RUNNER)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def run_handoff(
@@ -79,6 +99,93 @@ def test_path_rejects_missing_workspace_without_creating_state(tmp_path: Path) -
     assert not state.exists()
 
 
+def test_missing_fcntl_returns_controlled_handoff_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handoff = load_handoff_without_fcntl(monkeypatch)
+
+    with pytest.raises(handoff.HandoffError, match="requires POSIX fcntl"):
+        handoff.atomic_write(tmp_path / "handoff.md", 1, b"approved\n")
+
+    assert not (tmp_path / "handoff.md").exists()
+
+
+def test_lock_contention_retries_until_bounded_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handoff = load_handoff()
+
+    class ContendedLocking:
+        LOCK_EX = 2
+        LOCK_NB = 4
+
+        def __init__(self) -> None:
+            self.operations: list[int] = []
+
+        def flock(self, _descriptor: int, operation: int) -> None:
+            self.operations.append(operation)
+            raise BlockingIOError(errno.EAGAIN, "contended")
+
+    class Clock:
+        now = 10.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+        def sleep(self, seconds: float) -> None:
+            self.now += seconds
+
+    locking = ContendedLocking()
+    clock = Clock()
+    monkeypatch.setattr(handoff, "fcntl", locking)
+    monkeypatch.setattr(handoff, "time", clock)
+    monkeypatch.setattr(handoff, "LOCK_TIMEOUT_SECONDS", 0.1)
+    monkeypatch.setattr(handoff, "LOCK_RETRY_SECONDS", 0.04)
+    directory = os.open(tmp_path, os.O_RDONLY)
+    try:
+        with pytest.raises(handoff.HandoffError, match="timed out waiting"):
+            handoff.lock_workspace(directory)
+    finally:
+        os.close(directory)
+
+    assert len(locking.operations) == 4
+    assert set(locking.operations) == {locking.LOCK_EX | locking.LOCK_NB}
+    assert clock.now == pytest.approx(10.1)
+
+
+def test_hard_linked_lock_is_rejected_before_chmod_or_flock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    handoff = load_handoff()
+    lock_path = tmp_path / ".handoff.lock"
+    lock_path.touch(mode=0o600)
+    os.link(lock_path, tmp_path / "linked-lock")
+    operations: list[int] = []
+    chmod_calls: list[tuple[int, int]] = []
+
+    class UnexpectedLocking:
+        LOCK_EX = 2
+        LOCK_NB = 4
+
+        def flock(self, _descriptor: int, operation: int) -> None:
+            operations.append(operation)
+
+    def record_fchmod(descriptor: int, mode: int) -> None:
+        chmod_calls.append((descriptor, mode))
+
+    monkeypatch.setattr(handoff, "fcntl", UnexpectedLocking())
+    monkeypatch.setattr(handoff.os, "fchmod", record_fchmod)
+    directory = os.open(tmp_path, os.O_RDONLY)
+    try:
+        with pytest.raises(handoff.HandoffError, match="handoff lock is unsafe"):
+            handoff.lock_workspace(directory)
+    finally:
+        os.close(directory)
+
+    assert chmod_calls == []
+    assert operations == []
+
+
 def test_write_privately_creates_and_atomically_replaces_handoff(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -105,6 +212,43 @@ def test_write_privately_creates_and_atomically_replaces_handoff(tmp_path: Path)
     ):
         assert stat.S_IMODE(directory.stat().st_mode) == 0o700
     assert not list(destination.parent.glob(".handoff.*.tmp"))
+
+
+def test_concurrent_writes_retain_every_handoff_version(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state = tmp_path / "state"
+    expected_path = Path(run_handoff("path", workspace, state).stdout.decode().strip())
+    processes = [
+        subprocess.Popen(
+            [
+                sys.executable,
+                "-I",
+                "-S",
+                "-B",
+                str(RUNNER),
+                "write",
+                "--workspace",
+                str(workspace),
+                "--expected-path",
+                str(expected_path),
+            ],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={**os.environ, "XDG_STATE_HOME": str(state)},
+        )
+        for _ in range(8)
+    ]
+    bodies = [f"# Handoff {index}\n".encode() for index in range(len(processes))]
+    results = [process.communicate(body) for process, body in zip(processes, bodies, strict=True)]
+
+    assert all(process.returncode == 0 for process in processes), results
+    current = expected_path.read_bytes()
+    snapshots = (expected_path.parent / "history" / "handoff").glob("*.md")
+    retained = {path.read_bytes() for path in snapshots}
+    retained.add(current.split(b"\n## History\n", 1)[0])
+    assert retained == set(bodies)
 
 
 @pytest.mark.parametrize(

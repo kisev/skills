@@ -44,6 +44,31 @@ After explicit confirmation, run the returned digest-bound `profile-save`
 command. Profile setup is complete only when the requested action passes
 `action-check` with the saved profile. A successful save records an advisory XDG
 marker; inspect the saved profile rather than treating the marker as a postcondition.
+When `--set-default` is selected, the profile and settings pointer are one locked
+transaction: a failed write rolls both files back and does not consume the
+one-use receipt. A schema v3 private durable journal restores an interrupted
+transaction before retrying the same preview. Previous profile and settings
+bytes are bounded private content-addressed backup files under XDG state; the
+journal contains only their digests and exact transaction-owned references.
+Shared backup content is removed only after the journal is committed or rollback
+is complete, and only after its last transaction reference is gone. Every transaction namespace change is made
+crash-durable with a POSIX parent-directory fsync; the receipt is created only
+after the journal, profile, optional settings, and report entries are durable and
+safe private reads confirm all three journal-declared existence and content-digest
+postconditions. A pre-receipt mismatch fails and rolls back without a receipt.
+Recovery fsyncs the receipt namespace before accepting a valid receipt as the
+commit point, then verifies the exact receipt schema and the journal-bound
+profile, settings, and report existence and content digests before deleting the
+journal. Recovery commits postcondition-matching files only with a valid receipt,
+finishes rollback when files match prior state, and safely rolls back mixed prior
+and intended transaction state. Any profile, settings, or report content matching
+neither state is treated as a newer user edit: recovery preserves it together
+with the journal and backups and fails closed. Existing schema v2 journals with
+inline base64 backups remain recoverable under a separate enlarged legacy bound.
+Profile mutations wait up to five seconds for the lock using non-blocking POSIX
+`flock` retries measured by a monotonic clock. Lock contention, unavailable
+`fcntl`, hardlinked lock files, and unavailable durability primitives fail through the expected JSON
+I/O error contract; imports and read-only commands remain cross-platform.
 
 ## Remember and Update
 
@@ -55,7 +80,15 @@ exact fields being added, changed, or removed without dumping unrelated private
 values. Use `profile-prepare`, confirmation, and `profile-save`; the runtime
 binds the update to both the candidate digest and previous profile digest.
 Changed profiles and saved contexts retain content-addressed JSON versions in
-private XDG state. Settings pointers and one-use receipts are not duplicated.
+private XDG state. Context saves are serialized and roll back the visible context
+and newly created report if a post-replace directory fsync, report, or required
+success-marker write fails; their one-use receipt is created only after those
+steps succeed. A post-link receipt error is reconciled as committed only when the
+exact receipt and both intended content digests are present. Settings pointers
+and one-use receipts are not duplicated. Once
+profile recovery observes an exact durable receipt, it finishes commit only when
+all intended postconditions match. Prior, mixed, or unknown state preserves the
+receipt, journal, and backups and fails closed, so the consumed plan cannot replay.
 
 Contradictory or ambiguous updates require one focused question. Time-dependent
 membership or policy changes should use effective dates or provenance rather

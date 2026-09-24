@@ -45,7 +45,12 @@ python3 scripts/gitlab_period_metrics.py \
 
 Create a unique private temporary `METRICS_ROOT` for every run. Do not reuse
 another run's output. The collector reads GitLab through `glab`, paginates,
-deduplicates, and returns exit code `2` for partial evidence.
+deduplicates, and returns exit code `2` for partial evidence. It is POSIX-only:
+bounded subprocess cleanup relies on POSIX sessions, process groups, and file
+descriptor selectors. Unsupported capabilities produce structured partial
+errors rather than unbounded collection, including process creation and selector
+construction or registration failures. Once a process exists, setup failures
+also trigger bounded process-group cleanup.
 
 Verify all of the following before calling the evidence complete:
 

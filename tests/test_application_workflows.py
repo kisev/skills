@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import base64
+import errno
 import hashlib
 import importlib.util
 import io
 import json
 import os
 import shlex
+import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
-from contextlib import nullcontext, redirect_stdout
+from contextlib import nullcontext, redirect_stdout, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import patch
@@ -1014,6 +1018,9 @@ print(json.dumps(value))
             subprocess.run(["git", "add", "release.txt"], cwd=repository, check=True)
             subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
             subprocess.run(["git", "tag", "v1.0.0"], cwd=repository, check=True)
+            base_sha = subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+            ).strip()
             source.write_text("base\ndirect\n", encoding="utf-8")
             subprocess.run(
                 ["git", "commit", "-qam", "fix direct behavior"], cwd=repository, check=True
@@ -1054,6 +1061,21 @@ print(json.dumps(value))
             self.assertEqual(inventory_result.returncode, 0, inventory_result.stderr)
             inventory = json.loads(inventory_result.stdout)
             self.assertEqual(inventory["previous_ref"], "v1.0.0")
+            sha_inventory_result = self.run_runner(
+                "release-prepare",
+                "inventory",
+                "--evidence",
+                evidence,
+                "--repo-root",
+                str(repository),
+                "--previous-ref",
+                base_sha,
+                env=environment,
+            )
+            self.assertEqual(sha_inventory_result.returncode, 0, sha_inventory_result.stderr)
+            sha_inventory = json.loads(sha_inventory_result.stdout)
+            self.assertEqual(sha_inventory["previous_ref"], base_sha)
+            self.assertEqual(sha_inventory["previous_sha"], base_sha)
             self.assertEqual(
                 inventory["counts"],
                 {
@@ -1565,6 +1587,7 @@ print(json.dumps(value))
         from shared.references.portable_gitlab import contract
 
         inventory = {
+            "previous_ref": "v1.0.0",
             "contributors": [{"display": "@author"}],
             "reviewers": [{"username": "reviewer"}],
             "work_item_candidates": [{"project_id": 19, "iid": 21}],
@@ -1616,6 +1639,38 @@ print(json.dumps(value))
             invalid = json.loads(json.dumps(content))
             mutate(invalid)
             self.assertFalse(contract.release_content_is_valid(invalid, inventory))
+
+        for version, compatibility in (
+            ("1.0.1", "minor"),
+            ("1.2.0", "minor"),
+            ("2.0.0", "minor"),
+            ("1.1.0-alpha.1", "minor"),
+            ("1.1.0+build.1", "minor"),
+        ):
+            with self.subTest(version=version, compatibility=compatibility):
+                invalid = json.loads(json.dumps(content))
+                invalid["version"] = version
+                invalid["label_intent"]["compatibility"] = compatibility
+                self.assertFalse(contract.release_content_is_valid(invalid, inventory))
+
+        first_release = json.loads(json.dumps(content))
+        first_release["version"] = "1.0.0"
+        first_release["label_intent"]["compatibility"] = "major"
+        self.assertTrue(
+            contract.release_content_is_valid(first_release, {**inventory, "previous_ref": None})
+        )
+        self.assertFalse(
+            contract.release_content_is_valid(content, {**inventory, "previous_ref": "v0.9.0"})
+        )
+        sha_boundary = {**inventory, "previous_ref": "a" * 40}
+        self.assertTrue(contract.release_content_is_valid(content, sha_boundary))
+        sha_patch = json.loads(json.dumps(content))
+        sha_patch["version"] = "3.7.9"
+        sha_patch["label_intent"]["compatibility"] = "patch"
+        self.assertTrue(contract.release_content_is_valid(sha_patch, sha_boundary))
+        self.assertFalse(
+            contract.release_content_is_valid(content, {**inventory, "previous_ref": "a" * 39})
+        )
 
     def test_code_review_requires_real_independent_critic_capability(self) -> None:
         result = self.run_runner("code-review", "assess-mode", "--mode", "deep")
@@ -1960,14 +2015,17 @@ print(json.dumps(value))
                 module,
                 "glab_text",
                 return_value=(
-                    "Approval count is insufficient\n"
-                    "token=hidden-value\n"
-                    "Authorization: Bearer bearer-value\n"
-                    "AWS_ACCESS_KEY_ID=cloud-value\n"
-                    "https://user:url-value@example.invalid/path\n"
-                    "postgresql://user:database-value@example.invalid/db\n"
-                    '{"password":"json-value"}\n'
-                    "-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----\n"
+                    (
+                        "Approval count is insufficient\n"
+                        "token=hidden-value\n"
+                        "Authorization: Bearer bearer-value\n"
+                        "AWS_ACCESS_KEY_ID=cloud-value\n"
+                        "https://user:url-value@example.invalid/path\n"
+                        "postgresql://user:database-value@example.invalid/db\n"
+                        '{"password":"json-value"}\n'
+                        "-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----\n"
+                    ),
+                    True,
                 ),
             ),
         ):
@@ -1996,6 +2054,239 @@ print(json.dumps(value))
         self.assertIn('{"password":"[REDACTED]"}', trace["excerpt"])
         self.assertIn("[REDACTED PRIVATE KEY]", trace["excerpt"])
         self.assertIn("projects/23/pipelines/42/jobs?per_page=100&page=1", calls)
+
+    def test_gitlab_trace_completeness_requires_confirmed_full_range(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_trace_range"
+        )
+
+        def response(content_range: str, body: bytes) -> bytes:
+            return (
+                b"HTTP/2 206 Partial Content\r\n"
+                + f"Content-Range: {content_range}\r\n\r\n".encode()
+                + body
+            )
+
+        self.assertEqual(module.parse_glab_trace(response("bytes 4-7/8", b"tail")), ("tail", False))
+        self.assertEqual(module.parse_glab_trace(response("bytes 0-3/4", b"full")), ("full", True))
+
+        def paginated(_hostname: str, endpoint: str, **_kwargs: object) -> dict[str, object]:
+            items: list[object] = (
+                [{"id": 7, "name": "policy", "status": "failed"}]
+                if endpoint.endswith("/jobs")
+                else []
+            )
+            return {"items": items, "complete": True, "errors": [], "truncated": False}
+
+        with (
+            patch.object(module, "paginated", side_effect=paginated),
+            patch.object(module, "glab_text", return_value=("tail", False)),
+        ):
+            evidence = module.collect_pipeline_jobs("gitlab.example", 19, {"id": 41})
+        self.assertFalse(evidence["complete"])
+        self.assertFalse(evidence["pipelines"][0]["jobs"][0]["trace"]["complete"])
+        self.assertIn("CI job trace completeness could not be confirmed", evidence["errors"])
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
+    def test_gitlab_trace_streaming_preserves_other_separator_in_body(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_lf_headers"
+        )
+        response = b"HTTP/1.1 200 OK\nContent-Type: text/plain\n\nfirst\r\n\r\nsecond"
+
+        stdout, _stderr = module.streamed_glab_trace(
+            [sys.executable, "-c", f"import os; os.write(1, {response!r})"]
+        )
+
+        self.assertEqual(module.parse_glab_trace(stdout), ("first\r\n\r\nsecond", True))
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
+    def test_gitlab_trace_streaming_accepts_exact_header_body_and_crlf_limits(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py",
+            "canonical_gitlab_trace_boundary",
+        )
+        prefix = b"HTTP/1.1 200 OK\r\n"
+        headers = prefix + b"x" * (module.MAX_TRACE_HEADER_BYTES - len(prefix))
+        body = b"y" * module.MAX_TRACE_BYTES
+        command = (
+            "import os; "
+            f"prefix={prefix!r}; "
+            f"os.write(1, prefix + b'x' * ({module.MAX_TRACE_HEADER_BYTES} - len(prefix)) "
+            f"+ b'\\r\\n\\r\\n' + b'y' * {module.MAX_TRACE_BYTES})"
+        )
+
+        stdout, _stderr = module.streamed_glab_trace([sys.executable, "-c", command])
+
+        self.assertEqual(module.split_glab_trace_response(stdout), (headers, body))
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process group test")
+    def test_stop_process_group_kills_descendant_after_leader_exits(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_dead_leader"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            pid_path = Path(temporary) / "descendant-pid"
+            command = (
+                "import os, pathlib, time; "
+                "pid = os.fork(); "
+                f"path = pathlib.Path({str(pid_path)!r}); "
+                "pid == 0 and path.write_text(str(os.getpid())); "
+                "pid != 0 and [time.sleep(0.01) for _ in iter(path.exists, True)]; "
+                "pid != 0 and os._exit(0); "
+                "time.sleep(10)"
+            )
+            process = subprocess.Popen(
+                [sys.executable, "-c", command],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+            try:
+                process.wait(timeout=2)
+                descendant_pid = int(pid_path.read_text(encoding="utf-8"))
+                os.kill(descendant_pid, 0)
+
+                started = time.monotonic()
+                module.stop_process_group(process)
+
+                self.assertLess(time.monotonic() - started, 2)
+                deadline = time.monotonic() + 2
+                while time.monotonic() < deadline:
+                    try:
+                        os.kill(descendant_pid, 0)
+                    except ProcessLookupError:
+                        break
+                    status_path = Path(f"/proc/{descendant_pid}/stat")
+                    if status_path.exists():
+                        try:
+                            if status_path.read_text().split()[2] == "Z":
+                                break
+                        except FileNotFoundError:
+                            break
+                    time.sleep(0.01)
+                else:
+                    self.fail("descendant remained alive after process-group cleanup")
+            finally:
+                with suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+
+    def test_stop_process_group_reports_unreapable_process_and_preserves_primary(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py",
+            "canonical_gitlab_unreapable",
+        )
+
+        class UnreapableProcess:
+            pid = 1234
+            stdout = io.BytesIO()
+            stderr = io.BytesIO()
+
+            def __init__(self) -> None:
+                self.wait_timeouts: list[float] = []
+
+            def wait(self, timeout: float) -> int:
+                self.wait_timeouts.append(timeout)
+                raise subprocess.TimeoutExpired("glab", timeout)
+
+            def kill(self) -> None:
+                pass
+
+        process = UnreapableProcess()
+        with (
+            patch.object(module.subprocess, "Popen", return_value=process),
+            patch.object(module.selectors, "DefaultSelector", side_effect=NotImplementedError),
+            patch.object(module.os, "killpg"),
+        ):
+            with self.assertRaisesRegex(module.WorkflowError, "could not be reaped") as raised:
+                module.streamed_glab_trace(["glab"])
+
+        self.assertEqual(
+            process.wait_timeouts,
+            [module.PROCESS_CLEANUP_TIMEOUT_SECONDS] * 2,
+        )
+        self.assertIsInstance(raised.exception.__cause__, module.WorkflowError)
+        self.assertIn("streaming is unavailable", str(raised.exception.__cause__))
+        self.assertIsInstance(raised.exception.__cause__.__cause__, NotImplementedError)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
+    def test_gitlab_trace_streaming_enforces_limit_and_cleans_up_timeout(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_streaming"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            executable = directory / "glab"
+            executable.write_text(
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "sys.stdout.buffer.write(b'HTTP/1.1 200 OK\\r\\n\\r\\n' + b'x' * 65537)\n",
+                encoding="utf-8",
+            )
+            executable.chmod(0o755)
+            with patch.object(module.shutil, "which", return_value=str(executable)):
+                with self.assertRaisesRegex(module.WorkflowError, "size limit"):
+                    module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+
+            pid_path = directory / "pid"
+            executable.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os, time\n"
+                "from pathlib import Path\n"
+                f"Path({str(pid_path)!r}).write_text(str(os.getpid()))\n"
+                "time.sleep(10)\n",
+                encoding="utf-8",
+            )
+            with (
+                patch.object(module.shutil, "which", return_value=str(executable)),
+                patch.object(module, "TRACE_TIMEOUT_SECONDS", 0.05),
+            ):
+                with self.assertRaisesRegex(module.WorkflowError, "timed out"):
+                    module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+            pid = int(pid_path.read_text(encoding="utf-8"))
+            with self.assertRaises(ProcessLookupError):
+                os.kill(pid, 0)
+
+    def test_gitlab_trace_streaming_reports_unsupported_capability(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_no_streaming"
+        )
+        with (
+            patch.object(module.shutil, "which", return_value="/usr/bin/glab"),
+            patch.object(module.os, "name", "nt"),
+        ):
+            with self.assertRaisesRegex(module.WorkflowError, "requires POSIX"):
+                module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+
+    def test_gitlab_trace_streaming_controls_process_start_capability_failure(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_no_popen"
+        )
+        with (
+            patch.object(module.subprocess, "Popen", side_effect=NotImplementedError),
+            patch.object(module, "stop_process_group") as stop_process_group,
+        ):
+            with self.assertRaisesRegex(module.WorkflowError, "streaming is unavailable"):
+                module.streamed_glab_trace(["glab"])
+        stop_process_group.assert_not_called()
+
+    def test_gitlab_trace_streaming_cleans_up_after_selector_capability_failure(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_no_selector"
+        )
+        process = type(
+            "Process",
+            (),
+            {"stdout": io.BytesIO(), "stderr": io.BytesIO(), "pid": 123},
+        )()
+        with (
+            patch.object(module.subprocess, "Popen", return_value=process),
+            patch.object(module.selectors, "DefaultSelector", side_effect=NotImplementedError),
+            patch.object(module, "stop_process_group") as stop_process_group,
+        ):
+            with self.assertRaisesRegex(module.WorkflowError, "streaming is unavailable"):
+                module.streamed_glab_trace(["glab"])
+        stop_process_group.assert_called_once_with(process)
 
     def test_review_decision_requires_independent_critic_and_all_responses(self) -> None:
         module = load_module(
@@ -2255,6 +2546,24 @@ print(json.dumps(value))
             [low],
             job_evidence,
         )
+        incomplete_job_evidence = json.loads(json.dumps(job_evidence))
+        incomplete_job_evidence["pipelines"]["complete"] = False
+        incomplete_job_evidence["pipelines"]["items"][0]["job_evidence"]["complete"] = False
+        incomplete_job_evidence["pipelines"]["items"][0]["job_evidence"]["pipelines"][0]["jobs"][0][
+            "trace"
+        ]["complete"] = False
+        with self.assertRaises(module.portable.WorkflowError):
+            module.validate_review_verdict(
+                {
+                    "verdict": "ready",
+                    "blocking_findings": False,
+                    "blocking_finding_ids": [],
+                    "owner_decision_reasons": [],
+                    "ci_job_assessments": [process_gate],
+                },
+                [low],
+                incomplete_job_evidence,
+            )
         with self.assertRaises(module.portable.WorkflowError):
             module.validate_review_verdict(
                 {
@@ -4814,6 +5123,152 @@ class MattermostAndTeamTests(unittest.TestCase):
             self.assertFalse(config.exists())
             self.assertFalse(state.exists())
 
+    def test_team_context_post_replace_fsync_failure_rolls_back_without_receipt(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py", "team_context_fsync_rollback"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(
+                {
+                    "goals": ["goal"],
+                    "scope": ["scope"],
+                    "cadence": "weekly",
+                    "baseline": "baseline",
+                    "projects": ["project"],
+                    "delivery_signals": ["signal"],
+                }
+            ).encode()
+            environment = {"XDG_STATE_HOME": str(root / "state")}
+            with patch.dict(os.environ, environment):
+                payload = module.context_change_payload("platform-team", raw)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                context_root = module.state_root() / "contexts"
+                original_sync = module.sync_directory
+                failed = False
+
+                def fail_first_context_sync(path: Path) -> None:
+                    nonlocal failed
+                    if path == context_root and not failed:
+                        failed = True
+                        raise module.MutationIOError("simulated context directory fsync failure")
+                    original_sync(path)
+
+                with (
+                    patch.object(module, "sync_directory", side_effect=fail_first_context_sync),
+                    self.assertRaisesRegex(module.MutationIOError, "was rolled back"),
+                ):
+                    module.apply_context("platform-team", raw, plan_digest)
+
+            self.assertTrue(failed)
+            self.assertFalse((context_root / "platform-team.json").exists())
+            self.assertFalse(
+                (root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json").exists()
+            )
+
+    def test_team_context_report_and_marker_failures_roll_back_without_receipt(self) -> None:
+        for failure in ("report", "marker"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                module = load_module(
+                    BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+                    f"team_context_{failure}_rollback",
+                )
+                root = Path(temporary)
+                raw = json.dumps(
+                    {
+                        "goals": ["goal"],
+                        "scope": ["scope"],
+                        "cadence": "weekly",
+                        "baseline": "baseline",
+                        "projects": ["project"],
+                        "delivery_signals": ["signal"],
+                    }
+                ).encode()
+                environment = {"XDG_STATE_HOME": str(root / "state")}
+                with patch.dict(os.environ, environment):
+                    payload = module.context_change_payload("platform-team", raw)
+                    plan_digest, _, _ = module.prepare_plan(payload)
+                    original_write_once = module.write_once
+
+                    def fail_report(
+                        path: Path,
+                        content: bytes,
+                        *,
+                        write_once: Any = original_write_once,
+                    ) -> None:
+                        if path.parent.name == "reports":
+                            raise OSError("simulated context report failure")
+                        write_once(path, content)
+
+                    patches = (
+                        patch.object(module, "write_once", side_effect=fail_report)
+                        if failure == "report"
+                        else patch.object(
+                            module,
+                            "mark_save",
+                            side_effect=OSError("simulated context marker failure"),
+                        )
+                    )
+                    with (
+                        patches,
+                        self.assertRaisesRegex(module.MutationIOError, "was rolled back"),
+                    ):
+                        module.apply_context("platform-team", raw, plan_digest)
+
+                context_root = root / "state/agent-skills/team-workflow/contexts"
+                self.assertFalse((context_root / "platform-team.json").exists())
+                self.assertFalse(
+                    (
+                        root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
+                    ).exists()
+                )
+
+    def test_team_context_reconciles_receipt_post_link_fsync_failure(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_context_receipt_reconciliation",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(
+                {
+                    "goals": ["goal"],
+                    "scope": ["scope"],
+                    "cadence": "weekly",
+                    "baseline": "baseline",
+                    "projects": ["project"],
+                    "delivery_signals": ["signal"],
+                }
+            ).encode()
+            environment = {"XDG_STATE_HOME": str(root / "state")}
+            with patch.dict(os.environ, environment):
+                payload = module.context_change_payload("platform-team", raw)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                receipt_root = module.state_root() / "receipts"
+                original_sync = module.sync_directory
+                failed = False
+
+                def fail_first_receipt_sync(path: Path) -> None:
+                    nonlocal failed
+                    if path == receipt_root and not failed:
+                        failed = True
+                        raise module.MutationIOError("simulated receipt directory fsync failure")
+                    original_sync(path)
+
+                with patch.object(module, "sync_directory", side_effect=fail_first_receipt_sync):
+                    module.apply_context("platform-team", raw, plan_digest)
+
+            self.assertTrue(failed)
+            self.assertEqual(
+                (
+                    root / "state/agent-skills/team-workflow/contexts/platform-team.json"
+                ).read_bytes(),
+                raw,
+            )
+            self.assertTrue(
+                (root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json").is_file()
+            )
+
     def test_team_profile_setup_resolves_default_privately_without_plan_content(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -5025,6 +5480,798 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
             self.assertNotEqual(stale.returncode, 0)
             self.assertIn("digest", json.loads(stale.stdout)["error"]["message"])
+
+    def test_team_profile_default_failure_rolls_back_without_consuming_receipt(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py", "team_profile_rollback"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate.json"
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            candidate.write_bytes(raw)
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                original_atomic = module.atomic
+
+                def fail_settings(path: Path, content: bytes) -> None:
+                    if path.name == "settings.json":
+                        raise OSError("simulated settings failure")
+                    original_atomic(path, content)
+
+                output = io.StringIO()
+                with (
+                    patch.object(module, "atomic", side_effect=fail_settings),
+                    redirect_stdout(output),
+                ):
+                    status = module.main(
+                        [
+                            "profile-save",
+                            "--name",
+                            "platform-team",
+                            "--input",
+                            str(candidate),
+                            "--digest",
+                            plan_digest,
+                            "--set-default",
+                        ]
+                    )
+
+            result = json.loads(output.getvalue())
+            assert status == 2
+            assert result["error"]["code"] == "io_error"
+            assert not (root / "config/opencode/team-contexts/platform-team.json").exists()
+            assert not (root / "config/opencode/team-contexts/settings.json").exists()
+            assert not (
+                root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
+            ).exists()
+
+    def test_team_profile_report_failure_rolls_back_without_consuming_receipt(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py", "team_profile_report_rollback"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            candidate = root / "candidate.json"
+            candidate.write_bytes(raw)
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                original_write_once = module.write_once
+
+                def fail_report(path: Path, content: bytes) -> None:
+                    if path.parent.name == "reports":
+                        raise OSError("simulated report failure")
+                    original_write_once(path, content)
+
+                output = io.StringIO()
+                with (
+                    patch.object(module, "write_once", side_effect=fail_report),
+                    redirect_stdout(output),
+                ):
+                    status = module.main(
+                        [
+                            "profile-save",
+                            "--name",
+                            "platform-team",
+                            "--input",
+                            str(candidate),
+                            "--digest",
+                            plan_digest,
+                            "--set-default",
+                        ]
+                    )
+
+            result = json.loads(output.getvalue())
+            assert status == 2
+            assert result["error"]["code"] == "io_error"
+            assert not (root / "config/opencode/team-contexts/platform-team.json").exists()
+            assert not (root / "config/opencode/team-contexts/settings.json").exists()
+            assert not (
+                root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
+            ).exists()
+
+    def test_team_profile_tampering_before_receipt_preserves_unknown_state(self) -> None:
+        for tampered_file in ("profile", "settings", "report"):
+            with (
+                self.subTest(tampered_file=tampered_file),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                module = load_module(
+                    BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+                    f"team_profile_pre_receipt_tampering_{tampered_file}",
+                )
+                root = Path(temporary)
+                raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+                environment = {
+                    "XDG_CONFIG_HOME": str(root / "config"),
+                    "XDG_STATE_HOME": str(root / "state"),
+                }
+                with patch.dict(os.environ, environment):
+                    payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                    plan_digest, _, _ = module.prepare_plan(payload)
+                    transaction_root = root / "config/opencode/team-contexts"
+                    profile = transaction_root / "platform-team.json"
+                    settings = transaction_root / "settings.json"
+                    original_write_once = module.write_once
+
+                    def tamper_after_report(
+                        path: Path,
+                        content: bytes,
+                        *,
+                        write_once: Any = original_write_once,
+                        profile_path: Path = profile,
+                        settings_path: Path = settings,
+                        selected: str = tampered_file,
+                    ) -> None:
+                        write_once(path, content)
+                        if path.parent.name != "reports":
+                            return
+                        target = {
+                            "profile": profile_path,
+                            "settings": settings_path,
+                            "report": path,
+                        }[selected]
+                        target.write_bytes(target.read_bytes() + b"\n")
+
+                    with (
+                        patch.object(module, "write_once", side_effect=tamper_after_report),
+                        patch.object(module, "create_receipt") as create_receipt,
+                        self.assertRaisesRegex(module.MutationIOError, "recovery stopped"),
+                    ):
+                        module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                    create_receipt.assert_not_called()
+                    report_path, _, _ = module.report_artifact(
+                        plan_digest,
+                        {"status": "applied", "profile": "platform-team", "default": True},
+                    )
+
+                self.assertTrue(profile.exists())
+                self.assertTrue(settings.exists())
+                self.assertTrue(report_path.exists())
+                self.assertFalse(
+                    (
+                        root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
+                    ).exists()
+                )
+                self.assertTrue((transaction_root / ".profile-save.transaction.json").exists())
+
+    def test_team_profile_tampering_during_receipt_preserves_unknown_state(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_receipt_tampering",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                profile = root / "config/opencode/team-contexts/platform-team.json"
+                original_create_receipt = module.create_receipt
+
+                def create_and_tamper(receipt: Path, digest: str) -> None:
+                    original_create_receipt(receipt, digest)
+                    profile.write_bytes(profile.read_bytes() + b"\n")
+
+                with (
+                    patch.object(module, "create_receipt", side_effect=create_and_tamper),
+                    self.assertRaisesRegex(module.MutationIOError, "recovery stopped"),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+            self.assertTrue(profile.exists())
+            self.assertTrue(
+                (root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json").exists()
+            )
+            self.assertTrue(
+                (root / "config/opencode/team-contexts/.profile-save.transaction.json").exists()
+            )
+
+    def test_team_profile_recovers_interrupted_transaction_before_retry(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py", "team_profile_crash_recovery"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "create_receipt", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                journal = root / "config/opencode/team-contexts/.profile-save.transaction.json"
+                self.assertTrue(journal.is_file())
+                report_path, _ = module.apply_profile(
+                    "platform-team", raw, plan_digest, set_default=True
+                )
+
+            self.assertFalse(journal.exists())
+            self.assertTrue(report_path.is_file())
+            self.assertTrue(
+                (root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json").is_file()
+            )
+
+    def test_team_profile_near_limit_backup_keeps_v3_journal_bounded(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_near_limit_recovery",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            previous = b"{" + b" " * (module.MAX_BYTES - 2) + b"}"
+            with patch.dict(os.environ, environment):
+                transaction_root = module.profile_root(create=True)
+                profile = transaction_root / "platform-team.json"
+                profile.write_bytes(previous)
+                profile.chmod(0o600)
+                payload = module.profile_change_payload("platform-team", raw, set_default=False)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "create_receipt", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=False)
+
+                journal = transaction_root / ".profile-save.transaction.json"
+                document = json.loads(journal.read_text(encoding="utf-8"))
+                self.assertEqual(document["schema_version"], 3)
+                self.assertLess(journal.stat().st_size, module.MAX_BYTES)
+                backup = (
+                    root
+                    / "state/agent-skills/team-workflow"
+                    / document["previous_profile"]["reference"]
+                )
+                self.assertEqual(backup.stat().st_size, len(previous))
+                module.recover_profile_transaction(transaction_root)
+
+            self.assertEqual(profile.read_bytes(), previous)
+            self.assertFalse(journal.exists())
+            self.assertFalse(backup.exists())
+
+    def test_team_profile_recovers_large_legacy_v2_journal(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_v2_recovery",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            previous = b"{" + b" " * (module.MAX_BYTES - 2) + b"}"
+            with patch.dict(os.environ, environment):
+                transaction_root = module.profile_root(create=True)
+                profile = transaction_root / "platform-team.json"
+                profile.write_bytes(previous)
+                profile.chmod(0o600)
+                payload = module.profile_change_payload("platform-team", raw, set_default=False)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "create_receipt", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=False)
+
+                journal = transaction_root / ".profile-save.transaction.json"
+                document = json.loads(journal.read_text(encoding="utf-8"))
+                document["schema_version"] = 2
+                document["previous_profile"] = base64.b64encode(previous).decode()
+                document["previous_settings"] = None
+                del document["previous_report"]
+                del document["transaction_id"]
+                module.atomic(journal, module.canonical_bytes(document))
+                self.assertGreater(journal.stat().st_size, module.MAX_BYTES)
+                self.assertLess(journal.stat().st_size, module.LEGACY_JOURNAL_MAX_BYTES)
+                module.recover_profile_transaction(transaction_root)
+
+            self.assertEqual(profile.read_bytes(), previous)
+            self.assertFalse(journal.exists())
+
+    def test_team_profile_transaction_fsyncs_entries_before_receipt(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py", "team_profile_durability"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                synced: list[Path] = []
+                original_sync = module.sync_directory
+
+                def observe_sync(path: Path) -> None:
+                    original_sync(path)
+                    synced.append(path.resolve())
+
+                with patch.object(module, "sync_directory", side_effect=observe_sync):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+            profile_root = (root / "config/opencode/team-contexts").resolve()
+            report_root = (root / "state/agent-skills/team-workflow/reports").resolve()
+            receipt_root = (root / "state/agent-skills/team-workflow/receipts").resolve()
+            receipt_index = synced.index(receipt_root)
+            self.assertGreaterEqual(synced[:receipt_index].count(profile_root), 3)
+            self.assertIn(report_root, synced[:receipt_index])
+            self.assertEqual(synced[-1], profile_root)
+
+    def test_team_profile_reports_unavailable_fsync_as_controlled_error(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py", "team_profile_no_fsync"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            target = Path(temporary) / "profile.json"
+            with (
+                patch.object(module.os, "fsync", side_effect=NotImplementedError),
+                self.assertRaisesRegex(module.MutationIOError, "POSIX file fsync"),
+            ):
+                module.atomic(target, b"{}")
+
+    def test_team_runtime_imports_without_fcntl_and_read_only_command_works(self) -> None:
+        runner = BUILT_SKILLS / "team-retro/scripts/team_workflow.py"
+        with patch.dict(sys.modules, {"fcntl": None}):
+            module = load_module(runner, "team_profile_without_fcntl")
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(module.main(["--capabilities"]), 0)
+        self.assertEqual(json.loads(output.getvalue())["mutation"], "local-write")
+        with self.assertRaisesRegex(module.MutationIOError, "require POSIX fcntl"):
+            module.require_profile_locking()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate.json"
+            candidate.write_text(
+                json.dumps(self.example_team_profile("team-retro", "platform-team")),
+                encoding="utf-8",
+            )
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                prepared_output = io.StringIO()
+                with redirect_stdout(prepared_output):
+                    self.assertEqual(
+                        module.main(
+                            [
+                                "profile-prepare",
+                                "--name",
+                                "platform-team",
+                                "--input",
+                                str(candidate),
+                            ]
+                        ),
+                        0,
+                    )
+                plan_digest = json.loads(prepared_output.getvalue())["digest"]
+                save_output = io.StringIO()
+                with redirect_stdout(save_output):
+                    self.assertEqual(
+                        module.main(
+                            [
+                                "profile-save",
+                                "--name",
+                                "platform-team",
+                                "--input",
+                                str(candidate),
+                                "--digest",
+                                plan_digest,
+                            ]
+                        ),
+                        2,
+                    )
+            self.assertEqual(json.loads(save_output.getvalue())["error"]["code"], "io_error")
+            self.assertFalse((root / "config").exists())
+
+    def test_team_profile_lock_contention_retries_until_bounded_deadline(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py", "team_profile_lock_deadline"
+        )
+
+        class ContendedLocking:
+            LOCK_EX = 2
+            LOCK_NB = 4
+
+            def __init__(self) -> None:
+                self.operations: list[int] = []
+
+            def flock(self, _descriptor: int, operation: int) -> None:
+                self.operations.append(operation)
+                raise BlockingIOError(errno.EAGAIN, "contended")
+
+        class Clock:
+            now = 10.0
+
+            def monotonic(self) -> float:
+                return self.now
+
+            def sleep(self, seconds: float) -> None:
+                self.now += seconds
+
+        with tempfile.TemporaryDirectory() as temporary:
+            locking = ContendedLocking()
+            clock = Clock()
+            with (
+                patch.object(module, "fcntl", locking),
+                patch.object(module, "time", clock),
+                patch.object(module, "LOCK_TIMEOUT_SECONDS", 0.1),
+                patch.object(module, "LOCK_RETRY_SECONDS", 0.04),
+                self.assertRaisesRegex(module.MutationIOError, "timed out waiting"),
+            ):
+                module.acquire_profile_lock(Path(temporary))
+
+        self.assertEqual(len(locking.operations), 4)
+        self.assertEqual(set(locking.operations), {locking.LOCK_EX | locking.LOCK_NB})
+        self.assertAlmostEqual(clock.now, 10.1)
+
+    def test_team_profile_lock_rejects_hardlink_before_fchmod(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_hardlinked_lock",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock = root / ".profile-save.lock"
+            lock.write_bytes(b"")
+            lock.chmod(0o600)
+            os.link(lock, root / "lock-alias")
+            with (
+                patch.object(module.os, "fchmod") as fchmod,
+                self.assertRaisesRegex(module.MutationIOError, "lock is unsafe"),
+            ):
+                module.acquire_profile_lock(root)
+            fchmod.assert_not_called()
+
+    def test_team_profile_backup_cleanup_preserves_shared_content(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_shared_backup",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            environment = {"XDG_STATE_HOME": str(root / "state")}
+            with patch.dict(os.environ, environment):
+                first = module.backup_reference("a" * 32, "profile", b"previous")
+                second = module.backup_reference("b" * 32, "profile", b"previous")
+                canonical = (
+                    root
+                    / "state/agent-skills/team-workflow/profile-backups"
+                    / first["digest"]
+                    / "content"
+                )
+                module.cleanup_backups(
+                    {
+                        "schema_version": 3,
+                        "previous_profile": first,
+                        "previous_settings": None,
+                    }
+                )
+                self.assertTrue(canonical.is_file())
+                self.assertTrue((module.state_root() / second["reference"]).is_file())
+                module.cleanup_backups(
+                    {
+                        "schema_version": 3,
+                        "previous_profile": second,
+                        "previous_settings": None,
+                    }
+                )
+                self.assertFalse(canonical.exists())
+
+    def test_team_profile_recovery_requires_durable_valid_receipt(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_valid_receipt_recovery",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "durable_unlink", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                transaction_root = root / "config/opencode/team-contexts"
+                journal = transaction_root / ".profile-save.transaction.json"
+                receipt_root = root / "state/agent-skills/team-workflow/receipts"
+                original_sync = module.sync_directory
+
+                def fail_receipt_sync(path: Path) -> None:
+                    if path == receipt_root:
+                        raise module.MutationIOError("simulated receipt directory fsync failure")
+                    original_sync(path)
+
+                with (
+                    patch.object(module, "sync_directory", side_effect=fail_receipt_sync),
+                    self.assertRaisesRegex(module.MutationIOError, "receipt directory"),
+                ):
+                    module.recover_profile_transaction(transaction_root)
+
+            self.assertTrue(journal.is_file())
+            self.assertTrue((receipt_root / f"{plan_digest}.json").is_file())
+
+    def test_team_profile_valid_receipt_with_prior_state_fails_closed(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_consumed_prior_state",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                transaction_root = module.profile_root(create=True)
+                profile = transaction_root / "platform-team.json"
+                settings = transaction_root / "settings.json"
+                previous_profile = b'{"previous":"profile"}'
+                previous_settings = b'{"previous":"settings"}'
+                module.atomic(profile, previous_profile)
+                module.atomic(settings, previous_settings)
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "durable_unlink", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                journal = transaction_root / ".profile-save.transaction.json"
+                document = json.loads(journal.read_text(encoding="utf-8"))
+                report = module.state_root() / "reports" / f"{document['report_digest']}.json"
+                module.atomic(profile, previous_profile)
+                module.atomic(settings, previous_settings)
+                module.durable_unlink(report)
+                receipt = module.state_root() / "receipts" / f"{plan_digest}.json"
+                backups = [
+                    module.state_root() / document[field]["reference"]
+                    for field in ("previous_profile", "previous_settings")
+                ]
+
+                with self.assertRaisesRegex(module.MutationIOError, "consumed plan"):
+                    module.recover_profile_transaction(transaction_root)
+                with self.assertRaisesRegex(module.WorkflowError, "already consumed"):
+                    module.validate_plan(plan_digest, payload)
+
+            self.assertTrue(receipt.is_file())
+            self.assertTrue(journal.is_file())
+            self.assertTrue(all(path.is_file() for path in backups))
+            self.assertEqual(profile.read_bytes(), previous_profile)
+            self.assertEqual(settings.read_bytes(), previous_settings)
+
+    def test_team_profile_failed_receipt_fsync_requires_durable_recovery(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_failed_receipt_cleanup",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                transaction_root = root / "config/opencode/team-contexts"
+                journal = transaction_root / ".profile-save.transaction.json"
+                receipt_root = root / "state/agent-skills/team-workflow/receipts"
+                receipt = receipt_root / f"{plan_digest}.json"
+                original_sync = module.sync_directory
+
+                def fail_receipt_sync(path: Path) -> None:
+                    if path == receipt_root:
+                        raise module.MutationIOError("simulated receipt directory fsync failure")
+                    original_sync(path)
+
+                with (
+                    patch.object(module, "sync_directory", side_effect=fail_receipt_sync),
+                    self.assertRaisesRegex(module.MutationIOError, "recovery stopped"),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                self.assertTrue(journal.is_file())
+                self.assertTrue(receipt.exists())
+                with (
+                    patch.object(module, "sync_directory", side_effect=fail_receipt_sync),
+                    self.assertRaisesRegex(module.MutationIOError, "receipt directory"),
+                ):
+                    module.recover_profile_transaction(transaction_root)
+                self.assertTrue(journal.is_file())
+
+                module.recover_profile_transaction(transaction_root)
+
+            self.assertFalse(journal.exists())
+            self.assertTrue((transaction_root / "platform-team.json").is_file())
+            self.assertTrue((transaction_root / "settings.json").is_file())
+            self.assertTrue(receipt.is_file())
+
+    def test_team_profile_recovery_durably_removes_malformed_receipt(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_malformed_receipt_recovery",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "create_receipt", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                transaction_root = root / "config/opencode/team-contexts"
+                receipt_root = root / "state/agent-skills/team-workflow/receipts"
+                receipt = receipt_root / f"{plan_digest}.json"
+                receipt.write_text("{", encoding="utf-8")
+                receipt.chmod(0o600)
+                synced: list[Path] = []
+                original_sync = module.sync_directory
+
+                def observe_sync(path: Path) -> None:
+                    original_sync(path)
+                    synced.append(path)
+
+                with patch.object(module, "sync_directory", side_effect=observe_sync):
+                    module.recover_profile_transaction(transaction_root)
+
+            self.assertFalse(receipt.exists())
+            self.assertIn(receipt_root, synced)
+            self.assertFalse((transaction_root / ".profile-save.transaction.json").exists())
+
+    def test_team_profile_recovery_rejects_receipt_with_non_exact_schema(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_non_exact_receipt_recovery",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "durable_unlink", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                transaction_root = root / "config/opencode/team-contexts"
+                receipt = root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
+                receipt_value = json.loads(receipt.read_text(encoding="utf-8"))
+                self.assertTrue(module.valid_receipt(receipt_value, plan_digest))
+                self.assertFalse(
+                    module.valid_receipt({**receipt_value, "schema_version": True}, plan_digest)
+                )
+                self.assertFalse(
+                    module.valid_receipt({**receipt_value, "consumed_at": True}, plan_digest)
+                )
+                receipt_value["unexpected"] = True
+                receipt.write_text(json.dumps(receipt_value), encoding="utf-8")
+                receipt.chmod(0o600)
+                module.recover_profile_transaction(transaction_root)
+
+            self.assertFalse(receipt.exists())
+            self.assertFalse((transaction_root / "platform-team.json").exists())
+            self.assertFalse((transaction_root / "settings.json").exists())
+            self.assertFalse((transaction_root / ".profile-save.transaction.json").exists())
+
+    def test_team_profile_recovery_preserves_newer_profile_and_journal(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_tampered_postcondition_recovery",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = json.dumps(self.example_team_profile("team-retro", "platform-team")).encode()
+            environment = {
+                "XDG_CONFIG_HOME": str(root / "config"),
+                "XDG_STATE_HOME": str(root / "state"),
+            }
+            with patch.dict(os.environ, environment):
+                payload = module.profile_change_payload("platform-team", raw, set_default=True)
+                plan_digest, _, _ = module.prepare_plan(payload)
+                with (
+                    patch.object(module, "durable_unlink", side_effect=KeyboardInterrupt),
+                    self.assertRaises(KeyboardInterrupt),
+                ):
+                    module.apply_profile("platform-team", raw, plan_digest, set_default=True)
+
+                transaction_root = root / "config/opencode/team-contexts"
+                profile = transaction_root / "platform-team.json"
+                profile.write_bytes(raw + b"\n")
+                profile.chmod(0o600)
+                with self.assertRaisesRegex(module.MutationIOError, "neither prior nor intended"):
+                    module.recover_profile_transaction(transaction_root)
+
+            self.assertTrue((transaction_root / ".profile-save.transaction.json").is_file())
+            self.assertTrue(
+                (root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json").is_file()
+            )
+            self.assertEqual(profile.read_bytes(), raw + b"\n")
+
+    def test_durable_unlink_can_confirm_absence_without_creating_parent(self) -> None:
+        module = load_module(
+            BUILT_SKILLS / "team-retro/scripts/team_workflow.py",
+            "team_profile_durable_unlink_absence",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            missing_parent = root / "missing"
+            module.durable_unlink(
+                missing_parent / "receipt.json",
+                missing_ok=True,
+                sync_parent_if_missing=True,
+            )
+            self.assertFalse(missing_parent.exists())
+
+            existing_parent = root / "receipts"
+            existing_parent.mkdir()
+            with patch.object(module, "sync_directory") as sync_directory:
+                module.durable_unlink(
+                    existing_parent / "receipt.json",
+                    missing_ok=True,
+                    sync_parent_if_missing=True,
+                )
+            sync_directory.assert_called_once_with(existing_parent)
 
     def test_all_team_skills_use_shared_runtime_and_fixed_action(self) -> None:
         actions = {
