@@ -721,7 +721,7 @@ async function interactiveSelection(
   if (!process.stdin.isTTY || !process.stderr.isTTY) {
     throw new InstallerError(
       "terminal_required",
-      "agent configure requires a terminal or explicit --provider and --model",
+      "agent configure requires a terminal or explicit agent <name> and either exact --model provider/model or --provider + --model",
     );
   }
   const inventory = await listAgentProfiles(options.scope!);
@@ -1074,7 +1074,7 @@ async function run(arguments_: string[]): Promise<void> {
             confirmationCommand: shellCommand([
               action,
               ...scopeArguments(options.scope),
-              ...selectionArguments(plan.selection),
+              ...(action === "install" ? selectionArguments(plan.selection) : []),
               "--confirm",
               plan.digest,
             ]),
@@ -1124,11 +1124,12 @@ async function run(arguments_: string[]): Promise<void> {
         "agent configure does not accept selection options",
       );
     requireConfirmationMode(options);
+    const model = exactModel(options);
     const selected =
-      options.provider && options.model && options.name
+      options.name && model
         ? {
             name: validateAgentName(options.name),
-            model: exactModel(options)!,
+            model,
             ...(validateVariant(options.variant)
               ? { variant: validateVariant(options.variant) }
               : {}),

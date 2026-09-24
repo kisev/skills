@@ -795,6 +795,36 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
   }
 });
 
+test("uninstall dry-run prints an applicable confirmation command without selection options", async () => {
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    await install("project", project, home);
+    const result = spawnSync(
+      process.execPath,
+      [join(PACKAGE, "dist", "cli.js"), "uninstall", "--dry-run"],
+      {
+        cwd: project,
+        env: { ...process.env, HOME: home, XDG_STATE_HOME: join(home, ".state") },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(
+      result.stdout,
+      new RegExp(
+        `^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} uninstall --confirm [a-f0-9]{64}$`,
+        "m",
+      ),
+    );
+    assert.doesNotMatch(result.stdout, /--commands|--agents|--plugins/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("runtime plugin has no lifecycle writes and receipt gate is enforced", async () => {
   const directory = temporary();
   try {

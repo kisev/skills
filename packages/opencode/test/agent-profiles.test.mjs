@@ -195,9 +195,45 @@ test("incomplete non-TTY configure exits with JSON guidance and leaves no receip
   );
   try {
     assert.equal(result.status, 2);
-    assert.equal(JSON.parse(result.stdout).error.code, "terminal_required");
+    const error = JSON.parse(result.stdout).error;
+    assert.equal(error.code, "terminal_required");
+    assert.equal(
+      error.message,
+      "agent configure requires a terminal or explicit agent <name> and either exact --model provider/model or --provider + --model",
+    );
     assert.deepEqual(await fileSnapshot(join(context.project, ".opencode")), {});
     await assert.rejects(lstat(join(context.home, ".state")), { code: "ENOENT" });
+  } finally {
+    rmSync(context.directory, { recursive: true, force: true });
+  }
+});
+
+test("non-TTY configure accepts an exact model without a separate provider", async () => {
+  const context = await roots();
+  try {
+    await confirmedInstall(context.project, context.home);
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "agent",
+        "configure",
+        "manager",
+        "--model",
+        "openai/gpt-5",
+        "--dry-run",
+        "--json",
+      ],
+      {
+        cwd: context.project,
+        env: { ...process.env, HOME: context.home, XDG_STATE_HOME: join(context.home, ".state") },
+        encoding: "utf8",
+      },
+    );
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.plan.domain, "agent-profiles");
+    assert.equal(output.plan.action, "model-set");
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
   }
