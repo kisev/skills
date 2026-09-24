@@ -8,6 +8,55 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[10.0.0] - 2026-09-25
+
+### Added
+
+- Code-review publication now has a separately invoked one-action helper with
+  exact-plan confirmation, fresh GitLab preconditions and postconditions,
+  explanation-dependent thread closure, and read-only inspection of uncertain
+  outcomes. Durable reservations prevent automatic replay after ambiguous failures.
+- Local code review retains agreed scope, accepted risks, finding dispositions,
+  and verification evidence across follow-ups, with explicit full, incremental,
+  and unchanged modes.
+
+### Changed
+
+- OpenCode `manager` delegates all substantive work. `review` is available both
+  directly and as a subagent, runs the primary review, and selects independent
+  critics according to the chosen skill. Source fixes require an explicit request
+  and a separate fixing phase.
+- Explicit `askme` requests stop for manual continuation; internal clarification
+  returns to the already-authorized caller without expanding scope or clearing
+  publication gates.
+- Task triage now records structured recommendations, observed issue relations,
+  context-rich questions, role-aware follow-ups, and separate analysis-completeness
+  and pending-action summaries with linked reports.
+- `docs-review` without a scope inspects the complete user-documentation set.
+  Shared confirmation rules, command specifications, and runtime ownership are
+  consolidated; obsolete disabled tests and redundant prose-shape checks are removed.
+- Review stage orchestration belongs to the skill, while review publication and
+  task triage share bounded mutation-process execution.
+
+### Fixed
+
+- Manager-to-review and nested critic routing now agree with rendered agent modes,
+  permissions, and report contracts.
+- Specification and documentation no longer assign portable cleanup and rollback
+  to the OpenCode package; that lifecycle belongs to the external `skills` CLI.
+
+### Breaking Changes
+
+- Regenerate code-review publication plans against fresh evidence to use guarded
+  publication. Old direct commands do not gain these guarantees, and advisory
+  markers are not migrated into verified receipts. New actions expire after 24 hours.
+- Re-run task triage to produce its current structured analysis. Older analysis
+  inputs lacking the required recommendation, relation, and question fields are
+  not accepted as current output.
+- Internal `askme` clarification may now resume its calling workflow. Use an
+  explicit `/askme` request when a mandatory stop is required. Reinstall updated
+  OpenCode assets and restart the host to activate the changed agent contracts.
+
 ## \[9.0.0] - 2026-09-24
 
 ### Changed

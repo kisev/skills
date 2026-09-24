@@ -1,6 +1,6 @@
 {
   "name": "@kisev/skills-opencode",
-  "version": "9.0.0",
+  "version": "10.0.0",
   "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
   "homepage": "https://github.com/kisev/skills#readme",
   "bugs": {
