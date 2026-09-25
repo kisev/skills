@@ -127,14 +127,23 @@ Pages distribution, `@kisev/skills-opencode` version, tag, and GitHub Release
 must refer to one commit. Do not change a published version; publish a new patch
 release instead.
 
-Push the prepared release commit first to the exact `release/vX.Y.Z` branch. The
-read-only `.github/workflows/release-preflight.yml` workflow runs the complete
-gate, builds the proposed artifacts, and validates the version without requiring
-the tag to exist. After it succeeds, atomically push the same commit to `main`
-with its annotated `vX.Y.Z` tag, then delete the temporary branch.
+Use `dev` as the integration branch. Direct commits and pull requests from
+feature or fix branches may target `dev`. Pull requests into `main` must use
+`dev` as their source and a merge commit. Prepare the maintainer-selected stable
+version and both changelogs on `dev`; merging does not itself publish a release.
+
+Invoke the project `project-release` skill to run the guarded release workflow.
+It requires separate confirmation before pushing `dev`, merging into `main`,
+creating the annotated `vX.Y.Z` tag, and pushing that tag. The tag must reference
+the resulting `main` merge commit.
 
 The tag starts `.github/workflows/publish.yml`. It revalidates the published tag
 and revision, builds one exact npm tarball and cross-channel digest manifest,
-publishes and verifies GitHub Pages and npm, and only then creates the GitHub
-Release. npm publishing uses trusted publishing through OIDC and verifies the
-registry tarball, imports, CLI, signatures, and provenance.
+publishes and verifies stable GitHub Pages and npm `latest`, and only then creates
+the GitHub Release. npm publishing uses trusted publishing through OIDC and
+verifies the registry tarball, imports, CLI, signatures, and provenance.
+
+For every push to `dev`, the same workflow runs the complete gate, then replaces
+only the Pages `/dev` channel and publishes a unique npm prerelease under dist-tag
+`dev`. Development snapshots do not choose a stable SemVer and create no GitHub
+Release.

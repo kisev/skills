@@ -56,6 +56,20 @@ run global-scope CLI commands from any directory:
 npx --yes @kisev/skills-opencode@latest install --global --dry-run
 ```
 
+### Development Channel
+
+Use npm dist-tag `dev` explicitly for both the persistent dependency and the
+installer CLI:
+
+```shell
+npm install --save-exact @kisev/skills-opencode@dev
+npx --yes @kisev/skills-opencode@dev install --dry-run
+```
+
+Each successful push to `dev` publishes a unique prerelease and moves only the
+`dev` dist-tag. Reinstall `@kisev/skills-opencode` without `@dev` and run the
+stable `@latest` CLI to return to the stable channel.
+
 ## Select Assets
 
 In a TTY, `install` opens three selection groups: Skill command adapters, Fixed
@@ -238,6 +252,8 @@ retained profile configuration. It does not remove portable skills or edit
 - Global scope is cwd-independent; project scope targets `.opencode` under the
   current directory.
 - The installer owns only files proved by manifests and exact hashes.
+- npm `latest` is the stable channel; npm `dev` is an explicit moving
+  development channel and never selects the next stable version.
 - The package is MIT-licensed. Current inventory and checks are in
   [Migration Inventory](../migration-inventory.md) and
   [Verification](../verification.md).

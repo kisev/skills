@@ -23,9 +23,6 @@ def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
 def test_workflows_delegate_quality_checks_to_task() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
-    release_preflight = (ROOT / ".github/workflows/release-preflight.yml").read_text(
-        encoding="utf-8"
-    )
     live = (ROOT / ".github/workflows/evals-live.yml").read_text(encoding="utf-8")
     assert not (ROOT / ".github/workflows/pages.yml").exists()
     assert 'task "$CHECK_TASK"' in ci
@@ -56,7 +53,7 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
         assert task in publish
     assert "fetch-depth: 0" in publish
     assert 'tags:\n      - "v*"' in publish
-    assert "path: .build/packages/skills" in publish
+    assert "path: .build/pages" in publish
     assert "include-hidden-files: true" in publish
     assert "pages: write" in publish
     assert "id-token: write" in publish
@@ -71,7 +68,7 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "github.event.deleted != true" in ci
     assert 'test "$DELETED_REF" = true' in ci
     assert "fetch-depth: 0" in ci
-    for workflow in (ci, publish, release_preflight, live):
+    for workflow in (ci, publish, live):
         for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", workflow):
             assert re.fullmatch(r"[0-9a-f]{40}", reference)
     for duplicated in ("ruff ", "pytest", "npm ci", "npm test", "agentskills"):

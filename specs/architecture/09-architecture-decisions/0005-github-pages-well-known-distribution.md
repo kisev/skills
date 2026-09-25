@@ -29,8 +29,10 @@ contracts and runtimes remain deduplicated in the authored Git tree. The
 
 On an exact validated release tag, build every complete skill in isolation and
 deploy a standard agentskills.io well-known index plus one SHA-256-bound archive
-per skill to GitHub Pages. The stable Pages URL is the installation and update
-source; Git tags remain provenance and the OpenCode npm package remains separate.
+per skill to GitHub Pages. The root Pages URL is the stable installation and
+update source; the additive `/dev` source follows
+[ADR-0011](0011-dev-integration-channel.md). Git tags remain stable provenance and
+the OpenCode npm package remains separate.
 
 ## Consequences
 

@@ -29,7 +29,7 @@ content-addressed archival can preserve recovery and auditability.
 ### REQ-C-005 - Bounded distribution change in this target
 
 The current target changes portable build, publication, and installation transport
-without expanding the `27/27/6/3/1` capability inventory or the declared OpenCode
+without expanding the `28/28/6/3/1` capability inventory or the declared OpenCode
 compatibility range.
 
 ### REQ-C-006 - Specification traceability gate (withdrawn)

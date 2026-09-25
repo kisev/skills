@@ -1,7 +1,7 @@
 ---
 name: mattermost
 description: >-
-  Read Mattermost messages from a supplied link with bounded scope. Russian discovery terms: прочитать Mattermost.
+  Read Mattermost messages from an exact link and prepare manual message publications. Never sends messages itself. Russian discovery terms: прочитать Mattermost, отправить сообщение Mattermost.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

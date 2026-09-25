@@ -1,6 +1,6 @@
 # Building Block View
 
-- `skills/` contains 27 authored capability definitions and unique resources.
+- `skills/` contains 28 authored capability definitions and unique resources.
 - `shared/` and `shared/manifest.json` contain canonical reusable material and
   exact build destinations.
 - `packages/skills/`, `build_skills.py`, and `build_distribution.py` define the

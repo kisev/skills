@@ -40,8 +40,22 @@ npx --yes skills@latest add https://kisev.github.io/skills --list
 The GitHub Pages URL is the supported moving stable-release channel. Its release
 metadata identifies the release and source revision, while the Pages index binds
 each archive to a SHA-256 digest. The current GitHub Release is available at
-`https://github.com/kisev/skills/releases/latest`. The authored repository is
-intentionally not an install source.
+`https://github.com/kisev/skills/releases/latest`. The authored `skills/` tree is
+intentionally not a public install source; `.agents/skills/project-release` is a
+repository-local maintainer workflow.
+
+### Install The Development Channel
+
+Replace the stable source with the explicit `/dev` source:
+
+```shell
+npx --yes skills@latest add https://kisev.github.io/skills/dev --agent opencode --agent codex --skill '*' --copy --global --yes
+```
+
+The moving dev channel updates after successful pushes to `dev`. Its technical
+version identifies the workflow run and source revision; it does not predict the
+next stable release. Repeat the stable `add` command to switch an installation
+back to stable.
 
 ## Update
 
@@ -102,6 +116,8 @@ renames a skill, repeat `add` for additions and remove retired names explicitly.
 - The supported distribution is `https://kisev.github.io/skills`; source
   provenance is recorded in its release metadata and linked from
   `https://github.com/kisev/skills/releases/latest`.
+- The opt-in development distribution is `https://kisev.github.io/skills/dev`;
+  only its current snapshot is retained.
 - The stable portable installer is `npx --yes skills@latest`.
 - Updates do not prune retired names automatically.
 - Skills do not replace repository policy, review, secret scanning, or access

@@ -44,6 +44,12 @@ target collection root. The ledger retains successful postconditions and an
 in-progress reservation after ambiguous results. It is separate from advisory
 markers and governed by [the code-review contract](../../capabilities/skills/code-review.md).
 
+Mattermost triage owns its dedicated private XDG namespace for one-origin,
+one-identity incremental checkpoints, immutable evidence, stable current output,
+and digest-bound prepared responses. Only a complete run advances its checkpoint;
+partial state remains explicit and cannot replace complete provenance. This
+mechanism provides [REQ-F-507](../../capabilities/skills/mattermost-triage.md#req-f-507---triage-bounded-mattermost-attention).
+
 This ownership and isolation mechanism provides
 [REQ-F-005](../../requirements/functional/README.md#req-f-005---archive-owned-retired-assets),
 [REQ-Q-002](../../requirements/quality/README.md#req-q-002---mutation-safety), and

@@ -47,6 +47,10 @@
     },
     {
       "source": "references/state_artifacts.py",
+      "destination": "mattermost-triage/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
       "destination": "team-sprint-start/scripts/state_artifacts.py"
     },
     {
@@ -521,6 +525,10 @@
     {
       "source": "references/language-policy.md",
       "destination": "mattermost/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "mattermost-triage/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",

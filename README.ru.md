@@ -10,7 +10,7 @@
 
 | Компонент | Назначение | Жизненный цикл |
 | - | - | - |
-| Portable Agent Skills | 27 автономных сценариев для разработки, документации, выпуска и командной работы | Стабильный CLI `skills@latest` устанавливает их в `~/.agents/skills` или `.agents/skills` |
+| Portable Agent Skills | 28 автономных сценариев для разработки, документации, выпуска и командной работы | Стабильный CLI `skills@latest` устанавливает их в `~/.agents/skills` или `.agents/skills` |
 | `@kisev/skills-opencode` | Команды OpenCode, агенты с фиксированными ролями, средства маршрутизации, диагностика и необязательные обёртки плагинов | Устанавливается как зависимость npm; управляемые файлы находятся в `~/.config/opencode` или `.opencode` |
 
 Переносимые навыки не требуют npm-пакета. Пакет не содержит, не устанавливает и
@@ -27,7 +27,10 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --ag
 ```
 
 Стабильный канал публикует актуальные метаданные релиза и архивы, привязанные к
-контрольным суммам. Начните с [пошаговой установки](docs/ru/tutorials/getting-started.md),
+контрольным суммам. Для явного перехода на обновляемый dev-канал используйте
+`https://kisev.github.io/skills/dev`; он обновляется после успешных push в `dev`
+и не меняет стабильный источник установки. Начните с
+[пошаговой установки](docs/ru/tutorials/getting-started.md),
 используйте [инструкцию по переносимым навыкам](docs/ru/how-to/portable-skills.md)
 для установки в проект, обновления, очистки и устранения неполадок или откройте
 [каталог навыков](docs/ru/reference/skill-catalog.md).
@@ -50,6 +53,9 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --ag
 npm install --save-exact @kisev/skills-opencode
 npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
+
+Чтобы использовать текущий dev-снимок, укажите
+`@kisev/skills-opencode@dev` в обеих командах.
 
 Это только начало обязательной последовательности действий. Выполните точную
 команду подтверждения из предварительного просмотра, добавьте пакет в запись

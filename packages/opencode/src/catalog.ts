@@ -13,6 +13,7 @@ export const CATALOG = {
     "goal",
     "humanize",
     "mattermost",
+    "mattermost-triage",
     "mr-prepare",
     "release-prepare",
     "release-review",

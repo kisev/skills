@@ -76,7 +76,11 @@ ownership from a caller, or mutate another workflow's state. GitLab prepare and
 review runners never publish. A separately invoked write helper may apply only
 one previously previewed action whose exact digest is supplied as Confirmation;
 it must revalidate immediately before writing and report the result. One digest
-cannot authorize a batch, another action, or recovery with changed content. Do
+cannot authorize a batch of user-visible actions, another action, or recovery
+with changed content. One user-visible action may be compound when its immutable
+preview and digest bind every required internal mutation, such as zero to five
+file uploads followed by creation of one message; this does not authorize a
+second message or another user-visible action. Do
 not change user-owned configuration without Confirmation. A precomputed
 suggestion or patch is part of the exact confirmed action; generating or changing
 a fix after confirmation requires a new plan and digest. A definitive rejection

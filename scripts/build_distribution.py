@@ -31,6 +31,10 @@ class DistributionError(Exception):
 
 DESCRIPTION = re.compile(r"^description:\s*>-?\s*\n\s+(.+)$", re.MULTILINE)
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
+DEV_SEMVER = re.compile(
+    r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)"
+    r"-dev\.(?:0|[1-9][0-9]*)\.g[0-9a-f]{7,40}$"
+)
 
 
 def skill_description(skill: Path) -> str:
@@ -79,13 +83,16 @@ def archive(skill: Path) -> bytes:
     return payload.getvalue()
 
 
-def build(output: Path, check: bool) -> int:
+def build(output: Path, check: bool, version_override: str | None = None) -> int:
     if not BUILT_SKILLS.is_dir():
         raise DistributionError("built skills are missing; run task build:skills first")
     manifest = json.loads((PACKAGE / "package.json").read_text(encoding="utf-8"))
-    version = manifest.get("version")
-    if not isinstance(version, str) or not SEMVER.fullmatch(version):
+    package_version = manifest.get("version")
+    if not isinstance(package_version, str) or not SEMVER.fullmatch(package_version):
         raise DistributionError("distribution package version is invalid")
+    version = version_override or package_version
+    if version_override is not None and not DEV_SEMVER.fullmatch(version_override):
+        raise DistributionError("development distribution version is invalid")
     inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
     public_skills = inventory.get("skills")
     if not isinstance(public_skills, list) or not all(
@@ -185,9 +192,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--version")
     args = parser.parse_args(argv)
     try:
-        return build(args.output.resolve(), args.check)
+        return build(args.output.resolve(), args.check, args.version)
     except DistributionError as error:
         parser.error(str(error))
     return 2

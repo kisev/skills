@@ -118,3 +118,8 @@ run the installed runners. Release CI additionally checks the tag, version,
 source revision, every deployed Pages byte, the exact npm tarball, package
 imports and CLI, registry signatures, SLSA provenance, and cross-channel digests
 before creating the GitHub Release.
+
+Development publication tests additionally check deterministic snapshot version
+derivation, `dev` source provenance, Pages root and `/dev` composition, and the
+required npm `dev` dist-tag. CI rejects pull requests into `main` from any branch
+other than `dev`; repository branch protection remains an external setting.

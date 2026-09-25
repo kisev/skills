@@ -18,7 +18,9 @@ from scripts import (
     build_distribution,
     build_release_artifacts,
     check_release,
+    compose_pages_site,
     create_github_release,
+    dev_version,
     publish_npm_release,
     verify_distribution_url,
 )
@@ -46,6 +48,20 @@ def test_current_release_metadata_is_aligned() -> None:
 @pytest.mark.parametrize("version", ["01.2.3", "1.02.3", "1.2.03"])
 def test_release_version_rejects_leading_zeroes(version: str) -> None:
     assert check_release.SEMVER.fullmatch(version) is None
+
+
+def test_dev_version_uses_stable_base_run_and_revision() -> None:
+    revision = "a" * 40
+    assert dev_version.derive("10.0.0", "418", revision) == "10.0.0-dev.418.gaaaaaaaaaaaa"
+
+
+@pytest.mark.parametrize(
+    ("run_number", "revision"),
+    [("0", "a" * 40), ("01", "a" * 40), ("1", "not-a-revision")],
+)
+def test_dev_version_rejects_ambiguous_identity(run_number: str, revision: str) -> None:
+    with pytest.raises(ValueError, match=r"run number|revision"):
+        dev_version.derive("10.0.0", run_number, revision)
 
 
 def test_release_check_rejects_package_version_drift(
@@ -167,7 +183,7 @@ def test_git_timeout_kills_real_descendant_process(
                 break
             status_path = Path(f"/proc/{descendant_pid}/stat")
             # Reaping may remove /proc state after the liveness check.
-            with suppress(FileNotFoundError):
+            with suppress(FileNotFoundError, ProcessLookupError):
                 if status_path.read_text().split()[2] == "Z":
                     break
             time.sleep(0.01)
@@ -217,7 +233,7 @@ def test_successful_git_cleans_real_descendant_and_keeps_result(
             except ProcessLookupError:
                 break
             status_path = Path(f"/proc/{descendant_pid}/stat")
-            with suppress(FileNotFoundError):
+            with suppress(FileNotFoundError, ProcessLookupError):
                 if status_path.read_text().split()[2] == "Z":
                     break
             time.sleep(0.01)
@@ -543,6 +559,7 @@ def test_existing_registry_version_is_verified_without_republication(
         publish_npm_release, "download_registry_tarball", lambda *_args, **_kwargs: content
     )
     monkeypatch.setattr(publish_npm_release, "verify_provenance", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(publish_npm_release, "verify_dist_tag", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(publish_npm_release, "registry_smoke", lambda *_args: None)
     monkeypatch.setattr(
         publish_npm_release, "command", lambda *_args: pytest.fail("must not republish")
@@ -551,6 +568,97 @@ def test_existing_registry_version_is_verified_without_republication(
     metadata["dist"]["integrity"] = "wrong"
     with pytest.raises(publish_npm_release.PublicationError, match="differs"):
         publish_npm_release.publish()
+
+
+def test_dev_manifest_requires_dev_dist_tag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    release = {
+        "schema": "@kisev/skills-dev/v1",
+        "npm": {"name": "@example/package"},
+        "version": "1.0.0-dev.1.gabcdef0",
+        "revision": "a" * 40,
+    }
+    monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
+    monkeypatch.setattr(
+        publish_npm_release, "manifest", lambda: (release, tmp_path / "package.tgz")
+    )
+    monkeypatch.setenv("NPM_DIST_TAG", "latest")
+    with pytest.raises(publish_npm_release.PublicationError, match="requires npm dist-tag 'dev'"):
+        publish_npm_release.publish()
+
+
+def test_pages_composition_keeps_stable_root_and_dev_subpath(tmp_path: Path) -> None:
+    stable = tmp_path / "stable"
+    dev = tmp_path / "dev-source"
+    stable.mkdir()
+    dev.mkdir()
+    (stable / "index.json").write_text("stable\n", encoding="utf-8")
+    (stable / ".nojekyll").write_text("", encoding="utf-8")
+    (dev / "index.json").write_text("dev\n", encoding="utf-8")
+    output = tmp_path / "site"
+    compose_pages_site.compose(
+        output,
+        stable_dir=stable,
+        stable_url=None,
+        dev_dir=dev,
+        dev_url=None,
+    )
+    assert (output / "index.json").read_text(encoding="utf-8") == "stable\n"
+    assert (output / "dev/index.json").read_text(encoding="utf-8") == "dev\n"
+
+
+def test_remote_pages_copy_rejects_lock_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    assert build_distribution.build(source, False) == 0
+    payloads = {
+        path.relative_to(source).as_posix(): path.read_bytes()
+        for path in source.rglob("*")
+        if path.is_file()
+    }
+    monkeypatch.setattr(
+        compose_pages_site,
+        "fetch",
+        lambda _base, relative: payloads[relative],
+    )
+    target = tmp_path / "target"
+    compose_pages_site.copy_remote("https://pages.example/skills", target)
+    assert (target / "index.json").read_bytes() == payloads["index.json"]
+
+    lock = json.loads(payloads["skills-lock.json"])
+    lock["archives"].pop(next(iter(lock["archives"])))
+    payloads["skills-lock.json"] = json.dumps(lock).encode()
+    payloads[".well-known/skills/lock.json"] = payloads["skills-lock.json"]
+    with pytest.raises(compose_pages_site.ComposeError, match="lock differs"):
+        compose_pages_site.copy_remote("https://pages.example/skills", tmp_path / "bad")
+
+
+def test_remote_pages_copy_fails_closed_when_channel_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    missing = urllib.error.HTTPError(
+        "https://pages.example/skills/dev/index.json", 404, "Not Found", Message(), None
+    )
+
+    def fetch_missing(*_args: object) -> bytes:
+        raise missing
+
+    monkeypatch.setattr(compose_pages_site, "fetch", fetch_missing)
+    with pytest.raises(urllib.error.HTTPError):
+        compose_pages_site.copy_remote("https://pages.example/skills/dev", tmp_path / "dev")
+
+
+def test_project_release_skill_keeps_manual_publication_gates() -> None:
+    skill = (ROOT / ".agents/skills/project-release/SKILL.md").read_text(encoding="utf-8")
+    normalized = " ".join(skill.split())
+    assert "Never choose the release version" in normalized
+    assert "base is `main` and head is `dev`" in normalized
+    assert "merge commit" in normalized
+    assert "confirmation before creating or updating the PR" in normalized
+    for action in ("pushing `dev`", "merging", "creating the annotated", "pushing the tag"):
+        assert action in normalized
 
 
 def test_release_manifest_rejects_tampered_tarball(
@@ -812,22 +920,32 @@ def test_release_environment_revision_must_match_head(monkeypatch: pytest.Monkey
 
 def test_release_workflow_gates_publication_and_final_release() -> None:
     workflow = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
-    preflight = (ROOT / ".github/workflows/release-preflight.yml").read_text(encoding="utf-8")
     assert (
-        workflow.index("preflight:") < workflow.index("pages:") < workflow.index("github-release:")
+        workflow.index("stable-preflight:")
+        < workflow.index("stable-pages:")
+        < workflow.index("github-release:")
     )
-    assert workflow.count("needs: preflight") == 2
+    assert workflow.count("needs: stable-preflight") == 2
     assert "task release:prepare" in workflow
-    assert "task release:preflight" in preflight
-    assert 'branches:\n      - "release/v*"' in preflight
-    assert "GITHUB_REF_NAME#release/" in preflight
-    assert "upload-artifact" not in preflight
+    assert "branches:\n      - dev" in workflow
+    assert "task check" in workflow
+    assert "workflow_run" not in workflow
+    assert "DEV_REVISION: ${{ github.sha }}" in workflow
+    assert "cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/v') }}" in workflow
+    assert "github.event.deleted != true" in workflow
+    assert "task dev:prepare" in workflow
+    assert "task dev:npm" in workflow
+    assert "task dev:pages:verify" in workflow
     assert "task release:pages:verify" in workflow
     assert "task release:npm" in workflow
     assert "task release:github" in workflow
-    assert "      - pages\n      - npm" in workflow
-    assert "needs.preflight.outputs.npm-artifact" in workflow
-    assert "needs.preflight.outputs.pages-artifact" in workflow
+    assert "      - stable-pages\n      - stable-npm" in workflow
+    assert "needs.stable-preflight.outputs.npm-artifact" in workflow
+    assert "needs.stable-preflight.outputs.pages-artifact" in workflow
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    assert 'test "$HEAD_REF" = dev' in ci
+    assert 'test "$HEAD_REPOSITORY" = "$REPOSITORY"' in ci
+    assert "git merge-base --is-ancestor HEAD^2 origin/dev" in ci
     builder = (ROOT / "scripts/build_release_artifacts.py").read_text(encoding="utf-8")
     publisher = (ROOT / "scripts/publish_npm_release.py").read_text(encoding="utf-8")
     pages = (ROOT / "scripts/verify_distribution_url.py").read_text(encoding="utf-8")

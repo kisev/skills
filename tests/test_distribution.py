@@ -94,6 +94,7 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
                 assert not any(name.startswith("templates/ru/") for name in names)
             if entry["name"] == "mattermost":
                 assert "scripts/mattermost.py" in document.getnames()
+                assert "scripts/mattermost_publication.py" in document.getnames()
 
 
 def test_distribution_is_byte_reproducible(tmp_path: Path) -> None:
@@ -107,6 +108,14 @@ def test_distribution_is_byte_reproducible(tmp_path: Path) -> None:
         path.relative_to(second): path.read_bytes() for path in second.rglob("*") if path.is_file()
     }
     assert first_files == second_files
+
+
+def test_distribution_accepts_explicit_dev_snapshot_version(tmp_path: Path) -> None:
+    output = tmp_path / "dev"
+    version = f"{RELEASE_VERSION}-dev.42.g{'a' * 12}"
+    assert build_distribution.build(output, False, version) == 0
+    index = json.loads((output / "index.json").read_text(encoding="utf-8"))
+    assert index["version"] == version
 
 
 def test_distribution_check_rejects_unexpected_file(tmp_path: Path) -> None:
@@ -273,7 +282,7 @@ def test_pages_install_is_self_contained_for_both_hosts_and_scopes(tmp_path: Pat
                 assert help_result.returncode == 0, (runner, help_result.stderr)
 
 
-def test_authored_repository_is_not_an_install_source(tmp_path: Path) -> None:
+def test_authored_repository_exposes_only_the_project_release_skill(tmp_path: Path) -> None:
     source = tmp_path / "source"
     shutil.copytree(
         ROOT,
@@ -298,8 +307,9 @@ def test_authored_repository_is_not_an_install_source(tmp_path: Path) -> None:
         text=True,
         check=False,
     )
-    assert result.returncode != 0
-    assert "No valid skills found" in result.stdout
+    assert result.returncode == 0
+    assert "project-release" in result.stdout
+    assert "mattermost" not in result.stdout
 
 
 def update_archive(distribution: Path, skill: str) -> None:

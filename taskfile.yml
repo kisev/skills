@@ -193,6 +193,52 @@ tasks:
     cmds:
       - mise exec -- uv run --locked python scripts/create_github_release.py
 
+  pages:compose:stable:
+    desc: Compose the stable Pages distribution with the current dev channel
+    cmds:
+      - >-
+        mise exec -- uv run --locked python scripts/compose_pages_site.py
+        --stable-dir .build/packages/skills
+        --dev-url https://kisev.github.io/skills/dev
+        --output .build/pages
+
+  dev:version:
+    desc: Derive the immutable version for the current dev workflow run
+    cmds:
+      - >-
+        mise exec -- uv run --locked python scripts/dev_version.py
+        --run-number "$DEV_RUN_NUMBER" --revision "$DEV_REVISION"
+
+  dev:prepare:
+    desc: Build exact npm and composed Pages artifacts for one dev snapshot
+    cmds:
+      - >-
+        mise exec -- uv run --locked python scripts/build_skills.py
+        --source-url https://kisev.github.io/skills/dev
+      - >-
+        mise exec -- uv run --locked python scripts/build_distribution.py
+        --version "$DEV_VERSION"
+      - task: package:build
+      - mise exec -- uv run --locked python scripts/build_dev_artifacts.py
+      - >-
+        mise exec -- uv run --locked python scripts/compose_pages_site.py
+        --stable-url https://kisev.github.io/skills
+        --dev-dir .build/packages/skills
+        --output .build/pages
+
+  dev:npm:
+    desc: Publish or accept and verify the exact npm dev artifact
+    cmds:
+      - mise exec -- uv run --locked python scripts/publish_npm_release.py
+
+  dev:pages:verify:
+    desc: Verify the exact deployed Pages dev artifact
+    cmds:
+      - >-
+        mise exec -- uv run --locked python scripts/verify_distribution_url.py
+        "${PAGES_URL%/}/dev" --version "$DEV_VERSION" --revision "$DEV_REVISION"
+        --attempts 24 --manifest .build/release/release.json
+
   dependency:audit:
     desc: Audit locked Python and npm dependencies
     cmds:

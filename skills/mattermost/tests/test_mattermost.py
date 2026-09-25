@@ -845,6 +845,69 @@ class MattermostTests(unittest.TestCase):
         with self.assertRaises(MODULE.AuthorizationRequired):
             MODULE.read_reactions(client, [post("p" * 26, 1000)])
 
+    def test_read_token_rejects_unsafe_mode_and_hardlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}):
+                path = MODULE.origin_token_file("https://chat.example.com")
+                path.parent.mkdir(parents=True, mode=0o700)
+                path.parent.parent.chmod(0o700)
+                path.write_text("secret\n", encoding="utf-8")
+                path.chmod(0o644)
+                with self.assertRaises(MODULE.AuthorizationRequired):
+                    MODULE.read_token("https://chat.example.com")
+                self.assertEqual(0o644, stat.S_IMODE(path.stat().st_mode))
+                path.chmod(0o600)
+                os.link(path, path.with_name("token-link"))
+                with self.assertRaises(MODULE.AuthorizationRequired):
+                    MODULE.read_token("https://chat.example.com")
+
+    def test_auth_validates_browser_token_before_save(self):
+        events = []
+        client = FakeClient({"/users/me": {"id": USER_ID}})
+
+        def receipt(*_args, consume=True, **_kwargs):
+            events.append("consume" if consume else "validate-receipt")
+
+        with (
+            mock.patch.object(MODULE, "consume_receipt", side_effect=receipt),
+            mock.patch.object(MODULE, "agent_browser_token", return_value="secret"),
+            mock.patch.object(MODULE, "Client", return_value=client),
+            mock.patch.object(
+                MODULE, "save_token", side_effect=lambda *_args: events.append("save")
+            ),
+            mock.patch.object(MODULE, "mark_local_mutation"),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            code = MODULE.main(
+                [
+                    "auth",
+                    "apply",
+                    "https://chat.example.com/team/channels/dev",
+                    "--confirm",
+                    "a" * 64,
+                    "--browser-consent",
+                ]
+            )
+
+        self.assertEqual(0, code)
+        self.assertEqual(["validate-receipt", "consume", "save"], events)
+        self.assertEqual(["/users/me"], client.calls)
+
+    def test_auth_path_reports_origin_bound_file_without_creating_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = io.StringIO()
+            with (
+                mock.patch.dict(os.environ, {"XDG_CONFIG_HOME": directory}),
+                contextlib.redirect_stdout(output),
+            ):
+                code = MODULE.main(["auth", "path", "https://chat.example.com/team/channels/dev"])
+
+            result = json.loads(output.getvalue())
+            self.assertEqual(0, code)
+            self.assertEqual("0600", result["file_mode"])
+            self.assertEqual("0700", result["directory_mode"])
+            self.assertFalse(Path(result["token_path"]).exists())
+
     def test_cli_no_reactions_passes_flag_to_reader(self):
         completed = {
             **MODULE.result_base(scope="post"),

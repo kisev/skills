@@ -3459,7 +3459,7 @@ print(json.dumps(value))
             self.assertIn("The fix changes behavior without changing the public API.", markdown)
             self.assertNotIn("marker-run --skill code-review --action patch:", markdown)
             self.assertIn("git apply <<'PATCH_", markdown)
-            self.assertIn(" apply --check <<'PATCH_CHECK_", markdown)
+            self.assertNotIn(" apply --check <<'PATCH_CHECK_", markdown)
             release = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
             self.assertIn(f"code-review: {release} · contract: 6", markdown)
             self.assertNotIn("`operation:", markdown)
@@ -4898,7 +4898,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 self.assertIn("pages", observed)
                 self.assertIn("unresolved_ids", observed)
 
-    def test_mattermost_client_uses_only_get_requests(self) -> None:
+    def test_mattermost_read_client_uses_only_get_requests(self) -> None:
         module = self.mattermost_module("get_only")
         seen: list[Request] = []
         case = self
@@ -4940,13 +4940,24 @@ class MattermostAndTeamTests(unittest.TestCase):
             with patch.dict(os.environ, environment, clear=False):
                 preview = module.prepare_receipt("auth", origin="https://chat.example")
                 digest = preview["digest"]
-                with patch.object(
-                    sys,
-                    "stdin",
-                    io.StringIO(
-                        json.dumps(
-                            [{"name": "MMAUTHTOKEN", "domain": "chat.example", "value": secret}]
-                        )
+                with (
+                    patch.object(
+                        sys,
+                        "stdin",
+                        io.StringIO(
+                            json.dumps(
+                                [{"name": "MMAUTHTOKEN", "domain": "chat.example", "value": secret}]
+                            )
+                        ),
+                    ),
+                    patch.object(
+                        module,
+                        "Client",
+                        return_value=type(
+                            "IdentityClient",
+                            (),
+                            {"get": lambda self, _path: {"id": "viewer"}},
+                        )(),
                     ),
                 ):
                     self.assertEqual(

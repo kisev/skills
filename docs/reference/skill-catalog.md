@@ -2,7 +2,7 @@
 
 [Русский](../ru/reference/skill-catalog.md)
 
-The current stable release publishes 27 portable Agent Skills. Its release
+The current stable release publishes 28 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
 of `@kisev/skills-opencode`.
@@ -22,6 +22,7 @@ of `@kisev/skills-opencode`.
 | `goal` | Produce a read-only structured Markdown goal of at most 4000 characters. |
 | `humanize` | Edit technical prose into direct, natural language. |
 | `mattermost` | Read and analyze a bounded Mattermost post, thread, channel, or chat. |
+| `mattermost-triage` | Find Mattermost conversations that need attention and prepare durable manual response plans. |
 | `mr-prepare` | Prepare metadata and a local publication plan for a GitLab MR. |
 | `release-prepare` | Prepare a release MR, inventory, announcement, and publication plan. |
 | `release-review` | Review a release MR for completeness and compatibility. |
@@ -68,8 +69,9 @@ separate fixing phase. Portable `code-review` also works without this agent laye
 2. Inspect each proposed action and its exact body before running its command.
 3. Run one generated `review_publication.py apply` command at a time. A thread
    closure requires the successful receipt for its preceding explanation.
-4. If the result is `unknown`, replace `apply` with `inspect` in that exact command
-   to check GitLab without another write. An unresolved result blocks further writes.
+4. If the result is `unknown`, follow the helper's interactive recovery or run its
+   exact `inspect` command. If bounded reads still do not find the effect, only the
+   explicit `retry` command can repeat the write, with a duplicate-write warning.
 5. Regenerate stale or expired plans. Old direct-command plans do not acquire
    these guarantees retroactively, and advisory markers are not publication receipts.
 

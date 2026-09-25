@@ -10,6 +10,8 @@ Normalized work-item validation and review distinguish `ready`,
 separate. Triage classifies evidence without issuing a quality verdict. JSON
 reports and CLI exit codes are stable within the package contracts.
 
-Code-review does not execute publication commands. A failed manual `glab`
-command is outside the review runner; the user may inspect current GitLab state
-and rerun or revise it through a new review.
+Code-review preparation does not execute publication commands. Its separately
+invoked helper preserves bounded redacted diagnostics, polls read-only
+postconditions, and returns exact inspection and explicit-retry commands for an
+unknown result. It never retries a write without a separate mode selection or
+interactive confirmation.

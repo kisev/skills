@@ -13,7 +13,7 @@ import shutil
 import stat
 import sys
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -37,6 +37,8 @@ else:
     )
 
 SCHEMA = "code-review/publication/v1"
+POSTCONDITION_DELAYS = (0.0, 0.5, 1.5)
+RETRY_WARNING = "retry may duplicate a delayed GitLab write"
 
 
 def notes_snapshot(discussions: list[dict[str, Any]]) -> dict[str, Any]:
@@ -168,6 +170,23 @@ def make_command(
             "-B",
             str(Path(__file__).resolve()),
             "apply",
+            "--action",
+            str(path),
+            "--confirm",
+            digest,
+        ]
+    )
+
+
+def recovery_command(path: Path, digest: str, mode: str) -> str:
+    return shlex.join(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            str(Path(__file__).resolve()),
+            mode,
             "--action",
             str(path),
             "--confirm",
@@ -386,6 +405,48 @@ def postcondition(
     return matches[0] if len(matches) == 1 else None
 
 
+def observe_postcondition(
+    guard: dict[str, Any], before: dict[str, Any]
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    observed: dict[str, Any] | None = None
+    for delay in POSTCONDITION_DELAYS:
+        if delay:
+            time.sleep(delay)
+        observed = observe(guard)
+        effect = postcondition(guard, observed, before)
+        if effect is not None:
+            return effect, observed
+    if observed is None:  # pragma: no cover - the constant is intentionally non-empty
+        raise portable.WorkflowError("publication postcondition polling is unavailable")
+    return None, observed
+
+
+def process_diagnostic(result: Any) -> str:
+    output = result.stderr or result.stdout
+    detail = output.decode(errors="replace").strip() if output else "no diagnostic output"
+    return portable.redact(f"glab exited with status {result.returncode}: {detail}")[:2000]
+
+
+def recovery_result(
+    path: Path,
+    digest: str,
+    guard: dict[str, Any],
+    error: str,
+    *,
+    external_mutations: bool,
+) -> dict[str, Any]:
+    return {
+        "status": "blocked",
+        "mutation_outcome": "unknown",
+        "external_mutations": external_mutations,
+        "pending_action": guard["action_id"],
+        "error": portable.redact(error)[:2000],
+        "inspect_command": recovery_command(path, digest, "inspect"),
+        "retry_command": recovery_command(path, digest, "retry"),
+        "retry_warning": RETRY_WARNING,
+    }
+
+
 def revalidate(
     guard: dict[str, Any], observed: dict[str, Any], receipts: list[dict[str, Any]]
 ) -> None:
@@ -433,7 +494,175 @@ def finalized_action(root: Path, guard: dict[str, Any], digest: str) -> None:
         )
 
 
-def execute(path: Path, digest: str, *, inspect: bool = False) -> dict[str, Any]:
+def inspect_reservation(
+    path: Path,
+    digest: str,
+    guard: dict[str, Any],
+    pending: dict[str, Any] | None,
+    ledger: dict[str, Any],
+    ledger_path: Path,
+    receipts: list[dict[str, Any]],
+    *,
+    inspect: bool,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if pending is None or pending["digest"] != digest:
+        return None, {
+            "status": "not_attempted",
+            "mutation_outcome": "none",
+            "external_mutations": False,
+        }
+    try:
+        effect, observed = observe_postcondition(guard, pending["before"])
+    except (portable.WorkflowError, OSError, ValueError) as exc:
+        pending["error"] = portable.redact(f"publication inspection failed: {exc}")[:2000]
+        portable.write_json(ledger_path, ledger)
+        return None, recovery_result(
+            path, digest, guard, pending["error"], external_mutations=False
+        )
+    if effect is None and inspect:
+        error = "publication effect was not observed after bounded inspection; " + pending.get(
+            "error", "the original mutation outcome is unknown"
+        )
+        return None, recovery_result(path, digest, guard, error, external_mutations=False)
+    if effect is None:
+        related = [
+            receipt
+            for receipt in receipts
+            if receipt["evidence_digest"] == guard["evidence_digest"]
+        ]
+        revalidate(guard, observed, related)
+    return effect, None
+
+
+def begin_action(
+    root: Path,
+    digest: str,
+    guard: dict[str, Any],
+    pending: dict[str, Any] | None,
+    ledger: dict[str, Any],
+    ledger_path: Path,
+    receipts: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str | None, dict[str, Any] | None]:
+    if pending is not None:
+        pending_digest = pending.get("digest")
+        if not portable.is_digest(pending_digest):
+            raise portable.WorkflowError("invalid pending publication action")
+        pending_digest = cast("str", pending_digest)
+        pending_path = root / "artifacts" / "publication_actions" / f"{pending_digest}.json"
+        _, pending_guard = load_action(pending_path, pending_digest)
+        result = recovery_result(
+            pending_path,
+            pending_digest,
+            pending_guard,
+            pending.get("error", "unresolved publication blocks writes; inspect it first"),
+            external_mutations=False,
+        )
+        return None, None, result
+    finalized_action(root, guard, digest)
+    if time.time() > guard["expires_at"]:
+        raise portable.WorkflowError("publication action expired; regenerate the plan")
+    if guard["dependency"] is not None and not any(
+        receipt["digest"] == guard["dependency"] for receipt in receipts
+    ):
+        raise portable.WorkflowError("publish the thread explanation before changing its state")
+    observed = observe(guard)
+    related = [
+        receipt for receipt in receipts if receipt["evidence_digest"] == guard["evidence_digest"]
+    ]
+    revalidate(guard, observed, related)
+    executable = shutil.which("glab")
+    if executable is None:
+        raise portable.WorkflowError("glab is unavailable")
+    pending = {"digest": digest, "before": observed}
+    ledger["pending"] = pending
+    portable.write_json(ledger_path, ledger)
+    return pending, executable, None
+
+
+def attempt_mutation(
+    path: Path,
+    digest: str,
+    guard: dict[str, Any],
+    pending: dict[str, Any],
+    ledger: dict[str, Any],
+    ledger_path: Path,
+    executable: str | None,
+    *,
+    retry: bool,
+) -> tuple[dict[str, Any] | None, bool, dict[str, Any] | None]:
+    executable = executable or shutil.which("glab")
+    if executable is None:
+        if not retry:
+            raise portable.WorkflowError("glab is unavailable")
+        pending["error"] = "glab is unavailable"
+        portable.write_json(ledger_path, ledger)
+        result = recovery_result(path, digest, guard, pending["error"], external_mutations=False)
+        return None, False, result
+    external_mutations = False
+    try:
+        process = run_mutation_process(
+            [
+                executable,
+                "api",
+                "--hostname",
+                guard["host"],
+                "--method",
+                guard["method"],
+                guard["endpoint"],
+                "--header",
+                "Content-Type: application/json",
+                "--input",
+                "-",
+            ],
+            portable.canonical(guard["payload"]),
+        )
+        external_mutations = True
+        process_error = process_diagnostic(process) if process.returncode != 0 else None
+        try:
+            effect, _ = observe_postcondition(guard, pending["before"])
+        except (portable.WorkflowError, OSError, ValueError) as exc:
+            if process_error is not None:
+                raise portable.WorkflowError(
+                    f"{process_error}; postcondition read failed: {exc}"
+                ) from exc
+            raise
+        if effect is None:
+            diagnostic = process_error or (
+                "publication postcondition is unverified after bounded inspection"
+            )
+            raise MutationOutcomeUnknown(diagnostic)
+    except MutationNotAttempted as exc:
+        if not retry:
+            ledger["pending"] = None
+            portable.write_json(ledger_path, ledger)
+            raise
+        pending["error"] = portable.redact(str(exc))
+        portable.write_json(ledger_path, ledger)
+        result = recovery_result(path, digest, guard, str(exc), external_mutations=False)
+        return None, False, result
+    except (MutationOutcomeUnknown, portable.WorkflowError, OSError, ValueError) as exc:
+        if isinstance(exc, MutationOutcomeUnknown):
+            external_mutations = True
+        pending["error"] = portable.redact(str(exc))[:2000]
+        with suppress(OSError):
+            portable.write_json(ledger_path, ledger)
+        result = recovery_result(
+            path,
+            digest,
+            guard,
+            str(exc),
+            external_mutations=external_mutations,
+        )
+        return None, external_mutations, result
+    else:
+        return effect, external_mutations, None
+
+
+def execute(
+    path: Path, digest: str, *, inspect: bool = False, retry: bool = False
+) -> dict[str, Any]:
+    if inspect and retry:
+        raise portable.WorkflowError("publication action mode is invalid")
     root, guard = load_action(path, digest)
     with publication_lock(root) as directory:
         ledger_path = directory / "ledger.json"
@@ -452,79 +681,47 @@ def execute(path: Path, digest: str, *, inspect: bool = False) -> dict[str, Any]
                 "external_mutations": False,
             }
         pending = ledger["pending"]
-        if inspect:
-            if pending is None or pending["digest"] != digest:
-                return {
-                    "status": "not_attempted",
-                    "mutation_outcome": "none",
-                    "external_mutations": False,
-                }
-            effect = postcondition(guard, observe(guard), pending["before"])
-            if effect is None:
-                return {
-                    "status": "blocked",
-                    "mutation_outcome": "unknown",
-                    "external_mutations": False,
-                }
+        effect: dict[str, Any] | None = None
+        external_mutations = False
+        executable: str | None = None
+        if inspect or retry:
+            if retry:
+                finalized_action(root, guard, digest)
+                if time.time() > guard["expires_at"]:
+                    raise portable.WorkflowError("publication action expired; regenerate the plan")
+            effect, result = inspect_reservation(
+                path,
+                digest,
+                guard,
+                pending,
+                ledger,
+                ledger_path,
+                receipts,
+                inspect=inspect,
+            )
+            if result is not None:
+                return result
         else:
-            if pending is not None:
-                raise portable.WorkflowError(
-                    "unresolved publication blocks writes; inspect its exact action first"
-                )
-            finalized_action(root, guard, digest)
-            if time.time() > guard["expires_at"]:
-                raise portable.WorkflowError("publication action expired; regenerate the plan")
-            if guard["dependency"] is not None and not any(
-                receipt["digest"] == guard["dependency"] for receipt in receipts
-            ):
-                raise portable.WorkflowError(
-                    "publish the thread explanation before changing its state"
-                )
-            observed = observe(guard)
-            related = [
-                receipt
-                for receipt in receipts
-                if receipt["evidence_digest"] == guard["evidence_digest"]
-            ]
-            revalidate(guard, observed, related)
-            executable = shutil.which("glab")
-            if executable is None:
-                raise portable.WorkflowError("glab is unavailable")
-            pending = {"digest": digest, "before": observed}
-            ledger["pending"] = pending
-            portable.write_json(ledger_path, ledger)
-            try:
-                result = run_mutation_process(
-                    [
-                        executable,
-                        "api",
-                        "--hostname",
-                        guard["host"],
-                        "--method",
-                        guard["method"],
-                        guard["endpoint"],
-                        "--header",
-                        "Content-Type: application/json",
-                        "--input",
-                        "-",
-                    ],
-                    portable.canonical(guard["payload"]),
-                )
-                if result.returncode != 0:
-                    raise MutationOutcomeUnknown("publication process failed")
-                effect = postcondition(guard, observe(guard), observed)
-                if effect is None:
-                    raise MutationOutcomeUnknown("publication postcondition is unverified")
-            except MutationNotAttempted:
-                ledger["pending"] = None
-                portable.write_json(ledger_path, ledger)
-                raise
-            except (MutationOutcomeUnknown, portable.WorkflowError, OSError, ValueError):
-                return {
-                    "status": "blocked",
-                    "mutation_outcome": "unknown",
-                    "external_mutations": True,
-                }
+            pending, executable, result = begin_action(
+                root, digest, guard, pending, ledger, ledger_path, receipts
+            )
+            if result is not None:
+                return result
+        if effect is None:
+            if pending is None:
+                raise portable.WorkflowError("publication reservation is unavailable")
+            effect, external_mutations, result = attempt_mutation(
+                path,
+                digest,
+                guard,
+                pending,
+                ledger,
+                ledger_path,
+                executable,
+                retry=retry,
+            )
+            if result is not None:
+                return result
         receipts.append(
             {"digest": digest, "evidence_digest": guard["evidence_digest"], "effect": effect}
         )
@@ -532,22 +729,54 @@ def execute(path: Path, digest: str, *, inspect: bool = False) -> dict[str, Any]
         try:
             portable.write_json(ledger_path, ledger)
         except OSError:
-            return {
-                "status": "blocked",
-                "mutation_outcome": "unknown",
-                "external_mutations": not inspect,
-            }
+            return recovery_result(
+                path,
+                digest,
+                guard,
+                "publication effect was observed but its receipt could not be persisted",
+                external_mutations=external_mutations,
+            )
         return {
             "status": "applied",
             "mutation_outcome": "applied",
-            "external_mutations": not inspect,
+            "external_mutations": external_mutations,
         }
+
+
+def confirm_interactively(prompt: str) -> bool:
+    print(prompt, file=sys.stderr, flush=True)
+    answer = sys.stdin.readline()
+    return answer.strip().lower() in {"y", "yes"}
+
+
+def interactive_recovery(
+    path: Path, digest: str, result: dict[str, Any], *, inspected: bool = False
+) -> dict[str, Any]:
+    if result.get("status") != "blocked" or result.get("mutation_outcome") != "unknown":
+        return result
+    if not sys.stdin.isatty() or not sys.stderr.isatty():
+        return result
+    command = result.get("inspect_command")
+    if isinstance(command, str):
+        tokens = shlex.split(command)
+        path = Path(tokens[tokens.index("--action") + 1])
+        digest = tokens[tokens.index("--confirm") + 1]
+    print(f"Publication is unverified: {result.get('error', 'unknown error')}", file=sys.stderr)
+    inspected_result = result
+    if not inspected:
+        if not confirm_interactively("Inspect GitLab for the exact effect now? [y/N]"):
+            return result
+        inspected_result = execute(path, digest, inspect=True)
+    if inspected_result["status"] != "blocked":
+        return inspected_result
+    warning = f"The exact effect is still absent; {RETRY_WARNING}. Retry this action? [y/N]"
+    return execute(path, digest, retry=True) if confirm_interactively(warning) else inspected_result
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = portable.ContractArgumentParser(description=__doc__)
     parser.add_argument("--capabilities", action="store_true")
-    parser.add_argument("mode", nargs="?", choices=("apply", "inspect"))
+    parser.add_argument("mode", nargs="?", choices=("apply", "inspect", "retry"))
     parser.add_argument("--action", type=Path)
     parser.add_argument("--confirm")
     try:
@@ -556,7 +785,7 @@ def main(argv: list[str] | None = None) -> int:
             portable.emit(
                 {
                     "schema": SCHEMA,
-                    "operations": ["apply", "inspect"],
+                    "operations": ["apply", "inspect", "retry"],
                     "platform": "posix",
                     "confirmation": "one action SHA-256",
                     "external_mutations": False,
@@ -565,7 +794,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.mode is None or args.action is None or args.confirm is None:
             raise portable.WorkflowError("mode, --action and --confirm are required")
-        result = execute(args.action, args.confirm, inspect=args.mode == "inspect")
+        result = execute(
+            args.action,
+            args.confirm,
+            inspect=args.mode == "inspect",
+            retry=args.mode == "retry",
+        )
+        if args.mode in {"apply", "inspect"}:
+            result = interactive_recovery(
+                args.action, args.confirm, result, inspected=args.mode == "inspect"
+            )
         portable.emit(result)
         return 0 if result["status"] != "blocked" else 1
     except (

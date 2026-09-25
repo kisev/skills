@@ -5,7 +5,7 @@
 ### REQ-F-001 - Expose the verified capability surface
 
 The repository shall expose exactly the public inventory in
-`evals/contracts/public-surfaces.json`: 27 skills, 27 commands, 6 agents, 3
+`evals/contracts/public-surfaces.json`: 28 skills, 28 commands, 6 agents, 3
 selectable plugins, and 1 package tool.
 
 #### Verification
@@ -101,3 +101,18 @@ contract.
 
 Package smoke tests load rendered assets through pinned OpenCode versions and
 verify exports, CLI help, and agent discovery without provider credentials.
+
+### REQ-F-009 - Publish an isolated development channel
+
+After the complete publication gate succeeds for a push to `dev`, publication
+shall update the moving
+portable distribution at `https://kisev.github.io/skills/dev` and publish one
+unique `@kisev/skills-opencode` prerelease under npm dist-tag `dev`. The snapshot
+version shall combine the maintained stable base, workflow run number, and source
+revision without selecting a future stable SemVer. Development publication shall
+not create a GitHub Release or change npm `latest`.
+
+#### Verification
+
+Workflow and release tests verify the `dev` trigger, version derivation, npm
+dist-tag, Pages subpath, and isolation from stable publication.

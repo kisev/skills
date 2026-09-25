@@ -41,8 +41,23 @@ npx --yes skills@latest add https://kisev.github.io/skills --list
 URL GitHub Pages - поддерживаемый обновляемый канал стабильных выпусков. Его
 метаданные указывают выпуск и ревизию исходников, а индекс Pages связывает каждый
 архив с контрольной суммой SHA-256. Текущий GitHub Release доступен по адресу
-`https://github.com/kisev/skills/releases/latest`. Исходный репозиторий намеренно
-не используется для установки.
+`https://github.com/kisev/skills/releases/latest`. Исходное дерево `skills/`
+намеренно не используется как публичный источник установки;
+`.agents/skills/project-release` предназначен только для сопровождающего этого
+репозитория.
+
+### Установка dev-канала
+
+Замените стабильный источник на явный источник `/dev`:
+
+```shell
+npx --yes skills@latest add https://kisev.github.io/skills/dev --agent opencode --agent codex --skill '*' --copy --global --yes
+```
+
+Обновляемый dev-канал публикуется после успешных push в `dev`. Его техническая
+версия указывает запуск workflow и ревизию исходников, а не предсказывает
+следующий стабильный выпуск. Чтобы вернуться на stable, повторите команду `add`
+со стабильным URL.
 
 ## Обновление
 
@@ -107,6 +122,8 @@ npx --yes skills@latest list --global
   `https://kisev.github.io/skills`; сведения о происхождении исходников записаны
   в его метаданных выпуска и доступны через
   `https://github.com/kisev/skills/releases/latest`.
+- Dev-дистрибутив доступен по явному адресу
+  `https://kisev.github.io/skills/dev`; сохраняется только его текущий снимок.
 - Стабильный установщик переносимых навыков - `npx --yes skills@latest`.
 - Обновления не удаляют устаревшие имена автоматически.
 - Навыки не заменяют правила репозитория, проверку кода, поиск секретов и
