@@ -4916,7 +4916,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         class Opener:
             def open(self, request: Request, *, timeout: int) -> Response:
                 seen.append(request)
-                case.assertEqual(timeout, 30)
+                case.assertEqual(timeout, module.DEFAULT_HTTP_TIMEOUT_SECONDS)
                 return Response()
 
         with patch.object(module.urllib.request, "build_opener", return_value=Opener()):
@@ -4928,6 +4928,84 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(seen[0].get_method(), "GET")
         self.assertEqual(seen[0].full_url, "https://chat.example/api/v4/users/me")
         self.assertIsNone(module.NoRedirect().redirect_request())
+
+    def test_team_evidence_store_resumes_built_collector_through_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "state"
+            state.mkdir(mode=0o700)
+            binroot = Path(temporary) / "bin"
+            binroot.mkdir()
+            fake_glab = binroot / "glab"
+            fake_glab.write_text(
+                "#!/bin/sh\n"
+                'case "$2" in *merge_requests*) echo "[{\\"id\\":1,\\"iid\\":1,'
+                '\\"title\\":\\"MR 1\\",\\"merged_at\\":\\"2026-09-02T00:00:00Z\\",'
+                '\\"author\\":{\\"username\\":\\"a\\"},\\"web_url\\":\\"u\\"}]";; *) echo "[]";; esac\n',
+                encoding="utf-8",
+            )
+            fake_glab.chmod(0o755)
+            environment = {
+                "XDG_STATE_HOME": str(state),
+                "PATH": f"{binroot}:{os.environ.get('PATH', '')}",
+            }
+            output = Path(temporary) / "metrics.json"
+            common = (
+                "--hostname",
+                "gitlab.example.test",
+                "--since",
+                "2026-09-01T00:00:00Z",
+                "--until",
+                "2026-09-25T00:00:00Z",
+                "--project",
+                "101=Example",
+                "--resume-profile",
+                "pipelines",
+                "--output",
+                str(output),
+            )
+            first = self.run_script(
+                "team-retro", "gitlab_period_metrics.py", *common, env=environment
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+            document = json.loads(output.read_text(encoding="utf-8"))
+            self.assertTrue(document["complete"])
+            self.assertEqual(document["resume"]["profile"], "pipelines")
+            self.assertEqual(
+                document["resume"]["projects"]["101"]["collected"],
+                [{"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}],
+            )
+
+            output.unlink()
+            fake_glab.write_text("#!/bin/sh\necho '[]'\n", encoding="utf-8")
+            second = self.run_script(
+                "team-retro", "gitlab_period_metrics.py", *common, env=environment
+            )
+            self.assertEqual(second.returncode, 0, second.stderr)
+            reused = json.loads(output.read_text(encoding="utf-8"))
+            self.assertTrue(reused["complete"])
+            self.assertEqual(
+                reused["resume"]["projects"]["101"]["reused"],
+                [{"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}],
+            )
+            self.assertEqual(reused["resume"]["projects"]["101"]["collected"], [])
+            self.assertEqual(len(reused["projects"][0]["sources"]["merge_requests"]["items"]), 1)
+
+            shown = self.run_script(
+                "team-retro",
+                "evidence_store.py",
+                "evidence-show",
+                "--profile",
+                "pipelines",
+                "--since",
+                "2026-09-01T00:00:00Z",
+                "--until",
+                "2026-09-25T00:00:00Z",
+                env=environment,
+            )
+            self.assertEqual(shown.returncode, 0, shown.stderr)
+            provenance = json.loads(shown.stdout)
+            self.assertEqual(provenance["sources"][0]["window_coverage"], "complete")
+            self.assertEqual(provenance["sources"][0]["location"], "gitlab.example.test")
 
     def test_mattermost_auth_and_cache_confirmation_are_one_use_and_redact_secret(self) -> None:
         module = self.mattermost_module("confirm")

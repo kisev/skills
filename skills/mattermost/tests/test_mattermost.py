@@ -943,3 +943,111 @@ class MattermostTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TimeoutTests(unittest.TestCase):
+    def test_client_rejects_out_of_range_timeout(self):
+        for value in (0, -1, MODULE.MAX_HTTP_TIMEOUT_SECONDS + 1):
+            with self.assertRaises(MODULE.MattermostError):
+                MODULE.Client("https://chat.example.com", "secret", timeout_seconds=value)
+
+    def test_client_maps_request_timeouts_to_retryable_error(self):
+        client = MODULE.Client("https://chat.example.com", "secret", timeout_seconds=5)
+        timeout = urllib.error.URLError(TimeoutError())
+        with mock.patch.object(client, "opener") as opener:
+            opener.open.side_effect = timeout
+            with self.assertRaises(MODULE.MattermostTimeout) as raised:
+                client.get("/users/me")
+        self.assertIn("timed out after 5 seconds", str(raised.exception))
+
+    def test_read_channel_reports_network_timeout_as_retryable(self):
+        client = FakeClient(
+            handler=lambda _path: (_ for _ in ()).throw(
+                MODULE.MattermostTimeout("Mattermost request timed out after 5 seconds")
+            )
+        )
+        posts, complete, _pages, errors, _warnings = MODULE.read_channel(
+            client, {"id": CHANNEL_ID}, 0, 1000
+        )
+        self.assertFalse(complete)
+        self.assertEqual([], posts)
+        self.assertEqual("network_timeout", errors[0]["code"])
+        self.assertTrue(errors[0]["retryable"])
+
+    def test_cli_timeout_flag_is_validated_and_passed_to_reader(self):
+        completed = {
+            **MODULE.result_base(scope="post"),
+            "status": "ok",
+            "complete": True,
+            "posts": [],
+        }
+        output = io.StringIO()
+        with (
+            mock.patch.object(MODULE, "read_one", return_value=completed) as read_one,
+            contextlib.redirect_stdout(output),
+        ):
+            exit_code = MODULE.main(
+                ["read", f"https://chat.example.com/team/pl/{'p' * 26}", "--timeout", "5"]
+            )
+        self.assertEqual(0, exit_code)
+        self.assertEqual(5, read_one.call_args.kwargs["timeout_seconds"])
+
+        rejected = io.StringIO()
+        with (
+            mock.patch.object(MODULE, "read_one", return_value=completed),
+            contextlib.redirect_stdout(rejected),
+        ):
+            exit_code = MODULE.main(
+                ["read", f"https://chat.example.com/team/pl/{'p' * 26}", "--timeout", "0"]
+            )
+        self.assertEqual(2, exit_code)
+        self.assertEqual("invalid_input", json.loads(rejected.getvalue())["errors"][0]["code"])
+
+    def test_read_many_continues_after_a_timed_out_target(self):
+        slow_channel = "s" * 26
+
+        def handler(path):
+            if path == "/users/me":
+                return {"id": USER_ID}
+            if path == "/teams/name/team":
+                return {"id": TEAM_ID}
+            if path == "/teams/name/team/channels/name/slow":
+                raise MODULE.MattermostTimeout("Mattermost request timed out after 5 seconds")
+            if path == f"/teams/{TEAM_ID}/channels/name/slow":
+                return {"id": slow_channel, "type": "O", "name": "slow"}
+            if path == f"/teams/{TEAM_ID}/channels/name/dev":
+                return {"id": CHANNEL_ID, "type": "O", "name": "dev"}
+            if path.startswith(f"/channels/{slow_channel}/posts?"):
+                raise MODULE.MattermostTimeout("Mattermost request timed out after 5 seconds")
+            if path.startswith(f"/channels/{CHANNEL_ID}/posts?"):
+                return {"order": [], "posts": {}}
+            self.fail(f"unexpected GET {path}")
+            return None
+
+        client = FakeClient(handler=handler)
+        output = io.StringIO()
+        with (
+            mock.patch.object(MODULE, "read_token", return_value="secret"),
+            mock.patch.object(MODULE, "Client", return_value=client),
+            contextlib.redirect_stdout(output),
+        ):
+            exit_code = MODULE.main(
+                [
+                    "read-many",
+                    "https://chat.example.com/team/channels/slow",
+                    "https://chat.example.com/team/channels/dev",
+                    "--since",
+                    "1970-01-01T00:00:00+00:00",
+                    "--no-cache",
+                    "--timeout",
+                    "5",
+                ]
+            )
+
+        result = json.loads(output.getvalue())
+        self.assertEqual(1, exit_code)
+        self.assertEqual("partial", result["status"])
+        self.assertEqual("network_timeout", result["targets"][0]["errors"][0]["code"])
+        self.assertTrue(result["targets"][0]["errors"][0]["retryable"])
+        self.assertEqual("ok", result["targets"][1]["status"])
+        self.assertEqual([], result["targets"][1]["errors"])

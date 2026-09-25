@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import selectors
@@ -598,6 +599,299 @@ def parse_project(value: str) -> Project:
     return Project(key=key.strip(), name=name.strip() if separator and name.strip() else None)
 
 
+_EVIDENCE_STORE: dict[str, Any] = {}
+
+
+def evidence_store_module() -> Any:
+    if "module" not in _EVIDENCE_STORE:
+        path = Path(__file__).with_name("evidence_store.py")
+        if not path.exists():
+            path = next(
+                parent / "evidence_store.py"
+                for parent in Path(__file__).resolve().parents
+                if (parent / "evidence_store.py").is_file()
+            )
+        spec = importlib.util.spec_from_file_location("evidence_store", path)
+        if spec is None or spec.loader is None:
+            raise MetricsError("evidence store runtime is unavailable")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        _EVIDENCE_STORE["module"] = module
+    return _EVIDENCE_STORE["module"]
+
+
+def snapshot_document(
+    hostname: str,
+    project: Project,
+    since: datetime,
+    until: datetime,
+    source_results: dict[str, JsonObject],
+) -> bytes:
+    document = {
+        "schema_version": SCHEMA_VERSION,
+        "hostname": hostname,
+        "period": {
+            "since": format_instant(since),
+            "until": format_instant(until),
+            "semantics": "[since, until)",
+        },
+        "project": {"project_id": project.key, "project_name": project.name},
+        "sources": source_results,
+    }
+    return json.dumps(document, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+
+
+def resume_collect_metrics(
+    projects: Sequence[Project],
+    sources: Sequence[str],
+    since: datetime,
+    until: datetime,
+    hostname: str,
+    profile: str,
+    *,
+    per_page: int = DEFAULT_PER_PAGE,
+    workers: int = DEFAULT_WORKERS,
+    max_pages: int = DEFAULT_MAX_PAGES,
+    max_elements: int = DEFAULT_MAX_ELEMENTS,
+    runner: Runner = default_runner,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    refresh: bool = False,
+) -> JsonObject:
+    if since >= until:
+        raise MetricsError("--since must be earlier than --until")
+    if not 1 <= per_page <= MAX_PER_PAGE:
+        raise MetricsError(f"--per-page must be between 1 and {MAX_PER_PAGE}")
+    if not 1 <= workers <= MAX_WORKERS:
+        raise MetricsError(f"--workers must be between 1 and {MAX_WORKERS}")
+    if max_pages < 1:
+        raise MetricsError("--max-pages must be positive")
+    if max_elements < 1:
+        raise MetricsError("--max-elements must be positive")
+    store = evidence_store_module()
+    source_set = frozenset(sources)
+    keys = {project.key: f"gitlab:{hostname}:{project.key}" for project in projects}
+    plans: dict[str, JsonObject] = {}
+    missing: dict[str, list[tuple[datetime, datetime]]] = {}
+    try:
+        for project in projects:
+            plan = store.plan_windows(
+                profile,
+                keys[project.key],
+                since,
+                until,
+                required_sources=source_set,
+                now=now(),
+            )
+            if refresh:
+                plan = {
+                    **plan,
+                    "reusable_windows": [],
+                    "missing_windows": [
+                        {"since": format_instant(since), "until": format_instant(until)}
+                    ],
+                }
+            plans[project.key] = plan
+            missing[project.key] = [
+                (parse_instant(window["since"]), parse_instant(window["until"]))
+                for window in plan["missing_windows"]
+            ]
+    except ValueError as exc:
+        raise MetricsError(f"evidence store rejected the plan: {exc}") from exc
+    client = GlabClient(
+        hostname,
+        per_page=per_page,
+        max_pages=max_pages,
+        max_elements=max_elements,
+        runner=runner,
+    )
+    tasks = [
+        (project_index, window_index, project, source, window)
+        for project_index, project in enumerate(projects)
+        for window_index, window in enumerate(missing[project.key])
+        for source in sources
+    ]
+    results: dict[tuple[int, str, int], JsonObject] = {}
+    if tasks:
+        with ThreadPoolExecutor(
+            max_workers=min(workers, len(tasks)),
+            thread_name_prefix="gitlab-metrics",
+        ) as executor:
+            futures = {
+                executor.submit(collect_source, client, project, source, window[0], window[1]): (
+                    project_index,
+                    source,
+                    window_index,
+                )
+                for project_index, window_index, project, source, window in tasks
+            }
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()
+    resume_projects: dict[str, JsonObject] = {}
+    project_results: list[JsonObject] = []
+    all_errors: list[JsonObject] = []
+    for project_index, project in enumerate(projects):
+        windows = missing[project.key]
+        collected: list[JsonObject] = []
+        incomplete: list[JsonObject] = []
+        complete_windows: set[int] = set()
+        window_results: dict[int, dict[str, JsonObject]] = {
+            window_index: {} for window_index in range(len(windows))
+        }
+        for window_index, window in enumerate(windows):
+            complete_window = True
+            for source in sources:
+                source_result = results.get((project_index, source, window_index))
+                if source_result is None:
+                    complete_window = False
+                    continue
+                window_results[window_index][source] = source_result
+                complete_window = complete_window and bool(source_result["complete"])
+            entry = {
+                "since": format_instant(window[0]),
+                "until": format_instant(window[1]),
+            }
+            if complete_window and window_results[window_index]:
+                document = snapshot_document(
+                    hostname,
+                    project,
+                    window[0],
+                    window[1],
+                    window_results[window_index],
+                )
+                try:
+                    store.record_coverage(
+                        profile,
+                        keys[project.key],
+                        "gitlab-metrics",
+                        hostname,
+                        since=window[0],
+                        until=window[1],
+                        complete=True,
+                        evidence=document,
+                        label=f"GitLab metrics for {project.name or project.key}",
+                        now=now(),
+                    )
+                except (OSError, ValueError) as exc:
+                    raise MetricsError(f"evidence store write failed: {exc}") from exc
+                complete_windows.add(window_index)
+                collected.append(entry)
+            else:
+                try:
+                    store.record_coverage(
+                        profile,
+                        keys[project.key],
+                        "gitlab-metrics",
+                        hostname,
+                        since=window[0],
+                        until=window[1],
+                        complete=False,
+                        label=f"GitLab metrics for {project.name or project.key}",
+                        now=now(),
+                    )
+                except (OSError, ValueError) as exc:
+                    raise MetricsError(f"evidence store write failed: {exc}") from exc
+                incomplete.append(entry)
+        merged = store.materialize_gitlab(
+            profile,
+            keys[project.key],
+            since,
+            until,
+            sources=source_set,
+            now=now(),
+        )
+        project_errors: list[JsonObject] = [
+            {
+                "project": project.key,
+                "source": "coverage",
+                "kind": str(error.get("kind", "coverage_gap")),
+                "message": str(error.get("message", "stored coverage gap")),
+                **({"windows": error["windows"]} if "windows" in error else {}),
+            }
+            for error in merged["errors"]
+        ]
+        source_items: dict[str, dict[str, Any]] = {
+            name: {
+                "complete": bool(result["complete"]),
+                "errors": [],
+                "count": int(result["count"]),
+                "items": list(result["items"]),
+            }
+            for name, result in merged["sources"].items()
+        }
+        source_failed: dict[str, bool] = {}
+        for window_index, _window in enumerate(windows):
+            if window_index in complete_windows:
+                continue
+            for source, source_result in window_results[window_index].items():
+                target = source_items.setdefault(
+                    source, {"complete": False, "errors": [], "count": 0, "items": []}
+                )
+                if not source_result["complete"]:
+                    source_failed[source] = True
+                    target["errors"].extend(source_result["errors"])
+                known = {
+                    str(item.get("id", item.get("iid", item.get("tag_name", item.get("name")))))
+                    for item in target["items"]
+                }
+                for item in source_result["items"]:
+                    identity = str(
+                        item.get("id", item.get("iid", item.get("tag_name", item.get("name"))))
+                    )
+                    if identity not in known:
+                        known.add(identity)
+                        target["items"].append(item)
+                        target["count"] += 1
+                for error in source_result["errors"]:
+                    project_errors.append(
+                        {
+                            "project": project.key,
+                            "source": source,
+                            "kind": str(error.get("kind", "fetch")),
+                            "message": str(error.get("message", "")),
+                        }
+                    )
+        for name, target in source_items.items():
+            target["items"] = sorted(
+                target["items"], key=lambda value: parse_instant(str(value["event_at"]))
+            )
+            target["complete"] = merged["complete"] and not source_failed.get(name, False)
+        project_results.append(
+            {
+                "project_id": project.key,
+                "project_name": project.name,
+                "complete": not project_errors and merged["complete"],
+                "errors": project_errors,
+                "sources": source_items,
+            }
+        )
+        all_errors.extend(project_errors)
+        resume_projects[project.key] = {
+            "key": keys[project.key],
+            "reused": plans[project.key]["reusable_windows"],
+            "collected": collected,
+            "incomplete": incomplete,
+        }
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "hostname": hostname,
+        "generated_at": format_instant(now()),
+        "period": {
+            "since": format_instant(since),
+            "until": format_instant(until),
+            "semantics": "[since, until)",
+        },
+        "workers": min(workers, len(tasks)) if tasks else 0,
+        "complete": not all_errors,
+        "errors": all_errors,
+        "projects": project_results,
+        "resume": {
+            "profile": profile,
+            "store": "${XDG_STATE_HOME:-~/.local/state}/agent-skills/team-evidence",
+            "projects": resume_projects,
+        },
+    }
+
+
 def write_result(result: JsonObject, output: Path | None) -> None:
     rendered = json.dumps(result, ensure_ascii=False, indent=2) + "\n"
     if output is None:
@@ -645,6 +939,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES)
     parser.add_argument("--max-elements", type=int, default=DEFAULT_MAX_ELEMENTS)
+    parser.add_argument(
+        "--resume-profile",
+        help=(
+            "Collect only windows missing from the profile evidence store, "
+            "reuse stored complete coverage, and record the new coverage"
+        ),
+    )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="With --resume-profile: ignore reusable coverage and re-collect the full window",
+    )
     parser.add_argument("--output", type=Path, help="Write JSON atomically to this file")
     return parser
 
@@ -655,17 +961,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         since = parse_instant(arguments.since)
         until = parse_instant(arguments.until)
-        result = collect_metrics(
-            arguments.project,
-            arguments.source or SOURCE_NAMES,
-            since,
-            until,
-            arguments.hostname,
-            per_page=arguments.per_page,
-            workers=arguments.workers,
-            max_pages=arguments.max_pages,
-            max_elements=arguments.max_elements,
-        )
+        if arguments.resume_profile:
+            result = resume_collect_metrics(
+                arguments.project,
+                arguments.source or SOURCE_NAMES,
+                since,
+                until,
+                arguments.hostname,
+                arguments.resume_profile,
+                per_page=arguments.per_page,
+                workers=arguments.workers,
+                max_pages=arguments.max_pages,
+                max_elements=arguments.max_elements,
+                refresh=arguments.refresh,
+            )
+        else:
+            result = collect_metrics(
+                arguments.project,
+                arguments.source or SOURCE_NAMES,
+                since,
+                until,
+                arguments.hostname,
+                per_page=arguments.per_page,
+                workers=arguments.workers,
+                max_pages=arguments.max_pages,
+                max_elements=arguments.max_elements,
+            )
         write_result(result, arguments.output)
     except MetricsError as exc:
         parser.error(str(exc))

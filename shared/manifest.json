@@ -307,6 +307,22 @@
       "destination": "team-roadmap/scripts/gitlab_period_metrics.py"
     },
     {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-retro/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-roadmap/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-sprint-start/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-sprint-close/scripts/evidence_store.py"
+    },
+    {
       "source": "references/work_item_runtime/__init__.py",
       "destination": "task-triage/scripts/portable_runtime/__init__.py"
     },

@@ -478,3 +478,154 @@ def test_default_runner_rejects_oversized_response(monkeypatch: Any) -> None:
     monkeypatch.setattr(metrics, "MAX_RESPONSE_BYTES", 8)
     with pytest.raises(metrics.MetricsError, match="size limit"):
         metrics.default_runner([sys.executable, "-c", "print('123456789')"])
+
+
+class WindowRunner:
+    """Serve merge requests whose merged_at is at or after the queried window."""
+
+    def __init__(self, events: list[tuple[int, str]], *, fail: bool = False) -> None:
+        self.events = events
+        self.fail = fail
+        self.calls: list[str] = []
+
+    def __call__(self, command: list[str]) -> subprocess.CompletedProcess[str]:
+        self.calls.append(command[2])
+        source = urlsplit(command[2]).path.split("/", 2)[-1]
+        if source != "merge_requests":
+            return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+        query = parse_qs(urlsplit(command[2]).query)
+        since = query.get("updated_after", ["1970-01-01T00:00:00Z"])[0]
+        if self.fail:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="boom")
+        items = [
+            merge_request(item_id, timestamp)
+            for item_id, timestamp in self.events
+            if timestamp >= since
+        ]
+        return subprocess.CompletedProcess(command, 0, stdout=json.dumps(items), stderr="")
+
+
+def collect_resume(
+    runner: WindowRunner,
+    since: str,
+    until: str,
+    *,
+    refresh: bool = False,
+    sources: list[str] | None = None,
+) -> dict[str, Any]:
+    return cast(
+        "dict[str, Any]",
+        metrics.resume_collect_metrics(
+            [metrics.Project("101", "Example")],
+            sources or ["merge_requests"],
+            metrics.parse_instant(since),
+            metrics.parse_instant(until),
+            "gitlab.example.test",
+            "resume-test",
+            per_page=100,
+            workers=2,
+            runner=runner,
+            refresh=refresh,
+        ),
+    )
+
+
+def test_resume_reuses_complete_windows_without_refetching(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    events = [(1, "2026-09-02T00:00:00Z"), (2, "2026-09-20T00:00:00Z")]
+    first = WindowRunner(events)
+    result = collect_resume(first, "2026-09-01", "2026-09-25")
+    assert result["complete"]
+    assert result["projects"][0]["sources"]["merge_requests"]["count"] == 2
+    assert len(first.calls) > 0
+    assert result["resume"]["projects"]["101"]["collected"] == [
+        {"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}
+    ]
+
+    second = WindowRunner(events)
+    repeated = collect_resume(second, "2026-09-01", "2026-09-25")
+    assert repeated["complete"]
+    assert second.calls == []
+    assert repeated["projects"][0]["sources"]["merge_requests"]["count"] == 2
+    assert repeated["resume"]["projects"]["101"]["reused"] == [
+        {"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}
+    ]
+
+
+def test_resume_collects_only_the_missing_delta_when_the_period_grows(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    events = [
+        (1, "2026-09-02T00:00:00Z"),
+        (2, "2026-09-20T00:00:00Z"),
+        (3, "2026-09-28T00:00:00Z"),
+    ]
+    first = WindowRunner(events)
+    collect_resume(first, "2026-09-01", "2026-09-25")
+    assert len(first.calls) > 0
+
+    second = WindowRunner(events)
+    extended = collect_resume(second, "2026-09-01", "2026-10-01")
+    assert extended["complete"]
+    assert extended["projects"][0]["sources"]["merge_requests"]["count"] == 3
+    resumed = extended["resume"]["projects"]["101"]
+    assert resumed["reused"] == [{"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}]
+    assert resumed["collected"] == [
+        {"since": "2026-09-25T00:00:00Z", "until": "2026-10-01T00:00:00Z"}
+    ]
+    assert len(second.calls) > 0
+    updated_after = parse_qs(urlsplit(second.calls[0]).query)["updated_after"][0]
+    assert updated_after == "2026-09-25T00:00:00Z"
+
+
+def test_resume_keeps_partial_evidence_and_recollects_incomplete_windows(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    failing = WindowRunner([], fail=True)
+    partial = collect_resume(failing, "2026-09-01", "2026-09-25")
+    assert not partial["complete"]
+    assert partial["projects"][0]["sources"]["merge_requests"]["errors"]
+    assert partial["resume"]["projects"]["101"]["incomplete"] == [
+        {"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}
+    ]
+
+    healthy = WindowRunner([(1, "2026-09-02T00:00:00Z")])
+    recovered = collect_resume(healthy, "2026-09-01", "2026-09-25")
+    assert recovered["complete"]
+    assert len(healthy.calls) > 0
+    assert recovered["resume"]["projects"]["101"]["incomplete"] == []
+
+
+def test_resume_refresh_ignores_stored_coverage(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    events = [(1, "2026-09-02T00:00:00Z")]
+    first = WindowRunner(events)
+    collect_resume(first, "2026-09-01", "2026-09-25")
+    refreshed_runner = WindowRunner(events)
+    refreshed = collect_resume(refreshed_runner, "2026-09-01", "2026-09-25", refresh=True)
+    assert refreshed["complete"]
+    assert len(refreshed_runner.calls) > 0
+    assert refreshed["resume"]["projects"]["101"]["reused"] == []
+    assert refreshed["resume"]["projects"]["101"]["collected"] == [
+        {"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}
+    ]
+
+
+def test_resume_recollects_when_requested_sources_exceed_snapshot_coverage(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    events = [(1, "2026-09-02T00:00:00Z")]
+    first = WindowRunner(events)
+    collect_resume(first, "2026-09-01", "2026-09-25")
+
+    wider = WindowRunner(events)
+    result = collect_resume(wider, "2026-09-01", "2026-09-25", sources=["merge_requests", "tags"])
+    assert result["complete"]
+    assert len(wider.calls) > 0
+    assert result["resume"]["projects"]["101"]["reused"] == []
+    assert "tags" in result["projects"][0]["sources"]

@@ -47,9 +47,12 @@ late edits or deletes remain stale until an explicit `--refresh`.
 ## Errors, Partial, Escalation
 
 Auth, pagination, or repeated-page failures produce partial or blocked status.
-Publication progress is durable. An ambiguous upload blocks retry and may leave
-an unattached server file; an ambiguous post requires manual inspect and is never
-replayed by the agent.
+A GET request that exceeds its configured timeout is reported as a retryable
+`network_timeout` error scoped to the affected target; `read-many` continues
+reading the remaining URLs and the timed-out URL is re-runnable from the
+coverage cache. Publication progress is durable. An ambiguous upload blocks
+retry and may leave an unattached server file; an ambiguous post requires
+manual inspect and is never replayed by the agent.
 
 ## Unique Constraints
 
@@ -78,6 +81,14 @@ The skill shall perform bounded GET reads, preserve safe evidence on partial
 failure, and prepare digest-bound manual message publications without invoking
 their apply or inspect commands. Only the separate helper may perform bounded
 POST requests for one confirmed message action.
+
+### REQ-F-513 - Bound network reads with a configurable per-request timeout
+
+The skill shall bound every GET request by a configurable timeout of at most
+600 seconds, defaulting to 60, report exceeded timeouts as retryable
+`network_timeout` errors scoped to one target, and continue a multi-target
+read past a timed-out target so the remaining targets are still read and the
+timed-out target can be resumed from the coverage cache.
 
 ## Example
 

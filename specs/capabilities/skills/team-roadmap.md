@@ -86,6 +86,14 @@ Mutation locking shall use non-blocking POSIX `flock` retries with a five-second
 monotonic deadline and reject a lock with more than one hardlink before changing
 its mode, while module import and read-only commands remain portable.
 
+### REQ-F-510 - Bind roadmap evidence to the incremental store
+
+The skill shall update roadmap outcomes only from bounded evidence. Roadmap
+updates shall record contributing sources in the private evidence store, render
+a data-sources section with exact locations, collected windows, completeness,
+and collection times, and snapshot the written document with its period and
+contributing source keys, as specified by REQ-F-509.
+
 ## Example
 
 `team-roadmap` emits a roadmap view and leaves task creation to an explicit action.

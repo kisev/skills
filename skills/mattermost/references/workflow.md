@@ -16,6 +16,13 @@ ISO-8601 timestamps and apply only to channels and chats. Their interval is
 start-inclusive and end-exclusive. The default starts at the user's local
 midnight and ends at the current time.
 
+`--timeout SECONDS` bounds every GET request; the default is 60 seconds and
+values above 600 are rejected. `read-many` continues past a source whose
+request times out: that target is returned with error code `network_timeout`
+and `retryable=true`, while the remaining URLs are still read. Re-run the
+exact URL to resume it from the coverage cache instead of repeating the bulk
+export.
+
 Reactions are fetched by default through separate GET requests and returned as
 exact `{emoji, user}` pairs. Use `--no-reactions` only when the user asks to omit
 them. Never interpret a reaction as approval or moderation.
@@ -153,7 +160,9 @@ Read JSON from stdout. Check `status`, `complete`, `scope`, `period`, `counts`,
 `pages`, `errors`, `warnings`, `cache_hit`, `cache_age`, and
 `access_revalidated` before using `posts` or `members`. A successful empty period
 is `status=ok`, `complete=true`, and `posts=[]`. Preserve partial evidence, but do
-not describe it as complete.
+not describe it as complete. A `network_timeout` error is retryable and covers
+only the affected target; other targets in the same `read-many` result are
+unaffected.
 
 Exit codes are `0` for complete success, `1` for a partial result, `2` for input
 or target errors, `3` for required authentication, and `4` for cache errors.

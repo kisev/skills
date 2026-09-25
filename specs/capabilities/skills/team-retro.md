@@ -23,9 +23,10 @@ draft the configured artifact, write it, verify, and report.
 
 ## Dependencies
 
-Shared team profile runtime, optional bounded GitLab metrics collector, declared
-evidence connectors, and owned local state. The metrics collector requires POSIX
-sessions, process groups, pipes, and file-descriptor selectors.
+Shared team profile runtime, the private per-profile evidence store, optional
+bounded GitLab metrics collector, declared evidence connectors, and owned local
+state. The metrics collector requires POSIX sessions, process groups, pipes,
+and file-descriptor selectors.
 
 ## Remote/Local Effects
 
@@ -83,6 +84,21 @@ sizes, ownership, and private permissions shall be verified before restoration.
 Mutation locking shall use non-blocking POSIX `flock` retries with a five-second
 monotonic deadline and reject a lock with more than one hardlink before changing
 its mode, while module import and read-only commands remain portable.
+
+### REQ-F-509 - Keep collected evidence incremental and provenance-bound
+
+Team skills shall keep collected evidence in a private per-profile store under
+XDG state with a coverage manifest and immutable content-addressed snapshots.
+The GitLab metrics collector with an explicit profile shall fetch only windows
+missing from stored complete coverage, merge the remaining windows from the
+store, and record each newly collected window; complete GitLab windows shall
+remain reusable without an age limit because terminal delivery timestamps
+never move, while an explicit refresh flag shall force full re-collection.
+Partial collections shall be recorded for provenance only and never reused as
+data. Every rendered artifact shall end with a data-sources section listing
+each contributing source's kind, exact location, collected window or point
+timestamp, completeness, and collection time, and every written artifact shall
+be snapshotted in the store with its period and contributing source keys.
 
 ## Example
 

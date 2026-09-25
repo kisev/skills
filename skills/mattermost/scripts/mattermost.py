@@ -49,6 +49,8 @@ SCHEMA_VERSION = 2
 CACHE_TTL_SECONDS = 300
 CACHE_SCHEMA_VERSION = 3
 CACHE_STABLE_AGE_SECONDS = 7 * 24 * 60 * 60
+DEFAULT_HTTP_TIMEOUT_SECONDS = 60
+MAX_HTTP_TIMEOUT_SECONDS = 600
 MAX_RESPONSE = 32 * 1024 * 1024
 MAX_PUBLICATION_FILE = 100 * 1024 * 1024
 PUBLICATION_TTL_SECONDS = 24 * 60 * 60
@@ -69,6 +71,10 @@ class AuthorizationRequired(MattermostError):
 
 class CacheError(MattermostError):
     """The local cache cannot be trusted."""
+
+
+class MattermostTimeout(MattermostError):
+    """A GET request exceeded its configured network timeout."""
 
 
 class ContractArgumentParser(argparse.ArgumentParser):
@@ -119,9 +125,9 @@ def result_base(
     }
 
 
-def fail(code: str, message: str, exit_code: int = 2) -> int:
+def fail(code: str, message: str, exit_code: int = 2, *, retryable: bool = False) -> int:
     result = result_base()
-    result["errors"] = [error_item(code, message)]
+    result["errors"] = [error_item(code, message, retryable=retryable)]
     emit(result)
     return exit_code
 
@@ -411,9 +417,20 @@ def normalized_target(target: dict[str, str | None]) -> dict[str, str | None]:
 
 
 class Client:
-    def __init__(self, origin: str, token: str):
+    def __init__(
+        self,
+        origin: str,
+        token: str,
+        *,
+        timeout_seconds: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
+    ):
+        if not 1 <= timeout_seconds <= MAX_HTTP_TIMEOUT_SECONDS:
+            raise MattermostError(
+                f"--timeout must be between 1 and {MAX_HTTP_TIMEOUT_SECONDS} seconds"
+            )
         self.origin = normalized_origin(origin)
         self.token = token
+        self.timeout_seconds = timeout_seconds
         self.opener = urllib.request.build_opener(NoRedirect())
 
     def get(self, path: str) -> object:
@@ -425,7 +442,7 @@ class Client:
             method="GET",
         )
         try:
-            with self.opener.open(request, timeout=30) as response:
+            with self.opener.open(request, timeout=self.timeout_seconds) as response:
                 data = response.read(MAX_RESPONSE + 1)
         except urllib.error.HTTPError as exc:
             if exc.code in {401, 403}:
@@ -434,7 +451,15 @@ class Client:
                 ) from exc
             raise MattermostError(f"Mattermost GET failed with HTTP {exc.code}") from exc
         except urllib.error.URLError as exc:
+            if isinstance(getattr(exc, "reason", None), TimeoutError):
+                raise MattermostTimeout(
+                    f"Mattermost request timed out after {self.timeout_seconds} seconds"
+                ) from exc
             raise MattermostError("Mattermost network request failed") from exc
+        except TimeoutError as exc:
+            raise MattermostTimeout(
+                f"Mattermost request timed out after {self.timeout_seconds} seconds"
+            ) from exc
         if len(data) > MAX_RESPONSE:
             raise MattermostError("Mattermost response exceeds the size limit")
         try:
@@ -1356,6 +1381,17 @@ def read_post(
         return posts, not malformed, errors, [], False, None
     except AuthorizationRequired:
         raise
+    except MattermostTimeout as exc:
+        if cache is not None and write_cache:
+            cache.put_thread(root_id, [post], current_ms, complete=False)
+        return (
+            [post],
+            False,
+            [error_item("network_timeout", str(exc), retryable=True)],
+            [warning("network_timeout", str(exc))],
+            False,
+            None,
+        )
     except MattermostError as exc:
         if isinstance(exc, CacheError):
             raise
@@ -1431,6 +1467,11 @@ def read_channel(
             posts, ordered, order, malformed = channel_post_page(value)
         except AuthorizationRequired:
             raise
+        except MattermostTimeout as exc:
+            complete = False
+            errors.append(error_item("network_timeout", str(exc), retryable=True))
+            warnings.append(warning("network_timeout", str(exc)))
+            break
         except MattermostError as exc:
             complete = False
             errors.append(
@@ -1777,11 +1818,12 @@ def read_one(
     write_cache: bool,
     *,
     include_reactions: bool = True,
+    timeout_seconds: int = DEFAULT_HTTP_TIMEOUT_SECONDS,
 ) -> dict[str, object]:
     target = classify_url(url)
     period = parse_period(since, until, allowed=target["kind"] != "post")
     token = read_token(str(target["origin"]))
-    client = Client(str(target["origin"]), token)
+    client = Client(str(target["origin"]), token, timeout_seconds=timeout_seconds)
     user_id = user_identity(client)
     access_post, access_channel = revalidate_access(client, target, user_id)
     current_ms = int(time.time() * 1000)
@@ -1898,12 +1940,14 @@ def read_one(
             cache.close()
 
 
-def collect_members(url: str) -> dict[str, object]:
+def collect_members(
+    url: str, *, timeout_seconds: int = DEFAULT_HTTP_TIMEOUT_SECONDS
+) -> dict[str, object]:
     target = classify_url(url)
     if target["kind"] == "post":
         raise MattermostError("members requires a channel, direct, or group chat URL")
     token = read_token(str(target["origin"]))
-    client = Client(str(target["origin"]), token)
+    client = Client(str(target["origin"]), token, timeout_seconds=timeout_seconds)
     user_id = user_identity(client)
     _, channel = revalidate_access(client, target, user_id)
     assert channel is not None
@@ -1925,6 +1969,11 @@ def collect_members(url: str) -> dict[str, object]:
             )
         except AuthorizationRequired:
             raise
+        except MattermostTimeout as exc:
+            complete = False
+            errors.append(error_item("network_timeout", str(exc), retryable=True))
+            warnings.append(warning("network_timeout", str(exc)))
+            break
         except MattermostError as exc:
             complete = False
             errors.append(
@@ -1983,6 +2032,12 @@ def collect_members(url: str) -> dict[str, object]:
             profile = client.get(f"/users/{urllib.parse.quote(user_id, safe='')}")
         except AuthorizationRequired:
             raise
+        except MattermostTimeout as exc:
+            complete = False
+            unresolved.append(user_id)
+            errors.append(error_item("network_timeout", str(exc), retryable=True))
+            warnings.append(warning("network_timeout", str(exc)))
+            continue
         except MattermostError as exc:
             complete = False
             unresolved.append(user_id)
@@ -2675,6 +2730,7 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--refresh", action="store_true")
     read.add_argument("--no-cache", action="store_true")
     read.add_argument("--no-reactions", action="store_true")
+    read.add_argument("--timeout", type=int, default=DEFAULT_HTTP_TIMEOUT_SECONDS)
     many = subparsers.add_parser("read-many")
     many.add_argument("urls", nargs="+")
     many.add_argument("--since")
@@ -2682,8 +2738,10 @@ def main(argv: list[str] | None = None) -> int:
     many.add_argument("--refresh", action="store_true")
     many.add_argument("--no-cache", action="store_true")
     many.add_argument("--no-reactions", action="store_true")
+    many.add_argument("--timeout", type=int, default=DEFAULT_HTTP_TIMEOUT_SECONDS)
     members = subparsers.add_parser("members")
     members.add_argument("url")
+    members.add_argument("--timeout", type=int, default=DEFAULT_HTTP_TIMEOUT_SECONDS)
     auth = subparsers.add_parser("auth")
     auth_subparsers = auth.add_subparsers(
         dest="auth_action", required=True, parser_class=ContractArgumentParser
@@ -2714,10 +2772,11 @@ def main(argv: list[str] | None = None) -> int:
             emit(
                 {
                     "schema_version": 1,
-                    "payload_version": "2.1.0",
+                    "payload_version": "2.2.0",
                     "mutation": "private-confirmed-only",
                     "dry_run": True,
                     "state_protocol": "origin-identity-segmented-history-cache",
+                    "http_timeout_seconds": DEFAULT_HTTP_TIMEOUT_SECONDS,
                     "external_tools": {"browser_auth": True},
                     "destructive_flags": ["auth apply --confirm", "cache clear --confirm"],
                     "external_mutations": False,
@@ -2808,7 +2867,11 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             return 0
-        if args.command in {"read", "read-many"}:
+        if args.command in {"read", "read-many", "members"}:
+            if not 1 <= args.timeout <= MAX_HTTP_TIMEOUT_SECONDS:
+                raise MattermostError(
+                    f"--timeout must be between 1 and {MAX_HTTP_TIMEOUT_SECONDS} seconds"
+                )
             if args.refresh and args.no_cache:
                 raise MattermostError("--refresh and --no-cache cannot be combined")
             read_cache, write_cache = (not args.no_cache and not args.refresh), not args.no_cache
@@ -2823,6 +2886,7 @@ def main(argv: list[str] | None = None) -> int:
                     read_cache,
                     write_cache,
                     include_reactions=not args.no_reactions,
+                    timeout_seconds=args.timeout,
                 )
                 emit(result)
                 return 0 if result["status"] == "ok" else 1 if result["status"] == "partial" else 2
@@ -2840,6 +2904,7 @@ def main(argv: list[str] | None = None) -> int:
                             read_cache,
                             write_cache,
                             include_reactions=not args.no_reactions,
+                            timeout_seconds=args.timeout,
                         )
                     )
                 except CacheError:
@@ -2849,6 +2914,13 @@ def main(argv: list[str] | None = None) -> int:
                         {
                             **result_base(target=url),
                             "errors": [error_item("authentication_required", str(exc))],
+                        }
+                    )
+                except MattermostTimeout as exc:
+                    results.append(
+                        {
+                            **result_base(target=url),
+                            "errors": [error_item("network_timeout", str(exc), retryable=True)],
                         }
                     )
                 except MattermostError as exc:
@@ -2896,7 +2968,7 @@ def main(argv: list[str] | None = None) -> int:
                 else 2
             )
         if args.command == "members":
-            result = collect_members(args.url)
+            result = collect_members(args.url, timeout_seconds=args.timeout)
             emit(result)
             return 0 if result["status"] == "ok" else 1 if result["status"] == "partial" else 2
         raise MattermostError("a supported subcommand is required")
@@ -2904,6 +2976,8 @@ def main(argv: list[str] | None = None) -> int:
         return fail("cache_error", str(exc), CACHE_ERROR_EXIT)
     except AuthorizationRequired as exc:
         return fail("authentication_required", str(exc), AUTH_REQUIRED)
+    except MattermostTimeout as exc:
+        return fail("network_timeout", str(exc), 2, retryable=True)
     except MattermostError as exc:
         return fail("invalid_input", str(exc))
 

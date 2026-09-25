@@ -32,7 +32,7 @@ skill instead of inventing flags. Collection is read-only.
 
 For a GitLab source with `actions.retro.use_gitlab_metrics: true`, run the
 bundled collector with one `--project ID=path` argument for every included
-GitLab project:
+GitLab project and the resolved profile name:
 
 ```shell
 python3 scripts/gitlab_period_metrics.py \
@@ -40,17 +40,30 @@ python3 scripts/gitlab_period_metrics.py \
   --since START_INCLUSIVE \
   --until END_EXCLUSIVE \
   --project ID=PROJECT_PATH \
+  --resume-profile PROFILE \
   --output METRICS_ROOT/gitlab-period-metrics.json
 ```
 
-Create a unique private temporary `METRICS_ROOT` for every run. Do not reuse
-another run's output. The collector reads GitLab through `glab`, paginates,
-deduplicates, and returns exit code `2` for partial evidence. It is POSIX-only:
-bounded subprocess cleanup relies on POSIX sessions, process groups, and file
+`METRICS_ROOT` remains a unique private temporary directory per run. The
+`--resume-profile` flag routes collection through the private evidence store
+under `${XDG_STATE_HOME:-~/.local/state}/agent-skills/team-evidence/<profile>/`:
+the collector fetches only windows missing from stored complete coverage,
+merges the remaining windows from content-addressed snapshots, and records
+each newly collected window. Complete GitLab windows stay reusable forever
+because `merged_at`, `closed_at`, `released_at`, and tag creation timestamps
+never move; late title or description edits are not observed unless
+`--refresh` forces a full re-collection. Read the output `resume` block:
+`reused` windows came from the store, `collected` windows were fetched now,
+and `incomplete` windows stayed partial and will be re-collected by the next
+run. Collection is read-only towards GitLab; the store is private user state.
+
+The collector reads GitLab through `glab`, paginates, deduplicates, and
+returns exit code `2` for partial evidence. It is POSIX-only: bounded
+subprocess cleanup relies on POSIX sessions, process groups, and file
 descriptor selectors. Unsupported capabilities produce structured partial
-errors rather than unbounded collection, including process creation and selector
-construction or registration failures. Once a process exists, setup failures
-also trigger bounded process-group cleanup.
+errors rather than unbounded collection, including process creation and
+selector construction or registration failures. Once a process exists, setup
+failures also trigger bounded process-group cleanup.
 
 Verify all of the following before calling the evidence complete:
 
@@ -60,6 +73,15 @@ Verify all of the following before calling the evidence complete:
 - `period.semantics` is `[since, until)` and boundaries match the request.
 - Every event exposes `event_at` and `time_source`.
 - Required delivery signals from the profile have a corresponding source.
+- `resume.incomplete` is empty and every `resume.projects` entry accounts for
+  the full requested period through `reused` and `collected` windows.
+
+Record every non-GitLab source that contributed evidence in the same store
+with `scripts/evidence_store.py evidence-record --profile PROFILE`:
+chats read through the mattermost skill as `--kind mattermost --location URL`
+with the exact read window or point timestamp, and local protocols, roadmap,
+or planning documents as `--kind file --location PATH`. These records carry
+provenance only; the mattermost skill keeps its own data cache.
 
 Retry only the failed bounded source when safe. If a gap remains, report the
 affected project, signal, and consequence; mark totals partial instead of
@@ -122,8 +144,27 @@ Keep each slide focused, reserve readable space for text, and express bullets as
 content come from the profile or current repository evidence, not this public
 skill.
 
-Write the complete artifact directly with `artifact-write`, then report the
-resulting path, diff summary, and conflicts. Do not modify image files and do not
+Every rendered artifact ends with a "Data sources" section in the artifact's
+language. Render it from `scripts/evidence_store.py evidence-show --profile
+PROFILE --since START_INCLUSIVE --until END_EXCLUSIVE`: one row per source that
+contributed evidence, with the kind, the exact location (URL or path), the
+collected `[since, until)` window or point timestamp, completeness, and
+`collected_at`. Name sources that were consulted but not recorded in the store
+with their exact URL or path and the consultation date. For Marp output this
+section is one compact final slide.
+
+Write the complete artifact directly with `artifact-write`, then snapshot it in
+the evidence store:
+
+```shell
+python3 scripts/evidence_store.py artifact-record \
+  --profile PROFILE --target ARTIFACT_PATH \
+  --since START_INCLUSIVE --until END_EXCLUSIVE \
+  --source SOURCE_KEY
+```
+
+Repeat `--source` for every contributing source key. Report the resulting
+path, diff summary, and conflicts. Do not modify image files and do not
 publish.
 
 ## 6. Verify and Report
@@ -133,9 +174,10 @@ missing or stale, inspect repository-native build help and ask before choosing a
 different command. Fix artifact errors and rerun verification.
 
 Report the artifact path, period, projects covered, evidence completeness,
-totals, external contributors, checks run, and every remaining limitation.
-Delete or retain private temporary evidence according to the user's instruction;
-never commit it by default.
+totals, external contributors, checks run, evidence-store coverage for the
+period (reused, collected, incomplete windows), and every remaining
+limitation. Delete or retain private temporary evidence according to the
+user's instruction; never commit it by default.
 
 Read `references/interaction-contract.md` for evidence and mutation rules
 and `references/language-policy.md` for user-facing prose.

@@ -191,6 +191,13 @@ def _read_optional_immutable(path: Path, boundary: Path) -> bytes | None:
         os.close(directory)
 
 
+def read_immutable(path: Path, boundary: Path) -> bytes:
+    """Read one immutable state file through safe traversal."""
+    if not path.exists():
+        raise FileNotFoundError(path)
+    return _read_immutable(path, boundary)
+
+
 def _snapshot(history: Path, suffix: str, content: bytes) -> Path:
     digest = content_digest(content)
     path = history / f"{digest}{suffix}"
@@ -286,6 +293,16 @@ def archive_json(path: Path, body: bytes, boundary: Path) -> Path:
     """Store one canonical JSON state version in a content-addressed history."""
     history = boundary / "history" / path.stem
     return _snapshot(history, ".json", body)
+
+
+def archive_bytes(boundary: Path, stem: str, suffix: str, body: bytes) -> Path:
+    """Store one immutable content-addressed file under a named history."""
+    if not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", stem):
+        raise StateArtifactError("archive history stem is invalid")
+    if suffix not in {".json", ".md"}:
+        raise StateArtifactError("archive history suffix is unsupported")
+    history = boundary / "history" / stem
+    return _snapshot(history, suffix, body)
 
 
 def xdg_state_home() -> Path:

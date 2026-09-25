@@ -29,11 +29,17 @@ confidence, discrepancy, and destination. Use all included profile projects and
 only declared sources or user-provided evidence.
 
 When `actions.roadmap.use_gitlab_metrics` is true, use
-`scripts/gitlab_period_metrics.py` exactly as described by the retro workflow:
-one project argument per included GitLab project, strict half-open boundaries,
-full pagination, timestamp provenance, and explicit partial status. Query
-tracker, document, or presentation sources through their declared tools and
-current installed help; do not invent commands or statuses.
+`scripts/gitlab_period_metrics.py` exactly as described by the retro workflow,
+including `--resume-profile PROFILE`: one project argument per included GitLab
+project, strict half-open boundaries, full pagination, timestamp provenance,
+and explicit partial status. The private evidence store reuses complete
+collected windows and fetches only the missing delta; read the output `resume`
+block to distinguish reused from newly collected windows. Query tracker,
+document, or presentation sources through their declared tools and current
+installed help; do not invent commands or statuses. Record every contributing
+non-GitLab source in the same store with `scripts/evidence_store.py
+evidence-record --profile PROFILE` (`--kind mattermost --location URL` for
+chats, `--kind file --location PATH` for local documents).
 
 Evidence precedence is factual, not aspirational. A delivery signal may prove
 an outcome even when a tracker state is stale, but record the discrepancy. A
@@ -82,9 +88,15 @@ owned location.
 
 ## 5. Write and Verify
 
-For a review, report findings and stop without writing. For an update, write the
-complete candidate document directly through `artifact-write`, then report
-changed periods, unresolved conflicts, evidence gaps, and checks.
+For a review, report findings and stop without writing. For an update, write
+the complete candidate document directly through `artifact-write`. When the
+update changes period outcomes, append or refresh a "Data sources" section
+rendered from `scripts/evidence_store.py evidence-show --profile PROFILE --since START_INCLUSIVE --until END_EXCLUSIVE`: one row per contributing
+source with the kind, exact location, collected window or point timestamp,
+completeness, and `collected_at`, in the document's language. Snapshot the
+written document with `scripts/evidence_store.py artifact-record --profile
+PROFILE --target DOCUMENT --since START --until END --source SOURCE_KEY`,
+then report changed periods, unresolved conflicts, evidence gaps, and checks.
 
 Run every applicable command in `actions.roadmap.verification_commands`. Prefer
 direct linting of the target path when repository wrappers ignore untracked

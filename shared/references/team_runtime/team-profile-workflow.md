@@ -94,6 +94,27 @@ Contradictory or ambiguous updates require one focused question. Time-dependent
 membership or policy changes should use effective dates or provenance rather
 than silently rewriting historical facts.
 
+## Evidence Store
+
+Team skills keep collected evidence in a private per-profile store under
+`${XDG_STATE_HOME:-~/.local/state}/agent-skills/team-evidence/<profile>/`.
+The store holds a coverage manifest and immutable content-addressed
+snapshots; directories and files are private to the user. Complete GitLab
+metrics windows are reusable forever because delivery timestamps never move;
+other source kinds reuse fresh coverage for 300 seconds and coverage older
+than seven days, mirroring the mattermost cache policy. Partial collections
+are recorded for provenance but never reused as data.
+
+Manage the store with `scripts/evidence_store.py`: `evidence-plan` reports
+reusable and missing windows, `evidence-record` appends coverage (with a JSON
+snapshot for complete collections), `evidence-show` renders provenance rows
+for an exact period, `evidence-materialize` rebuilds a merged GitLab metrics
+document from stored snapshots, and `artifact-record` snapshots a written
+workspace artifact with its period and contributing source keys. The bundled
+GitLab collector with `--resume-profile PROFILE` plans, fetches, records, and
+merges in one command; `--refresh` ignores reusable coverage for that run.
+Never store credentials, tokens, or attachment files in the store.
+
 ## Privacy and Boundaries
 
 Profiles and settings are local user configuration, created with directory mode

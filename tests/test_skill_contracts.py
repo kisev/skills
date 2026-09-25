@@ -219,6 +219,11 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
             "outcome - purpose",
             "external contributors",
             "verification_command",
+            "--resume-profile PROFILE",
+            "agent-skills/team-evidence/<profile>/",
+            "`resume.incomplete` is empty",
+            '"Data sources" section',
+            "artifact-record",
         ),
         "team-roadmap": (
             "evidence matrix",
@@ -226,6 +231,21 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
             "Every unfinished goal needs one explicit destination",
             "create issues, epics, milestones",
             "verification_commands",
+            "--resume-profile PROFILE",
+            '"Data sources" section',
+            "artifact-record",
+        ),
+        "team-sprint-start": (
+            '"Data sources" section',
+            "evidence-record",
+            "artifact-record",
+            "agent-skills/team-evidence",
+        ),
+        "team-sprint-close": (
+            '"Data sources" section',
+            "evidence-record",
+            "artifact-record",
+            "--resume-profile PROFILE",
         ),
         "slides-prompts-prepare": (
             "Theme and technical content are complementary layers",
@@ -241,6 +261,23 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
         )
         for marker in markers:
             assert marker in workflow, (name, marker)
+
+
+def test_team_profile_workflow_documents_the_evidence_store() -> None:
+    workflow = (ROOT / "shared/references/team_runtime/team-profile-workflow.md").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "agent-skills/team-evidence/<profile>/",
+        "evidence-plan",
+        "evidence-record",
+        "evidence-show",
+        "evidence-materialize",
+        "artifact-record",
+        "--resume-profile PROFILE",
+        "Never store credentials",
+    ):
+        assert marker in workflow, marker
 
 
 def test_team_profile_contract_is_distributed_without_private_values() -> None:
