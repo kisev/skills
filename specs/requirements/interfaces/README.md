@@ -9,8 +9,10 @@ with standards-valid frontmatter and explicit trigger boundaries. Its published
 archive shall expose root `SKILL.md`, portable referenced resources, and the
 shared interaction/evidence contract. Authored and built skill metadata shall not
 carry a version; release identity belongs to distribution metadata and archive
-digest. Every published skill shall carry the exact cleanup provenance marker
-`metadata.source: "https://kisev.github.io/skills"`. The `goal`, `task-prepare`, `task-review`, and `task-triage` skills shall
+digest. Stable skills shall carry cleanup provenance
+`metadata.source: "https://kisev.github.io/skills"`; dev skills shall carry
+`metadata.source: "https://kisev.github.io/skills/dev"`. The `goal`,
+`task-prepare`, `task-review`, and `task-triage` skills shall
 normalize their documented inputs to `work-item/v1` before semantic processing.
 
 ### REQ-I-002 - Command interface

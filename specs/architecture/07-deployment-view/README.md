@@ -1,10 +1,14 @@
 # Deployment View
 
-Validated release tags run the complete gate, then deploy a standard well-known
-index and content-addressed portable archives to `https://kisev.github.io/skills`
-and publish one preflighted `@kisev/skills-opencode` tarball. Remote bytes,
-registry signatures, and provenance are verified before the GitHub Release is
-created. Git contains deduplicated authored sources, not installable skills.
+Validated release tags run the complete gate, deploy the stable well-known
+distribution at `https://kisev.github.io/skills`, and publish one preflighted
+`@kisev/skills-opencode` tarball under npm `latest`. A push to `dev` runs the
+complete publication gate, then updates `https://kisev.github.io/skills/dev` and
+npm `dev` with a unique
+technical snapshot version. Every Pages artifact contains both channels so one
+deployment cannot erase the other. Stable remote bytes, registry signatures,
+and provenance are verified before the GitHub Release is created. Dev creates no
+GitHub Release. Git contains deduplicated authored sources, not installable skills.
 Runtime state is local to its declared global/project owner; ordinary tests and
 offline evals run without network or credentials.
 

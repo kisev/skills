@@ -56,6 +56,20 @@ npm install --save-exact @kisev/skills-opencode
 npx --yes @kisev/skills-opencode@latest install --global --dry-run
 ```
 
+### Dev-канал
+
+Явно укажите npm dist-tag `dev` и для постоянной зависимости, и для CLI
+установщика:
+
+```shell
+npm install --save-exact @kisev/skills-opencode@dev
+npx --yes @kisev/skills-opencode@dev install --dry-run
+```
+
+Каждый успешный push в `dev` публикует уникальную prerelease-версию и перемещает
+только dist-tag `dev`. Чтобы вернуться на стабильный канал, переустановите
+`@kisev/skills-opencode` без `@dev` и запустите стабильный CLI `@latest`.
+
 ## Выбор компонентов
 
 В TTY команда `install` открывает три группы: Skill command adapters, Fixed agents
@@ -250,6 +264,8 @@ npm uninstall @kisev/skills-opencode
   использует `.opencode` в текущем каталоге.
 - Установщик считает своими только файлы, для которых принадлежность подтверждена
   манифестами и точными контрольными суммами.
+- npm `latest` обозначает стабильный канал; npm `dev` - явно выбранный
+  обновляемый канал разработки, который не определяет следующую stable-версию.
 - Пакет распространяется по лицензии MIT. Текущий состав и проверки описаны в
   [инвентаре миграции](../migration-inventory.md) и
   [документе проверки](../verification.md).

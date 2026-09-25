@@ -19,6 +19,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  branch-policy:
+    name: Branch policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      EVENT_NAME: ${{ github.event_name }}
+      BASE_REF: ${{ github.base_ref }}
+      HEAD_REF: ${{ github.head_ref }}
+      HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+      REPOSITORY: ${{ github.repository }}
+      REF_NAME: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          fetch-depth: 0
+      - name: Require dev as the only source for main
+        run: |
+          if test "$EVENT_NAME" = pull_request && test "$BASE_REF" = main; then
+            test "$HEAD_REF" = dev
+            test "$HEAD_REPOSITORY" = "$REPOSITORY"
+          fi
+          if test "$EVENT_NAME" = push && test "$REF_NAME" = main; then
+            test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3
+            git merge-base --is-ancestor HEAD^2 origin/dev
+          fi
+
   skills-build:
     name: Materialize portable skills
     if: ${{ github.event.deleted != true }}
@@ -100,6 +126,7 @@ jobs:
     name: check
     if: ${{ always() }}
     needs:
+      - branch-policy
       - skills-build
       - quality
       - built-quality
@@ -110,12 +137,14 @@ jobs:
       SKILLS_BUILD_RESULT: ${{ needs.skills-build.result }}
       QUALITY_RESULT: ${{ needs.quality.result }}
       BUILT_QUALITY_RESULT: ${{ needs.built-quality.result }}
+      BRANCH_POLICY_RESULT: ${{ needs.branch-policy.result }}
     steps:
       - name: Require every CI gate
         run: |
           if test "$DELETED_REF" = true; then
             exit 0
           fi
+          test "$BRANCH_POLICY_RESULT" = success
           test "$SKILLS_BUILD_RESULT" = success
           test "$QUALITY_RESULT" = success
           test "$BUILT_QUALITY_RESULT" = success

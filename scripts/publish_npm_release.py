@@ -121,7 +121,10 @@ def manifest() -> tuple[dict[str, Any], Path]:
         value = json.loads((RELEASE / "release.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise PublicationError(f"cannot read release manifest: {error}") from error
-    if not isinstance(value, dict) or value.get("schema") != "@kisev/skills-release/v1":
+    if not isinstance(value, dict) or value.get("schema") not in {
+        "@kisev/skills-release/v1",
+        "@kisev/skills-dev/v1",
+    }:
         raise PublicationError("release manifest schema is invalid")
     npm = value.get("npm")
     if not isinstance(npm, dict) or not isinstance(npm.get("filename"), str):
@@ -149,6 +152,13 @@ def registry_url(name: str, version: str) -> str:
             urllib.parse.quote(version, safe=""),
         )
     )
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+def package_registry_url(name: str) -> str:
+    registry = os.environ.get("NPM_CONFIG_REGISTRY", "https://registry.npmjs.org/").rstrip("/")
+    parsed = require_https(registry, registry_base=True)
+    path = "/".join((parsed.path.rstrip("/"), urllib.parse.quote(name, safe="")))
     return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
 
 
@@ -211,7 +221,9 @@ def download_registry_tarball(
     return content
 
 
-def provenance_matches(document: dict[str, Any], expected_sha512: str, revision: str) -> bool:
+def provenance_matches(
+    document: dict[str, Any], expected_sha512: str, revision: str, workflow_path: str
+) -> bool:
     records = document.get("attestations") if document else None
     if not isinstance(records, list):
         return False
@@ -241,7 +253,7 @@ def provenance_matches(document: dict[str, Any], expected_sha512: str, revision:
         )
         workflow_matches = (
             isinstance(workflow, dict)
-            and workflow.get("path") == ".github/workflows/publish.yml"
+            and workflow.get("path") == workflow_path
             and workflow.get("repository") == "https://github.com/kisev/skills"
         )
         revision_matches = isinstance(dependencies, list) and any(
@@ -264,6 +276,7 @@ def verify_provenance(
     *,
     deadline: float | None = None,
     metadata_url: str | None = None,
+    workflow_path: str = ".github/workflows/publish.yml",
 ) -> None:
     def read() -> bool | None:
         nonlocal metadata
@@ -288,7 +301,7 @@ def verify_provenance(
         document = request_json(attestations["url"])
         if document is None:
             return None
-        if not provenance_matches(document, expected_sha512, revision):
+        if not provenance_matches(document, expected_sha512, revision, workflow_path):
             raise PublicationError(
                 "npm provenance does not bind the artifact, workflow, and revision"
             )
@@ -335,6 +348,26 @@ def registry_smoke(name: str, version: str) -> None:
         command("npm", "audit", "signatures", "--json", cwd=root, env=env)
 
 
+def verify_dist_tag(name: str, version: str, dist_tag: str, *, deadline: float) -> None:
+    def read() -> bool | None:
+        metadata = request_json(package_registry_url(name))
+        if metadata is None:
+            return None
+        tags = metadata.get("dist-tags")
+        if not isinstance(tags, dict):
+            raise PublicationError("registry dist-tags metadata is missing")
+        observed = tags.get(dist_tag)
+        if observed == version:
+            return True
+        if observed is not None and not isinstance(observed, str):
+            raise PublicationError("registry dist-tag value is invalid")
+        return None
+
+    if wait_for_registry("dist-tag", read, PROPAGATION_ATTEMPTS, 5, deadline):
+        return
+    raise PublicationError(f"npm dist-tag {dist_tag!r} does not reference {version}")
+
+
 def publish() -> dict[str, Any]:
     require_trusted_publishing_npm()
     release, tarball = manifest()
@@ -346,6 +379,11 @@ def publish() -> dict[str, Any]:
         raise PublicationError("release version is invalid")
     if not isinstance(revision, str) or not revision:
         raise PublicationError("release identity is invalid")
+    schema = release.get("schema")
+    expected_tag = "dev" if schema == "@kisev/skills-dev/v1" else "latest"
+    dist_tag = os.environ.get("NPM_DIST_TAG", expected_tag)
+    if dist_tag != expected_tag:
+        raise PublicationError(f"manifest requires npm dist-tag {expected_tag!r}, got {dist_tag!r}")
     deadline = time.monotonic() + PROPAGATION_SECONDS
 
     def probe() -> tuple[dict[str, Any] | None]:
@@ -358,7 +396,16 @@ def publish() -> dict[str, Any]:
     metadata = observed[0]
     if metadata is None:
         try:
-            command("npm", "publish", str(tarball), "--access", "public", "--provenance")
+            command(
+                "npm",
+                "publish",
+                str(tarball),
+                "--access",
+                "public",
+                "--provenance",
+                "--tag",
+                dist_tag,
+            )
         except PublicationError:
             metadata = wait_for_metadata(name, version, deadline=deadline)
             if metadata is None:
@@ -383,6 +430,7 @@ def publish() -> dict[str, Any]:
         deadline=deadline,
         metadata_url=registry_url(name, version),
     )
+    verify_dist_tag(name, version, dist_tag, deadline=deadline)
     registry_smoke(name, version)
     return metadata
 

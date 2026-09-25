@@ -78,6 +78,16 @@ def test_release_stamp_is_portable_and_reproducible(
     )
 
 
+def test_dev_build_stamps_dev_source_without_changing_authored_sources(tmp_path: Path) -> None:
+    output = tmp_path / "built"
+    dev_source = "https://kisev.github.io/skills/dev"
+    assert build_skills.build(output, False, dev_source) == 0
+    for entrypoint in output.glob("*/SKILL.md"):
+        assert f'  source: "{dev_source}"' in entrypoint.read_text(encoding="utf-8")
+    for source in build_skills.SOURCES.glob("*/SKILL.source.md"):
+        assert f'  source: "{build_skills.STABLE_SOURCE_URL}"' in source.read_text(encoding="utf-8")
+
+
 def test_manifest_rejects_duplicate_missing_symlink_and_escape(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

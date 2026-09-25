@@ -2,7 +2,7 @@
 
 [Русский](../ru/reference/skill-catalog.md)
 
-The current stable release publishes 27 portable Agent Skills. Its release
+The current stable release publishes 28 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
 of `@kisev/skills-opencode`.

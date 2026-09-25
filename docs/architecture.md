@@ -40,6 +40,11 @@ manifest binds every Pages file and the exact npm tarball to the tag and source
 revision. The tag workflow runs the full gate, publishes and verifies Pages and
 npm, then creates the GitHub Release.
 
+A push to `dev` invokes the same publication workflow without a stable tag and
+runs the complete gate. It then derives a technical prerelease version, replaces
+only Pages `/dev`, and moves only npm dist-tag `dev`. Each Pages deployment
+composes the stable root and `/dev` so either channel preserves the other.
+
 ## Host Integration
 
 Portable skills are host-neutral and every published archive is self-contained.
@@ -116,5 +121,7 @@ publication, and history-rewrite confirmations.
 - Release checks bind the Pages version and source revision to the exact tag;
   publication promotes only preflighted artifacts and verifies both remote
   channels before creating the GitHub Release.
+- Development publication runs the complete gate for a `dev` push, verifies its
+  exact Pages and npm artifacts, and cannot update stable Pages or npm `latest`.
 - Work-item findings have stable ordering and reports bind item and evidence
   digests, so unchanged checks produce the same verdict.

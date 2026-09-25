@@ -292,6 +292,8 @@ def test_marker_runner_checks_exact_git_head(tmp_path: Path) -> None:
             "user.name=Test",
             "-c",
             "user.email=test@example.com",
+            "-c",
+            "commit.gpgsign=false",
             "commit",
             "-qm",
             "initial",

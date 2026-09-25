@@ -17,6 +17,7 @@ SOURCES = ROOT / "skills"
 MANIFEST = SHARED / "manifest.json"
 DEFAULT_OUTPUT = ROOT / ".build" / "skills"
 SOURCE_ENTRYPOINT = "SKILL.source.md"
+STABLE_SOURCE_URL = "https://kisev.github.io/skills"
 
 
 class BuildError(Exception):
@@ -124,6 +125,23 @@ def stamp_release(root: Path) -> None:
     target.write_text(text.replace(token, version), encoding="utf-8")
 
 
+def stamp_source(root: Path, source_url: str) -> None:
+    if source_url not in {STABLE_SOURCE_URL, f"{STABLE_SOURCE_URL}/dev"}:
+        raise BuildError("unsupported portable skill source URL")
+    marker = f'  source: "{STABLE_SOURCE_URL}"'
+    replacement = f'  source: "{source_url}"'
+    for skill in root.iterdir():
+        if not skill.is_dir() or skill.is_symlink():
+            continue
+        entrypoint = skill / "SKILL.md"
+        text = entrypoint.read_text(encoding="utf-8")
+        if marker not in text and source_url == STABLE_SOURCE_URL:
+            continue
+        if text.count(marker) != 1:
+            raise BuildError(f"portable source marker must occur exactly once: {skill.name}")
+        entrypoint.write_text(text.replace(marker, replacement), encoding="utf-8")
+
+
 def materialize(root: Path, entries: list[tuple[Path, Path]]) -> None:
     for source, relative in entries:
         target = root / relative
@@ -173,7 +191,7 @@ def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
                 raise BuildError(f"undeclared generated copy: {relative}")
 
 
-def build(output: Path, check: bool) -> int:
+def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int:
     entries = manifest_entries()
     check_sources(entries)
     if output.is_symlink():
@@ -186,6 +204,7 @@ def build(output: Path, check: bool) -> int:
     ) as temporary:
         staged = Path(temporary) / "skills"
         copy_source(staged)
+        stamp_source(staged, source_url)
         stamp_release(staged)
         materialize(staged, entries)
         check_materialized(staged, entries)
@@ -232,11 +251,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--source-url", default=STABLE_SOURCE_URL)
     args = parser.parse_args(argv)
     try:
         if args.output.is_symlink():
             raise BuildError("output must not be a symbolic link")
-        return build(args.output.absolute(), args.check)
+        return build(args.output.absolute(), args.check, args.source_url)
     except BuildError as error:
         parser.error(str(error))
     return 2

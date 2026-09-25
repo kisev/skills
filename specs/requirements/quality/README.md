@@ -117,3 +117,17 @@ properties as `not_checked` and shall not claim semantic quality or drift covera
 
 `tests/test_spec_validate.py` checks valid and invalid snapshots, explicit-baseline
 lifecycle transitions, deterministic JSON, unsafe inputs, and isolated execution.
+
+### REQ-Q-010 - Isolate publication channels
+
+Every Pages deployment shall contain both the stable root and moving `/dev`
+distribution. Stable publication may replace only the root channel; dev
+publication may replace only `/dev`. npm stable publication shall use `latest`,
+and npm development publication shall use `dev`. A workflow shall fail closed if
+the preserved channel cannot be validated and copied.
+
+#### Verification
+
+Composition tests preserve both paths, publication tests require the manifest's
+exact dist-tag, and deployed-channel verification checks version, revision, and
+every manifest-bound file.

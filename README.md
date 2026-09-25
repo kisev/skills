@@ -10,7 +10,7 @@ one on its own or install both for the complete OpenCode experience.
 
 | Component | What it provides | Lifecycle |
 | - | - | - |
-| Portable Agent Skills | 27 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
+| Portable Agent Skills | 28 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
 | `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
 Portable skills do not require the npm package. The package does not contain,
@@ -27,6 +27,9 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --ag
 ```
 
 The stable channel exposes current release metadata and digest-bound archives.
+To opt into the moving development channel instead, install from
+`https://kisev.github.io/skills/dev`; it updates after successful pushes to
+`dev` and does not change the stable installation source.
 Start with the [guided installation](docs/tutorials/getting-started.md), use the
 [portable skills how-to](docs/how-to/portable-skills.md) for project installs,
 updates, cleanup, and troubleshooting, or browse the
@@ -48,6 +51,9 @@ then preview its managed assets:
 npm install --save-exact @kisev/skills-opencode
 npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
+
+Use `@kisev/skills-opencode@dev` in both commands to opt into the current
+development snapshot.
 
 This only starts the mandatory flow. Apply the exact confirmation command from
 the preview, add the package to the user-owned OpenCode `plugin` entry, and
