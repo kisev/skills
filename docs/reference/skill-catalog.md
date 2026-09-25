@@ -22,6 +22,7 @@ of `@kisev/skills-opencode`.
 | `goal` | Produce a read-only structured Markdown goal of at most 4000 characters. |
 | `humanize` | Edit technical prose into direct, natural language. |
 | `mattermost` | Read and analyze a bounded Mattermost post, thread, channel, or chat. |
+| `mattermost-triage` | Find Mattermost conversations that need attention and prepare durable manual response plans. |
 | `mr-prepare` | Prepare metadata and a local publication plan for a GitLab MR. |
 | `release-prepare` | Prepare a release MR, inventory, announcement, and publication plan. |
 | `release-review` | Review a release MR for completeness and compatibility. |

@@ -5,7 +5,7 @@
 ### REQ-F-001 - Expose the verified capability surface
 
 The repository shall expose exactly the public inventory in
-`evals/contracts/public-surfaces.json`: 27 skills, 27 commands, 6 agents, 3
+`evals/contracts/public-surfaces.json`: 28 skills, 28 commands, 6 agents, 3
 selectable plugins, and 1 package tool.
 
 #### Verification

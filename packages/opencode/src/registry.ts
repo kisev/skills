@@ -22,6 +22,7 @@ const SKILL_NAMES = [
   "goal",
   "humanize",
   "mattermost",
+  "mattermost-triage",
   "mr-prepare",
   "release-prepare",
   "release-review",

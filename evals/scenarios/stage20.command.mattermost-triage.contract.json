@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "c8ad2a89b0ce7db978f60318a846763e804a5e07b38e2eb67146c0446c49178f",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:mattermost-triage"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.mattermost-triage.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:mattermost-triage"]
+    },
+    "prompt": "Verify command mattermost-triage contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.mattermost-triage.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

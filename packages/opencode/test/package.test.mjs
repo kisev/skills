@@ -317,9 +317,9 @@ async function install(scope, cwd, home) {
   return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
 }
 
-test("registry generates exactly twenty-seven thin skill command assets", () => {
-  assert.equal(COMMAND_REGISTRY.length, 27);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 27);
+test("registry generates exactly twenty-eight thin skill command assets", () => {
+  assert.equal(COMMAND_REGISTRY.length, 28);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 28);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
   for (const entry of COMMAND_REGISTRY) {
     assert.ok(skills.has(entry.skill), entry.skill);
@@ -487,11 +487,11 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     assert.deepEqual(second.operations, first.operations);
     assert.equal(second.plan_digest, first.plan_digest);
     assert.notEqual(second.confirmation_digest, first.confirmation_digest);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 36);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 37);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 27);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 28);
     await assert.rejects(lstat(join(home, ".config", "opencode", "plugins")), { code: "ENOENT" });
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), {
       code: "ENOENT",
@@ -583,7 +583,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", repeat.digest, project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 36);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 37);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -711,7 +711,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
     const changed = join(project, ".opencode", "commands", "askme.md");
     await writeFile(changed, "user change\n");
     const plan = await preview("uninstall", "project", project, home);
-    assert.ok(plan.operations.filter((item) => item.operation === "archive-pending").length >= 26);
+    assert.ok(plan.operations.filter((item) => item.operation === "archive-pending").length >= 27);
     assert.deepEqual(
       plan.operations.find((item) => item.path === "commands/askme.md").operation,
       "conflict",

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "a8eabec85d0b1c9bffea749a711292aca167558ba80ce958481f4d689b379883",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:mattermost-triage"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.mattermost-triage.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to mattermost-triage; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.mattermost-triage.near-miss.source",
+      "path": ".build/skills/mattermost-triage/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.mattermost-triage.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

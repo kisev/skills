@@ -19,6 +19,14 @@ planning decisions. Task review validates the same sidecar without owning state.
 Task preparation consumes a current accepted decision or requests scoped
 single-item triage; it does not duplicate release-policy interpretation.
 
+Mattermost triage selects the freshest bounded DM/GM set plus exact additional
+URLs for one origin and identity, collects the initial or incremental interval,
+and resolves complete threads before classifying attention, mentions, uncertainty,
+confidence, and closure. It persists digest-bound private evidence and a stable
+minimal-citation view. Partial runs do not advance the complete checkpoint, and
+separately confirmed text-response commands remain manual and unexecuted. This
+runtime provides [REQ-F-507](../../capabilities/skills/mattermost-triage.md#req-f-507---triage-bounded-mattermost-attention).
+
 Routing resolves host inventory, creates a receipt, consumes it once for a
 matching Task, validates the structured result, and expires the receipt.
 Installation and reconciliation validate ownership and digests before

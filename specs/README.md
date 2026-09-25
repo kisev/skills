@@ -15,7 +15,7 @@ roadmap, or implementation plans.
 
 ## Public Surface
 
-The verified public inventory is 27 skills, 27 commands, 6 agents, 3 selectable
+The verified public inventory is 28 skills, 28 commands, 6 agents, 3 selectable
 plugins, and 1 package tool. The core infrastructure plugin is always
 available; selectable plugins are `rules-injector`, `rtk`, and `zed-bell`.
 

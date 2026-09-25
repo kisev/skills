@@ -52,7 +52,7 @@ The OpenCode package does not inspect or remove portable skills.
 
 ## Current OpenCode Surface
 
-The current package inventory has 27 commands, one per active skill. The package
+The current package inventory has 28 commands, one per active skill. The package
 tool `route` remains available without a slash command.
 
 The six fixed agents are `manager`, `architect`, `mapper`, `worker`, `review`, and
