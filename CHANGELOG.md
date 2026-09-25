@@ -8,6 +8,14 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+### Changed
+
+- Code-review publication now polls delayed postconditions, retains redacted
+  failure diagnostics, and offers exact inspection plus user-confirmed retry
+  recovery without automatically repeating writes. Reviewer plans no longer
+  render a second local-check copy of a patch already shown in the publication
+  preview.
+
 ## \[10.0.0] - 2026-09-25
 
 ### Added

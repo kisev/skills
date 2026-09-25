@@ -22,13 +22,20 @@ Repeated successful actions return `already_applied` without another write.
 The helper persists an in-progress reservation before starting the mutation.
 Only a proven process-start failure removes it without a remote postcondition.
 Timeout, nonzero exit, oversized output, or an unverified postcondition leaves the
-result `unknown` and blocks further writes for this collection.
+result `unknown` and blocks further writes for this collection. Before reporting
+that result, the helper performs bounded read-only polling. Its redacted JSON
+diagnostic names the pending action and includes exact `inspect` and `retry`
+commands.
 
 Replace `apply` with `inspect` in the exact action command to perform a read-only
 GitLab check. A unique matching effect completes the receipt. Insufficient
-evidence leaves the reservation blocked; it never authorizes an automatic retry.
-An explicitly repeated write must pass current freshness and confirmation checks.
-Inspection may update the local receipt but never writes to GitLab.
+evidence leaves the reservation blocked and never causes an automatic retry.
+When attached to a terminal, `apply` and `inspect` offer read-only inspection and
+then warn before an explicit retry. Without a terminal, run the returned exact
+`retry` command. A retry first repeats the read-only check, warns that a delayed
+effect could be duplicated, and writes only after the user selects or invokes that
+mode. It must still pass current freshness and confirmation checks. Inspection may
+update the local receipt but never writes to GitLab.
 
 Exit codes are `0` for a completed observation/action, `1` for an unknown outcome,
 and `2` for invalid, stale, expired, or otherwise blocked input. The JSON result

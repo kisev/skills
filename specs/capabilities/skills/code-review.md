@@ -135,7 +135,11 @@ snapshot may satisfy freshness checks; unrelated conversation or label changes
 shall require regeneration. Successful action replay shall not write again.
 Only a proven process-start failure shall clear a reservation without a remote
 postcondition. Ambiguous outcomes shall block further writes; explicit inspection
-may resolve them through read-only GitLab observations but shall not retry writes.
+may resolve them through bounded read-only GitLab observations. The helper shall
+retain a bounded redacted cause and exact recovery commands. It may retry an
+unobserved effect only after the user explicitly selects the retry mode or accepts
+its interactive duplicate-write warning; retry shall revalidate freshness and
+shall never be automatic.
 Old direct-command plans shall remain readable history and require regeneration
 for guarded publication. Local patches retain advisory markers and exact-head
 checks; markers shall not count as publication evidence. Preparation shall never

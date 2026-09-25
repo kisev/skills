@@ -2769,8 +2769,6 @@ def review_markdown(
             ]
         )
         publication_spec = finding_publications[finding["id"]]
-        if publication_spec["fix_mode"] == "patch":
-            lines.extend(["```sh", render_patch_check(context, publication_spec), "```", ""])
         if finding["id"] in finding_publications:
             add_publication_action(cast("str", finding["id"]))
 

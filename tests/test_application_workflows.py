@@ -3459,7 +3459,7 @@ print(json.dumps(value))
             self.assertIn("The fix changes behavior without changing the public API.", markdown)
             self.assertNotIn("marker-run --skill code-review --action patch:", markdown)
             self.assertIn("git apply <<'PATCH_", markdown)
-            self.assertIn(" apply --check <<'PATCH_CHECK_", markdown)
+            self.assertNotIn(" apply --check <<'PATCH_CHECK_", markdown)
             release = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
             self.assertIn(f"code-review: {release} · contract: 6", markdown)
             self.assertNotIn("`operation:", markdown)

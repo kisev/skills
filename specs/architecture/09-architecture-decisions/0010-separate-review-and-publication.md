@@ -28,7 +28,10 @@ from a safe retry.
 Use the single-action helper. Review preparation remains non-publishing; the user
 starts each mutation independently. A persisted reservation precedes process start,
 and a fresh read establishes success. Unknown outcomes block writes until a
-read-only inspection proves the effect. No batch executor or automatic retry exists.
+bounded read-only inspection proves the effect or the user explicitly accepts a
+retry after the effect remains unobserved. The helper preserves redacted failure
+diagnostics and offers the exact recovery commands. No batch executor or automatic
+retry exists.
 
 Review owns its orchestration and calls shared evidence, validation, and process
 primitives. OpenCode manager delegates the primary review to the dual-mode review
@@ -56,6 +59,8 @@ publication and users must not replay uncertain actions through it.
 Tests cover nested routing, current-plan membership, digest and body integrity,
 stale conversations, dependent thread closure, replay, process-start failure,
 ambiguous results, and read-only recovery. Package smoke verifies host discovery.
+Tests also cover delayed postconditions, retained diagnostics, and explicit retry
+after an absent effect.
 
 ## Links
 

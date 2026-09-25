@@ -68,8 +68,9 @@ separate fixing phase. Portable `code-review` also works without this agent laye
 2. Inspect each proposed action and its exact body before running its command.
 3. Run one generated `review_publication.py apply` command at a time. A thread
    closure requires the successful receipt for its preceding explanation.
-4. If the result is `unknown`, replace `apply` with `inspect` in that exact command
-   to check GitLab without another write. An unresolved result blocks further writes.
+4. If the result is `unknown`, follow the helper's interactive recovery or run its
+   exact `inspect` command. If bounded reads still do not find the effect, only the
+   explicit `retry` command can repeat the write, with a duplicate-write warning.
 5. Regenerate stale or expired plans. Old direct-command plans do not acquire
    these guarantees retroactively, and advisory markers are not publication receipts.
 

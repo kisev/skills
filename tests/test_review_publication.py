@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import io
 import json
 import shlex
 import subprocess
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 
@@ -34,6 +35,7 @@ def publication(
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    monkeypatch.setattr(module, "POSTCONDITION_DELAYS", (0.0, 0.0, 0.0))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
     target = {"hostname": "gitlab.example", "project_id": 10, "kind": "merge_requests", "iid": 2}
     root = module.portable.state_directory("code-review", target)
@@ -149,7 +151,7 @@ def test_later_reply_blocks_closure(publication: Any, monkeypatch: pytest.Monkey
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize("failure", ["timeout", "nonzero", "postcondition"])
+@pytest.mark.parametrize("failure", ["timeout", "postcondition"])
 def test_ambiguous_attempt_blocks_replay_and_read_only_inspection_can_confirm(
     publication: Any, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
@@ -164,18 +166,133 @@ def test_ambiguous_attempt_blocks_replay_and_read_only_inspection_can_confirm(
             raise module.MutationOutcomeUnknown("timeout")
         if failure == "postcondition":
             observed["notes"].pop("2")
-        return subprocess.CompletedProcess(
-            argv, 1 if failure == "nonzero" else result.returncode, b"", b""
-        )
+        return cast("subprocess.CompletedProcess[bytes]", result)
 
     monkeypatch.setattr(module, "run_mutation_process", fail)
     result = module.execute(path, digest)
     assert result["mutation_outcome"] == "unknown" and result["external_mutations"] is True
-    with pytest.raises(module.portable.WorkflowError, match="unresolved"):
-        module.execute(path, digest)
+    blocked = module.execute(path, digest)
+    assert blocked["status"] == "blocked" and "inspect --action" in blocked["inspect_command"]
     inspected = module.execute(path, digest, inspect=True)
     assert inspected["status"] == ("blocked" if failure == "postcondition" else "applied")
     assert inspected["external_mutations"] is False and len(calls) == 1
+
+
+def test_nonzero_process_with_proven_effect_is_successful(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    path, digest = action(publication)
+    _, calls = runtime(publication, monkeypatch)
+    original = module.run_mutation_process
+
+    def fail(argv: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
+        original(argv, payload)
+        return subprocess.CompletedProcess(argv, 1, b"", b"response lost")
+
+    monkeypatch.setattr(module, "run_mutation_process", fail)
+    result = module.execute(path, digest)
+    assert result["status"] == "applied" and result["external_mutations"] is True
+    assert len(calls) == 1
+
+
+def test_failed_process_preserves_diagnostic_and_explicit_retry(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    path, digest = action(publication)
+    _, calls = runtime(publication, monkeypatch)
+    mutate = module.run_mutation_process
+
+    def fail(argv: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1, b"", b"HTTP 400 invalid body")
+
+    monkeypatch.setattr(module, "run_mutation_process", fail)
+    result = module.execute(path, digest)
+    assert result["status"] == "blocked"
+    assert "HTTP 400 invalid body" in result["error"]
+    assert "inspect --action" in result["inspect_command"]
+    assert "retry --action" in result["retry_command"]
+    assert "duplicate" in result["retry_warning"]
+
+    monkeypatch.setattr(module, "run_mutation_process", mutate)
+    retried = module.execute(path, digest, retry=True)
+    assert retried["status"] == "applied" and len(calls) == 2
+
+
+def test_postcondition_polling_accepts_delayed_effect(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, evidence, context = publication
+    path, digest = action(publication)
+    observed, calls = runtime(publication, monkeypatch)
+    stale = {
+        "mr": copy.deepcopy(evidence["object"]),
+        "notes": module.notes_snapshot(context["discussions"]),
+    }
+    observations = 0
+
+    def delayed(guard: dict[str, Any]) -> dict[str, Any]:
+        nonlocal observations
+        observations += 1
+        return copy.deepcopy(observed if observations >= 4 else stale)
+
+    monkeypatch.setattr(module, "observe", delayed)
+    result = module.execute(path, digest)
+    assert result["status"] == "applied"
+    assert observations == 4 and len(calls) == 1
+
+
+def test_interactive_recovery_inspects_and_confirms_retry(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    path, digest = action(publication)
+    _, calls = runtime(publication, monkeypatch)
+    mutate = module.run_mutation_process
+
+    def fail(argv: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1, b"", b"temporary failure")
+
+    class Tty(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    monkeypatch.setattr(module, "run_mutation_process", fail)
+    blocked = module.execute(path, digest)
+    monkeypatch.setattr(module, "run_mutation_process", mutate)
+    monkeypatch.setattr(module.sys, "stdin", Tty("y\ny\n"))
+    monkeypatch.setattr(module.sys, "stderr", Tty())
+    recovered = module.interactive_recovery(path, digest, blocked)
+    assert recovered["status"] == "applied" and len(calls) == 2
+
+
+def test_interactive_recovery_does_not_repeat_explicit_inspection(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    path, digest = action(publication)
+    _, calls = runtime(publication, monkeypatch)
+    mutate = module.run_mutation_process
+
+    def fail(argv: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, 1, b"", b"temporary failure")
+
+    class Tty(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    monkeypatch.setattr(module, "run_mutation_process", fail)
+    module.execute(path, digest)
+    inspected = module.execute(path, digest, inspect=True)
+    monkeypatch.setattr(module, "run_mutation_process", mutate)
+    monkeypatch.setattr(module.sys, "stdin", Tty("y\n"))
+    monkeypatch.setattr(module.sys, "stderr", Tty())
+    recovered = module.interactive_recovery(path, digest, inspected, inspected=True)
+    assert recovered["status"] == "applied" and len(calls) == 2
 
 
 def test_proven_start_failure_allows_fresh_explicit_attempt(
@@ -254,4 +371,4 @@ def test_publication_cli_is_available_without_a_checkout(tmp_path: Path, flag: s
     )
     assert result.returncode == 0 and result.stdout
     if flag == "--capabilities":
-        assert json.loads(result.stdout)["operations"] == ["apply", "inspect"]
+        assert json.loads(result.stdout)["operations"] == ["apply", "inspect", "retry"]

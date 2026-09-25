@@ -95,7 +95,8 @@ shows `code-review: <skill version> · contract: <version>`, then contains:
 For every actionable item, show its natural conclusion, publication preview,
 suggestion or patch when applicable, and directly runnable command. Do not show
 `fix_mode`, action IDs, operations, body paths, digests, raw positions, or a
-separate artifact copy of a patch. Those bindings remain in private JSON.
+second rendered copy or local preflight of a patch already present in the exact
+publication preview. Those bindings and validation results remain in private JSON.
 
 The model supplies semantic assessment prose, natural role-authored publication
 bodies, template selections, and exhaustive label-applicability rationales. The
