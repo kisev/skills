@@ -94,6 +94,7 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
                 assert not any(name.startswith("templates/ru/") for name in names)
             if entry["name"] == "mattermost":
                 assert "scripts/mattermost.py" in document.getnames()
+                assert "scripts/mattermost_publication.py" in document.getnames()
 
 
 def test_distribution_is_byte_reproducible(tmp_path: Path) -> None:

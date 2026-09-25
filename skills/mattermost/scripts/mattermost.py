@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import importlib.util
 import json
 import os
 import re
 import secrets
+import shlex
 import sqlite3
 import stat
 import subprocess
@@ -48,6 +50,8 @@ CACHE_TTL_SECONDS = 300
 CACHE_SCHEMA_VERSION = 3
 CACHE_STABLE_AGE_SECONDS = 7 * 24 * 60 * 60
 MAX_RESPONSE = 32 * 1024 * 1024
+MAX_PUBLICATION_FILE = 100 * 1024 * 1024
+PUBLICATION_TTL_SECONDS = 24 * 60 * 60
 PAGE_SIZE = 200
 MAX_PAGES = 10_000
 RECEIPT_TTL_SECONDS = 300
@@ -167,12 +171,59 @@ def private_file(path: Path) -> None:
     path.chmod(0o600)
 
 
+def require_private_directory(path: Path) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise MattermostError("private directory is unavailable") from exc
+    if (
+        stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise MattermostError("private directory is unsafe")
+
+
+def require_private_file(path: Path) -> None:
+    try:
+        metadata = path.lstat()
+    except OSError as exc:
+        raise MattermostError("private file is unavailable") from exc
+    if (
+        stat.S_ISLNK(metadata.st_mode)
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_nlink != 1
+        or stat.S_IMODE(metadata.st_mode) != 0o600
+    ):
+        raise MattermostError("private file is unsafe")
+
+
+def ensure_private_directory(path: Path) -> Path:
+    if path.exists() or path.is_symlink():
+        require_private_directory(path)
+        return path
+    try:
+        path.mkdir(mode=0o700)
+    except OSError as exc:
+        raise MattermostError("private directory could not be created") from exc
+    require_private_directory(path)
+    return path
+
+
 def config_root() -> Path:
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "mattermost"
+    configured = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    if not configured.is_absolute() or configured != Path(os.path.normpath(configured)):
+        raise MattermostError("XDG_CONFIG_HOME must be a normalized absolute path")
+    return configured / "mattermost"
 
 
 def cache_root() -> Path:
-    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "mattermost"
+    configured = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    if not configured.is_absolute() or configured != Path(os.path.normpath(configured)):
+        raise MattermostError("XDG_CACHE_HOME must be a normalized absolute path")
+    return configured / "mattermost"
 
 
 def cache_path() -> Path:
@@ -181,18 +232,30 @@ def cache_path() -> Path:
 
 def origin_token_file(origin: str) -> Path:
     key = hashlib.sha256(normalized_origin(origin).encode()).hexdigest()
-    return private_directory(private_directory(config_root()) / key) / "token"
+    return config_root() / key / "token"
 
 
 def read_token(origin: str) -> str:
     path = origin_token_file(origin)
-    if not path.exists():
+    if not path.exists() and not path.is_symlink():
         raise AuthorizationRequired("Mattermost authentication is required for this origin")
     try:
-        private_file(path)
-    except MattermostError as exc:
+        require_private_directory(path.parent.parent)
+        require_private_directory(path.parent)
+        require_private_file(path)
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        with os.fdopen(descriptor, "r", encoding="utf-8") as stream:
+            metadata = os.fstat(stream.fileno())
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+            ):
+                raise MattermostError("private file is unsafe")
+            token = stream.read().strip()
+    except (MattermostError, OSError) as exc:
         raise AuthorizationRequired("Mattermost credential file is unsafe") from exc
-    token = path.read_text(encoding="utf-8").strip()
     if not token or "\n" in token or "\r" in token:
         raise AuthorizationRequired("Mattermost credential is invalid")
     return token
@@ -202,12 +265,27 @@ def save_token(origin: str, token: str) -> None:
     if not token or "\n" in token or "\r" in token:
         raise MattermostError("browser did not provide a valid session credential")
     path = origin_token_file(origin)
+    root = path.parent.parent
+    if root.exists() or root.is_symlink():
+        require_private_directory(root)
+    else:
+        parent = root.parent
+        if not parent.is_absolute():
+            raise MattermostError("Mattermost configuration path must be absolute")
+        root.mkdir(parents=True, mode=0o700)
+        require_private_directory(root)
+    ensure_private_directory(path.parent)
+    if path.exists() or path.is_symlink():
+        require_private_file(path)
     temporary = path.with_name(f".token-{secrets.token_hex(8)}.tmp")
     try:
-        temporary.write_text(token + "\n", encoding="utf-8")
-        temporary.chmod(0o600)
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(token + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary, path)
-        private_file(path)
+        require_private_file(path)
     finally:
         if temporary.exists():
             temporary.unlink()
@@ -284,6 +362,8 @@ def classify_url(value: str) -> dict[str, str | None]:
         else identifier(pieces[3], "path component")
     )
     pairs = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True, strict_parsing=True)
+    if any(key not in {"post", "post_id", "focusedPostId"} for key, _item in pairs):
+        raise MattermostError("Mattermost URL contains an unsupported query parameter")
     post_values = [item for key, item in pairs if key in {"post", "post_id", "focusedPostId"}]
     if len(post_values) > 1 or any(not value for value in post_values):
         raise MattermostError("Mattermost post query is ambiguous")
@@ -1948,6 +2028,439 @@ def collect_members(url: str) -> dict[str, object]:
     return finalize_result(result)
 
 
+def publication_state_root(origin: str, user_id: str, *, create: bool) -> Path:
+    configured = os.environ.get("XDG_STATE_HOME")
+    base = Path(configured) if configured else Path.home() / ".local" / "state"
+    if not base.is_absolute() or base != Path(os.path.normpath(base)):
+        raise MattermostError("XDG_STATE_HOME must be a normalized absolute path")
+    if base.exists() or base.is_symlink():
+        metadata = base.lstat()
+        if (
+            stat.S_ISLNK(metadata.st_mode)
+            or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+        ):
+            raise MattermostError("XDG state directory is unsafe")
+    identity = hashlib.sha256(f"{normalized_origin(origin)}\0{user_id}".encode()).hexdigest()
+    path = base / "agent-skills" / "mattermost" / identity / "default"
+    if create:
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise MattermostError("XDG state directory could not be created") from exc
+        current = base
+        for name in ("agent-skills", "mattermost", identity, "default"):
+            current = current / name
+            ensure_private_directory(current)
+    else:
+        for current in (
+            base / "agent-skills",
+            base / "agent-skills" / "mattermost",
+            base / "agent-skills" / "mattermost" / identity,
+            path,
+        ):
+            require_private_directory(current)
+    return path
+
+
+def publication_file_metadata(value: object) -> dict[str, object]:
+    if not isinstance(value, str) or not value or not Path(value).is_absolute():
+        raise MattermostError("publication file paths must be absolute")
+    path = Path(value)
+    if path != Path(os.path.normpath(path)):
+        raise MattermostError("publication file paths must be normalized")
+    for component in reversed(path.parents):
+        if component == Path("/"):
+            continue
+        try:
+            if stat.S_ISLNK(component.lstat().st_mode):
+                raise MattermostError("publication file path must not contain symbolic links")
+        except OSError as exc:
+            raise MattermostError("publication file path is unavailable") from exc
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise MattermostError("publication file is unavailable or unsafe") from exc
+    digest = hashlib.sha256()
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or before.st_nlink != 1
+            or before.st_size > MAX_PUBLICATION_FILE
+        ):
+            raise MattermostError(
+                "publication file must be owned, regular, singly linked, and at most 100 MiB"
+            )
+        size = 0
+        while chunk := os.read(descriptor, 1024 * 1024):
+            size += len(chunk)
+            if size > MAX_PUBLICATION_FILE:
+                raise MattermostError("publication file exceeds 100 MiB")
+            digest.update(chunk)
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    stable_fields = (
+        "st_dev",
+        "st_ino",
+        "st_mode",
+        "st_uid",
+        "st_nlink",
+        "st_size",
+        "st_mtime_ns",
+        "st_ctime_ns",
+    )
+    if (
+        any(getattr(before, key) != getattr(after, key) for key in stable_fields)
+        or size != before.st_size
+    ):
+        raise MattermostError("publication file changed while it was read")
+    return {
+        "path": str(path),
+        "name": path.name,
+        "size": size,
+        "sha256": digest.hexdigest(),
+    }
+
+
+def publication_channel(
+    client: Client, target: dict[str, str | None], user_id: str
+) -> dict[str, str]:
+    post, channel = revalidate_access(client, target, user_id)
+    team_id = team_identity(client, identifier(target["team"], "team"))
+    root_id = ""
+    if post is not None:
+        channel_id = identifier(post.get("channel_id"), "channel ID")
+        channel = channel_response(
+            client.get(f"/channels/{urllib.parse.quote(channel_id, safe='')}"),
+            expected_id=channel_id,
+        )
+        root_id = identifier(post.get("root_id") or post.get("id"), "thread root ID")
+    assert channel is not None
+    channel_id = identifier(channel.get("id"), "channel ID")
+    channel_type = channel.get("type")
+    if channel_type not in {"O", "P", "D", "G"}:
+        raise MattermostError("Mattermost channel type is unsupported")
+    if channel_type in {"D", "G"}:
+        matches = [
+            item
+            for item in user_team_channels(client, user_id, team_id)
+            if item.get("id") == channel_id
+        ]
+        if len(matches) != 1:
+            raise MattermostError("Mattermost chat is not available in the URL team")
+    elif channel.get("team_id") != team_id:
+        raise MattermostError("Mattermost channel is not in the URL team")
+    return {
+        "channel_id": channel_id,
+        "channel_type": channel_type,
+        "team_id": team_id,
+        "root_id": root_id,
+    }
+
+
+def write_private_immutable(path: Path, data: bytes) -> None:
+    if path.exists() or path.is_symlink():
+        if read_private_bytes(path) != data:
+            raise MattermostError("immutable publication content conflicts with existing state")
+        return
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except OSError as exc:
+        raise MattermostError("publication state could not be written") from exc
+    require_private_file(path)
+
+
+def read_private_bytes(path: Path, *, limit: int | None = None) -> bytes:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            raise MattermostError("private file is unsafe")
+        chunks = bytearray()
+        while chunk := os.read(descriptor, 1024 * 1024):
+            chunks.extend(chunk)
+            if limit is not None and len(chunks) > limit:
+                raise MattermostError("private file exceeds the size limit")
+        return bytes(chunks)
+    except OSError as exc:
+        raise MattermostError("private file is unavailable") from exc
+    finally:
+        if "descriptor" in locals():
+            os.close(descriptor)
+
+
+def replace_private(path: Path, data: bytes) -> None:
+    if path.exists() or path.is_symlink():
+        require_private_file(path)
+    temporary = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
+    try:
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        descriptor = os.open(path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        require_private_file(path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def publication_prepare_lock(root: Path) -> Any:
+    path = root / "publication.lock"
+    if not path.exists() and not path.is_symlink():
+        try:
+            descriptor = os.open(path, os.O_RDWR | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(descriptor)
+        except FileExistsError:
+            pass
+        except OSError as exc:
+            raise MattermostError("publication preparation lock could not be created") from exc
+    require_private_file(path)
+    try:
+        descriptor = os.open(path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+        metadata = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or metadata.st_nlink != 1
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+        ):
+            os.close(descriptor)
+            raise MattermostError("publication preparation lock is unsafe")
+        stream = os.fdopen(descriptor, "r+")
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX)
+        except OSError:
+            stream.close()
+            raise
+    except OSError as exc:
+        raise MattermostError("publication preparation lock is unavailable") from exc
+    return stream
+
+
+def markdown_block(value: str, language: str = "") -> list[str]:
+    fence = "```"
+    while fence in value:
+        fence += "`"
+    return [fence + language, value, fence]
+
+
+def prepare_publication(value: object) -> dict[str, object]:
+    if not isinstance(value, dict) or set(value) != {"messages"}:
+        raise MattermostError("publication request must contain only messages")
+    messages = value.get("messages")
+    if not isinstance(messages, list) or not messages:
+        raise MattermostError("publication messages must be a non-empty array")
+    prepared: list[tuple[dict[str, object], bytes]] = []
+    origin: str | None = None
+    current_user: str | None = None
+    plan_id = secrets.token_hex(16)
+    created_at = now()
+    script = Path(__file__).with_name("mattermost_publication.py").resolve()
+    for item in messages:
+        if not isinstance(item, dict) or set(item) != {"target", "message", "files"}:
+            raise MattermostError(
+                "each publication message must contain target, message, and files"
+            )
+        target_value, message, files = item["target"], item["message"], item["files"]
+        if not isinstance(target_value, str) or not isinstance(message, str):
+            raise MattermostError("publication target and message must be strings")
+        if not isinstance(files, list) or len(files) > 5:
+            raise MattermostError("publication files must be an array of at most five paths")
+        if not message and not files:
+            raise MattermostError("an empty publication message requires a file")
+        target = classify_url(target_value)
+        item_origin = str(target["origin"])
+        if origin is not None and item_origin != origin:
+            raise MattermostError("all publication targets must use the same origin")
+        token = read_token(item_origin)
+        client = Client(item_origin, token)
+        user_id = user_identity(client)
+        if current_user is not None and user_id != current_user:
+            raise MattermostError("publication identity changed during preparation")
+        frozen = publication_channel(client, target, user_id)
+        metadata = [publication_file_metadata(path) for path in files]
+        body = message.encode("utf-8")
+        body_digest = hashlib.sha256(body).hexdigest()
+        action: dict[str, object] = {
+            "schema_version": 1,
+            "plan_id": plan_id,
+            "origin": item_origin,
+            "user_id": user_id,
+            "target": target_value,
+            **frozen,
+            "body_digest": body_digest,
+            "files": metadata,
+            "publication_id": secrets.token_hex(16),
+            "created_at": created_at,
+            "expires_at": created_at + PUBLICATION_TTL_SECONDS,
+        }
+        prepared.append((action, body))
+        origin, current_user = item_origin, user_id
+    assert origin is not None
+    assert current_user is not None
+    root = publication_state_root(origin, current_user, create=True)
+    lock = publication_prepare_lock(root)
+    try:
+        bodies = ensure_private_directory(root / "bodies")
+        actions = ensure_private_directory(root / "actions")
+        plans = ensure_private_directory(root / "plans")
+        plan_indexes = ensure_private_directory(root / "plan-index")
+        action_entries: list[dict[str, str]] = []
+        commands: list[tuple[str, str]] = []
+        for action, body in prepared:
+            body_path = bodies / f"{action['body_digest']}.md"
+            action["body_path"] = str(body_path)
+            digest = hashlib.sha256(canonical(action)).hexdigest()
+            action_path = actions / f"{digest}.json"
+            write_private_immutable(body_path, body)
+            write_private_immutable(action_path, canonical(action) + b"\n")
+            apply_command = " ".join(
+                shlex.quote(part)
+                for part in (
+                    str(Path(sys.executable).resolve()),
+                    str(script),
+                    "apply",
+                    "--action",
+                    str(action_path),
+                    "--confirm",
+                    digest,
+                )
+            )
+            inspect_command = " ".join(
+                shlex.quote(part)
+                for part in (
+                    str(Path(sys.executable).resolve()),
+                    str(script),
+                    "inspect",
+                    "--action",
+                    str(action_path),
+                    "--confirm",
+                    digest,
+                )
+            )
+            action_entries.append({"digest": digest, "path": str(action_path)})
+            commands.append((apply_command, inspect_command))
+        plan = {
+            "schema_version": 1,
+            "plan_id": plan_id,
+            "origin": origin,
+            "user_id": current_user,
+            "created_at": created_at,
+            "expires_at": created_at + PUBLICATION_TTL_SECONDS,
+            "finalized": True,
+            "actions": action_entries,
+        }
+        plan_digest = hashlib.sha256(canonical(plan)).hexdigest()
+        plan_path = plans / f"{plan_digest}.json"
+        write_private_immutable(plan_path, canonical(plan) + b"\n")
+        plan_index = {"digest": plan_digest, "path": str(plan_path), "plan_id": plan_id}
+        write_private_immutable(plan_indexes / f"{plan_id}.json", canonical(plan_index) + b"\n")
+        markdown = [
+            f"# Mattermost publication plan `{plan_digest}`",
+            "",
+            "Origin:",
+            "",
+            *markdown_block(json.dumps(origin), "json"),
+            "",
+            f"Authenticated user: `{current_user}`",
+            f"Expires at: `{plan['expires_at']}`",
+            "",
+            "Each Apply command publishes exactly one prepared message. Files are read from",
+            "their original paths and must still match the recorded size and SHA-256 digest.",
+            "A lost upload response blocks replay and can leave an unattached server file.",
+            "",
+        ]
+        for index, ((action, body), (apply_command, inspect_command)) in enumerate(
+            zip(prepared, commands, strict=True), 1
+        ):
+            markdown.extend(
+                [
+                    f"## Message {index}",
+                    "",
+                    "Target:",
+                    "",
+                    *markdown_block(json.dumps(action["target"]), "json"),
+                    "",
+                    f"Channel ID: `{action['channel_id']}`",
+                    f"Thread root: `{action['root_id'] or 'none'}`",
+                    f"Body SHA-256: `{action['body_digest']}`",
+                    "",
+                    *markdown_block(body.decode(), "markdown"),
+                    "",
+                    "Files:",
+                    "",
+                ]
+            )
+            files = action["files"]
+            assert isinstance(files, list)
+            markdown.extend(
+                markdown_block(
+                    json.dumps(
+                        [
+                            {
+                                "path": item["path"],
+                                "size": item["size"],
+                                "sha256": item["sha256"],
+                            }
+                            for item in files
+                        ],
+                        indent=2,
+                        sort_keys=True,
+                    ),
+                    "json",
+                )
+            )
+            markdown.extend(
+                [
+                    "",
+                    "Apply:",
+                    "",
+                    *markdown_block(apply_command, "sh"),
+                    "",
+                    "Inspect:",
+                    "",
+                    *markdown_block(inspect_command, "sh"),
+                    "",
+                ]
+            )
+        markdown_data = ("\n".join(markdown) + "\n").encode()
+        versioned_markdown = plans / f"{plan_digest}.md"
+        write_private_immutable(versioned_markdown, markdown_data)
+        replace_private(root / "current-plan.json", canonical(plan_index) + b"\n")
+        stable_plan = root / "mattermost-publication.md"
+        replace_private(stable_plan, markdown_data)
+    finally:
+        lock.close()
+    return {
+        "status": "prepared",
+        "plan_path": str(stable_plan),
+        "plan_digest": plan_digest,
+        "action_count": len(action_entries),
+        "external_mutations": False,
+    }
+
+
 def receipt_root() -> Path:
     return private_directory(private_directory(config_root()) / "receipts")
 
@@ -2008,7 +2521,12 @@ def prepare_receipt(
 
 
 def consume_receipt(
-    digest: str, action: str, *, origin: str | None = None, path: Path | None = None
+    digest: str,
+    action: str,
+    *,
+    origin: str | None = None,
+    path: Path | None = None,
+    consume: bool = True,
 ) -> None:
     destination = receipt_path(digest)
     try:
@@ -2036,6 +2554,8 @@ def consume_receipt(
         raise MattermostError(
             "confirmation receipt is stale, tampered, replayed, or does not match"
         )
+    if not consume:
+        return
     receipt["used"] = True
     temporary = destination.with_name(f".{destination.name}.{secrets.token_hex(8)}.tmp")
     temporary.write_text(json.dumps(receipt, sort_keys=True) + "\n", encoding="utf-8")
@@ -2170,6 +2690,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     auth_preview = auth_subparsers.add_parser("preview")
     auth_preview.add_argument("url")
+    auth_path = auth_subparsers.add_parser("path")
+    auth_path.add_argument("url")
     auth_apply = auth_subparsers.add_parser("apply")
     auth_apply.add_argument("url")
     auth_apply.add_argument("--confirm", required=True)
@@ -2181,6 +2703,11 @@ def main(argv: list[str] | None = None) -> int:
     cache_subparsers.add_parser("status")
     clear = cache_subparsers.add_parser("clear")
     clear.add_argument("--confirm")
+    publication = subparsers.add_parser("publication")
+    publication_subparsers = publication.add_subparsers(
+        dest="publication_action", required=True, parser_class=ContractArgumentParser
+    )
+    publication_subparsers.add_parser("prepare")
     try:
         args = parser.parse_args(argv)
         if args.capabilities:
@@ -2199,14 +2726,36 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "auth":
             origin = normalized_origin(args.url)
+            if args.auth_action == "path":
+                path = origin_token_file(origin)
+                emit(
+                    {
+                        "status": "ok",
+                        "origin": origin,
+                        "token_path": str(path),
+                        "directory_mode": "0700",
+                        "file_mode": "0600",
+                        "external_mutations": False,
+                    }
+                )
+                return 0
             if args.auth_action == "preview":
                 emit(prepare_receipt("auth", origin=origin))
                 return 0
+            consume_receipt(args.confirm, "auth", origin=origin, consume=False)
             token = agent_browser_token(origin) if args.browser_consent else cookie_token(origin)
+            user_identity(Client(origin, token))
             consume_receipt(args.confirm, "auth", origin=origin)
             save_token(origin, token)
             mark_local_mutation(f"auth:{args.confirm}", args.confirm, {"origin": origin})
             emit({"status": "ok", "origin": origin, "external_mutations": False})
+            return 0
+        if args.command == "publication":
+            try:
+                request = json.load(sys.stdin)
+            except json.JSONDecodeError as exc:
+                raise MattermostError("publication request must be JSON on stdin") from exc
+            emit(prepare_publication(request))
             return 0
         if args.command == "cache":
             path = cache_path()

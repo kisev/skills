@@ -18,6 +18,11 @@ action and boundary and checked before success. A matching synthetic continuatio
 preserves that gate, while unrelated exact frozen-objective actions remain
 authorized.
 
+One digest authorizes one user-visible action, not a batch of messages or other
+independent actions. An immutable preview may define that action as compound when
+all internal mutations share its boundary and are required for the one result,
+such as zero to five file uploads followed by one message post.
+
 Storage-neutral task preparation and standalone task review accept exactly one
 explicit source: inline text, a local regular file, or an exact HTTPS link
 readable by the host. They normalize source content to `work-item/v1` before
