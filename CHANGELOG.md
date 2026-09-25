@@ -8,7 +8,25 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+## \[10.1.0] - 2026-09-25
+
+### Added
+
+- Mattermost publication now uses exact plans, fresh preconditions and
+  postconditions, bounded mutation execution, durable receipts, and explicit
+  confirmation before each write.
+- The new `mattermost-triage` skill finds conversations that need attention and
+  prepares durable manual response plans.
+- Successful pushes to `dev` now publish an isolated portable `/dev` distribution
+  and npm `dev` prerelease. The project release skill promotes a maintainer-chosen
+  stable version from `dev` to `main` with confirmation gates.
+
 ### Changed
+
+- `briefing` now applies stricter evidence selection and factual-summary checks,
+  backed by expanded English and Russian behavior evaluations.
+
+### Fixed
 
 - Code-review publication now polls delayed postconditions, retains redacted
   failure diagnostics, and offers exact inspection plus user-confirmed retry
