@@ -1,7 +1,8 @@
 ---
 name: goal
 description: >-
-  Prepare a read-only structured goal of at most 4000 characters. Russian discovery terms: проверяемая цель.
+  Prepare a read-only structured goal of at most 4000 characters as an
+  assignment for an LLM agent, not a human-facing work item. Russian discovery terms: проверяемая цель.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

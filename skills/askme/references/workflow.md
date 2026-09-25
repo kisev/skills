@@ -17,7 +17,7 @@ Quoted examples, negated requests such as "do not ask me", and discussion such a
 
 ## Interview
 
-1. Determine the goal, known facts, decisions, unknowns, and dependencies between them. Build a decision tree, not a linear list of questions. For review follow-ups, first apply the necessity check below; a finding is a candidate, not an agreed requirement.
+1. Determine the goal, known facts, decisions, unknowns, and dependencies between them. Build a decision tree, not a linear list of questions. For review follow-ups, first apply the necessity check in `references/necessity-doctrine.md`; a finding is a candidate, not an agreed requirement.
 2. Show a concise **Proposed task** block in chat before the first question, or before the no-questions result: problem, expected outcome, boundaries, acceptance criteria, and unknowns. This is a hypothesis that the user can confirm or correct, not an agreed decision.
 3. Form the current frontier: all independent questions whose prerequisites are already known. Do not ask a question and a question dependent on it at the same time.
 4. Conduct one logical round through the host's standard interactive tool. If the host has no such tool, ask the questions in chat. Each question contains one idea, necessary context, and, where appropriate, a recommended option. Read `references/question-guidelines.md` for rules on combining an option and free-form input. Never repeat a question answered by evidence or the user, or ask for a decision that does not affect the task. If facts are sufficient, explicitly say that no clarification questions remain; do not invent a question or require a redundant confirmation.
@@ -40,32 +40,9 @@ Quoted examples, negated requests such as "do not ask me", and discussion such a
 
 ## Necessity before implementation choices
 
-For each supplied review candidate, establish the agreed requirement, reachable
-scenario, user consequence, relation to the latest changes, and proportionate
-minimum remedy. Separate an unmet requirement or regression from optional
-hardening, pre-existing debt, and a new feature. Reproduction alone does not make
-a candidate a blocker, and severity does not decide whether it belongs in this
-task. Inspect available facts yourself before asking the user.
-
-Explain this assessment before asking how to implement a remedy. Recommend
-accepting a limitation, deferring work, or rejecting the candidate when justified.
-Do not call all remaining fixes mandatory merely because they appeared in a
-review. A request to discuss every finding is not approval to implement all of
-them. If the user already explicitly chose a broader feature, preserve that
-choice and explain its additional implementation and verification cost.
-
-When a mechanism repeatedly needs edge-case patches, reconsider the approach
-before adding another layer. Offer the simplest behavior that meets the goal,
-including a narrower supported input when appropriate. Structured evidence can
-validate identity or freshness; extra JSON fields cannot prove that a model's
-semantic judgment is correct.
-
-Completion means the agreed result and acceptance checks are satisfied, required
-findings are closed, affected regressions are checked, and remaining limitations
-are named. It does not mean proving that no possible defect exists. Preserve
-accepted risks and exclusions through implementation and review; reopen them
-only for changed facts or an explicit user decision. Do not use a fixed number
-of review rounds or a severity cutoff to hide a real regression.
+Apply the shared necessity and completion doctrine in
+`references/necessity-doctrine.md` to every supplied review candidate and
+follow-up decision.
 
 ## `questionnaire` Preset
 

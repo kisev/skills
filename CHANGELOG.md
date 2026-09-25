@@ -8,6 +8,26 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## Unreleased
 
+### Added
+
+- Cross-skill relations are now declared in `shared/skill-relations.json`
+  (`requires`/`uses`/`recommends`) and materialized into every built `SKILL.md`
+  as a recommendational "Related skills" section; archives stay self-contained.
+- The askme and code-review skills now share one materialized necessity and
+  completion doctrine instead of duplicated copies.
+
+### Changed
+
+- `code-review` routes release MRs to `release-review`; `goal` and
+  `task-prepare` reference each other by audience; `briefing` and `team-retro`
+  state their boundary; Mattermost publication ownership is fixed on
+  `mattermost`.
+
+### Fixed
+
+- `task-prepare` no longer references a nonexistent `glab` skill; the duplicated
+  paragraph in `release-review` was removed.
+
 ## \[10.1.0] - 2026-09-25
 
 ### Added

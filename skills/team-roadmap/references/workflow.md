@@ -2,7 +2,7 @@
 
 This skill has the fixed `roadmap` entrypoint. It reviews or updates one roadmap
 artifact; it does not create work items, start implementation, prepare a retro,
-or publish externally.
+or publish externally. Apply `humanize` to drafted roadmap prose.
 
 Resolve the profile and handle setup or remembered updates through
 `references/team-profile-workflow.md`. Run

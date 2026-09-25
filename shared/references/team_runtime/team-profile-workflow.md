@@ -97,7 +97,7 @@ than silently rewriting historical facts.
 ## Evidence Store
 
 Team skills keep collected evidence in a private per-profile store under
-`${XDG_STATE_HOME:-~/.local/state}/agent-skills/team-evidence/<profile>/`.
+`${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team-evidence/<profile>/`.
 The store holds a coverage manifest and immutable content-addressed
 snapshots; directories and files are private to the user. Complete GitLab
 metrics windows are reusable forever because delivery timestamps never move;

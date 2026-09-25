@@ -7,6 +7,11 @@ metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
 of `@kisev/skills-opencode`.
 
+Declared companions are listed in each skill's built `SKILL.md` "Related skills"
+section: `requires` marks a shared credential or workflow, `uses` marks a
+composed contract, and `recommends` marks a natural companion. Relations are
+install recommendations only; every archive works on its own.
+
 ## Active Skills
 
 | Skill | Purpose |

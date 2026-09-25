@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "relations": [
+    {
+      "from": "mattermost-triage",
+      "to": "mattermost",
+      "type": "requires",
+      "reason": "shares the origin-bound token location and authentication workflow"
+    },
+    {
+      "from": "task-prepare",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied before drafting user-facing prose"
+    },
+    {
+      "from": "task-prepare",
+      "to": "askme",
+      "type": "uses",
+      "reason": "resolves decisions that inspection cannot answer"
+    },
+    {
+      "from": "task-prepare",
+      "to": "task-review",
+      "type": "uses",
+      "reason": "verdict contract applied to every prepared item"
+    },
+    {
+      "from": "task-prepare",
+      "to": "task-triage",
+      "type": "uses",
+      "reason": "GitLab mode consumes a current accepted release plan"
+    },
+    {
+      "from": "task-triage",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to reports"
+    },
+    {
+      "from": "task-triage",
+      "to": "task-review",
+      "type": "uses",
+      "reason": "per-issue verdict contract recorded in triage analysis"
+    },
+    {
+      "from": "task-triage",
+      "to": "code-review",
+      "type": "uses",
+      "reason": "release-aware SemVer assessment method"
+    },
+    {
+      "from": "code-review",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to all drafted prose"
+    },
+    {
+      "from": "mr-prepare",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to all drafted prose"
+    },
+    {
+      "from": "mr-prepare",
+      "to": "askme",
+      "type": "uses",
+      "reason": "resolves materially ambiguous preparation decisions"
+    },
+    {
+      "from": "docs-prepare",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied before drafting documentation prose"
+    },
+    {
+      "from": "docs-prepare",
+      "to": "spec-manage",
+      "type": "uses",
+      "reason": "specification mismatches route to its audit or update mode"
+    },
+    {
+      "from": "docs-review",
+      "to": "spec-manage",
+      "type": "uses",
+      "reason": "specs/ content routes to its spec-audit mode"
+    },
+    {
+      "from": "commit-msg",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to the drafted commit subject"
+    },
+    {
+      "from": "briefing",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to the summary prose"
+    },
+    {
+      "from": "release-prepare",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to release notes and announcement prose"
+    },
+    {
+      "from": "mattermost-triage",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to draft responses and the digest"
+    },
+    {
+      "from": "team-retro",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to report and presentation prose"
+    },
+    {
+      "from": "team-roadmap",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to roadmap prose"
+    },
+    {
+      "from": "team-sprint-start",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to sprint scope prose"
+    },
+    {
+      "from": "team-sprint-close",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to closing report prose"
+    },
+    {
+      "from": "slides-prompts-prepare",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to slide prompt prose"
+    },
+    {
+      "from": "code-review",
+      "to": "release-review",
+      "type": "recommends",
+      "reason": "release MRs route to it for the release verdict"
+    },
+    {
+      "from": "code-explain",
+      "to": "code-review",
+      "type": "recommends",
+      "reason": "quality evaluation after the walkthrough"
+    },
+    {
+      "from": "team-retro",
+      "to": "mattermost",
+      "type": "recommends",
+      "reason": "chat evidence is read through it"
+    },
+    {
+      "from": "team-roadmap",
+      "to": "mattermost",
+      "type": "recommends",
+      "reason": "chat evidence is read through it"
+    },
+    {
+      "from": "team-sprint-start",
+      "to": "mattermost",
+      "type": "recommends",
+      "reason": "chat evidence is read through it"
+    },
+    {
+      "from": "team-sprint-close",
+      "to": "mattermost",
+      "type": "recommends",
+      "reason": "chat evidence is read through it"
+    },
+    {
+      "from": "briefing",
+      "to": "team-retro",
+      "type": "recommends",
+      "reason": "retrospective analysis over collected team evidence is its scope"
+    },
+    {
+      "from": "team-retro",
+      "to": "briefing",
+      "type": "recommends",
+      "reason": "supplied transcripts and notes are summarized with it"
+    },
+    {
+      "from": "goal",
+      "to": "task-prepare",
+      "type": "recommends",
+      "reason": "human-facing work items and GitLab publication use it"
+    },
+    {
+      "from": "task-prepare",
+      "to": "goal",
+      "type": "recommends",
+      "reason": "compact read-only goals for LLM agents use it"
+    },
+    {
+      "from": "release-prepare",
+      "to": "release-review",
+      "type": "recommends",
+      "reason": "release MR readiness verdict before merge"
+    },
+    {
+      "from": "release-review",
+      "to": "release-prepare",
+      "type": "recommends",
+      "reason": "the release runbook and publication plan come from it"
+    },
+    {
+      "from": "mattermost",
+      "to": "mattermost-triage",
+      "type": "recommends",
+      "reason": "bulk triage of direct and group chats builds on this credential"
+    },
+    {
+      "from": "task-review",
+      "to": "task-prepare",
+      "type": "recommends",
+      "reason": "task-prepare applies this verdict before publication"
+    },
+    {
+      "from": "task-review",
+      "to": "task-triage",
+      "type": "recommends",
+      "reason": "task-triage records this verdict per issue"
+    },
+    {
+      "from": "askme",
+      "to": "task-prepare",
+      "type": "recommends",
+      "reason": "interview answers feed its preparation workflow"
+    }
+  ]
+}

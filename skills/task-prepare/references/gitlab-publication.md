@@ -2,8 +2,8 @@
 
 ## Evidence and scope
 
-Read GitLab through `glab` with an explicit host. Use the `glab` skill when
-available and inspect the installed CLI help before choosing API flags. The
+Read GitLab through `glab` with an explicit host. Inspect the installed `glab`
+CLI help before choosing API flags. The
 bundled generator needs only Python 3.12+ and the standard library; it never
 calls GitLab. Authentication is needed for live evidence and later manual
 publication, not for neutral preparation or local rendering.

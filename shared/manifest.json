@@ -2,6 +2,14 @@
   "version": 1,
   "files": [
     {
+      "source": "references/necessity-doctrine.md",
+      "destination": "askme/references/necessity-doctrine.md"
+    },
+    {
+      "source": "references/necessity-doctrine.md",
+      "destination": "code-review/references/necessity-doctrine.md"
+    },
+    {
       "source": "references/mutation_process.py",
       "destination": "code-review/scripts/portable_runtime/mutation_process.py"
     },

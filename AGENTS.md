@@ -48,7 +48,7 @@
 - Add focused contract or regression tests for observable behavior.
 - Run `task format` after maintained-source formatting changes; run `task check` before a non-push handoff, while Lefthook `pre-push` owns complete local verification for pushes.
 - Treat `task pre-push` as the single local push gate: it runs `task check` and `task dependency:audit` concurrently; do not run either immediately before a push unless diagnosing a failure.
-- Preserve agentskills.io frontmatter constraints and keep every built skill self-contained.
+- Preserve agentskills.io frontmatter constraints; every built skill archive stays self-contained, and cross-skill relations are declared only in `shared/skill-relations.json` (`requires`/`uses`/`recommends`) and materialized into built `SKILL.md` as a recommendational "Related skills" section, never as a runtime import of another archive.
 - Keep Python runners shipped in portable skills compatible with Python 3.12+ and standard-library-only.
 - Validate every committed `*.schema.json` with a concrete valid instance and add it to the exhaustive mapping in `tests/test_json_schemas.py`.
 - Write ordinary project files directly with bounded paths and atomic replacement or rollback; require preview and explicit confirmation only for external publication, user configuration, destructive cleanup, history changes, releases, and package lifecycle mutations.

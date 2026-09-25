@@ -1,7 +1,10 @@
 # Workflow
 
 This skill has the fixed `retro` entrypoint. Do not combine it with roadmap
-editing, slide-image generation, task creation, or external publication.
+editing, slide-image generation, task creation, or external publication. Apply
+`humanize` to drafted report and presentation prose. Summarizing supplied
+transcripts or notes without team evidence collection selects the `briefing`
+skill instead of this workflow.
 
 Resolve the profile and handle setup or remembered updates through
 `references/team-profile-workflow.md`. Run
@@ -46,7 +49,7 @@ python3 scripts/gitlab_period_metrics.py \
 
 `METRICS_ROOT` remains a unique private temporary directory per run. The
 `--resume-profile` flag routes collection through the private evidence store
-under `${XDG_STATE_HOME:-~/.local/state}/agent-skills/team-evidence/<profile>/`:
+under `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team-evidence/<profile>/`:
 the collector fetches only windows missing from stored complete coverage,
 merges the remaining windows from content-addressed snapshots, and records
 each newly collected window. Complete GitLab windows stay reusable forever

@@ -2,7 +2,8 @@
 
 This skill has the fixed `slides-prompts` entrypoint. It prepares image prompts
 for an existing presentation; it does not rewrite presentation content, render
-or replace images, or publish artifacts.
+or replace images, or publish artifacts. Apply `humanize` to drafted prompt
+prose.
 
 Resolve the profile and handle setup or remembered updates through
 `references/team-profile-workflow.md`. Run

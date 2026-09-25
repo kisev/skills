@@ -113,6 +113,9 @@ renames a skill, repeat `add` for additions and remove retired names explicitly.
 
 - Portable skills are self-contained and do not depend on the repository or the
   OpenCode npm package after installation.
+- Cross-skill relations are install recommendations: the build materializes each
+  skill's declared companions into its `SKILL.md` "Related skills" section, and
+  every archive still works on its own.
 - The supported distribution is `https://kisev.github.io/skills`; source
   provenance is recorded in its release metadata and linked from
   `https://github.com/kisev/skills/releases/latest`.

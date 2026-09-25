@@ -18,6 +18,9 @@ English when that language is ambiguous.
   when the user requests a set or agrees to the proposed split. Keep one plan
   for the entire set, including cross-project tasks.
 
+This skill prepares human-facing work items. A compact read-only goal meant as
+an assignment for an LLM agent selects the `goal` skill instead of a task.
+
 Use the explicitly supplied conversation and its confirmed decisions as source
 material. Do not discard earlier answers when the final request says "prepare
 an issue". In GitLab mode, exact relevant project, issue, and MR links may supply

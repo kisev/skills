@@ -73,17 +73,24 @@ def test_built_skill_files_match_canonical_sources() -> None:
 
 def test_review_followups_preserve_the_decision_boundary() -> None:
     askme = (BUILT_SKILLS / "askme/references/workflow.md").read_text(encoding="utf-8")
+    askme_doctrine = (BUILT_SKILLS / "askme/references/necessity-doctrine.md").read_text(
+        encoding="utf-8"
+    )
     review = (BUILT_SKILLS / "code-review/references/workflow.md").read_text(encoding="utf-8")
+    review_doctrine = (BUILT_SKILLS / "code-review/references/necessity-doctrine.md").read_text(
+        encoding="utf-8"
+    )
     local = (BUILT_SKILLS / "code-review/references/local-review.md").read_text(encoding="utf-8")
     examples = (BUILT_SKILLS / "code-review/references/finding-examples.md").read_text(
         encoding="utf-8"
     )
-    assert "necessity check below" in askme
-    assert "before asking how to implement" in askme
+    assert askme_doctrine == review_doctrine
+    assert "necessity check in `references/necessity-doctrine.md`" in askme
     assert "a candidate, not an agreed requirement" in askme
+    assert "before asking how to implement" in askme_doctrine
     assert "Independent reviewers receive these decisions" in review
-    assert "fault injection alone" in review
-    assert "Do not automatically recommend another broad review" in review
+    assert "fault injection alone" in review_doctrine
+    assert "Do not automatically recommend another broad review" in review_doctrine
     assert "previous finalized local report and snapshot" in review
     assert "not an implementation regression" in local
     assert "cannot prove" in local

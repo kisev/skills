@@ -73,3 +73,12 @@ Interactive CLI selectors shall share one visual and keyboard contract. Single
 selection shall support Up/Down, Enter, and cancellation; multi-selection shall
 also support Space toggle, select all, and select none. The installer shall allow
 arbitrary command, agent, and plugin subsets while preserving documented defaults.
+
+### REQ-I-010 - Skill relations interface
+
+`shared/skill-relations.json` shall be the single source of truth for the
+cross-skill relation graph. Each entry shall name two existing skills, one
+relation type, and a one-line English reason. The portable build shall validate
+the graph, reject unknown skill names, self-relations, and duplicates, and
+render each skill's relations into its built `SKILL.md` "Related skills"
+section, which points to the source recorded in the skill's `metadata.source`.

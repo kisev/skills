@@ -3,6 +3,7 @@
 Read applicable `AGENTS.md`, the existing target document, source code, tests,
 configuration, and related canonical specifications. Without a path or section,
 inspect the complete user-facing documentation set to select the relevant document.
+Apply `humanize` before drafting documentation prose.
 
 ## Document selection
 

@@ -57,3 +57,12 @@ historical maximum of its namespace without filling gaps or reusing identifiers.
 Withdrawn, deprecated, and superseded records shall remain in canonical `specs/`
 with enough context to identify the former requirement or decision, its status,
 the reason it changed, and its replacement when one exists.
+
+### REQ-C-009 - Recommendational skill relations
+
+Cross-skill relations shall be declared only in `shared/skill-relations.json`
+with the types `requires`, `uses`, and `recommends`. Relations are install
+recommendations: every published archive shall remain self-contained, no
+published archive shall import another archive's files at runtime, and the
+portable build shall materialize each skill's declared relations into its built
+`SKILL.md` as a "Related skills" section.

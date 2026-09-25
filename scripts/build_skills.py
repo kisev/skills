@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared"
 SOURCES = ROOT / "skills"
 MANIFEST = SHARED / "manifest.json"
+RELATION_TYPES = ("requires", "uses", "recommends")
 DEFAULT_OUTPUT = ROOT / ".build" / "skills"
 SOURCE_ENTRYPOINT = "SKILL.source.md"
 STABLE_SOURCE_URL = "https://kisev.github.io/skills"
@@ -70,6 +71,74 @@ def manifest_entries() -> list[tuple[Path, Path]]:
             raise BuildError("sources must be inside shared/references") from error
         entries.append((source, destination))
     return entries
+
+
+def load_relations() -> dict[str, list[dict[str, str]]]:
+    """Load the curated cross-skill relation graph keyed by source skill."""
+    try:
+        payload = json.loads((SHARED / "skill-relations.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise BuildError(f"cannot read skill relations: {error}") from error
+    if not isinstance(payload, dict) or payload.get("version") != 1:
+        raise BuildError("skill relations version must be 1")
+    entries = payload.get("relations")
+    if not isinstance(entries, list):
+        raise BuildError("skill relations must be a list")
+    related: dict[str, list[dict[str, str]]] = {}
+    seen: set[tuple[str, str, str]] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise BuildError("skill relation entries must be objects")
+        source = entry.get("from")
+        target = entry.get("to")
+        relation_type = entry.get("type")
+        reason = entry.get("reason")
+        if not isinstance(source, str) or not (SOURCES / source / SOURCE_ENTRYPOINT).is_file():
+            raise BuildError(f"skill relation from names an unknown skill: {source!r}")
+        if not isinstance(target, str) or not (SOURCES / target / SOURCE_ENTRYPOINT).is_file():
+            raise BuildError(f"skill relation to names an unknown skill: {target!r}")
+        if source == target:
+            raise BuildError(f"skill relation to itself: {source}")
+        if not isinstance(relation_type, str) or relation_type not in RELATION_TYPES:
+            raise BuildError(f"unknown skill relation type: {relation_type!r}")
+        if not isinstance(reason, str) or not reason or "\n" in reason:
+            raise BuildError("skill relation reason must be a non-empty single line")
+        key = (source, target, relation_type)
+        if key in seen:
+            raise BuildError(f"duplicate skill relation: {key[0]} -> {key[1]} ({key[2]})")
+        seen.add(key)
+        related.setdefault(source, []).append(
+            {"name": target, "type": relation_type, "reason": reason}
+        )
+    for edges in related.values():
+        edges.sort(key=lambda edge: (RELATION_TYPES.index(edge["type"]), edge["name"]))
+    return related
+
+
+def render_related_section(edges: list[dict[str, str]]) -> str:
+    lines = [
+        "## Related skills",
+        "",
+        "Every archive in this collection stays usable on its own. These declared",
+        "companions are recommended installs from the same source recorded in this",
+        "skill's frontmatter `source` field:",
+        "",
+    ]
+    lines.extend(f"- `{edge['name']}` ({edge['type']}) — {edge['reason']}." for edge in edges)
+    return "\n".join(lines) + "\n"
+
+
+def inject_relations(root: Path, related: dict[str, list[dict[str, str]]]) -> None:
+    for name, edges in related.items():
+        entrypoint = root / name / "SKILL.md"
+        if not entrypoint.is_file():
+            raise BuildError(f"cannot inject related skills section: {name}")
+        text = entrypoint.read_text(encoding="utf-8")
+        if "## Related skills" in text:
+            raise BuildError(f"related skills section already present: {name}")
+        entrypoint.write_text(
+            text.rstrip("\n") + "\n\n" + render_related_section(edges), encoding="utf-8"
+        )
 
 
 def check_sources(entries: list[tuple[Path, Path]]) -> None:
@@ -193,6 +262,7 @@ def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
 
 def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int:
     entries = manifest_entries()
+    related = load_relations()
     check_sources(entries)
     if output.is_symlink():
         raise BuildError("output must not be a symbolic link")
@@ -206,6 +276,7 @@ def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int
         copy_source(staged)
         stamp_source(staged, source_url)
         stamp_release(staged)
+        inject_relations(staged, related)
         materialize(staged, entries)
         check_materialized(staged, entries)
         if check:

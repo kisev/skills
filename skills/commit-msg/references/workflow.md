@@ -13,6 +13,7 @@
 
 ## Rules
 
+- Apply `humanize` to the drafted subject after repository rules are satisfied.
 - If the repository sources establish no message format, use Conventional Commit: `type[optional scope][!]: description`.
 - When using Conventional Commit, choose `type` by the actual effect; do not invent a scope if it does not help.
 - If the repository sources establish no wording style, write the descriptive subject in imperative mood, omit the trailing period, and ensure it completes `If applied, this commit will ...` after any Conventional Commit prefix is removed.

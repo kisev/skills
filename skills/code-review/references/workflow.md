@@ -9,9 +9,11 @@ Select every thread outcome explicitly after analysis. The draft's `reply` is
 not an instruction to publish. When no new information is needed, choose
 `no_publication` and explain that decision privately.
 
-Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, and `references/semver.md`. Apply the necessity and completion rules below to both targets. For local WIP follow `references/local-review.md`, then stop; the remote stages below do not apply. For a GitLab MR also read `references/incremental-review.md` and `references/review-state-machine.md`.
+Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/necessity-doctrine.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, and `references/semver.md`. Apply the necessity and completion doctrine to both targets. For local WIP follow `references/local-review.md`, then stop; the remote stages below do not apply. For a GitLab MR also read `references/incremental-review.md` and `references/review-state-machine.md`.
 
 `/code-review` distinguishes a remote-MR target from local-WIP input.
+
+A release MR — one that publishes or tags a version — routes to the `release-review` skill, which owns the release verdict and its SemVer, compatibility, migration, rollback, and CI gates. Review such an MR here only when the user explicitly requests this skill in addition.
 
 For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter URLs, and branch inference before any API call or artifact creation. Run `scripts/review_mr.py prepare --url <mr-url> --repo-root <checkout> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto`, then execute the returned fully bound `context` action. Use `--incremental off` only for an explicit request such as "without incremental review", "start from scratch", or "ignore the previous review"; "full review" alone is not an opt-out. The context must bind the numeric ID and username of the current GitLab user, MR author, role, all paginated discussions and notes, project issue templates from the exact MR head, exact note permalinks, and a local repository containing the exact base/start/head commits. Do not duplicate canonical collection with direct `glab mr view` or parallel MR reads.
 
@@ -19,33 +21,10 @@ For local WIP, use only the current existing checkout and `prepare-local --incre
 
 ## Necessity and completion
 
-Before promoting any candidate, establish the agreed requirement, reachable
-scenario and its assumptions, user consequence, relation to the reviewed change,
-and proportionate minimum fix. Reproduction or fault injection alone proves
-neither practical reachability nor priority. Distinguish a regression, a missed
-requirement, pre-existing debt, and a new requirement. Report optional hardening
-and scope expansion separately from acceptance blockers. Use risk and evidence
-to calibrate severity; do not raise it to justify doing more work.
-
-Carry the user's accepted risks, supported scenarios, exclusions, and acceptance
-checks into every review. Independent reviewers receive these decisions even
-when previous reviewer conclusions are withheld to avoid anchoring. Do not
-reopen an accepted limitation or rejected candidate without changed facts or an
-explicit user decision. Describe that basis when reopening it. Extra structured
-fields cannot prove semantic reasoning quality; require a concrete contract
-failure before proposing a new validator or state machine.
-
-A follow-up checks agreed fixes, the delta, and affected consumers and failure
-paths. New regressions and consequential missed requirements remain actionable;
-unrelated improvements do not automatically extend the task. When successive
-fixes expand one mechanism, assess simplification against the agreed goal before
-requesting another layer. A new feature needs a separate scope decision with its
-cost explained. Do not prescribe a fixed round limit or a severity-only cutoff.
-
-Finish when acceptance checks and required findings are satisfied and affected
-regressions have been checked. State residual limitations and incomplete checks.
-Do not automatically recommend another broad review after successful completion,
-or describe a targeted check as proof that all possible defects are absent.
+Apply the shared necessity and completion doctrine in
+`references/necessity-doctrine.md` to every candidate, remedy, and follow-up.
+Independent reviewers receive these decisions even when previous reviewer
+conclusions are withheld to avoid anchoring.
 
 ## Remote MR stages
 
