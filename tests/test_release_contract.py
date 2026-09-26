@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import json
 import os
 import signal
 import subprocess
+import tarfile
 import time
 import urllib.error
 from contextlib import suppress
@@ -15,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from scripts import (
+    build_dev_artifacts,
     build_distribution,
     build_release_artifacts,
     check_release,
@@ -683,6 +686,42 @@ def test_project_release_skill_keeps_manual_publication_gates() -> None:
     assert "confirmation before creating or updating the PR" in normalized
     for action in ("pushing `dev`", "merging", "creating the annotated", "pushing the tag"):
         assert action in normalized
+
+
+def test_dev_pack_pins_workspace_dependencies_to_exact_dev_versions(tmp_path: Path) -> None:
+    source = tmp_path / "member"
+    (source / "dist").mkdir(parents=True)
+    (source / "dist" / "index.js").write_text("export {}\n", encoding="utf-8")
+    for name in ("README.md", "README.ru.md"):
+        (source / name).write_text("readme\n", encoding="utf-8")
+    (source / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "@kisev/example",
+                "version": "1.2.0",
+                "dependencies": {
+                    "@kisev/safe-fs": "^1.0.0",
+                    "@kisev/memomatic": "^1.0.0",
+                    "external-package": "^2.0.0",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    pins = {
+        "@kisev/safe-fs": "1.0.0-dev.7.g1a2b3c4",
+        "@kisev/memomatic": "1.0.0-dev.7.g1a2b3c4",
+    }
+    content, record = build_dev_artifacts.pack(source, "1.2.0-dev.7.g1a2b3c4", ("dist/",), pins)
+    with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
+        handle = archive.extractfile("package/package.json")
+        assert handle is not None
+        packed = json.loads(handle.read().decode("utf-8"))
+    assert packed["version"] == "1.2.0-dev.7.g1a2b3c4"
+    assert packed["dependencies"]["@kisev/safe-fs"] == pins["@kisev/safe-fs"]
+    assert packed["dependencies"]["@kisev/memomatic"] == pins["@kisev/memomatic"]
+    assert packed["dependencies"]["external-package"] == "^2.0.0"
+    assert record["version"] == "1.2.0-dev.7.g1a2b3c4"
 
 
 def test_release_manifest_rejects_tampered_tarball(

@@ -28,7 +28,12 @@ class DevArtifactError(Exception):
     pass
 
 
-def pack(source: Path, version: str, prefixes: tuple[str, ...]) -> tuple[bytes, dict[str, Any]]:
+def pack(
+    source: Path,
+    version: str,
+    prefixes: tuple[str, ...],
+    pins: dict[str, str],
+) -> tuple[bytes, dict[str, Any]]:
     with tempfile.TemporaryDirectory(prefix="skills-dev-pack-") as temporary:
         staged = Path(temporary) / "package"
         staged.mkdir()
@@ -39,6 +44,12 @@ def pack(source: Path, version: str, prefixes: tuple[str, ...]) -> tuple[bytes, 
             shutil.copytree(source / "assets", staged / "assets")
         package = json.loads((staged / "package.json").read_text(encoding="utf-8"))
         package["version"] = version
+        dependencies = package.get("dependencies", {})
+        if not isinstance(dependencies, dict):
+            raise DevArtifactError("npm package dependencies are invalid")
+        for dependency in dependencies:
+            if dependency in pins:
+                dependencies[dependency] = pins[dependency]
         (staged / "package.json").write_text(
             json.dumps(package, ensure_ascii=True, indent=2) + "\n", encoding="utf-8"
         )
@@ -97,15 +108,20 @@ def build(version: str, revision: str) -> dict[str, Any]:
         (MEMOMATIC, "memomatic.tgz", ("dist/", "assets/")),
         (PACKAGE, "package.tgz", ("dist/",)),
     )
-    npm_entries: list[dict[str, Any]] = []
-    tarballs: dict[str, Path] = {}
-    for source, filename, prefixes in members:
+    pins: dict[str, str] = {}
+    for source, _filename, _prefixes in members:
         package = json.loads((source / "package.json").read_text(encoding="utf-8"))
         name, base = package.get("name"), package.get("version")
         if not isinstance(name, str) or not isinstance(base, str) or not base:
             raise DevArtifactError("npm package name or version is invalid")
-        member_version = version if source == PACKAGE else member_dev_version(base, version)
-        content, record = pack(source, member_version, prefixes)
+        pins[name] = version if source == PACKAGE else member_dev_version(base, version)
+    npm_entries: list[dict[str, Any]] = []
+    tarballs: dict[str, Path] = {}
+    for source, filename, prefixes in members:
+        package = json.loads((source / "package.json").read_text(encoding="utf-8"))
+        name = package["name"]
+        member_version = pins[name]
+        content, record = pack(source, member_version, prefixes, pins)
         digest = build_release_artifacts.hashes(content)
         if record.get("integrity") != digest["integrity"] or record.get("shasum") != digest["sha1"]:
             raise DevArtifactError("npm pack digests do not match the exact tarball")

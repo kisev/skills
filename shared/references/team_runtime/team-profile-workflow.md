@@ -17,8 +17,7 @@ read for the delivery kind. When `action-check` reports
 `context_location: legacy`, offer migration: run `profile-migrate --name NAME --set-default`, present the preview, and after explicit confirmation run the
 returned digest-bound `profile-save` command. The legacy file is never removed
 by the skill; the user removes it manually after verifying the migrated
-profile. Evidence stores migrated with `evidence_store.py evidence-migrate
---profile NAME` move `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team-evidence/<profile>/`
+profile. Evidence stores migrated with `evidence_store.py evidence-migrate --profile NAME` move `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team-evidence/<profile>/`
 into `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/evidence/` atomically; the
 command refuses to run when the current location already exists.
 
