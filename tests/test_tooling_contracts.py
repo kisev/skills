@@ -117,5 +117,15 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     assert "deps: [check, dependency:audit]" in taskfile
     assert "  release:preflight:" in taskfile
     assert "task release:check -- --published" in taskfile
+    build_cmd = "mise exec -- npm run build --workspace @kisev/"
+    assert (
+        "  typecheck:typescript:\n    desc: Check types in typescript\n"
+        "    deps: [package:build]" in taskfile
+    ), "typecheck must build workspace packages so clean checkouts resolve types"
+    safe_fs_pos = taskfile.index(f"{build_cmd}safe-fs")
+    for consumer in ("memomatic", "agentomatic"):
+        assert taskfile.index(f"{build_cmd}{consumer}") > safe_fs_pos, (
+            f"{consumer} must build after safe-fs"
+        )
     distribution = (ROOT / "scripts/build_distribution.py").read_text(encoding="utf-8")
     assert "build_skills(BUILT_SKILLS" not in distribution

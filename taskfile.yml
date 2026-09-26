@@ -141,7 +141,7 @@ tasks:
 
   typecheck:typescript:
     desc: Check types in typescript
-    deps: [package:install]
+    deps: [package:build]
     cmds:
       - mise exec -- tsc --project apps/memomatic/tsconfig.json --noEmit
       - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
@@ -386,6 +386,7 @@ tasks:
     dir: .
     deps: [package:install]
     cmds:
+      - mise exec -- npm run build --workspace @kisev/safe-fs
       - mise exec -- npm run build --workspace @kisev/memomatic
       - mise exec -- npm run build --workspace @kisev/agentomatic
 
