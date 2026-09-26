@@ -37,6 +37,7 @@ SCHEMA_PATHS = {
     "shared/references/portable_gitlab/artifact-contracts-v2.schema.json",
     "shared/references/post-success-marker.schema.json",
     "shared/references/team_runtime/team-context.schema.json",
+    "shared/references/people_runtime/people-context.schema.json",
     "shared/references/work-item-contract.schema.json",
     "skills/taskmatic/references/snapshot.schema.json",
 }
@@ -753,7 +754,7 @@ def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
 def validate_eval_contract_instances() -> None:
     scenario_validator = validator("evals/schemas/scenario-v1.schema.json")
     scenarios = sorted((ROOT / "evals/scenarios").glob("*.json"))
-    assert len(scenarios) == 230
+    assert len(scenarios) == 275
     for path in scenarios:
         scenario_validator.validate(load(path.relative_to(ROOT)))
 
@@ -778,6 +779,20 @@ def validate_shared_contract_instances() -> None:
     )
     validator("shared/references/team_runtime/team-context.schema.json").validate(
         load("shared/references/team_runtime/team-context.example.json")
+    )
+    people_validator = validator("shared/references/people_runtime/people-context.schema.json")
+    people_validator.validate(load("shared/references/people_runtime/people-context.example.json"))
+    people_validator.validate(
+        {
+            "schema_version": 1,
+            "profile": "minimal-team",
+            "reports": [
+                {
+                    "name": "Minimal Report",
+                    "one_on_one": {"frequency": "monthly", "minutes": 45},
+                }
+            ],
+        }
     )
     validator("shared/references/work-item-contract.schema.json").validate(cast("Any", work_item()))
     artifact_validator = validator(

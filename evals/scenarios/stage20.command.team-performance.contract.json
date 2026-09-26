@@ -1,0 +1,39 @@
+{
+  "id": "stage20.command.team-performance.contract",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "command",
+  "locale": "neutral",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["command:team-performance"]
+    },
+    "prompt": "Verify command team-performance contract."
+  },
+  "expected": {
+    "selected": ["command:team-performance"],
+    "not_selected": [],
+    "mutation_boundary": "adapter-only",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-performance.contract.source",
+      "path": "packages/agentomatic/src/registry.ts"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "5c8ba3815cceb68c42d119b22904e214bb7b203d37a50fc51d8ad0e2f5657389"
+}

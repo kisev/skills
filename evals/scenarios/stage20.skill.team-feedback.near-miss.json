@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-feedback.near-miss",
+  "pair_id": "stage20.skill.team-feedback.near-miss",
+  "kind": "near-miss",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Русский: это намеренно не относится к навыку team-feedback; не направляй запрос в этот навык."
+  },
+  "expected": {
+    "selected": [],
+    "not_selected": ["skill:team-feedback"],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "safe-escalation"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-feedback.near-miss.source",
+      "path": ".build/skills/team-feedback/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "a15cf681e5277ccdf6a4c7854d50550acd0e8633016b3351c028435edf51396b"
+}

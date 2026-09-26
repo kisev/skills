@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kisev.github.io/skills/schemas/people-context.schema.json",
+  "title": "People context profile",
+  "description": "Private manager profile with stable facts about reports and stakeholders.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile", "reports"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schema_version": { "const": 1 },
+    "profile": { "type": "string", "pattern": "^[a-z0-9-]{1,63}$" },
+    "manager": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "reports": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/report" }
+    },
+    "stakeholders": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/stakeholder" }
+    },
+    "extensions": { "type": "object" }
+  },
+  "$defs": {
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "handle": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "level": { "type": "string", "minLength": 1 },
+        "since": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "strengths": { "$ref": "#/$defs/textList" },
+        "growth_areas": { "$ref": "#/$defs/textList" },
+        "motivators": { "$ref": "#/$defs/textList" },
+        "caution": { "$ref": "#/$defs/textList" },
+        "notes": { "$ref": "#/$defs/textList" },
+        "one_on_one": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "frequency": { "type": "string", "minLength": 1 },
+            "minutes": { "type": "integer", "minimum": 5, "maximum": 240 }
+          }
+        }
+      }
+    },
+    "stakeholder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "role": { "type": "string", "minLength": 1 },
+        "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "textList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

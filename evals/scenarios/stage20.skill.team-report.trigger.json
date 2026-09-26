@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-report.trigger",
+  "pair_id": "stage20.skill.team-report.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-report"]
+    },
+    "prompt": "Выбери навык team-report для его точного контрактного сценария."
+  },
+  "expected": {
+    "selected": ["skill:team-report"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-report.trigger.source",
+      "path": ".build/skills/team-report/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "7048f33fe40b3f51af932e04293a54618c42621131ca4331798774c6b24da386"
+}

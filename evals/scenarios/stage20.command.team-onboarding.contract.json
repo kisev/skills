@@ -1,0 +1,39 @@
+{
+  "id": "stage20.command.team-onboarding.contract",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "command",
+  "locale": "neutral",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["command:team-onboarding"]
+    },
+    "prompt": "Verify command team-onboarding contract."
+  },
+  "expected": {
+    "selected": ["command:team-onboarding"],
+    "not_selected": [],
+    "mutation_boundary": "adapter-only",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-onboarding.contract.source",
+      "path": "packages/agentomatic/src/registry.ts"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "5e97a467ea64261333518dfa80991ff824a96b9f95c1f5c325548415695b41c3"
+}

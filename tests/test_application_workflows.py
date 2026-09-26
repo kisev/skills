@@ -5405,9 +5405,9 @@ class MattermostAndTeamTests(unittest.TestCase):
             applied = self.save_team_profile("team-retro", candidate, "platform-team", environment)
             self.assertEqual(applied.returncode, 0, applied.stderr)
 
-            profile_root = root / "config/opencode/team-contexts"
-            saved = profile_root / "platform-team.json"
-            settings = profile_root / "settings.json"
+            profile_root = root / "config/agent-skills/team/platform-team"
+            saved = profile_root / "context.json"
+            settings = profile_root.parent / "settings.json"
             self.assertEqual(stat_mode(profile_root), 0o700)
             self.assertEqual(stat_mode(saved), 0o600)
             self.assertEqual(stat_mode(settings), 0o600)
@@ -5583,7 +5583,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
             digest = json.loads(prepared.stdout)["digest"]
-            saved = root / "config/opencode/team-contexts/platform-team.json"
+            saved = root / "config/agent-skills/team/platform-team/context.json"
             saved.write_text(saved.read_text(encoding="utf-8") + "\n", encoding="utf-8")
             saved.chmod(0o600)
             stale = self.run_script(
@@ -5646,8 +5646,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             result = json.loads(output.getvalue())
             assert status == 2
             assert result["error"]["code"] == "io_error"
-            assert not (root / "config/opencode/team-contexts/platform-team.json").exists()
-            assert not (root / "config/opencode/team-contexts/settings.json").exists()
+            assert not (root / "config/agent-skills/team/platform-team/context.json").exists()
+            assert not (root / "config/agent-skills/team/settings.json").exists()
             assert not (
                 root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
             ).exists()
@@ -5696,8 +5696,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             result = json.loads(output.getvalue())
             assert status == 2
             assert result["error"]["code"] == "io_error"
-            assert not (root / "config/opencode/team-contexts/platform-team.json").exists()
-            assert not (root / "config/opencode/team-contexts/settings.json").exists()
+            assert not (root / "config/agent-skills/team/platform-team/context.json").exists()
+            assert not (root / "config/agent-skills/team/settings.json").exists()
             assert not (
                 root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
             ).exists()
@@ -5721,8 +5721,8 @@ class MattermostAndTeamTests(unittest.TestCase):
                 with patch.dict(os.environ, environment):
                     payload = module.profile_change_payload("platform-team", raw, set_default=True)
                     plan_digest, _, _ = module.prepare_plan(payload)
-                    transaction_root = root / "config/opencode/team-contexts"
-                    profile = transaction_root / "platform-team.json"
+                    transaction_root = root / "config/agent-skills/team"
+                    profile = transaction_root / "platform-team/context.json"
                     settings = transaction_root / "settings.json"
                     original_write_once = module.write_once
 
@@ -5783,7 +5783,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             with patch.dict(os.environ, environment):
                 payload = module.profile_change_payload("platform-team", raw, set_default=True)
                 plan_digest, _, _ = module.prepare_plan(payload)
-                profile = root / "config/opencode/team-contexts/platform-team.json"
+                profile = root / "config/agent-skills/team/platform-team/context.json"
                 original_create_receipt = module.create_receipt
 
                 def create_and_tamper(receipt: Path, digest: str) -> None:
@@ -5801,7 +5801,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 (root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json").exists()
             )
             self.assertTrue(
-                (root / "config/opencode/team-contexts/.profile-save.transaction.json").exists()
+                (root / "config/agent-skills/team/.profile-save.transaction.json").exists()
             )
 
     def test_team_profile_recovers_interrupted_transaction_before_retry(self) -> None:
@@ -5824,7 +5824,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                journal = root / "config/opencode/team-contexts/.profile-save.transaction.json"
+                journal = root / "config/agent-skills/team/.profile-save.transaction.json"
                 self.assertTrue(journal.is_file())
                 report_path, _ = module.apply_profile(
                     "platform-team", raw, plan_digest, set_default=True
@@ -5851,7 +5851,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             previous = b"{" + b" " * (module.MAX_BYTES - 2) + b"}"
             with patch.dict(os.environ, environment):
                 transaction_root = module.profile_root(create=True)
-                profile = transaction_root / "platform-team.json"
+                profile = transaction_root / "platform-team/context.json"
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 profile.write_bytes(previous)
                 profile.chmod(0o600)
                 payload = module.profile_change_payload("platform-team", raw, set_default=False)
@@ -5893,7 +5894,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             previous = b"{" + b" " * (module.MAX_BYTES - 2) + b"}"
             with patch.dict(os.environ, environment):
                 transaction_root = module.profile_root(create=True)
-                profile = transaction_root / "platform-team.json"
+                profile = transaction_root / "platform-team/context.json"
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 profile.write_bytes(previous)
                 profile.chmod(0o600)
                 payload = module.profile_change_payload("platform-team", raw, set_default=False)
@@ -5943,11 +5945,13 @@ class MattermostAndTeamTests(unittest.TestCase):
                 with patch.object(module, "sync_directory", side_effect=observe_sync):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-            profile_root = (root / "config/opencode/team-contexts").resolve()
+            profile_root = (root / "config/agent-skills/team").resolve()
+            profile_dir = (root / "config/agent-skills/team/platform-team").resolve()
             report_root = (root / "state/agent-skills/team-workflow/reports").resolve()
             receipt_root = (root / "state/agent-skills/team-workflow/receipts").resolve()
             receipt_index = synced.index(receipt_root)
-            self.assertGreaterEqual(synced[:receipt_index].count(profile_root), 3)
+            self.assertGreaterEqual(synced[:receipt_index].count(profile_root), 2)
+            self.assertIn(profile_dir, synced[:receipt_index])
             self.assertIn(report_root, synced[:receipt_index])
             self.assertEqual(synced[-1], profile_root)
 
@@ -6136,7 +6140,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 journal = transaction_root / ".profile-save.transaction.json"
                 receipt_root = root / "state/agent-skills/team-workflow/receipts"
                 original_sync = module.sync_directory
@@ -6169,10 +6173,11 @@ class MattermostAndTeamTests(unittest.TestCase):
             }
             with patch.dict(os.environ, environment):
                 transaction_root = module.profile_root(create=True)
-                profile = transaction_root / "platform-team.json"
+                profile = transaction_root / "platform-team/context.json"
                 settings = transaction_root / "settings.json"
                 previous_profile = b'{"previous":"profile"}'
                 previous_settings = b'{"previous":"settings"}'
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 module.atomic(profile, previous_profile)
                 module.atomic(settings, previous_settings)
                 payload = module.profile_change_payload("platform-team", raw, set_default=True)
@@ -6221,7 +6226,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             with patch.dict(os.environ, environment):
                 payload = module.profile_change_payload("platform-team", raw, set_default=True)
                 plan_digest, _, _ = module.prepare_plan(payload)
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 journal = transaction_root / ".profile-save.transaction.json"
                 receipt_root = root / "state/agent-skills/team-workflow/receipts"
                 receipt = receipt_root / f"{plan_digest}.json"
@@ -6250,7 +6255,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 module.recover_profile_transaction(transaction_root)
 
             self.assertFalse(journal.exists())
-            self.assertTrue((transaction_root / "platform-team.json").is_file())
+            self.assertTrue((transaction_root / "platform-team/context.json").is_file())
             self.assertTrue((transaction_root / "settings.json").is_file())
             self.assertTrue(receipt.is_file())
 
@@ -6275,7 +6280,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 receipt_root = root / "state/agent-skills/team-workflow/receipts"
                 receipt = receipt_root / f"{plan_digest}.json"
                 receipt.write_text("{", encoding="utf-8")
@@ -6315,7 +6320,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 receipt = root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
                 receipt_value = json.loads(receipt.read_text(encoding="utf-8"))
                 self.assertTrue(module.valid_receipt(receipt_value, plan_digest))
@@ -6331,7 +6336,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 module.recover_profile_transaction(transaction_root)
 
             self.assertFalse(receipt.exists())
-            self.assertFalse((transaction_root / "platform-team.json").exists())
+            self.assertFalse((transaction_root / "platform-team/context.json").exists())
             self.assertFalse((transaction_root / "settings.json").exists())
             self.assertFalse((transaction_root / ".profile-save.transaction.json").exists())
 
@@ -6356,8 +6361,9 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
-                profile = transaction_root / "platform-team.json"
+                transaction_root = root / "config/agent-skills/team"
+                profile = transaction_root / "platform-team/context.json"
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 profile.write_bytes(raw + b"\n")
                 profile.chmod(0o600)
                 with self.assertRaisesRegex(module.MutationIOError, "neither prior nor intended"):

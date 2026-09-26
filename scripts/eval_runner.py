@@ -446,8 +446,8 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
                 "surface_coverage_drift", f"{surface} coverage does not match inventory"
             )
     if (
-        len(expected["skill"]) != 29
-        or len(expected["command"]) != 30
+        len(expected["skill"]) != 38
+        or len(expected["command"]) != 39
         or len(expected["agent"]) != 6
         or len(expected["plugin"]) != 3
         or len(expected["package-tool"]) != 1
@@ -458,9 +458,9 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
         for item in scenarios
         if item["surface"] == "skill" and item["kind"] in {"trigger", "near-miss"}
     ]
-    if len(skill_scenarios) < 116:
+    if len(skill_scenarios) < 152:
         raise EvalError(
-            "skill_corpus_incomplete", "skill trigger/near-miss corpus is below 116 scenarios"
+            "skill_corpus_incomplete", "skill trigger/near-miss corpus is below 152 scenarios"
         )
     for name in expected["skill"]:
         items = [

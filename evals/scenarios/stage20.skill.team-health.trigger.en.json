@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-health.trigger.en",
+  "pair_id": "stage20.skill.team-health.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-health"]
+    },
+    "prompt": "English: select the team-health skill for its exact contract scenario."
+  },
+  "expected": {
+    "selected": ["skill:team-health"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-health.trigger.source",
+      "path": ".build/skills/team-health/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "e12b9e51c78239bc71777ecf0a28415bae57787fb928992023680b3ba7bed8ee"
+}

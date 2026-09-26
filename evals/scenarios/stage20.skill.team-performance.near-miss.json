@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-performance.near-miss",
+  "pair_id": "stage20.skill.team-performance.near-miss",
+  "kind": "near-miss",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Русский: это намеренно не относится к навыку team-performance; не направляй запрос в этот навык."
+  },
+  "expected": {
+    "selected": [],
+    "not_selected": ["skill:team-performance"],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "safe-escalation"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-performance.near-miss.source",
+      "path": ".build/skills/team-performance/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "046be0c3875e0d975db971fcd01ccad2f2451eb6b4e13d2f6265526549ece78e"
+}

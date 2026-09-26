@@ -234,6 +234,114 @@
       "to": "task-prepare",
       "type": "recommends",
       "reason": "interview answers feed its preparation workflow"
+    },
+    {
+      "from": "team-people",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to user-facing summaries"
+    },
+    {
+      "from": "team-1on1",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "reads and maintains the people profile and journal it owns"
+    },
+    {
+      "from": "team-1on1",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to drafted preparation prose"
+    },
+    {
+      "from": "team-1on1",
+      "to": "mattermost",
+      "type": "recommends",
+      "reason": "optional read-only thread context from an exact URL"
+    },
+    {
+      "from": "team-feedback",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "profile cautions and journal history ground the draft"
+    },
+    {
+      "from": "team-feedback",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to every drafted sentence before delivery"
+    },
+    {
+      "from": "team-performance",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "journal facts and profile levels form the evidence base"
+    },
+    {
+      "from": "team-performance",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to review and justification prose"
+    },
+    {
+      "from": "team-agreements",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "journal ownership and person name resolution"
+    },
+    {
+      "from": "team-onboarding",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "people map, buddy choice, and cadence come from it"
+    },
+    {
+      "from": "team-report",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "delivery-relevant journal facts feed the roll-up"
+    },
+    {
+      "from": "team-report",
+      "to": "team-retro",
+      "type": "uses",
+      "reason": "shares its evidence collection and delivery-signal discipline"
+    },
+    {
+      "from": "team-report",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to stakeholder-facing prose"
+    },
+    {
+      "from": "team-incident",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "participants and action-item owners resolve from it"
+    },
+    {
+      "from": "team-incident",
+      "to": "mattermost",
+      "type": "recommends",
+      "reason": "incident threads are read from exact URLs"
+    },
+    {
+      "from": "team-health",
+      "to": "team-people",
+      "type": "uses",
+      "reason": "journal signals and profile cadence drive the review"
+    },
+    {
+      "from": "team-health",
+      "to": "team-retro",
+      "type": "uses",
+      "reason": "delivery load comes from the shared evidence store"
+    },
+    {
+      "from": "team-health",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to the team-view artifact prose"
     }
   ]
 }

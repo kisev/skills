@@ -181,11 +181,26 @@
       "source": "references/work-item-contract.schema.json",
       "destination": "task-review/references/work-item-contract.schema.json"
     },
-    { "source": "references/work_item.py", "destination": "askme/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "goal/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "task-prepare/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "task-review/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "task-triage/scripts/work_item.py" },
+    {
+      "source": "references/work_item.py",
+      "destination": "askme/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "goal/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-prepare/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-review/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-triage/scripts/work_item.py"
+    },
     {
       "source": "references/question-guidelines.md",
       "destination": "askme/references/question-guidelines.md"
@@ -625,6 +640,378 @@
     {
       "source": "references/label-semantics.md",
       "destination": "release-prepare/references/label-semantics.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-people/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-people/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-people/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-people/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-people/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-people/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-people/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-people/scripts/people_journal.py"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-1on1/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-1on1/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-1on1/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-1on1/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-1on1/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-1on1/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-1on1/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-1on1/scripts/people_journal.py"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-feedback/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-feedback/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-feedback/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-feedback/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-feedback/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-feedback/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-feedback/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-feedback/scripts/people_journal.py"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-agreements/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-agreements/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-agreements/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-agreements/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-agreements/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-agreements/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-agreements/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-agreements/scripts/people_journal.py"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-onboarding/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-onboarding/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-onboarding/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-onboarding/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-onboarding/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-onboarding/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-onboarding/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-onboarding/scripts/people_journal.py"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-onboarding/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-onboarding/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-onboarding/references/team-context.example.json"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-incident/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-incident/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-incident/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-incident/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-incident/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-incident/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-incident/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-incident/scripts/people_journal.py"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-incident/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-incident/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-incident/references/team-context.example.json"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-performance/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-performance/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-performance/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-performance/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-performance/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-performance/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-performance/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-performance/scripts/people_journal.py"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-performance/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-performance/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-performance/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-performance/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-performance/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-report/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-report/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-report/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-report/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-report/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-report/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-report/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-report/scripts/people_journal.py"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-report/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-report/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-report/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-report/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-report/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-health/references/language-policy.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-health/references/interaction-contract.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-health/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-health/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-health/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-health/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-health/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-health/scripts/people_journal.py"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-health/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-health/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-health/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-health/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-health/scripts/gitlab_period_metrics.py"
     }
   ]
 }

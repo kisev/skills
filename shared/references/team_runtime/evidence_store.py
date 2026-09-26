@@ -127,7 +127,7 @@ def valid_location(value: str) -> str:
 def store_root(profile: str, *, create: bool = True) -> Path:
     name = valid_profile_name(profile)
     home = xdg_state_home()
-    path = home / "agent-skills" / "team-evidence" / name
+    path = home / "agent-skills" / "team" / name / "evidence"
     if create:
         try:
             return ensure_private_directory(path, home)
@@ -139,6 +139,48 @@ def store_root(profile: str, *, create: bool = True) -> Path:
         return inspect_private_directory(path, home)
     except (OSError, ValueError) as error:
         raise EvidenceIOError("evidence store directory is unsafe") from error
+
+
+def legacy_store_root(profile: str) -> Path:
+    return xdg_state_home() / "agent-skills" / "team-evidence" / valid_profile_name(profile)
+
+
+def resolve_store(profile: str) -> Path:
+    current = store_root(profile, create=False)
+    if current.exists():
+        return current
+    legacy = legacy_store_root(profile)
+    if legacy.exists():
+        inspect_private_directory(legacy, xdg_state_home())
+        return legacy
+    return current
+
+
+def migrate_store(profile: str) -> dict[str, Any]:
+    name = valid_profile_name(profile)
+    legacy = legacy_store_root(profile)
+    current = store_root(profile, create=False)
+    if current.exists():
+        raise EvidenceError("evidence store already exists in the current location")
+    if not legacy.exists():
+        raise EvidenceError("legacy evidence store is missing")
+    inspect_private_directory(legacy, xdg_state_home())
+    current.parent.mkdir(parents=True, exist_ok=True)
+    ensure_private_directory(current.parent.parent, xdg_state_home())
+    try:
+        inspect_private_directory(current.parent, current.parent.parent)
+    except (OSError, ValueError) as error:
+        raise EvidenceIOError("evidence store parent directory is unsafe") from error
+    os.rename(legacy, current)
+    sync_directory(legacy.parent)
+    return {"profile": name, "migrated_from": str(legacy), "migrated_to": str(current)}
+
+
+def active_store(profile: str, *, create: bool = False) -> Path:
+    root = resolve_store(profile)
+    if create and not root.exists():
+        root = store_root(profile)
+    return root
 
 
 def empty_manifest(profile: str) -> dict[str, Any]:
@@ -428,7 +470,7 @@ def plan_windows(
     if since >= until:
         raise EvidenceError("--since must be earlier than --until")
     current = now or datetime.now(UTC)
-    root = store_root(profile, create=False)
+    root = active_store(profile)
     manifest = load_manifest(root)
     source = manifest["sources"].get(source_key)
     reusable: list[tuple[datetime, datetime]] = []
@@ -469,7 +511,7 @@ def store_snapshot(root: Path, stem: str, suffix: str, content: bytes) -> tuple[
 def read_snapshot(profile: str, relative: str) -> bytes:
     if SNAPSHOT_PATH.fullmatch(relative) is None:
         raise EvidenceError("snapshot path is invalid")
-    root = store_root(profile, create=False)
+    root = active_store(profile)
     home = xdg_state_home()
     if not relative.startswith("history/evidence/"):
         raise EvidenceError("snapshot path is invalid")
@@ -516,7 +558,7 @@ def record_coverage(
     else:
         raise EvidenceError("a record requires a window or a point timestamp")
     current = now or datetime.now(UTC)
-    root = store_root(profile)
+    root = active_store(profile, create=True)
     descriptor = acquire_lock(root)
     try:
         manifest = load_manifest(root)
@@ -578,7 +620,7 @@ def show_manifest(
         if since >= until:
             raise EvidenceError("--since must be earlier than --until")
         window = (since, until)
-    root = store_root(profile, create=False)
+    root = active_store(profile)
     manifest = load_manifest(root)
     sources = []
     for key in sorted(manifest["sources"]):
@@ -666,7 +708,7 @@ def materialize_gitlab(
     if since >= until:
         raise EvidenceError("--since must be earlier than --until")
     current = now or datetime.now(UTC)
-    root = store_root(profile, create=False)
+    root = active_store(profile)
     manifest = load_manifest(root)
     source = manifest["sources"].get(source_key)
     if source is None or source["kind"] != "gitlab-metrics":
@@ -813,7 +855,7 @@ def record_artifact(
     source = regular_file(input_path or target, "artifact input")
     content = source.read_bytes()
     current = now or datetime.now(UTC)
-    root = store_root(profile)
+    root = active_store(profile, create=True)
     descriptor = acquire_lock(root)
     try:
         manifest = load_manifest(root)
@@ -885,6 +927,8 @@ def build_parser() -> ContractArgumentParser:
     artifact.add_argument("--since")
     artifact.add_argument("--until")
     artifact.add_argument("--source", action="append", default=[])
+    migrate = commands.add_parser("evidence-migrate")
+    migrate.add_argument("--profile", required=True)
     return parser
 
 
@@ -893,17 +937,29 @@ def run_command(arguments: argparse.Namespace) -> int:
         emit(
             {
                 "schema_version": 1,
-                "payload_version": "1.0.0",
+                "payload_version": "1.1.0",
                 "mutation": "private-state-append",
                 "dry_run": False,
                 "state_protocol": "profile-scoped-coverage-manifest",
-                "store_location": "${XDG_STATE_HOME:-~/.local/state}/agent-skills/team-evidence",
+                "store_location": (
+                    "${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/evidence"
+                ),
+                "legacy_store_location": (
+                    "${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team-evidence/<profile>"
+                ),
                 "fresh_ttl_seconds": FRESH_TTL_SECONDS,
                 "stable_age_seconds": STABLE_AGE_SECONDS,
-                "destructive_flags": [],
+                "destructive_flags": ["evidence-migrate"],
                 "external_mutations": False,
             }
         )
+        return 0
+    return dispatch_command(arguments)
+
+
+def dispatch_command(arguments: argparse.Namespace) -> int:
+    if arguments.command == "evidence-migrate":
+        emit(migrate_store(arguments.profile))
         return 0
     if arguments.command == "evidence-plan":
         emit(

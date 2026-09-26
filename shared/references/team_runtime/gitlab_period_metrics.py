@@ -886,7 +886,7 @@ def resume_collect_metrics(
         "projects": project_results,
         "resume": {
             "profile": profile,
-            "store": "${XDG_STATE_HOME:-~/.local/state}/agent-skills/team-evidence",
+            "store": "${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/evidence",
             "projects": resume_projects,
         },
     }

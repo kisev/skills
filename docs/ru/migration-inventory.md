@@ -11,17 +11,19 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Активные переносимые навыки
 
-Активны ровно 29 переносимых навыков:
+Активны ровно 38 переносимых навыков:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
 `docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
 `mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
-`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-retro`,
-`team-roadmap`, `team-sprint-close` и `team-sprint-start`.
+`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
+`team-agreements`, `team-feedback`, `team-health`, `team-incident`,
+`team-onboarding`, `team-people`, `team-performance`, `team-report`,
+`team-retro`, `team-roadmap`, `team-sprint-close` и `team-sprint-start`.
 
 Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
-те же 29 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+те же 38 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
 добавляются только в `.build/skills` и проверяются побайтово.
 
 ## Сведения об очистке переносимых навыков
@@ -41,6 +43,7 @@ GitHub Release. Необязательный пакет интеграции - `
 | `skill-improver` | `skill-improve` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
+| `people-workflow` | `team-people`, `team-1on1`, `team-feedback`, `team-agreements`, `team-onboarding`, `team-incident`, `team-performance`, `team-report`, `team-health` |
 | `summary` | `briefing` |
 
 Операция `update` в CLI `skills` обнаруживает удалённые в источнике имена и
@@ -50,7 +53,7 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Текущий состав интеграции OpenCode
 
-Текущий состав пакета содержит 28 команд: по одной для каждого активного навыка.
+Текущий состав пакета содержит 38 команд: по одной для каждого активного навыка.
 Инструмент пакета `route` доступен без слеш-команды.
 
 Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,

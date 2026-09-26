@@ -405,7 +405,7 @@ def test_team_profile_rejects_symlinked_config_component(
     outside = tmp_path / "outside"
     config.mkdir()
     outside.mkdir()
-    (config / "opencode").symlink_to(outside, target_is_directory=True)
+    (config / "agent-skills").symlink_to(outside, target_is_directory=True)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config))
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 

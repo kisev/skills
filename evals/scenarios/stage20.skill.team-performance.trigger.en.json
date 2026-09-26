@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-performance.trigger.en",
+  "pair_id": "stage20.skill.team-performance.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-performance"]
+    },
+    "prompt": "English: select the team-performance skill for its exact contract scenario."
+  },
+  "expected": {
+    "selected": ["skill:team-performance"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-performance.trigger.source",
+      "path": ".build/skills/team-performance/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "04b452676fac2fa757454d5ea0bda29d46913e788d986f05fba3569e79c8b80d"
+}

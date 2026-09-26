@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-report.near-miss.en",
+  "pair_id": "stage20.skill.team-report.near-miss",
+  "kind": "near-miss",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this intentionally does not belong to the team-report skill; do not route this request into it."
+  },
+  "expected": {
+    "selected": [],
+    "not_selected": ["skill:team-report"],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "safe-escalation"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-report.near-miss.source",
+      "path": ".build/skills/team-report/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "fb98b49341cc639f64bc9c6dc570fb75c14a8ae29af6e584d5cef1f7bd2e0342"
+}
