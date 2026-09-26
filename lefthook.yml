@@ -47,6 +47,7 @@ pre-commit:
 
           - name: json
             glob: "**/*.{json,jsonc,json5}"
+            exclude: "**/package-lock.json"
             run: mise exec -- oxfmt --check {files}
 
           - name: shell
