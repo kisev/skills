@@ -10,11 +10,14 @@ Trigger for skill quality work; near-miss: changing application runtime behavior
 
 ## Inputs and Outputs
 
-Input is one skill path. Output is findings or a bounded improvement with checks.
+Input is one skill path. Output is findings or a bounded improvement with
+checks. An optional read-only session report adds deterministic usage evidence
+from opencode, kilo, and mimo session databases.
 
 ## Workflow Stages
 
-Resolve skill, check frontmatter/resources, write changes, recheck, report.
+Resolve skill, check frontmatter/resources, optionally collect session
+evidence, write changes, recheck, report.
 
 ## Dependencies
 
@@ -37,6 +40,17 @@ Portable runtime dependencies and locale contracts cannot be weakened.
 ### REQ-F-118 - Improve skills without contract drift
 
 The skill shall preserve declared frontmatter, resources, and portability contracts.
+
+### REQ-F-132 - Ground skill improvements in session evidence
+
+The skill shall extract deterministic usage signals from opencode, kilo, and
+mimo session databases strictly read-only, and shall keep verbatim session
+excerpts out of persisted artifacts.
+
+#### Verification
+
+Fixture-database tests assert invocation, error, retry, follow-up, and pattern
+extraction with read-only access and missing-database error handling.
 
 ## Example
 

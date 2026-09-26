@@ -24,6 +24,11 @@ All notable changes to this project are documented in this file. Entries follow
   directives and the opt-in `- auto-clean:` directive live in
   `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`; without them nothing is
   deleted.
+- `skill-improve` can ground improvements in real usage: the new read-only
+  `sessions` subcommand of `skill_improver.py` reports skill invocations,
+  errors, retries, follow-up user messages, and recurring uncovered action
+  patterns with new-skill candidates from opencode, kilo, and mimo session
+  databases (REQ-F-132).
 - The `rtk` compression wrapper is now deployed by the default installer
   selection (opt out with `--plugins none`; previously installed selections are
   preserved). Deployed wrapper files load automatically from the `plugins`

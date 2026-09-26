@@ -17,6 +17,33 @@ The runner outputs one JSON value. Exit code `0` means no critical or major
 findings, `1` means there is a critical or major finding, and `2` means a usage
 error. `--capabilities` has no side effects.
 
+## Session evidence
+
+Ground the improvement in real usage with the read-only session report:
+
+```shell
+python3 -I -S -B scripts/skill_improver.py sessions [--skill NAME] [--host HOST]
+  [--db PATH] [--since DAYS] [--limit N] [--min-pattern-count N]
+```
+
+The command reads opencode, kilo, and mimo session databases strictly
+read-only. `--host auto` discovers `opencode.db`, `kilo.db`, and `mimocode.db`
+in the XDG data directory; `--db` points at any compatible SQLite database. The
+output is one JSON value with deterministic signals only: per-skill invocations,
+status counts, durations, verbatim error excerpts, retry sessions, the first
+user message after each invocation, frequent actions, recurring action pairs
+between skill invocations, and new-skill candidates.
+
+- Interpret the signals semantically. Errors, retries, and follow-up user
+  messages are signals of possible problems, not findings by themselves.
+- Treat `candidates` as evidence, not decisions: propose a new skill or an
+  improvement only when a pattern recurs across sessions and has a concrete
+  improvement it would produce.
+- Session excerpts are verbatim and confidential: never copy them into
+  persisted files, the eval corpus, commit messages, or published text.
+- A missing database, empty history, or a `--skill` filter without invocations
+  is a valid outcome; it must not block the static check cycle.
+
 ## Cycle
 
 1. Run `check` for one target and read the JSON. The absence of real successful

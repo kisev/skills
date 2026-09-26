@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -182,6 +183,10 @@ WORKFLOW_CONTRACTS = {
         "exactly one existing directory",
         "<skill-improvement-complete>",
         "not commands, plugins, agents, or tools",
+        "strictly read-only",
+        "evidence, not decisions",
+        "never copy them into persisted files",
+        "must not block the static check cycle",
     ),
     "rtk": (
         "external cli and is not installed by this skill",
@@ -885,6 +890,188 @@ class PortableRunnerTests(unittest.TestCase):
             self.assertIn(
                 "frontmatter-unsupported-field",
                 {issue["rule"] for issue in json.loads(rejected.stdout)["issues"]},
+            )
+
+    def test_skill_improver_sessions_report_extracts_usage_evidence(self) -> None:
+        def tool_part(
+            tool: str,
+            state: dict[str, object],
+            call_id: str | None = None,
+        ) -> str:
+            payload: dict[str, object] = {"type": "tool", "tool": tool, "state": state}
+            if call_id is not None:
+                payload["callID"] = call_id
+            return json.dumps(payload)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "fixture.db"
+            connection = sqlite3.connect(database)
+            connection.executescript(
+                """
+                CREATE TABLE session (
+                    id TEXT PRIMARY KEY, title TEXT, directory TEXT, time_created INTEGER);
+                CREATE TABLE message (
+                    id TEXT PRIMARY KEY, session_id TEXT, data TEXT);
+                CREATE TABLE part (
+                    id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+                    time_created INTEGER, data TEXT);
+                INSERT INTO session VALUES ('s1', 'First', '/tmp/demo', 100);
+                INSERT INTO session VALUES ('s2', 'Second', '/tmp/demo', 200);
+                INSERT INTO message VALUES ('m1', 's1', '{"role": "user"}');
+                INSERT INTO message VALUES ('m2', 's1', '{"role": "assistant"}');
+                INSERT INTO message VALUES ('m5', 's1', '{"role": "user"}');
+                INSERT INTO message VALUES ('m3', 's2', '{"role": "user"}');
+                INSERT INTO message VALUES ('m4', 's2', '{"role": "assistant"}');
+                INSERT INTO part VALUES ('p1', 'm1', 's1', 100,
+                    '{"type": "text", "text": "Fix the checker"}');
+                INSERT INTO part VALUES ('p5', 'm5', 's1', 600,
+                    '{"type": "text", "text": "не работает после правки"}');
+                """
+            )
+            tool_parts = (
+                (
+                    "p2",
+                    "m2",
+                    "s1",
+                    200,
+                    tool_part(
+                        "skill",
+                        {
+                            "status": "completed",
+                            "input": {"name": "demo"},
+                            "time": {"start": 200, "end": 350},
+                        },
+                        "call_1",
+                    ),
+                ),
+                (
+                    "p3",
+                    "m2",
+                    "s1",
+                    400,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git status --short"}}
+                    ),
+                ),
+                (
+                    "p4",
+                    "m2",
+                    "s1",
+                    500,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git diff --stat"}}
+                    ),
+                ),
+                (
+                    "p7",
+                    "m4",
+                    "s2",
+                    300,
+                    tool_part(
+                        "skill",
+                        {"status": "error", "input": {"name": "demo"}, "error": "boom"},
+                        "call_2",
+                    ),
+                ),
+                (
+                    "p8",
+                    "m4",
+                    "s2",
+                    320,
+                    tool_part(
+                        "skill", {"status": "completed", "input": {"name": "demo"}}, "call_3"
+                    ),
+                ),
+                (
+                    "p9",
+                    "m4",
+                    "s2",
+                    700,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git status --short"}}
+                    ),
+                ),
+                (
+                    "p10",
+                    "m4",
+                    "s2",
+                    800,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git diff --stat"}}
+                    ),
+                ),
+            )
+            connection.executemany("INSERT INTO part VALUES (?, ?, ?, ?, ?)", tool_parts)
+            connection.commit()
+            connection.close()
+            result = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--db",
+                str(database),
+                "--min-pattern-count",
+                "2",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["databases"][0]["host"], "custom")
+            self.assertEqual(payload["databases"][0]["sessions_scanned"], 2)
+            demo = payload["skills"]["demo"]
+            self.assertEqual(demo["invocations"], 3)
+            self.assertEqual(demo["sessions"], 2)
+            self.assertEqual(demo["error_count"], 1)
+            self.assertEqual(demo["errors"][0]["error"], "boom")
+            self.assertEqual(demo["retry_sessions"][0]["count"], 2)
+            self.assertEqual(demo["durations_ms"], {"samples": 1, "avg": 150, "max": 150})
+            self.assertEqual(len(demo["followups"]), 1)
+            self.assertEqual(demo["followups"][0]["text"], "не работает после правки")
+            self.assertEqual(demo["followups"][0]["gap_ms"], 400)
+            patterns = payload["patterns"]
+            self.assertEqual(
+                [
+                    (pattern["actions"], pattern["count"], pattern["sessions"])
+                    for pattern in patterns
+                ],
+                [(["bash:git status", "bash:git diff"], 2, 2)],
+            )
+            self.assertEqual(
+                [(candidate["kind"], candidate["count"]) for candidate in payload["candidates"]],
+                [("new-skill-candidate", 2)],
+            )
+            frequent = {action["action"]: action["count"] for action in payload["frequent_actions"]}
+            self.assertEqual(frequent["bash:git status"], 2)
+            filtered = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--db",
+                str(database),
+                "--skill",
+                "absent",
+            )
+            self.assertEqual(filtered.returncode, 0, filtered.stderr)
+            self.assertEqual(json.loads(filtered.stdout)["skills"], {})
+            missing = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--db",
+                str(Path(temporary) / "absent.db"),
+            )
+            self.assertEqual(missing.returncode, 2)
+            self.assertEqual(
+                json.loads(missing.stdout)["error"]["code"],
+                "sessions_error",
+            )
+            isolated = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--host",
+                "auto",
+                env={"XDG_DATA_HOME": temporary},
+            )
+            self.assertEqual(isolated.returncode, 2)
+            self.assertEqual(
+                json.loads(isolated.stdout)["error"]["code"],
+                "sessions_error",
             )
 
     def test_code_explain_current_range_diff_file_and_chunk_coverage(self) -> None:

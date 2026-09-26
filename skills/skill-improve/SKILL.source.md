@@ -1,7 +1,9 @@
 ---
 name: skill-improve
 description: >-
-  Iteratively check and improve one Agent Skill. Russian discovery terms: улучшить skill.
+  Iteratively check and improve one Agent Skill from static contract checks and
+  real opencode, kilo, and mimo session evidence.
+  Russian discovery terms: улучшить skill, проанализировать сессии, как использовались скиллы.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
