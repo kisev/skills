@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".build" / "packages" / "skills"
 PACKAGE_METADATA = json.loads(
-    (ROOT / "packages" / "opencode" / "package.json").read_text(encoding="utf-8")
+    (ROOT / "packages" / "agentomatic" / "package.json").read_text(encoding="utf-8")
 )
 RELEASE_VERSION = PACKAGE_METADATA["version"]
 SKILLS_INSTALLER_VERSION = PACKAGE_METADATA["skillsInstallerVersion"]

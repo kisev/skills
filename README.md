@@ -2,7 +2,7 @@
 
 [Русский](README.ru.md)
 
-Portable Agent Skills for Codex and OpenCode, plus `skills-opencode`, a
+Portable Agent Skills for Codex and OpenCode, plus `agentomatic`, a
 first-class OpenCode integration. The two components are independent: use either
 one on its own or install both for the complete OpenCode experience.
 
@@ -11,7 +11,7 @@ one on its own or install both for the complete OpenCode experience.
 | Component | What it provides | Lifecycle |
 | - | - | - |
 | Portable Agent Skills | 28 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
-| `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
+| `@kisev/agentomatic` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
 Portable skills do not require the npm package. The package does not contain,
 install, update, inspect, or remove them. Their lifecycle is owned by the
@@ -35,9 +35,9 @@ Start with the [guided installation](docs/tutorials/getting-started.md), use the
 updates, cleanup, and troubleshooting, or browse the
 [skill catalog](docs/reference/skill-catalog.md).
 
-## skills-opencode
+## agentomatic
 
-`@kisev/skills-opencode` extends OpenCode with:
+`@kisev/agentomatic` extends OpenCode with:
 
 - slash-command adapters for installed skills;
 - six fixed agent roles and profile management;
@@ -49,11 +49,11 @@ Install the package persistently in the npm project that owns the integration,
 then preview its managed assets:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npm install --save-exact @kisev/agentomatic
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
-Use `@kisev/skills-opencode@dev` in both commands to opt into the current
+Use `@kisev/agentomatic@dev` in both commands to opt into the current
 development snapshot.
 
 This only starts the mandatory flow. Apply the exact confirmation command from

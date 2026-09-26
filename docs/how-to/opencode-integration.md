@@ -2,7 +2,7 @@
 
 [Русский](../ru/how-to/opencode-integration.md)
 
-`@kisev/skills-opencode` is the optional OpenCode-specific layer. Portable
+`@kisev/agentomatic` is the optional OpenCode-specific layer. Portable
 skills have a separate lifecycle and must be installed independently through the
 [portable skills guide](portable-skills.md).
 
@@ -16,7 +16,7 @@ The package requires Node.js 22+ and OpenCode `>=1.18.29 <1.19.0`.
 | Commands | `.opencode/commands` | `~/.config/opencode/commands` |
 | Agents | `.opencode/agents` | `~/.config/opencode/agents` |
 | Optional wrappers | `.opencode/plugins` | `~/.config/opencode/plugins` |
-| Ownership metadata | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode` |
+| Ownership metadata | `.opencode/.agentomatic` | `~/.config/opencode/.agentomatic` |
 
 The package and generated wrappers must remain resolvable after the installer
 exits. Import, plugin loading, and npm lifecycle scripts do not install assets,
@@ -30,8 +30,8 @@ Install in the repository's npm project and run the CLI from that project root:
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npm install --save-exact @kisev/agentomatic
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
 The package remains in project `node_modules`; confirmed assets go under
@@ -45,7 +45,7 @@ Use `~/.config/opencode` as the persistent npm project:
 mkdir -p "$HOME/.config/opencode"
 cd "$HOME/.config/opencode"
 test -f package.json || npm init --yes
-npm install --save-exact @kisev/skills-opencode
+npm install --save-exact @kisev/agentomatic
 ```
 
 Keep the dependency in that npm project's `package.json` and lock file.
@@ -53,7 +53,7 @@ Confirmed assets go under `~/.config/opencode`. After the persistent install,
 run global-scope CLI commands from any directory:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --global --dry-run
+npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
 ### Development Channel
@@ -62,12 +62,12 @@ Use npm dist-tag `dev` explicitly for both the persistent dependency and the
 installer CLI:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode@dev
-npx --yes @kisev/skills-opencode@dev install --dry-run
+npm install --save-exact @kisev/agentomatic@dev
+npx --yes @kisev/agentomatic@dev install --dry-run
 ```
 
 Each successful push to `dev` publishes a unique prerelease and moves only the
-`dev` dist-tag. Reinstall `@kisev/skills-opencode` without `@dev` and run the
+`dev` dist-tag. Reinstall `@kisev/agentomatic` without `@dev` and run the
 stable `@latest` CLI to return to the stable channel.
 
 ## Select Assets
@@ -84,7 +84,7 @@ Outside a TTY, pass all three selection groups. This example selects three
 commands, all fixed agents, and no wrapper:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install \
+npx --yes @kisev/agentomatic@latest install \
   --commands askme,code-review,goal \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
@@ -94,7 +94,7 @@ If any selection flag is present outside a TTY, `--commands`, `--agents`, and
 `--plugins` are all required. Query exact current names with:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest capabilities --json
+npx --yes @kisev/agentomatic@latest capabilities --json
 ```
 
 The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`; `rtk` is
@@ -118,7 +118,7 @@ Inspect the summary with the `/rtk-stats` command, or machine-readably through
 the `rtk.observability` check:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest doctor --json
+npx --yes @kisev/agentomatic@latest doctor --json
 ```
 
 The check reports wrapper deployment, RTK binary availability, event counters,
@@ -134,7 +134,7 @@ package with the confirmed `config` command, or add it to the user-owned
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@kisev/skills-opencode"]
+  "plugin": ["@kisev/agentomatic"]
 }
 ```
 
@@ -148,8 +148,8 @@ The `config` command connects the package and recommended fragments into
 user-owned configuration files:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest config --global --dry-run
-npx --yes @kisev/skills-opencode@latest config --dry-run
+npx --yes @kisev/agentomatic@latest config --global --dry-run
+npx --yes @kisev/agentomatic@latest config --dry-run
 ```
 
 In a TTY, target and fragment selectors open when flags are omitted. Global
@@ -162,7 +162,7 @@ Selectable fragments:
 
 | Fragment | Targets | Effect |
 | - | - | - |
-| `core-plugin` | opencode | Adds `$schema` and registers `@kisev/skills-opencode` in `plugin` |
+| `core-plugin` | opencode | Adds `$schema` and registers `@kisev/agentomatic` in `plugin` |
 | `skills-state-permissions` | opencode, kilo, mimo | Allows `~/.local/state/agent-skills/**` (plus `~/.config/opencode/skills/**` for OpenCode) in `permission.read`, `permission.edit`, and `permission.external_directory` so the standard skills state paths stop prompting |
 | `lsp-preset` | opencode | Adds LSP servers from the shared catalog with standard commands |
 | `secrets-guard` | opencode, kilo, mimo | Denies reads and edits of common secret files (`.env*`, keys, credentials) |
@@ -189,7 +189,7 @@ installer confirmation, then repeat reconcile; resolve ownership conflicts
 manually.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
 The mandatory OpenCode flow is: persistent npm install, `install --dry-run`, the
@@ -216,8 +216,8 @@ root, and current inventory. Apply rejects stale state and unsafe conflicts.
 starting plugins, or starting LSP servers:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest doctor
-npx --yes @kisev/skills-opencode@latest doctor --json
+npx --yes @kisev/agentomatic@latest doctor
+npx --yes @kisev/agentomatic@latest doctor --json
 ```
 
 The report includes versions, ownership, drift, collisions, archive counts,
@@ -233,8 +233,8 @@ and persist the resolved exact version, preview and confirm `install` with the
 same scope and desired selection, then restart OpenCode:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npm install --save-exact @kisev/agentomatic
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
 Use the complete confirmation command printed by the preview. The installer
@@ -248,9 +248,9 @@ model choices, variants, additional critics, or retained profile configuration.
 and installation metadata for one scope:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest reconcile --dry-run
-npx --yes @kisev/skills-opencode@latest reconcile --confirm <digest>
-npx --yes @kisev/skills-opencode@latest reconcile --global --dry-run --json
+npx --yes @kisev/agentomatic@latest reconcile --dry-run
+npx --yes @kisev/agentomatic@latest reconcile --confirm <digest>
+npx --yes @kisev/agentomatic@latest reconcile --global --dry-run --json
 ```
 
 Before reconcile, update the package through its owning installer. Manage
@@ -271,11 +271,11 @@ The direct CLI manages fixed-agent models and additional critics without an LLM
 call:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest agent list --global
-npx --yes @kisev/skills-opencode@latest agent configure manager --global --dry-run
-npx --yes @kisev/skills-opencode@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
-npx --yes @kisev/skills-opencode@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
-npx --yes @kisev/skills-opencode@latest agent reconcile --global --dry-run
+npx --yes @kisev/agentomatic@latest agent list --global
+npx --yes @kisev/agentomatic@latest agent configure manager --global --dry-run
+npx --yes @kisev/agentomatic@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
+npx --yes @kisev/agentomatic@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
+npx --yes @kisev/agentomatic@latest agent reconcile --global --dry-run
 ```
 
 Fixed roles keep their names, prompts, and permissions; only model and variant
@@ -287,14 +287,14 @@ same preview and one-time confirmation contract.
 Keep the package resolvable until its assets are removed:
 
 1. Preview and confirm package-owned asset removal.
-2. Remove `@kisev/skills-opencode` from the user-owned `plugin` array.
+2. Remove `@kisev/agentomatic` from the user-owned `plugin` array.
 3. Uninstall the dependency from the same npm project.
 4. Restart OpenCode.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest uninstall --dry-run
-npx --yes @kisev/skills-opencode@latest uninstall --confirm <digest>
-npm uninstall @kisev/skills-opencode
+npx --yes @kisev/agentomatic@latest uninstall --dry-run
+npx --yes @kisev/agentomatic@latest uninstall --confirm <digest>
+npm uninstall @kisev/agentomatic
 ```
 
 For global scope, run the stable npx command from any directory with
@@ -310,7 +310,7 @@ retained profile configuration. It does not remove portable skills or edit
 - Commands corresponding to skills are thin adapters; the portable skill remains
   authoritative and must be installed separately.
 - The only package tool is `route`; it has no slash command. Administrative
-  operations use the direct `skills-opencode` CLI.
+  operations use the direct `agentomatic` CLI.
 - `install` and `uninstall` never edit `opencode.json`; the `config` command is
   the only confirmed path for configuration fragments.
 - Global scope is cwd-independent; project scope targets `.opencode` under the

@@ -1,0 +1,9 @@
+[Unit]
+Description=Memomatic dream: background memory consolidation sweep
+Documentation=https://github.com/kisev/skills#memomatic
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -lc 'exec agentomatic-memomatic dream'
+Environment=MEMOMATIC_DREAM=1

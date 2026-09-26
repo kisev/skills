@@ -17,7 +17,7 @@ if str(ROOT) not in sys.path:
 
 from scripts import build_distribution, build_release_artifacts  # noqa: E402
 
-PACKAGE = ROOT / "packages" / "opencode"
+PACKAGE = ROOT / "packages" / "agentomatic"
 OUTPUT = ROOT / ".build" / "release"
 
 

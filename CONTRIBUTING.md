@@ -8,7 +8,7 @@ Each directory under `skills/` is an authored definition, not an installation
 artifact. The build must turn every definition into a portable, self-contained
 skill without depending on a checkout, user home, particular provider,
 credentials, or one team's configuration. OpenCode-specific agents, commands,
-and plugins belong only in `packages/opencode/`.
+and plugins belong only in `packages/agentomatic/`.
 
 Agree on a material behavior, compatibility, or security-boundary change before
 implementing it. A new runner needs an observable contract: JSON on `stdout`,
@@ -58,8 +58,8 @@ The main public tasks divide the checks as follows:
 ignored artifacts. Portable authored entrypoints are named `SKILL.source.md`;
 `scripts/build_skills.py` writes `SKILL.md` and injects files declared by
 `shared/manifest.json` only under `.build/skills`. OpenCode commands and the
-copied LSP catalog are generated only into `packages/opencode/dist/assets/`
-before packing; their sources are `packages/opencode/src/registry.ts` and
+copied LSP catalog are generated only into `packages/agentomatic/dist/assets/`
+before packing; their sources are `packages/agentomatic/src/registry.ts` and
 `shared/references/`.
 
 `package:check` installs locked npm dependencies, builds the package once, runs
@@ -123,7 +123,7 @@ once, without separate package type checking, testing, or generation before
 
 Portable skills carry no version. Release identity belongs to the GitHub Pages
 distribution metadata and each content-addressed archive digest. The GitHub
-Pages distribution, `@kisev/skills-opencode` version, tag, and GitHub Release
+Pages distribution, `@kisev/agentomatic` version, tag, and GitHub Release
 must refer to one commit. Do not change a published version; publish a new patch
 release instead.
 

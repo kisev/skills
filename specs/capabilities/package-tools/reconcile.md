@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: Reconciliation remains available through `skills-opencode reconcile`.
+- Reason: Reconciliation remains available through `agentomatic reconcile`.
 
 ## Purpose
 

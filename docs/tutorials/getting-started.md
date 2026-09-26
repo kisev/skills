@@ -46,9 +46,9 @@ npx --yes skills@latest list --global
 Restart the selected host if it was running during installation. The installed
 skills should then be available from `~/.agents/skills`.
 
-## 3. Decide Whether You Need skills-opencode
+## 3. Decide Whether You Need agentomatic
 
-Portable skills already work in OpenCode. Install `@kisev/skills-opencode` only
+Portable skills already work in OpenCode. Install `@kisev/agentomatic` only
 if you also want OpenCode-specific commands, fixed agents, routing tools,
 diagnostics, or optional plugin wrappers. The package has a separate lifecycle
 and does not install portable skills.

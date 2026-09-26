@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: Profile management remains available through `skills-opencode agent` and `critic` commands.
+- Reason: Profile management remains available through `agentomatic agent` and `critic` commands.
 
 ## Purpose
 

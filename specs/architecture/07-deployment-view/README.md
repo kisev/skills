@@ -2,7 +2,7 @@
 
 Validated release tags run the complete gate, deploy the stable well-known
 distribution at `https://kisev.github.io/skills`, and publish one preflighted
-`@kisev/skills-opencode` tarball under npm `latest`. A push to `dev` runs the
+`@kisev/agentomatic` tarball under npm `latest`. A push to `dev` runs the
 complete publication gate, then updates `https://kisev.github.io/skills/dev` and
 npm `dev` with a unique
 technical snapshot version. Every Pages artifact contains both channels so one

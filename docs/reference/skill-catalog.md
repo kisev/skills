@@ -5,7 +5,7 @@
 The current stable release publishes 29 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
-of `@kisev/skills-opencode`.
+of `@kisev/agentomatic`.
 
 Declared companions are listed in each skill's built `SKILL.md` "Related skills"
 section: `requires` marks a shared credential or workflow, `uses` marks a
@@ -103,6 +103,6 @@ do not put credentials or personal notes in them.
 - Portable runners use Python 3.12+ standard library only when a runner is
   needed.
 - `ast-grep` and `rtk` require their external CLI; skills do not install them.
-- Portable skills work without `@kisev/skills-opencode`.
+- Portable skills work without `@kisev/agentomatic`.
 - Skills do not replace repository policy, review, secret scanning, access
   control, or the user's final judgment.

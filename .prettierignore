@@ -1,4 +1,4 @@
-packages/opencode/assets/commands/
-packages/opencode/dist/
-packages/opencode/node_modules/
+packages/agentomatic/assets/commands/
+packages/agentomatic/dist/
+packages/agentomatic/node_modules/
 uv.lock

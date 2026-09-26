@@ -3,7 +3,7 @@
 [Русский](../ru/how-to/portable-skills.md)
 
 Use this guide to install, update, rebind, clean up, or troubleshoot portable
-skills. These operations are independent of `@kisev/skills-opencode`.
+skills. These operations are independent of `@kisev/agentomatic`.
 
 ## Choose a Scope and Host
 

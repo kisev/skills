@@ -9,17 +9,30 @@
   "host": "opencode",
   "input": {
     "prompt": "Не маршрутизируй, просто объясни разницу между mapper и worker.",
-    "fixture": { "selected": [] }
+    "fixture": {
+      "selected": []
+    }
   },
-  "expected": { "selected": [], "not_selected": ["agent:mapper", "agent:worker"] },
+  "expected": {
+    "selected": [],
+    "not_selected": ["agent:mapper", "agent:worker"]
+  },
   "invariants": [
     {
       "id": "four-destinations",
-      "path": "packages/opencode/src/routing.ts",
+      "path": "packages/agentomatic/src/routing.ts",
       "contains": "CATEGORIES"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "5401e74c2768c247c0c4e6ba4ccad03a39f5d9590b8f183a58da44faedf892fc"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 1000,
+    "max_cost": 1
+  },
+  "digest": "26385e343c6ccb0d2a92afab70ebbc3d0693cafa5a53cbc314f43f1f1f3c766b"
 }

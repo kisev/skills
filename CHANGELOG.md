@@ -6,9 +6,16 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
-## Unreleased
+## \[11.0.0] - 2026-09-26
 
 ### Added
+
+- The integration package is renamed from `@kisev/skills-opencode` to
+  `@kisev/agentomatic` (bin `agentomatic`, memomatic bin
+  `agentomatic-memomatic`) starting with this major release; the previous
+  package name is frozen at 10.1.0. Existing deployments are recognized through
+  the legacy ownership manifest and package name, and installs now write the
+  `.agentomatic-manifest.json` ownership manifest.
 
 - New `taskmatic` skill: a local-first task board for people and agents. A private
   SQLite store under the taskmatic XDG state root is the single authority; every

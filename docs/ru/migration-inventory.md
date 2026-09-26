@@ -7,7 +7,7 @@
 Текущий источник переносимых навыков - стабильный канал GitHub Pages:
 `https://kisev.github.io/skills`. Его метаданные указывают выпуск и ревизию
 исходников, а `https://github.com/kisev/skills/releases/latest` открывает текущий
-GitHub Release. Необязательный пакет интеграции - `@kisev/skills-opencode`.
+GitHub Release. Необязательный пакет интеграции - `@kisev/agentomatic`.
 
 ## Активные переносимые навыки
 
@@ -71,7 +71,7 @@ GitHub Release. Необязательный пакет интеграции - `
 ## Машиночитаемые источники
 
 Точные имена, замены, прежние контрольные суммы и метаданные источников находятся
-в `packages/opencode/assets/migration-inventory.json`. Активный состав пакета
-описан в `packages/opencode/src/catalog.ts`, метаданные выпуска переносимых
+в `packages/agentomatic/assets/migration-inventory.json`. Активный состав пакета
+описан в `packages/agentomatic/src/catalog.ts`, метаданные выпуска переносимых
 навыков - в `packages/skills/package.json`, а объявления общих файлов только для
 сборки - в `shared/manifest.json`.

@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "a3f58ad20f158eb6f6e0a0ebd2b1dab9128ee31a7e04b47dc03ec5fb772fe884",
+  "digest": "dd0096d86af630719aaf200de883a02f5345de88379b9eda5fe20c4f90e11d8f",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.ast-grep.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

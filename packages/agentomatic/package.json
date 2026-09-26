@@ -1,0 +1,69 @@
+{
+  "name": "@kisev/agentomatic",
+  "version": "11.0.0",
+  "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
+  "homepage": "https://github.com/kisev/skills#readme",
+  "bugs": {
+    "url": "https://github.com/kisev/skills/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kisev/skills.git",
+    "directory": "packages/agentomatic"
+  },
+  "bin": {
+    "agentomatic": "./dist/cli.js",
+    "agentomatic-memomatic": "./dist/memomatic/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./plugins/rules-injector": {
+      "types": "./dist/plugins/rules-injector.d.ts",
+      "import": "./dist/plugins/rules-injector.js"
+    },
+    "./plugins/memomatic": {
+      "types": "./dist/plugins/memomatic.d.ts",
+      "import": "./dist/plugins/memomatic.js"
+    },
+    "./plugins/rtk": {
+      "types": "./dist/plugins/rtk.d.ts",
+      "import": "./dist/plugins/rtk.js"
+    },
+    "./plugins/zed-bell": {
+      "types": "./dist/plugins/zed-bell.d.ts",
+      "import": "./dist/plugins/zed-bell.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json && node dist/generate-assets.js",
+    "test": "node --test test/agent-profiles.test.mjs test/config-setup.test.mjs test/doctor.test.mjs test/memomatic.test.mjs test/package.test.mjs test/rtk.test.mjs test/stage19.test.mjs",
+    "smoke": "node test/smoke.mjs",
+    "pack:check": "node test/pack-allowlist.mjs"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.29",
+    "@types/node": "22.15.30",
+    "typescript": "7.0.2"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.18.29 <1.19.0"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "skillsInstallerVersion": "1.7.0"
+}

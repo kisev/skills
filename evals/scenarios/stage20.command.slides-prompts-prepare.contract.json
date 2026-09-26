@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "4db252a16da571ca7f774083acff31fd9f49020792ea349302ef31a95558385d",
+  "digest": "8dde162eb4e0f92c275aabc91b779f67862db90f8c687508b35e9e3c67294651",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.slides-prompts-prepare.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

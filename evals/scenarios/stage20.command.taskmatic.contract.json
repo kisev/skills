@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "ea5adcfe8c7dfb34a4a9bb412fa809fb71fab131b0a7e9d5f745f64d1e4c9122",
+  "digest": "ae297fcdf78dca69b7f2d60ac153d0f8ca53c3fc80e98d98b158ea38201104e2",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.taskmatic.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

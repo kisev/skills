@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "00ca2b469fcd478d2f8832cb40ddd5f4f0512083522eb21594a5437845469f06",
+  "digest": "bb5555541fefcae65c1dcd556369da87f202b755b6ef1d9ecd141bc865eeeac8",
   "expected": {
     "mutation_boundary": "host-owned-or-card-bound",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.agent.manager.contract.source",
-      "path": "packages/opencode/assets/agents/manager.md"
+      "path": "packages/agentomatic/assets/agents/manager.md"
     }
   ],
   "kind": "deterministic",

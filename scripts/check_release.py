@@ -16,8 +16,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PORTABLE_PACKAGE = ROOT / "packages" / "skills" / "package.json"
-OPENCODE_PACKAGE = ROOT / "packages" / "opencode" / "package.json"
-OPENCODE_LOCK = ROOT / "packages" / "opencode" / "package-lock.json"
+OPENCODE_PACKAGE = ROOT / "packages" / "agentomatic" / "package.json"
+OPENCODE_LOCK = ROOT / "packages" / "agentomatic" / "package-lock.json"
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
 CHANGELOG = ROOT / "CHANGELOG.md"
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")

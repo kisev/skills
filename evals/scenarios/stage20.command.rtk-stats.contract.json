@@ -21,7 +21,7 @@
   "invariants": [
     {
       "id": "stage20.command.rtk-stats.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",
@@ -35,5 +35,5 @@
   },
   "schema": "eval-scenario/v1",
   "surface": "command",
-  "digest": "2dca08213b82bea594bf511085cd93f7918c61417a8e872cd8b85475566cee19"
+  "digest": "7ad3e7eb77f616620f444beff0cf3fc177454ab8077a3d14395ac5494152ef29"
 }

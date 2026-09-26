@@ -28,12 +28,12 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
     "evals/schemas/result-v1.schema.json",
     "evals/schemas/scenario-v1.schema.json",
-    "packages/opencode/contracts/critic-report-v1.schema.json",
-    "packages/opencode/contracts/execution-card-v1.schema.json",
-    "packages/opencode/contracts/mapper-report-v1.schema.json",
-    "packages/opencode/contracts/review-report-v1.schema.json",
-    "packages/opencode/contracts/routing-receipt-v1.schema.json",
-    "packages/opencode/contracts/worker-report-v1.schema.json",
+    "packages/agentomatic/contracts/critic-report-v1.schema.json",
+    "packages/agentomatic/contracts/execution-card-v1.schema.json",
+    "packages/agentomatic/contracts/mapper-report-v1.schema.json",
+    "packages/agentomatic/contracts/review-report-v1.schema.json",
+    "packages/agentomatic/contracts/routing-receipt-v1.schema.json",
+    "packages/agentomatic/contracts/worker-report-v1.schema.json",
     "shared/references/portable_gitlab/artifact-contracts-v2.schema.json",
     "shared/references/post-success-marker.schema.json",
     "shared/references/team_runtime/team-context.schema.json",
@@ -804,11 +804,11 @@ def validate_shared_contract_instances() -> None:
 
 
 def validate_opencode_contract_instances() -> None:
-    instances = load("packages/opencode/contracts/instances-v1.json")
+    instances = load("packages/agentomatic/contracts/instances-v1.json")
     schema_names = {path.rsplit("/", 1)[-1] for path in SCHEMA_PATHS if "/contracts/" in path}
     assert set(instances) == schema_names
     for name, instance in instances.items():
-        validator(f"packages/opencode/contracts/{name}").validate(instance)
+        validator(f"packages/agentomatic/contracts/{name}").validate(instance)
 
 
 def load_taskmatic_runtime() -> Any:
@@ -881,8 +881,8 @@ def test_every_committed_json_schema_has_a_concrete_contract() -> None:
 
 
 def validate_schema_runtime_rejections() -> None:
-    opencode = load("packages/opencode/contracts/instances-v1.json")
-    routing_validator = validator("packages/opencode/contracts/routing-receipt-v1.schema.json")
+    opencode = load("packages/agentomatic/contracts/instances-v1.json")
+    routing_validator = validator("packages/agentomatic/contracts/routing-receipt-v1.schema.json")
     lowercase_date = copy.deepcopy(opencode["routing-receipt-v1.schema.json"])
     lowercase_date["expires_at"] = "2099-01-01t00:00:00z"
     routing_validator.validate(lowercase_date)

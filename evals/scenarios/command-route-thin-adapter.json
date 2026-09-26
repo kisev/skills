@@ -18,7 +18,7 @@
   "invariants": [
     {
       "id": "route-package-tool",
-      "path": "packages/opencode/src/index.ts",
+      "path": "packages/agentomatic/src/index.ts",
       "contains": "tool: { route }"
     }
   ],
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "b83913ca381a4f1658f6ad43e15600b6f5287a5c4ebc1fdfbca22bd5e3eee114",
+  "digest": "ccb5bec9b0c86048ff0a679b887157527b598f6d81673c4a7a72bfa524c25bfd",
   "locale": "neutral",
   "pair_id": null
 }

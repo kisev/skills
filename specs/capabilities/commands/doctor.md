@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: Diagnostics remain available through `skills-opencode doctor`.
+- Reason: Diagnostics remain available through `agentomatic doctor`.
 
 ## Purpose
 

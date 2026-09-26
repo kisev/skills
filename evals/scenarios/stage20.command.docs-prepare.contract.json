@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "81b2cccc914e2dcab61ae48ef436fc74e0547cf456edd516528f5860fe765e25",
+  "digest": "04b7c3a328994559c4e72b26eb31bbc93059e641c9c82907adba654472327f3e",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.docs-prepare.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

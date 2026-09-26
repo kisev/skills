@@ -41,8 +41,8 @@
 - This repository publishes portable Agent Skills and an optional OpenCode npm integration; keep portable behavior independent of a checkout, provider, credential, user home, or team-specific configuration.
 - Edit portable definitions under `skills/<name>/`; the authored entrypoint is `SKILL.source.md`.
 - Edit shared contracts and runtimes only under `shared/references/`, and update `shared/manifest.json` when their materialization changes.
-- Keep OpenCode-only commands, agents, plugins, routing, and installer behavior under `packages/opencode/`.
-- Do not edit `.build/`, `packages/opencode/dist/`, generated `SKILL.md`, or copied assets directly; use `task generate` and verify reproducibility with `task generate:check`.
+- Keep OpenCode-only commands, agents, plugins, routing, and installer behavior under `packages/agentomatic/`.
+- Do not edit `.build/`, `packages/agentomatic/dist/`, generated `SKILL.md`, or copied assets directly; use `task generate` and verify reproducibility with `task generate:check`.
 - Run `mise install` from the repository root before making changes.
 - Treat `taskfile.yml` as the full repository and CI task graph; the Lefthook pre-commit fast path may invoke pinned Mise tools directly for staged files, while workflows and pre-push must call public tasks.
 - Add focused contract or regression tests for observable behavior.

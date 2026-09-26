@@ -63,7 +63,7 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
     assert len(english_root.splitlines()) < 100
     assert len(russian_root.splitlines()) < 100
     for document in (english_root, russian_root):
-        assert "skills-opencode" in document
+        assert "agentomatic" in document
         assert "docs/" in document
     assert all(
         heading in english_index
@@ -90,22 +90,22 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "plugin" in document
         assert "restart" in document or "перезапуск" in document
         assert "Skill command adapters" in document
-        assert "npm install --save-exact @kisev/skills-opencode" in document
-        assert "npx --yes @kisev/skills-opencode@latest" in document
-        assert "npm exec -- skills-opencode" not in document
+        assert "npm install --save-exact @kisev/agentomatic" in document
+        assert "npx --yes @kisev/agentomatic@latest" in document
+        assert "npm exec -- agentomatic" not in document
     assert "Manage\nportable skills separately" in english
     assert "Переносимыми навыками\nуправляйте отдельно" in russian
     assert "lock files do not affect the\nreconcile plan" in english
     assert "lock-файлы не влияют на план" in russian
 
-    package_english = (ROOT / "packages/opencode/README.md").read_text(encoding="utf-8")
-    package_russian = (ROOT / "packages/opencode/README.ru.md").read_text(encoding="utf-8")
+    package_english = (ROOT / "packages/agentomatic/README.md").read_text(encoding="utf-8")
+    package_russian = (ROOT / "packages/agentomatic/README.ru.md").read_text(encoding="utf-8")
     assert "/docs/how-to/opencode-integration.md" in package_english
     assert "/docs/ru/how-to/opencode-integration.md" in package_russian
     for document in (package_english, package_russian):
-        assert "npm install --save-exact @kisev/skills-opencode" in document
-        assert "npx --yes @kisev/skills-opencode@latest" in document
-        assert "npm exec -- skills-opencode" not in document
+        assert "npm install --save-exact @kisev/agentomatic" in document
+        assert "npx --yes @kisev/agentomatic@latest" in document
+        assert "npm exec -- agentomatic" not in document
 
 
 def test_current_user_documentation_uses_stable_cli_channels() -> None:
@@ -114,13 +114,13 @@ def test_current_user_documentation_uses_stable_cli_channels() -> None:
         ROOT / "README.ru.md",
         ROOT / "CONTRIBUTING.md",
         ROOT / "CONTRIBUTING.ru.md",
-        ROOT / "packages/opencode/README.md",
-        ROOT / "packages/opencode/README.ru.md",
+        ROOT / "packages/agentomatic/README.md",
+        ROOT / "packages/agentomatic/README.ru.md",
         ROOT / "packages/skills/README.md",
         ROOT / "packages/skills/README.ru.md",
         *sorted((ROOT / "docs").rglob("*.md")),
     ]
-    numeric_pin = re.compile(r"(?:\bskills|@kisev/skills-opencode)@\d+\.\d+\.\d+")
+    numeric_pin = re.compile(r"(?:\bskills|@kisev/agentomatic)@\d+\.\d+\.\d+")
     for path in documents:
         text = path.read_text(encoding="utf-8")
         assert not numeric_pin.search(text), path
@@ -140,7 +140,7 @@ def test_current_user_documentation_uses_stable_cli_channels() -> None:
 
 def test_portable_cleanup_docs_cover_every_retired_skill_name() -> None:
     inventory = json.loads(
-        (ROOT / "packages/opencode/assets/migration-inventory.json").read_text(encoding="utf-8")
+        (ROOT / "packages/agentomatic/assets/migration-inventory.json").read_text(encoding="utf-8")
     )
     retired = {
         *inventory["removed"],

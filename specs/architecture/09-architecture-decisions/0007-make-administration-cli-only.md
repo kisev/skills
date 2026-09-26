@@ -9,7 +9,7 @@
 ## Context and problem statement
 
 OpenCode slash commands and package tools duplicated deterministic operations
-already implemented by `skills-opencode`; portable `lsp-report` also duplicated
+already implemented by `agentomatic`; portable `lsp-report` also duplicated
 the LSP inventory in the direct doctor CLI.
 
 ## Decision drivers
@@ -27,10 +27,10 @@ the LSP inventory in the direct doctor CLI.
 
 ## Outcome
 
-Keep package administration only in `skills-opencode`. Retire the
+Keep package administration only in `agentomatic`. Retire the
 `agent-profiles`, `capabilities`, `doctor`, and `reconcile` slash commands and
 package tools. Keep `route` as the sole package tool, and use
-`skills-opencode doctor` as the supported LSP reporting interface.
+`agentomatic doctor` as the supported LSP reporting interface.
 
 ## Consequences
 

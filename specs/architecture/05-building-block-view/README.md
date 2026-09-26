@@ -7,9 +7,9 @@
   private build and public Pages distribution boundary.
 - `.github/workflows/publish.yml` gates, builds, publishes, and verifies both
   release channels before creating the GitHub Release.
-- `packages/opencode/src/` contains catalog, registry, plugins, routing, CLI,
+- `packages/agentomatic/src/` contains catalog, registry, plugins, routing, CLI,
   installer, profiles, lifecycle, and state adapters.
-- `packages/opencode/test/` contains package lifecycle and security contracts.
+- `packages/agentomatic/test/` contains package lifecycle and security contracts.
 - `tests/` contains repository, distribution, workflow, and eval contracts.
 - `evals/` contains machine-readable scenarios, fixtures, schemas, and negative
   corpus entries.

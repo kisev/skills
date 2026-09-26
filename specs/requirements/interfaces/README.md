@@ -54,7 +54,7 @@ the checked versions and no-network/no-credentials compatibility boundary.
 ### REQ-I-007 - Support location-independent direct CLI invocation
 
 Human-facing direct CLI commands shall use the exact-version invocation
-`npx --yes @kisev/skills-opencode@<version>`. Global scope shall resolve deployment
+`npx --yes @kisev/agentomatic@<version>`. Global scope shall resolve deployment
 and lifecycle roots independently of the current working directory. Scope-aware
 commands shall default to project scope, accept one `--global`, reject `--scope`,
 and reject every option outside the selected command's documented allowlist.

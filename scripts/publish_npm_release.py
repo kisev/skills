@@ -332,11 +332,11 @@ def registry_smoke(name: str, version: str) -> None:
             "node",
             "--input-type=module",
             "--eval",
-            "await import('@kisev/skills-opencode'); await import('@kisev/skills-opencode/plugins/rules-injector'); await import('@kisev/skills-opencode/plugins/rtk'); await import('@kisev/skills-opencode/plugins/zed-bell');",
+            "await import('@kisev/agentomatic'); await import('@kisev/agentomatic/plugins/rules-injector'); await import('@kisev/agentomatic/plugins/rtk'); await import('@kisev/agentomatic/plugins/zed-bell');",
             cwd=root,
             env=env,
         )
-        executable = root / "node_modules" / ".bin" / "skills-opencode"
+        executable = root / "node_modules" / ".bin" / "agentomatic"
         if command(str(executable), "--version", cwd=root, env=env).strip() != version:
             raise PublicationError("installed npm CLI reports the wrong version")
         command(str(executable), "--help", cwd=root, env=env)

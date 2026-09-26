@@ -143,7 +143,7 @@ tasks:
     desc: Check types in typescript
     deps: [package:install]
     cmds:
-      - mise exec -- tsc --project packages/opencode/tsconfig.json --noEmit
+      - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
 
   typecheck:python:
     desc: Check types in python
@@ -361,14 +361,14 @@ tasks:
   package:check:
     desc: Verify the complete OpenCode package lifecycle and tarball
     deps: [package:test]
-    dir: packages/opencode
+    dir: packages/agentomatic
     cmds:
       - mise exec -- npm run smoke
       - mise exec -- npm run pack:check
 
   package:test:
     internal: true
-    dir: packages/opencode
+    dir: packages/agentomatic
     deps: [package:build]
     cmds:
       - mise exec -- npm test
@@ -379,7 +379,7 @@ tasks:
 
   package:build:
     internal: true
-    dir: packages/opencode
+    dir: packages/agentomatic
     deps: [package:install]
     cmds:
       - mise exec -- npm run build
@@ -387,12 +387,12 @@ tasks:
   package:install:
     internal: true
     run: once
-    dir: packages/opencode
+    dir: packages/agentomatic
     cmds:
       - mise exec -- npm ci
 
   package:audit:
     internal: true
-    dir: packages/opencode
+    dir: packages/agentomatic
     cmds:
       - mise exec -- npm audit --package-lock-only

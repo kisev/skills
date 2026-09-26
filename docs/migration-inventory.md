@@ -8,7 +8,7 @@ The current portable source is the GitHub Pages stable channel at
 `https://kisev.github.io/skills`. Its release metadata identifies the release and
 source revision, while `https://github.com/kisev/skills/releases/latest` resolves
 the current GitHub Release. The optional integration package is
-`@kisev/skills-opencode`.
+`@kisev/agentomatic`.
 
 ## Active Portable Skills
 
@@ -71,7 +71,7 @@ through `doctor`; no archive restore or purge command is provided.
 ## Machine-Readable Sources
 
 Exact names, replacements, historical hashes, and source metadata are in
-`packages/opencode/assets/migration-inventory.json`. Active package surfaces are
-in `packages/opencode/src/catalog.ts`; portable release metadata is in
+`packages/agentomatic/assets/migration-inventory.json`. Active package surfaces are
+in `packages/agentomatic/src/catalog.ts`; portable release metadata is in
 `packages/skills/package.json`; build-only shared-file declarations are in
 `shared/manifest.json`.

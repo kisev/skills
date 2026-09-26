@@ -18,7 +18,7 @@ def write_json(path: Path, value: object) -> None:
 def version_root(root: Path) -> Path:
     write_json(root / "packages/skills/package.json", {"version": "2.2.3"})
     write_json(
-        root / "packages/opencode/package.json",
+        root / "packages/agentomatic/package.json",
         {
             "version": "2.2.3",
             "skillsInstallerVersion": "1.5.23",
@@ -27,7 +27,7 @@ def version_root(root: Path) -> Path:
         },
     )
     write_json(
-        root / "packages/opencode/package-lock.json",
+        root / "packages/agentomatic/package-lock.json",
         {"version": "2.2.3", "packages": {"": {"version": "2.2.3"}}},
     )
     write_json(
@@ -46,7 +46,7 @@ def version_root(root: Path) -> Path:
         encoding="utf-8",
     )
     (root / "README.md").write_text(
-        "Use `npx --yes skills@latest` and `@kisev/skills-opencode@latest`.\n",
+        "Use `npx --yes skills@latest` and `@kisev/agentomatic@latest`.\n",
         encoding="utf-8",
     )
     return root
@@ -61,9 +61,9 @@ def test_repository_version_contract_is_centralized() -> None:
 
 def test_version_contract_rejects_release_mirror_drift(tmp_path: Path) -> None:
     root = version_root(tmp_path)
-    package = check_versions.read_json(root / "packages/opencode/package.json")
+    package = check_versions.read_json(root / "packages/agentomatic/package.json")
     package["version"] = "9.9.9"
-    write_json(root / "packages/opencode/package.json", package)
+    write_json(root / "packages/agentomatic/package.json", package)
     with pytest.raises(check_versions.VersionError, match="release mirrors"):
         check_versions.validate(root)
 
@@ -71,7 +71,7 @@ def test_version_contract_rejects_release_mirror_drift(tmp_path: Path) -> None:
 def test_version_contract_rejects_numeric_public_documentation_pin(tmp_path: Path) -> None:
     root = version_root(tmp_path)
     (root / "README.md").write_text(
-        "Run `npx --yes @kisev/skills-opencode@2.2.3 doctor --global`.\n",
+        "Run `npx --yes @kisev/agentomatic@2.2.3 doctor --global`.\n",
         encoding="utf-8",
     )
     with pytest.raises(check_versions.VersionError, match="public documentation"):
@@ -90,8 +90,8 @@ def test_version_contract_rejects_authored_skill_version(tmp_path: Path) -> None
 
 def test_version_contract_rejects_installer_pin_drift(tmp_path: Path) -> None:
     root = version_root(tmp_path)
-    package = check_versions.read_json(root / "packages/opencode/package.json")
+    package = check_versions.read_json(root / "packages/agentomatic/package.json")
     package["skillsInstallerVersion"] = "1.5.22"
-    write_json(root / "packages/opencode/package.json", package)
+    write_json(root / "packages/agentomatic/package.json", package)
     with pytest.raises(check_versions.VersionError, match="installer versions differ"):
         check_versions.validate(root)

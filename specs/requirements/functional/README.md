@@ -10,7 +10,7 @@ selectable plugins, and 1 package tool.
 
 #### Verification
 
-Compare the contract with `skills/`, `packages/opencode/src/catalog.ts`, and
+Compare the contract with `skills/`, `packages/agentomatic/src/catalog.ts`, and
 generated package assets; execute the public inventory tests.
 
 ### REQ-F-002 - Route work through bounded orchestration
@@ -107,7 +107,7 @@ verify exports, CLI help, and agent discovery without provider credentials.
 After the complete publication gate succeeds for a push to `dev`, publication
 shall update the moving
 portable distribution at `https://kisev.github.io/skills/dev` and publish one
-unique `@kisev/skills-opencode` prerelease under npm dist-tag `dev`. The snapshot
+unique `@kisev/agentomatic` prerelease under npm dist-tag `dev`. The snapshot
 version shall combine the maintained stable base, workflow run number, and source
 revision without selecting a future stable SemVer. Development publication shall
 not create a GitHub Release or change npm `latest`.

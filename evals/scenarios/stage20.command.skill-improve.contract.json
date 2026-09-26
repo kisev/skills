@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "f5c79b3e6126af7a76cb558626b6f2ad1efe099f8aa999b14e37a4a4df090b34",
+  "digest": "a2c769b501fd95ca7126d13a605f3fb4b7ea7173ef0234762504e9eea2922db6",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.skill-improve.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

@@ -13,7 +13,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 NUMERIC_COMMAND_PIN = re.compile(
-    r"(?:npx\s+--yes\s+)?(?:skills|@kisev/skills-opencode)@[0-9]+\.[0-9]+\.[0-9]+"
+    r"(?:npx\s+--yes\s+)?(?:skills|@kisev/agentomatic)@[0-9]+\.[0-9]+\.[0-9]+"
 )
 
 
@@ -86,8 +86,8 @@ def validate_skill_metadata(root: Path) -> int:
 
 def validate(root: Path = ROOT) -> dict[str, object]:
     portable = read_json(root / "packages/skills/package.json")
-    opencode = read_json(root / "packages/opencode/package.json")
-    lock = read_json(root / "packages/opencode/package-lock.json")
+    opencode = read_json(root / "packages/agentomatic/package.json")
+    lock = read_json(root / "packages/agentomatic/package-lock.json")
     compatibility = read_json(root / "evals/contracts/opencode-compatibility.json")
     with (root / "mise.toml").open("rb") as stream:
         mise = tomllib.load(stream)
@@ -97,9 +97,9 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     if not isinstance(lock_packages, dict) or not isinstance(lock_packages.get(""), dict):
         raise VersionError("OpenCode package lock root is invalid")
     release_mirrors = {
-        "packages/opencode/package.json": opencode.get("version"),
-        "packages/opencode/package-lock.json": lock.get("version"),
-        "packages/opencode/package-lock.json packages root": lock_packages[""].get("version"),
+        "packages/agentomatic/package.json": opencode.get("version"),
+        "packages/agentomatic/package-lock.json": lock.get("version"),
+        "packages/agentomatic/package-lock.json packages root": lock_packages[""].get("version"),
     }
     drift = {name: value for name, value in release_mirrors.items() if value != release}
     if drift:

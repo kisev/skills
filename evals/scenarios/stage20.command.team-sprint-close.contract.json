@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "4ca463bafb28bca2a48cdec738063588acd56494b60b827e68c2d2f1c267ab4e",
+  "digest": "b14b381354f662e34ed17d77a7a1251d85096f04dc8ccb6cd75b00767753369c",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.team-sprint-close.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

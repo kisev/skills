@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Переносимые навыки для агентов Codex и OpenCode, а также `skills-opencode` -
+Переносимые навыки для агентов Codex и OpenCode, а также `agentomatic` -
 полноценная интеграция с OpenCode. Компоненты независимы: каждый можно
 использовать отдельно или установить оба для полной работы с OpenCode.
 
@@ -11,7 +11,7 @@
 | Компонент | Назначение | Жизненный цикл |
 | - | - | - |
 | Portable Agent Skills | 28 автономных сценариев для разработки, документации, выпуска и командной работы | Стабильный CLI `skills@latest` устанавливает их в `~/.agents/skills` или `.agents/skills` |
-| `@kisev/skills-opencode` | Команды OpenCode, агенты с фиксированными ролями, средства маршрутизации, диагностика и необязательные обёртки плагинов | Устанавливается как зависимость npm; управляемые файлы находятся в `~/.config/opencode` или `.opencode` |
+| `@kisev/agentomatic` | Команды OpenCode, агенты с фиксированными ролями, средства маршрутизации, диагностика и необязательные обёртки плагинов | Устанавливается как зависимость npm; управляемые файлы находятся в `~/.config/opencode` или `.opencode` |
 
 Переносимые навыки не требуют npm-пакета. Пакет не содержит, не устанавливает и
 не обновляет, не проверяет и не удаляет их. Их жизненным циклом управляет CLI
@@ -35,9 +35,9 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --ag
 для установки в проект, обновления, очистки и устранения неполадок или откройте
 [каталог навыков](docs/ru/reference/skill-catalog.md).
 
-## skills-opencode
+## agentomatic
 
-`@kisev/skills-opencode` добавляет в OpenCode:
+`@kisev/agentomatic` добавляет в OpenCode:
 
 - адаптеры слеш-команд для установленных навыков;
 - шесть агентов с фиксированными ролями и управление профилями;
@@ -51,12 +51,12 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --ag
 предварительно просмотрите управляемые файлы:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npm install --save-exact @kisev/agentomatic
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
 Чтобы использовать текущий dev-снимок, укажите
-`@kisev/skills-opencode@dev` в обеих командах.
+`@kisev/agentomatic@dev` в обеих командах.
 
 Это только начало обязательной последовательности действий. Выполните точную
 команду подтверждения из предварительного просмотра, добавьте пакет в запись

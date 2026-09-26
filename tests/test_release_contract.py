@@ -28,7 +28,7 @@ from scripts import (
 ROOT = Path(__file__).resolve().parents[1]
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
 PACKAGE_METADATA = json.loads(
-    (ROOT / "packages" / "opencode" / "package.json").read_text(encoding="utf-8")
+    (ROOT / "packages" / "agentomatic" / "package.json").read_text(encoding="utf-8")
 )
 RELEASE_VERSION = PACKAGE_METADATA["version"]
 
@@ -479,9 +479,9 @@ def test_registry_smoke_installs_the_optional_runtime_peer(
         return ""
 
     monkeypatch.setattr(publish_npm_release, "command", command)
-    publish_npm_release.registry_smoke("@kisev/skills-opencode", RELEASE_VERSION)
+    publish_npm_release.registry_smoke("@kisev/agentomatic", RELEASE_VERSION)
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
-    assert f"@kisev/skills-opencode@{RELEASE_VERSION}" in install
+    assert f"@kisev/agentomatic@{RELEASE_VERSION}" in install
     assert "@opencode-ai/plugin@1.18.29" in install
     assert ("npm", "audit", "signatures", "--json") in calls
 
@@ -667,7 +667,7 @@ def test_release_manifest_rejects_tampered_tarball(
     content = b"validated tarball"
     npm = {
         "filename": "package.tgz",
-        "name": "@kisev/skills-opencode",
+        "name": "@kisev/agentomatic",
         "size": len(content),
         **build_release_artifacts.hashes(content),
     }

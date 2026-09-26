@@ -2,7 +2,7 @@
 
 [English](../../how-to/opencode-integration.md)
 
-`@kisev/skills-opencode` - необязательный слой для OpenCode. У переносимых
+`@kisev/agentomatic` - необязательный слой для OpenCode. У переносимых
 навыков отдельный жизненный цикл: их нужно устанавливать независимо по
 [инструкции для переносимых навыков](portable-skills.md).
 
@@ -16,7 +16,7 @@
 | Команды | `.opencode/commands` | `~/.config/opencode/commands` |
 | Агенты | `.opencode/agents` | `~/.config/opencode/agents` |
 | Необязательные обёртки | `.opencode/plugins` | `~/.config/opencode/plugins` |
-| Метаданные принадлежности | `.opencode/.skills-opencode` | `~/.config/opencode/.skills-opencode` |
+| Метаданные принадлежности | `.opencode/.agentomatic` | `~/.config/opencode/.agentomatic` |
 
 Пакет и созданные обёртки должны оставаться доступными после завершения работы
 установщика. Импорт, загрузка плагина и сценарии жизненного цикла npm не
@@ -30,8 +30,8 @@
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npm install --save-exact @kisev/agentomatic
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
 Пакет остаётся в каталоге `node_modules` проекта, а подтверждённые компоненты
@@ -45,7 +45,7 @@ npx --yes @kisev/skills-opencode@latest install --dry-run
 mkdir -p "$HOME/.config/opencode"
 cd "$HOME/.config/opencode"
 test -f package.json || npm init --yes
-npm install --save-exact @kisev/skills-opencode
+npm install --save-exact @kisev/agentomatic
 ```
 
 Сохраните зависимость в `package.json` и файле блокировки этого npm-проекта.
@@ -53,7 +53,7 @@ npm install --save-exact @kisev/skills-opencode
 установки запускайте команды CLI для глобальной области из любого каталога:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --global --dry-run
+npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
 ### Dev-канал
@@ -62,13 +62,13 @@ npx --yes @kisev/skills-opencode@latest install --global --dry-run
 установщика:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode@dev
-npx --yes @kisev/skills-opencode@dev install --dry-run
+npm install --save-exact @kisev/agentomatic@dev
+npx --yes @kisev/agentomatic@dev install --dry-run
 ```
 
 Каждый успешный push в `dev` публикует уникальную prerelease-версию и перемещает
 только dist-tag `dev`. Чтобы вернуться на стабильный канал, переустановите
-`@kisev/skills-opencode` без `@dev` и запустите стабильный CLI `@latest`.
+`@kisev/agentomatic` без `@dev` и запустите стабильный CLI `@latest`.
 
 ## Выбор компонентов
 
@@ -85,7 +85,7 @@ npx --yes @kisev/skills-opencode@dev install --dry-run
 три команды, все агенты с фиксированными ролями и ни одна обёртка:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install \
+npx --yes @kisev/agentomatic@latest install \
   --commands askme,code-review,goal \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
@@ -95,7 +95,7 @@ npx --yes @kisev/skills-opencode@latest install \
 и `--plugins`. Точные текущие имена можно получить командой:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest capabilities --json
+npx --yes @kisev/agentomatic@latest capabilities --json
 ```
 
 Доступные обёртки: `rules-injector`, `rtk`, `zed-bell`; `rtk` предварительно
@@ -119,7 +119,7 @@ npx --yes @kisev/skills-opencode@latest capabilities --json
 проверку `rtk.observability`:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest doctor --json
+npx --yes @kisev/agentomatic@latest doctor --json
 ```
 
 Проверка сообщает о развёртывании обёртки, доступности бинаря RTK, счётчиках
@@ -136,7 +136,7 @@ npx --yes @kisev/skills-opencode@latest doctor --json
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@kisev/skills-opencode"]
+  "plugin": ["@kisev/agentomatic"]
 }
 ```
 
@@ -151,8 +151,8 @@ npx --yes @kisev/skills-opencode@latest doctor --json
 пользовательские файлы конфигурации:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest config --global --dry-run
-npx --yes @kisev/skills-opencode@latest config --dry-run
+npx --yes @kisev/agentomatic@latest config --global --dry-run
+npx --yes @kisev/agentomatic@latest config --dry-run
 ```
 
 В терминале без флагов открываются селекторы целей и фрагментов. Глобальная
@@ -165,7 +165,7 @@ npx --yes @kisev/skills-opencode@latest config --dry-run
 
 | Фрагмент | Цели | Эффект |
 | - | - | - |
-| `core-plugin` | opencode | Добавляет `$schema` и регистрирует `@kisev/skills-opencode` в `plugin` |
+| `core-plugin` | opencode | Добавляет `$schema` и регистрирует `@kisev/agentomatic` в `plugin` |
 | `skills-state-permissions` | opencode, kilo, mimo | Разрешает `~/.local/state/agent-skills/**` (для OpenCode также `~/.config/opencode/skills/**`) в `permission.read`, `permission.edit` и `permission.external_directory`, чтобы штатные пути состояния навыков не запрашивали подтверждение |
 | `lsp-preset` | opencode | Добавляет LSP-серверы из общего каталога со стандартными командами |
 | `secrets-guard` | opencode, kilo, mimo | Запрещает чтение и изменение распространённых файлов секретов (`.env*`, ключи, учётные данные) |
@@ -194,7 +194,7 @@ npx --yes @kisev/skills-opencode@latest config --dry-run
 нужно разрешить вручную.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
 Обязательная последовательность для OpenCode: постоянная установка через npm,
@@ -222,8 +222,8 @@ OpenCode. Постоянный npm-проект в `~/.config/opencode` сохр
 восстановление по журналам и не запуская плагины или LSP-серверы:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest doctor
-npx --yes @kisev/skills-opencode@latest doctor --json
+npx --yes @kisev/agentomatic@latest doctor
+npx --yes @kisev/agentomatic@latest doctor --json
 ```
 
 Отчёт содержит версии, принадлежность, отклонения, коллизии, количество архивов,
@@ -241,8 +241,8 @@ npx --yes @kisev/skills-opencode@latest doctor --json
 набором компонентов, после чего перезапустите OpenCode:
 
 ```shell
-npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --dry-run
+npm install --save-exact @kisev/agentomatic
+npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
 Используйте полную команду подтверждения из предварительного просмотра.
@@ -258,9 +258,9 @@ npx --yes @kisev/skills-opencode@latest install --dry-run
 метаданные установки в одной области:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest reconcile --dry-run
-npx --yes @kisev/skills-opencode@latest reconcile --confirm <digest>
-npx --yes @kisev/skills-opencode@latest reconcile --global --dry-run --json
+npx --yes @kisev/agentomatic@latest reconcile --dry-run
+npx --yes @kisev/agentomatic@latest reconcile --confirm <digest>
+npx --yes @kisev/agentomatic@latest reconcile --global --dry-run --json
 ```
 
 Перед `reconcile` обновите пакет через его установщик. Переносимыми навыками
@@ -282,11 +282,11 @@ CLI напрямую управляет моделями агентов с фи�
 критиками без обращения к LLM:
 
 ```shell
-npx --yes @kisev/skills-opencode@latest agent list --global
-npx --yes @kisev/skills-opencode@latest agent configure manager --global --dry-run
-npx --yes @kisev/skills-opencode@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
-npx --yes @kisev/skills-opencode@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
-npx --yes @kisev/skills-opencode@latest agent reconcile --global --dry-run
+npx --yes @kisev/agentomatic@latest agent list --global
+npx --yes @kisev/agentomatic@latest agent configure manager --global --dry-run
+npx --yes @kisev/agentomatic@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
+npx --yes @kisev/agentomatic@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
+npx --yes @kisev/agentomatic@latest agent reconcile --global --dry-run
 ```
 
 Фиксированные роли сохраняют имена, инструкции и разрешения; меняются только
@@ -299,14 +299,14 @@ npx --yes @kisev/skills-opencode@latest agent reconcile --global --dry-run
 Пакет должен оставаться доступным до удаления его компонентов:
 
 1. Просмотрите и подтвердите удаление принадлежащих пакету компонентов.
-2. Удалите `@kisev/skills-opencode` из пользовательского массива `plugin`.
+2. Удалите `@kisev/agentomatic` из пользовательского массива `plugin`.
 3. Удалите зависимость из того же npm-проекта.
 4. Перезапустите OpenCode.
 
 ```shell
-npx --yes @kisev/skills-opencode@latest uninstall --dry-run
-npx --yes @kisev/skills-opencode@latest uninstall --confirm <digest>
-npm uninstall @kisev/skills-opencode
+npx --yes @kisev/agentomatic@latest uninstall --dry-run
+npx --yes @kisev/agentomatic@latest uninstall --confirm <digest>
+npm uninstall @kisev/agentomatic
 ```
 
 Для глобальной области запустите стабильную команду npx из любого каталога с
@@ -324,7 +324,7 @@ npm uninstall @kisev/skills-opencode
 - Команды, соответствующие навыкам, являются простыми адаптерами; поведение
   определяет переносимый навык, который устанавливается отдельно.
 - Единственный инструмент пакета - `route`; у него нет слеш-команды.
-  Административные операции выполняются через прямой CLI `skills-opencode`.
+  Административные операции выполняются через прямой CLI `agentomatic`.
 - `install` и `uninstall` никогда не меняют `opencode.json`; команда `config` -
   единственный подтверждённый путь для фрагментов конфигурации.
 - Глобальная область не зависит от текущего рабочего каталога; область проекта

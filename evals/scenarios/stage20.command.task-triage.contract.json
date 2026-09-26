@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "49b379fdb6a8dd5b5da62e5e9975fc048731857685a4bc779fd40f6506a04dfb",
+  "digest": "268f1d65016e1cc2b9ef4aa4f0af034d5a773955f18ce29bcfd1c4a6efb00d20",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.task-triage.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

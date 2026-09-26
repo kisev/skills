@@ -18,7 +18,7 @@
   "invariants": [
     {
       "id": "plugin-source",
-      "path": "packages/opencode/src/plugins/rules-injector.ts",
+      "path": "packages/agentomatic/src/plugins/rules-injector.ts",
       "contains": "enabled"
     }
   ],
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "5c1be49b080254ba2b14e8b8e2ffc16fc167a298aab849f5a0caf8725213cf19",
+  "digest": "fe874b1a8bc81010cfbb618f505795c9cfb28b9ca3b63084cd5d808f501c71c4",
   "locale": "neutral",
   "pair_id": null
 }

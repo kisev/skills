@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "a075040c69d6125def4d7c3e4724439a3346434c1ecb0a8f3accc685ff48f1b6",
+  "digest": "54d16842a9eec3eb1628337072968c9c1e18ee5ebeccd5d59c191923c4a88526",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.team-roadmap.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

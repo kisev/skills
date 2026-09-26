@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "packages" / "opencode"
+PACKAGE = ROOT / "packages" / "agentomatic"
 PAGES = ROOT / ".build" / "packages" / "skills"
 OUTPUT = ROOT / ".build" / "release"
 ALLOWED_PACKAGE_FILES = {"README.md", "README.ru.md", "package.json"}

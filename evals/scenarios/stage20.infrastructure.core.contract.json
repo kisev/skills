@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "7ca3c42e2888db317ea425004304024b84732526f766fb4f38551a6f37147834",
+  "digest": "73d6fab69490976263bdc9a3956e800373b8dfbc27dfbd3c10edafce3788b5d2",
   "expected": {
     "mutation_boundary": "host-owned-runtime",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.infrastructure.core.contract.source",
-      "path": "packages/opencode/src/index.ts"
+      "path": "packages/agentomatic/src/index.ts"
     }
   ],
   "kind": "deterministic",

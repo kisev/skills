@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Connect `@kisev/skills-opencode` and recommended configuration fragments into
+Connect `@kisev/agentomatic` and recommended configuration fragments into
 user-owned OpenCode, Kilo Code, and MiMo Code configuration files through a
 confirmed interactive or flag-driven setup.
 
