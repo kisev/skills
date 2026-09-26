@@ -1,7 +1,7 @@
 ---
 name: mattermost
 description: >-
-  Read Mattermost messages from an exact link and prepare manual message publications. Never sends messages itself. Russian discovery terms: прочитать Mattermost, отправить сообщение Mattermost.
+  Read Mattermost messages from an exact link, including Band chat links (Band is a Mattermost fork), and prepare manual message publications. Never sends messages itself. Russian discovery terms: прочитать Mattermost, отправить сообщение Mattermost, прочитать бэнд, выгрузка из бэнда, бенд.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

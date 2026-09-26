@@ -9,8 +9,10 @@ prepare a manual plan for publishing messages to exact Mattermost targets.
 
 Trigger for Mattermost reading and message sending. A send request produces a
 manual publication plan; the skill never invokes its generated apply or inspect
-commands. Near-misses are broad search and edit, delete, reaction, channel, or
-member mutations.
+commands. Band, a Mattermost fork, triggers the same skill through its own exact
+origins and routes; Band origins do not serve the reactions API, so Band reads
+run with `--no-reactions` without per-post failures. Near-misses are broad
+search and edit, delete, reaction, channel, or member mutations.
 
 ## Inputs and Outputs
 

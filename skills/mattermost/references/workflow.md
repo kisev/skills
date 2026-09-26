@@ -25,15 +25,18 @@ export.
 
 Reactions are fetched by default through separate GET requests and returned as
 exact `{emoji, user}` pairs. Use `--no-reactions` only when the user asks to omit
-them. Never interpret a reaction as approval or moderation.
+them, or on Band origins: Band, a Mattermost fork, does not serve the reactions
+API, so reads there run with `--no-reactions` instead of collecting per-post
+failures. Never interpret a reaction as approval or moderation.
 
 ## Scope
 
 Resolve only an exact HTTPS URL supplied by the user or the exact Mattermost URL
 in the current host context. Mattermost URLs already encode names in their exact
-channel, direct-message, group, and permalink routes. If the context is absent or
-ambiguous, ask for the exact URL instead of searching by a name or widening the
-scope.
+channel, direct-message, group, and permalink routes. Mattermost-compatible fork
+origins, such as Band, use the same routes and are in scope on their own exact
+origins. If the context is absent or ambiguous, ask for the exact URL instead of
+searching by a name or widening the scope.
 
 Reading and publication preparation requests are GET-only and remain at the
 selected origin. Only a separately and manually invoked publication helper may
@@ -50,14 +53,17 @@ direct-channel name. Do not broaden resolution into search.
 
 ## Cache
 
-The SQLite cache is isolated by normalized origin and current user ID. Access to
-the exact post or channel is revalidated before every cache read.
+The SQLite cache is one private `cache.sqlite3` under the user's XDG cache home
+in a `mattermost/` directory, isolated by normalized origin and current user ID.
+Access to the exact post or channel is revalidated before every cache read.
 
 - Coverage newer than seven days is reusable for 300 seconds.
 - Coverage wholly older than seven days is intentionally treated as immutable
   and stable, with no freshness expiry. This is a deliberate
   performance/freshness tradeoff that avoids repeated historical API reads;
   late edits and deletes are not observed unless the caller uses `--refresh`.
+- One read whose interval crosses the seven-day boundary is split into a stable
+  segment and a fresh segment; each segment follows its own rule above.
 - Thread composition is reusable for 300 seconds.
 - Reactions are never cached and are fetched again unless `--no-reactions` is set.
 - Partial reads may cache individual posts but never mark an interval or thread
