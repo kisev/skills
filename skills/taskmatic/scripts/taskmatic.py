@@ -15,8 +15,6 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
@@ -754,61 +752,6 @@ def render_page(snapshot: dict[str, Any]) -> str:
     return load_viewer_template().replace(SNAPSHOT_PLACEHOLDER, payload)
 
 
-class ViewerHTTPServer(ThreadingHTTPServer):
-    def __init__(self, address: tuple[str, int], store: Store) -> None:
-        self.taskmatic_store = store
-        super().__init__(address, ViewerHandler)
-
-
-class ViewerHandler(BaseHTTPRequestHandler):
-    server: ViewerHTTPServer
-
-    def fresh_snapshot(self) -> dict[str, Any]:
-        connection = sqlite3.connect(self.server.taskmatic_store.root / DB_NAME)
-        connection.row_factory = sqlite3.Row
-        try:
-            return build_snapshot(connection)
-        finally:
-            connection.close()
-
-    def do_GET(self) -> None:
-        path = self.path.split("?", 1)[0]
-        if path == "/":
-            body = render_page(self.fresh_snapshot()).encode("utf-8")
-            self.respond(HTTPStatus.OK, "text/html; charset=utf-8", body)
-        elif path == "/snapshot.json":
-            snapshot = self.fresh_snapshot()
-            body = (
-                json.dumps(snapshot, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-            ).encode("utf-8")
-            self.respond(HTTPStatus.OK, "application/json", body)
-        else:
-            self.respond(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"not found\n")
-
-    def respond(self, status: HTTPStatus, content_type: str, body: bytes) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def log_message(self, format_string: str, *args: Any) -> None:
-        pass
-
-
-def serve(store: Store, host: str, port: int) -> None:
-    server = ViewerHTTPServer((host, port), store)
-    assigned = server.server_address[1]
-    print(f"taskmatic board: http://{host}:{assigned}/", flush=True)
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
-
-
 MCP_TOOLS: list[dict[str, Any]] = [
     {
         "name": "taskmatic_boards",
@@ -1250,10 +1193,6 @@ def build_parser() -> Parser:
     snapshot.add_argument("--assignee")
     snapshot.add_argument("--label")
 
-    serve_parser = subparsers.add_parser("serve", help="serve the read-only web board")
-    serve_parser.add_argument("--host", default="127.0.0.1")
-    serve_parser.add_argument("--port", type=int, default=8765)
-
     subparsers.add_parser("mcp", help="run the MCP stdio server")
 
     path = subparsers.add_parser("path", help="print resolved state paths")
@@ -1447,9 +1386,6 @@ def dispatch(store: Store, args: argparse.Namespace) -> int:
             label=args.label,
         )
         print_json(snapshot)
-        return 0
-    if command == "serve":
-        serve(store, args.host, args.port)
         return 0
     if command == "mcp":
         return run_mcp(store)

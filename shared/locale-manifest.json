@@ -64,6 +64,10 @@
     {
       "en": "packages/safe-fs/README.md",
       "ru": "packages/safe-fs/README.ru.md"
+    },
+    {
+      "en": "apps/taskmatic/README.md",
+      "ru": "apps/taskmatic/README.ru.md"
     }
   ],
   "patterns": [

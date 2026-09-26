@@ -3,7 +3,8 @@
 ## Purpose
 
 Run a local-first task board for one person and their agents with SQLite authority,
-a regenerated markdown mirror, read-only web views, and agent claims.
+a regenerated markdown mirror, static web export, and agent claims; the live
+web board is the separate user-run `taskmatic-web` application.
 
 ## Triggers and Near-Misses
 
@@ -18,7 +19,8 @@ Input is card data through the CLI, MCP tool calls, or nothing (viewer). Output 
 the private SQLite store under `$TASKMATIC_HOME` or
 `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/taskmatic/`, a regenerated
 markdown mirror (`export/boards/...`) and web export (`export/web/`), snapshot
-JSON, and a loopback read-only HTTP board.
+JSON, and the static web export; live loopback serving belongs to the
+separate `taskmatic-web` application under `apps/taskmatic/`.
 
 ## Workflow Stages
 
@@ -64,9 +66,9 @@ through an immediate transaction that records activity, and regenerate the markd
 mirror and web export from a snapshot after each mutating command. The runner shall
 compute `claim_state` and `claim_remaining_seconds` at read time, reject claims on
 cards held by another agent, allow takeover of expired claims, and clear the claim
-on completion. Views (`serve`, `snapshot`, list and show output) shall stay
-read-only, bind at most a loopback socket, and never require dependencies beyond
-the Python 3.12+ standard library.
+on completion. Views (`snapshot`, list and show output, the static export) shall stay
+read-only and never require dependencies beyond the Python 3.12+ standard
+library; the separate user-run `taskmatic-web` application owns live serving.
 
 ## Example
 

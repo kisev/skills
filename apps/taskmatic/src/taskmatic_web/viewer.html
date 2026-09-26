@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>taskmatic</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e2e5ea; --ink: #1f2430; --muted: #6b7280;
+    --todo: #64748b; --doing: #2563eb; --review: #9333ea; --blocked: #dc2626; --done: #16a34a;
+    --urgent: #b91c1c; --high: #ea580c; --normal: #6b7280; --low: #94a3b8; --sel: #dbeafe;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { display: flex; gap: 12px; align-items: center; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  header select, header input { padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font: inherit; }
+  header input { width: 220px; }
+  header button { padding: 5px 10px; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
+  main { display: flex; gap: 12px; padding: 14px 16px; align-items: flex-start; overflow-x: auto; }
+  .column { flex: 1 1 260px; min-width: 240px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .column > h2 { margin: 0; padding: 8px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; border-bottom: 1px solid var(--line); color: var(--muted); display: flex; justify-content: space-between; }
+  .column > h2 .count { color: var(--ink); }
+  .column[data-status="todo"] > h2 { border-top: 3px solid var(--todo); }
+  .column[data-status="doing"] > h2 { border-top: 3px solid var(--doing); }
+  .column[data-status="review"] > h2 { border-top: 3px solid var(--review); }
+  .column[data-status="blocked"] > h2 { border-top: 3px solid var(--blocked); }
+  .column[data-status="done"] > h2 { border-top: 3px solid var(--done); }
+  .cards { padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; background: #fff; }
+  .card:hover { border-color: #94a3b8; }
+  .card.selected { outline: 2px solid var(--sel); }
+  .card .title { font-weight: 600; }
+  .card .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; align-items: center; }
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: #fff; background: var(--normal); }
+  .pill.urgent { background: var(--urgent); } .pill.high { background: var(--high); }
+  .pill.normal { background: var(--normal); } .pill.low { background: var(--low); }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #eef2f7; color: var(--muted); }
+  .claim { font-size: 11px; color: var(--muted); }
+  .claim.held { color: var(--doing); }
+  .claim.expired { color: var(--blocked); }
+  .cid { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; }
+  aside { position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 92vw); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(15, 23, 42, .08); transform: translateX(100%); transition: transform .15s ease; overflow-y: auto; padding: 16px 18px; z-index: 3; }
+  aside.open { transform: none; }
+  aside .close { float: right; border: 0; background: none; font-size: 18px; cursor: pointer; color: var(--muted); }
+  aside h3 { margin: 2px 0 6px; font-size: 16px; }
+  aside .kv { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+  aside .notes { border-top: 1px solid var(--line); padding-top: 10px; overflow-wrap: anywhere; }
+  aside .notes h4, aside .activity h4 { margin: 10px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+  aside .activity { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 6px; }
+  aside .activity ul { margin: 0; padding-left: 16px; }
+  aside .activity li { margin: 3px 0; font-size: 12px; }
+  aside .activity .at { color: var(--muted); font-family: ui-monospace, monospace; font-size: 11px; }
+  .notes pre { background: #f1f5f9; padding: 8px; border-radius: 6px; overflow-x: auto; }
+  .notes code { background: #f1f5f9; padding: 0 4px; border-radius: 4px; }
+  .notes ul { padding-left: 18px; }
+  .empty { color: var(--muted); text-align: center; padding: 10px 0 14px; font-size: 12px; }
+  .offline-note { color: var(--muted); font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>taskmatic</h1>
+  <span class="meta" id="generated"></span>
+  <select id="board"></select>
+  <input id="filter" type="search" placeholder="filter by text or #label">
+  <button id="refresh" type="button">Refresh</button>
+  <span class="offline-note" id="mode"></span>
+</header>
+<main id="board"></main>
+<aside id="detail" aria-label="card detail">
+  <button class="close" id="close" type="button" title="close">&times;</button>
+  <div id="detail-body"></div>
+</aside>
+<script id="taskmatic-snapshot" type="application/json">__TASKMATIC_SNAPSHOT_JSON__</script>
+<script>
+"use strict";
+const STATUSES = ["todo", "doing", "review", "blocked", "done"];
+let snapshot = null;
+let selected = null;
+const esc = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+function md(text) {
+  const blocks = String(text ?? "").split(/```/);
+  return blocks.map((block, index) => {
+    if (index % 2 === 1) return "<pre>" + esc(block.replace(/^\w*\n/, "")) + "</pre>";
+    const lines = block.split(/\n/);
+    const html = [];
+    let inList = false;
+    for (const raw of lines) {
+      const line = raw.trimEnd();
+      const inline = esc(line)
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/(^|\s)\*([^*]+)\*(?=\s|$)/g, "$1<em>$2</em>");
+      const heading = line.match(/^(#{1,3})\s+(.*)$/);
+      const item = line.match(/^[-*]\s+(.*)$/);
+      if (item) {
+        if (!inList) { html.push("<ul>"); inList = true; }
+        html.push("<li>" + inline.replace(/^[-*]\s+/, "") + "</li>");
+        continue;
+      }
+      if (inList) { html.push("</ul>"); inList = false; }
+      if (heading) {
+        const level = heading[1].length + 1;
+        html.push(`<h${level}>${esc(heading[2])}</h${level}>`);
+      } else if (line.trim() === "") {
+        continue;
+      } else {
+        html.push("<p>" + inline + "</p>");
+      }
+    }
+    if (inList) html.push("</ul>");
+    return html.join("");
+  }).join("");
+}
+
+function cardMatches(card, filter) {
+  if (!filter) return true;
+  const needle = filter.toLowerCase();
+  if (filter.startsWith("#")) {
+    return card.labels.some((label) => label.toLowerCase() === needle.slice(1));
+  }
+  return (
+    card.title.toLowerCase().includes(needle) ||
+    card.id.includes(needle) ||
+    (card.assignee && card.assignee.toLowerCase().includes(needle)) ||
+    card.labels.some((label) => label.toLowerCase().includes(needle)) ||
+    card.notes.toLowerCase().includes(needle)
+  );
+}
+
+function claimLine(card) {
+  if (card.claim_state === "held") {
+    const minutes = Math.max(1, Math.round(card.claim_remaining_seconds / 60));
+    return `<span class="claim held">claim: ${esc(card.claimed_by)} · ${minutes}m left</span>`;
+  }
+  if (card.claim_state === "expired") {
+    return `<span class="claim expired">claim expired: ${esc(card.claimed_by)}</span>`;
+  }
+  return "";
+}
+
+function cardHtml(card) {
+  const tags = card.labels.map((label) => `<span class="tag">${esc(label)}</span>`).join("");
+  const assignee = card.assignee ? `<span class="tag">@${esc(card.assignee)}</span>` : "";
+  return `<div class="card${selected === card.id ? " selected" : ""}" data-id="${card.id}">
+    <div class="title">${esc(card.title)}</div>
+    <div class="row">
+      <span class="cid">${esc(card.id)}</span>
+      <span class="pill ${esc(card.priority)}">${esc(card.priority)}</span>
+      ${tags}${assignee}${claimLine(card)}
+    </div>
+  </div>`;
+}
+
+function render() {
+  const boardSelect = document.getElementById("board");
+  const current = boardSelect.value || "all";
+  boardSelect.innerHTML =
+    `<option value="all">all boards</option>` +
+    snapshot.boards.map((board) => `<option value="${esc(board.slug)}">${esc(board.slug)}</option>`).join("");
+  boardSelect.value = snapshot.boards.some((board) => board.slug === current) || current === "all" ? current : "all";
+  const filter = document.getElementById("filter").value.trim();
+  const cards = snapshot.cards.filter(
+    (card) => (boardSelect.value === "all" || card.board === boardSelect.value) && cardMatches(card, filter),
+  );
+  document.getElementById("generated").textContent = snapshot.generated_at + " · " + cards.length + " cards";
+  const main = document.getElementById("board");
+  main.innerHTML = STATUSES.map((status) => {
+    const column = cards.filter((card) => card.status === status);
+    const body = column.length
+      ? `<div class="cards">` + column.map(cardHtml).join("") + `</div>`
+      : `<div class="empty">none</div>`;
+    return `<section class="column" data-status="${status}"><h2>${status} <span class="count">${column.length}</span></h2>${body}</section>`;
+  }).join("");
+  main.querySelectorAll(".card").forEach((element) => {
+    element.addEventListener("click", () => openDetail(element.dataset.id));
+  });
+  if (selected) renderDetail(selected);
+}
+
+function renderDetail(id) {
+  const card = snapshot.cards.find((entry) => entry.id === id);
+  if (!card) return;
+  const kv = [
+    `id ${esc(card.id)}`, `board ${esc(card.board)}`, `status ${esc(card.status)}`,
+    `priority ${esc(card.priority)}`,
+    card.assignee ? `assignee ${esc(card.assignee)}` : "",
+    card.labels.length ? `labels ${card.labels.map(esc).join(", ")}` : "",
+    card.parent ? `parent ${esc(card.parent)}` : "",
+    card.children.length ? `children ${card.children.map(esc).join(", ")}` : "",
+    card.linked ? `linked ${esc(card.linked)}` : "",
+    card.claim_state ? `claim ${esc(card.claim_state)} (${esc(card.claimed_by)})` : "",
+    `created ${esc(card.created_at)}`, `updated ${esc(card.updated_at)}`,
+  ].filter(Boolean).map((part) => `<span>${part}</span>`).join("");
+  const activity = card.activity.length
+    ? "<ul>" + card.activity.slice().reverse().map((event) =>
+        `<li><span class="at">${esc(event.at)}</span> <strong>${esc(event.kind)}</strong> by ${esc(event.actor)}${event.detail ? " — " + esc(event.detail) : ""}</li>`).join("") + "</ul>"
+    : `<div class="empty">no recorded activity</div>`;
+  document.getElementById("detail-body").innerHTML =
+    `<h3>${esc(card.title)}</h3><div class="kv">${kv}</div>` +
+    `<div class="notes"><h4>Notes</h4>${card.notes.trim() ? md(card.notes) : '<div class="empty">no notes</div>'}</div>` +
+    `<div class="activity"><h4>Activity</h4>${activity}</div>`;
+}
+
+function openDetail(id) {
+  selected = id;
+  document.getElementById("detail").classList.add("open");
+  renderDetail(id);
+  document.querySelectorAll(".card").forEach((element) => {
+    element.classList.toggle("selected", element.dataset.id === id);
+  });
+}
+
+function load(next) {
+  snapshot = next;
+  render();
+}
+
+function boot() {
+  const island = document.getElementById("taskmatic-snapshot");
+  load(JSON.parse(island.textContent));
+  const served = location.protocol === "http:" || location.protocol === "https:";
+  document.getElementById("mode").textContent = served ? "" : "static export";
+  document.getElementById("board").addEventListener("change", render);
+  document.getElementById("filter").addEventListener("input", render);
+  document.getElementById("close").addEventListener("click", () => {
+    selected = null;
+    document.getElementById("detail").classList.remove("open");
+    render();
+  });
+  document.getElementById("refresh").addEventListener("click", refresh);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && selected) document.getElementById("close").click();
+  });
+  if (served) setInterval(refresh, 15000);
+}
+
+async function refresh() {
+  try {
+    const response = await fetch("snapshot.json", { cache: "no-store" });
+    if (!response.ok) return;
+    load(await response.json());
+  } catch (error) {
+    /* static export keeps the embedded snapshot */
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

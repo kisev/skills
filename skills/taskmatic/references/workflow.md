@@ -38,7 +38,12 @@ skill) or through any wrapper the host provides.
   `release <id> --agent NAME`
 - `export` — regenerate the mirror; `snapshot [--board ...]` — print snapshot JSON;
   `path [root|db|export|web]`
-- `serve [--host 127.0.0.1] [--port 8765]` — read-only web board; it never writes.
+
+The live web board is the standalone `taskmatic-web` application (see
+`apps/taskmatic/` in the skills repository), installed with `uv tool install` or
+`pipx install` and run as `taskmatic-web serve [--host 127.0.0.1] [--port 8765]`.
+It is a user-run application, not part of the skill runner. Without it, open the
+static `export/web/index.html` from any file browser or static server.
 
 Statuses: `todo`, `doing`, `review`, `blocked`, `done`. TTL accepts seconds
 (`1800`) or `30m`, `2h`, `1d`. All list and show output is also available as
@@ -97,8 +102,9 @@ exact location depends on the host installation.
 
 ## Boundaries
 
-- The runner and the MCP server never open network connections; only `serve`
-  binds a local loopback socket, and it serves read-only rendered state.
+- The runner and the MCP server never open network connections. All views are
+  read-only; only the separate user-run `taskmatic-web` application binds a
+  local loopback socket.
 - The board is private state: never commit `taskmatic.db` or `export/` to a
   repository and never publish a snapshot that contains private data.
 - The web board is strictly read-only; every mutation goes through the CLI or MCP.

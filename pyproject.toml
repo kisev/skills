@@ -22,7 +22,8 @@
   strict = true
   disallow_any_unimported = true
   explicit_package_bases = true
-  files = ["scripts", "shared/references", "tests", "skills/*/scripts/*.py"]
+  mypy_path = "apps/taskmatic/src"
+  files = ["scripts", "shared/references", "tests", "skills/*/scripts/*.py", "apps/taskmatic/src"]
 
 [tool.pytest.ini_options]
   addopts = [
@@ -34,7 +35,7 @@
     "--durations=10",
   ]
   pythonpath = ["."]
-  testpaths = ["tests", "skills/*/tests"]
+  testpaths = ["tests", "skills/*/tests", "apps/taskmatic/tests"]
 
 [tool.ruff]
   target-version = "py312"

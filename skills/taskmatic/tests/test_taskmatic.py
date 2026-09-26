@@ -6,9 +6,7 @@ import json
 import os
 import sys
 import tempfile
-import threading
 import unittest
-import urllib.request
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest import mock
@@ -319,26 +317,6 @@ class ExportTests(RuntimeTestCase):
         self.assertNotIn("</script><b>", page)
         self.assertIn("\\u003c/script>", page)
         self.assertIn(card_id, page)
-
-
-class ServeTests(RuntimeTestCase):
-    def test_serves_board_and_snapshot(self):
-        self.add_card("Visible card", labels=["ops"])
-        server = TASKMATIC.ViewerHTTPServer(("127.0.0.1", 0), self.store)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        self.addCleanup(server.server_close)
-        self.addCleanup(server.shutdown)
-        base = f"http://127.0.0.1:{server.server_address[1]}"
-        with urllib.request.urlopen(base + "/", timeout=5) as response:
-            page = response.read().decode("utf-8")
-            self.assertEqual(response.headers["Content-Type"], "text/html; charset=utf-8")
-            self.assertIn("Visible card", page)
-        with urllib.request.urlopen(base + "/snapshot.json", timeout=5) as response:
-            snapshot = json.loads(response.read().decode("utf-8"))
-            self.assertEqual(snapshot["schema"], "taskmatic/snapshot/v1")
-        with self.assertRaises(urllib.error.URLError):
-            urllib.request.urlopen(base + "/missing", timeout=5)
 
 
 class McpTests(RuntimeTestCase):
