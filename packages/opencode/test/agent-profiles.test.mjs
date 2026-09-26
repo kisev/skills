@@ -1288,7 +1288,10 @@ test("CLI human plan never truncates conflicts", async () => {
   const context = await roots();
   const executable = join(PACKAGE, "dist", "cli.js");
   try {
-    const commands = readdirSync(join(PACKAGE, "dist", "assets", "commands")).slice(0, 25);
+    // rtk-stats is a package command and is not a valid --commands selection value.
+    const commands = readdirSync(join(PACKAGE, "dist", "assets", "commands"))
+      .filter((name) => name !== "rtk-stats.md")
+      .slice(0, 25);
     await mkdir(join(context.root, "commands"), { recursive: true });
     await Promise.all(
       commands.map((name) =>

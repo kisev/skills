@@ -29,7 +29,13 @@ import {
 } from "../dist/runtime/worktree.js";
 import { stateRoot } from "../dist/runtime/state.js";
 import zedBell from "../dist/plugins/zed-bell.js";
-import { InstallerError, apply, preview } from "../dist/installer.js";
+import {
+  InstallerError,
+  apply,
+  defaultSelection,
+  normalizeSelection,
+  preview,
+} from "../dist/installer.js";
 import { renderReconcile, shellCommand } from "../dist/cli-output.js";
 import { applyReconcile, previewReconcile, ReconcileError } from "../dist/reconcile.js";
 import { lifecycleRoot } from "../dist/lifecycle.js";
@@ -94,10 +100,45 @@ test("installer wizard uses shared multi-select groups and keeps defaults", () =
   assert.match(source, /selectOptions\(\s*label,\s*names,\s*initialSelected,/);
   assert.match(source, /group\("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS\)/);
   assert.match(source, /group\("Fixed agents", defaults\.agents, defaults\.agents\)/);
-  assert.match(source, /group\("Selectable plugins", SELECTABLE_PLUGINS, \[\]\)/);
+  assert.match(source, /group\("Selectable plugins", SELECTABLE_PLUGINS, defaults\.plugins\)/);
   assert.doesNotMatch(source, /"Select all", "Select none"/);
   assert.match(source, /--skill-commands/);
   assert.doesNotMatch(source, /--package-commands/);
+});
+
+test("rtk wrapper is the default plugin selection and an explicit opt-out is preserved", async () => {
+  assert.deepEqual(defaultSelection().plugins, ["rtk"]);
+  assert.deepEqual(normalizeSelection().plugins, ["rtk"]);
+  assert.deepEqual(normalizeSelection({ plugins: [] }).plugins, []);
+  const directory = temporary();
+  try {
+    const project = join(directory, "project");
+    const home = join(directory, "home");
+    await Promise.all([mkdir(project), mkdir(home)]);
+    const { plan, applied } = await (async () => {
+      const plan = await preview("install", "global", project, home, { plugins: [] });
+      return {
+        plan,
+        applied: await apply("install", "global", plan.digest, project, home, {}, { plugins: [] }),
+      };
+    })();
+    assert.equal(
+      plan.operations.some((item) => item.path === "plugins/rtk.js"),
+      false,
+    );
+    assert.deepEqual(applied.selection.plugins, []);
+    await assert.rejects(lstat(join(home, ".config", "opencode", "plugins")), {
+      code: "ENOENT",
+    });
+    const reinstated = await preview("install", "global", project, home);
+    assert.deepEqual(reinstated.selection.plugins, []);
+    assert.equal(
+      reinstated.operations.some((item) => item.path === "plugins/rtk.js"),
+      false,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("modified managed reconcile preview is blocked without Apply", async () => {
@@ -317,11 +358,13 @@ async function install(scope, cwd, home) {
   return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
 }
 
-test("registry generates exactly twenty-eight thin skill command assets", () => {
-  assert.equal(COMMAND_REGISTRY.length, 28);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 28);
+test("registry generates twenty-eight thin skill command assets and one package command", () => {
+  assert.equal(COMMAND_REGISTRY.length, 29);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 29);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
-  for (const entry of COMMAND_REGISTRY) {
+  const skillCommands = COMMAND_REGISTRY.filter((entry) => "skill" in entry);
+  assert.equal(skillCommands.length, 28);
+  for (const entry of skillCommands) {
     assert.ok(skills.has(entry.skill), entry.skill);
     const rendered = renderCommand(entry);
     assert.match(rendered, /native Skill tool/);
@@ -337,6 +380,22 @@ test("registry generates exactly twenty-eight thin skill command assets", () => 
       rendered,
     );
   }
+  const packageCommands = COMMAND_REGISTRY.filter((entry) => !("skill" in entry));
+  assert.deepEqual(
+    packageCommands.map((entry) => entry.name),
+    ["rtk-stats"],
+  );
+  const stats = renderCommand(packageCommands[0]);
+  assert.match(stats, /doctor --json/);
+  assert.match(stats, /rtk\.observability/);
+  assert.match(stats, /untrusted input/);
+  assert.match(stats, /\$ARGUMENTS/);
+  assert.doesNotMatch(stats, /native Skill tool/);
+  assert.doesNotMatch(stats, /python|runner|curl|fetch\(/i);
+  assert.equal(
+    readFileSync(join(PACKAGE, "dist", "assets", "commands", "rtk-stats.md"), "utf8"),
+    stats,
+  );
   for (const expected of ["code-explain", "goal", "spec-manage", "team-sprint-start"])
     assert.ok(COMMAND_REGISTRY.some((entry) => entry.skill === expected));
   assert.deepEqual(
@@ -487,12 +546,12 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     assert.deepEqual(second.operations, first.operations);
     assert.equal(second.plan_digest, first.plan_digest);
     assert.notEqual(second.confirmation_digest, first.confirmation_digest);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 37);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 39);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 28);
-    await assert.rejects(lstat(join(home, ".config", "opencode", "plugins")), { code: "ENOENT" });
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 29);
+    assert.deepEqual(readdirSync(join(home, ".config", "opencode", "plugins")), ["rtk.js"]);
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), {
       code: "ENOENT",
     });
@@ -583,7 +642,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", repeat.digest, project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 37);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 39);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

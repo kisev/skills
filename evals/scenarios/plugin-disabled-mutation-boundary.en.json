@@ -19,7 +19,7 @@
     {
       "id": "plugin-opt-in",
       "path": "packages/opencode/src/installer.ts",
-      "contains": "plugins: [],"
+      "contains": "plugins: [\"rtk\"],"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "67abfa9623785832f7fdaa27d3bb89593d405f4fc3713ff15b8c427d9b85571d",
+  "digest": "2b4ef8d1fc68efe469addbaa4123954b1ea8a5e6fa5eb8d31661e67a921ca960",
   "locale": "en",
   "pair_id": "plugin.rules-injector.disabled-mutation-boundary"
 }

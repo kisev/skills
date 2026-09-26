@@ -47,6 +47,7 @@
     "release-prepare",
     "release-review",
     "rtk",
+    "rtk-stats",
     "skill-improve",
     "slides-prompts-prepare",
     "spec-manage",

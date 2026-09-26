@@ -97,7 +97,32 @@ If any selection flag is present outside a TTY, `--commands`, `--agents`, and
 npx --yes @kisev/skills-opencode@latest capabilities --json
 ```
 
-The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`.
+The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`; `rtk` is
+preselected by the installer. OpenCode loads deployed wrapper files from the
+`plugins` directory automatically, so they need no `plugin` array entry; that
+array stays reserved for the npm core package. Opt out explicitly with
+`--plugins none`.
+
+## RTK Compression Observability
+
+The `rtk` wrapper compresses verbose `bash` tool output above 8,000 characters
+through the external RTK CLI, falls back to head+tail truncation when the
+binary is unavailable, and appends an
+`[rtk: compressed method=...; sizes=...; evidence_complete=false]` marker to
+every compressed output. Classified event counters, character savings, and a
+capped recent-event list are stored only in
+`$XDG_STATE_HOME/opencode/skills/rtk/stats.json` (mode 0600) and never include
+command output contents.
+
+Inspect the summary with the `/rtk-stats` command, or machine-readably through
+the `rtk.observability` check:
+
+```shell
+npx --yes @kisev/skills-opencode@latest doctor --json
+```
+
+The check reports wrapper deployment, RTK binary availability, event counters,
+estimated token savings, and the statistics timestamp.
 
 ## Activate the Core Plugin
 

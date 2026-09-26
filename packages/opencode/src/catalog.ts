@@ -33,7 +33,7 @@ export const CATALOG = {
   ],
   plugins: ["rules-injector", "rtk", "zed-bell"],
   agents: ["manager", "architect", "mapper", "worker", "review", "critic"],
-  package_commands: [],
+  package_commands: ["rtk-stats"],
   tools: ["route"],
   version: requirePackageVersion(),
 } as const;

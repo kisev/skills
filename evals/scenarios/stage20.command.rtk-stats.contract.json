@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:rtk-stats"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.rtk-stats.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:rtk-stats"]
+    },
+    "prompt": "Verify command rtk-stats contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.rtk-stats.contract.source",
+      "path": "packages/opencode/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command",
+  "digest": "2dca08213b82bea594bf511085cd93f7918c61417a8e872cd8b85475566cee19"
+}

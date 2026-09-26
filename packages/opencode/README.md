@@ -12,7 +12,9 @@ update, and removal lifecycle.
 - Six fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`, and
   `critic`.
 - Capability routing plus direct CLI diagnostics, reconciliation, and profiles.
-- Optional `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
+- Optional plugin wrappers: `rules-injector` and `zed-bell`; the `rtk`
+  compression wrapper is deployed by default and observable through
+  `/rtk-stats` and `doctor`.
 
 The package does not contain, install, update, inspect, or remove portable skills.
 Their lifecycle is owned by the `skills` CLI.

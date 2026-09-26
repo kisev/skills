@@ -447,7 +447,7 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
             )
     if (
         len(expected["skill"]) != 28
-        or len(expected["command"]) != 28
+        or len(expected["command"]) != 29
         or len(expected["agent"]) != 6
         or len(expected["plugin"]) != 3
         or len(expected["package-tool"]) != 1

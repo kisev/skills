@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 
 import { collectDoctorFacts, doctorExitCode } from "../dist/doctor.js";
@@ -161,6 +161,64 @@ test("doctor reports disabled LSP and inaccessible symlink inputs without readin
   } finally {
     if (previous === undefined) delete process.env.OPENCODE_DISABLE_LSP_DOWNLOAD;
     else process.env.OPENCODE_DISABLE_LSP_DOWNLOAD = previous;
+    rmSync(item.root, { recursive: true, force: true });
+  }
+});
+
+test("doctor reports rtk observability for deployed wrapper, stats, and opt-out", async () => {
+  const item = fixture();
+  try {
+    const bare = await collectDoctorFacts("global", item.project, item.home);
+    const missing = bare.checks.find((check) => check.id === "rtk.observability");
+    assert.equal(missing.status, "warn");
+    assert.equal(missing.evidence.wrapper_deployed, false);
+    assert.equal(missing.evidence.stats_present, false);
+    assert.equal(missing.evidence.counters_compressed_rtk, 0);
+    assert.ok(Array.isArray(missing.remediation) && missing.remediation.length > 0);
+    mkdirSync(join(item.home, ".config", "opencode", "plugins"), { recursive: true });
+    writeFileSync(join(item.home, ".config", "opencode", "plugins", "rtk.js"), "wrapper\n");
+    const statsPath = join(item.home, ".local", "state", "opencode", "skills", "rtk", "stats.json");
+    mkdirSync(dirname(statsPath), { recursive: true });
+    writeFileSync(
+      statsPath,
+      `${JSON.stringify({
+        schema_version: 1,
+        counters: {
+          "compressed-rtk": 2,
+          "truncated-head-tail": 1,
+          "rtk-unavailable": 0,
+          ineligible: 0,
+          "below-threshold": 9,
+        },
+        chars_original: 27_000,
+        chars_final: 9_000,
+        recent: [
+          {
+            at: "2026-09-26T00:00:00.000Z",
+            method: "compressed-rtk",
+            original: 9_000,
+            final: 3_000,
+          },
+        ],
+        updated_at: "2026-09-26T00:00:00.000Z",
+      })}\n`,
+    );
+    const report = await collectDoctorFacts("global", item.project, item.home);
+    const observability = report.checks.find((check) => check.id === "rtk.observability");
+    assert.equal(observability.evidence.wrapper_deployed, true);
+    assert.equal(observability.evidence.stats_present, true);
+    assert.equal(observability.evidence.counters_compressed_rtk, 2);
+    assert.equal(observability.evidence.counters_below_threshold, 9);
+    assert.equal(observability.evidence.chars_saved, 18_000);
+    assert.equal(observability.evidence.tokens_saved_estimate, 4_500);
+    assert.equal(
+      observability.evidence.compression_active,
+      observability.evidence.binary_available,
+    );
+    assert.deepEqual(observability.evidence.recent_methods, ["compressed-rtk"]);
+    const plugins = report.checks.find((check) => check.id === "config.plugins");
+    assert.deepEqual(plugins.evidence.deployed_local_plugins, ["rtk.js"]);
+  } finally {
     rmSync(item.root, { recursive: true, force: true });
   }
 });

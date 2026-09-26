@@ -40,7 +40,7 @@
   },
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json && node dist/generate-assets.js",
-    "test": "node --test test/agent-profiles.test.mjs test/doctor.test.mjs test/package.test.mjs test/stage19.test.mjs",
+    "test": "node --test test/agent-profiles.test.mjs test/doctor.test.mjs test/package.test.mjs test/rtk.test.mjs test/stage19.test.mjs",
     "smoke": "node test/smoke.mjs",
     "pack:check": "node test/pack-allowlist.mjs"
   },

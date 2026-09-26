@@ -42,7 +42,8 @@ updates, cleanup, and troubleshooting, or browse the
 - slash-command adapters for installed skills;
 - six fixed agent roles and profile management;
 - capability routing plus direct CLI installation, diagnostics, profiles, and reconciliation;
-- opt-in `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
+- optional plugin wrappers: `rules-injector` and `zed-bell`, plus the `rtk`
+  compression wrapper deployed by default and observable through `/rtk-stats`.
 
 Install the package persistently in the npm project that owns the integration,
 then preview its managed assets:

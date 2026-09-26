@@ -120,12 +120,13 @@ function retiredAssetPaths(): Set<string> {
 
 export const SELECTABLE_PLUGINS = [...CATALOG.plugins] as SelectablePlugin[];
 export const SKILL_COMMANDS = [...CATALOG.skills] as string[];
+const PACKAGE_COMMANDS = [...CATALOG.package_commands] as string[];
 
 export function defaultSelection(): InstallerSelection {
   return {
     commands: [...SKILL_COMMANDS].sort(),
     agents: [...FIXED_AGENT_ROLES],
-    plugins: [],
+    plugins: ["rtk"],
     core_activation: true,
   };
 }
@@ -134,7 +135,7 @@ export function normalizeSelection(value: Partial<InstallerSelection> = {}): Ins
   const allCommands = new Set(SKILL_COMMANDS);
   const commands = [...new Set(value.commands ?? defaultSelection().commands)].sort();
   const agents = [...new Set(value.agents ?? FIXED_AGENT_ROLES)] as FixedAgentRole[];
-  const plugins = [...new Set(value.plugins ?? [])] as SelectablePlugin[];
+  const plugins = [...new Set(value.plugins ?? ["rtk"])] as SelectablePlugin[];
   if (commands.some((name) => !allCommands.has(name)))
     throw new InstallerError("invalid_selection", "Unknown command selection");
   if (agents.some((name) => !FIXED_AGENT_ROLES.includes(name)))
@@ -172,7 +173,12 @@ async function assets(selection: InstallerSelection): Promise<Asset[]> {
           `Asset is not a regular ${extension} file: ${entry.name}`,
         );
       if (category === "plugins" && !selection.plugins.includes(name as SelectablePlugin)) continue;
-      if (category === "commands" && !selection.commands.includes(name)) continue;
+      if (
+        category === "commands" &&
+        !selection.commands.includes(name) &&
+        !PACKAGE_COMMANDS.includes(name)
+      )
+        continue;
       const relativePath = `${category}/${entry.name}`;
       const content = await readRegular(destination(assetsRoot, relativePath));
       if (!content) throw new InstallerError("asset_error", `Asset is missing: ${relativePath}`);

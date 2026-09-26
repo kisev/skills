@@ -10,6 +10,19 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- The `rtk` compression wrapper is now deployed by the default installer
+  selection (opt out with `--plugins none`; previously installed selections are
+  preserved). Deployed wrapper files load automatically from the `plugins`
+  directory, so the user-owned `plugin` array stays reserved for the npm core
+  package.
+- RTK observability: the wrapper records classified event counters
+  (`compressed-rtk`, `truncated-head-tail`, `rtk-unavailable`, `ineligible`,
+  `below-threshold`) with character savings in
+  `$XDG_STATE_HOME/opencode/skills/rtk/stats.json` (mode 0600, capped recent
+  events, no command output contents) and stays fail-open. The new
+  `/rtk-stats` command and the `rtk.observability` `doctor --json` check report
+  wrapper deployment, RTK binary availability, counters, and estimated token
+  savings.
 - Cross-skill relations are now declared in `shared/skill-relations.json`
   (`requires`/`uses`/`recommends`) and materialized into every built `SKILL.md`
   as a recommendational "Related skills" section; archives stay self-contained.
@@ -25,6 +38,9 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Fixed
 
+- The `[rtk: compressed method=...]` marker now reports `head+tail` when an
+  RTK result is not shorter than the original output instead of claiming
+  `rtk/<filter>`.
 - `task-prepare` no longer references a nonexistent `glab` skill; the duplicated
   paragraph in `release-review` was removed.
 

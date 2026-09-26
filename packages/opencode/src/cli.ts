@@ -175,7 +175,7 @@ function rootHelp(): string {
       ["--commands <list|none>", "Select adapters for installed portable skills."],
       ["--skill-commands <list|none>", "Select adapters for installed portable skills."],
       ["--agents <list|none>", "Select fixed agents."],
-      ["--plugins <list|none>", "Select optional plugin wrappers."],
+      ["--plugins <list|none>", "Select optional plugin wrappers; rtk is the default."],
     ]),
     "  Lists are comma-separated. Outside a TTY, provide command selection, --agents, and --plugins.",
     "",
@@ -296,7 +296,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         ["--commands <list|none>", "Select installed-skill adapters."],
         ["--skill-commands <list|none>", "Select installed-skill adapters."],
         ["--agents <list|none>", "Select fixed agents."],
-        ["--plugins <list|none>", "Select optional plugin wrappers."],
+        ["--plugins <list|none>", "Select optional plugin wrappers; rtk is preselected."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -663,7 +663,7 @@ async function interactiveInstallerSelection(): Promise<InstallerSelection> {
   const defaults = defaultSelection();
   const commands = await group("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS);
   const agents = await group("Fixed agents", defaults.agents, defaults.agents);
-  const plugins = await group("Selectable plugins", SELECTABLE_PLUGINS, []);
+  const plugins = await group("Selectable plugins", SELECTABLE_PLUGINS, defaults.plugins);
   return normalizeSelection({
     commands,
     agents: agents as InstallerSelection["agents"],

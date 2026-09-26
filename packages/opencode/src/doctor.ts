@@ -18,6 +18,12 @@ import {
 } from "./lifecycle.js";
 import { inspectReconcile, type ReconcilePlan } from "./reconcile.js";
 import { readPackageVersion } from "./package-metadata.js";
+import {
+  readRtkStats,
+  rtkCharsSaved,
+  rtkStatsPath,
+  rtkTokensSavedEstimate,
+} from "./plugins/rtk.js";
 import { stateRoot } from "./runtime/state.js";
 
 const run = promisify(execFile);
@@ -312,6 +318,12 @@ function diagnosticStateRoot(name: string, home: string): string {
   return home === homedir()
     ? stateRoot(name, home)
     : join(home, ".local", "state", "opencode", "skills", name);
+}
+
+function diagnosticRtkStatsPath(home: string): string {
+  return home === homedir()
+    ? rtkStatsPath()
+    : join(home, ".local", "state", "opencode", "skills", "rtk", "stats.json");
 }
 
 async function lifecycleArtifacts(root: string): Promise<{
@@ -631,6 +643,8 @@ export async function collectDoctorFacts(
       partial.push("config.resolved");
     }
   } else unavailable.push("config.resolved");
+  const deployedPlugins =
+    assetGroups.find(([group]) => group === "plugins")?.[1].files.sort() ?? [];
   checks.push(
     check(
       "config.plugins",
@@ -645,9 +659,59 @@ export async function collectDoctorFacts(
         resolved_enabled: hostConfig?.enabled_plugins ?? [],
         resolved_disabled: hostConfig?.disabled_plugins ?? [...CATALOG.plugins],
         resolved_unknown: hostConfig?.unknown_plugins ?? 0,
+        deployed_local_plugins: deployedPlugins,
         source: config.source ?? "host-or-file-unavailable",
       },
-      ["Inspect OpenCode configuration without exposing secrets."],
+      [
+        "Inspect OpenCode configuration without exposing secrets.",
+        "Local plugin wrappers in the deployment plugins directory load automatically without a plugin array entry.",
+      ],
+    ),
+  );
+  const rtkWrapper = await regular(join(deployment, "plugins", "rtk.js"));
+  const rtkDeployed = rtkWrapper.status === "present";
+  let rtkStats: Awaited<ReturnType<typeof readRtkStats>> = undefined;
+  try {
+    rtkStats = await readRtkStats(diagnosticRtkStatsPath(homeRoot));
+  } catch {
+    partial.push("rtk.stats");
+  }
+  const rtkBinaryAvailable = await executableAvailable("rtk");
+  checks.push(
+    check(
+      "rtk.observability",
+      rtkDeployed && rtkBinaryAvailable ? "pass" : "warn",
+      rtkDeployed
+        ? "RTK compression wrapper observability is available"
+        : "RTK compression wrapper is not deployed",
+      {
+        wrapper_deployed: rtkDeployed,
+        wrapper_path: "plugins/rtk.js",
+        binary_available: rtkBinaryAvailable,
+        compression_active: rtkDeployed && rtkBinaryAvailable,
+        stats_present: Boolean(rtkStats),
+        counters_compressed_rtk: rtkStats?.counters["compressed-rtk"] ?? 0,
+        counters_truncated_head_tail: rtkStats?.counters["truncated-head-tail"] ?? 0,
+        counters_rtk_unavailable: rtkStats?.counters["rtk-unavailable"] ?? 0,
+        counters_ineligible: rtkStats?.counters.ineligible ?? 0,
+        counters_below_threshold: rtkStats?.counters["below-threshold"] ?? 0,
+        chars_original: rtkStats?.chars_original ?? 0,
+        chars_final: rtkStats?.chars_final ?? 0,
+        chars_saved: rtkStats ? rtkCharsSaved(rtkStats) : 0,
+        tokens_saved_estimate: rtkStats ? rtkTokensSavedEstimate(rtkStats) : 0,
+        tokens_estimate_method: "chars/4",
+        stats_updated_at: rtkStats?.updated_at ?? "",
+        recent_methods: (rtkStats?.recent ?? []).map((item) => item.method),
+      },
+      rtkDeployed
+        ? rtkBinaryAvailable
+          ? undefined
+          : [
+              "Install the rtk CLI with your toolchain so compression replaces head+tail truncation, then restart OpenCode.",
+            ]
+        : [
+            "Select the rtk plugin wrapper (installer default) and apply the plan, then restart OpenCode.",
+          ],
     ),
   );
   const profileManifest = await regular(

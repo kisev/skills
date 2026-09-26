@@ -130,12 +130,13 @@ try {
   const manifest = JSON.parse(
     await readFile(join(home, ".config", "opencode", ".skills-opencode-manifest.json"), "utf8"),
   );
-  assert.equal(Object.keys(manifest.files).length, 1);
+  assert.equal(Object.keys(manifest.files).length, 2);
   assert.equal(
     Object.keys(manifest.files).some((path) => path.startsWith("agents/")),
     false,
   );
   assert.equal(Object.keys(manifest.files).filter((path) => path.startsWith("plugins/")).length, 0);
+  assert.equal("commands/rtk-stats.md" in manifest.files, true);
   const semantic = JSON.parse(
     await readFile(
       join(home, ".config", "opencode", ".skills-opencode", "agent-profiles.manifest.json"),
