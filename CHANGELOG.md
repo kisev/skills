@@ -25,6 +25,7 @@ All notable changes to this project are documented in this file. Entries follow
   loopback read-only web board, and an MCP stdio server with a pinned
   `taskmatic_*` tool surface. The `taskmatic` snapshot JSON contract is committed
   as `skills/taskmatic/references/snapshot.schema.json`.
+
 - The `memomatic` plugin: personal learning memory for OpenCode following the
   OpenClaw architecture. A tiered Markdown corpus (`MEMORY.md`, `USER.md`,
   daily notes, `DREAMS.md`) in a dedicated `$XDG_STATE_HOME/memomatic/`
@@ -39,16 +40,19 @@ All notable changes to this project are documented in this file. Entries follow
   directives and the opt-in `- auto-clean:` directive live in
   `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`; without them nothing is
   deleted.
+
 - `skill-improve` can ground improvements in real usage: the new read-only
   `sessions` subcommand of `skill_improver.py` reports skill invocations,
   errors, retries, follow-up user messages, and recurring uncovered action
   patterns with new-skill candidates from opencode, kilo, and mimo session
   databases (REQ-F-132).
+
 - The `rtk` compression wrapper is now deployed by the default installer
   selection (opt out with `--plugins none`; previously installed selections are
   preserved). Deployed wrapper files load automatically from the `plugins`
   directory, so the user-owned `plugin` array stays reserved for the npm core
   package.
+
 - RTK observability: the wrapper records classified event counters
   (`compressed-rtk`, `truncated-head-tail`, `rtk-unavailable`, `ineligible`,
   `below-threshold`) with character savings in
@@ -57,9 +61,11 @@ All notable changes to this project are documented in this file. Entries follow
   `/rtk-stats` command and the `rtk.observability` `doctor --json` check report
   wrapper deployment, RTK binary availability, counters, and estimated token
   savings.
+
 - Cross-skill relations are now declared in `shared/skill-relations.json`
   (`requires`/`uses`/`recommends`) and materialized into every built `SKILL.md`
   as a recommendational "Related skills" section; archives stay self-contained.
+
 - The askme and code-review skills now share one materialized necessity and
   completion doctrine instead of duplicated copies.
 

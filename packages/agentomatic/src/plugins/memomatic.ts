@@ -7,7 +7,7 @@ import {
   searchMemory,
   writeEntry,
   type MemomaticContext,
-} from "../memomatic/service.js";
+} from "@kisev/memomatic";
 
 export type MemomaticOptions = {
   enabled?: boolean;

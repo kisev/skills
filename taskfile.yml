@@ -143,6 +143,7 @@ tasks:
     desc: Check types in typescript
     deps: [package:install]
     cmds:
+      - mise exec -- tsc --project apps/memomatic/tsconfig.json --noEmit
       - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
 
   typecheck:python:
@@ -359,12 +360,14 @@ tasks:
     deps: [check, dependency:audit]
 
   package:check:
-    desc: Verify the complete OpenCode package lifecycle and tarball
+    desc: Verify the complete agentomatic and memomatic package lifecycle and tarballs
     deps: [package:test]
     dir: packages/agentomatic
     cmds:
       - mise exec -- npm run smoke
       - mise exec -- npm run pack:check
+      - mise exec -- npm test
+      - mise exec -- npm --prefix ../../apps/memomatic test
 
   package:test:
     internal: true
@@ -372,6 +375,7 @@ tasks:
     deps: [package:build]
     cmds:
       - mise exec -- npm test
+      - mise exec -- npm --prefix ../../apps/memomatic test
 
   package:generate:
     internal: true
@@ -379,20 +383,21 @@ tasks:
 
   package:build:
     internal: true
-    dir: packages/agentomatic
+    dir: .
     deps: [package:install]
     cmds:
-      - mise exec -- npm run build
+      - mise exec -- npm run build --workspace @kisev/memomatic
+      - mise exec -- npm run build --workspace @kisev/agentomatic
 
   package:install:
     internal: true
     run: once
-    dir: packages/agentomatic
+    dir: .
     cmds:
       - mise exec -- npm ci
 
   package:audit:
     internal: true
-    dir: packages/agentomatic
+    dir: .
     cmds:
       - mise exec -- npm audit --package-lock-only

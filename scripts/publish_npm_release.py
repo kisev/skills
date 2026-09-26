@@ -116,30 +116,44 @@ def require_trusted_publishing_npm() -> None:
         raise PublicationError("npm 11.5.1 or newer is required for trusted publishing")
 
 
-def manifest() -> tuple[dict[str, Any], Path]:
+NPM_PUBLISH_ORDER = ("@kisev/safe-fs", "@kisev/memomatic", "@kisev/agentomatic")
+
+
+def _tarball_entry(release_dir: Path, entry: dict[str, Any]) -> dict[str, Any]:
+    tarball = release_dir / entry["filename"]
+    content = tarball.read_bytes()
+    integrity = "sha512-" + base64.b64encode(hashlib.sha512(content).digest()).decode("ascii")
+    if (
+        len(content) != entry.get("size")
+        or hashlib.sha1(content, usedforsecurity=False).hexdigest() != entry.get("sha1")
+        or hashlib.sha512(content).hexdigest() != entry.get("sha512")
+        or integrity != entry.get("integrity")
+    ):
+        raise PublicationError(f"release tarball does not match its manifest: {entry['name']}")
+    return {**entry, "path": tarball}
+
+
+def manifest() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
         value = json.loads((RELEASE / "release.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise PublicationError(f"cannot read release manifest: {error}") from error
     if not isinstance(value, dict) or value.get("schema") not in {
-        "@kisev/skills-release/v1",
-        "@kisev/skills-dev/v1",
+        "@kisev/skills-release/v2",
+        "@kisev/skills-dev/v2",
     }:
         raise PublicationError("release manifest schema is invalid")
     npm = value.get("npm")
-    if not isinstance(npm, dict) or not isinstance(npm.get("filename"), str):
+    if not isinstance(npm, list) or not npm or not all(isinstance(entry, dict) for entry in npm):
         raise PublicationError("release manifest npm data is invalid")
-    tarball = RELEASE / npm["filename"]
-    content = tarball.read_bytes()
-    integrity = "sha512-" + base64.b64encode(hashlib.sha512(content).digest()).decode("ascii")
-    if (
-        len(content) != npm.get("size")
-        or hashlib.sha1(content, usedforsecurity=False).hexdigest() != npm.get("sha1")
-        or hashlib.sha512(content).hexdigest() != npm.get("sha512")
-        or integrity != npm.get("integrity")
+    names = [entry.get("name") for entry in npm]
+    if tuple(names) != NPM_PUBLISH_ORDER or not all(
+        isinstance(entry.get("version"), str) and isinstance(entry.get("filename"), str)
+        for entry in npm
     ):
-        raise PublicationError("release tarball does not match its manifest")
-    return value, tarball
+        raise PublicationError("release manifest npm members are invalid")
+    entries = [_tarball_entry(RELEASE, entry) for entry in npm]
+    return value, entries
 
 
 def registry_url(name: str, version: str) -> str:
@@ -312,7 +326,10 @@ def verify_provenance(
     raise PublicationError("npm provenance does not bind the artifact, workflow, and revision")
 
 
-def registry_smoke(name: str, version: str) -> None:
+def registry_smoke(entries: list[dict[str, Any]]) -> None:
+    by_name = {entry["name"]: entry for entry in entries}
+    agentomatic = by_name["@kisev/agentomatic"]
+    memomatic = by_name["@kisev/memomatic"]
     with tempfile.TemporaryDirectory(prefix="skills-registry-smoke-") as temporary:
         root = Path(temporary)
         (root / "package.json").write_text('{"private":true}\n', encoding="utf-8")
@@ -323,7 +340,7 @@ def registry_smoke(name: str, version: str) -> None:
             "--ignore-scripts",
             "--no-audit",
             "--no-fund",
-            f"{name}@{version}",
+            f"{agentomatic['name']}@{agentomatic['version']}",
             "@opencode-ai/plugin@1.18.29",
             cwd=root,
             env=env,
@@ -332,18 +349,31 @@ def registry_smoke(name: str, version: str) -> None:
             "node",
             "--input-type=module",
             "--eval",
-            "await import('@kisev/agentomatic'); await import('@kisev/agentomatic/plugins/rules-injector'); await import('@kisev/agentomatic/plugins/rtk'); await import('@kisev/agentomatic/plugins/zed-bell');",
+            "await import('@kisev/agentomatic'); await import('@kisev/agentomatic/plugins/rules-injector'); await import('@kisev/agentomatic/plugins/rtk'); await import('@kisev/agentomatic/plugins/zed-bell'); await import('@kisev/memomatic');",
             cwd=root,
             env=env,
         )
-        executable = root / "node_modules" / ".bin" / "agentomatic"
-        if command(str(executable), "--version", cwd=root, env=env).strip() != version:
-            raise PublicationError("installed npm CLI reports the wrong version")
-        command(str(executable), "--help", cwd=root, env=env)
+        for name, version in (
+            ("agentomatic", agentomatic["version"]),
+            ("memomatic", memomatic["version"]),
+        ):
+            executable = root / "node_modules" / ".bin" / name
+            if command(str(executable), "--version", cwd=root, env=env).strip() != version:
+                raise PublicationError(f"installed npm CLI {name} reports the wrong version")
+            command(str(executable), "--help", cwd=root, env=env)
         capabilities = json.loads(
-            command(str(executable), "capabilities", "--json", cwd=root, env=env)
+            command(
+                str(root / "node_modules" / ".bin" / "agentomatic"),
+                "capabilities",
+                "--json",
+                cwd=root,
+                env=env,
+            )
         )
-        if capabilities.get("status") != "ok" or capabilities.get("version") != version:
+        if (
+            capabilities.get("status") != "ok"
+            or capabilities.get("version") != agentomatic["version"]
+        ):
             raise PublicationError("installed npm CLI capabilities are invalid")
         command("npm", "audit", "signatures", "--json", cwd=root, env=env)
 
@@ -368,23 +398,11 @@ def verify_dist_tag(name: str, version: str, dist_tag: str, *, deadline: float) 
     raise PublicationError(f"npm dist-tag {dist_tag!r} does not reference {version}")
 
 
-def publish() -> dict[str, Any]:
-    require_trusted_publishing_npm()
-    release, tarball = manifest()
-    npm = release["npm"]
-    name, version, revision = npm.get("name"), release.get("version"), release.get("revision")
-    if not isinstance(name, str) or not name:
-        raise PublicationError("release npm name is invalid")
-    if not isinstance(version, str) or not version:
-        raise PublicationError("release version is invalid")
-    if not isinstance(revision, str) or not revision:
-        raise PublicationError("release identity is invalid")
-    schema = release.get("schema")
-    expected_tag = "dev" if schema == "@kisev/skills-dev/v1" else "latest"
-    dist_tag = os.environ.get("NPM_DIST_TAG", expected_tag)
-    if dist_tag != expected_tag:
-        raise PublicationError(f"manifest requires npm dist-tag {expected_tag!r}, got {dist_tag!r}")
-    deadline = time.monotonic() + PROPAGATION_SECONDS
+def publish_one(
+    entry: dict[str, Any], dist_tag: str, revision: str, *, deadline: float
+) -> dict[str, Any]:
+    name, version = entry["name"], entry["version"]
+    tarball = entry["path"]
 
     def probe() -> tuple[dict[str, Any] | None]:
         # A definite 404 permits the single publish. Transport failure never does.
@@ -415,36 +433,62 @@ def publish() -> dict[str, Any]:
     if metadata is None:
         raise PublicationError("published npm metadata did not become available")
     dist = metadata.get("dist")
-    if not isinstance(dist, dict) or dist.get("integrity") != npm.get("integrity"):
+    if not isinstance(dist, dict) or dist.get("integrity") != entry.get("integrity"):
         raise PublicationError("registry npm artifact differs from the validated tarball")
     tarball_url = dist.get("tarball")
     if not isinstance(tarball_url, str):
         raise PublicationError("registry tarball URL is missing")
     registry_content = download_registry_tarball(tarball_url, deadline=deadline)
-    if hashlib.sha512(registry_content).hexdigest() != npm.get("sha512"):
+    if hashlib.sha512(registry_content).hexdigest() != entry.get("sha512"):
         raise PublicationError("downloaded registry tarball differs from the validated tarball")
     verify_provenance(
         metadata,
-        str(npm["sha512"]),
+        str(entry["sha512"]),
         revision,
         deadline=deadline,
         metadata_url=registry_url(name, version),
     )
     verify_dist_tag(name, version, dist_tag, deadline=deadline)
-    registry_smoke(name, version)
     return metadata
+
+
+def publish() -> list[dict[str, Any]]:
+    require_trusted_publishing_npm()
+    release, entries = manifest()
+    version, revision = release.get("version"), release.get("revision")
+    if not isinstance(version, str) or not version:
+        raise PublicationError("release version is invalid")
+    if not isinstance(revision, str) or not revision:
+        raise PublicationError("release identity is invalid")
+    schema = release.get("schema")
+    expected_tag = "dev" if schema == "@kisev/skills-dev/v2" else "latest"
+    dist_tag = os.environ.get("NPM_DIST_TAG", expected_tag)
+    if dist_tag != expected_tag:
+        raise PublicationError(f"manifest requires npm dist-tag {expected_tag!r}, got {dist_tag!r}")
+    deadline = time.monotonic() + PROPAGATION_SECONDS
+    published = [publish_one(entry, dist_tag, revision, deadline=deadline) for entry in entries]
+    registry_smoke(entries)
+    return published
 
 
 def main() -> int:
     try:
-        metadata = publish()
+        published = publish()
     except (PublicationError, OSError, ValueError, urllib.error.URLError) as error:
         raise SystemExit(
             f"{error}\nInspect the release run before retrying. For propagation failures, "
             "rerun failed jobs with the retained exact artifacts. Do not republish or move the tag."
         ) from error
     print(
-        json.dumps({"status": "verified", "name": metadata["name"], "version": metadata["version"]})
+        json.dumps(
+            {
+                "status": "verified",
+                "packages": [
+                    {"name": metadata["name"], "version": metadata["version"]}
+                    for metadata in published
+                ],
+            }
+        )
     )
     return 0
 

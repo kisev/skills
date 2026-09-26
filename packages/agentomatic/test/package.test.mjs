@@ -1342,7 +1342,7 @@ test("published package metadata and tarball expose only the OpenCode integratio
     execFileSync("tar", ["-xzf", tarball, "-C", directory], { encoding: "utf8" });
     const unpacked = join(directory, "package");
     assert.equal(readdirSync(unpacked).includes("skills"), false);
-    symlinkSync(join(PACKAGE, "node_modules"), join(unpacked, "node_modules"));
+    symlinkSync(join(PACKAGE, "..", "..", "node_modules"), join(unpacked, "node_modules"));
     const unpackedMetadata = await import(
       pathToFileURL(join(unpacked, "dist", "package-metadata.js")).href
     );

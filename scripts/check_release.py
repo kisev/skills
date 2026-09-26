@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PORTABLE_PACKAGE = ROOT / "packages" / "skills" / "package.json"
 OPENCODE_PACKAGE = ROOT / "packages" / "agentomatic" / "package.json"
-OPENCODE_LOCK = ROOT / "packages" / "agentomatic" / "package-lock.json"
+OPENCODE_LOCK = ROOT / "package-lock.json"
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
 CHANGELOG = ROOT / "CHANGELOG.md"
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
@@ -205,8 +205,9 @@ def validate(
     versions = {
         "portable": portable,
         "opencode": opencode,
-        "opencode_lock_document": lock.get("version"),
-        "opencode_lock": lock_root[""].get("version"),
+        "opencode_lock_member": lock_root.get("packages/agentomatic", {}).get("version")
+        if isinstance(lock_root.get("packages/agentomatic"), dict)
+        else None,
     }
     if not all(isinstance(value, str) for value in versions.values()):
         raise ReleaseError("release versions must be strings")

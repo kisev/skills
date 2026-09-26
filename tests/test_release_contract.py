@@ -479,7 +479,13 @@ def test_registry_smoke_installs_the_optional_runtime_peer(
         return ""
 
     monkeypatch.setattr(publish_npm_release, "command", command)
-    publish_npm_release.registry_smoke("@kisev/agentomatic", RELEASE_VERSION)
+    publish_npm_release.registry_smoke(
+        [
+            {"name": "@kisev/safe-fs", "version": RELEASE_VERSION},
+            {"name": "@kisev/memomatic", "version": RELEASE_VERSION},
+            {"name": "@kisev/agentomatic", "version": RELEASE_VERSION},
+        ]
+    )
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
     assert f"@kisev/agentomatic@{RELEASE_VERSION}" in install
     assert "@opencode-ai/plugin@1.18.29" in install
@@ -545,14 +551,20 @@ def test_existing_registry_version_is_verified_without_republication(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     content = b"exact artifact"
-    npm = {"name": "@example/package", **build_release_artifacts.hashes(content)}
-    release = {"npm": npm, "version": "1.0.0", "revision": "a" * 40}
+    npm = {
+        "name": "@example/package",
+        "version": "1.0.0",
+        **build_release_artifacts.hashes(content),
+    }
+    release = {"npm": [npm], "version": "1.0.0", "revision": "a" * 40}
     metadata = {
         "dist": {"integrity": npm["integrity"], "tarball": "https://registry.example/archive"}
     }
     monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
     monkeypatch.setattr(
-        publish_npm_release, "manifest", lambda: (release, tmp_path / "package.tgz")
+        publish_npm_release,
+        "manifest",
+        lambda: (release, [{"path": tmp_path / "package.tgz", **npm}]),
     )
     monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: metadata)
     monkeypatch.setattr(
@@ -564,7 +576,7 @@ def test_existing_registry_version_is_verified_without_republication(
     monkeypatch.setattr(
         publish_npm_release, "command", lambda *_args: pytest.fail("must not republish")
     )
-    assert publish_npm_release.publish() == metadata
+    assert publish_npm_release.publish() == [metadata]
     metadata["dist"]["integrity"] = "wrong"
     with pytest.raises(publish_npm_release.PublicationError, match="differs"):
         publish_npm_release.publish()
@@ -574,15 +586,27 @@ def test_dev_manifest_requires_dev_dist_tag(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     release = {
-        "schema": "@kisev/skills-dev/v1",
-        "npm": {"name": "@example/package"},
+        "schema": "@kisev/skills-dev/v2",
+        "npm": [
+            {
+                "name": "@example/package",
+                "version": "1.0.0-dev.1.gabcdef0",
+                "filename": "package.tgz",
+            }
+        ],
         "version": "1.0.0-dev.1.gabcdef0",
         "revision": "a" * 40,
     }
     monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
-    monkeypatch.setattr(
-        publish_npm_release, "manifest", lambda: (release, tmp_path / "package.tgz")
-    )
+    entries: list[dict[str, object]] = [
+        {
+            "path": tmp_path / "package.tgz",
+            "name": "@example/package",
+            "version": "1.0.0-dev.1.gabcdef0",
+            "filename": "package.tgz",
+        },
+    ]
+    monkeypatch.setattr(publish_npm_release, "manifest", lambda: (release, entries))
     monkeypatch.setenv("NPM_DIST_TAG", "latest")
     with pytest.raises(publish_npm_release.PublicationError, match="requires npm dist-tag 'dev'"):
         publish_npm_release.publish()
@@ -665,20 +689,35 @@ def test_release_manifest_rejects_tampered_tarball(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     content = b"validated tarball"
-    npm = {
-        "filename": "package.tgz",
-        "name": "@kisev/agentomatic",
-        "size": len(content),
-        **build_release_artifacts.hashes(content),
-    }
+
+    def entry(name: str, filename: str) -> dict[str, object]:
+        return {
+            "filename": filename,
+            "name": name,
+            "size": len(content),
+            "version": "1.0.0",
+            **build_release_artifacts.hashes(content),
+        }
+
     release = tmp_path / "release"
     release.mkdir()
-    (release / "package.tgz").write_bytes(content)
+    for filename in ("safe-fs.tgz", "memomatic.tgz", "package.tgz"):
+        (release / filename).write_bytes(content)
     (release / "release.json").write_text(
-        json.dumps({"schema": "@kisev/skills-release/v1", "npm": npm}), encoding="utf-8"
+        json.dumps(
+            {
+                "schema": "@kisev/skills-release/v2",
+                "npm": [
+                    entry("@kisev/safe-fs", "safe-fs.tgz"),
+                    entry("@kisev/memomatic", "memomatic.tgz"),
+                    entry("@kisev/agentomatic", "package.tgz"),
+                ],
+            }
+        ),
+        encoding="utf-8",
     )
     monkeypatch.setattr(publish_npm_release, "RELEASE", release)
-    assert publish_npm_release.manifest()[1].read_bytes() == content
+    assert publish_npm_release.manifest()[1][2]["path"].read_bytes() == content
     (release / "package.tgz").write_bytes(content + b"tampered")
     with pytest.raises(publish_npm_release.PublicationError, match="does not match"):
         publish_npm_release.manifest()

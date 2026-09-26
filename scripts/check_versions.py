@@ -86,8 +86,9 @@ def validate_skill_metadata(root: Path) -> int:
 
 def validate(root: Path = ROOT) -> dict[str, object]:
     portable = read_json(root / "packages/skills/package.json")
-    opencode = read_json(root / "packages/agentomatic/package.json")
-    lock = read_json(root / "packages/agentomatic/package-lock.json")
+    agentomatic = read_json(root / "packages/agentomatic/package.json")
+    memomatic = read_json(root / "apps/memomatic/package.json")
+    lock = read_json(root / "package-lock.json")
     compatibility = read_json(root / "evals/contracts/opencode-compatibility.json")
     with (root / "mise.toml").open("rb") as stream:
         mise = tomllib.load(stream)
@@ -95,15 +96,21 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     release = require_string(portable.get("version"), "portable release", semver=True)
     lock_packages = lock.get("packages")
     if not isinstance(lock_packages, dict) or not isinstance(lock_packages.get(""), dict):
-        raise VersionError("OpenCode package lock root is invalid")
+        raise VersionError("workspace package lock root is invalid")
     release_mirrors = {
-        "packages/agentomatic/package.json": opencode.get("version"),
-        "packages/agentomatic/package-lock.json": lock.get("version"),
-        "packages/agentomatic/package-lock.json packages root": lock_packages[""].get("version"),
+        "packages/agentomatic/package.json": agentomatic.get("version"),
+        "package-lock.json agentomatic member": lock_packages.get("packages/agentomatic", {}).get(
+            "version"
+        )
+        if isinstance(lock_packages.get("packages/agentomatic"), dict)
+        else None,
     }
     drift = {name: value for name, value in release_mirrors.items() if value != release}
     if drift:
         raise VersionError(f"project release mirrors differ from {release}: {drift}")
+    member = lock_packages.get("apps/memomatic")
+    if not isinstance(member, dict) or member.get("version") != memomatic.get("version"):
+        raise VersionError("memomatic workspace member version differs from its manifest")
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     heading = re.search(
         r"^## \\?\[([0-9]+\.[0-9]+\.[0-9]+)\] - \d{4}-\d{2}-\d{2}$",
@@ -117,7 +124,7 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     if not isinstance(tools, dict):
         raise VersionError("mise tools table is missing")
     installer = require_string(
-        opencode.get("skillsInstallerVersion"), "package skills installer", semver=True
+        agentomatic.get("skillsInstallerVersion"), "package skills installer", semver=True
     )
     mise_installer = require_string(tools.get("npm:skills"), "mise npm:skills", semver=True)
     if installer != mise_installer:
@@ -126,7 +133,7 @@ def validate(root: Path = ROOT) -> dict[str, object]:
         )
 
     compatibility_range = require_string(compatibility.get("range"), "compatibility range")
-    peer_dependencies = opencode.get("peerDependencies")
+    peer_dependencies = agentomatic.get("peerDependencies")
     if not isinstance(peer_dependencies, dict):
         raise VersionError("OpenCode peer dependencies are missing")
     if peer_dependencies.get("@opencode-ai/plugin") != compatibility_range:
@@ -139,7 +146,7 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     ):
         raise VersionError("OpenCode compatibility versions are invalid")
     compatible = set(versions)
-    dev_dependencies = opencode.get("devDependencies")
+    dev_dependencies = agentomatic.get("devDependencies")
     if not isinstance(dev_dependencies, dict):
         raise VersionError("OpenCode development dependencies are missing")
     checked_versions = {

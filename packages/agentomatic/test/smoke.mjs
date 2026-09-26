@@ -29,16 +29,32 @@ try {
   await mkdir(project);
   await mkdir(home);
   await writeFile(join(project, "package.json"), '{"private":true}\n');
-  const packed = process.env.PACKAGE_TARBALL
-    ? null
-    : JSON.parse(
-        execFileSync("npm", ["pack", "--json", "--pack-destination", temporary], {
-          cwd: packageRoot,
-          encoding: "utf8",
-        }),
-      );
-  const tarball = process.env.PACKAGE_TARBALL ?? join(temporary, packed[0].filename);
-  execFileSync("npm", ["install", "--ignore-scripts", tarball], { cwd: project, encoding: "utf8" });
+  const packed =
+    process.env.AGENTOMATIC_TARBALL && process.env.MEMOMATIC_TARBALL && process.env.SAFE_FS_TARBALL
+      ? null
+      : JSON.parse(
+          execFileSync("npm", ["pack", "--json", "--workspaces", "--pack-destination", temporary], {
+            cwd: resolve(packageRoot, "../.."),
+            encoding: "utf8",
+          }),
+        );
+  const tarballFor = (name) =>
+    ({
+      "@kisev/agentomatic": process.env.AGENTOMATIC_TARBALL,
+      "@kisev/memomatic": process.env.MEMOMATIC_TARBALL,
+      "@kisev/safe-fs": process.env.SAFE_FS_TARBALL,
+    })[name] ?? join(temporary, packed.find((record) => record.name === name).filename);
+  const tarballs = [
+    tarballFor("@kisev/safe-fs"),
+    tarballFor("@kisev/memomatic"),
+    tarballFor("@kisev/agentomatic"),
+  ];
+  execFileSync("npm", ["install", "--ignore-scripts", ...tarballs], {
+    cwd: project,
+    encoding: "utf8",
+  });
+  const memomaticExecutable = join(project, "node_modules", ".bin", "memomatic");
+  run(memomaticExecutable, ["--help"]);
   const executable = join(project, "node_modules", ".bin", "agentomatic");
   const environment = {
     PATH: process.env.PATH ?? "",

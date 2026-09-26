@@ -1,11 +1,26 @@
 {
   "version": 1,
   "pairs": [
-    { "en": "README.md", "ru": "README.ru.md" },
-    { "en": "CHANGELOG.md", "ru": "CHANGELOG.ru.md" },
-    { "en": "CONTRIBUTING.md", "ru": "CONTRIBUTING.ru.md" },
-    { "en": "SECURITY.md", "ru": "SECURITY.ru.md" },
-    { "en": "docs/README.md", "ru": "docs/ru/README.md" },
+    {
+      "en": "README.md",
+      "ru": "README.ru.md"
+    },
+    {
+      "en": "CHANGELOG.md",
+      "ru": "CHANGELOG.ru.md"
+    },
+    {
+      "en": "CONTRIBUTING.md",
+      "ru": "CONTRIBUTING.ru.md"
+    },
+    {
+      "en": "SECURITY.md",
+      "ru": "SECURITY.ru.md"
+    },
+    {
+      "en": "docs/README.md",
+      "ru": "docs/ru/README.md"
+    },
     {
       "en": "docs/tutorials/getting-started.md",
       "ru": "docs/ru/tutorials/getting-started.md"
@@ -22,11 +37,34 @@
       "en": "docs/reference/skill-catalog.md",
       "ru": "docs/ru/reference/skill-catalog.md"
     },
-    { "en": "docs/architecture.md", "ru": "docs/ru/architecture.md" },
-    { "en": "docs/migration-inventory.md", "ru": "docs/ru/migration-inventory.md" },
-    { "en": "docs/verification.md", "ru": "docs/ru/verification.md" },
-    { "en": "packages/agentomatic/README.md", "ru": "packages/agentomatic/README.ru.md" },
-    { "en": "packages/skills/README.md", "ru": "packages/skills/README.ru.md" }
+    {
+      "en": "docs/architecture.md",
+      "ru": "docs/ru/architecture.md"
+    },
+    {
+      "en": "docs/migration-inventory.md",
+      "ru": "docs/ru/migration-inventory.md"
+    },
+    {
+      "en": "docs/verification.md",
+      "ru": "docs/ru/verification.md"
+    },
+    {
+      "en": "packages/agentomatic/README.md",
+      "ru": "packages/agentomatic/README.ru.md"
+    },
+    {
+      "en": "packages/skills/README.md",
+      "ru": "packages/skills/README.ru.md"
+    },
+    {
+      "en": "apps/memomatic/README.md",
+      "ru": "apps/memomatic/README.ru.md"
+    },
+    {
+      "en": "packages/safe-fs/README.md",
+      "ru": "packages/safe-fs/README.ru.md"
+    }
   ],
   "patterns": [
     {

@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readFile, rm } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 
-import { writeAtomic } from "../lifecycle.js";
+import { writeAtomic } from "@kisev/safe-fs";
 import { type CorpusEntry, parseEntryLine } from "./entries.js";
 import type { MemomaticPaths } from "./paths.js";
 

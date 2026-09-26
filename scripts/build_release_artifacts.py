@@ -10,14 +10,47 @@ import os
 import shutil
 import subprocess
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "packages" / "agentomatic"
 PAGES = ROOT / ".build" / "packages" / "skills"
 OUTPUT = ROOT / ".build" / "release"
-ALLOWED_PACKAGE_FILES = {"README.md", "README.ru.md", "package.json"}
+
+
+@dataclass(frozen=True)
+class PackageMember:
+    name: str
+    directory: Path
+    filename: str
+    allowed: frozenset[str]
+    prefixes: tuple[str, ...]
+
+
+PACKAGE_MEMBERS: tuple[PackageMember, ...] = (
+    PackageMember(
+        name="@kisev/safe-fs",
+        directory=ROOT / "packages" / "safe-fs",
+        filename="safe-fs.tgz",
+        allowed=frozenset({"README.md", "README.ru.md", "package.json"}),
+        prefixes=("dist/",),
+    ),
+    PackageMember(
+        name="@kisev/memomatic",
+        directory=ROOT / "apps" / "memomatic",
+        filename="memomatic.tgz",
+        allowed=frozenset({"README.md", "README.ru.md", "package.json"}),
+        prefixes=("dist/", "assets/"),
+    ),
+    PackageMember(
+        name="@kisev/agentomatic",
+        directory=ROOT / "packages" / "agentomatic",
+        filename="package.tgz",
+        allowed=frozenset({"README.md", "README.ru.md", "package.json"}),
+        prefixes=("dist/",),
+    ),
+)
 
 
 class ArtifactError(Exception):
@@ -63,7 +96,10 @@ def page_hashes() -> dict[str, str]:
     return result
 
 
-def pack() -> tuple[bytes, dict[str, Any]]:
+def pack(member: PackageMember) -> tuple[bytes, dict[str, Any]]:
+    directory = member.directory
+    allowed = member.allowed
+    prefixes = member.prefixes
     with tempfile.TemporaryDirectory(prefix="skills-release-pack-") as temporary:
         output = command(
             "npm",
@@ -72,7 +108,7 @@ def pack() -> tuple[bytes, dict[str, Any]]:
             "--json",
             "--pack-destination",
             temporary,
-            cwd=PACKAGE,
+            cwd=directory,
         )
         try:
             records = json.loads(output)
@@ -91,11 +127,9 @@ def pack() -> tuple[bytes, dict[str, Any]]:
                 raise ArtifactError("npm pack returned an invalid file record")
             paths.append(path)
         paths.sort()
-        if not all(path in ALLOWED_PACKAGE_FILES or path.startswith("dist/") for path in paths):
+        if not all(path in allowed or path.startswith(prefixes) for path in paths):
             raise ArtifactError("npm package contains an unexpected file")
-        if not set(paths) >= ALLOWED_PACKAGE_FILES or not any(
-            path.startswith("dist/") for path in paths
-        ):
+        if not set(paths) >= allowed or not any(path.startswith(prefixes) for path in paths):
             raise ArtifactError("npm package allowlist is incomplete")
         filename = record.get("filename")
         if not isinstance(filename, str):
@@ -104,7 +138,9 @@ def pack() -> tuple[bytes, dict[str, Any]]:
 
 
 def build(tag: str, revision: str) -> dict[str, Any]:
-    package = json.loads((PACKAGE / "package.json").read_text(encoding="utf-8"))
+    package = json.loads(
+        (ROOT / "packages" / "agentomatic" / "package.json").read_text(encoding="utf-8")
+    )
     name, version = package.get("name"), package.get("version")
     if not isinstance(name, str) or not isinstance(version, str) or tag != f"v{version}":
         raise ArtifactError("release tag and npm package version differ")
@@ -112,34 +148,59 @@ def build(tag: str, revision: str) -> dict[str, Any]:
     if revision != actual_revision:
         raise ArtifactError("release revision does not match HEAD")
 
-    content, record = pack()
-    digest = hashes(content)
-    if record.get("integrity") != digest["integrity"] or record.get("shasum") != digest["sha1"]:
-        raise ArtifactError("npm pack digests do not match the exact tarball")
-
     if OUTPUT.exists():
         shutil.rmtree(OUTPUT)
     OUTPUT.mkdir(parents=True)
-    tarball = OUTPUT / "package.tgz"
-    tarball.write_bytes(content)
+    npm_entries: list[dict[str, Any]] = []
+    agentomatic_tarball: Path | None = None
+    for member in PACKAGE_MEMBERS:
+        content, record = pack(member)
+        digest = hashes(content)
+        if record.get("integrity") != digest["integrity"] or record.get("shasum") != digest["sha1"]:
+            raise ArtifactError("npm pack digests do not match the exact tarball")
+        member_name = member.name
+        if not isinstance(member_name, str) or record.get("name") != member_name:
+            raise ArtifactError("npm pack name does not match the release member")
+        member_version = record.get("version")
+        if not isinstance(member_version, str):
+            raise ArtifactError("npm pack version is missing")
+        tarball = OUTPUT / member.filename
+        tarball.write_bytes(content)
+        if member_name == name:
+            agentomatic_tarball = tarball
+        npm_entries.append(
+            {
+                "name": member_name,
+                "version": member_version,
+                "filename": tarball.name,
+                "size": len(content),
+                **digest,
+            }
+        )
+    if agentomatic_tarball is None:
+        raise ArtifactError("agentomatic tarball is missing")
+
+    by_name = {entry["name"]: entry["filename"] for entry in npm_entries}
     smoke_env = {
         **os.environ,
-        "PACKAGE_TARBALL": str(tarball),
+        "AGENTOMATIC_TARBALL": str(agentomatic_tarball),
+        "MEMOMATIC_TARBALL": str(OUTPUT / by_name["@kisev/memomatic"]),
+        "SAFE_FS_TARBALL": str(OUTPUT / by_name["@kisev/safe-fs"]),
         "OPENCODE_BINARY": command("mise", "which", "opencode").strip(),
     }
-    command("node", "test/smoke.mjs", cwd=PACKAGE, env=smoke_env)
+    command(
+        "node",
+        "test/smoke.mjs",
+        cwd=ROOT / "packages" / "agentomatic",
+        env=smoke_env,
+    )
 
     manifest = {
-        "schema": "@kisev/skills-release/v1",
+        "schema": "@kisev/skills-release/v2",
         "tag": tag,
         "version": version,
         "revision": revision,
-        "npm": {
-            "name": name,
-            "filename": tarball.name,
-            "size": len(content),
-            **digest,
-        },
+        "npm": npm_entries,
         "pages": {"files": page_hashes()},
     }
     (OUTPUT / "release.json").write_bytes(canonical(manifest))

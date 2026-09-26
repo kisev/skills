@@ -59,11 +59,6 @@ if (rootIndex === -1) {
       resolve(packageRoot, "dist", "assets", "plugins"),
       { recursive: true },
     );
-    await cp(
-      resolve(packageRoot, "assets", "systemd"),
-      resolve(packageRoot, "dist", "assets", "systemd"),
-      { recursive: true },
-    );
     await copyFile(
       resolve(packageRoot, "assets", "migration-inventory.json"),
       resolve(packageRoot, "dist", "assets", "migration-inventory.json"),

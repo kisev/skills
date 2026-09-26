@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -76,8 +77,15 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
         assert duplicated not in publish
 
 
-def test_no_root_npm_workspace_or_runtime_python_dependencies() -> None:
-    assert not (ROOT / "package.json").exists()
+def test_root_npm_workspace_is_private_exact_and_python_stays_detached() -> None:
+    root = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    assert set(root) == {"private", "workspaces"}
+    assert root["private"] is True
+    assert root["workspaces"] == [
+        "apps/memomatic",
+        "packages/agentomatic",
+        "packages/safe-fs",
+    ]
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "dependencies = []" in pyproject
     assert "skills-ref==0.1.1" in pyproject

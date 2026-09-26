@@ -13,8 +13,7 @@
     "directory": "packages/agentomatic"
   },
   "bin": {
-    "agentomatic": "./dist/cli.js",
-    "agentomatic-memomatic": "./dist/memomatic/cli.js"
+    "agentomatic": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -45,9 +44,13 @@
   },
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json && node dist/generate-assets.js",
-    "test": "node --test test/agent-profiles.test.mjs test/config-setup.test.mjs test/doctor.test.mjs test/memomatic.test.mjs test/package.test.mjs test/rtk.test.mjs test/stage19.test.mjs",
+    "test": "node --test test/agent-profiles.test.mjs test/config-setup.test.mjs test/doctor.test.mjs test/memomatic-plugin.test.mjs test/package.test.mjs test/rtk.test.mjs test/stage19.test.mjs",
     "smoke": "node test/smoke.mjs",
     "pack:check": "node test/pack-allowlist.mjs"
+  },
+  "dependencies": {
+    "@kisev/memomatic": "^1.0.0",
+    "@kisev/safe-fs": "^1.0.0"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "1.18.29",

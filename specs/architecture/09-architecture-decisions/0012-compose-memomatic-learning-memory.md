@@ -30,12 +30,14 @@ configured OpenCode provider with model and reasoning variant.
 
 - Adopt or extend an existing OpenCode memory plugin or MCP server.
 - Build a memory system inside a portable skill using the shared Python runtime.
-- Add a dedicated `memomatic` subsystem under `packages/agentomatic` with its own
+- Ship memomatic as the standalone `@kisev/memomatic` package under `apps/memomatic`
+  with its own
   XDG namespace, OpenCode plugin tools, an MCP stdio server, and a dream CLI.
 
 ## Outcome
 
-`packages/agentomatic` ships memomatic: a personal learning-memory subsystem with
+`@kisev/agentomatic` depends on `@kisev/memomatic` (and both on `@kisev/safe-fs`):
+memomatic is a personal learning-memory subsystem with
 tiered corpus (`MEMORY.md`, `USER.md`, daily notes, `DREAMS.md`), an annotated
 entry format (`<!-- key/status/origin/observed/project/importance/trigger/pinned -->`),
 a SQLite index with FTS5 keyword search, optional local embeddings through an

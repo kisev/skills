@@ -36,12 +36,12 @@ outdated facts by key, and archives every pre-image.
   model and variant, thresholds) and `MEMORY_RULES.md` with manual directives:
   `- never-save: <topic>` and opt-in `- auto-clean: older-than=90d scope=episodic`.
 - Tools: `memory_search`, `memory_get`, `memory_write`, `memory_forget`, exposed
-  by the plugin, by the MCP stdio server (`agentomatic-memomatic mcp-serve`),
+  by the plugin, by the MCP stdio server (`memomatic mcp-serve`),
   and by the CLI (`search`, `status`, `index`, `dream --dry-run`).
 - Scheduling: copy `memomatic-dream.service` and `memomatic-dream.timer` from the
   package `assets/systemd/` into `~/.config/systemd/user/` and run
   `systemctl --user enable --now memomatic-dream.timer`; run the sweep another
-  way by invoking `agentomatic-memomatic dream` yourself.
+  way by invoking `memomatic dream` yourself.
 - Forgetting is explicit or rule-gated: nothing is deleted without
   `memory_forget` or an `auto-clean` directive; pinned entries never decay.
 

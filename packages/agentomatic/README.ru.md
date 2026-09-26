@@ -39,12 +39,12 @@ Memomatic - персональная обучающая память по мот
   ручными директивами: `- never-save: <тема>` и опциональная
   `- auto-clean: older-than=90d scope=episodic`.
 - Инструменты: `memory_search`, `memory_get`, `memory_write`, `memory_forget` -
-  через плагин, MCP-сервер stdio (`agentomatic-memomatic mcp-serve`) и CLI
+  через плагин, MCP-сервер stdio (`memomatic mcp-serve`) и CLI
   (`search`, `status`, `index`, `dream --dry-run`).
 - Расписание: скопируйте `memomatic-dream.service` и `memomatic-dream.timer` из
   `assets/systemd/` пакета в `~/.config/systemd/user/` и выполните
   `systemctl --user enable --now memomatic-dream.timer`; альтернативный запуск -
-  командой `agentomatic-memomatic dream`.
+  командой `memomatic dream`.
 - Забывание явно или по правилу: ничего не удаляется без `memory_forget` или
   директивы `auto-clean`; закрепленные записи не затухают.
 

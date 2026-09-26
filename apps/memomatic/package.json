@@ -1,0 +1,46 @@
+{
+  "name": "@kisev/memomatic",
+  "version": "1.0.0",
+  "description": "Personal learning memory for agents: tiered Markdown corpus, rebuildable index, dream sweep.",
+  "homepage": "https://github.com/kisev/skills#readme",
+  "bugs": {
+    "url": "https://github.com/kisev/skills/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kisev/skills.git",
+    "directory": "apps/memomatic"
+  },
+  "bin": {
+    "memomatic": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "assets",
+    "README.md",
+    "README.ru.md"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json",
+    "test": "node --test test/",
+    "pack:check": "node test/pack-allowlist.mjs"
+  },
+  "dependencies": {
+    "@kisev/safe-fs": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -4,9 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import memomatic from "../dist/plugins/memomatic.js";
-import { parseEntryLine, entryLine } from "../dist/memomatic/entries.js";
-import { parseRules, isForbidden } from "../dist/memomatic/rules.js";
+import { parseEntryLine, entryLine } from "../dist/entries.js";
+import { parseRules, isForbidden } from "../dist/rules.js";
 import {
   openMemomatic,
   rebuildIndex,
@@ -14,10 +13,10 @@ import {
   writeEntry,
   getEntry,
   archiveOldEpisodic,
-} from "../dist/memomatic/service.js";
-import { runDream, parseExtraction, parseConsolidation } from "../dist/memomatic/dream.js";
-import { handleMcpRequest } from "../dist/memomatic/mcp.js";
-import { stableIdFor } from "../dist/memomatic/store.js";
+} from "../dist/service.js";
+import { runDream, parseExtraction, parseConsolidation } from "../dist/dream.js";
+import { handleMcpRequest } from "../dist/mcp.js";
+import { stableIdFor } from "../dist/store.js";
 
 function environment() {
   const root = mkdtempSync(join(tmpdir(), "memomatic-test-"));
@@ -101,8 +100,8 @@ test("search ranks pinned and curated above decaying episodic entries", async ()
       origin: "agent",
       text: "Loopback binding decision about deploy gateway targets",
     });
-    const { writeCorpusFile } = await import("../dist/memomatic/corpus.js");
-    const { dailyNotePath } = await import("../dist/memomatic/corpus.js");
+    const { writeCorpusFile } = await import("../dist/corpus.js");
+    const { dailyNotePath } = await import("../dist/corpus.js");
     const old = new Date(Date.now() - 120 * 86_400_000);
     const pinnedLine = entryLine("Pinned loopback binding rule for the deploy gateway", {
       key: "pinned-loopback",
@@ -211,7 +210,7 @@ test("consolidation falls back to append-only when drop loss exceeds the bound",
   const env = environment();
   try {
     const ctx = await context();
-    const { writeCorpusFile } = await import("../dist/memomatic/corpus.js");
+    const { writeCorpusFile } = await import("../dist/corpus.js");
     await writeCorpusFile(
       ctx.paths,
       ctx.paths.memoryFile,
@@ -289,7 +288,7 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
   const env = environment();
   try {
     const ctx = await context();
-    const { writeCorpusFile, dailyNotePath } = await import("../dist/memomatic/corpus.js");
+    const { writeCorpusFile, dailyNotePath } = await import("../dist/corpus.js");
     const old = new Date(Date.now() - 120 * 86_400_000);
     const file = dailyNotePath(ctx.paths, old);
     await writeCorpusFile(
@@ -354,36 +353,6 @@ test("mcp server lists tools and answers a search call", async () => {
     const payload = JSON.parse(call.result.content[0].text);
     assert.ok(payload.length >= 1);
     assert.match(payload[0].snippet, /tool names functional/);
-  } finally {
-    rmSync(env.root, { force: true, recursive: true });
-  }
-});
-
-test("plugin exposes memory tools and injects system context", async () => {
-  const env = environment();
-  try {
-    const ctx = await context();
-    const { writeCorpusFile } = await import("../dist/memomatic/corpus.js");
-    await writeCorpusFile(
-      ctx.paths,
-      ctx.paths.memoryFile,
-      `${entryLine("Curated fact injected at session start", { key: "injected", origin: "user" })}\n`,
-    );
-    ctx.store.close();
-    const hooks = await memomatic({ enabled: true });
-    assert.deepEqual(Object.keys(hooks.tool).sort(), [
-      "memory_forget",
-      "memory_get",
-      "memory_search",
-      "memory_write",
-    ]);
-    const output = { system: [] };
-    await hooks["experimental.chat.system.transform"]({}, output);
-    assert.equal(output.system.length, 1);
-    assert.match(output.system[0], /Curated fact injected at session start/);
-    assert.match(output.system[0], /memory_search/);
-    const disabled = await memomatic({ enabled: false });
-    assert.deepEqual(disabled, {});
   } finally {
     rmSync(env.root, { force: true, recursive: true });
   }

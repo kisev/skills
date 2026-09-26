@@ -27,8 +27,19 @@ def version_root(root: Path) -> Path:
         },
     )
     write_json(
-        root / "packages/agentomatic/package-lock.json",
-        {"version": "2.2.3", "packages": {"": {"version": "2.2.3"}}},
+        root / "apps/memomatic/package.json",
+        {"version": "1.0.0"},
+    )
+    write_json(
+        root / "package-lock.json",
+        {
+            "version": "2.2.3",
+            "packages": {
+                "": {"version": "2.2.3"},
+                "packages/agentomatic": {"version": "2.2.3"},
+                "apps/memomatic": {"version": "1.0.0"},
+            },
+        },
     )
     write_json(
         root / "evals/contracts/opencode-compatibility.json",
