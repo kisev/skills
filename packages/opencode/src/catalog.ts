@@ -31,7 +31,7 @@ export const CATALOG = {
     "team-sprint-close",
     "team-sprint-start",
   ],
-  plugins: ["rules-injector", "rtk", "zed-bell"],
+  plugins: ["rules-injector", "rtk", "zed-bell", "memomatic"],
   agents: ["manager", "architect", "mapper", "worker", "review", "critic"],
   package_commands: ["rtk-stats"],
   tools: ["route"],

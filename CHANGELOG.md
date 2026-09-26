@@ -10,6 +10,20 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- The `memomatic` plugin: personal learning memory for OpenCode following the
+  OpenClaw architecture. A tiered Markdown corpus (`MEMORY.md`, `USER.md`,
+  daily notes, `DREAMS.md`) in a dedicated `$XDG_STATE_HOME/memomatic/`
+  namespace, a rebuildable SQLite index with FTS5 and optional local
+  embeddings, `memory_search`, `memory_get`, `memory_write`, and
+  `memory_forget` tools through the plugin, an MCP stdio server, and a CLI,
+  plus the nightly `skills-opencode-memomatic dream` sweep (`memomatic-dream`
+  systemd user units in `assets/systemd/`): transcript ingestion from the
+  OpenCode database, deterministic promotion gates, bounded model consolidation
+  through `opencode run` with the configured model and reasoning variant,
+  key-based supersession, and pre-images in `history/`. Manual `- never-save:`
+  directives and the opt-in `- auto-clean:` directive live in
+  `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`; without them nothing is
+  deleted.
 - The `rtk` compression wrapper is now deployed by the default installer
   selection (opt out with `--plugins none`; previously installed selections are
   preserved). Deployed wrapper files load automatically from the `plugins`

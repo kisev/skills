@@ -15,12 +15,35 @@ update, and removal lifecycle.
 - A confirmed `config` command that connects the package and recommended
   fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
   `mimocode.json(c)` while preserving existing entries and comments.
-- Optional plugin wrappers: `rules-injector` and `zed-bell`; the `rtk`
-  compression wrapper is deployed by default and observable through
-  `/rtk-stats` and `doctor`.
+- Optional plugin wrappers: `rules-injector`, `zed-bell`, and `memomatic`
+  personal learning memory; the `rtk` compression wrapper is deployed by
+  default and observable through `/rtk-stats` and `doctor`.
 
 The package does not contain, install, update, inspect, or remove portable skills.
 Their lifecycle is owned by the `skills` CLI.
+
+## Memomatic
+
+Memomatic is personal learning memory inspired by the OpenClaw architecture:
+tiered Markdown (`MEMORY.md`, `USER.md`, daily notes, `DREAMS.md`), a rebuildable
+SQLite index with FTS5 keyword search and optional local embeddings, and a
+nightly dream sweep that ingests session transcripts, promotes repeatedly useful
+entries through deterministic gates and one bounded model turn, supersedes
+outdated facts by key, and archives every pre-image.
+
+- State: `$XDG_STATE_HOME/memomatic/` (corpus, index, history, archive).
+- Config: `$XDG_CONFIG_HOME/memomatic/settings.json` (embedding endpoint, dream
+  model and variant, thresholds) and `MEMORY_RULES.md` with manual directives:
+  `- never-save: <topic>` and opt-in `- auto-clean: older-than=90d scope=episodic`.
+- Tools: `memory_search`, `memory_get`, `memory_write`, `memory_forget`, exposed
+  by the plugin, by the MCP stdio server (`skills-opencode-memomatic mcp-serve`),
+  and by the CLI (`search`, `status`, `index`, `dream --dry-run`).
+- Scheduling: copy `memomatic-dream.service` and `memomatic-dream.timer` from the
+  package `assets/systemd/` into `~/.config/systemd/user/` and run
+  `systemctl --user enable --now memomatic-dream.timer`; run the sweep another
+  way by invoking `skills-opencode-memomatic dream` yourself.
+- Forgetting is explicit or rule-gated: nothing is deleted without
+  `memory_forget` or an `auto-clean` directive; pinned entries never decay.
 
 ## Requirements
 
