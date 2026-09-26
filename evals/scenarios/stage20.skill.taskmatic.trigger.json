@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "ab396882963439859a454b3fe93dd9ba4f6d1ddd82693e73ec354131c6e878aa",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:taskmatic"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.taskmatic.trigger",
+  "input": {
+    "fixture": {
+      "selected": ["skill:taskmatic"]
+    },
+    "prompt": "Выбери навык taskmatic для его точного контрактного сценария локальной доски задач."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.taskmatic.trigger.source",
+      "path": ".build/skills/taskmatic/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "stage20.skill.taskmatic.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

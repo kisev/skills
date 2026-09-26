@@ -26,6 +26,7 @@ export const CATALOG = {
     "task-prepare",
     "task-review",
     "task-triage",
+    "taskmatic",
     "team-retro",
     "team-roadmap",
     "team-sprint-close",

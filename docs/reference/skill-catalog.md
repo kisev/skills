@@ -2,7 +2,7 @@
 
 [Русский](../ru/reference/skill-catalog.md)
 
-The current stable release publishes 28 portable Agent Skills. Its release
+The current stable release publishes 29 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
 of `@kisev/skills-opencode`.
@@ -40,6 +40,7 @@ install recommendations only; every archive works on its own.
 | `task-prepare` | Prepare tasks with shared review, scoped release planning, and manual GitLab publication commands. |
 | `task-review` | Review semantic quality and release-milestone compatibility standalone or inside other task workflows. |
 | `task-triage` | Triage GitLab issues into persistent decisions, release milestones, priorities, dependencies, and manual update commands. |
+| `taskmatic` | Run a local-first task board for people and agents with a markdown mirror, claims, and a read-only web board. |
 | `team-retro` | Prepare an evidence-based retrospective or delivery presentation from a private profile. |
 | `team-roadmap` | Review or update an evidence-based roadmap from a private profile. |
 | `team-sprint-close` | Close one sprint cycle from a private profile or explicit context. |

@@ -11,17 +11,17 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Активные переносимые навыки
 
-Активны ровно 27 переносимых навыков:
+Активны ровно 29 переносимых навыков:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`, `mr-prepare`,
-`release-prepare`, `release-review`, `rtk`,
+`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
+`mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
-`task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
-`team-sprint-close` и `team-sprint-start`.
+`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-retro`,
+`team-roadmap`, `team-sprint-close` и `team-sprint-start`.
 
 Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
-те же 27 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+те же 29 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
 добавляются только в `.build/skills` и проверяются побайтово.
 
 ## Сведения об очистке переносимых навыков

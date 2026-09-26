@@ -3,8 +3,11 @@ from __future__ import annotations
 import argparse
 import copy
 import hashlib
+import importlib.util
 import json
 import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -35,6 +38,7 @@ SCHEMA_PATHS = {
     "shared/references/post-success-marker.schema.json",
     "shared/references/team_runtime/team-context.schema.json",
     "shared/references/work-item-contract.schema.json",
+    "skills/taskmatic/references/snapshot.schema.json",
 }
 DIGEST = "a" * 64
 CREATED_AT = "2026-09-14T00:00:00Z"
@@ -749,7 +753,7 @@ def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
 def validate_eval_contract_instances() -> None:
     scenario_validator = validator("evals/schemas/scenario-v1.schema.json")
     scenarios = sorted((ROOT / "evals/scenarios").glob("*.json"))
-    assert len(scenarios) == 225
+    assert len(scenarios) == 230
     for path in scenarios:
         scenario_validator.validate(load(path.relative_to(ROOT)))
 
@@ -807,10 +811,72 @@ def validate_opencode_contract_instances() -> None:
         validator(f"packages/opencode/contracts/{name}").validate(instance)
 
 
+def load_taskmatic_runtime() -> Any:
+    path = ROOT / "skills" / "taskmatic" / "scripts" / "taskmatic.py"
+    spec = importlib.util.spec_from_file_location("taskmatic_json_schemas", path)
+    if spec is None or spec.loader is None:
+        raise ImportError("taskmatic runtime is unavailable")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["taskmatic_json_schemas"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def taskmatic_snapshot_instance() -> dict[str, Any]:
+    taskmatic = load_taskmatic_runtime()
+    with tempfile.TemporaryDirectory() as home:
+        store = taskmatic.open_store(home)
+        try:
+            parent = taskmatic.create_card(
+                store.connection,
+                board="main",
+                title="Review the snapshot contract",
+                priority="high",
+                labels=["contract"],
+                notes="Validate the emitted snapshot.",
+            )
+            child = taskmatic.create_card(
+                store.connection, board="ops", title="Child card", parent=parent
+            )
+            taskmatic.claim_card(store.connection, child, "agent-a", 600)
+            taskmatic.append_note(store.connection, child, "claimed for review", actor="agent-a")
+            return cast("dict[str, Any]", taskmatic.build_snapshot(store.connection))
+        finally:
+            store.connection.close()
+
+
+def validate_taskmatic_contract_instances() -> None:
+    taskmatic_validator = validator("skills/taskmatic/references/snapshot.schema.json")
+    instance = taskmatic_snapshot_instance()
+    taskmatic_validator.validate(instance)
+    assert {card["title"] for card in instance["cards"]} == {
+        "Review the snapshot contract",
+        "Child card",
+    }
+    for change in (
+        {"schema": "taskmatic/snapshot/v2"},
+        {"generated_at": "yesterday"},
+        {"cards": [{"id": "nothex"}]},
+    ):
+        invalid = copy.deepcopy(instance)
+        invalid.update(change)
+        with pytest.raises(ValidationError):
+            taskmatic_validator.validate(invalid)
+    bad_card = copy.deepcopy(instance)
+    bad_card["cards"][0]["status"] = "archived"
+    with pytest.raises(ValidationError):
+        taskmatic_validator.validate(bad_card)
+    bad_claim = copy.deepcopy(instance)
+    bad_claim["cards"][0]["claim_remaining_seconds"] = -1
+    with pytest.raises(ValidationError):
+        taskmatic_validator.validate(bad_claim)
+
+
 def test_every_committed_json_schema_has_a_concrete_contract() -> None:
     validate_eval_contract_instances()
     validate_shared_contract_instances()
     validate_opencode_contract_instances()
+    validate_taskmatic_contract_instances()
     validate_schema_runtime_rejections()
 
 

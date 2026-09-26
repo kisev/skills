@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "0138a1f7840c4699b5f5e9647bc3ce6159e487d8b1fc5ab6d9b2d4f9d47c631c",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:taskmatic"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.taskmatic.near-miss",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Русский: это намеренно не относится к навыку taskmatic; не направляй запрос в этот навык."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.taskmatic.near-miss.source",
+      "path": ".build/skills/taskmatic/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "stage20.skill.taskmatic.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

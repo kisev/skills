@@ -12,17 +12,17 @@ the current GitHub Release. The optional integration package is
 
 ## Active Portable Skills
 
-There are exactly 27 active portable skills:
+There are exactly 29 active portable skills:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`, `mr-prepare`,
-`release-prepare`, `release-review`, `rtk`,
+`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
+`mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
-`task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
-`team-sprint-close`, and `team-sprint-start`.
+`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-retro`,
+`team-roadmap`, `team-sprint-close`, and `team-sprint-start`.
 
 The authored inventory contains deduplicated definitions; build and distribution
-inventories contain the same 27 self-contained skills. Shared files are declared
+inventories contain the same 29 self-contained skills. Shared files are declared
 by `shared/manifest.json`, injected only into `.build/skills`, and checked
 byte-for-byte.
 

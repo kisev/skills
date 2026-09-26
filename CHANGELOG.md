@@ -10,6 +10,14 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- New `taskmatic` skill: a local-first task board for people and agents. A private
+  SQLite store under the taskmatic XDG state root is the single authority; every
+  mutation regenerates a readable markdown mirror and a read-only web export. The
+  bundled runner (standard-library-only Python 3.12+) provides board and card
+  commands, agent claims with heartbeats and computed claim state, `serve` for a
+  loopback read-only web board, and an MCP stdio server with a pinned
+  `taskmatic_*` tool surface. The `taskmatic` snapshot JSON contract is committed
+  as `skills/taskmatic/references/snapshot.schema.json`.
 - The `memomatic` plugin: personal learning memory for OpenCode following the
   OpenClaw architecture. A tiered Markdown corpus (`MEMORY.md`, `USER.md`,
   daily notes, `DREAMS.md`) in a dedicated `$XDG_STATE_HOME/memomatic/`

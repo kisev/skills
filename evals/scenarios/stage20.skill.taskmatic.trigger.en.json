@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "c6b3c1b977ca3ca96ba863dfd8974c8d243126074a04da79abe06c53e8ddda92",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:taskmatic"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.taskmatic.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:taskmatic"]
+    },
+    "prompt": "Select the taskmatic skill for its exact local task board contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.taskmatic.trigger.source",
+      "path": ".build/skills/taskmatic/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.taskmatic.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

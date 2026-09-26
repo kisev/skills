@@ -177,6 +177,12 @@
       "skills/skill-improve/scripts/skill_improver.py" = [
         "S603"
       ]                                                                     # The validator receives a bounded temporary skill path.
+      "skills/taskmatic/scripts/taskmatic.py" = [
+        "S608",                                                             # SQL text is fixed; dynamic parts are bound parameters from fixed column sets.
+        "C901",                                                             # The CLI dispatch keeps every subcommand branch in one flat table.
+        "PLR0911",                                                          # Explicit per-command returns mirror the subcommand surface.
+        "PLR0912",                                                          # One branch per subcommand keeps dispatch observable.
+      ]
 
     [tool.ruff.lint.mccabe]
       max-complexity = 40

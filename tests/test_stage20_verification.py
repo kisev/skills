@@ -20,8 +20,8 @@ def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts()
         for item in scenarios
         if item["surface"] == "skill" and item["id"].startswith("stage20.")
     ]
-    assert len(skill) == 112
-    assert len({item["input"]["prompt"] for item in skill}) == 112
+    assert len(skill) == 116
+    assert len({item["input"]["prompt"] for item in skill}) == 116
     for name in json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["skills"]:
         selected = [
             item for item in skill if f"skill:{name}" in item["expected"].get("selected", [])
