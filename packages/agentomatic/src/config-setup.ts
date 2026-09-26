@@ -23,6 +23,7 @@ import {
 import { applyJsoncEdits, parseJsonc, type JsoncEdit } from "./jsonc.js";
 
 const PACKAGE_NAME = "@kisev/agentomatic";
+const LEGACY_PACKAGE_NAME = "@kisev/skills-opencode";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const XDG_STATE_GLOB = "~/.local/state/agent-skills/**";
 const OPENCODE_SKILLS_GLOB = "~/.config/opencode/skills/**";
@@ -183,6 +184,12 @@ function fragmentEdits(
     return [
       { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/config.json" },
       { kind: "set-if-absent", path: ["plugin"], value: [] },
+      {
+        kind: "replace-array-value",
+        path: ["plugin"],
+        from: LEGACY_PACKAGE_NAME,
+        to: PACKAGE_NAME,
+      },
       { kind: "append-unique", path: ["plugin"], value: PACKAGE_NAME },
     ];
   }

@@ -19,16 +19,18 @@ import {
   digest,
   LifecycleError,
   lifecycleRoot,
+  migrateLegacyDeploymentNamespace,
+  migrateLegacyNamespaces,
   readRegular,
   recoverTransaction,
   saveReceipt,
   sha256,
   stable,
-  withLifecycleLock,
-  type SupersededPlan,
   type FileMutation,
   type Scope,
+  type SupersededPlan,
   type TransactionOptions,
+  withLifecycleLock,
 } from "./lifecycle.js";
 import { CATALOG } from "./catalog.js";
 import { FIXED_AGENT_ROLES, type FixedAgentRole } from "./agent-profiles.js";
@@ -839,6 +841,9 @@ export async function preview(
   home = homedir(),
   selection?: Partial<InstallerSelection>,
 ): Promise<Plan> {
+  // Infrastructure normalization like stale-lock reclamation: idempotent,
+  // preserves every legacy byte, and never touches user configuration.
+  await migrateLegacyNamespaces(home);
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
   try {
@@ -885,8 +890,10 @@ export async function apply(
 ): Promise<Plan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
+  await migrateLegacyNamespaces(home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
+      await migrateLegacyDeploymentNamespace(root);
       if (await recoverTransaction(root, stateRoot, [archiveRoot(scope, cwd, home)]))
         throw new InstallerError(
           "recovered_transaction",

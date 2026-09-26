@@ -63,7 +63,10 @@ Status: active since 2026-09-26.
 The `config` command shall merge selected fragments into user configuration
 files only after a confirmed preview, preserve user entries and comments, add
 only absent keys, validate every merged document before and after writing, and
-roll the whole plan back on any failed postcondition.
+roll the whole plan back on any failed postcondition. The `core-plugin`
+fragment shall replace a legacy `@kisev/skills-opencode` plugin entry in place
+with `@kisev/agentomatic` instead of appending a duplicate, leaving unrelated
+user plugins untouched.
 
 ## Example
 

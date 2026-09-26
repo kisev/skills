@@ -1,7 +1,6 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import {
-  chmod,
   lstat,
   mkdir,
   open,
@@ -14,17 +13,7 @@ import {
   unlink,
 } from "node:fs/promises";
 import { homedir } from "node:os";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  normalize,
-  parse,
-  relative,
-  resolve,
-  sep,
-} from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 
 export const RECEIPT_TTL_MS = 10 * 60 * 1000;
 
@@ -158,6 +147,46 @@ export function lifecycleRoot(scope: Scope, cwd = process.cwd(), home = homedir(
       : resolve(home, ".local", "state");
   const suffix = scope === "global" ? "global" : join("project", sha256(resolve(cwd)));
   return join(base, "opencode", "agentomatic", suffix);
+}
+
+function xdgBase(variable: "XDG_STATE_HOME" | "XDG_DATA_HOME", home: string): string {
+  const base = process.env[variable];
+  return base && home === homedir()
+    ? resolve(base)
+    : resolve(home, ".local", variable === "XDG_STATE_HOME" ? "state" : "share");
+}
+
+async function moveLegacyDirectoryOnce(legacy: string, target: string): Promise<boolean> {
+  const legacyInfo = await lstatSafe(legacy);
+  if (!legacyInfo) return false;
+  if (!legacyInfo.isDirectory() || legacyInfo.isSymbolicLink())
+    throw new LifecycleError("unsafe_path", `Legacy state path is not a directory: ${legacy}`);
+  if (await lstatSafe(target)) return false;
+  await ensureDirectory(dirname(target), 0o700);
+  await rename(legacy, target);
+  return true;
+}
+
+export async function migrateLegacyDeploymentNamespace(root: string): Promise<boolean> {
+  return moveLegacyDirectoryOnce(join(root, ".skills-opencode"), join(root, ".agentomatic"));
+}
+
+export async function migrateLegacyNamespaces(home = homedir()): Promise<string[]> {
+  const moved: string[] = [];
+  const namespaces: Array<[string, string]> = [
+    [
+      join(xdgBase("XDG_STATE_HOME", home), "opencode", "skills-opencode"),
+      join(xdgBase("XDG_STATE_HOME", home), "opencode", "agentomatic"),
+    ],
+    [
+      join(xdgBase("XDG_DATA_HOME", home), "opencode", "skills-opencode"),
+      join(xdgBase("XDG_DATA_HOME", home), "opencode", "agentomatic"),
+    ],
+  ];
+  for (const [legacy, target] of namespaces) {
+    if (await moveLegacyDirectoryOnce(legacy, target)) moved.push(target);
+  }
+  return moved;
 }
 
 export function archiveRoot(scope: Scope, cwd = process.cwd(), home = homedir()): string {

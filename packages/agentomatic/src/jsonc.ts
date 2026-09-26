@@ -41,10 +41,11 @@ export type JsoncPath = Array<string | number>;
 
 export type JsoncEdit =
   | { kind: "append-unique"; path: JsoncPath; value: string }
+  | { kind: "replace-array-value"; path: JsoncPath; from: string; to: string }
   | { kind: "set-if-absent"; path: JsoncPath; value: unknown }
   | { kind: "widen-scalar-map"; path: JsoncPath; entries: Record<string, string> };
 
-export type JsoncEditResult = "created" | "present" | "appended" | "widened";
+export type JsoncEditResult = "created" | "present" | "appended" | "replaced" | "widened";
 
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
@@ -334,6 +335,18 @@ function applyEdit(
     const at = target.empty ? target.start + 1 : target.items.at(-1)!.end;
     return { text: text.slice(0, at) + insertion + text.slice(at), result: "appended" };
   }
+  if (edit.kind === "replace-array-value") {
+    const target = resolve(root, edit.path);
+    if (!target || target.kind !== "array")
+      throw new JsoncError("conflict", "replace-array-value target is missing or not an array");
+    const index = target.items.map(nodeToValue).indexOf(edit.from);
+    if (index === -1) return { text, result: "present" };
+    const node = target.items[index];
+    return {
+      text: text.slice(0, node.start) + JSON.stringify(edit.to) + text.slice(node.end),
+      result: "replaced",
+    };
+  }
   if (edit.kind === "set-if-absent") {
     const key = edit.path.at(-1);
     if (typeof key !== "string")
@@ -408,6 +421,19 @@ function verifyEdit(before: unknown, after: unknown, edit: JsoncEdit): void {
     const target = at(after, edit.path);
     if (!Array.isArray(target) || !target.includes(edit.value))
       throw new JsoncError("merge_validation_failed", "append-unique postcondition failed");
+    return;
+  }
+  if (edit.kind === "replace-array-value") {
+    const beforeTarget = at(before, edit.path);
+    const afterTarget = at(after, edit.path);
+    if (Array.isArray(beforeTarget) && beforeTarget.includes(edit.from)) {
+      if (
+        !Array.isArray(afterTarget) ||
+        !afterTarget.includes(edit.to) ||
+        afterTarget.includes(edit.from)
+      )
+        throw new JsoncError("merge_validation_failed", "replace-array-value postcondition failed");
+    }
     return;
   }
   if (edit.kind === "set-if-absent") {

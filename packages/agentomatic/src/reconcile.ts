@@ -28,7 +28,21 @@ import { archiveMutations, type ArchiveCandidate } from "./installer.js";
 
 const PACKAGE_NAME = "@kisev/agentomatic";
 const GENERIC_MANIFEST = ".agentomatic-manifest.json";
+const LEGACY_GENERIC_MANIFEST = ".skills-opencode-manifest.json";
 const SEMANTIC_MANIFEST = ".agentomatic/agent-profiles.manifest.json";
+const LEGACY_SEMANTIC_MANIFEST = ".skills-opencode/agent-profiles.manifest.json";
+
+type RegularFile = { content: Buffer; mode: number };
+
+async function firstExisting(
+  targets: string[],
+): Promise<{ path: string; value: RegularFile } | undefined> {
+  for (const path of targets) {
+    const value = await regular(path);
+    if (value && !("unsafe" in value)) return { path, value };
+  }
+  return undefined;
+}
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const assetsRoot = resolve(packageRoot, "dist", "assets");
 const inventoryPath = resolve(assetsRoot, "migration-inventory.json");
@@ -299,8 +313,14 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
   const mutations: FileMutation[] = [];
   const archiveCandidates: ArchiveCandidate[] = [];
   const managed = new Map<string, { sha256: string }>();
-  const manifestPath = join(deployment, GENERIC_MANIFEST);
-  const manifestValue = await regular(manifestPath);
+  const legacyManifest = await firstExisting([
+    join(deployment, GENERIC_MANIFEST),
+    join(deployment, LEGACY_GENERIC_MANIFEST),
+  ]);
+  const manifestPath = legacyManifest?.path ?? join(deployment, GENERIC_MANIFEST);
+  const manifestValue = legacyManifest
+    ? ({ ...legacyManifest.value } as { content: Buffer; mode: number })
+    : await regular(manifestPath);
   let manifestRaw: Buffer | undefined;
   let manifestFiles: Record<string, { sha256: string }> = {};
   if (manifestValue && "unsafe" in manifestValue) {
@@ -553,8 +573,14 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     }
   }
 
-  const semanticPath = safeTarget(deployment, SEMANTIC_MANIFEST);
-  const semanticValue = await regular(semanticPath);
+  const legacySemantic = await firstExisting([
+    safeTarget(deployment, SEMANTIC_MANIFEST),
+    safeTarget(deployment, LEGACY_SEMANTIC_MANIFEST),
+  ]);
+  const semanticPath = legacySemantic?.path ?? safeTarget(deployment, SEMANTIC_MANIFEST);
+  const semanticValue = legacySemantic
+    ? ({ ...legacySemantic.value } as { content: Buffer; mode: number })
+    : await regular(semanticPath);
   const agentHashes = new Map<string, string>();
   if (semanticValue && "unsafe" in semanticValue) {
     add(

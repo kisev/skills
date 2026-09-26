@@ -156,6 +156,8 @@ function ownsPackage(name: unknown): boolean {
 }
 const CONFIG_PATH = ".agentomatic/agent-profiles.json";
 const MANIFEST_PATH = ".agentomatic/agent-profiles.manifest.json";
+const LEGACY_CONFIG_PATH = ".skills-opencode/agent-profiles.json";
+const LEGACY_MANIFEST_PATH = ".skills-opencode/agent-profiles.manifest.json";
 const AGENTS_DIRECTORY = "agents";
 const NAME_PATTERN = /^(?:manager|architect|mapper|worker|review|critic)$/;
 const CRITIC_PATTERN = /^critic-[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -338,6 +340,14 @@ function parseManifest(raw: Buffer, scope: Scope): DeploymentManifest {
   return manifest as DeploymentManifest;
 }
 
+async function firstSemanticExisting(root: string, relatives: string[]): Promise<string> {
+  for (const relative of relatives) {
+    const path = destination(root, relative);
+    if (await readRegular(path)) return path;
+  }
+  return destination(root, relatives[0]);
+}
+
 async function loadState(
   scope: Scope,
   root: string,
@@ -347,8 +357,8 @@ async function loadState(
   manifest?: DeploymentManifest;
   manifestRaw?: Buffer;
 }> {
-  const configPath = destination(root, CONFIG_PATH);
-  const manifestPath = destination(root, MANIFEST_PATH);
+  const configPath = await firstSemanticExisting(root, [CONFIG_PATH, LEGACY_CONFIG_PATH]);
+  const manifestPath = await firstSemanticExisting(root, [MANIFEST_PATH, LEGACY_MANIFEST_PATH]);
   const [configRaw, manifestRaw] = await Promise.all([
     readRegular(configPath),
     readRegular(manifestPath),
