@@ -38,10 +38,10 @@
 
 ## Project rules
 
-- This repository publishes portable Agent Skills and an optional OpenCode npm integration; keep portable behavior independent of a checkout, provider, credential, user home, or team-specific configuration.
+- This repository publishes portable Agent Skills, the `@kisev/agentomatic` npm integration with its workspace packages, and user-run applications under `apps/`; keep portable behavior independent of a checkout, provider, credential, user home, or team-specific configuration.
 - Edit portable definitions under `skills/<name>/`; the authored entrypoint is `SKILL.source.md`.
 - Edit shared contracts and runtimes only under `shared/references/`, and update `shared/manifest.json` when their materialization changes.
-- Keep OpenCode-only commands, agents, plugins, routing, and installer behavior under `packages/agentomatic/`.
+- Keep OpenCode-only commands, agents, plugins, routing, and installer behavior under `packages/agentomatic/`, npm-publishable shared packages under `packages/`, and user-run cross-host applications (any stack) under `apps/<name>/`.
 - Do not edit `.build/`, `packages/agentomatic/dist/`, generated `SKILL.md`, or copied assets directly; use `task generate` and verify reproducibility with `task generate:check`.
 - Run `mise install` from the repository root before making changes.
 - Treat `taskfile.yml` as the full repository and CI task graph; the Lefthook pre-commit fast path may invoke pinned Mise tools directly for staged files, while workflows and pre-push must call public tasks.
@@ -49,7 +49,7 @@
 - Run `task format` after maintained-source formatting changes; run `task check` before a non-push handoff, while Lefthook `pre-push` owns complete local verification for pushes.
 - Treat `task pre-push` as the single local push gate: it runs `task check` and `task dependency:audit` concurrently; do not run either immediately before a push unless diagnosing a failure.
 - Preserve agentskills.io frontmatter constraints; every built skill archive stays self-contained, and cross-skill relations are declared only in `shared/skill-relations.json` (`requires`/`uses`/`recommends`) and materialized into built `SKILL.md` as a recommendational "Related skills" section, never as a runtime import of another archive.
-- Keep Python runners shipped in portable skills compatible with Python 3.12+ and standard-library-only.
+- Keep Python runners executed inside portable skill archives compatible with Python 3.12+ and standard-library-only; user-installed applications under `apps/` may declare dependencies.
 - Validate every committed `*.schema.json` with a concrete valid instance and add it to the exhaustive mapping in `tests/test_json_schemas.py`.
 - Write ordinary project files directly with bounded paths and atomic replacement or rollback; require preview and explicit confirmation only for external publication, user configuration, destructive cleanup, history changes, releases, and package lifecycle mutations.
 - Keep credentials, private endpoints, local paths, caches, live-eval output, and generated artifacts out of Git.
