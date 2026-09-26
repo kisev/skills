@@ -40,6 +40,36 @@ else:
     inspect_private_directory = _state_module.inspect_private_directory
     xdg_state_home = _state_module.xdg_state_home
 
+
+def _drop_memory_mirror(profile: str, document: dict[str, Any]) -> None:
+    """Mirror a fresh journal entry into the memomatic inbox; never fail the journal."""
+    try:
+        _inbox_path = Path(__file__).with_name("memomatic_inbox.py")
+        if not _inbox_path.exists():
+            _inbox_path = next(
+                parent / "memomatic_inbox.py"
+                for parent in Path(__file__).resolve().parents
+                if (parent / "memomatic_inbox.py").is_file()
+            )
+        _inbox_spec = importlib.util.spec_from_file_location("memomatic_inbox", _inbox_path)
+        if _inbox_spec is None or _inbox_spec.loader is None:
+            return
+        _inbox = importlib.util.module_from_spec(_inbox_spec)
+        _inbox_spec.loader.exec_module(_inbox)
+        person = document.get("person")
+        heading = f"{person}: " if isinstance(person, str) and person else ""
+        due = document.get("due")
+        suffix = f" (due {due})" if isinstance(due, str) and due else ""
+        lines = _inbox.entry_lines(
+            [f"[{profile}] {document.get('type')}{suffix}: {heading}{document.get('text')}"],
+            source="people-journal",
+            key=f"people-{profile}-{document.get('id')}",
+        )
+        _inbox.drop_memory(lines, "people-journal")
+    except Exception:
+        return
+
+
 SCHEMA_VERSION = 1
 ENTRY_TYPES = frozenset({"1on1", "agreement", "fact", "note", "feedback"})
 RESOLUTIONS = frozenset({"fulfilled", "broken"})
@@ -262,6 +292,7 @@ def append_entry(
         private_regular(path, "journal entry")
         return {"status": "ok", "id": identifier, "duplicate": True, "entry": document}
     atomic_write(path, canonical_bytes(document))
+    _drop_memory_mirror(profile, document)
     return {"status": "ok", "id": identifier, "duplicate": False, "entry": document}
 
 

@@ -1,10 +1,13 @@
 import { tool } from "@opencode-ai/plugin";
 
 import {
+  bootstrapContext,
   forgetEntry,
   getEntry,
+  opencodeDatabasePath,
   openMemomatic,
   searchMemory,
+  sessionFacts,
   writeEntry,
   type MemomaticContext,
 } from "@kisev/memomatic";
@@ -12,9 +15,8 @@ import {
 export type MemomaticOptions = {
   enabled?: boolean;
   bootstrapBudgetChars?: number;
+  bootstrapEpisodicBudgetChars?: number;
 };
-
-const DEFAULT_BOOTSTRAP_BUDGET = 4_000;
 
 async function withContext<T>(work: (context: MemomaticContext) => Promise<T>): Promise<string> {
   const context = await openMemomatic();
@@ -27,7 +29,8 @@ async function withContext<T>(work: (context: MemomaticContext) => Promise<T>): 
 
 export async function memomatic(options: MemomaticOptions = {}) {
   if (options.enabled === false) return {};
-  const budget = options.bootstrapBudgetChars ?? DEFAULT_BOOTSTRAP_BUDGET;
+  const curatedBudget = options.bootstrapBudgetChars ?? 4_000;
+  const episodicBudget = options.bootstrapEpisodicBudgetChars ?? 1_500;
   const memorySearch = tool({
     args: { query: tool.schema.string() },
     description:
@@ -54,18 +57,20 @@ export async function memomatic(options: MemomaticOptions = {}) {
       origin: tool.schema.enum(["user", "agent"]).optional(),
       key: tool.schema.string().optional(),
       project: tool.schema.string().optional(),
+      source: tool.schema.string().optional(),
       importance: tool.schema.number().min(1).max(10).optional(),
       trigger: tool.schema.array(tool.schema.string()).optional(),
       pinned: tool.schema.boolean().optional(),
     },
     description:
-      "Save a durable memory entry: standing decisions with rationale, discoveries, failed attempts with rejection reasons, session outcomes, action-sensitive boundaries. Respect MEMORY_RULES.md; never-save topics are rejected.",
+      "Queue a durable memory entry for the next process/dream pass: standing decisions with rationale, discoveries, failed attempts with rejection reasons, session outcomes, action-sensitive boundaries. Pass source=<skill-name> when a skill workflow requests the save. Respect MEMORY_RULES.md; never-save topics are rejected.",
     async execute(args: {
       text: string;
       target?: "episodic" | "curated" | "user";
       origin?: "user" | "agent";
       key?: string;
       project?: string;
+      source?: string;
       importance?: number;
       trigger?: string[];
       pinned?: boolean;
@@ -77,6 +82,7 @@ export async function memomatic(options: MemomaticOptions = {}) {
           origin: args.origin,
           pinned: args.pinned,
           project: args.project,
+          source: args.source,
           target: args.target,
           text: args.text,
           trigger: args.trigger,
@@ -92,23 +98,21 @@ export async function memomatic(options: MemomaticOptions = {}) {
     },
   });
   return {
-    "experimental.chat.system.transform": async (_input: unknown, output: { system: string[] }) => {
+    "experimental.chat.system.transform": async (
+      input: { sessionID?: string },
+      output: { system: string[] },
+    ) => {
       try {
         const context = await openMemomatic();
         try {
-          const blocks: string[] = [];
-          for (const file of [context.paths.memoryFile, context.paths.userFile]) {
-            const content = await import("node:fs/promises")
-              .then((fs) => fs.readFile(file, "utf8"))
-              .catch(() => undefined);
-            if (content === undefined || !content.trim()) continue;
-            const name = file.slice(file.lastIndexOf("/") + 1);
-            blocks.push(`# Memomatic ${name}\n\n${content.trim().slice(0, budget)}`);
-          }
-          if (!blocks.length) return;
-          output.system.push(
-            `${blocks.join("\n\n")}\n\nUse memory_search for episodic details and memory_write to save durable outcomes. Never re-save content that is already present in this memory.`,
-          );
+          const facts = input.sessionID
+            ? sessionFacts(opencodeDatabasePath(), input.sessionID)
+            : { directory: null, title: null, firstMessage: null };
+          const block = await bootstrapContext(context, facts, {
+            curatedBudgetChars: curatedBudget,
+            episodicBudgetChars: episodicBudget,
+          });
+          if (block) output.system.push(block);
         } finally {
           context.store.close();
         }

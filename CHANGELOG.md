@@ -6,6 +6,39 @@ All notable changes to this project are documented in this file. Entries follow
 
 [Русская версия](CHANGELOG.ru.md)
 
+## \[Unreleased]
+
+### Added
+
+- memomatic composes with XDG skill artifacts through an asynchronous inbox
+  under `$XDG_STATE_HOME/memomatic/inbox/`. Skills and agents append
+  single-format Markdown entry lines; the new deterministic `memomatic process`
+  CLI pass (also run first by every dream sweep) validates drops, enforces
+  `never-save`, deduplicates exact texts, supersedes entries by `key`, routes
+  user-origin targets, rebuilds the index with batch embeddings, and moves
+  rejected drops to `inbox/rejected/`. A stale-tolerant run lock serializes
+  dream and process runs; `memory_write` and the MCP server now queue inbox
+  drops and answer with a flush hint instead of touching corpus files.
+
+- Every memory entry can carry a `source` annotation; usage visibility derives
+  from it (`team-*`, `gitlab`, and `spec-manage` entries are quotable in
+  team-facing artifacts, everything else is personal-only). Search responses
+  and bootstrap blocks expose the label, and the `auto-clean` directive gains
+  an optional `source=` filter for transient sources such as `stopit`.
+
+- The memomatic plugin bootstrap resolves session facts (directory, title,
+  first user message) from the OpenCode database and injects two bounded
+  recall blocks: project-matched episodic entries through the new
+  `settings.json` `projects` longest-prefix map, and trigger-phrase matches.
+
+- The shared `memomatic_inbox.py` helper (materialized into dropping skills)
+  mirrors durable events into the inbox with presence detection: people-journal
+  appends (`people-<profile>-<id>` keys, superseded on repeat), stopit handoff
+  distillates (keyed per workspace), task-triage per-issue decisions (keyed per
+  issue, superseded on re-triage), and task-prepare outcomes. docs, spec-manage
+  ADR, mattermost-triage digest, and team artifact workflows offer confirmed
+  drops through the same helper CLI.
+
 ## \[11.0.0] - 2026-09-26
 
 ### Added

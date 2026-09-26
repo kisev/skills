@@ -18,3 +18,22 @@ Identify the target reader and purpose in scope. Check claims, commands, APIs, c
 3. Check prerequisites, order of actions, effects of errors, compatibility, stale links, and terminological consistency.
 4. Report only confirmed findings. For each, state severity, precise evidence, consequence, and the minimal fix.
 5. If there are no findings, state that briefly and list unverified boundaries.
+
+## Memory integration
+
+Before reviewing, search personal memory (`memory_search` tool or
+`memomatic search`) for this project's documentation conventions; personal
+entries inform the review but must never be quoted into shared documents.
+
+After reporting the findings, offer one memory drop of the durable lesson
+(recurring documentation failure, convention drift) and run it after user
+confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source docs-review \
+  --project PROJECT --text "Durable documentation lesson in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged.

@@ -1,4 +1,5 @@
 import { forgetEntry, getEntry, openMemomatic, searchMemory, writeEntry } from "./service.js";
+import { visibilityForSource } from "./visibility.js";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -36,7 +37,7 @@ const TOOLS = [
   },
   {
     description:
-      "Save a memory entry. Use for standing decisions with rationale, discoveries, failed attempts with rejection reasons, session outcomes, and action-sensitive boundaries. Respect MEMORY_RULES.md; never-save topics are rejected.",
+      "Queue a memory entry for the next process/dream pass. Use for standing decisions with rationale, discoveries, failed attempts with rejection reasons, session outcomes, and action-sensitive boundaries. Respect MEMORY_RULES.md; never-save topics are rejected immediately.",
     inputSchema: {
       additionalProperties: false,
       properties: {
@@ -45,6 +46,10 @@ const TOOLS = [
         origin: { enum: ["user", "agent"], type: "string" },
         pinned: { type: "boolean" },
         project: { type: "string" },
+        source: {
+          description: "Originating skill or producer in kebab-case, e.g. team-retro",
+          type: "string",
+        },
         target: { enum: ["episodic", "curated", "user"], type: "string" },
         text: { type: "string" },
         trigger: { items: { type: "string" }, type: "array" },
@@ -83,6 +88,8 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
           line: hit.entry.line,
           score: Number(hit.score.toFixed(4)),
           snippet: hit.snippet,
+          source: hit.entry.source,
+          visibility: visibilityForSource(hit.entry.source),
         }));
       }
       case "memory_get": {
@@ -97,19 +104,30 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       }
       case "memory_write": {
         if (typeof args.text !== "string" || !args.text.trim()) throw new Error("text is required");
+        const source =
+          typeof args.source === "string" && args.source
+            ? args.source
+            : args.origin === "user"
+              ? "user"
+              : "agent";
         const file = await writeEntry(context, {
           importance: typeof args.importance === "number" ? args.importance : undefined,
           key: typeof args.key === "string" ? args.key : undefined,
           origin: args.origin === "user" ? "user" : "agent",
           pinned: args.pinned === true,
           project: typeof args.project === "string" ? args.project : undefined,
+          source,
           target: args.target === "curated" || args.target === "user" ? args.target : "episodic",
           text: args.text,
           trigger: Array.isArray(args.trigger)
             ? args.trigger.filter((item): item is string => typeof item === "string")
             : undefined,
         });
-        return { file: file.replace(`${context.paths.stateRoot}/`, ""), saved: true };
+        return {
+          file: file.replace(`${context.paths.stateRoot}/`, ""),
+          flushHint: "run `memomatic process` to index queued entries immediately",
+          queued: true,
+        };
       }
       case "memory_forget": {
         if (typeof args.file !== "string" || typeof args.line !== "number")

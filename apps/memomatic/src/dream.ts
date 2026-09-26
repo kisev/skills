@@ -1,5 +1,6 @@
 import { entryLine, parseEntryLine } from "./entries.js";
 import { appendDailyEntry, appendDreams, readTextIfExists, writeCorpusFile } from "./corpus.js";
+import { processInbox, type InboxReport } from "./inbox.js";
 import { promotionCandidates } from "./gates.js";
 import { extractJson, type ModelExecutor } from "./executor.js";
 import { loadRecentSessions, opencodeDatabasePath } from "./ingest.js";
@@ -9,6 +10,7 @@ import type { MemomaticContext } from "./service.js";
 import { archiveOldEpisodic } from "./service.js";
 
 export type DreamReport = {
+  inbox: InboxReport;
   sessionsIngested: number;
   candidatesExtracted: number;
   promoted: string[];
@@ -144,6 +146,16 @@ export async function runDream(
 ): Promise<DreamReport> {
   const dryRun = options.dryRun === true;
   const report: DreamReport = {
+    inbox: {
+      filesProcessed: 0,
+      filesRejected: 0,
+      entriesAppended: 0,
+      entriesSuperseded: 0,
+      entriesDuplicated: 0,
+      linesForbidden: 0,
+      linesInvalid: 0,
+      dryRun,
+    },
     sessionsIngested: 0,
     candidatesExtracted: 0,
     promoted: [],
@@ -155,6 +167,8 @@ export async function runDream(
     dryRun,
   };
   await reindex(context.paths, context.settings, context.store);
+
+  report.inbox = await processInbox(context, { dryRun });
 
   const ingestion = await ingestSessions(context, executor);
   report.sessionsIngested = ingestion.sessions;
@@ -209,6 +223,10 @@ export async function runDream(
   await reindex(context.paths, context.settings, context.store);
 
   const summary = [
+    `- inbox files processed: ${report.inbox.filesProcessed}`,
+    `- inbox entries appended: ${report.inbox.entriesAppended}`,
+    `- inbox entries superseded: ${report.inbox.entriesSuperseded}`,
+    `- inbox files rejected: ${report.inbox.filesRejected}`,
     `- sessions ingested: ${report.sessionsIngested}`,
     `- candidates extracted: ${report.candidatesExtracted}`,
     `- promoted: ${report.promoted.length}${report.promoted.length ? ` (${report.promoted.join(", ")})` : ""}`,

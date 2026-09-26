@@ -13,6 +13,11 @@ journal contain names, stable facts, agreements, and conversation summaries.
 - Journal: `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/journal/`,
   an append-only store of dated entries, private to the user (0600 files,
   0700 directories). Entries are content-addressed by their canonical digest;
+  each successful `journal-append` also mirrors a one-line distillate into the
+  memomatic memory inbox (`source: people-journal`, key
+  `people-<profile>-<id>`, superseded on repeat) when
+  `$XDG_STATE_HOME/memomatic/inbox/` exists; the mirror is advisory and never
+  fails the journal.
   nothing is ever rewritten. Resolutions are new entries that reference the
   original `id`.
 

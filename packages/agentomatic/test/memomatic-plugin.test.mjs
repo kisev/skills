@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -32,6 +32,24 @@ test("plugin exposes memory tools and injects system context", async () => {
     assert.equal(output.system.length, 1);
     assert.match(output.system[0], /Curated fact injected at session start/);
     assert.match(output.system[0], /memory_search/);
+
+    const queued = JSON.parse(
+      await hooks.tool.memory_write.execute({
+        source: "team-retro",
+        text: "Plugin queues skill-sourced memory drops.",
+      }),
+    );
+    const inboxFiles = readdirSync(join(root, "state", "memomatic", "inbox")).filter((name) =>
+      name.endsWith(".md"),
+    );
+    assert.equal(inboxFiles.length, 1);
+    assert.match(inboxFiles[0], /^team-retro-/);
+    assert.match(String(queued), /inbox/);
+
+    const noSession = { system: [] };
+    await hooks["experimental.chat.system.transform"]({ sessionID: "missing" }, noSession);
+    assert.equal(noSession.system.length, 1);
+
     const disabled = await memomatic({ enabled: false });
     assert.deepEqual(disabled, {});
   } finally {

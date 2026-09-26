@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 import { openMemomatic, rebuildIndex, searchMemory } from "./service.js";
 import { runDream } from "./dream.js";
+import { processInbox, withRunLock } from "./inbox.js";
 import { OpenCodeExecutor } from "./executor.js";
 import { handleMcpRequest } from "./mcp.js";
 
 const USAGE = `usage: memomatic <command> [args]
 
 commands:
+  process [--dry-run]      validate the inbox and move accepted entries into the corpus
   dream [--dry-run]        run the consolidation sweep (scheduled by memomatic-dream.timer)
   search <query>           search memory from the command line
   status                   report corpus and index status
@@ -37,16 +39,19 @@ async function main(): Promise<void> {
   }
   const context = await openMemomatic();
   try {
-    if (command === "dream") {
+    if (command === "dream" || command === "process") {
       const dryRun = rest.includes("--dry-run");
-      const executor = context.settings.dream.model
-        ? new OpenCodeExecutor({
-            model: context.settings.dream.model,
-            variant: context.settings.dream.variant,
-          })
-        : null;
-      const report = await runDream(context, executor, { dryRun });
-      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+      const result = await withRunLock(context.paths, async () => {
+        if (command === "process") return processInbox(context, { dryRun });
+        const executor = context.settings.dream.model
+          ? new OpenCodeExecutor({
+              model: context.settings.dream.model,
+              variant: context.settings.dream.variant,
+            })
+          : null;
+        return runDream(context, executor, { dryRun });
+      });
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return;
     }
     if (command === "search") {

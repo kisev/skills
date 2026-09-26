@@ -2,11 +2,12 @@ import { readFile } from "node:fs/promises";
 
 export type MemoryRules = {
   neverSave: string[];
-  autoClean: { olderThanDays: number; scope: "episodic" } | null;
+  autoClean: { olderThanDays: number; scope: "episodic"; source?: string } | null;
 };
 
 const NEVER_SAVE = /^-\s*never-save:\s*(.+?)\s*$/gim;
-const AUTO_CLEAN = /^-\s*auto-clean:\s*older-than=(\d+)d\s+scope=episodic\s*$/im;
+const AUTO_CLEAN =
+  /^-\s*auto-clean:\s*older-than=(\d+)d\s+scope=episodic(?:\s+source=([a-z0-9-]+))?\s*$/im;
 
 export const emptyRules = (): MemoryRules => ({ neverSave: [], autoClean: null });
 
@@ -20,7 +21,11 @@ export function parseRules(markdown: string): MemoryRules {
   if (autoClean) {
     const days = Number.parseInt(autoClean[1], 10);
     if (Number.isFinite(days) && days > 0)
-      rules.autoClean = { olderThanDays: days, scope: "episodic" };
+      rules.autoClean = {
+        olderThanDays: days,
+        scope: "episodic",
+        source: autoClean[2],
+      };
   }
   return rules;
 }

@@ -109,3 +109,23 @@ artifact path, and verification results.
 
 Read `references/interaction-contract.md` for evidence and mutation rules
 and `references/language-policy.md` for user-facing prose.
+
+## Memory integration
+
+When personal memory is available, search it before evidence collection with
+the `memory_search` tool (or `memomatic search`) for prior durable knowledge
+about this team or profile. Treat results as personal context: never quote
+entries marked personal-only into team-facing artifacts.
+
+After the artifact is verified, offer one memory drop of the durable outcome
+(decisions, process changes, recurring findings) and run it after user
+confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source team-roadmap \
+  --project PROJECT --text "Durable outcome in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged.

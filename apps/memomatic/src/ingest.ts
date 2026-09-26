@@ -18,6 +18,62 @@ export function opencodeDatabasePath(): string {
   return join(base, "opencode", "opencode.db");
 }
 
+export type SessionFacts = {
+  directory: string | null;
+  title: string | null;
+  firstMessage: string | null;
+};
+
+/**
+ * Resolve session context for the bootstrap block: working directory, title,
+ * and the first user message, read-only from the OpenCode database. Returns
+ * nulls when the session or database is unavailable.
+ */
+export function sessionFacts(databaseFile: string, sessionId: string): SessionFacts {
+  let db: DatabaseSync;
+  try {
+    db = new DatabaseSync(databaseFile, { readOnly: true });
+  } catch {
+    return { directory: null, title: null, firstMessage: null };
+  }
+  try {
+    const session = db
+      .prepare("SELECT directory, title FROM session WHERE id = ?;")
+      .get(sessionId) as { directory?: string; title?: string } | undefined;
+    let firstMessage: string | null = null;
+    const rows = db
+      .prepare(`SELECT data FROM message WHERE session_id = ? ORDER BY time_created ASC LIMIT 20;`)
+      .all(sessionId) as RawMessage[];
+    for (const row of rows) {
+      try {
+        const parsed = JSON.parse(row.data) as { role?: string; parts?: unknown[] };
+        if (parsed.role !== "user") continue;
+        const texts: string[] = [];
+        for (const part of parsed.parts ?? []) {
+          const value = part as { type?: string; text?: string };
+          if (value.type === "text" && typeof value.text === "string") texts.push(value.text);
+        }
+        const text = texts.join("\n").trim();
+        if (text) {
+          firstMessage = text;
+          break;
+        }
+      } catch {
+        continue;
+      }
+    }
+    return {
+      directory: session?.directory ?? null,
+      title: session?.title ?? null,
+      firstMessage,
+    };
+  } catch {
+    return { directory: null, title: null, firstMessage: null };
+  } finally {
+    db.close();
+  }
+}
+
 type RawMessage = { data: string };
 
 export function loadRecentSessions(

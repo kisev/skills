@@ -14,6 +14,9 @@ export type MemomaticPaths = {
   archiveDir: string;
   historyDir: string;
   indexFile: string;
+  inboxDir: string;
+  rejectedDir: string;
+  runLockFile: string;
 };
 
 function safeXdg(name: string, fallback: string): string {
@@ -54,6 +57,9 @@ export function memomaticPaths(): MemomaticPaths {
     archiveDir: join(stateRoot, "archive"),
     historyDir: join(stateRoot, "history"),
     indexFile: join(stateRoot, "index.sqlite"),
+    inboxDir: join(stateRoot, "inbox"),
+    rejectedDir: join(stateRoot, "inbox", "rejected"),
+    runLockFile: join(stateRoot, "run.lock"),
   };
 }
 

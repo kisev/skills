@@ -141,3 +141,18 @@ Operational stdout is one JSON object; diagnostics go to stderr. Exit code `0`
 means complete success, `1` means partial collection, `2` means invalid input or
 state, and `3` means authentication is required. Use `--capabilities` for the
 machine-readable command contract and `--help` for CLI help.
+
+## Memory integration
+
+After the digest and manual response commands are prepared, offer one memory
+drop of the durable triage outcome (recurring themes, attention items that
+will matter later) and run it after user confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source mattermost-triage \
+  --text "Durable triage outcome in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged. Never include message bodies or attachments in the drop.

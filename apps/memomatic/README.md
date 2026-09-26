@@ -19,18 +19,42 @@ The `@kisev/agentomatic` installer deploys the OpenCode plugin automatically;
 standalone use runs the CLI:
 
 ```bash
-memomatic dream --dry-run
+memomatic process    # validate the inbox and index accepted entries (no model)
+memomatic dream      # full sweep: inbox + sessions + consolidation
 ```
 
 The nightly sweep is scheduled by the systemd user units in `assets/systemd/`
 (`memomatic-dream.service` and `memomatic-dream.timer`).
 
+## Inbox
+
+All writes are asynchronous. Skills, agents, and the `memory_write` tool
+append Markdown entry lines to `$XDG_STATE_HOME/memomatic/inbox/`:
+
+```markdown
+- Durable outcome in one sentence. <!-- source: team-retro --> <!-- key: stable-id -->
+```
+
+The next `process` or `dream` pass validates drops, applies `never-save`
+rules, deduplicates exact texts, supersedes entries sharing a `key`, rebuilds
+the SQLite index with batch embeddings, and moves rejected drops to
+`inbox/rejected/`. Producers detect the inbox by presence and skip silently
+when memomatic is absent.
+
+Every entry can carry a `source` annotation. Visibility derives from it:
+`team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing
+artifacts; every other source (`people-journal`, `stopit`,
+`mattermost-triage`, `task-*`, `docs-*`, `user`) is personal-only. The label
+is exposed in search responses and session bootstrap blocks.
+
 ## Surfaces
 
-- `memomatic` CLI: corpus inspection and the `dream` sweep.
+- `memomatic` CLI: `process`, `dream`, `search`, `status`, `index`.
 - MCP stdio server with `memory_search`, `memory_get`, `memory_write`, and
   `memory_forget` tools.
-- The OpenCode plugin re-exported by `@kisev/agentomatic`.
+- The OpenCode plugin re-exported by `@kisev/agentomatic`; its bootstrap
+  injects curated memory plus project- and trigger-matched recall blocks
+  resolved from the session database (`projects` map in `settings.json`).
 
 Nothing is deleted without the explicit directives documented in
 `MEMORY_RULES.md`.

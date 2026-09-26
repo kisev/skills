@@ -33,18 +33,26 @@ Memomatic - персональная обучающая память по мот
 воротами и одной ограниченной модельной фазой, замещает устаревшие факты по
 ключу и сохраняет все предобразы.
 
-- Состояние: `$XDG_STATE_HOME/memomatic/` (корпус, индекс, история, архив).
+- Состояние: `$XDG_STATE_HOME/memomatic/` (корпус, индекс, история, архив) и
+  `$XDG_STATE_HOME/memomatic/inbox/`, куда скиллы и агенты кладут асинхронные
+  Markdown-дропы.
 - Настройки: `$XDG_CONFIG_HOME/memomatic/settings.json` (эндпоинт эмбеддера,
-  модель и вариант мышления для сновидений, пороги) и `MEMORY_RULES.md` с
-  ручными директивами: `- never-save: <тема>` и опциональная
-  `- auto-clean: older-than=90d scope=episodic`.
+  модель и вариант мышления для сновидений, пороги, маппинг `projects`
+  каталог→проект для напоминаний) и `MEMORY_RULES.md` с ручными директивами:
+  `- never-save: <тема>` и опциональная
+  `- auto-clean: older-than=90d scope=episodic [source=name]`.
 - Инструменты: `memory_search`, `memory_get`, `memory_write`, `memory_forget` -
   через плагин, MCP-сервер stdio (`memomatic mcp-serve`) и CLI
-  (`search`, `status`, `index`, `dream --dry-run`).
+  (`process`, `search`, `status`, `index`, `dream --dry-run`).
+  `memory_write` кладёт дроп в inbox и отвечает подсказкой flush; записи несут
+  аннотацию `source`, из которой выводится видимость (`team-*`, `gitlab` и
+  `spec-manage` цитируемы в командных артефактах, остальные personal-only);
+  метка видна в поиске и в bootstrap сессии, куда также попадают блоки
+  напоминаний по проекту и trigger-фразам из базы сессий.
 - Расписание: скопируйте `memomatic-dream.service` и `memomatic-dream.timer` из
   `assets/systemd/` пакета в `~/.config/systemd/user/` и выполните
   `systemctl --user enable --now memomatic-dream.timer`; альтернативный запуск -
-  командой `memomatic dream`.
+  командами `memomatic process` или `memomatic dream`.
 - Забывание явно или по правилу: ничего не удаляется без `memory_forget` или
   директивы `auto-clean`; закрепленные записи не затухают.
 

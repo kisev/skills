@@ -25,3 +25,19 @@ pause for confirmation before ordinary project-file edits.
 Report the resulting path, diff summary, verified sources, checks, and limitations.
 Do not modify `specs/`. If documentation reveals a specification mismatch,
 separately propose `spec-manage` audit or update; never combine workflows.
+
+## Memory integration
+
+After the document is written and verified, offer one memory drop of the
+durable documentation convention observed in this repository (audience,
+locale, Diataxis layout, verified check commands) and run it after user
+confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source docs-prepare \
+  --project PROJECT --text "Documentation convention in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged.

@@ -7,7 +7,11 @@ export type EntryAnnotations = {
   importance?: number;
   trigger?: string[];
   pinned?: boolean;
+  source?: string;
+  target?: "episodic" | "curated" | "user";
 };
+
+const SOURCE_PATTERN = /^[a-z][a-z0-9-]{0,63}$/;
 
 export type CorpusEntry = {
   file: string;
@@ -30,10 +34,16 @@ export function parseEntryLine(
     const name = match[1];
     const raw = match[2];
     let consumed = true;
-    if (name === "key" || name === "project" || name === "observed") {
+    if (name === "key" || name === "project" || name === "observed" || name === "source") {
       if (name === "observed") annotations.observed = raw;
       else if (name === "project") annotations.project = raw;
-      else annotations.key = raw;
+      else if (name === "source") {
+        if (SOURCE_PATTERN.test(raw)) annotations.source = raw;
+        else consumed = false;
+      } else annotations.key = raw;
+    } else if (name === "target") {
+      if (raw === "episodic" || raw === "curated" || raw === "user") annotations.target = raw;
+      else consumed = false;
     } else if (name === "status") {
       if (raw === "active" || raw === "superseded") annotations.status = raw;
       else consumed = false;
@@ -60,7 +70,10 @@ export function parseEntryLine(
   return { text: value, annotations };
 }
 
-export function serializeAnnotations(annotations: EntryAnnotations): string {
+export function serializeAnnotations(
+  annotations: EntryAnnotations,
+  options: { dropTarget?: boolean } = {},
+): string {
   const parts: string[] = [];
   if (annotations.key) parts.push(`key: ${annotations.key}`);
   if (annotations.status) parts.push(`status: ${annotations.status}`);
@@ -70,11 +83,17 @@ export function serializeAnnotations(annotations: EntryAnnotations): string {
   if (annotations.importance !== undefined) parts.push(`importance: ${annotations.importance}`);
   if (annotations.trigger?.length) parts.push(`trigger: ${annotations.trigger.join("; ")}`);
   if (annotations.pinned) parts.push("pinned: true");
+  if (annotations.source) parts.push(`source: ${annotations.source}`);
+  if (!options.dropTarget && annotations.target) parts.push(`target: ${annotations.target}`);
   return parts.map((part) => `<!-- ${part} -->`).join(" ");
 }
 
-export function entryLine(text: string, annotations: EntryAnnotations): string {
-  const suffix = serializeAnnotations(annotations);
+export function entryLine(
+  text: string,
+  annotations: EntryAnnotations,
+  options: { dropTarget?: boolean } = {},
+): string {
+  const suffix = serializeAnnotations(annotations, options);
   return `- ${text}${suffix ? ` ${suffix}` : ""}`;
 }
 

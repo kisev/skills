@@ -19,6 +19,7 @@ export type IndexedEntry = {
   origin: "user" | "agent" | null;
   observedAt: number | null;
   status: "active" | null;
+  source: string | null;
 };
 
 export type VectorRow = { stableId: string; dim: number; data: Float32Array };
@@ -71,7 +72,16 @@ export class MemoryStore {
     this.db = new DatabaseSync(indexFile);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec(SCHEMA);
+    this.migrate();
     this.fts = this.ensureFts();
+  }
+
+  private migrate(): void {
+    const columns = this.db.prepare("PRAGMA table_info(entries);").all() as Array<{
+      name: string;
+    }>;
+    if (!columns.some((column) => column.name === "source"))
+      this.db.exec("ALTER TABLE entries ADD COLUMN source TEXT;");
   }
 
   static async open(indexFile: string): Promise<MemoryStore> {
@@ -105,8 +115,8 @@ export class MemoryStore {
         seen.add(entry.stableId);
         this.db
           .prepare(
-            `INSERT INTO entries (stable_id, file, line, kind, key, text, trigger_phrases, importance, pinned, project, origin, observed_at, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO entries (stable_id, file, line, kind, key, text, trigger_phrases, importance, pinned, project, origin, observed_at, status, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             entry.stableId,
@@ -122,6 +132,7 @@ export class MemoryStore {
             entry.origin,
             entry.observedAt,
             entry.status,
+            entry.source ?? null,
           );
         if (this.fts)
           this.db
@@ -140,7 +151,7 @@ export class MemoryStore {
   allEntries(): IndexedEntry[] {
     return this.db
       .prepare(
-        "SELECT stable_id, file, line, kind, key, text, trigger_phrases, importance, pinned, project, origin, observed_at, status FROM entries ORDER BY observed_at ASC",
+        "SELECT stable_id, file, line, kind, key, text, trigger_phrases, importance, pinned, project, origin, observed_at, status, source FROM entries ORDER BY observed_at ASC",
       )
       .all()
       .map((row) => {
@@ -159,6 +170,7 @@ export class MemoryStore {
           origin: (value.origin as "user" | "agent" | null) ?? null,
           observedAt: (value.observed_at as number | null) ?? null,
           status: (value.status as "active" | null) ?? null,
+          source: (value.source as string | null) ?? null,
         };
       });
   }

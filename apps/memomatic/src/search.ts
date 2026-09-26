@@ -14,7 +14,7 @@ export type SearchHit = {
   snippet: string;
 };
 
-async function corpusFiles(paths: MemomaticPaths): Promise<string[]> {
+export async function corpusFiles(paths: MemomaticPaths): Promise<string[]> {
   const files: string[] = [];
   for (const name of ["MEMORY.md", "USER.md"]) {
     const file = join(paths.stateRoot, name);
@@ -56,6 +56,7 @@ export async function reindex(
         origin: entry.annotations.origin ?? null,
         observedAt: Number.isNaN(entryObservedAt(entry)) ? null : entryObservedAt(entry),
         status: entry.annotations.status === "active" ? "active" : null,
+        source: entry.annotations.source ?? null,
       });
     }
   }

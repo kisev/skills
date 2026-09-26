@@ -1,10 +1,21 @@
 import { entryLine } from "./entries.js";
-import { appendDailyEntry, archiveFile, readTextIfExists, replaceEntryLine } from "./corpus.js";
+import { archiveFile, readTextIfExists, replaceEntryLine } from "./corpus.js";
+import { dropToInbox } from "./inbox.js";
 import { isForbidden, loadRules, type MemoryRules } from "./rules.js";
 import { memomaticPaths, type MemomaticPaths } from "./paths.js";
 import { loadSettings, type MemomaticSettings } from "./settings.js";
 import { reindex, search, type SearchHit } from "./search.js";
 import { MemoryStore } from "./store.js";
+import { stat } from "node:fs/promises";
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export type WriteRequest = {
   text: string;
@@ -15,6 +26,7 @@ export type WriteRequest = {
   origin?: "user" | "agent";
   target?: "episodic" | "curated" | "user";
   pinned?: boolean;
+  source?: string;
 };
 
 export type MemomaticContext = {
@@ -43,27 +55,19 @@ export async function writeEntry(
   if (isForbidden(text, context.rules))
     throw new Error("memory text matches a never-save rule in MEMORY_RULES.md");
   const origin = request.origin ?? "agent";
-  const observed = new Date().toISOString().slice(0, 10);
   const line = entryLine(text, {
     key: request.key,
     status: origin === "user" && request.target === "user" ? "active" : undefined,
     origin,
-    observed,
+    observed: new Date().toISOString().slice(0, 10),
     project: request.project,
     importance: request.importance,
     trigger: request.trigger,
     pinned: request.pinned,
+    source: request.source ?? origin,
+    target: request.target,
   });
-  if (request.target === "curated" || request.target === "user") {
-    if (origin !== "user") throw new Error("curated and user entries require origin=user");
-    const file = request.target === "user" ? context.paths.userFile : context.paths.memoryFile;
-    const current = (await readTextIfExists(file)) ?? "";
-    const next = `${current.trimEnd()}\n${line}\n`;
-    const { writeCorpusFile } = await import("./corpus.js");
-    await writeCorpusFile(context.paths, file, next);
-    return file;
-  }
-  return appendDailyEntry(context.paths, line);
+  return dropToInbox(context.paths, [line], request.source ?? origin);
 }
 
 export async function searchMemory(context: MemomaticContext, query: string): Promise<SearchHit[]> {
@@ -117,10 +121,13 @@ export async function forgetEntry(
 export async function archiveOldEpisodic(context: MemomaticContext): Promise<string[]> {
   const archived: string[] = [];
   if (!context.rules.autoClean) return archived;
-  const cutoff = Date.now() - context.rules.autoClean.olderThanDays * 86_400_000;
+  const rule = context.rules.autoClean;
+  const cutoff = Date.now() - rule.olderThanDays * 86_400_000;
   for (const entry of context.store.allEntries()) {
     if (entry.kind !== "episodic" || !entry.observedAt || entry.observedAt >= cutoff) continue;
+    if (rule.source && entry.source !== rule.source) continue;
     if (entry.pinned) continue;
+    if (!(await exists(entry.file))) continue;
     const alreadyDone = archived.includes(entry.file);
     if (!alreadyDone) {
       await archiveFile(context.paths, entry.file);

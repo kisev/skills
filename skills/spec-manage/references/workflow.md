@@ -127,3 +127,23 @@ focused audit requires one only when the user explicitly requests it. Critic
 unavailability makes a required audit partial but does not discard confirmed
 findings. Do not create reports, ADRs, temporary artifacts, or audit state, and
 do not offer to apply fixes automatically.
+
+## Memory integration
+
+Before `spec-audit` or `spec-onboard`, search personal memory (`memory_search`
+tool or `memomatic search`) for prior decisions about this project; entries
+marked personal-only inform the analysis but must never be quoted into
+shared `specs/` documents.
+
+After `spec-update` lands an architecture decision record, offer one memory
+drop of the decision and run it after user confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source spec-manage \
+  --project PROJECT --key spec-PROJECT-ADR-ID \
+  --text "Decision: what was accepted and why, in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged.

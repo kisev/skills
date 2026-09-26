@@ -31,17 +31,25 @@ nightly dream sweep that ingests session transcripts, promotes repeatedly useful
 entries through deterministic gates and one bounded model turn, supersedes
 outdated facts by key, and archives every pre-image.
 
-- State: `$XDG_STATE_HOME/memomatic/` (corpus, index, history, archive).
+- State: `$XDG_STATE_HOME/memomatic/` (corpus, index, history, archive) and
+  `$XDG_STATE_HOME/memomatic/inbox/` where skills and agents queue asynchronous
+  Markdown drops.
 - Config: `$XDG_CONFIG_HOME/memomatic/settings.json` (embedding endpoint, dream
-  model and variant, thresholds) and `MEMORY_RULES.md` with manual directives:
-  `- never-save: <topic>` and opt-in `- auto-clean: older-than=90d scope=episodic`.
+  model and variant, thresholds, `projects` cwd-to-project map for recall) and
+  `MEMORY_RULES.md` with manual directives: `- never-save: <topic>` and opt-in
+  `- auto-clean: older-than=90d scope=episodic [source=name]`.
 - Tools: `memory_search`, `memory_get`, `memory_write`, `memory_forget`, exposed
   by the plugin, by the MCP stdio server (`memomatic mcp-serve`),
-  and by the CLI (`search`, `status`, `index`, `dream --dry-run`).
+  and by the CLI (`process`, `search`, `status`, `index`, `dream --dry-run`).
+  `memory_write` queues an inbox drop and answers with a flush hint; entries
+  carry a `source` annotation whose derived visibility (`team-*`, `gitlab`,
+  `spec-manage` are quotable in team artifacts, the rest personal-only) is
+  exposed in search results and the session bootstrap, which also injects
+  project- and trigger-matched recall blocks from the session database.
 - Scheduling: copy `memomatic-dream.service` and `memomatic-dream.timer` from the
   package `assets/systemd/` into `~/.config/systemd/user/` and run
   `systemctl --user enable --now memomatic-dream.timer`; run the sweep another
-  way by invoking `memomatic dream` yourself.
+  way by invoking `memomatic process` or `memomatic dream` yourself.
 - Forgetting is explicit or rule-gated: nothing is deleted without
   `memory_forget` or an `auto-clean` directive; pinned entries never decay.
 
