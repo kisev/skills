@@ -16,8 +16,8 @@ make that boundary explicit.
 - [Manage portable skills](how-to/portable-skills.md) - install by scope or host,
   update, rebind an older source, clean up retired names, and troubleshoot.
 - [Install and manage skills-opencode](how-to/opencode-integration.md) - install
-  the package, select assets, activate the plugin, update, reconcile, diagnose,
-  configure agents, and uninstall safely.
+  the package, select assets, activate the plugin, configure user configs,
+  update, reconcile, diagnose, configure agents, and uninstall safely.
 - [Contribute to the repository](../CONTRIBUTING.md) - change authored sources and
   run the required checks.
 

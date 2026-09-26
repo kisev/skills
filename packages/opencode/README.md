@@ -12,6 +12,9 @@ update, and removal lifecycle.
 - Six fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`, and
   `critic`.
 - Capability routing plus direct CLI diagnostics, reconciliation, and profiles.
+- A confirmed `config` command that connects the package and recommended
+  fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
+  `mimocode.json(c)` while preserving existing entries and comments.
 - Optional plugin wrappers: `rules-injector` and `zed-bell`; the `rtk`
   compression wrapper is deployed by default and observable through
   `/rtk-stats` and `doctor`.
@@ -36,8 +39,13 @@ npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 Run the exact confirmation command printed by the preview. If the selected
-assets need core integration, add the package to the user-owned OpenCode
-configuration while preserving existing entries:
+assets need core integration, connect the package into the user-owned OpenCode
+configuration yourself or through the confirmed `config` command, which merges
+the `plugin` entry while preserving existing entries:
+
+```shell
+npx --yes @kisev/skills-opencode@latest config --global --dry-run
+```
 
 ```json
 {
@@ -46,8 +54,10 @@ configuration while preserving existing entries:
 }
 ```
 
-Restart OpenCode after activation or asset changes. The installer does not edit
-`opencode.json` and command adapter selections do not install portable skills.
+Restart OpenCode after activation or asset changes. The `install` and
+`uninstall` commands never edit `opencode.json`; `config` is the only confirmed
+path for configuration fragments, and command adapter selections do not install
+portable skills.
 
 ## Documentation
 
@@ -58,5 +68,5 @@ The canonical documentation lives in `docs/`, not in the package source:
 - [Documentation index](https://github.com/kisev/skills/blob/main/docs/README.md)
 
 The complete guide covers global installation, asset selection, confirmation,
-activation, `doctor`, update, `reconcile`, agent profiles, ownership, and
-uninstall.
+activation, `config` fragments, `doctor`, update, `reconcile`, agent profiles,
+ownership, and uninstall.

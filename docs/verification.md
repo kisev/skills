@@ -36,10 +36,15 @@ global integration persists in the npm project at `~/.config/opencode`.
 
 Scope-aware direct commands default to the current directory and accept one
 `--global` flag for global state; `--scope` is unsupported. The installer
-requires preview/confirmation. It writes only selected managed assets after confirmation and never creates or edits
-`opencode.json`; the core `plugin` entry remains user-owned. Update is an exact
-npm install followed by install preview, exact confirmation, and OpenCode
-restart.
+requires preview/confirmation. It writes only selected managed assets after
+confirmation and never creates or edits `opencode.json`. The separate `config`
+command is the confirmed path for user configuration: it merges selected
+fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
+`mimocode.json(c)` behind a preview/confirmation receipt, preserving existing
+entries, comments, and unrelated keys, adding only absent keys, and widening
+scalar permission maps while keeping the scalar as the `"*"` entry. Update is
+an exact npm install followed by install preview, exact confirmation, and
+OpenCode restart.
 
 Uninstall order is asset preview and confirmation, user-owned plugin-entry
 removal, `npm uninstall` in the owning project, then restart. Reconcile and

@@ -13,6 +13,7 @@ import {
   type AgentProfileRequest,
 } from "./agent-profiles.js";
 import {
+  renderConfigSetup,
   renderDoctor,
   renderInventory,
   renderPlan,
@@ -23,6 +24,17 @@ import {
 } from "./cli-output.js";
 import { collectDoctorFacts, doctorExitCode } from "./doctor.js";
 import { CATALOG } from "./catalog.js";
+import {
+  applyConfigSetup,
+  CONFIG_FRAGMENTS,
+  CONFIG_TARGETS,
+  defaultConfigSelection,
+  normalizeConfigSelection,
+  previewConfigSetup,
+  type ConfigSetupSelection,
+  type ConfigTargetName,
+  type FragmentName,
+} from "./config-setup.js";
 import {
   apply,
   defaultSelection,
@@ -52,6 +64,8 @@ type Options = {
   commands?: string[];
   agents?: string[];
   plugins?: string[];
+  configTargets?: string[];
+  configFragments?: string[];
   selectionFlag: boolean;
 };
 
@@ -119,6 +133,23 @@ function parseOptions(values: string[]): Options {
       } else {
         options[target] = names;
       }
+    } else if (value === "--targets" || value === "--fragments") {
+      const raw = values[++index];
+      if (!raw)
+        throw new InstallerError(
+          "invalid_input",
+          `${value} requires a comma-separated value or none`,
+        );
+      const names =
+        raw === "none"
+          ? []
+          : raw
+              .split(",")
+              .map((item) => item.trim())
+              .filter(Boolean);
+      options.selectionFlag = true;
+      if (value === "--targets") options.configTargets = names;
+      else options.configFragments = names;
     } else {
       throw new InstallerError("invalid_input", `Unknown argument: ${value}`);
     }
@@ -149,6 +180,7 @@ function rootHelp(): string {
         "uninstall",
         "Archive and remove exact-owned assets while preserving conflicts and user files.",
       ],
+      ["config", "Connect the package and recommended fragments into user configuration files."],
       ["doctor", "Inspect versions, ownership, drift, config, archives, tools, and LSP."],
       ["capabilities", "Print the versioned commands, agents, plugins, and tools catalog as JSON."],
       ["reconcile", "Classify current and retired assets; archive exact-owned retired entries."],
@@ -176,8 +208,11 @@ function rootHelp(): string {
       ["--skill-commands <list|none>", "Select adapters for installed portable skills."],
       ["--agents <list|none>", "Select fixed agents."],
       ["--plugins <list|none>", "Select optional plugin wrappers; rtk is the default."],
+      ["--targets <list|none>", "Select config targets for the config command."],
+      ["--fragments <list|none>", "Select config fragments for the config command."],
     ]),
-    "  Lists are comma-separated. Outside a TTY, provide command selection, --agents, and --plugins.",
+    "  Lists are comma-separated. Outside a TTY, provide command selection, --agents, and --plugins;",
+    "  the config command requires --targets and --fragments.",
     "",
     "Agent model options:",
     ...helpRows([
@@ -193,7 +228,8 @@ function rootHelp(): string {
     "  2. Review the target, operations, conflicts, restart requirement, and expiry.",
     "  3. Run the exact Apply command printed by the preview before it expires.",
     "  4. Restart OpenCode when the applied plan requires it.",
-    "  The installer never edits opencode.json or installs portable skills.",
+    "  install and uninstall never edit opencode.json; the config command is the",
+    "  confirmed path for configuration fragments. No command installs portable skills.",
     "",
     "Scope behavior:",
     ...helpRows([
@@ -304,7 +340,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Without selection flags, a TTY opens command, agent, and plugin selectors.",
         "Use Up/Down to move, Space to toggle, A/N for all/none, and Enter to confirm.",
         "Outside a TTY, provide command selection, --agents, and --plugins.",
-        "Writes occur only after confirmation; the installer never edits opencode.json.",
+        "Writes occur only after confirmation; install never edits opencode.json.",
         "Portable skills are installed separately; restart OpenCode after asset changes.",
       ],
       [
@@ -317,6 +353,46 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
           "manager,architect,mapper,worker,review,critic",
           "--plugins",
           "none",
+          "--dry-run",
+        ]),
+      ],
+    );
+  if (domain === "config")
+    return commandHelp(
+      "config",
+      "Connect the package and recommended fragments into user configuration files.",
+      [
+        "skills-opencode config [--global] --dry-run [selection options]",
+        "skills-opencode config [--global] --confirm <digest> [selection options]",
+      ],
+      [
+        ["--global", "Use global scope; project scope is the default."],
+        ["--dry-run", "Preview config operations and issue a one-time confirmation digest."],
+        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--targets <list|none>", `Select targets: ${CONFIG_TARGETS.join(", ")}.`],
+        [
+          "--fragments <list|none>",
+          `Select fragments: ${CONFIG_FRAGMENTS.map((item) => item.name).join(", ")}.`,
+        ],
+        ["--json", "Emit stable machine-readable output."],
+        ["--help", "Show this command help and exit."],
+      ],
+      [
+        "In a TTY, target and fragment selectors open when flags are omitted.",
+        "Global scope edits opencode.json(c), tui.json, kilo.json(c), and mimocode.json(c).",
+        "Project scope edits the project opencode.json(c) file only.",
+        "Existing entries, comments, and unrelated keys are preserved; only absent keys are added.",
+        "Writes occur only after the exact confirmation; conflicting fragments are skipped as findings.",
+      ],
+      [
+        shellCommand(["config", "--global", "--dry-run"]),
+        shellCommand([
+          "config",
+          "--global",
+          "--targets",
+          "opencode",
+          "--fragments",
+          "core-plugin,skills-state-permissions",
           "--dry-run",
         ]),
       ],
@@ -676,6 +752,68 @@ function installerSelection(options: Options): Partial<InstallerSelection> {
     commands: options.commands,
     agents: options.agents as InstallerSelection["agents"] | undefined,
     plugins: options.plugins as InstallerSelection["plugins"] | undefined,
+  });
+}
+
+function configSelectionFromOptions(options: Options): Partial<ConfigSetupSelection> {
+  return {
+    targets: options.configTargets as ConfigTargetName[] | undefined,
+    fragments: options.configFragments as FragmentName[] | undefined,
+  };
+}
+
+function configSelectionArguments(selection: ConfigSetupSelection): string[] {
+  return [
+    "--targets",
+    selection.targets.join(",") || "none",
+    "--fragments",
+    selection.fragments.join(",") || "none",
+  ];
+}
+
+async function interactiveConfigSelection(options: Options): Promise<ConfigSetupSelection> {
+  if (!process.stdin.isTTY || !process.stderr.isTTY)
+    throw new InstallerError(
+      "terminal_required",
+      "config requires --targets and --fragments outside a terminal",
+    );
+  process.stderr.write(
+    [
+      "This command edits user-owned configuration files after an exact confirmation.",
+      "Global scope targets opencode.json(c), tui.json, kilo.json(c), and mimocode.json(c).",
+      "Existing entries, comments, and unrelated keys are preserved.",
+      "\n",
+    ].join("\n"),
+  );
+  const defaults = await defaultConfigSelection(options.scope!);
+  const availableTargets = options.scope === "project" ? (["opencode"] as const) : CONFIG_TARGETS;
+  const targets = await selectOptions(
+    "Config targets",
+    [...availableTargets],
+    defaults.targets.filter((target) => (availableTargets as readonly string[]).includes(target)),
+    process.stdin,
+    process.stderr,
+  );
+  if (targets === null) throw new InstallerError("cancelled", "Wizard cancelled");
+  const availableFragments = CONFIG_FRAGMENTS.filter((fragment) =>
+    fragment.targets.some((target) => (targets as string[]).includes(target)),
+  ).map((fragment) => fragment.name);
+  if (!availableFragments.length)
+    return normalizeConfigSelection(options.scope!, {
+      targets: targets as ConfigTargetName[],
+      fragments: [],
+    });
+  const fragments = await selectOptions(
+    "Config fragments",
+    availableFragments,
+    defaults.fragments.filter((fragment) => availableFragments.includes(fragment)),
+    process.stdin,
+    process.stderr,
+  );
+  if (fragments === null) throw new InstallerError("cancelled", "Wizard cancelled");
+  return normalizeConfigSelection(options.scope!, {
+    targets: targets as ConfigTargetName[],
+    fragments: fragments as FragmentName[],
   });
 }
 
@@ -1094,7 +1232,17 @@ async function run(arguments_: string[]): Promise<void> {
         process.stdout.write(
           `${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan }, null, 2)}\n`,
         );
-      else process.stdout.write(renderPlan(plan, { applied: true }));
+      else
+        process.stdout.write(
+          renderPlan(plan, {
+            applied: true,
+            ...(action === "install"
+              ? {
+                  hint: `Connect the package into user configs: ${shellCommand(["config", ...scopeArguments(options.scope), "--dry-run"])}`,
+                }
+              : {}),
+          }),
+        );
     }
     return;
   }
@@ -1221,9 +1369,78 @@ async function run(arguments_: string[]): Promise<void> {
     }
     return;
   }
+  if (domain === "config") {
+    if (operation?.startsWith("--") || operation === undefined)
+      rest.unshift(...(operation ? [operation] : []));
+    else throw new InstallerError("invalid_input", `Unexpected argument: ${operation}`);
+    const options = parseOptions(rest);
+    if (
+      options.name ||
+      options.provider ||
+      options.model ||
+      options.variant !== undefined ||
+      options.commands !== undefined ||
+      options.agents !== undefined ||
+      options.plugins !== undefined
+    )
+      throw new InstallerError(
+        "invalid_input",
+        "config accepts only --global, --targets, --fragments, --dry-run, --confirm, and --json",
+      );
+    if (
+      options.selectionFlag &&
+      (options.configTargets === undefined || options.configFragments === undefined)
+    )
+      throw new InstallerError(
+        "invalid_input",
+        "Non-TTY config requires both --targets and --fragments",
+      );
+    const selection = options.selectionFlag
+      ? normalizeConfigSelection(options.scope!, configSelectionFromOptions(options))
+      : await interactiveConfigSelection(options);
+    requireConfirmationMode(options);
+    if (options.dryRun) {
+      const plan = await previewConfigSetup(selection, options.scope!);
+      if (options.json)
+        process.stdout.write(
+          `${JSON.stringify({ status: "ok", applied: false, plan }, null, 2)}\n`,
+        );
+      else
+        process.stdout.write(
+          renderConfigSetup(plan, {
+            applied: false,
+            ...(plan.confirmable
+              ? {
+                  confirmationCommand: shellCommand([
+                    "config",
+                    ...scopeArguments(options.scope),
+                    ...configSelectionArguments(plan.selection),
+                    "--confirm",
+                    plan.confirmation_digest ?? plan.digest,
+                  ]),
+                }
+              : {}),
+          }),
+        );
+    } else {
+      const plan = await applyConfigSetup(selection, options.scope!, options.confirm!);
+      if (options.json)
+        process.stdout.write(
+          `${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan }, null, 2)}\n`,
+        );
+      else
+        process.stdout.write(
+          renderConfigSetup(plan, {
+            applied: true,
+            hint: `Restart OpenCode, Kilo Code, and MiMo Code when their configs changed.`,
+          }),
+        );
+    }
+    return;
+  }
   throw new InstallerError(
     "invalid_input",
-    "Use install, uninstall, doctor, capabilities, reconcile, agent list|configure|model-set|reconcile, or critic add|remove",
+    "Use install, uninstall, doctor, capabilities, reconcile, config, agent list|configure|model-set|reconcile, or critic add|remove",
   );
 }
 

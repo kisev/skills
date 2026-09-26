@@ -126,9 +126,10 @@ estimated token savings, and the statistics timestamp.
 
 ## Activate the Core Plugin
 
-The installer records whether the selection needs core integration, but never
-creates or edits `opencode.json`. Add the package to the user-owned `plugin`
-array for the same scope while preserving existing entries:
+The installer records whether the selection needs core integration, but
+`install` and `uninstall` never create or edit `opencode.json`. Connect the
+package with the confirmed `config` command, or add it to the user-owned
+`plugin` array for the same scope manually while preserving existing entries:
 
 ```json
 {
@@ -140,6 +141,42 @@ array for the same scope while preserving existing entries:
 For project scope, keep the package in project `node_modules` and configuration
 in the project. For global scope, keep the npm project and user configuration
 under `~/.config/opencode`. Restart OpenCode after activation or asset changes.
+
+## Configure User Configs
+
+The `config` command connects the package and recommended fragments into
+user-owned configuration files:
+
+```shell
+npx --yes @kisev/skills-opencode@latest config --global --dry-run
+npx --yes @kisev/skills-opencode@latest config --dry-run
+```
+
+In a TTY, target and fragment selectors open when flags are omitted. Global
+scope targets `~/.config/opencode/opencode.json(c)` and `tui.json`,
+`~/.config/kilo/kilo.json(c)`, and `~/.config/mimocode/mimocode.json(c)`;
+project scope targets the project `opencode.json(c)` file only. Outside a TTY,
+pass `--targets` and `--fragments` explicitly.
+
+Selectable fragments:
+
+| Fragment | Targets | Effect |
+| - | - | - |
+| `core-plugin` | opencode | Adds `$schema` and registers `@kisev/skills-opencode` in `plugin` |
+| `skills-state-permissions` | opencode, kilo, mimo | Allows `~/.local/state/agent-skills/**` (plus `~/.config/opencode/skills/**` for OpenCode) in `permission.read`, `permission.edit`, and `permission.external_directory` so the standard skills state paths stop prompting |
+| `lsp-preset` | opencode | Adds LSP servers from the shared catalog with standard commands |
+| `secrets-guard` | opencode, kilo, mimo | Denies reads and edits of common secret files (`.env*`, keys, credentials) |
+| `kilo-display` | kilo | Expands reasoning, terminal, edit, and tool blocks |
+| `tui-schema` | tui | Adds the `tui.json` schema and stacked diffs |
+
+The merge never overwrites user data: existing keys, comments, and unrelated
+entries are preserved; only absent keys are added; a scalar permission map such
+as `"external_directory": "ask"` is widened to a map that keeps the scalar as
+the `"*"` entry. Fragments that cannot merge cleanly are reported as conflicts
+and skipped without blocking the rest of the plan. Like every mutation, `config`
+requires `--dry-run` preview, the exact confirmation command, and a restart of
+the affected tool afterwards. A successful `install` apply prints the matching
+`config` dry-run as its next step.
 
 ## Preview and Confirm
 
@@ -156,10 +193,10 @@ npx --yes @kisev/skills-opencode@latest install --dry-run
 ```
 
 The mandatory OpenCode flow is: persistent npm install, `install --dry-run`, the
-exact confirmation command printed by that preview, add the package to the
-user-owned `plugin` entry, and restart OpenCode. The persistent npm project at
-`~/.config/opencode` keeps the global plugin resolvable. Scope-aware commands
-target the current directory by default. Add `--global` once
+exact confirmation command printed by that preview, the confirmed `config`
+command (or a manual plugin entry), and restart OpenCode. The persistent npm
+project at `~/.config/opencode` keeps the global plugin resolvable. Scope-aware
+commands target the current directory by default. Add `--global` once
 to target global state from any directory. The removed `--scope` option is not
 accepted. Install or upgrade the package and
 apply its installer plan before every reconcile.
@@ -274,6 +311,8 @@ retained profile configuration. It does not remove portable skills or edit
   authoritative and must be installed separately.
 - The only package tool is `route`; it has no slash command. Administrative
   operations use the direct `skills-opencode` CLI.
+- `install` and `uninstall` never edit `opencode.json`; the `config` command is
+  the only confirmed path for configuration fragments.
 - Global scope is cwd-independent; project scope targets `.opencode` under the
   current directory.
 - The installer owns only files proved by manifests and exact hashes.

@@ -1,5 +1,6 @@
 import type { AgentInventory, AgentProfilePlan } from "./agent-profiles.js";
 import { CATALOG } from "./catalog.js";
+import type { ConfigSetupPlan } from "./config-setup.js";
 import type { Plan as InstallerPlan } from "./installer.js";
 import type { ReconcilePlan } from "./reconcile.js";
 import type { DoctorReport } from "./doctor.js";
@@ -105,7 +106,7 @@ function migrationSummary(operations: readonly DisplayOperation[]): string | und
 
 export function renderPlan(
   plan: DisplayPlan,
-  options: { applied: boolean; confirmationCommand?: string },
+  options: { applied: boolean; confirmationCommand?: string; hint?: string },
 ): string {
   const version =
     "package_version" in plan ? ` @kisev/skills-opencode ${plan.package_version}` : "";
@@ -154,6 +155,76 @@ export function renderPlan(
     }
     if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
   }
+  if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
+  return `${lines.join("\n")}\n`;
+}
+
+export function renderConfigSetup(
+  plan: ConfigSetupPlan,
+  options: { applied: boolean; confirmationCommand?: string; hint?: string },
+): string {
+  const lines = [
+    `Config setup @kisev/skills-opencode ${plan.package_version} (${plan.scope})`,
+    `Root: ${terminalSafe(plan.root)}`,
+    "",
+  ];
+  if (plan.targets.length)
+    lines.push(
+      "Targets:",
+      ...plan.targets.map(
+        (item) =>
+          `  ${item.target}: ${terminalSafe(item.path)} (${item.exists ? "existing" : "new"})`,
+      ),
+    );
+  else lines.push("Targets: none");
+  const fragments = plan.operations.filter((item) => item.fragment !== "file");
+  if (fragments.length) {
+    lines.push(
+      "",
+      options.applied ? "Applied fragments:" : "Planned fragments:",
+      ...fragments.map(
+        (item) =>
+          `  ${item.target}/${item.fragment}: ${item.operation}${item.reason ? ` (${terminalSafe(item.reason)})` : ""}`,
+      ),
+    );
+  }
+  if (plan.skipped_fragments.length)
+    lines.push(
+      "",
+      "Skipped fragments:",
+      ...plan.skipped_fragments.map((item) => `  ${item.fragment}: ${terminalSafe(item.reason)}`),
+    );
+  const conflicts = plan.operations.filter((item) => item.operation === "conflict");
+  lines.push("", `Conflicts: ${conflicts.length || "none"}`);
+  lines.push(
+    options.applied
+      ? `Restart required: ${plan.requires_restart ? "yes" : "no"}`
+      : `Restart after apply: ${plan.requires_restart ? "yes" : "no"}`,
+  );
+  if (!options.applied) {
+    if (!plan.confirmable) {
+      lines.push("", "No configuration changes are required.");
+    } else {
+      if (plan.superseded_plan)
+        lines.push(
+          "",
+          "Superseded plan:",
+          `  kind: ${terminalSafe(plan.superseded_plan.kind)}`,
+          `  confirmation: ${terminalSafe(plan.superseded_plan.confirmation_digest)}`,
+          `  created: ${terminalSafe(plan.superseded_plan.created_at)}`,
+          `  expires: ${terminalSafe(plan.superseded_plan.expires_at)}`,
+        );
+      lines.push("", `Plan digest: ${plan.plan_digest}`);
+      if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
+      if (plan.confirmation_digest ?? plan.digest)
+        lines.push(
+          `Confirmation digest: ${plan.confirmation_digest ?? plan.digest}`,
+          `Digest: ${plan.confirmation_digest ?? plan.digest}`,
+        );
+      if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
+    }
+  }
+  if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
   return `${lines.join("\n")}\n`;
 }
 
