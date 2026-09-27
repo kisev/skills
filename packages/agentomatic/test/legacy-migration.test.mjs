@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -15,6 +16,7 @@ import test from "node:test";
 
 import { migrateLegacyDeploymentNamespace, migrateLegacyNamespaces } from "../dist/lifecycle.js";
 import { applyJsoncEdits } from "../dist/jsonc.js";
+import { apply, preview } from "../dist/installer.js";
 
 const PACKAGE = join(import.meta.dirname, "..");
 
@@ -194,4 +196,53 @@ test("replace-array-value keeps clean configurations untouched", () => {
   ]);
   assert.equal(applied.results[0], "present");
   assert.deepEqual(JSON.parse(applied.text).plugin, ["user-plugin"]);
+});
+
+test("install migrates a legacy-named ownership manifest in one transaction", async () => {
+  const root = mkdtempSync(join(tmpdir(), "agentomatic-legacy-upgrade-"));
+  try {
+    const home = join(root, "home");
+    const config = join(home, ".config", "opencode");
+    mkdirSync(join(config, "commands"), { recursive: true });
+    mkdirSync(join(config, "plugins"), { recursive: true });
+    const hash = (value) => createHash("sha256").update(value).digest("hex");
+    const files = {};
+    for (const name of ["agents-md", "askme"]) {
+      const content = `legacy ${name}\n`;
+      writeFileSync(join(config, "commands", `${name}.md`), content);
+      files[`commands/${name}.md`] = { sha256: hash(content), mode: 0o644, kind: "command" };
+    }
+    const rtk = "legacy rtk\n";
+    writeFileSync(join(config, "plugins", "rtk.js"), rtk);
+    files["plugins/rtk.js"] = { sha256: hash(rtk), mode: 0o644, kind: "plugin" };
+    writeFileSync(
+      join(config, ".skills-opencode-manifest.json"),
+      `${JSON.stringify({
+        schema_version: 2,
+        package: "@kisev/skills-opencode",
+        package_version: "3.0.0",
+        version: "3.0.0",
+        scope: "global",
+        commands: ["agents-md", "askme"],
+        agents: [],
+        plugins: ["rtk"],
+        core_activation: false,
+        files,
+      })}\n`,
+      { mode: 0o600 },
+    );
+    const selection = { commands: ["agents-md", "askme"], agents: [], plugins: ["rtk"] };
+    const plan = await preview("install", "global", root, home, selection, false);
+    assert.ok(plan.operations.some((item) => item.path === ".agentomatic-manifest.json"));
+    await apply("install", "global", plan.digest, root, home, {}, selection, false);
+    const migrated = JSON.parse(readFileSync(join(config, ".agentomatic-manifest.json"), "utf8"));
+    assert.equal(migrated.package, "@kisev/agentomatic");
+    assert.equal(existsSync(join(config, ".skills-opencode-manifest.json")), false);
+    assert.match(
+      readFileSync(join(config, "commands", "agents-md.md"), "utf8"),
+      /native Skill tool/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

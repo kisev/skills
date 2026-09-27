@@ -789,10 +789,12 @@ async function build(
         }
       : undefined;
   const manifestContent = nextManifest ? Buffer.from(`${stable(nextManifest)}\n`) : undefined;
+  const ownedNewRaw =
+    owned.manifestPath === destination(root, MANIFEST_NAME) ? owned.raw : undefined;
   if (manifestContent && (!owned.raw || !owned.raw.equals(manifestContent))) {
     operations.push({
       path: MANIFEST_NAME,
-      operation: owned.raw ? "update" : "create",
+      operation: ownedNewRaw ? "update" : "create",
       reason: "generic installer ownership",
     });
     mutations.push({
@@ -800,16 +802,29 @@ async function build(
       operation: "write",
       content: manifestContent,
       mode: 0o600,
-      expected: owned.raw ? { sha256: sha256(owned.raw) } : { absent: true },
+      expected: ownedNewRaw ? { sha256: sha256(ownedNewRaw) } : { absent: true },
     });
+    if (owned.raw && !ownedNewRaw) {
+      operations.push({
+        path: LEGACY_MANIFEST_NAME,
+        operation: "remove",
+        reason: "legacy ownership manifest migrated",
+      });
+      mutations.push({
+        path: LEGACY_MANIFEST_NAME,
+        operation: "remove",
+        expected: { sha256: sha256(owned.raw) },
+      });
+    }
   } else if (!manifestContent && owned.raw) {
+    const ownedManifestPath = ownedNewRaw ? MANIFEST_NAME : LEGACY_MANIFEST_NAME;
     operations.push({
-      path: MANIFEST_NAME,
+      path: ownedManifestPath,
       operation: "remove",
       reason: "generic assets uninstalled",
     });
     mutations.push({
-      path: MANIFEST_NAME,
+      path: ownedManifestPath,
       operation: "remove",
       expected: { sha256: sha256(owned.raw) },
     });
