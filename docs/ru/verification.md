@@ -107,7 +107,7 @@ selection-only и не доказывают mode или audit outcomes. Offline-
 `observation_mode: hostless-contract`; только trusted-live использует
 `observation_mode: trusted-live` и может подтвердить case outcomes.
 
-Проверки совместимости запускаются для OpenCode `1.18.29` и `1.18.31` в диапазоне
+Проверки совместимости запускаются для OpenCode `1.18.29`, `1.18.31` и `1.18.32` в диапазоне
 `>=1.18.29 <1.19.0` без учётных данных.
 
 ## Оценка на реальной модели и чистая рабочая копия

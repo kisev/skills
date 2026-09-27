@@ -99,7 +99,7 @@ audit outcomes. Offline results use `observation_mode: hostless-contract`; only
 trusted-live results use `observation_mode: trusted-live` and may satisfy case
 outcome assertions.
 
-Compatibility checks exercise OpenCode `1.18.29` and `1.18.31` inside
+Compatibility checks exercise OpenCode `1.18.29`, `1.18.31`, and `1.18.32` inside
 `>=1.18.29 <1.19.0` without credentials.
 
 ## Live Evaluation and Clean Checkout
