@@ -397,7 +397,7 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
             : "state";
       archiveCandidates.push({
         path: relativePath(root, target),
-        record: { sha256: record.sha256!, mode: 0o644, kind },
+        record: { sha256: record.sha256!, mode: 0o644 },
         content: value.content,
         reason: "retired inventory asset",
         kind,

@@ -200,7 +200,11 @@ step removes a pinned legacy `@kisev/skills-opencode` in the same pass.
 Non-interactive runs pass `--core` (or `--no-core`) with the explicit selection
 flags. The `config` command remains the full fragment manager for every target;
 applying its `core-plugin` fragment provisions the same dependency when the
-installer skipped it.
+installer skipped it. Every confirmed config apply first archives the previous
+content of each changed user file into the package archive store
+(`~/.local/share/opencode/agentomatic/archive`), content-addressed and
+deduplicated; `doctor --json` reports the latest snapshot under
+`config.backups`.
 Scope-aware commands target the current directory by default. Add `--global`
 once to target global state from any directory. The removed `--scope` option
 is not accepted. Install or upgrade the package and

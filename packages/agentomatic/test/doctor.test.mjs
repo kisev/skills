@@ -10,6 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 
@@ -230,4 +231,48 @@ test("doctor reports rtk observability for deployed wrapper, stats, and opt-out"
 test("built package LSP catalog is byte-identical to the shared catalog", () => {
   const canonical = readFileSync(join(ROOT, "shared/references/lsp-catalog.json"));
   assert.deepEqual(readFileSync(join(PACKAGE, "dist/assets/lsp-catalog.json")), canonical);
+});
+
+test("doctor reports archived configuration backups", async () => {
+  const item = fixture();
+  try {
+    const archive = join(
+      item.home,
+      ".local",
+      "share",
+      "opencode",
+      "agentomatic",
+      "archive",
+      "project",
+      createHash("sha256").update(resolve(item.project)).digest("hex"),
+    );
+    mkdirSync(archive, { recursive: true });
+    const configPath = join(item.project, "opencode.json");
+    writeFileSync(
+      join(archive, "index.json"),
+      `${JSON.stringify({
+        schema_version: 1,
+        version: PACKAGE_VERSION,
+        entries: [
+          {
+            schema_version: 1,
+            digest: "a".repeat(64),
+            original_path: configPath,
+            kind: "config-backup",
+            reason: "pre-apply config backup",
+            timestamp: "2026-09-27T00:00:00.000Z",
+          },
+        ],
+      })}\n`,
+      { mode: 0o600 },
+    );
+    const report = await collectDoctorFacts("project", item.project, item.home);
+    const backups = report.checks.find((check) => check.id === "config.backups");
+    assert.equal(backups.status, "pass");
+    assert.equal(backups.evidence.config_backups, 1);
+    assert.equal(backups.evidence.latest_backup_at, "2026-09-27T00:00:00.000Z");
+    assert.deepEqual(backups.evidence.latest_paths, [configPath]);
+  } finally {
+    rmSync(item.root, { recursive: true, force: true });
+  }
 });

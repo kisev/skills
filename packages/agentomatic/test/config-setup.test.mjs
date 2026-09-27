@@ -324,3 +324,38 @@ test("an unchanged config rerun still heals the plugin dependency", async () => 
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("config apply archives the previous user configuration content", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  const configPath = join(root, ".config", "opencode", "opencode.jsonc");
+  const original = `${JSON.stringify({ model: "user/model" }, null, 2)}\n`;
+  await writeFile(configPath, original);
+  try {
+    await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+    });
+    const archive = join(root, ".local", "share", "opencode", "agentomatic", "archive", "global");
+    const index = JSON.parse(readFileSync(join(archive, "index.json"), "utf8"));
+    const entry = index.entries.find(
+      (item) => item.kind === "config-backup" && item.original_path === configPath,
+    );
+    assert.ok(entry, `backup entry for ${configPath}`);
+    assert.equal(readFileSync(join(archive, "objects", entry.digest), "utf8"), original);
+
+    const evolved = `${JSON.stringify({ model: "user/model-2" }, null, 2)}\n`;
+    await writeFile(configPath, evolved);
+    await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+    });
+    const second = JSON.parse(readFileSync(join(archive, "index.json"), "utf8"));
+    assert.equal(
+      second.entries.filter(
+        (item) => item.kind === "config-backup" && item.original_path === configPath,
+      ).length,
+      2,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

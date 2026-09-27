@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
+import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { archiveMutations, type ArchiveCandidate } from "./installer.js";
 import { requirePackageVersion } from "./package-metadata.js";
 import { ensureDependency, planDependency, type DependencyRunner } from "./self-install.js";
 import {
@@ -541,7 +543,32 @@ export async function applyConfigSetup(
         }
         throw new ConfigSetupError("invalid_state", "Config setup plan has no applicable changes");
       }
-      await applyTransaction(root, stateRoot, built.mutations, {
+      const backups: ArchiveCandidate[] = [];
+      for (const mutation of built.mutations) {
+        if (mutation.operation !== "write") continue;
+        const target = join(mutation.root ?? root, mutation.path);
+        const current = await readRegular(target).catch(() => undefined);
+        if (!current || current.equals(mutation.content)) continue;
+        backups.push({
+          path: target,
+          record: {
+            sha256: sha256(current),
+            mode: (await lstat(target)).mode & 0o777,
+          },
+          content: current,
+          reason: "pre-apply config backup",
+          kind: "config-backup",
+        });
+      }
+      const backupMutations = await archiveMutations(
+        backups,
+        scope,
+        cwd,
+        home,
+        requirePackageVersion(),
+        new Date().toISOString(),
+      );
+      await applyTransaction(root, stateRoot, [...built.mutations, ...backupMutations], {
         validateFinal: async () => {
           for (const mutation of built.mutations) {
             if (mutation.operation !== "write") continue;

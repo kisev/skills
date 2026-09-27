@@ -101,10 +101,10 @@ type BuiltInstallerPlan = {
 };
 export type ArchiveCandidate = {
   path: string;
-  record: ManifestFile;
+  record: { sha256: string; mode: number };
   content: Buffer;
   reason: string;
-  kind: "command" | "agent" | "plugin" | "state";
+  kind: "command" | "agent" | "plugin" | "state" | "config-backup";
 };
 
 function retiredAssetPaths(): Set<string> {
@@ -318,6 +318,7 @@ export async function archiveMutations(
   cwd: string,
   home: string,
   sourceVersion: string,
+  timestamp = new Date(0).toISOString(),
 ): Promise<FileMutation[]> {
   if (!candidates.length) return [];
   const root = archiveRoot(scope, cwd, home);
@@ -370,7 +371,7 @@ export async function archiveMutations(
   );
   const mutations: FileMutation[] = [];
   const queuedObjects = new Set<string>();
-  const now = new Date(0).toISOString();
+  const now = timestamp;
   for (const candidate of candidates) {
     const digestValue = sha256(candidate.content);
     const key = `${candidate.path}:${digestValue}`;

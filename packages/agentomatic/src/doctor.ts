@@ -693,6 +693,45 @@ export async function collectDoctorFacts(
       ),
     );
   }
+  const archiveIndexPath = join(archiveRoot(scope, project, homeRoot), "index.json");
+  const archiveIndexRaw = await regular(archiveIndexPath);
+  let backupEntries: Array<{ original_path?: unknown; timestamp?: unknown }> = [];
+  if (archiveIndexRaw) {
+    try {
+      const parsed = JSON.parse(archiveIndexRaw.raw!.toString("utf8")) as {
+        entries?: unknown;
+      };
+      if (Array.isArray(parsed.entries))
+        backupEntries = parsed.entries.filter(
+          (item): item is { original_path?: unknown; timestamp?: unknown } =>
+            Boolean(
+              item &&
+              typeof item === "object" &&
+              (item as { kind?: unknown }).kind === "config-backup",
+            ),
+        );
+    } catch {
+      partial.push("config.backups");
+    }
+  }
+  const latestBackup = backupEntries
+    .map((item) => String(item.timestamp ?? ""))
+    .sort()
+    .at(-1);
+  checks.push(
+    check(
+      "config.backups",
+      archiveIndexRaw ? "pass" : "incomplete",
+      "User configuration snapshots are tracked in the archive",
+      {
+        archive_index: archiveIndexPath,
+        config_backups: backupEntries.length,
+        latest_backup_at: latestBackup ?? "never",
+        latest_paths: backupEntries.slice(-3).map((item) => String(item.original_path ?? "")),
+      },
+      ["Configuration edits archive the previous content before every apply."],
+    ),
+  );
   const rtkWrapper = await regular(join(deployment, "plugins", "rtk.js"));
   const rtkDeployed = rtkWrapper.status === "present";
   let rtkStats: Awaited<ReturnType<typeof readRtkStats>> = undefined;
