@@ -18,6 +18,7 @@ import {
 } from "./lifecycle.js";
 import { inspectReconcile, type ReconcilePlan } from "./reconcile.js";
 import { readPackageVersion } from "./package-metadata.js";
+import { planDependency } from "./self-install.js";
 import {
   readRtkStats,
   rtkCharsSaved,
@@ -670,6 +671,28 @@ export async function collectDoctorFacts(
       ],
     ),
   );
+  const wired =
+    (config.projection?.enabled_plugins ?? []).includes(packageName) ||
+    (hostConfig?.enabled_plugins ?? []).includes(packageName);
+  if (wired) {
+    const dependency = planDependency(scope, project, homeRoot);
+    const dependencyStatus =
+      dependency.status === "satisfied" ? "pass" : dependency.status === "manual" ? "warn" : "fail";
+    checks.push(
+      check(
+        "config.plugin-dependency",
+        dependencyStatus,
+        "The configured plugin package is pinned in the owning npm project",
+        {
+          project_dir: dependency.dir ?? "none",
+          pinned: dependency.status === "satisfied",
+          expected_version: dependency.version,
+          status: dependency.status,
+        },
+        ["Run config with the core-plugin fragment to provision the persistent npm dependency."],
+      ),
+    );
+  }
   const rtkWrapper = await regular(join(deployment, "plugins", "rtk.js"));
   const rtkDeployed = rtkWrapper.status === "present";
   let rtkStats: Awaited<ReturnType<typeof readRtkStats>> = undefined;

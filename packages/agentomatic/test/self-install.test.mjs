@@ -180,3 +180,24 @@ test("project install without an npm project skips the dependency step", async (
   assert.equal(applied.dependency.applied, "skipped");
   assert.equal(calls.length, 0);
 });
+
+test("ensureDependency removes a pinned legacy package after install", async () => {
+  const base = temporary();
+  const home = join(base, "home");
+  const plan = planDependency("global", "/tmp", home, VERSION);
+  mkdirSync(plan.dir, { recursive: true });
+  writeFileSync(
+    join(plan.dir, "package.json"),
+    `${JSON.stringify({ dependencies: { "@kisev/skills-opencode": "3.0.0" } }, null, 2)}\n`,
+  );
+  const { runner, calls } = stubRunner();
+  const result = await ensureDependency(plan, runner);
+  assert.equal(result.applied, "changed");
+  assert.equal(result.removed_legacy, true);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[1], {
+    command: "npm",
+    args: ["rm", "@kisev/skills-opencode", "--no-audit", "--no-fund"],
+    options: { cwd: plan.dir, timeout: 180_000 },
+  });
+});

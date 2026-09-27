@@ -123,6 +123,10 @@ test("doctor never serializes config secrets and classifies collisions as proble
     assert.equal(report.mutations, false);
     assert.ok(report.checks.some((check) => check.status === "fail"));
     assert.equal(report.status, "problems");
+    const dependency = report.checks.find((check) => check.id === "config.plugin-dependency");
+    assert.equal(dependency.status, "warn");
+    assert.equal(dependency.evidence.pinned, false);
+    assert.equal(dependency.evidence.status, "manual");
     const rendered = renderDoctor(report);
     assert.equal(rendered.includes("doctor-secret"), false);
     assert.match(

@@ -954,7 +954,6 @@ test("uninstall preserves managed agent drift with semantic ownership", async ()
     await confirmedInstall(context.project, context.home);
     const manager = join(context.root, "agents", "manager.md");
     await writeFile(manager, "user drift\n");
-    const plan = await preview("uninstall", "project", context.project, context.home);
     await apply("uninstall", "project", context.project, context.home);
     assert.equal(await readFile(manager, "utf8"), "user drift\n");
     const manifest = JSON.parse(

@@ -127,7 +127,9 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const preview = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     assert.equal(preview.confirmable, true);
     assert.equal(preview.requires_restart, true);
-    const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root);
+    const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+    });
     assert.deepEqual(
       applied.operations.filter((item) => item.operation === "conflict"),
       [],
@@ -196,7 +198,9 @@ test("config setup preserves user entries, comments, and scalar permissions", as
       "utf8",
     );
     await previewConfigSetup(FULL_SELECTION, "global", directory, root);
-    const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root);
+    const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+    });
     assert.equal(applied.operations.filter((item) => item.operation === "conflict").length, 0);
 
     const raw = readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8");
@@ -269,4 +273,30 @@ test("cli exposes the config command and install hints at it", () => {
 
   const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
   assert.match(source, /"config", \.\.\.scopeArguments\(options\.scope\), "--dry-run"/);
+});
+
+test("applying the core-plugin fragment provisions the npm dependency", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  const calls = [];
+  try {
+    const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: async (command, args, options) => {
+        calls.push({ command, args, options });
+        return { stdout: "", stderr: "" };
+      },
+    });
+    assert.equal(applied.confirmable, true);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].command, "npm");
+    assert.equal(calls[0].args[0], "install");
+    assert.ok(calls[0].args[2].startsWith("@kisev/agentomatic@"));
+    assert.equal(calls[0].options.cwd, join(root, ".config", "opencode"));
+    const pinned = JSON.parse(
+      readFileSync(join(root, ".config", "opencode", "package.json"), "utf8"),
+    );
+    assert.equal(pinned.private, true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });

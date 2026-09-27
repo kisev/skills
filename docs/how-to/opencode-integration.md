@@ -195,10 +195,13 @@ The mandatory OpenCode flow is: `install --dry-run`, rerunning the install
 command without `--dry-run` and confirming the plan summary (which also
 provisions the persistent npm dependency), the confirmed `config`
 command (or a manual plugin entry), and restart OpenCode. The persistent npm
-project at `~/.config/opencode` keeps the global plugin resolvable. Scope-aware
-commands target the current directory by default. Add `--global` once
-to target global state from any directory. The removed `--scope` option is not
-accepted. Install or upgrade the package and
+project at `~/.config/opencode` keeps the global plugin resolvable. Applying
+the `core-plugin` fragment through `config` provisions the same dependency when
+the installer skipped it (for example, with no fixed agents selected) and
+removes a pinned legacy `@kisev/skills-opencode` dependency in the same pass.
+Scope-aware commands target the current directory by default. Add `--global`
+once to target global state from any directory. The removed `--scope` option
+is not accepted. Install or upgrade the package and
 apply its installer plan before every reconcile.
 
 Without `--dry-run`, a mutation asks for consent directly. In a TTY, the

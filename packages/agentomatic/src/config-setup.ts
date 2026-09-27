@@ -4,6 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { requirePackageVersion } from "./package-metadata.js";
+import { ensureDependency, planDependency, type DependencyRunner } from "./self-install.js";
 import {
   applyTransaction,
   deploymentRoot,
@@ -506,6 +507,7 @@ export async function applyConfigSetup(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
+  options: { dependencyRunner?: DependencyRunner } = {},
 ): Promise<ConfigSetupPlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
@@ -533,6 +535,21 @@ export async function applyConfigSetup(
           }
         },
       });
+      const corePluginApplied = built.plan.operations.some(
+        (item) =>
+          item.target === "opencode" &&
+          item.fragment === "core-plugin" &&
+          item.operation !== "conflict",
+      );
+      if (corePluginApplied) {
+        try {
+          await ensureDependency(planDependency(scope, cwd, home), options.dependencyRunner);
+        } catch (error) {
+          if (error instanceof LifecycleError)
+            throw new ConfigSetupError(error.code, error.message);
+          throw error;
+        }
+      }
       return built.plan;
     });
   } catch (error) {

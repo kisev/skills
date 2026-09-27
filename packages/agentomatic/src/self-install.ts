@@ -9,6 +9,7 @@ import { requirePackageVersion } from "./package-metadata.js";
 const execFileAsync = promisify(execFile);
 
 export const SELF_PACKAGE_NAME = "@kisev/agentomatic";
+export const LEGACY_SELF_PACKAGE_NAME = "@kisev/skills-opencode";
 const NPM_INSTALL_TIMEOUT_MS = 180_000;
 
 export type DependencyRunner = (
@@ -53,6 +54,18 @@ function readDependencyVersion(dir: string): string | null {
     return typeof pinned === "string" && pinned.length > 0 ? pinned : null;
   } catch {
     return null;
+  }
+}
+
+export function legacyDependencyPresent(dir: string): boolean {
+  try {
+    const value: unknown = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const dependency = (value as Record<string, unknown>).dependencies;
+    if (!dependency || typeof dependency !== "object" || Array.isArray(dependency)) return false;
+    return typeof (dependency as Record<string, unknown>)[LEGACY_SELF_PACKAGE_NAME] === "string";
+  } catch {
+    return false;
   }
 }
 
@@ -134,5 +147,21 @@ export async function ensureDependency(
       `npm install for ${plan.name}@${plan.version} in ${dir} failed: ${detail}`,
     );
   }
-  return { ...plan, applied: "changed" };
+  let removedLegacy = false;
+  if (legacyDependencyPresent(dir)) {
+    try {
+      await runner("npm", ["rm", LEGACY_SELF_PACKAGE_NAME, "--no-audit", "--no-fund"], {
+        cwd: dir,
+        timeout: NPM_INSTALL_TIMEOUT_MS,
+      });
+      removedLegacy = true;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message.split("\n").slice(-6).join("\n") : "";
+      throw new SelfInstallError(
+        "npm_dependency_failed",
+        `npm rm for ${LEGACY_SELF_PACKAGE_NAME} in ${dir} failed: ${detail}`,
+      );
+    }
+  }
+  return { ...plan, applied: "changed", ...(removedLegacy ? { removed_legacy: true } : {}) };
 }
