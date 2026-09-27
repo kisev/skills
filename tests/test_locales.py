@@ -92,6 +92,7 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "Skill command adapters" in document
         assert "npm install --save-exact @kisev/agentomatic" in document
         assert "npx --yes @kisev/agentomatic@latest" in document
+        assert "npx --yes @kisev/agentomatic@dev" in document
         assert "npm exec -- agentomatic" not in document
     assert "Manage\nportable skills separately" in english
     assert "Переносимыми навыками\nуправляйте отдельно" in russian
@@ -105,7 +106,13 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
     for document in (package_english, package_russian):
         assert "npm install --save-exact @kisev/agentomatic" in document
         assert "npx --yes @kisev/agentomatic@latest" in document
+        assert "@kisev/agentomatic@dev" in document
         assert "npm exec -- agentomatic" not in document
+
+    for path in (ROOT / "README.md", ROOT / "README.ru.md"):
+        text = path.read_text(encoding="utf-8")
+        assert "npx --yes @kisev/agentomatic@latest" in text, path
+        assert "@kisev/agentomatic@dev" in text, path
 
 
 def test_current_user_documentation_uses_stable_cli_channels() -> None:

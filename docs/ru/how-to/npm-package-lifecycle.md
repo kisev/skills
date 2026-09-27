@@ -65,9 +65,7 @@ npm publish .build/release/safe-fs.tgz   --tag dev --access public
 npm publish .build/release/memomatic.tgz --tag dev --access public
 npm publish .build/release/package.tgz   --tag dev --access public
 
-# npm never allows deleting `latest`; retarget it to a published version
-npm dist-tag add @kisev/safe-fs@<newest-dev-version> latest    # no stable release yet
-npm dist-tag add @kisev/memomatic@<newest-dev-version> latest  # no stable release yet
+# npm never allows deleting `latest`; point it at a stable release when one exists
 npm dist-tag add @kisev/agentomatic@<stable-version> latest    # name with a stable release
 
 npm trust github @kisev/safe-fs    --repo kisev/skills --file publish.yml --allow-publish --yes
@@ -78,8 +76,9 @@ npm trust github @kisev/agentomatic --repo kisev/skills --file publish.yml --all
 Первый `npm trust` требует 2FA; браузер предложит пропуск на пять минут для
 оставшихся имён. Следующий пуш в `dev` публикуется уже через OIDC.
 
-Завершите бутстрап проверкой, что ни один тег `latest` не ссылается на
-prerelease:
+Завершите бутстрап проверкой, что тег `dev` отслеживает новейшую dev-версию
+каждого имени, что `latest` ссылается на стабильный релиз там, где он есть, и
+что потребителям никогда не нужен `latest`, чтобы получить dev-сборку:
 
 ```shell
 npm dist-tag ls @kisev/agentomatic
@@ -96,10 +95,12 @@ npm dist-tag ls @kisev/memomatic
   а локальная публикация существующего имени сдвигает `latest`, когда изданная
   dev-версия по semver выше текущего `latest`.
 - npm не позволяет удалять `latest` (registry отклоняет
-  `npm dist-tag rm <name> latest` с ошибкой 400; см. npm/cli#8490). Пока у
-  имени нет стабильного релиза, держите `latest` перенаправленным на новейшую
-  dev-версию; когда стабильный релиз появится, гейт публикации упадёт, если
-  `latest` всё ещё ссылается на prerelease.
+  `npm dist-tag rm <name> latest` с ошибкой 400; см. npm/cli#8490). Никогда не
+  перенаправляйте `latest` на dev-версию: dev-сборки ставятся через dist-tag
+  `dev`, а `latest` ссылается только на стабильные релизы. До первого
+  стабильного релиза имени `latest` может оставаться на неизбежной начальной
+  prerelease-версии; гейт публикации терпит ровно это состояние и падает, когда
+  стабильный релиз уже есть, а `latest` всё ещё ссылается на prerelease.
 - Совершенно новые имена распространяются медленно: отрицательное кэширование
   CDN способно съесть общий десятиминутный бюджет ожиданий на проверках
   metadata и tarball. Когда версии начнут отвечать 200, перезапустите только

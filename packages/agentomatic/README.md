@@ -68,6 +68,8 @@ scope); the confirmed install also provisions the persistent npm dependency:
 npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
+Use `@kisev/agentomatic@dev` to run the development snapshot instead.
+
 The confirmed install pins the executing version into the nearest npm project;
 global installs own `~/.config/opencode` and create its `package.json` when
 needed. Offline setups can provision the dependency by hand first:
