@@ -34,6 +34,10 @@
       "ru": "docs/ru/how-to/opencode-integration.md"
     },
     {
+      "en": "docs/how-to/npm-package-lifecycle.md",
+      "ru": "docs/ru/how-to/npm-package-lifecycle.md"
+    },
+    {
       "en": "docs/reference/skill-catalog.md",
       "ru": "docs/ru/reference/skill-catalog.md"
     },

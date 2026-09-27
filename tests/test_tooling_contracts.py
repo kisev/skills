@@ -127,5 +127,32 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
         assert taskfile.index(f"{build_cmd}{consumer}") > safe_fs_pos, (
             f"{consumer} must build after safe-fs"
         )
+
+
+def test_every_workspace_package_is_wired_into_the_publication_graph() -> None:
+    root = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    surfaces = {
+        "taskfile.yml": (ROOT / "taskfile.yml").read_text(encoding="utf-8"),
+        "scripts/build_dev_artifacts.py": (ROOT / "scripts/build_dev_artifacts.py").read_text(
+            encoding="utf-8"
+        ),
+        "scripts/build_release_artifacts.py": (
+            ROOT / "scripts/build_release_artifacts.py"
+        ).read_text(encoding="utf-8"),
+        "scripts/publish_npm_release.py": (ROOT / "scripts/publish_npm_release.py").read_text(
+            encoding="utf-8"
+        ),
+        "packages/agentomatic/test/smoke.mjs": (
+            ROOT / "packages/agentomatic/test/smoke.mjs"
+        ).read_text(encoding="utf-8"),
+    }
+    for workspace in root["workspaces"]:
+        name = json.loads((ROOT / workspace / "package.json").read_text(encoding="utf-8"))["name"]
+        for surface, content in surfaces.items():
+            assert name in content, (
+                f"{name} from {workspace} is missing from {surface}; every workspace"
+                " package must be wired into the complete publication graph, see"
+                " docs/how-to/npm-package-lifecycle.md"
+            )
     distribution = (ROOT / "scripts/build_distribution.py").read_text(encoding="utf-8")
     assert "build_skills(BUILT_SKILLS" not in distribution

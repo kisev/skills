@@ -42,6 +42,7 @@
 - Edit portable definitions under `skills/<name>/`; the authored entrypoint is `SKILL.source.md`.
 - Edit shared contracts and runtimes only under `shared/references/`, and update `shared/manifest.json` when their materialization changes.
 - Keep OpenCode-only commands, agents, plugins, routing, and installer behavior under `packages/agentomatic/`, npm-publishable shared packages under `packages/`, and user-run cross-host applications (any stack) under `apps/<name>/`.
+- Adding, renaming, or removing a workspace npm package rewires the complete publication graph and npm trusted-publisher bindings; follow `docs/how-to/npm-package-lifecycle.md` and the `npm-package-lifecycle` project skill before pushing.
 - Do not edit `.build/`, `packages/agentomatic/dist/`, generated `SKILL.md`, or copied assets directly; use `task generate` and verify reproducibility with `task generate:check`.
 - Run `mise install` from the repository root before making changes.
 - Treat `taskfile.yml` as the full repository and CI task graph; the Lefthook pre-commit fast path may invoke pinned Mise tools directly for staged files, while workflows and pre-push must call public tasks.

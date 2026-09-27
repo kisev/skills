@@ -53,9 +53,16 @@ try {
     cwd: project,
     encoding: "utf8",
   });
+  const installedVersion = async (name) =>
+    JSON.parse(await readFile(join(project, "node_modules", name, "package.json"), "utf8")).version;
   const memomaticExecutable = join(project, "node_modules", ".bin", "memomatic");
+  assert.equal(
+    run(memomaticExecutable, ["--version"]).trim(),
+    await installedVersion("@kisev/memomatic"),
+  );
   run(memomaticExecutable, ["--help"]);
   const executable = join(project, "node_modules", ".bin", "agentomatic");
+  assert.equal(run(executable, ["--version"]).trim(), await installedVersion("@kisev/agentomatic"));
   const environment = {
     PATH: process.env.PATH ?? "",
     HOME: home,

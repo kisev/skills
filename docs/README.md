@@ -18,6 +18,9 @@ make that boundary explicit.
 - [Install and manage agentomatic](how-to/opencode-integration.md) - install
   the package, select assets, activate the plugin, configure user configs,
   update, reconcile, diagnose, configure agents, and uninstall safely.
+- [Add or rename an npm workspace package](how-to/npm-package-lifecycle.md) -
+  rewire the publication graph, bootstrap a new package name on npm, and
+  deprecate a retired name.
 - [Contribute to the repository](../CONTRIBUTING.md) - change authored sources and
   run the required checks.
 
