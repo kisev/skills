@@ -50,7 +50,7 @@ import {
 import { LifecycleError, type Scope } from "./lifecycle.js";
 import { skillsInstallerSpec } from "./package-metadata.js";
 import { applyReconcile, previewReconcile } from "./reconcile.js";
-import { promptText, selectOption, selectOptions } from "./terminal-wizard.js";
+import { confirmQuestion, promptText, selectOption, selectOptions } from "./terminal-wizard.js";
 
 type Options = {
   scope: Scope;
@@ -871,8 +871,8 @@ function requireApplyMode(options: Options): void {
 }
 
 async function confirmSummary(): Promise<void> {
-  const choice = await selectOption("Apply these changes?", ["Yes", "No"]);
-  if (choice !== 0) throw new InstallerError("cancelled", "Cancelled before apply");
+  const choice = await confirmQuestion("Apply these changes?");
+  if (choice !== true) throw new InstallerError("cancelled", "Cancelled before apply");
 }
 
 function applyHint(command: readonly string[]): string {

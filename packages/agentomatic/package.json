@@ -49,6 +49,7 @@
     "pack:check": "node test/pack-allowlist.mjs"
   },
   "dependencies": {
+    "@clack/prompts": "^1.8.1",
     "@kisev/memomatic": "^1.0.0",
     "@kisev/safe-fs": "^1.0.0"
   },

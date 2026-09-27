@@ -258,9 +258,10 @@ test("single and multi selectors share visual controls and deterministic selecti
   );
   single.stdin.write("\x1b[B\r");
   assert.equal(await singleResult, 1);
-  assert.match(single.output(), /\? Select provider:/);
-  assert.match(single.output(), /Up\/Down move \| Enter select \| Esc cancel/);
-  assert.match(single.output(), /> openai/);
+  assert.match(single.output(), /◆  Select provider:/);
+  assert.match(single.output(), /↑\/↓ to navigate • Enter: confirm/);
+  assert.match(single.output(), /● openai/);
+  assert.match(single.output(), /◇  Select provider:/);
 
   const multiple = fakeTTY();
   const multipleResult = selectOptions(
@@ -272,13 +273,10 @@ test("single and multi selectors share visual controls and deterministic selecti
   );
   multiple.stdin.write("\x1b[B \r");
   assert.deepEqual(await multipleResult, ["manager", "review"]);
-  assert.match(
-    multiple.output(),
-    /Up\/Down move \| Space toggle \| A all \| N none \| Enter confirm \| Esc cancel/,
-  );
-  assert.match(multiple.output(), /\[x] manager/);
-  assert.match(multiple.output(), /\[ ] review/);
-  assert.match(multiple.output(), /Selected 1\/3/);
+  assert.match(multiple.output(), /↑\/↓ to navigate • Space: select • Enter: confirm/);
+  assert.match(multiple.output(), /◼ manager/);
+  assert.match(multiple.output(), /◻ review/);
+  assert.match(multiple.output(), /◇  Fixed agents\n│  manager, review/);
 
   const subset = fakeTTY();
   const subsetResult = selectOptions(
@@ -288,7 +286,7 @@ test("single and multi selectors share visual controls and deterministic selecti
     subset.stdin,
     subset.stderr,
   );
-  subset.stdin.write("n\x1b[B \r");
+  subset.stdin.write("a\x1b[B \r");
   assert.deepEqual(await subsetResult, ["goal"]);
 
   const all = fakeTTY();
@@ -329,9 +327,8 @@ test("keyboard selector supports cancel and text prompt only for critic identity
   const name = promptText("Critic name", namePrompt.stdin, namePrompt.stderr);
   namePrompt.stdin.write("security\r");
   assert.equal(await name, "security");
-  assert.match(namePrompt.output(), /\? Critic name/);
-  assert.match(namePrompt.output(), /Type a value \| Enter confirm \| Esc cancel/);
-  assert.match(namePrompt.output(), /> security/);
+  assert.match(namePrompt.output(), /◆  Critic name/);
+  assert.match(namePrompt.output(), /◇  Critic name\n│  security/);
 });
 
 test("model and variant configuration survives package install", async () => {
