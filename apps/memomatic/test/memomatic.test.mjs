@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -34,6 +35,20 @@ function environment() {
 async function context() {
   return openMemomatic();
 }
+
+test("cli --version reports the package version without touching state", () => {
+  const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  const output = execFileSync(process.execPath, ["dist/cli.js", "--version"], {
+    cwd: new URL("..", import.meta.url),
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      XDG_STATE_HOME: join(tmpdir(), "memomatic-cli-version-must-not-exist"),
+    },
+  });
+  assert.equal(output.trim(), version);
+  assert.ok(!existsSync(join(tmpdir(), "memomatic-cli-version-must-not-exist")));
+});
 
 test("entry annotations roundtrip through parse and serialize", () => {
   const line = entryLine("Keep the gateway on loopback.", {

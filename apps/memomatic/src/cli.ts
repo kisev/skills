@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 import { openMemomatic, rebuildIndex, searchMemory } from "./service.js";
 import { runDream } from "./dream.js";
 import { processInbox, withRunLock } from "./inbox.js";
@@ -35,6 +36,13 @@ async function main(): Promise<void> {
   }
   if (command === "mcp-selftest") {
     process.stdout.write(await handleMcpRequest({ id: 1, method: "tools/list" }));
+    return;
+  }
+  if (command === "--version") {
+    const { version } = JSON.parse(
+      readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+    ) as { version: string };
+    process.stdout.write(`${version}\n`);
     return;
   }
   const context = await openMemomatic();
