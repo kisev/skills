@@ -37,6 +37,10 @@ PACKAGE_METADATA = json.loads(
 )
 RELEASE_VERSION = PACKAGE_METADATA["version"]
 
+# Several tests validate the shared `.build/packages/skills` state built by
+# `tests/test_distribution.py`; the shared xdist group keeps them serialized.
+pytestmark = pytest.mark.xdist_group("distribution-state")
+
 
 def test_current_release_metadata_is_aligned() -> None:
     assert build_distribution.build(DISTRIBUTION, False) == 0
@@ -274,7 +278,17 @@ def test_git_bounds_stdout_and_stderr(
         check_release.git("status")
 
 
-def test_published_release_check_requires_tag() -> None:
+def test_published_release_check_requires_tag(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    version = json.loads((ROOT / "packages/skills/package.json").read_text(encoding="utf-8"))[
+        "version"
+    ]
+    revision = check_release.git("rev-parse", "HEAD")
+    (tmp_path / "index.json").write_text(
+        json.dumps({"version": version, "source_revision": revision}), encoding="utf-8"
+    )
+    monkeypatch.setattr(check_release, "DISTRIBUTION", tmp_path)
     with pytest.raises(check_release.ReleaseError, match="requires a tag"):
         check_release.validate(published=True)
 

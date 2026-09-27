@@ -13,12 +13,14 @@ import urllib.request
 from functools import partial
 from pathlib import Path
 from subprocess import run
-from typing import TYPE_CHECKING
+
+import pytest
 
 from scripts import build_distribution
 
-if TYPE_CHECKING:
-    import pytest
+# This module rebuilds the shared `.build/packages/skills` tree; keep it on one
+# xdist worker together with the release-contract tests that read that state.
+pytestmark = pytest.mark.xdist_group("distribution-state")
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".build" / "packages" / "skills"

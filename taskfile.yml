@@ -264,7 +264,7 @@ tasks:
   test:python:
     desc: Run Python tests against materialized skills
     cmds:
-      - SKILLS_BINARY="$(mise which skills)" mise exec -- uv run --locked pytest -n auto
+      - SKILLS_BINARY="$(mise which skills)" mise exec -- uv run --locked pytest -n auto --dist loadgroup
 
   generate:
     desc: Build all untracked distribution and package artifacts
