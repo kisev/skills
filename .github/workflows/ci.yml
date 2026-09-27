@@ -45,24 +45,6 @@ jobs:
             git merge-base --is-ancestor HEAD^2 origin/dev
           fi
 
-  skills-build:
-    name: Materialize portable skills
-    if: ${{ github.event.deleted != true }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - run: task build:skills
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        with:
-          name: built-skills
-          path: .build/skills
-          include-hidden-files: true
-          if-no-files-found: error
-          overwrite: true
-          retention-days: 1
-
   quality:
     name: ${{ matrix.name }}
     if: ${{ github.event.deleted != true }}
@@ -96,7 +78,6 @@ jobs:
   built-quality:
     name: ${{ matrix.name }}
     if: ${{ github.event.deleted != true }}
-    needs: skills-build
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
@@ -116,10 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
-        with:
-          name: built-skills
-          path: .build/skills
+      - run: task build:skills
       - run: task "$CHECK_TASK"
 
   check:
@@ -127,14 +105,12 @@ jobs:
     if: ${{ always() }}
     needs:
       - branch-policy
-      - skills-build
       - quality
       - built-quality
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
       DELETED_REF: ${{ github.event.deleted }}
-      SKILLS_BUILD_RESULT: ${{ needs.skills-build.result }}
       QUALITY_RESULT: ${{ needs.quality.result }}
       BUILT_QUALITY_RESULT: ${{ needs.built-quality.result }}
       BRANCH_POLICY_RESULT: ${{ needs.branch-policy.result }}
@@ -145,6 +121,5 @@ jobs:
             exit 0
           fi
           test "$BRANCH_POLICY_RESULT" = success
-          test "$SKILLS_BUILD_RESULT" = success
           test "$QUALITY_RESULT" = success
           test "$BUILT_QUALITY_RESULT" = success
