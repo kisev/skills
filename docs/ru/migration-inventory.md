@@ -43,7 +43,6 @@ GitHub Release. Необязательный пакет интеграции - `
 | `skill-improver` | `skill-improve` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
-| `people-workflow` | `team-people`, `team-1on1`, `team-feedback`, `team-agreements`, `team-onboarding`, `team-incident`, `team-performance`, `team-report`, `team-health` |
 | `summary` | `briefing` |
 
 Операция `update` в CLI `skills` обнаруживает удалённые в источнике имена и

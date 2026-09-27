@@ -45,7 +45,6 @@ does not contain a portable `multi-run` record.
 | `skill-improver` | `skill-improve` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
-| `people-workflow` | `team-people`, `team-1on1`, `team-feedback`, `team-agreements`, `team-onboarding`, `team-incident`, `team-performance`, `team-report`, `team-health` |
 | `summary` | `briefing` |
 
 The `skills` CLI `update` operation detects names deleted upstream and offers to
