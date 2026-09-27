@@ -14,6 +14,39 @@ using repository conventions or the appropriate Diataxis directory in `docs/`.
 Do not create an empty four-directory tree or overwrite a document with a different
 purpose or audience.
 
+## Language set
+
+Resolve the documentation language set in this order: an explicit user request,
+project rules, the agent's global rules, then English by default. Produce one
+single-language set or mirrored multilingual sets in any languages. Translate
+prose per mirror while machine tokens (commands, paths, flags, IDs, JSON
+fields) stay byte-identical across mirrors. The set is independent of the
+canonical specification language: never mirror `specs/` and never change its
+single canonical language from documentation work.
+
+## Agent annotations
+
+Write for humans first. Add machine-readable guidance for agents as YAML
+frontmatter: `audience: user` by default, plus an optional `agent` block with
+`purpose` and a `hints` list of short imperatives:
+
+```yaml
+---
+audience: user
+agent:
+  purpose: install portable skills globally
+  hints:
+    - prefer the default agent selection
+---
+```
+
+Add a dedicated agent section inside the document only when an agent needs an
+expanded instruction that does not fit `hints`; title it explicitly, for
+example `## Notes for agents`. Keep executable contracts, gates, and
+inventories out of user prose: they belong in the canonical specification or
+an explicit agent section. Frontmatter and agent sections are machine tokens:
+keep them identical across language mirrors.
+
 ## Preparation
 
 Follow `references/interaction-contract.md`. Verify claims, paths, commands,

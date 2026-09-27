@@ -14,7 +14,8 @@ Input is a document path or scope. Output is findings only.
 
 ## Workflow Stages
 
-Resolve scope, compare sources, inspect links and audience fit, report findings.
+Resolve scope, compare sources, inspect links and audience fit, verify language
+mirrors and agent annotations, report findings.
 
 ## Dependencies
 
@@ -40,6 +41,13 @@ The skill shall report documentation findings without changing repository files.
 Without an explicit path or area it shall inspect the complete current project's
 user-facing documentation set and name every unchecked boundary. Canonical specs
 remain the responsibility of `spec-manage` audit mode.
+
+### REQ-F-518 - Verify language mirrors and agent annotations
+
+The skill shall verify that the documentation language set matches its declared
+resolution order, that machine tokens and agent annotations are byte-identical
+across language mirrors, that agent hints still match actual commands and
+behavior, and that executable contracts do not hide in user prose.
 
 ## Example
 

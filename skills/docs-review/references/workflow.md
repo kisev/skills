@@ -14,10 +14,12 @@ Identify the target reader and purpose in scope. Check claims, commands, APIs, c
 ## Review
 
 1. Determine the target reader and the purpose of documentation in the specified boundary.
-2. Check claims, commands, APIs, configuration, and examples against source code, configuration, and repository instructions.
-3. Check prerequisites, order of actions, effects of errors, compatibility, stale links, and terminological consistency.
-4. Report only confirmed findings. For each, state severity, precise evidence, consequence, and the minimal fix.
-5. If there are no findings, state that briefly and list unverified boundaries.
+2. Resolve the expected language set from the explicit user request, project rules, or the agent's global rules. Check that every declared mirror exists and that machine tokens (commands, paths, flags, IDs, JSON fields) are byte-identical across mirrors.
+3. Check agent annotations: `audience` is declared, `agent` hints still match actual commands and behavior, frontmatter and agent sections are identical across language mirrors, and no executable contract hides in user prose instead of the canonical specification or an explicit agent section.
+4. Check claims, commands, APIs, configuration, and examples against source code, configuration, and repository instructions.
+5. Check prerequisites, order of actions, effects of errors, compatibility, stale links, and terminological consistency.
+6. Report only confirmed findings. For each, state severity, precise evidence, consequence, and the minimal fix.
+7. If there are no findings, state that briefly and list unverified boundaries.
 
 ## Memory integration
 
