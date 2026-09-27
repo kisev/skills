@@ -19,12 +19,16 @@ install, update, inspect, or remove them. Their lifecycle is owned by the
 
 ## Portable Skills
 
-Install the current stable portable distribution globally for Codex and
+Install the current stable portable distribution globally. The default agent
+selection covers every host that reads `.agents/skills`, including Codex and
 OpenCode:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --global
 ```
+
+The installer opens a skill picker with every skill preselected; deselect what
+you do not need, or pass `--skill <name>` to choose explicitly.
 
 The stable channel exposes current release metadata and digest-bound archives.
 To opt into the moving development channel instead, install from

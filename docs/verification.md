@@ -12,20 +12,21 @@ The supported portable source is the GitHub Pages stable channel at
 
 ## Portable Installation
 
-The global contract for both supported hosts is:
+The global installation contract is:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --skill '*' --global --yes
 ```
 
-It produces one canonical copy in `~/.agents/skills`. Without `--global`, the
+It produces one canonical copy in `~/.agents/skills` for every host that reads
+`.agents/skills`, plus any other installed host. Without `--global`, the
 project copy is `.agents/skills`. Release metadata provides source provenance;
 the authored repository is not an installation source.
 
 The Pages URL is a moving stable-release channel. `update` verifies the current
 well-known digest, downloads changed archives, and offers to remove tracked names
 deleted upstream. Existing Git-based installations must repeat `add` with the
-Pages URL and the same scope and agents to rebind their source. Explicit cleanup
+Pages URL and the same scope to rebind their source. Explicit cleanup
 is limited to the retired names in the current [Migration Inventory](migration-inventory.md).
 
 ## OpenCode Integration

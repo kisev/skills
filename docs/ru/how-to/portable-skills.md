@@ -12,26 +12,33 @@
 | - | - | - |
 | Глобальная область | Добавьте `--global` | `~/.agents/skills` |
 | Область проекта | Не передавайте `--global` | `.agents/skills` |
-| Только Codex | `--agent codex` | Выбранная область |
-| Только OpenCode | `--agent opencode` | Выбранная область |
-| Обе среды | `--agent opencode --agent codex --copy` | Один основной экземпляр в этой области |
+| Все среды `.agents` (по умолчанию) | Не передавайте `--agent` | Один основной экземпляр в этой области |
+| Только одна среда | `--agent <name>` | Выбранная область |
+
+Без `--agent` установщик выбирает все среды, читающие `.agents/skills`, и другие
+обнаруженные установленные среды.
 
 ## Установка
 
-Установите все навыки глобально для обеих сред:
+Установите навыки глобально:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --global
 ```
 
-Установите все навыки в текущем проекте:
+Установите навыки в текущем проекте:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@latest add https://kisev.github.io/skills
 ```
 
-Чтобы установить один навык, замените `'*'` его точным именем из
-[каталога навыков](../reference/skill-catalog.md). Посмотреть опубликованный
+Команда открывает список навыков с предвыбранными всеми позициями; снимите
+лишнее. Внутри сессии агента она выполняется без взаимодействия и ставит всё,
+поэтому передайте `--skill <name>`, чтобы ограничить выбор; точные имена указаны
+в [каталоге навыков](../reference/skill-catalog.md). По умолчанию создаётся один
+основной экземпляр, а среды с собственными каталогами навыков получают ссылки на
+него; добавляйте `--copy`, только если ваша среда не работает с символическими
+ссылками. Посмотреть опубликованный
 каталог без изменений на диске можно так:
 
 ```shell
@@ -51,7 +58,7 @@ URL GitHub Pages - поддерживаемый обновляемый кана�
 Замените стабильный источник на явный источник `/dev`:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills/dev --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills/dev --global
 ```
 
 Обновляемый dev-канал публикуется после успешных push в `dev`. Его техническая
@@ -69,7 +76,7 @@ npx --yes skills@latest update --global --yes
 
 Для области проекта не передавайте `--global`. Установка из репозитория Git или
 тега остаётся привязанной к этому источнику. Чтобы сменить источник, повторите
-подходящую команду `add` с URL Pages, той же областью и теми же агентами.
+подходящую команду `add` с URL Pages и той же областью.
 
 `update` обновляет отслеживаемые навыки, обнаруживает удалённые в источнике имена
 и предлагает удалить их локальные копии. У компонентов пакета OpenCode отдельный
@@ -80,20 +87,16 @@ OpenCode](opencode-integration.md#обновление).
 
 Текущий [инвентарь миграции](../migration-inventory.md) определяет одиннадцать
 устаревших имён. Обычно достаточно согласиться на их удаление, когда о них
-сообщит `skills update`. Чтобы явно удалить их из общей глобальной установки
-OpenCode и Codex, выполните:
+сообщит `skills update`. Чтобы явно удалить их из глобальной установки,
+выполните:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --agent opencode --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --global --yes
 ```
 
-Только для Codex используйте:
+Чтобы удалить только для одной среды, добавьте её параметр `--agent <name>`.
 
-```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --agent codex --global --yes
-```
-
-Используйте те же агенты и область, что при установке. Для области проекта не
+Используйте ту же область, что при установке. Для области проекта не
 передавайте `--global`. Не применяйте `remove --all`, если не хотите удалить все
 переносимые навыки в этой области.
 

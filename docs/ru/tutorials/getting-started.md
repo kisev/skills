@@ -3,12 +3,13 @@
 [English](../../tutorials/getting-started.md)
 
 В этом учебном руководстве вы установите текущий стабильный дистрибутив
-переносимых навыков для Codex и OpenCode. Будет создан один основной глобальный
-экземпляр, доступный обеим средам.
+переносимых навыков для всех сред, читающих `.agents/skills`, например Codex и
+OpenCode. Будет создан один основной глобальный экземпляр, общий для всех них.
 
 ## Перед началом
 
-Нужны Codex, OpenCode или обе среды, а также окружение с доступным `npx`. Команда
+Нужна хотя бы одна среда, читающая `.agents/skills`, например Codex или
+OpenCode, а также окружение с доступным `npx`. Команда
 использует стабильный канал установщика и получает поддерживаемый дистрибутив из
 GitHub Pages, а не из исходного репозитория.
 
@@ -17,24 +18,28 @@ GitHub Pages, а не из исходного репозитория.
 Запустите:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --global
 ```
 
-Команда устанавливает текущий стабильный дистрибутив в `~/.agents/skills`.
-`--copy` сохраняет один основной экземпляр для обеих выбранных сред. Метаданные
+Установщик открывает список навыков с предвыбранными всеми позициями; снимите
+лишнее. Внутри сессии агента команда выполняется без взаимодействия и ставит
+всё, поэтому там передайте `--skill <name>`, чтобы ограничить выбор. Навыки
+попадают в `~/.agents/skills` для всех сред, читающих этот каталог, и других
+обнаруженных установленных сред. Метаданные
 выпуска и контрольные суммы архивов позволяют определить установленный
 дистрибутив.
 
-Если вы используете только одну среду, оставьте только её параметр `--agent`:
+Чтобы установить навыки только для одной среды, ограничьте выбор параметром
+`--agent`:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --agent codex --global
 ```
 
 или:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --global
 ```
 
 ## 2. Проверьте установку
@@ -45,7 +50,7 @@ npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --sk
 npx --yes skills@latest list --global
 ```
 
-Если выбранная среда работала во время установки, перезапустите её. После этого
+Если среда работала во время установки, перезапустите её. После этого
 установленные навыки должны быть доступны из `~/.agents/skills`.
 
 ## 3. Решите, нужен ли вам agentomatic
