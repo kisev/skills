@@ -15,6 +15,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -509,7 +510,15 @@ def publish() -> list[dict[str, Any]]:
     if dist_tag != expected_tag:
         raise PublicationError(f"manifest requires npm dist-tag {expected_tag!r}, got {dist_tag!r}")
     deadline = time.monotonic() + PROPAGATION_SECONDS
-    published = [publish_one(entry, dist_tag, revision, deadline=deadline) for entry in entries]
+    # npm publish never resolves dependencies, so independently named packages
+    # publish and verify concurrently; the wall time is the slowest package
+    # instead of the sum of all waits.
+    with ThreadPoolExecutor(max_workers=max(len(entries), 1)) as pool:
+        futures = [
+            pool.submit(publish_one, entry, dist_tag, revision, deadline=deadline)
+            for entry in entries
+        ]
+        published = [future.result() for future in futures]
     registry_smoke(entries)
     return published
 

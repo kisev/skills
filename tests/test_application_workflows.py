@@ -4499,7 +4499,9 @@ class MattermostAndTeamTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         from scripts import build_skills
 
-        assert build_skills.build(BUILT_SKILLS, False) == 0
+        # Verify materialization instead of rebuilding: a destructive rebuild
+        # races parallel pytest workers reading the shared `.build/skills`.
+        assert build_skills.build(BUILT_SKILLS, True) == 0
 
     def mattermost_module(self, name: str) -> ModuleType:
         return load_module(

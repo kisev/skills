@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -439,7 +440,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         for entry in runtime_entries:
             source = ROOT / "shared" / entry["source"]
             destination = BUILT_SKILLS / entry["destination"]
-            with self.subTest(destination=destination):
+            with self.subTest(destination=str(destination)):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
@@ -610,16 +611,54 @@ class PortableSkillValidationTests(unittest.TestCase):
         for name in PORTABLE_SKILLS:
             self.assertIn(name, result.stdout)
 
-    def test_pinned_cli_installs_each_skill_for_codex_and_opencode(self) -> None:
-        for name in PORTABLE_SKILLS:
-            for agent in ("codex", "opencode"):
-                with self.subTest(skill=name, agent=agent):
-                    self.assert_isolated_install(name, agent)
+    _shared_install_source: Path | None = None
 
-    def assert_isolated_install(self, name: str, agent: str) -> None:
+    @classmethod
+    def shared_install_source(cls) -> Path:
+        """One reusable checkout holding `.build/skills` and the mise config.
+
+        Every subtest still installs into a fresh HOME; the checkout is
+        read-only input, and `test_pinned_cli_installs...` proves it stays
+        byte-identical across all installs."""
+        if cls._shared_install_source is None:
+            root = Path(tempfile.mkdtemp())
+            checkout = root / "checkout"
+            checkout.mkdir()
+            shutil.copytree(
+                BUILT_SKILLS,
+                checkout / ".build/skills",
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+            for config in ("mise.toml", ".mise.toml"):
+                source = ROOT / config
+                if source.exists():
+                    shutil.copy2(source, checkout / config)
+            cls._shared_install_source = checkout
+            cls.addClassCleanup(shutil.rmtree, root, ignore_errors=True)
+        return cls._shared_install_source
+
+    @staticmethod
+    def install_source_digest(checkout: Path) -> str:
+        digest = hashlib.sha256()
+        for path in sorted(checkout.rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts:
+                digest.update(str(path.relative_to(checkout)).encode())
+                digest.update(path.read_bytes())
+        return digest.hexdigest()
+
+    def test_pinned_cli_installs_each_skill_for_codex_and_opencode(self) -> None:
+        checkout = self.shared_install_source()
+        before = self.install_source_digest(checkout)
+        try:
+            for name in PORTABLE_SKILLS:
+                for agent in ("codex", "opencode"):
+                    with self.subTest(skill=name, agent=agent):
+                        self.assert_isolated_install(name, agent, checkout)
+        finally:
+            self.assertEqual(self.install_source_digest(checkout), before)
+
+    def assert_isolated_install(self, name: str, agent: str, checkout: Path) -> None:
         home = Path(tempfile.mkdtemp())
-        checkout = home / "checkout"
-        shutil.copytree(ROOT, checkout)
         environment = {
             **os.environ,
             "HOME": str(home),
@@ -649,8 +688,6 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         installed = home / ".agents/skills" / name
         self.assertTrue((installed / "SKILL.md").is_file())
-        shutil.rmtree(checkout / "shared")
-        shutil.rmtree(checkout)
         source = BUILT_SKILLS / name
         for path in source.rglob("*"):
             if path.is_file() and "__pycache__" not in path.parts:
