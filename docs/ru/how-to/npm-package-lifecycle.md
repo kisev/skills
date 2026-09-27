@@ -64,6 +64,12 @@ gh run download <run-id> -n npm-dev-<run-id>-1 -D .build/release
 npm publish .build/release/safe-fs.tgz   --tag dev --access public
 npm publish .build/release/memomatic.tgz --tag dev --access public
 npm publish .build/release/package.tgz   --tag dev --access public
+
+# npm never allows deleting `latest`; retarget it to a published version
+npm dist-tag add @kisev/safe-fs@<newest-dev-version> latest    # no stable release yet
+npm dist-tag add @kisev/memomatic@<newest-dev-version> latest  # no stable release yet
+npm dist-tag add @kisev/agentomatic@<stable-version> latest    # name with a stable release
+
 npm trust github @kisev/safe-fs    --repo kisev/skills --file publish.yml --allow-publish --yes
 npm trust github @kisev/memomatic --repo kisev/skills --file publish.yml --allow-publish --yes
 npm trust github @kisev/agentomatic --repo kisev/skills --file publish.yml --allow-publish --yes
@@ -72,13 +78,28 @@ npm trust github @kisev/agentomatic --repo kisev/skills --file publish.yml --all
 Первый `npm trust` требует 2FA; браузер предложит пропуск на пять минут для
 оставшихся имён. Следующий пуш в `dev` публикуется уже через OIDC.
 
+Завершите бутстрап проверкой, что ни один тег `latest` не ссылается на
+prerelease:
+
+```shell
+npm dist-tag ls @kisev/agentomatic
+npm dist-tag ls @kisev/safe-fs
+npm dist-tag ls @kisev/memomatic
+```
+
 Ловушки:
 
 - Версии, изданные из локального терминала, не несут provenance-аттестации.
   Не перезапускайте Publish-прогон, покрывающий локально изданные версии:
   проверка provenance упадёт по замыслу. Пусть следующий пуш их перекроет.
-- npm назначает dist-tag `latest` на первую изданную dev-версию. До первого
-  стабильного релиза уберите его: `npm dist-tag rm <name> latest`.
+- npm назначает dist-tag `latest` на первую изданную dev-версию нового имени,
+  а локальная публикация существующего имени сдвигает `latest`, когда изданная
+  dev-версия по semver выше текущего `latest`.
+- npm не позволяет удалять `latest` (registry отклоняет
+  `npm dist-tag rm <name> latest` с ошибкой 400; см. npm/cli#8490). Пока у
+  имени нет стабильного релиза, держите `latest` перенаправленным на новейшую
+  dev-версию; когда стабильный релиз появится, гейт публикации упадёт, если
+  `latest` всё ещё ссылается на prerelease.
 - Совершенно новые имена распространяются медленно: отрицательное кэширование
   CDN способно съесть общий десятиминутный бюджет ожиданий на проверках
   metadata и tarball. Когда версии начнут отвечать 200, перезапустите только

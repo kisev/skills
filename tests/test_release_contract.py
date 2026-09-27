@@ -10,9 +10,11 @@ import subprocess
 import tarfile
 import time
 import urllib.error
+import urllib.request
 from contextlib import suppress
 from email.message import Message
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -560,8 +562,10 @@ def test_existing_registry_version_is_verified_without_republication(
         **build_release_artifacts.hashes(content),
     }
     release = {"npm": [npm], "version": "1.0.0", "revision": "a" * 40}
-    metadata = {
-        "dist": {"integrity": npm["integrity"], "tarball": "https://registry.example/archive"}
+    metadata: dict[str, Any] = {
+        "dist": {"integrity": npm["integrity"], "tarball": "https://registry.example/archive"},
+        "dist-tags": {"latest": "1.0.0"},
+        "versions": {"1.0.0": {}},
     }
     monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
     monkeypatch.setattr(

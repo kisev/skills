@@ -7,6 +7,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,6 +26,7 @@ RELEASE = ROOT / ".build" / "release"
 SLSA_PREDICATE = "https://slsa.dev/provenance/v1"
 PROPAGATION_SECONDS = 600
 PROPAGATION_ATTEMPTS = 60
+PRERELEASE_VERSION = re.compile(r"^\d+\.\d+\.\d+-")
 T = TypeVar("T")
 
 
@@ -398,6 +400,46 @@ def verify_dist_tag(name: str, version: str, dist_tag: str, *, deadline: float) 
     raise PublicationError(f"npm dist-tag {dist_tag!r} does not reference {version}")
 
 
+def verify_latest_tag_stable(name: str, *, deadline: float) -> None:
+    """Reject a `latest` dist-tag that references a prerelease while a stable
+    release exists. npm never allows deleting `latest`, so a package without
+    any stable version necessarily keeps `latest` on a prerelease."""
+
+    def read() -> bool | None:
+        metadata = request_json(package_registry_url(name))
+        if metadata is None:
+            return None
+        tags = metadata.get("dist-tags")
+        if not isinstance(tags, dict):
+            raise PublicationError("registry dist-tags metadata is missing")
+        latest = tags.get("latest")
+        if latest is None:
+            return True
+        if not isinstance(latest, str) or not latest:
+            raise PublicationError("registry dist-tag value is invalid")
+        versions = metadata.get("versions")
+        if not isinstance(versions, dict):
+            raise PublicationError("registry versions metadata is missing")
+        has_stable = any(
+            isinstance(version, str) and not PRERELEASE_VERSION.match(version)
+            for version in versions
+        )
+        if not has_stable:
+            return True
+        if PRERELEASE_VERSION.match(latest):
+            raise PublicationError(
+                f"npm dist-tag 'latest' for {name} references prerelease {latest} "
+                "while a stable release exists; retarget it with "
+                "`npm dist-tag add <name>@<stable> latest` "
+                "(docs/how-to/npm-package-lifecycle.md)"
+            )
+        return True
+
+    if wait_for_registry("latest-tag", read, PROPAGATION_ATTEMPTS, 5, deadline):
+        return
+    raise PublicationError(f"registry metadata for {name} stayed unavailable for latest-tag check")
+
+
 def publish_one(
     entry: dict[str, Any], dist_tag: str, revision: str, *, deadline: float
 ) -> dict[str, Any]:
@@ -449,6 +491,7 @@ def publish_one(
         metadata_url=registry_url(name, version),
     )
     verify_dist_tag(name, version, dist_tag, deadline=deadline)
+    verify_latest_tag_stable(name, deadline=deadline)
     return metadata
 
 

@@ -63,6 +63,12 @@ gh run download <run-id> -n npm-dev-<run-id>-1 -D .build/release
 npm publish .build/release/safe-fs.tgz   --tag dev --access public
 npm publish .build/release/memomatic.tgz --tag dev --access public
 npm publish .build/release/package.tgz   --tag dev --access public
+
+# npm never allows deleting `latest`; retarget it to a published version
+npm dist-tag add @kisev/safe-fs@<newest-dev-version> latest    # no stable release yet
+npm dist-tag add @kisev/memomatic@<newest-dev-version> latest  # no stable release yet
+npm dist-tag add @kisev/agentomatic@<stable-version> latest    # name with a stable release
+
 npm trust github @kisev/safe-fs    --repo kisev/skills --file publish.yml --allow-publish --yes
 npm trust github @kisev/memomatic --repo kisev/skills --file publish.yml --allow-publish --yes
 npm trust github @kisev/agentomatic --repo kisev/skills --file publish.yml --allow-publish --yes
@@ -71,13 +77,28 @@ npm trust github @kisev/agentomatic --repo kisev/skills --file publish.yml --all
 The first `npm trust` requires 2FA; the browser offers a five-minute skip for
 the remaining names. The next push to `dev` publishes through OIDC.
 
+Finish the bootstrap by verifying that every `latest` tag references the newest
+intended version and never an old prerelease:
+
+```shell
+npm dist-tag ls @kisev/agentomatic
+npm dist-tag ls @kisev/safe-fs
+npm dist-tag ls @kisev/memomatic
+```
+
 Traps:
 
 - Versions published from a local terminal carry no provenance attestation.
   Never rerun a Publish run that covers locally published versions; the
   provenance verification fails by design. Let the next push supersede them.
-- npm assigns the `latest` dist-tag to the first published dev version. Until
-  the first stable release, remove it: `npm dist-tag rm <name> latest`.
+- npm assigns the `latest` dist-tag to the first published dev version of a
+  new name, and a local publish of an existing name moves `latest` whenever
+  the published dev version is semver-greater than the current `latest`.
+- npm does not allow deleting `latest` (the registry rejects
+  `npm dist-tag rm <name> latest` with 400; see npm/cli#8490). Until a name
+  has a stable release, keep `latest` retargeted to the newest dev version;
+  once a stable release exists, the publication gate fails if `latest` still
+  references a prerelease.
 - Brand-new names propagate slowly: CDN negative caching can consume the
   shared ten-minute wait budget on metadata and tarball verification. Once the
   versions answer 200 on the registry, rerun only the failed jobs with the
