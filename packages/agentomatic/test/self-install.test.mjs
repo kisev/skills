@@ -146,7 +146,7 @@ test("ensureDependency wraps npm failures as SelfInstallError", async () => {
   });
 });
 
-test("confirmed project install plans and applies the dependency step", async () => {
+test("project install plans and applies the dependency step", async () => {
   const base = await mkdtemp(join(tmpdir(), "self-install-apply-"));
   const project = join(base, "project");
   const home = join(base, "home");
@@ -157,7 +157,7 @@ test("confirmed project install plans and applies the dependency step", async ()
   assert.equal(plan.dependency.status, "install");
   assert.equal(plan.dependency.dir, project);
   const { runner, calls } = stubRunner();
-  const applied = await apply("install", "project", plan.digest, project, home, {
+  const applied = await apply("install", "project", project, home, {
     dependencyRunner: runner,
   });
   assert.equal(applied.dependency.applied, "changed");
@@ -165,7 +165,7 @@ test("confirmed project install plans and applies the dependency step", async ()
   assert.equal(calls[0].options.cwd, project);
 });
 
-test("confirmed project install without an npm project skips the dependency step", async () => {
+test("project install without an npm project skips the dependency step", async () => {
   const base = await mkdtemp(join(tmpdir(), "self-install-skip-"));
   const project = join(base, "project");
   const home = join(base, "home");
@@ -174,7 +174,7 @@ test("confirmed project install without an npm project skips the dependency step
   const plan = await preview("install", "project", project, home);
   assert.equal(plan.dependency.status, "manual");
   const { runner, calls } = stubRunner();
-  const applied = await apply("install", "project", plan.digest, project, home, {
+  const applied = await apply("install", "project", project, home, {
     dependencyRunner: runner,
   });
   assert.equal(applied.dependency.applied, "skipped");

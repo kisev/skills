@@ -50,7 +50,7 @@ test("installer preserves exact selection and keeps core separate from plugins",
       plan.operations.some((item) => item.path.startsWith("plugins/")),
       false,
     );
-    await apply("install", "project", plan.digest, project, home, {}, selection);
+    await apply("install", "project", project, home, {}, selection);
     const manifest = JSON.parse(
       await readFile(join(project, ".opencode", ".agentomatic-manifest.json"), "utf8"),
     );
@@ -103,7 +103,7 @@ test("retired exact-owned plugin is archived once during uninstall", async () =>
       plan.operations.find((item) => item.path === OLD_PLUGIN).operation,
       "archive-pending",
     );
-    await apply("uninstall", "project", plan.digest, project, home);
+    await apply("uninstall", "project", project, home);
     await assert.rejects(lstat(join(project, ".opencode", OLD_PLUGIN)), { code: "ENOENT" });
     const index = JSON.parse(
       await readFile(join(archiveRoot("project", project, home), "index.json"), "utf8"),
@@ -152,15 +152,14 @@ test("stale install archival is transactional and recoverable", async () => {
       "archive-pending",
     );
     await assert.rejects(
-      apply("install", "project", plan.digest, project, home, { afterPublish: () => "fail" }),
+      apply("install", "project", project, home, { afterPublish: () => "fail" }),
       (error) => error.code === "rolled_back",
     );
     assert.deepEqual(await readFile(join(project, ".opencode", "commands", "old.md")), content);
     await assert.rejects(lstat(join(archiveRoot("project", project, home), "index.json")), {
       code: "ENOENT",
     });
-    const fresh = await preview("install", "project", project, home);
-    await apply("install", "project", fresh.digest, project, home);
+    await apply("install", "project", project, home);
     await assert.rejects(lstat(join(project, ".opencode", "commands", "old.md")), {
       code: "ENOENT",
     });
@@ -212,7 +211,7 @@ test("CLI help is structured and explains commands options workflow and scope", 
   for (const option of [
     "--global",
     "--dry-run",
-    "--confirm <digest>",
+    "--yes",
     "--commands <list|none>",
     "--model <id>",
   ]) {
@@ -358,7 +357,7 @@ test("CLI exposes contextual help for every command and group", () => {
   assert.match(outputs.get("critic"), /^  add\s{2,}[\s\S]*^  remove\s{2,}/m);
 });
 
-test("non-TTY install requires explicit complete selection and creates no receipt", async () => {
+test("non-TTY install requires explicit complete selection and writes no state", async () => {
   const base = mkdtempSync(join(tmpdir(), "agentomatic-cli-"));
   const project = join(base, "project");
   const home = join(base, "home");

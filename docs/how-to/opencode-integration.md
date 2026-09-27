@@ -173,27 +173,27 @@ entries are preserved; only absent keys are added; a scalar permission map such
 as `"external_directory": "ask"` is widened to a map that keeps the scalar as
 the `"*"` entry. Fragments that cannot merge cleanly are reported as conflicts
 and skipped without blocking the rest of the plan. Like every mutation, `config`
-requires `--dry-run` preview, the exact confirmation command, and a restart of
+requires a `--dry-run` preview, an explicitly confirmed apply, and a restart of
 the affected tool afterwards. A successful `install` apply prints the matching
 `config` dry-run as its next step.
 
 ## Preview and Confirm
 
-Every mutation begins with `--dry-run`. The preview reports operations,
-conflicts, restart requirements, receipt expiry, separate plan and confirmation
-digests, and the exact confirmation command. If reconcile reports modified
-managed files or ownership conflicts, it is blocked: no receipt or Apply command
-is issued. Install or upgrade the current package first, apply its exact
-installer confirmation, then repeat reconcile; resolve ownership conflicts
-manually.
+Every mutation begins with `--dry-run`. The read-only preview reports
+operations, conflicts, and restart requirements, and ends with an Apply hint
+for the same command that notes the interactive confirmation and the `--yes`
+fallback outside a terminal. If reconcile reports modified
+managed files or ownership conflicts, it is blocked: no apply consent is
+offered. Install or upgrade the current package first, apply its installer
+plan, then repeat reconcile; resolve ownership conflicts manually.
 
 ```shell
 npx agentomatic install --dry-run
 ```
 
-The mandatory OpenCode flow is: `install --dry-run`, the exact confirmation
-command printed by that preview (which also provisions the persistent npm
-dependency), the confirmed `config`
+The mandatory OpenCode flow is: `install --dry-run`, rerunning the install
+command without `--dry-run` and confirming the plan summary (which also
+provisions the persistent npm dependency), the confirmed `config`
 command (or a manual plugin entry), and restart OpenCode. The persistent npm
 project at `~/.config/opencode` keeps the global plugin resolvable. Scope-aware
 commands target the current directory by default. Add `--global` once
@@ -201,18 +201,17 @@ to target global state from any directory. The removed `--scope` option is not
 accepted. Install or upgrade the package and
 apply its installer plan before every reconcile.
 
-The preview has a deterministic `plan_digest` and a unique
-`confirmation_digest`. A later dry-run in the same scope supersedes any older
-unconsumed preview, including previews from another package or agent operation;
-the older confirmation is rejected.
-
-Run the command printed by the preview, including all selection flags. Receipts
-are private, valid for 10 minutes, single-use, and bound to the action, scope,
-root, and current inventory. Apply rejects stale state and unsafe conflicts.
+Without `--dry-run`, a mutation asks for consent directly. In a TTY, the
+interactive selection wizards run first, the plan summary is printed, and
+nothing is written until the final question "Apply these changes?" is answered
+with Yes. Outside a TTY, pass the explicit selection flags plus `--yes`;
+without `--yes` the command fails with "Applying outside a terminal requires
+--yes; use --dry-run to preview". Apply rejects unsafe conflicts and remains
+transactional.
 
 ## Doctor
 
-`doctor` reads integration facts without creating receipts, recovering journals,
+`doctor` reads integration facts without creating state, recovering journals,
 starting plugins, or starting LSP servers:
 
 ```shell
@@ -222,8 +221,8 @@ npx --yes @kisev/agentomatic@latest doctor --json
 
 The report includes versions, ownership, drift, collisions, archive counts,
 redacted configuration projections, runtime summaries, and LSP facts. It does
-not serialize raw configuration, environment values, receipts, credentials, or
-secrets. Exit status `0` is clean, `1` reports findings, and `2` reports invalid
+not serialize raw configuration, environment values, credentials, or secrets.
+Exit status `0` is clean, `1` reports findings, and `2` reports invalid
 input or an incomplete probe failure.
 
 ## Update
@@ -235,8 +234,9 @@ selection, then restart OpenCode:
 npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
-Use the complete confirmation command printed by the preview; the confirmed
-install re-pins the persistent dependency to the executed version. The installer
+Rerun the install command without `--dry-run` and confirm the plan summary; the
+confirmed install re-pins the persistent dependency to the executed version. The
+installer
 updates only files whose recorded ownership and SHA-256 still match. User-owned
 or modified managed files remain conflicts. Package update does not reset agent
 model choices, variants, additional critics, or retained profile configuration.
@@ -248,19 +248,20 @@ and installation metadata for one scope:
 
 ```shell
 npx agentomatic reconcile --dry-run
-npx agentomatic reconcile --confirm <digest>
+npx agentomatic reconcile --yes
 npx agentomatic reconcile --global --dry-run --json
 ```
 
 Before reconcile, update the package through its owning installer. Manage
 portable skills separately with `npx --yes skills@latest update` or
 `npx --yes skills@latest remove`; their trees and lock files do not affect the
-reconcile plan, digest, conflicts, or operations.
+reconcile plan, conflicts, or operations.
 
 Confirmed reconcile archives the current bytes in a private content-addressed
 XDG archive. Package assets are then removed transactionally. User-owned,
 unknown, symlink, unsafe, or ambiguous package entries remain unchanged as
-findings or conflicts. A no-op preview has no confirmation digest. Portable
+findings or conflicts. A no-op preview reports that no reconciliation changes
+are required and offers no apply. Portable
 skills, their lock files, worktrees, and runtime state are preserved. The archive
 is inspectable through `doctor`; no archive restore or purge command is provided.
 
@@ -279,7 +280,7 @@ npx agentomatic agent reconcile --global --dry-run
 
 Fixed roles keep their names, prompts, and permissions; only model and variant
 change. Additional critics use `critic-<safe-suffix>`. Every mutation uses the
-same preview and one-time confirmation contract.
+same preview and confirmation contract.
 
 ## Uninstall
 
@@ -292,7 +293,7 @@ Keep the package resolvable until its assets are removed:
 
 ```shell
 npx agentomatic uninstall --dry-run
-npx agentomatic uninstall --confirm <digest>
+npx agentomatic uninstall --yes
 npm uninstall @kisev/agentomatic
 ```
 

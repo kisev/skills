@@ -7,20 +7,16 @@ import { fileURLToPath } from "node:url";
 
 import {
   applyTransaction,
-  consumeReceipt,
   deploymentRoot,
   destination,
-  digest,
   LifecycleError,
   lifecycleRoot,
   listDirectRegular,
   readRegular,
   recoverTransaction,
-  saveReceipt,
   sha256,
   stable,
   withLifecycleLock,
-  type SupersededPlan,
   type FileMutation,
   type Scope,
   type TransactionOptions,
@@ -80,7 +76,6 @@ export type AgentInventory = {
   collisions: string[];
   drift: string[];
   requires_restart: false;
-  digest: string;
 };
 export type AgentProfileAction =
   | "install"
@@ -109,11 +104,6 @@ export type AgentProfilePlan = {
   root: string;
   operations: AgentProfileOperation[];
   critic_pool: string[];
-  plan_digest: string;
-  confirmation_digest?: string;
-  superseded_plan?: SupersededPlan;
-  digest: string;
-  receipt_expires_at?: string;
   requires_restart: boolean;
 };
 export type AgentProfileResult = {
@@ -139,7 +129,6 @@ export type LegacyAgentOwnership = {
 type BuiltPlan = {
   plan: AgentProfilePlan;
   mutations: FileMutation[];
-  inventoryDigest: string;
   config: AgentProfileConfig;
   manifest?: DeploymentManifest;
   expectedConfig?: Buffer;
@@ -479,7 +468,7 @@ function desiredManifest(
       kind: NAME_PATTERN.test(name) ? "fixed" : "additional-critic",
       template: role,
       canonical_sha256: sha256(canonical[role]),
-      configuration_sha256: digest(selection),
+      configuration_sha256: sha256(stable(selection)),
       rendered_sha256: sha256(rendered[name]),
     };
   }
@@ -569,17 +558,6 @@ function legacyIsExact(
       sha256(content) === record.sha256
     );
   });
-}
-
-function planDigestBase(
-  plan: Omit<
-    AgentProfilePlan,
-    "digest" | "receipt_expires_at" | "plan_digest" | "confirmation_digest" | "superseded_plan"
-  >,
-  inventoryDigest: string,
-  request: AgentProfileRequest,
-): string {
-  return digest({ plan, inventory_digest: inventoryDigest, request });
 }
 
 export async function buildAgentProfilePlan(
@@ -782,19 +760,6 @@ export async function buildAgentProfilePlan(
     });
   }
 
-  const inventoryDigest = digest({
-    package_version: packageVersion(),
-    canonical: Object.fromEntries(FIXED_AGENT_ROLES.map((role) => [role, sha256(canonical[role])])),
-    desired_configuration: config,
-    desired_manifest: finalManifest ?? null,
-    config: state.configRaw?.toString("base64") ?? null,
-    manifest: state.manifestRaw?.toString("base64") ?? null,
-    agents: agentFiles.map((item) => ({
-      name: item.name,
-      sha256: sha256(item.content),
-      mode: item.mode,
-    })),
-  });
   const base = {
     schema_version: 1 as const,
     domain: "agent-profiles" as const,
@@ -805,16 +770,12 @@ export async function buildAgentProfilePlan(
     critic_pool: desired?.critic_pool ?? finalManifest?.critic_pool ?? [],
     requires_restart: mutations.some((item) => item.path.startsWith("agents/")),
   };
-  const planDigest = planDigestBase(base, inventoryDigest, request);
   const plan: AgentProfilePlan = {
     ...base,
-    plan_digest: planDigest,
-    digest: planDigest,
   };
   return {
     plan,
     mutations,
-    inventoryDigest,
     config,
     manifest: finalManifest,
     expectedConfig: names.length ? configContent : state.configRaw,
@@ -950,7 +911,7 @@ export async function listAgentProfiles(
     drift,
     requires_restart: false as const,
   };
-  return { ...base, digest: digest(base) };
+  return { ...base };
 }
 
 export async function previewAgentProfileChange(
@@ -966,31 +927,13 @@ export async function previewAgentProfileChange(
         "recovered_transaction",
         "Recovered an interrupted transaction; request a fresh plan",
       );
-    const built = await buildAgentProfilePlan(request, scope, cwd, home);
-    const receipt = await saveReceipt(
-      stateRoot,
-      `agent:${request.action}`,
-      scope,
-      built.plan.root,
-      { request, plan_digest: built.plan.digest },
-      Date.now(),
-      built.plan.digest,
-    );
-    return {
-      ...built.plan,
-      plan_digest: built.plan.digest,
-      confirmation_digest: receipt.digest,
-      digest: receipt.digest,
-      receipt_expires_at: receipt.expires_at,
-      ...(receipt.superseded_plan ? { superseded_plan: receipt.superseded_plan } : {}),
-    };
+    return (await buildAgentProfilePlan(request, scope, cwd, home)).plan;
   });
 }
 
 export async function applyAgentProfileChange(
   request: AgentProfileRequest,
   scope: Scope,
-  confirmationDigest: string,
   cwd = process.cwd(),
   home = homedir(),
   options: TransactionOptions = {},
@@ -1003,20 +946,7 @@ export async function applyAgentProfileChange(
         "recovered_transaction",
         "Recovered an interrupted transaction; request a fresh plan",
       );
-    const receipt = (await consumeReceipt(stateRoot, {
-      digest: confirmationDigest,
-      kind: `agent:${request.action}`,
-      scope,
-      root,
-    })) as { request?: AgentProfileRequest; plan_digest?: string; digest?: string };
-    if (stable(receipt.request) !== stable(request))
-      throw new AgentProfileError(
-        "confirmation_unknown",
-        "Saved confirmation belongs to a different request",
-      );
     const built = await buildAgentProfilePlan(request, scope, cwd, home);
-    if (built.plan.digest !== (receipt.plan_digest ?? receipt.digest))
-      throw new AgentProfileError("stale_plan", "Agent inventory changed after preview");
     if (
       built.plan.operations.some(
         (item) => item.operation === "conflict" && item.reason.includes("collision"),
@@ -1054,7 +984,7 @@ export async function applyAgentProfileChange(
       status: "ok",
       applied: true,
       requires_restart: built.plan.requires_restart,
-      plan: { ...built.plan, digest: confirmationDigest },
+      plan: built.plan,
     };
   });
 }

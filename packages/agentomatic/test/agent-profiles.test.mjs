@@ -29,13 +29,8 @@ import {
   LifecycleError,
   appendPrivate,
   applyTransaction,
-  consumeReceipt,
-  digest,
-  deploymentRoot,
   lifecycleRoot,
-  saveReceipt,
   sha256,
-  stable,
   withLifecycleLock,
 } from "../dist/lifecycle.js";
 
@@ -73,7 +68,7 @@ async function roots() {
 
 async function confirmedInstall(project, home) {
   const plan = await preview("install", "project", project, home);
-  await apply("install", "project", plan.digest, project, home);
+  await apply("install", "project", project, home);
   return plan;
 }
 
@@ -81,7 +76,7 @@ async function confirmedProfile(request, project, home, options) {
   const plan = await previewAgentProfileChange(request, "project", project, home);
   return {
     plan,
-    result: await applyAgentProfileChange(request, "project", plan.digest, project, home, options),
+    result: await applyAgentProfileChange(request, "project", project, home, options),
   };
 }
 
@@ -182,7 +177,7 @@ fi
   }
 });
 
-test("incomplete non-TTY configure exits with JSON guidance and leaves no receipt", async () => {
+test("incomplete non-TTY configure exits with JSON guidance and writes no state", async () => {
   const context = await roots();
   const result = spawnSync(
     process.execPath,
@@ -356,8 +351,7 @@ test("model and variant configuration survives package install", async () => {
       /model: openai\/gpt-5\nvariant: high/,
     );
 
-    const upgrade = await preview("install", "project", context.project, context.home);
-    await apply("install", "project", upgrade.digest, context.project, context.home);
+    await apply("install", "project", context.project, context.home);
     const config = JSON.parse(
       await readFile(join(context.root, ".agentomatic", "agent-profiles.json"), "utf8"),
     );
@@ -386,7 +380,7 @@ test("agent deselection removes managed profiles and preserves profile configura
       plan.operations.some((item) => item.path === ".agentomatic/agent-profiles.json"),
       false,
     );
-    await apply("install", "project", plan.digest, context.project, context.home, {}, selection);
+    await apply("install", "project", context.project, context.home, {}, selection);
 
     assert.deepEqual(await readFile(configPath), config);
     await assert.rejects(
@@ -523,146 +517,10 @@ test("exact-name collision blocks apply and preserves user-owned content", async
       "conflict",
     );
     await assert.rejects(
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home),
+      applyAgentProfileChange(request, "project", context.project, context.home),
       (error) => error instanceof AgentProfileError && error.code === "collision",
     );
     assert.equal(await readFile(target, "utf8"), "user-owned\n");
-  } finally {
-    rmSync(context.directory, { recursive: true, force: true });
-  }
-});
-
-test("receipts expire, are one-use, and reject stale inventory", async () => {
-  const context = await roots();
-  try {
-    const state = lifecycleRoot("project", context.project, context.home);
-    const root = deploymentRoot("project", context.project, context.home);
-    const receipt = await saveReceipt(state, "test", "project", root, { value: 1 }, 1_000);
-    await assert.rejects(
-      consumeReceipt(
-        state,
-        { digest: receipt.digest, kind: "test", scope: "project", root },
-        1_000 + 10 * 60 * 1000 + 1,
-      ),
-      (error) => error instanceof LifecycleError && error.code === "confirmation_expired",
-    );
-    const fresh = await saveReceipt(state, "test", "project", root, { value: 2 }, 2_000_000);
-    assert.deepEqual(
-      await consumeReceipt(
-        state,
-        { digest: fresh.digest, kind: "test", scope: "project", root },
-        2_000_001,
-      ),
-      { value: 2 },
-    );
-    await assert.rejects(
-      consumeReceipt(
-        state,
-        { digest: fresh.digest, kind: "test", scope: "project", root },
-        2_000_002,
-      ),
-      (error) => error instanceof LifecycleError && error.code === "confirmation_consumed",
-    );
-
-    await confirmedInstall(context.project, context.home);
-    const request = { action: "model-set", name: "worker", model: "openai/gpt-5" };
-    const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
-    await writeFile(join(context.root, "agents", "notes.md"), "appeared after preview\n");
-    await assert.rejects(
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home),
-      (error) => error instanceof AgentProfileError && error.code === "stale_plan",
-    );
-  } finally {
-    rmSync(context.directory, { recursive: true, force: true });
-  }
-});
-
-test("new previews supersede every unconsumed domain receipt and keep plan identity deterministic", async () => {
-  const context = await roots();
-  try {
-    const first = await preview("install", "project", context.project, context.home);
-    const second = await previewAgentProfileChange(
-      { action: "critic-add", name: "critic-security", model: "openai/gpt-5" },
-      "project",
-      context.project,
-      context.home,
-    );
-    assert.match(first.plan_digest, /^[a-f0-9]{64}$/);
-    assert.match(second.plan_digest, /^[a-f0-9]{64}$/);
-    assert.notEqual(first.confirmation_digest, second.confirmation_digest);
-    assert.equal(second.superseded_plan.kind, "installer:install");
-    assert.match(second.superseded_plan.confirmation_digest, /^[a-f0-9]{12}$/);
-    assert.equal(second.superseded_plan.created_at !== undefined, true);
-    await assert.rejects(
-      apply("install", "project", first.confirmation_digest, context.project, context.home),
-      (error) => error.code === "superseded_plan",
-    );
-
-    const sameA = await previewAgentProfileChange(
-      { action: "critic-add", name: "critic-a", model: "openai/gpt-5" },
-      "project",
-      context.project,
-      context.home,
-    );
-    const sameB = await previewAgentProfileChange(
-      { action: "critic-add", name: "critic-a", model: "openai/gpt-5" },
-      "project",
-      context.project,
-      context.home,
-    );
-    assert.equal(sameA.plan_digest, sameB.plan_digest);
-    assert.notEqual(sameA.confirmation_digest, sameB.confirmation_digest);
-    await assert.rejects(
-      applyAgentProfileChange(
-        { action: "critic-add", name: "critic-a", model: "openai/gpt-5" },
-        "project",
-        sameA.confirmation_digest,
-        context.project,
-        context.home,
-      ),
-      (error) => error.code === "superseded_plan",
-    );
-
-    const global = await preview("install", "global", context.project, context.home);
-    assert.equal(global.superseded_plan, undefined);
-  } finally {
-    rmSync(context.directory, { recursive: true, force: true });
-  }
-});
-
-test("a legacy 2.0.3 receipt is replaced by the next preview", async () => {
-  const context = await roots();
-  try {
-    const state = lifecycleRoot("project", context.project, context.home);
-    const root = deploymentRoot("project", context.project, context.home);
-    const payload = { digest: "0".repeat(64) };
-    const kind = "installer:install";
-    const scope = "project";
-    const legacy = {
-      schema_version: 1,
-      digest: digest({ schema_version: 1, kind, scope, root, payload }),
-      nonce: "legacy-nonce",
-      expires_at: new Date(Date.now() + 60_000).toISOString(),
-      consumed: false,
-      kind,
-      scope,
-      root,
-      payload,
-      integrity: "",
-    };
-    const { integrity: _integrity, ...legacyDocument } = legacy;
-    legacy.integrity = digest(legacyDocument);
-    await mkdir(state, { recursive: true });
-    chmodSync(state, 0o700);
-    await writeFile(join(state, "receipt.json"), `${stable(legacy)}\n`, { mode: 0o600 });
-    const next = await preview("install", "project", context.project, context.home);
-    assert.equal(next.superseded_plan.kind, kind);
-    await assert.rejects(
-      (async () => {
-        await consumeReceipt(state, { digest: legacy.digest, kind, scope, root });
-      })(),
-      (error) => error.code === "superseded_plan",
-    );
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
   }
@@ -673,10 +531,9 @@ test("concurrent apply permits only one transaction", async () => {
   try {
     await confirmedInstall(context.project, context.home);
     const request = { action: "model-set", name: "worker", model: "openai/gpt-5" };
-    const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
     const settled = await Promise.allSettled([
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home),
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home),
+      applyAgentProfileChange(request, "project", context.project, context.home),
+      applyAgentProfileChange(request, "project", context.project, context.home),
     ]);
     assert.equal(settled.filter((item) => item.status === "fulfilled").length, 1);
     assert.equal(settled.filter((item) => item.status === "rejected").length, 1);
@@ -691,23 +548,16 @@ test("injected failure rolls back every published file and final validation", as
     await confirmedInstall(context.project, context.home);
     const before = await fileSnapshot(context.root);
     const request = { action: "critic-add", name: "critic-security", model: "openai/gpt-5" };
-    const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
     await assert.rejects(
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home, {
+      applyAgentProfileChange(request, "project", context.project, context.home, {
         afterPublish: (published) => (published === 2 ? "fail" : "continue"),
       }),
       (error) => error instanceof LifecycleError && error.code === "rolled_back",
     );
     assert.deepEqual(await fileSnapshot(context.root), before);
 
-    const retry = await previewAgentProfileChange(
-      request,
-      "project",
-      context.project,
-      context.home,
-    );
     await assert.rejects(
-      applyAgentProfileChange(request, "project", retry.digest, context.project, context.home, {
+      applyAgentProfileChange(request, "project", context.project, context.home, {
         validateFinal: async () => {
           throw new Error("injected final validation failure");
         },
@@ -726,9 +576,8 @@ test("interrupted transaction recovers before requiring a fresh plan", async () 
     await confirmedInstall(context.project, context.home);
     const before = await fileSnapshot(context.root);
     const request = { action: "critic-add", name: "critic-security", model: "openai/gpt-5" };
-    const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
     await assert.rejects(
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home, {
+      applyAgentProfileChange(request, "project", context.project, context.home, {
         afterPublish: (published) => (published === 2 ? "interrupt" : "continue"),
       }),
       (error) => error instanceof LifecycleError && error.code === "test_interruption",
@@ -738,13 +587,7 @@ test("interrupted transaction recovers before requiring a fresh plan", async () 
       (error) => error instanceof AgentProfileError && error.code === "recovered_transaction",
     );
     assert.deepEqual(await fileSnapshot(context.root), before);
-    const fresh = await previewAgentProfileChange(
-      request,
-      "project",
-      context.project,
-      context.home,
-    );
-    assert.match(fresh.digest, /^[a-f0-9]{64}$/);
+    await previewAgentProfileChange(request, "project", context.project, context.home);
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
   }
@@ -934,20 +777,9 @@ test("explicit reconcile repairs only semantic-manifest-owned drift", async () =
     const manager = join(context.root, "agents", "manager.md");
     await writeFile(manager, "drift\n");
     const modelRequest = { action: "model-set", name: "worker", model: "openai/gpt-5" };
-    const blocked = await previewAgentProfileChange(
-      modelRequest,
-      "project",
-      context.project,
-      context.home,
-    );
+    await previewAgentProfileChange(modelRequest, "project", context.project, context.home);
     await assert.rejects(
-      applyAgentProfileChange(
-        modelRequest,
-        "project",
-        blocked.digest,
-        context.project,
-        context.home,
-      ),
+      applyAgentProfileChange(modelRequest, "project", context.project, context.home),
       (error) => error instanceof AgentProfileError && error.code === "drift",
     );
     const reconcile = { action: "reconcile" };
@@ -968,9 +800,8 @@ test("profile final validation requires exact semantic metadata", async () => {
     await confirmedInstall(context.project, context.home);
     const manifestPath = join(context.root, ".agentomatic", "agent-profiles.manifest.json");
     const request = { action: "reconcile" };
-    const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
     await assert.rejects(
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home, {
+      applyAgentProfileChange(request, "project", context.project, context.home, {
         validateFinal: async () => {
           const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
           manifest.package_version = "concurrent-change";
@@ -1001,7 +832,7 @@ test("mode-only mutation is fully rolled back", async () => {
       "update",
     );
     await assert.rejects(
-      applyAgentProfileChange(request, "project", plan.digest, context.project, context.home, {
+      applyAgentProfileChange(request, "project", context.project, context.home, {
         validateFinal: async () => {
           throw new Error("injected failure after mode update");
         },
@@ -1038,7 +869,7 @@ test("v1.0.0 ownership migrates only exact manifest and SHA-256 matches", async 
         (item) => item.path === "agents/manager.md" && item.reason === "v1.0.0 ownership transfer",
       ),
     );
-    await apply("install", "project", migration.digest, context.project, context.home);
+    await apply("install", "project", context.project, context.home);
     const generic = JSON.parse(
       await readFile(join(context.root, ".agentomatic-manifest.json"), "utf8"),
     );
@@ -1069,9 +900,7 @@ test("v1.0.0 ownership migrates only exact manifest and SHA-256 matches", async 
       );
       const blocked = await preview("install", "project", mismatch.project, mismatch.home);
       assert.ok(blocked.operations.some((item) => item.operation === "conflict"));
-      await assert.rejects(
-        apply("install", "project", blocked.digest, mismatch.project, mismatch.home),
-      );
+      await assert.rejects(apply("install", "project", mismatch.project, mismatch.home));
       assert.equal(
         await readFile(join(mismatch.root, "agents", "manager.md"), "utf8"),
         "user drift\n",
@@ -1093,8 +922,7 @@ test("profile paths reject symlink parents and uninstall preserves configuration
       context.project,
       context.home,
     );
-    const uninstall = await preview("uninstall", "project", context.project, context.home);
-    await apply("uninstall", "project", uninstall.digest, context.project, context.home);
+    await apply("uninstall", "project", context.project, context.home);
     assert.equal(
       JSON.parse(await readFile(join(context.root, ".agentomatic", "agent-profiles.json"), "utf8"))
         .fixed.worker.model,
@@ -1127,7 +955,7 @@ test("uninstall preserves managed agent drift with semantic ownership", async ()
     const manager = join(context.root, "agents", "manager.md");
     await writeFile(manager, "user drift\n");
     const plan = await preview("uninstall", "project", context.project, context.home);
-    await apply("uninstall", "project", plan.digest, context.project, context.home);
+    await apply("uninstall", "project", context.project, context.home);
     assert.equal(await readFile(manager, "utf8"), "user drift\n");
     const manifest = JSON.parse(
       await readFile(join(context.root, ".agentomatic", "agent-profiles.manifest.json"), "utf8"),
@@ -1170,7 +998,6 @@ test("CLI defaults to a concise human plan and table", async () => {
     assert.match(previewResult.stdout, /^  Agents: create 6$/m);
     assert.match(previewResult.stdout, /^  State: create 3$/m);
     assert.match(previewResult.stdout, /^Conflicts: none$/m);
-    assert.match(previewResult.stdout, /^Digest: [a-f0-9]{64}$/m);
     assert.match(
       previewResult.stdout,
       new RegExp(
@@ -1178,10 +1005,10 @@ test("CLI defaults to a concise human plan and table", async () => {
         "m",
       ),
     );
+    assert.match(previewResult.stdout, /confirm interactively; add --yes outside a terminal/);
     assert.doesNotMatch(previewResult.stdout, /"operations"|"status"/);
+    assert.doesNotMatch(previewResult.stdout, /^Digest: /m);
     assert.ok(previewResult.stdout.length < 2500);
-    const digest = previewResult.stdout.match(/^Digest: ([a-f0-9]{64})$/m)?.[1];
-    assert.ok(digest);
 
     const applied = invoke([
       "install",
@@ -1191,8 +1018,7 @@ test("CLI defaults to a concise human plan and table", async () => {
       "manager,architect,mapper,worker,review,critic",
       "--plugins",
       "none",
-      "--confirm",
-      digest,
+      "--yes",
     ]);
     assert.equal(applied.status, 0, applied.stderr);
     assert.match(applied.stdout, /^Applied changes:$/m);
@@ -1338,7 +1164,7 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
     return JSON.parse(result.stdout);
   };
   try {
-    let plan = run([
+    run([
       "install",
       "--commands",
       "none",
@@ -1347,7 +1173,7 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
       "--plugins",
       "none",
       "--dry-run",
-    ]).plan;
+    ]);
     assert.equal(
       run([
         "install",
@@ -1357,23 +1183,10 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
         "manager,architect,mapper,worker,review,critic",
         "--plugins",
         "none",
-        "--confirm",
-        plan.digest,
+        "--yes",
       ]).requires_restart,
       true,
     );
-    plan = run([
-      "agent",
-      "configure",
-      "manager",
-      "--provider",
-      "openai",
-      "--model",
-      "gpt-5",
-      "--variant",
-      "high",
-      "--dry-run",
-    ]).plan;
     run([
       "agent",
       "configure",
@@ -1384,8 +1197,19 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
       "gpt-5",
       "--variant",
       "high",
-      "--confirm",
-      plan.digest,
+      "--dry-run",
+    ]);
+    run([
+      "agent",
+      "configure",
+      "manager",
+      "--provider",
+      "openai",
+      "--model",
+      "gpt-5",
+      "--variant",
+      "high",
+      "--yes",
     ]);
     assert.equal(
       run(["agent", "list"]).inventory.profiles.find((item) => item.name === "manager").variant,

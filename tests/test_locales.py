@@ -94,6 +94,12 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "npx --yes @kisev/agentomatic@latest" in document
         assert "npx --yes @kisev/agentomatic@dev" in document
         assert "npm exec -- agentomatic" not in document
+        assert "reconcile --yes" in document
+        assert "uninstall --yes" in document
+        assert "Apply these changes?" in document
+        assert "--confirm" not in document
+        assert "plan_digest" not in document
+        assert "confirmation_digest" not in document
     assert "Manage\nportable skills separately" in english
     assert "Переносимыми навыками\nуправляйте отдельно" in russian
     assert "lock files do not affect the\nreconcile plan" in english
@@ -108,11 +114,13 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "npx --yes @kisev/agentomatic@latest" in document
         assert "@kisev/agentomatic@dev" in document
         assert "npm exec -- agentomatic" not in document
+        assert "--confirm" not in document
 
     for path in (ROOT / "README.md", ROOT / "README.ru.md"):
         text = path.read_text(encoding="utf-8")
         assert "npx --yes @kisev/agentomatic@latest" in text, path
         assert "@kisev/agentomatic@dev" in text, path
+        assert "--confirm" not in text, path
 
 
 def test_current_user_documentation_uses_stable_cli_channels() -> None:

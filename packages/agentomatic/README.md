@@ -75,8 +75,9 @@ global installs own `~/.config/opencode` and create its `package.json` when
 needed. Offline setups can provision the dependency by hand first:
 `npm install --save-exact @kisev/agentomatic`, then run
 `npx agentomatic install --dry-run` from that project so the executing version
-matches the installed package. Run the exact confirmation command
-printed by the preview. If the selected
+matches the installed package. Apply by rerunning the install command without
+`--dry-run` and confirming the printed plan summary, or by adding `--yes`
+outside a terminal. If the selected
 assets need core integration, connect the package into the user-owned OpenCode
 configuration yourself or through the confirmed `config` command, which merges
 the `plugin` entry while preserving existing entries:

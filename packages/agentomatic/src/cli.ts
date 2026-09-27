@@ -56,7 +56,7 @@ type Options = {
   global: boolean;
   dryRun: boolean;
   json: boolean;
-  confirm?: string;
+  yes: boolean;
   provider?: string;
   model?: string;
   variant?: string | null;
@@ -76,6 +76,7 @@ function parseOptions(values: string[]): Options {
     global: false,
     dryRun: false,
     json: false,
+    yes: false,
     selectionFlag: false,
   };
   for (let index = 0; index < values.length; index += 1) {
@@ -92,12 +93,9 @@ function parseOptions(values: string[]): Options {
       if (options.dryRun)
         throw new InstallerError("invalid_input", "--dry-run may be supplied once");
       options.dryRun = true;
-    } else if (value === "--confirm") {
-      if (options.confirm)
-        throw new InstallerError("invalid_input", "--confirm may be supplied once");
-      options.confirm = values[++index];
-      if (!options.confirm)
-        throw new InstallerError("invalid_input", "--confirm requires a digest");
+    } else if (value === "--yes") {
+      if (options.yes) throw new InstallerError("invalid_input", "--yes may be supplied once");
+      options.yes = true;
     } else if (value === "--provider") {
       options.provider = values[++index];
       if (!options.provider)
@@ -200,8 +198,8 @@ function rootHelp(): string {
     "Common options:",
     ...helpRows([
       ["--global", "Use global scope; project scope is the default."],
-      ["--dry-run", "Preview a mutation and issue a one-time confirmation digest."],
-      ["--confirm <digest>", "Apply the exact unexpired preview after final revalidation."],
+      ["--dry-run", "Preview a mutation without changing anything."],
+      ["--yes", "Apply without the interactive final confirmation (required outside a terminal)."],
       ["--json", "Emit stable machine-readable output when supported."],
       ["--help", "Show this help and exit."],
       ["--version", "Show the package version and exit."],
@@ -230,8 +228,9 @@ function rootHelp(): string {
     "",
     "Safe mutation workflow:",
     "  1. Run the command with --dry-run.",
-    "  2. Review the target, operations, conflicts, restart requirement, and expiry.",
-    "  3. Run the exact Apply command printed by the preview before it expires.",
+    "  2. Review the target, operations, conflicts, and restart requirement.",
+    "  3. Run the command without --dry-run; confirm the summary when asked",
+    "     (add --yes to skip the question or to apply outside a terminal).",
     "  4. Restart OpenCode when the applied plan requires it.",
     "  install and uninstall never edit opencode.json; the config command is the",
     "  confirmed path for configuration fragments. No command installs portable skills.",
@@ -328,12 +327,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "Select and deploy package-owned OpenCode integration assets.",
       [
         "agentomatic install [--global] --dry-run [selection options]",
-        "agentomatic install [--global] --confirm <digest> [selection options]",
+        "agentomatic install [--global] [--dry-run | --yes] [selection options]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
-        ["--dry-run", "Preview operations and issue a one-time confirmation digest."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--dry-run", "Preview operations without changing anything."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--no-dependency", "Skip provisioning the persistent npm dependency for the core plugin."],
         ["--commands <list|none>", "Select installed-skill adapters."],
         ["--skill-commands <list|none>", "Select installed-skill adapters."],
@@ -369,12 +368,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "Connect the package and recommended fragments into user configuration files.",
       [
         "agentomatic config [--global] --dry-run [selection options]",
-        "agentomatic config [--global] --confirm <digest> [selection options]",
+        "agentomatic config [--global] [--dry-run | --yes] [selection options]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
-        ["--dry-run", "Preview config operations and issue a one-time confirmation digest."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--dry-run", "Preview config operations without changing anything."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--targets <list|none>", `Select targets: ${CONFIG_TARGETS.join(", ")}.`],
         [
           "--fragments <list|none>",
@@ -409,12 +408,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "Remove package-owned integration assets safely.",
       [
         "agentomatic uninstall [--global] --dry-run",
-        "agentomatic uninstall [--global] --confirm <digest>",
+        "agentomatic uninstall [--global] [--dry-run | --yes]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview removals, archives, and conflicts."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -466,12 +465,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "Classify current and historical assets and retire exact-owned entries.",
       [
         "agentomatic reconcile [--global] --dry-run",
-        "agentomatic reconcile [--global] --confirm <digest>",
+        "agentomatic reconcile [--global] [--dry-run | --yes]",
       ],
       [
         ["--global", "Reconcile global scope; project scope is the default."],
         ["--dry-run", "Preview classifications, archives, and blockers."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -505,7 +504,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       [
         "agentomatic agent configure [name] [--global] --dry-run",
         "agentomatic agent configure <name> [--global] --model <provider/model> [--variant <id>] --dry-run",
-        "agentomatic agent configure <name> [--global] --model <provider/model> [--variant <id>] --confirm <digest>",
+        "agentomatic agent configure <name> [--global] --model <provider/model> [--variant <id>] [--dry-run | --yes]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
@@ -514,7 +513,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         ["--variant <id>", "Set an optional model variant."],
         ["--clear-variant", "Remove the configured variant."],
         ["--dry-run", "Preview the profile change."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -544,7 +543,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "Set one agent model and optional variant directly.",
       [
         "agentomatic agent model-set <name> [--global] --model <provider/model> [--variant <id>] --dry-run",
-        "agentomatic agent model-set <name> [--global] --model <provider/model> [--variant <id>] --confirm <digest>",
+        "agentomatic agent model-set <name> [--global] --model <provider/model> [--variant <id>] [--dry-run | --yes]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
@@ -553,7 +552,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         ["--variant <id>", "Set an optional model variant."],
         ["--clear-variant", "Remove the configured variant."],
         ["--dry-run", "Preview the profile change."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -592,12 +591,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "Re-render managed agent files from saved profile configuration.",
       [
         "agentomatic agent reconcile [--global] --dry-run",
-        "agentomatic agent reconcile [--global] --confirm <digest>",
+        "agentomatic agent reconcile [--global] [--dry-run | --yes]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview rendered agent changes and conflicts."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -635,7 +634,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       [
         "agentomatic critic add [name] [--global] --dry-run",
         "agentomatic critic add <name> [--global] --model <provider/model> [--variant <id>] --dry-run",
-        "agentomatic critic add <name> [--global] --model <provider/model> [--variant <id>] --confirm <digest>",
+        "agentomatic critic add <name> [--global] --model <provider/model> [--variant <id>] [--dry-run | --yes]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
@@ -643,7 +642,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         ["--model <id>", "Exact provider/model or model paired with --provider."],
         ["--variant <id>", "Set an optional model variant."],
         ["--dry-run", "Preview critic creation and pool changes."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -671,12 +670,12 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       "Remove a package-managed additional critic.",
       [
         "agentomatic critic remove <name> [--global] --dry-run",
-        "agentomatic critic remove <name> [--global] --confirm <digest>",
+        "agentomatic critic remove <name> [--global] [--dry-run | --yes]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview critic removal and pool changes."],
-        ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--yes", "Apply without the interactive final confirmation."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -834,9 +833,27 @@ function selectionArguments(selection: InstallerSelection): string[] {
   ];
 }
 
-function requireConfirmationMode(options: Options): void {
-  if (options.dryRun === Boolean(options.confirm))
-    throw new InstallerError("invalid_input", "Use exactly one of --dry-run or --confirm <digest>");
+function interactiveTerminal(): boolean {
+  return Boolean(process.stdin.isTTY && process.stderr.isTTY);
+}
+
+function requireApplyMode(options: Options): void {
+  if (options.dryRun && options.yes)
+    throw new InstallerError("invalid_input", "Use either --dry-run or --yes, not both");
+  if (!options.dryRun && !options.yes && !interactiveTerminal())
+    throw new InstallerError(
+      "invalid_input",
+      "Applying outside a terminal requires --yes; use --dry-run to preview",
+    );
+}
+
+async function confirmSummary(): Promise<void> {
+  const choice = await selectOption("Apply these changes?", ["Yes", "No"]);
+  if (choice !== 0) throw new InstallerError("cancelled", "Cancelled before apply");
+}
+
+function applyHint(command: readonly string[]): string {
+  return `${shellCommand(command)} (confirm interactively; add --yes outside a terminal)`;
 }
 
 function exactModel(options: Options): string | undefined {
@@ -999,7 +1016,7 @@ async function interactiveSelection(
 }
 
 async function runProfile(request: AgentProfileRequest, options: Options): Promise<void> {
-  requireConfirmationMode(options);
+  requireApplyMode(options);
   if (options.dryRun) {
     const plan = await previewAgentProfileChange(request, options.scope!);
     if (options.json)
@@ -1010,27 +1027,25 @@ async function runProfile(request: AgentProfileRequest, options: Options): Promi
       process.stdout.write(
         renderPlan(plan, {
           applied: false,
-          confirmationCommand: shellCommand(
-            profileConfirmationArguments(request, options.scope!, plan.digest),
-          ),
+          applyHint: applyHint(profileApplyArguments(request, options.scope!)),
         }),
       );
   } else {
-    const applied = await applyAgentProfileChange(request, options.scope!, options.confirm!);
+    if (!options.yes) {
+      const plan = await previewAgentProfileChange(request, options.scope!);
+      process.stdout.write(renderPlan(plan, { applied: false }));
+      await confirmSummary();
+    }
+    const applied = await applyAgentProfileChange(request, options.scope!);
     if (options.json) process.stdout.write(`${JSON.stringify(applied, null, 2)}\n`);
     else process.stdout.write(renderPlan(applied.plan, { applied: true }));
   }
 }
 
-function profileConfirmationArguments(
-  request: AgentProfileRequest,
-  scope: Scope,
-  digest: string,
-): string[] {
-  if (request.action === "reconcile")
-    return ["agent", "reconcile", ...scopeArguments(scope), "--confirm", digest];
+function profileApplyArguments(request: AgentProfileRequest, scope: Scope): string[] {
+  if (request.action === "reconcile") return ["agent", "reconcile", ...scopeArguments(scope)];
   if (request.action === "critic-remove")
-    return ["critic", "remove", request.name!, ...scopeArguments(scope), "--confirm", digest];
+    return ["critic", "remove", request.name!, ...scopeArguments(scope)];
   const command =
     request.action === "critic-add"
       ? ["critic", "add", request.name!]
@@ -1038,7 +1053,6 @@ function profileConfirmationArguments(
   command.push(...scopeArguments(scope), "--model", request.model!);
   if (request.variant) command.push("--variant", request.variant);
   else if (request.action === "model-set") command.push("--clear-variant");
-  command.push("--confirm", digest);
   return command;
 }
 
@@ -1093,7 +1107,7 @@ async function run(arguments_: string[]): Promise<void> {
     const options = parseOptions(rest);
     if (
       options.dryRun ||
-      options.confirm ||
+      options.yes ||
       options.name ||
       options.provider ||
       options.model ||
@@ -1112,7 +1126,7 @@ async function run(arguments_: string[]): Promise<void> {
     const options = parseOptions(rest);
     if (
       options.dryRun ||
-      options.confirm ||
+      options.yes ||
       options.name ||
       options.provider ||
       options.model ||
@@ -1138,9 +1152,9 @@ async function run(arguments_: string[]): Promise<void> {
     )
       throw new InstallerError(
         "invalid_input",
-        "reconcile accepts only --global, --dry-run, --confirm, and --json",
+        "reconcile accepts only --global, --dry-run, --yes, and --json",
       );
-    requireConfirmationMode(options);
+    requireApplyMode(options);
     if (options.dryRun) {
       const plan = await previewReconcile(options.scope!);
       if (options.json)
@@ -1151,18 +1165,18 @@ async function run(arguments_: string[]): Promise<void> {
         process.stdout.write(
           renderReconcile(plan, {
             applied: false,
-            confirmationCommand: plan.confirmable
-              ? shellCommand([
-                  "reconcile",
-                  ...scopeArguments(options.scope),
-                  "--confirm",
-                  plan.confirmation_digest ?? plan.digest!,
-                ])
+            applyHint: plan.confirmable
+              ? applyHint(["reconcile", ...scopeArguments(options.scope)])
               : undefined,
           }),
         );
     } else {
-      const applied = await applyReconcile(options.scope!, options.confirm!);
+      if (!options.yes) {
+        const plan = await previewReconcile(options.scope!);
+        process.stdout.write(renderReconcile(plan, { applied: false }));
+        await confirmSummary();
+      }
+      const applied = await applyReconcile(options.scope!);
       if (options.json) process.stdout.write(`${JSON.stringify(applied, null, 2)}\n`);
       else process.stdout.write(renderReconcile(applied.plan, { applied: true }));
     }
@@ -1185,7 +1199,7 @@ async function run(arguments_: string[]): Promise<void> {
         "invalid_input",
         action === "install"
           ? "install does not accept model options or positional arguments"
-          : "uninstall accepts only --global, --dry-run, --confirm, and --json",
+          : "uninstall accepts only --global, --dry-run, --yes, and --json",
       );
     if (
       action === "install" &&
@@ -1204,7 +1218,7 @@ async function run(arguments_: string[]): Promise<void> {
           ? installerSelection(options)
           : await interactiveInstallerSelection()
         : undefined;
-    requireConfirmationMode(options);
+    requireApplyMode(options);
     if (options.dryRun) {
       const plan = await preview(
         action,
@@ -1222,21 +1236,30 @@ async function run(arguments_: string[]): Promise<void> {
         process.stdout.write(
           renderPlan(plan, {
             applied: false,
-            confirmationCommand: shellCommand([
+            applyHint: applyHint([
               action,
               ...scopeArguments(options.scope),
               ...(action === "install" ? selectionArguments(plan.selection) : []),
               ...(options.noDependency ? ["--no-dependency"] : []),
-              "--confirm",
-              plan.digest,
             ]),
           }),
         );
     } else {
+      if (!options.yes) {
+        const plan = await preview(
+          action,
+          options.scope!,
+          process.cwd(),
+          undefined,
+          selection,
+          !options.noDependency,
+        );
+        process.stdout.write(renderPlan(plan, { applied: false }));
+        await confirmSummary();
+      }
       const plan = await apply(
         action,
         options.scope!,
-        options.confirm!,
         process.cwd(),
         undefined,
         {},
@@ -1265,7 +1288,7 @@ async function run(arguments_: string[]): Promise<void> {
     const options = parseOptions(rest);
     if (
       options.dryRun ||
-      options.confirm ||
+      options.yes ||
       options.name ||
       options.provider ||
       options.model ||
@@ -1286,7 +1309,7 @@ async function run(arguments_: string[]): Promise<void> {
         "invalid_input",
         "agent configure does not accept selection options",
       );
-    requireConfirmationMode(options);
+    requireApplyMode(options);
     const model = exactModel(options);
     const selected =
       options.name && model
@@ -1335,7 +1358,7 @@ async function run(arguments_: string[]): Promise<void> {
     )
       throw new InstallerError(
         "invalid_input",
-        "agent reconcile accepts only --global, --dry-run, --confirm, and --json",
+        "agent reconcile accepts only --global, --dry-run, --yes, and --json",
       );
     await runProfile({ action: "reconcile" }, options);
     return;
@@ -1400,7 +1423,7 @@ async function run(arguments_: string[]): Promise<void> {
     )
       throw new InstallerError(
         "invalid_input",
-        "config accepts only --global, --targets, --fragments, --dry-run, --confirm, and --json",
+        "config accepts only --global, --targets, --fragments, --dry-run, --yes, and --json",
       );
     if (
       options.selectionFlag &&
@@ -1413,7 +1436,7 @@ async function run(arguments_: string[]): Promise<void> {
     const selection = options.selectionFlag
       ? normalizeConfigSelection(options.scope!, configSelectionFromOptions(options))
       : await interactiveConfigSelection(options);
-    requireConfirmationMode(options);
+    requireApplyMode(options);
     if (options.dryRun) {
       const plan = await previewConfigSetup(selection, options.scope!);
       if (options.json)
@@ -1424,21 +1447,22 @@ async function run(arguments_: string[]): Promise<void> {
         process.stdout.write(
           renderConfigSetup(plan, {
             applied: false,
-            ...(plan.confirmable
-              ? {
-                  confirmationCommand: shellCommand([
-                    "config",
-                    ...scopeArguments(options.scope),
-                    ...configSelectionArguments(plan.selection),
-                    "--confirm",
-                    plan.confirmation_digest ?? plan.digest,
-                  ]),
-                }
-              : {}),
+            applyHint: plan.confirmable
+              ? applyHint([
+                  "config",
+                  ...scopeArguments(options.scope),
+                  ...configSelectionArguments(plan.selection),
+                ])
+              : undefined,
           }),
         );
     } else {
-      const plan = await applyConfigSetup(selection, options.scope!, options.confirm!);
+      if (!options.yes) {
+        const plan = await previewConfigSetup(selection, options.scope!);
+        process.stdout.write(renderConfigSetup(plan, { applied: false }));
+        await confirmSummary();
+      }
+      const plan = await applyConfigSetup(selection, options.scope!);
       if (options.json)
         process.stdout.write(
           `${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan }, null, 2)}\n`,

@@ -106,7 +106,7 @@ function migrationSummary(operations: readonly DisplayOperation[]): string | und
 
 export function renderPlan(
   plan: DisplayPlan,
-  options: { applied: boolean; confirmationCommand?: string; hint?: string },
+  options: { applied: boolean; applyHint?: string; hint?: string },
 ): string {
   const version = "package_version" in plan ? ` @kisev/agentomatic ${plan.package_version}` : "";
   const lines = [
@@ -136,31 +136,14 @@ export function renderPlan(
       ? `Restart required: ${plan.requires_restart ? "yes" : "no"}`
       : `Restart after apply: ${plan.requires_restart ? "yes" : "no"}`,
   );
-  if (!options.applied) {
-    if (plan.superseded_plan)
-      lines.push(
-        "",
-        "Superseded plan:",
-        `  kind: ${terminalSafe(plan.superseded_plan.kind)}`,
-        `  confirmation: ${terminalSafe(plan.superseded_plan.confirmation_digest)}`,
-        `  created: ${terminalSafe(plan.superseded_plan.created_at)}`,
-        `  expires: ${terminalSafe(plan.superseded_plan.expires_at)}`,
-      );
-    if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
-    if ("plan_digest" in plan) lines.push(`Plan digest: ${plan.plan_digest}`);
-    if (plan.confirmation_digest ?? plan.digest) {
-      lines.push(`Confirmation digest: ${plan.confirmation_digest ?? plan.digest}`);
-      lines.push(`Digest: ${plan.confirmation_digest ?? plan.digest}`);
-    }
-    if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
-  }
+  if (!options.applied && options.applyHint) lines.push("", "Apply:", `  ${options.applyHint}`);
   if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
   return `${lines.join("\n")}\n`;
 }
 
 export function renderConfigSetup(
   plan: ConfigSetupPlan,
-  options: { applied: boolean; confirmationCommand?: string; hint?: string },
+  options: { applied: boolean; applyHint?: string; hint?: string },
 ): string {
   const lines = [
     `Config setup @kisev/agentomatic ${plan.package_version} (${plan.scope})`,
@@ -201,27 +184,8 @@ export function renderConfigSetup(
       : `Restart after apply: ${plan.requires_restart ? "yes" : "no"}`,
   );
   if (!options.applied) {
-    if (!plan.confirmable) {
-      lines.push("", "No configuration changes are required.");
-    } else {
-      if (plan.superseded_plan)
-        lines.push(
-          "",
-          "Superseded plan:",
-          `  kind: ${terminalSafe(plan.superseded_plan.kind)}`,
-          `  confirmation: ${terminalSafe(plan.superseded_plan.confirmation_digest)}`,
-          `  created: ${terminalSafe(plan.superseded_plan.created_at)}`,
-          `  expires: ${terminalSafe(plan.superseded_plan.expires_at)}`,
-        );
-      lines.push("", `Plan digest: ${plan.plan_digest}`);
-      if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
-      if (plan.confirmation_digest ?? plan.digest)
-        lines.push(
-          `Confirmation digest: ${plan.confirmation_digest ?? plan.digest}`,
-          `Digest: ${plan.confirmation_digest ?? plan.digest}`,
-        );
-      if (options.confirmationCommand) lines.push("", "Apply:", `  ${options.confirmationCommand}`);
-    }
+    if (!plan.confirmable) lines.push("", "No configuration changes are required.");
+    else if (options.applyHint) lines.push("", "Apply:", `  ${options.applyHint}`);
   }
   if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
   return `${lines.join("\n")}\n`;
@@ -280,7 +244,7 @@ export function scopeArguments(scope: Scope): [] | ["--global"] {
 
 export function renderReconcile(
   plan: ReconcilePlan,
-  options: { applied: boolean; confirmationCommand?: string },
+  options: { applied: boolean; applyHint?: string },
 ): string {
   const lines = [
     `Reconcile (${plan.scope})`,
@@ -349,30 +313,14 @@ export function renderReconcile(
       if (plan.modified_managed.length)
         lines.push(
           `  Update managed assets first: ${shellCommand(["install", ...scopeArguments(plan.scope), "--dry-run"])}`,
-          "  Apply the exact confirmation command from that installer preview, then build a new reconcile preview.",
+          "  Apply that installer plan, then build a new reconcile preview.",
         );
       if (plan.conflicts.length)
         lines.push("  Manually resolve every ownership conflict listed above before reconciling.");
     } else if (!plan.confirmable) {
       lines.push("", "No reconciliation changes are required.");
-    } else if (options.confirmationCommand) {
-      if (plan.superseded_plan)
-        lines.push(
-          "",
-          "Superseded plan:",
-          `  kind: ${terminalSafe(plan.superseded_plan.kind)}`,
-          `  confirmation: ${terminalSafe(plan.superseded_plan.confirmation_digest)}`,
-          `  created: ${terminalSafe(plan.superseded_plan.created_at)}`,
-          `  expires: ${terminalSafe(plan.superseded_plan.expires_at)}`,
-        );
-      lines.push("", `Plan digest: ${plan.plan_digest}`);
-      if (plan.receipt_expires_at) lines.push(`Confirmation expires: ${plan.receipt_expires_at}`);
-      if (plan.confirmation_digest ?? plan.digest)
-        lines.push(
-          `Confirmation digest: ${plan.confirmation_digest ?? plan.digest}`,
-          `Digest: ${plan.confirmation_digest ?? plan.digest}`,
-        );
-      lines.push("", "Apply:", `  ${options.confirmationCommand}`);
+    } else if (options.applyHint) {
+      lines.push("", "Apply:", `  ${options.applyHint}`);
     }
   }
   return `${lines.join("\n")}\n`;

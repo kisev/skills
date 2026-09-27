@@ -13,22 +13,18 @@ import {
 import {
   applyTransaction,
   archiveRoot,
-  consumeReceipt,
   deploymentRoot,
   destination,
-  digest,
   LifecycleError,
   lifecycleRoot,
   migrateLegacyDeploymentNamespace,
   migrateLegacyNamespaces,
   readRegular,
   recoverTransaction,
-  saveReceipt,
   sha256,
   stable,
   type FileMutation,
   type Scope,
-  type SupersededPlan,
   type TransactionOptions,
   withLifecycleLock,
 } from "./lifecycle.js";
@@ -77,11 +73,6 @@ export type Plan = {
   selection: InstallerSelection;
   operations: PlanItem[];
   dependency?: DependencyPlan & { applied?: "changed" | "unchanged" | "skipped" };
-  plan_digest: string;
-  confirmation_digest?: string;
-  superseded_plan?: SupersededPlan;
-  digest: string;
-  receipt_expires_at?: string;
   requires_restart: boolean;
 };
 type Asset = { relativePath: string; content: Buffer; sha256: string; mode: number };
@@ -853,9 +844,8 @@ async function build(
           item.path.startsWith("plugins/"),
       ),
   };
-  const planDigest = digest(base);
   return {
-    plan: { ...base, plan_digest: planDigest, digest: planDigest },
+    plan: { ...base },
     mutations,
     expectedManifest: manifestContent,
     profiles,
@@ -882,24 +872,7 @@ export async function preview(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
         );
-      const built = await build(action, scope, cwd, home, selection, provisionDependency);
-      const receipt = await saveReceipt(
-        stateRoot,
-        `installer:${action}`,
-        scope,
-        root,
-        { plan_digest: built.plan.digest },
-        Date.now(),
-        built.plan.digest,
-      );
-      return {
-        ...built.plan,
-        plan_digest: built.plan.digest,
-        confirmation_digest: receipt.digest,
-        digest: receipt.digest,
-        receipt_expires_at: receipt.expires_at,
-        ...(receipt.superseded_plan ? { superseded_plan: receipt.superseded_plan } : {}),
-      };
+      return (await build(action, scope, cwd, home, selection, provisionDependency)).plan;
     });
   } catch (error) {
     if (error instanceof InstallerError) throw error;
@@ -911,7 +884,6 @@ export async function preview(
 export async function apply(
   action: Action,
   scope: Scope,
-  confirmationDigest: string,
   cwd = process.cwd(),
   home = homedir(),
   options: TransactionOptions & { dependencyRunner?: DependencyRunner } = {},
@@ -930,18 +902,7 @@ export async function apply(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
         );
-      const receipt = (await consumeReceipt(stateRoot, {
-        digest: confirmationDigest,
-        kind: `installer:${action}`,
-        scope,
-        root,
-      })) as { digest?: string };
       const built = await build(action, scope, cwd, home, selection, provisionDependency);
-      const savedPlanDigest =
-        (receipt as { plan_digest?: string; digest?: string }).plan_digest ??
-        (receipt as { digest?: string }).digest;
-      if (built.plan.digest !== savedPlanDigest)
-        throw new InstallerError("stale_plan", "Installer plan changed after preview");
       if (
         built.plan.operations.some(
           (item) =>
@@ -997,7 +958,6 @@ export async function apply(
           : undefined;
       return {
         ...built.plan,
-        digest: confirmationDigest,
         ...(dependencyOutcome ? { dependency: dependencyOutcome } : {}),
       };
     });

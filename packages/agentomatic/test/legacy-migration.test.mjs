@@ -150,10 +150,8 @@ test("applying an upgrade migrates legacy namespaces before installing", () => {
       "--global",
       "--json",
     ];
-    const dryRun = JSON.parse(cli(["install", ...selection, "--dry-run"]).stdout);
-    const applied = JSON.parse(
-      cli(["install", ...selection, "--confirm", dryRun.plan.digest]).stdout,
-    );
+    JSON.parse(cli(["install", ...selection, "--dry-run"]).stdout);
+    const applied = JSON.parse(cli(["install", ...selection, "--yes"]).stdout);
     assert.equal(applied.applied, true);
     assert.equal(
       readFileSync(join(env.state, "opencode", "agentomatic", "global", "journal.json"), "utf8"),
@@ -234,7 +232,7 @@ test("install migrates a legacy-named ownership manifest in one transaction", as
     const selection = { commands: ["agents-md", "askme"], agents: [], plugins: ["rtk"] };
     const plan = await preview("install", "global", root, home, selection, false);
     assert.ok(plan.operations.some((item) => item.path === ".agentomatic-manifest.json"));
-    await apply("install", "global", plan.digest, root, home, {}, selection, false);
+    await apply("install", "global", root, home, {}, selection, false);
     const migrated = JSON.parse(readFileSync(join(config, ".agentomatic-manifest.json"), "utf8"));
     assert.equal(migrated.package, "@kisev/agentomatic");
     assert.equal(existsSync(join(config, ".skills-opencode-manifest.json")), false);

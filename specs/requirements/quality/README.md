@@ -15,17 +15,16 @@ inject missing or incorrect observed case outcomes without substituting fixtures
 
 ### REQ-Q-002 - Mutation safety
 
-Every package mutation shall validate ownership, scope, confirmation digest, and
-freshness before writing, and shall be atomic or recoverable on failure. Preview
-receipts shall use a deterministic plan digest plus a unique confirmation digest;
-same-scope supersession and one-use confirmation shall fail closed.
-Receipts persisted by the previous package patch shall be safely normalized or
-replaced during the next preview without weakening integrity validation.
+Every package mutation shall validate ownership, scope, and explicit consent
+before writing, and shall be atomic or recoverable on failure. Previews shall be
+read-only; apply shall require interactive Yes/No consent in a terminal or the
+explicit `--yes` flag outside a terminal and shall fail closed without either.
+Unsafe conflicts shall block apply.
 
 #### Verification
 
-Package lifecycle and profile tests cover ownership conflicts, tampering, expiry,
-supersession, replay, interrupted writes, and recovery with preserved user files.
+Package lifecycle and profile tests cover ownership conflicts, tampering,
+missing consent, interrupted writes, and recovery with preserved user files.
 
 ### REQ-Q-003 - Secret safety
 

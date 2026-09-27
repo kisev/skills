@@ -23,9 +23,8 @@ not add state, storage, or publication behavior absent from that contract. Comma
 selection remains the user's decision: the installer selects command adapters,
 not portable skills. Command adapters load an already-installed same-named skill.
 Pre-selector guidance shall identify the exact configured `skills` CLI version
-and the supported Pages source, and previews shall expose deterministic
-`plan_digest` separately from the unique `confirmation_digest`; superseded plans
-expose only redacted kind, short confirmation digest, and timestamps.
+and the supported Pages source, and previews shall remain read-only summaries
+that end with an apply hint requiring interactive confirmation or `--yes`.
 
 ### REQ-I-003 - Package tool interface
 

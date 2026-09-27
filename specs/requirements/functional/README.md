@@ -55,21 +55,17 @@ When exact-owned retired assets are reconciled, the system shall archive them
 content-addressably and preserve unrelated user-owned files and durable state.
 Reconcile shall inspect and mutate only package-owned OpenCode assets; portable
 skill trees and installer lock files shall not affect its classifications, plan,
-digest, conflicts, or operations. Portable skill updates and removals remain
+conflicts, or operations. Portable skill updates and removals remain
 owned by the `skills` CLI.
-Human reconcile preview shall be blocked, without an Apply command, when
+Human reconcile preview shall be blocked, without an apply step, when
 `modified_managed` or `conflicts` is non-empty; it shall list every blocking path
-and provide remediation. An actionable clean preview shall retain the digest and
-exact Apply command contract; a no-op preview shall issue no receipt or Apply
-command. Every new dry-run in one project or global scope shall
-supersede the previous unconsumed receipt across installer, reconcile, profile,
-and critic domains; deterministic plan and unique confirmation digests are
-separate, and superseded confirmation fails closed.
+and provide remediation. An actionable clean preview shall retain the
+interactive consent contract; a no-op preview shall offer no apply.
 
 #### Verification
 
 Package lifecycle tests cover exact ownership, modified files, portable-tree
-independence, no-op previews, and cross-domain confirmation supersession.
+independence, no-op previews, and consent-gated apply.
 
 ### REQ-F-006 - Manage package-owned profiles safely
 
@@ -89,7 +85,7 @@ repairing, or mutating runtime state.
 #### Verification
 
 Doctor tests compare state before and after observations and reject incomplete
-facts without repair or receipt creation.
+facts without repair or state creation.
 
 ### REQ-F-008 - Support compatible host integration
 
@@ -133,4 +129,4 @@ changes the dependency.
 
 Package tests stub the npm runner and verify plan states (`install`, `update`,
 `satisfied`, `manual`), package.json creation, argument shape, failure wrapping,
-and confirm-digest coupling through preview and apply.
+and dependency coupling through preview and apply.

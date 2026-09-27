@@ -14,8 +14,8 @@ Trigger for exact-owned cleanup; near-miss: arbitrary file deletion.
 
 ## Inputs/Outputs
 
-Input is phase, optional scope defaulting to project, and confirmation digest;
-output is a plan or receipt.
+Input is phase, optional scope defaulting to project, and explicit apply
+consent; output is a plan or result.
 
 ## Workflow Stages
 
@@ -32,7 +32,7 @@ Portable skills remain under the separate `skills` CLI lifecycle.
 
 ## Errors/Partial/Escalation
 
-Stale, tampered, expired, or replayed confirmations fail safely.
+Applies without consent or with unsafe conflicts fail safely.
 
 ## Unique Constraints
 
@@ -45,8 +45,8 @@ Unknown or pre-marker sources, runtime state, and user-owned files are untouched
 Status: withdrawn on 2026-09-16 because reconciliation is now CLI-only.
 
 Former requirement: the command shall expose the exact package-tool argument schema, default omitted
-scope to project, invoke package tool `reconcile`, and require a fresh
-confirmation digest for apply.
+scope to project, invoke package tool `reconcile`, and require explicit user
+confirmation for apply.
 
 ## Example
 

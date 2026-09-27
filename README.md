@@ -63,9 +63,10 @@ installs own the npm project at `~/.config/opencode` and create its
 package once with `npm install -g @kisev/agentomatic` to call the `agentomatic`
 binary directly.
 
-This only starts the mandatory flow. Apply the exact confirmation command from
-the preview, add the package to the user-owned OpenCode `plugin` entry, and
-restart OpenCode. Follow the complete
+This only starts the mandatory flow. Rerun the install command without
+`--dry-run` and answer the confirmation question for the printed plan summary,
+or add `--yes` outside a terminal. Then add the package to the user-owned
+OpenCode `plugin` entry and restart OpenCode. Follow the complete
 [OpenCode integration guide](docs/how-to/opencode-integration.md).
 
 ## Documentation

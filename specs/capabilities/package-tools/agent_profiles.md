@@ -15,7 +15,7 @@ Trigger for profile management; near-miss: direct config editing.
 ## Inputs/Outputs
 
 Input is action, optional scope defaulting to project, profile values, and
-confirmation digest; output is inventory/plan/result.
+explicit apply consent; output is inventory/plan/result.
 
 ## Workflow Stages
 
@@ -31,7 +31,7 @@ Bounded global/project local configuration effects.
 
 ## Errors/Partial/Escalation
 
-Collisions, stale receipts, symlinks, and failures roll back or escalate.
+Collisions, symlinks, and failures roll back or escalate.
 
 ## Unique Constraints
 
@@ -43,7 +43,7 @@ Exact semantic ownership and restart behavior are preserved.
 
 Status: withdrawn on 2026-09-16 because profile management is now CLI-only.
 
-Former requirement: the tool shall require preview and fresh confirmation and
+Former requirement: the tool shall require preview and explicit confirmation and
 preserve user-owned configuration.
 
 ## Example

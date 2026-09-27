@@ -6,19 +6,15 @@ import { fileURLToPath } from "node:url";
 import { requirePackageVersion } from "./package-metadata.js";
 import {
   applyTransaction,
-  consumeReceipt,
   deploymentRoot,
-  digest,
   LifecycleError,
   lifecycleRoot,
   readRegular,
   recoverTransaction,
-  saveReceipt,
   sha256,
   withLifecycleLock,
   type FileMutation,
   type Scope,
-  type SupersededPlan,
 } from "./lifecycle.js";
 import { applyJsoncEdits, parseJsonc, type JsoncEdit } from "./jsonc.js";
 
@@ -113,11 +109,6 @@ export type ConfigSetupPlan = {
   targets: Array<{ target: ConfigTargetName; path: string; exists: boolean }>;
   operations: ConfigSetupOperation[];
   skipped_fragments: Array<{ fragment: FragmentName; reason: string }>;
-  plan_digest: string;
-  digest: string;
-  confirmation_digest?: string;
-  receipt_expires_at?: string;
-  superseded_plan?: SupersededPlan;
   requires_restart: boolean;
   confirmable: boolean;
 };
@@ -478,9 +469,8 @@ async function build(
     ),
     confirmable: mutations.length > 0,
   };
-  const planDigest = digest(base);
   return {
-    plan: { ...base, plan_digest: planDigest, digest: planDigest },
+    plan: { ...base },
     mutations,
     allowedRoots: [...allowedRoots],
   };
@@ -502,23 +492,7 @@ export async function previewConfigSetup(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
         );
-      if (!built.plan.confirmable) return built.plan;
-      const receipt = await saveReceipt(
-        stateRoot,
-        "config-setup",
-        scope,
-        root,
-        { plan_digest: built.plan.plan_digest },
-        Date.now(),
-        built.plan.plan_digest,
-      );
-      return {
-        ...built.plan,
-        digest: receipt.digest,
-        confirmation_digest: receipt.digest,
-        receipt_expires_at: receipt.expires_at,
-        ...(receipt.superseded_plan ? { superseded_plan: receipt.superseded_plan } : {}),
-      };
+      return built.plan;
     });
   } catch (error) {
     if (error instanceof ConfigSetupError) throw error;
@@ -530,7 +504,6 @@ export async function previewConfigSetup(
 export async function applyConfigSetup(
   selection: ConfigSetupSelection,
   scope: Scope,
-  confirmationDigest: string,
   cwd = process.cwd(),
   home = homedir(),
 ): Promise<ConfigSetupPlan> {
@@ -544,14 +517,6 @@ export async function applyConfigSetup(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
         );
-      const receipt = (await consumeReceipt(stateRoot, {
-        digest: confirmationDigest,
-        kind: "config-setup",
-        scope,
-        root,
-      })) as { plan_digest?: string };
-      if (built.plan.plan_digest !== (receipt.plan_digest ?? digest(receipt)))
-        throw new ConfigSetupError("stale_plan", "Config setup plan changed after preview");
       if (!built.plan.confirmable)
         throw new ConfigSetupError("invalid_state", "Config setup plan has no applicable changes");
       await applyTransaction(root, stateRoot, built.mutations, {
@@ -568,7 +533,7 @@ export async function applyConfigSetup(
           }
         },
       });
-      return { ...built.plan, digest: confirmationDigest };
+      return built.plan;
     });
   } catch (error) {
     if (error instanceof ConfigSetupError) throw error;

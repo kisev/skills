@@ -36,9 +36,8 @@ import {
   normalizeSelection,
   preview,
 } from "../dist/installer.js";
-import { renderReconcile, shellCommand } from "../dist/cli-output.js";
+import { renderReconcile } from "../dist/cli-output.js";
 import { applyReconcile, previewReconcile, ReconcileError } from "../dist/reconcile.js";
-import { lifecycleRoot } from "../dist/lifecycle.js";
 import {
   readPackageVersion,
   requirePackageVersion,
@@ -119,16 +118,7 @@ test("rtk wrapper is the default plugin selection and an explicit opt-out is pre
       const plan = await preview("install", "global", project, home, { plugins: [] }, false);
       return {
         plan,
-        applied: await apply(
-          "install",
-          "global",
-          plan.digest,
-          project,
-          home,
-          {},
-          { plugins: [] },
-          false,
-        ),
+        applied: await apply("install", "global", project, home, {}, { plugins: [] }, false),
       };
     })();
     assert.equal(
@@ -157,33 +147,24 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
   await Promise.all([mkdir(project), mkdir(home)]);
   try {
     const selection = { commands: ["agents-md"], agents: [], plugins: [] };
-    const installPlan = await preview("install", "project", project, home, selection);
-    await apply("install", "project", installPlan.digest, project, home, {}, selection);
+    await apply("install", "project", project, home, {}, selection);
     await writeFile(join(project, ".opencode", "commands", "agents-md.md"), "modified\n");
-    const receiptPath = join(lifecycleRoot("project", project, home), "receipt.json");
-    const receiptBefore = await readFile(receiptPath, "utf8");
 
     const plan = await previewReconcile("project", project, home);
     assert.equal(plan.modified_managed.length, 1);
     assert.equal(plan.conflicts.length, 0);
     assert.equal(plan.confirmable, false);
-    assert.equal(plan.receipt_expires_at, undefined);
-    assert.equal(plan.confirmation_digest, undefined);
-    assert.equal(await readFile(receiptPath, "utf8"), receiptBefore);
-    const output = renderReconcile(plan, {
-      applied: false,
-      confirmationCommand: shellCommand(["reconcile", "--confirm", "digest"]),
-    });
+    const output = renderReconcile(plan, { applied: false });
     assert.match(output, /Blocked:/);
     assert.match(output, new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --dry-run`));
-    assert.match(output, /Apply the exact confirmation command/);
+    assert.match(output, /Apply that installer plan, then build a new reconcile preview\./);
     assert.doesNotMatch(output, /\nApply:\n/);
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
 });
 
-test("blocked reconcile confirmation exits with code two", async () => {
+test("blocked reconcile apply exits with code two", async () => {
   const base = temporary();
   const project = join(base, "project");
   const home = join(base, "home");
@@ -193,39 +174,11 @@ test("blocked reconcile confirmation exits with code two", async () => {
     HOME: home,
     XDG_STATE_HOME: join(home, "state"),
   };
+  const selection = ["--commands", "agents-md", "--agents", "none", "--plugins", "none"];
   try {
-    const installPreview = spawnSync(
-      process.execPath,
-      [
-        join(PACKAGE, "dist", "cli.js"),
-        "install",
-        "--commands",
-        "agents-md",
-        "--agents",
-        "none",
-        "--plugins",
-        "none",
-        "--dry-run",
-        "--json",
-      ],
-      { cwd: project, env: environment, encoding: "utf8" },
-    );
-    assert.equal(installPreview.status, 0, installPreview.stderr);
-    const installDigest = JSON.parse(installPreview.stdout).plan.digest;
     const installed = spawnSync(
       process.execPath,
-      [
-        join(PACKAGE, "dist", "cli.js"),
-        "install",
-        "--commands",
-        "agents-md",
-        "--agents",
-        "none",
-        "--plugins",
-        "none",
-        "--confirm",
-        installDigest,
-      ],
+      [join(PACKAGE, "dist", "cli.js"), "install", ...selection, "--yes"],
       { cwd: project, env: environment, encoding: "utf8" },
     );
     assert.equal(installed.status, 0, installed.stderr);
@@ -239,17 +192,19 @@ test("blocked reconcile confirmation exits with code two", async () => {
     assert.equal(reconcilePreview.status, 0, reconcilePreview.stderr);
     const blockedPlan = JSON.parse(reconcilePreview.stdout).plan;
     assert.equal(blockedPlan.confirmable, false);
-    assert.equal(blockedPlan.confirmation_digest, undefined);
-    assert.equal(blockedPlan.receipt_expires_at, undefined);
-    await assert.rejects(lstat(join(lifecycleRoot("project", project, home), "receipt.json")), {
-      code: "ENOENT",
-    });
+    const blockedApply = spawnSync(
+      process.execPath,
+      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--yes", "--json"],
+      { cwd: project, env: environment, encoding: "utf8" },
+    );
+    assert.equal(blockedApply.status, 2, blockedApply.stderr);
+    assert.equal(JSON.parse(blockedApply.stdout).error.code, "conflict");
   } finally {
     rmSync(base, { recursive: true, force: true });
   }
 });
 
-test("clean reconcile preview reports a no-op without a receipt", async () => {
+test("clean reconcile preview reports a no-op", async () => {
   const base = temporary();
   const project = join(base, "project");
   const home = join(base, "home");
@@ -366,7 +321,7 @@ async function install(scope, cwd, home) {
   const plan = await preview("install", scope, cwd, home, undefined, false);
   return {
     plan,
-    applied: await apply("install", scope, plan.digest, cwd, home, {}, undefined, false),
+    applied: await apply("install", scope, cwd, home, {}, undefined, false),
   };
 }
 
@@ -556,8 +511,6 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second.operations, first.operations);
-    assert.equal(second.plan_digest, first.plan_digest);
-    assert.notEqual(second.confirmation_digest, first.confirmation_digest);
     assert.equal(first.operations.filter((item) => item.operation === "create").length, 49);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
@@ -576,18 +529,18 @@ test("installer dry-run is deterministic and keeps global and project roots isol
   }
 });
 
-test("installer rejects stale plans, unmanaged collisions, traversal, and symlinks", async () => {
+test("installer rejects unmanaged collisions, traversal, and symlinks", async () => {
   const directory = temporary();
   try {
     const project = join(directory, "project");
     const home = join(directory, "home");
     await Promise.all([mkdir(project), mkdir(home)]);
-    const stale = await preview("install", "project", project, home);
+    await preview("install", "project", project, home);
     await mkdir(join(project, ".opencode", "agents"), { recursive: true });
     await writeFile(join(project, ".opencode", "agents", "manager.md"), "user\n");
     await assert.rejects(
-      apply("install", "project", stale.digest, project, home),
-      (error) => error instanceof InstallerError && error.code === "stale_plan",
+      apply("install", "project", project, home),
+      (error) => error instanceof InstallerError && error.code === "conflict",
     );
     const collision = await preview("install", "project", project, home);
     assert.deepEqual(
@@ -599,7 +552,7 @@ test("installer rejects stale plans, unmanaged collisions, traversal, and symlin
       },
     );
     await assert.rejects(
-      apply("install", "project", collision.digest, project, home),
+      apply("install", "project", project, home),
       (error) => error instanceof InstallerError && error.code === "conflict",
     );
     assert.equal(
@@ -639,7 +592,7 @@ test("installer rejects stale plans, unmanaged collisions, traversal, and symlin
   }
 });
 
-test("confirmed install is atomic per asset and idempotent", async () => {
+test("install is atomic per asset and idempotent", async () => {
   const directory = temporary();
   try {
     const project = join(directory, "project");
@@ -652,7 +605,7 @@ test("confirmed install is atomic per asset and idempotent", async () => {
     const before = await readFile(manifest);
     const repeat = await preview("install", "project", project, home);
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
-    await apply("install", "project", repeat.digest, project, home);
+    await apply("install", "project", project, home);
     assert.deepEqual(await readFile(manifest), before);
     assert.equal(applied.operations.filter((item) => item.operation === "create").length, 49);
   } finally {
@@ -668,9 +621,8 @@ test("installer final validation covers unchanged generic assets", async () => {
     await Promise.all([mkdir(project), mkdir(home)]);
     await install("project", project, home);
     const target = join(project, ".opencode", "commands", "askme.md");
-    const plan = await preview("install", "project", project, home);
     await assert.rejects(
-      apply("install", "project", plan.digest, project, home, {
+      apply("install", "project", project, home, {
         validateFinal: async () => writeFile(target, "concurrent user change\n"),
       }),
       (error) => error instanceof InstallerError && error.code === "rolled_back",
@@ -689,9 +641,8 @@ test("installer final validation requires the exact generic manifest", async () 
     await Promise.all([mkdir(project), mkdir(home)]);
     await install("project", project, home);
     const manifestPath = join(project, ".opencode", ".agentomatic-manifest.json");
-    const plan = await preview("install", "project", project, home);
     await assert.rejects(
-      apply("install", "project", plan.digest, project, home, {
+      apply("install", "project", project, home, {
         validateFinal: async () => {
           const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
           manifest.version = "concurrent-change";
@@ -732,7 +683,7 @@ test("package-only upgrade requires restart while same-version reinstall does no
         .filter((item) => item.operation !== "unchanged")
         .every((item) => item.path.startsWith(".agentomatic")),
     );
-    await apply("install", "project", upgrade.digest, project, home);
+    await apply("install", "project", project, home);
     assert.equal(JSON.parse(await readFile(genericPath, "utf8")).version, expectedVersion);
     assert.equal(JSON.parse(await readFile(semanticPath, "utf8")).package_version, expectedVersion);
 
@@ -765,7 +716,7 @@ test("upgrade removes only an unchanged stale managed asset", async () => {
       plan.operations.find((item) => item.path === "commands/retired.md").operation,
       "archive-pending",
     );
-    await apply("install", "project", plan.digest, project, home);
+    await apply("install", "project", project, home);
     await assert.rejects(lstat(retired), { code: "ENOENT" });
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -787,7 +738,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
       plan.operations.find((item) => item.path === "commands/askme.md").operation,
       "conflict",
     );
-    await apply("uninstall", "project", plan.digest, project, home);
+    await apply("uninstall", "project", project, home);
     assert.equal(await readFile(changed, "utf8"), "user change\n");
     await assert.rejects(lstat(join(project, ".opencode", "agents", "manager.md")), {
       code: "ENOENT",
@@ -801,7 +752,7 @@ test("uninstall removes only unchanged managed files and preserves user drift", 
   }
 });
 
-test("uninstall dry-run prints an applicable confirmation command without selection options", async () => {
+test("uninstall dry-run prints an applicable command without selection options", async () => {
   const directory = temporary();
   try {
     const project = join(directory, "project");
@@ -821,7 +772,7 @@ test("uninstall dry-run prints an applicable confirmation command without select
     assert.match(
       result.stdout,
       new RegExp(
-        `^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} uninstall --confirm [a-f0-9]{64}$`,
+        `^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} uninstall \\(confirm interactively; add --yes outside a terminal\\)$`,
         "m",
       ),
     );
@@ -1462,7 +1413,7 @@ test("reconcile leaves historical goal and multi-run state byte-for-byte unchang
     const plan = await previewReconcile("project", project, home);
     assert.equal(plan.diagnostic_state_only.length, 2);
     assert.equal(plan.retired.length, 1);
-    await applyReconcile("project", plan.digest, project, home);
+    await applyReconcile("project", project, home);
     await assert.rejects(lstat(join(root, "commands", "goal-start.md")), { code: "ENOENT" });
     for (const [path, content] of stateFiles) assert.deepEqual(await readFile(path), content);
   } finally {
@@ -1504,24 +1455,21 @@ test("reconcile CLI returns stable JSON and an explicit no-op", () => {
     assert.doesNotMatch(human.stdout, /\nApply:\n/);
     const invalid = spawnSync(
       process.execPath,
-      [
-        join(PACKAGE, "dist", "cli.js"),
-        "reconcile",
-        "--dry-run",
-        "--confirm",
-        "0".repeat(64),
-        "--json",
-      ],
+      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--json"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(invalid.status, 2);
     assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
+    assert.match(
+      JSON.parse(invalid.stdout).error.message,
+      /Applying outside a terminal requires --yes; use --dry-run to preview/,
+    );
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("global CLI is cwd-independent and prints pinned npx confirmation", () => {
+test("global CLI is cwd-independent and prints a pinned npx apply hint", () => {
   const directory = temporary();
   try {
     const invocation = join(directory, "invocation");
@@ -1560,57 +1508,23 @@ test("global CLI is cwd-independent and prints pinned npx confirmation", () => {
   }
 });
 
-test("reconcile receipts reject stale, tampered, expired, and replayed confirmations", async () => {
+test("reconcile apply rejects managed files modified after preview", async () => {
   const directory = temporary();
-  const originalNow = Date.now;
   try {
     const project = join(directory, "project");
     const home = join(directory, "home");
     await mkdir(project);
     await mkdir(home);
-    const staleAsset = await writeRetiredPackageCommand(project);
-    const stale = await previewReconcile("project", project, home);
-    await writeFile(staleAsset.target, "changed after preview\n");
+    const retired = await writeRetiredPackageCommand(project);
+    const plan = await previewReconcile("project", project, home);
+    assert.equal(plan.confirmable, true);
+    await writeFile(retired.target, "changed after preview\n");
     await assert.rejects(
-      applyReconcile("project", stale.digest, project, home),
-      (error) => error instanceof ReconcileError && error.code === "stale_plan",
+      applyReconcile("project", project, home),
+      (error) => error instanceof ReconcileError && error.code === "conflict",
     );
-
-    const tamperedProject = join(directory, "tampered-project");
-    await mkdir(tamperedProject);
-    await writeRetiredPackageCommand(tamperedProject);
-    const tampered = await previewReconcile("project", tamperedProject, home);
-    const receiptPath = join(lifecycleRoot("project", tamperedProject, home), "receipt.json");
-    const receipt = JSON.parse(await readFile(receiptPath, "utf8"));
-    receipt.digest = "0".repeat(64);
-    await writeFile(receiptPath, JSON.stringify(receipt));
-    await assert.rejects(
-      applyReconcile("project", tampered.digest, tamperedProject, home),
-      (error) => error instanceof ReconcileError && error.code === "invalid_receipt",
-    );
-
-    const expiredProject = join(directory, "expired-project");
-    await mkdir(expiredProject);
-    await writeRetiredPackageCommand(expiredProject);
-    Date.now = () => 0;
-    const expired = await previewReconcile("project", expiredProject, home);
-    Date.now = originalNow;
-    await assert.rejects(
-      applyReconcile("project", expired.digest, expiredProject, home),
-      (error) => error instanceof ReconcileError && error.code === "confirmation_expired",
-    );
-
-    const replayProject = join(directory, "replay-project");
-    await mkdir(replayProject);
-    await writeRetiredPackageCommand(replayProject);
-    const replay = await previewReconcile("project", replayProject, home);
-    await applyReconcile("project", replay.digest, replayProject, home);
-    await assert.rejects(
-      applyReconcile("project", replay.digest, replayProject, home),
-      (error) => error instanceof ReconcileError && error.code === "confirmation_consumed",
-    );
+    assert.equal(await readFile(retired.target, "utf8"), "changed after preview\n");
   } finally {
-    Date.now = originalNow;
     rmSync(directory, { recursive: true, force: true });
   }
 });

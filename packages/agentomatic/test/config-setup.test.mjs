@@ -127,14 +127,7 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const preview = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     assert.equal(preview.confirmable, true);
     assert.equal(preview.requires_restart, true);
-    assert.ok(preview.confirmation_digest);
-    const applied = await applyConfigSetup(
-      FULL_SELECTION,
-      "global",
-      preview.confirmation_digest,
-      directory,
-      root,
-    );
+    const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root);
     assert.deepEqual(
       applied.operations.filter((item) => item.operation === "conflict"),
       [],
@@ -202,14 +195,8 @@ test("config setup preserves user entries, comments, and scalar permissions", as
       ].join("\n"),
       "utf8",
     );
-    const preview = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
-    const applied = await applyConfigSetup(
-      FULL_SELECTION,
-      "global",
-      preview.confirmation_digest,
-      directory,
-      root,
-    );
+    await previewConfigSetup(FULL_SELECTION, "global", directory, root);
+    const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root);
     assert.equal(applied.operations.filter((item) => item.operation === "conflict").length, 0);
 
     const raw = readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8");
@@ -225,35 +212,6 @@ test("config setup preserves user entries, comments, and scalar permissions", as
     assert.equal(kilo.permission.edit["*"], "ask");
     assert.equal(kilo.permission.external_directory["*"], "ask");
     assert.equal(kilo.permission.edit["~/.local/state/agent-skills/**"], "allow");
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-test("config setup rejects stale plans and replayed confirmations", async () => {
-  const directory = temporary();
-  const root = await homeWithConfigs(directory);
-  try {
-    const selection = { targets: ["opencode"], fragments: ["core-plugin"] };
-    const preview = await previewConfigSetup(selection, "global", directory, root);
-    await writeFile(
-      join(root, ".config", "opencode", "opencode.jsonc"),
-      '{ "model": "openai/changed" }\n',
-      "utf8",
-    );
-    await assert.rejects(
-      applyConfigSetup(selection, "global", preview.confirmation_digest, directory, root),
-      (error) => error instanceof ConfigSetupError && error.code === "stale_plan",
-    );
-
-    const fresh = await previewConfigSetup(selection, "global", directory, root);
-    await applyConfigSetup(selection, "global", fresh.confirmation_digest, directory, root);
-    await assert.rejects(
-      applyConfigSetup(selection, "global", fresh.confirmation_digest, directory, root),
-      (error) =>
-        error instanceof ConfigSetupError &&
-        (error.code === "confirmation_consumed" || error.code === "stale_plan"),
-    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
