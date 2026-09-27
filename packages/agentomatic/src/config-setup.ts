@@ -519,8 +519,28 @@ export async function applyConfigSetup(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
         );
-      if (!built.plan.confirmable)
+      const corePluginActive = built.plan.operations.some(
+        (item) =>
+          item.target === "opencode" &&
+          item.fragment === "core-plugin" &&
+          item.operation !== "conflict",
+      );
+      const provision = async (): Promise<void> => {
+        try {
+          await ensureDependency(planDependency(scope, cwd, home), options.dependencyRunner);
+        } catch (error) {
+          if (error instanceof LifecycleError)
+            throw new ConfigSetupError(error.code, error.message);
+          throw error;
+        }
+      };
+      if (!built.plan.confirmable) {
+        if (corePluginActive) {
+          await provision();
+          return built.plan;
+        }
         throw new ConfigSetupError("invalid_state", "Config setup plan has no applicable changes");
+      }
       await applyTransaction(root, stateRoot, built.mutations, {
         validateFinal: async () => {
           for (const mutation of built.mutations) {
@@ -535,21 +555,7 @@ export async function applyConfigSetup(
           }
         },
       });
-      const corePluginApplied = built.plan.operations.some(
-        (item) =>
-          item.target === "opencode" &&
-          item.fragment === "core-plugin" &&
-          item.operation !== "conflict",
-      );
-      if (corePluginApplied) {
-        try {
-          await ensureDependency(planDependency(scope, cwd, home), options.dependencyRunner);
-        } catch (error) {
-          if (error instanceof LifecycleError)
-            throw new ConfigSetupError(error.code, error.message);
-          throw error;
-        }
-      }
+      if (corePluginActive) await provision();
       return built.plan;
     });
   } catch (error) {

@@ -300,3 +300,27 @@ test("applying the core-plugin fragment provisions the npm dependency", async ()
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("an unchanged config rerun still heals the plugin dependency", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  const calls = [];
+  const runner = async (command, args, options) => {
+    calls.push({ command, args, options });
+    return { stdout: "", stderr: "" };
+  };
+  try {
+    await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: runner,
+    });
+    const before = calls.length;
+    const healed = await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: runner,
+    });
+    assert.equal(healed.confirmable, false);
+    assert.equal(calls.length, before + 1);
+    assert.equal(calls[calls.length - 1].args[0], "install");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
