@@ -76,10 +76,13 @@ try {
         env: environment,
       }),
     );
-  const dryRun = cli(["install", "--global", ...selection, "--dry-run"]);
+  const dryRun = cli(["install", "--global", ...selection, "--no-core", "--dry-run"]);
   assert.equal(dryRun.applied, false);
   assert.equal(dryRun.plan.requires_restart, true);
-  assert.equal(cli(["install", "--global", ...selection, "--yes"]).requires_restart, true);
+  assert.equal(
+    cli(["install", "--global", ...selection, "--no-core", "--yes"]).requires_restart,
+    true,
+  );
   const doctor = spawnSync(executable, ["doctor", "--global", "--json"], {
     cwd: project,
     env: environment,

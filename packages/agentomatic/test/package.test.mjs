@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
 import { lstat, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -1524,6 +1532,70 @@ test("reconcile apply rejects managed files modified after preview", async () =>
       (error) => error instanceof ReconcileError && error.code === "conflict",
     );
     assert.equal(await readFile(retired.target, "utf8"), "changed after preview\n");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("install core integration wires config and dependency in one run", async () => {
+  const directory = temporary();
+  const home = join(directory, "home");
+  const project = join(directory, "project");
+  await Promise.all([
+    mkdir(join(home, ".config", "opencode"), { recursive: true }),
+    mkdir(project),
+  ]);
+  await writeFile(
+    join(home, ".config", "opencode", "package.json"),
+    `${JSON.stringify(
+      { name: "opencode", private: true, dependencies: { "@kisev/agentomatic": PACKAGE_VERSION } },
+      null,
+      2,
+    )}\n`,
+  );
+  const invoke = (arguments_) =>
+    spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), ...arguments_], {
+      cwd: project,
+      env: { ...process.env, HOME: home, XDG_STATE_HOME: join(home, ".state") },
+      encoding: "utf8",
+    });
+  try {
+    const wired = invoke([
+      "install",
+      "--global",
+      "--commands",
+      "agents-md",
+      "--agents",
+      "none",
+      "--plugins",
+      "none",
+      "--core",
+      "--yes",
+    ]);
+    assert.equal(wired.status, 0, `${wired.stdout}\n${wired.stderr}`);
+    assert.match(wired.stdout, /^Applied changes:$/m);
+    assert.match(wired.stdout, /opencode\/core-plugin: (create|update)/m);
+    const opencode = JSON.parse(
+      await readFile(join(home, ".config", "opencode", "opencode.jsonc"), "utf8"),
+    );
+    assert.deepEqual(opencode.plugin, ["@kisev/agentomatic"]);
+    assert.ok(existsSync(join(home, ".config", "opencode", "commands", "agents-md.md")));
+
+    const skipped = invoke([
+      "install",
+      "--global",
+      "--commands",
+      "agents-md",
+      "--agents",
+      "none",
+      "--plugins",
+      "none",
+      "--no-core",
+      "--yes",
+    ]);
+    assert.equal(skipped.status, 0, `${skipped.stdout}\n${skipped.stderr}`);
+    assert.doesNotMatch(skipped.stdout, /core-plugin/m);
+    assert.match(skipped.stdout, /Connect the package into user configs:/m);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

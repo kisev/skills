@@ -191,14 +191,16 @@ plan, then repeat reconcile; resolve ownership conflicts manually.
 npx agentomatic install --dry-run
 ```
 
-The mandatory OpenCode flow is: `install --dry-run`, rerunning the install
-command without `--dry-run` and confirming the plan summary (which also
-provisions the persistent npm dependency), the confirmed `config`
-command (or a manual plugin entry), and restart OpenCode. The persistent npm
-project at `~/.config/opencode` keeps the global plugin resolvable. Applying
-the `core-plugin` fragment through `config` provisions the same dependency when
-the installer skipped it (for example, with no fixed agents selected) and
-removes a pinned legacy `@kisev/skills-opencode` dependency in the same pass.
+The mandatory OpenCode flow is a single install run with core integration
+confirmed: the wizard asks for command adapters, fixed agents, plugin wrappers,
+and core integration; one consent applies the assets, wires the `core-plugin`
+fragment into the user config, and provisions the persistent npm dependency in
+`~/.config/opencode` that keeps the global plugin resolvable. The dependency
+step removes a pinned legacy `@kisev/skills-opencode` in the same pass.
+Non-interactive runs pass `--core` (or `--no-core`) with the explicit selection
+flags. The `config` command remains the full fragment manager for every target;
+applying its `core-plugin` fragment provisions the same dependency when the
+installer skipped it.
 Scope-aware commands target the current directory by default. Add `--global`
 once to target global state from any directory. The removed `--scope` option
 is not accepted. Install or upgrade the package and

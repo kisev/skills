@@ -31,6 +31,7 @@ import {
   defaultConfigSelection,
   normalizeConfigSelection,
   previewConfigSetup,
+  type ConfigSetupPlan,
   type ConfigSetupSelection,
   type ConfigTargetName,
   type FragmentName,
@@ -57,6 +58,7 @@ type Options = {
   dryRun: boolean;
   json: boolean;
   yes: boolean;
+  core?: boolean;
   provider?: string;
   model?: string;
   variant?: string | null;
@@ -96,6 +98,14 @@ function parseOptions(values: string[]): Options {
     } else if (value === "--yes") {
       if (options.yes) throw new InstallerError("invalid_input", "--yes may be supplied once");
       options.yes = true;
+    } else if (value === "--core") {
+      if (options.core === true || options.core === false)
+        throw new InstallerError("invalid_input", "Use only one core integration option");
+      options.core = true;
+    } else if (value === "--no-core") {
+      if (options.core === true || options.core === false)
+        throw new InstallerError("invalid_input", "Use only one core integration option");
+      options.core = false;
     } else if (value === "--provider") {
       options.provider = values[++index];
       if (!options.provider)
@@ -211,6 +221,7 @@ function rootHelp(): string {
       ["--skill-commands <list|none>", "Select adapters for installed portable skills."],
       ["--agents <list|none>", "Select fixed agents."],
       ["--plugins <list|none>", "Select optional plugin wrappers; rtk is the default."],
+      ["--core / --no-core", "Toggle plugin entry wiring and npm dependency provisioning."],
       ["--targets <list|none>", "Select config targets for the config command."],
       ["--fragments <list|none>", "Select config fragments for the config command."],
     ]),
@@ -338,14 +349,17 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         ["--skill-commands <list|none>", "Select installed-skill adapters."],
         ["--agents <list|none>", "Select fixed agents."],
         ["--plugins <list|none>", "Select optional plugin wrappers; rtk is preselected."],
+        ["--core", "Wire the plugin entry and pin the npm dependency in one run."],
+        ["--no-core", "Skip plugin entry wiring and npm dependency provisioning."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
       [
-        "Without selection flags, a TTY opens command, agent, and plugin selectors.",
+        "Without selection flags, a TTY opens command, agent, plugin, and core selectors.",
         "Use Up/Down to move, Space to toggle, A/N for all/none, and Enter to confirm.",
         "Outside a TTY, provide command selection, --agents, and --plugins.",
-        "Writes occur only after confirmation; install never edits opencode.json.",
+        "Confirmed core integration wires the core-plugin fragment in the same run;",
+        "asset writes never touch opencode.json directly.",
         "Portable skills are installed separately; restart OpenCode after asset changes.",
       ],
       [
@@ -745,10 +759,18 @@ async function interactiveInstallerSelection(): Promise<InstallerSelection> {
   const commands = await group("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS);
   const agents = await group("Fixed agents", defaults.agents, defaults.agents);
   const plugins = await group("Selectable plugins", SELECTABLE_PLUGINS, defaults.plugins);
+  const core = await selectOption(
+    "Core integration: wire the plugin entry and pin the npm dependency?",
+    ["Yes", "No"],
+    process.stdin,
+    process.stderr,
+  );
+  if (core === null) throw new InstallerError("cancelled", "Wizard cancelled");
   return normalizeSelection({
     commands,
     agents: agents as InstallerSelection["agents"],
     plugins: plugins as InstallerSelection["plugins"],
+    core_activation: core === 0,
   });
 }
 
@@ -757,6 +779,7 @@ function installerSelection(options: Options): Partial<InstallerSelection> {
     commands: options.commands,
     agents: options.agents as InstallerSelection["agents"] | undefined,
     plugins: options.plugins as InstallerSelection["plugins"] | undefined,
+    ...(options.core === undefined ? {} : { core_activation: options.core }),
   });
 }
 
@@ -1218,6 +1241,32 @@ async function run(arguments_: string[]): Promise<void> {
           ? installerSelection(options)
           : await interactiveInstallerSelection()
         : undefined;
+    const coreSelection: ConfigSetupSelection | undefined =
+      action === "install" && selection?.core_activation
+        ? normalizeConfigSelection(options.scope!, {
+            targets: ["opencode"],
+            fragments: ["core-plugin"],
+          })
+        : undefined;
+    const applyCoreIntegration = async (): Promise<ConfigSetupPlan | null> => {
+      if (!coreSelection) return null;
+      try {
+        return await applyConfigSetup(coreSelection, options.scope!);
+      } catch (error) {
+        const known =
+          error instanceof LifecycleError
+            ? error
+            : new InstallerError(
+                "internal_error",
+                error instanceof Error ? error.message : String(error),
+              );
+        process.stderr.write(
+          `Assets applied, but core integration failed [${known.code}]: ${terminalSafe(known.message)}\nRetry with: ${shellCommand(["config", ...scopeArguments(options.scope), "--targets", "opencode", "--fragments", "core-plugin"])}\n`,
+        );
+        process.exitCode = 2;
+        return null;
+      }
+    };
     requireApplyMode(options);
     if (options.dryRun) {
       const plan = await preview(
@@ -1228,11 +1277,14 @@ async function run(arguments_: string[]): Promise<void> {
         selection,
         !options.noDependency,
       );
+      const corePlan = coreSelection
+        ? await previewConfigSetup(coreSelection, options.scope!)
+        : undefined;
       if (options.json)
         process.stdout.write(
-          `${JSON.stringify({ status: "ok", applied: false, requires_restart: plan.requires_restart, plan }, null, 2)}\n`,
+          `${JSON.stringify({ status: "ok", applied: false, requires_restart: plan.requires_restart, plan, ...(corePlan ? { core_integration: corePlan } : {}) }, null, 2)}\n`,
         );
-      else
+      else {
         process.stdout.write(
           renderPlan(plan, {
             applied: false,
@@ -1244,6 +1296,8 @@ async function run(arguments_: string[]): Promise<void> {
             ]),
           }),
         );
+        if (corePlan) process.stdout.write(renderConfigSetup(corePlan, { applied: false }));
+      }
     } else {
       if (!options.yes) {
         const plan = await preview(
@@ -1266,21 +1320,24 @@ async function run(arguments_: string[]): Promise<void> {
         selection,
         !options.noDependency,
       );
+      const corePlan = await applyCoreIntegration();
       if (options.json)
         process.stdout.write(
-          `${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan }, null, 2)}\n`,
+          `${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan, ...(corePlan ? { core_integration: corePlan } : {}) }, null, 2)}\n`,
         );
       else
         process.stdout.write(
           renderPlan(plan, {
             applied: true,
-            ...(action === "install"
+            ...(action === "install" && !corePlan
               ? {
                   hint: `Connect the package into user configs: ${shellCommand(["config", ...scopeArguments(options.scope), "--dry-run"])}`,
                 }
               : {}),
           }),
         );
+      if (corePlan && !options.json)
+        process.stdout.write(renderConfigSetup(corePlan, { applied: true }));
     }
     return;
   }

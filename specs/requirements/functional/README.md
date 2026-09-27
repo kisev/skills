@@ -120,10 +120,14 @@ executing package version as a persistent npm dependency in the owning project:
 global scope owns `~/.config/opencode`, and project scope owns the nearest npm
 project upward from the working directory. Provisioning creates a minimal
 `package.json` when the global project has none, pins the dependency with
-`npm install --save-exact`, and reports the outcome in the applied plan.
-Project scope without an npm project shall report a manual follow-up instead of
-creating files. `install --no-dependency` skips the step, and `uninstall` never
-changes the dependency.
+`npm install --save-exact`, removes a pinned legacy `@kisev/skills-opencode`
+dependency in the same pass, and reports the outcome in the applied plan.
+The same confirmed run applies the `opencode` `core-plugin` config fragment
+through the config-setup executor while keeping package-owned and user-owned
+writes in separate transactions. Project scope without an npm project shall
+report a manual follow-up instead of creating files. `install --no-dependency`
+skips the dependency step, `--no-core` skips the fragment and the dependency,
+and `uninstall` never changes the dependency.
 
 #### Verification
 
