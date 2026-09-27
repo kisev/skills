@@ -61,21 +61,26 @@ outdated facts by key, and archives every pre-image.
 
 ## Project Install
 
-Install the package in the repository's npm project and preview the managed
-assets:
+Run the installer from the repository root (add `--global` for the global
+scope); the confirmed install also provisions the persistent npm dependency:
 
 ```shell
-npm install --save-exact @kisev/agentomatic
 npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
-Run the exact confirmation command printed by the preview. If the selected
+The confirmed install pins the executing version into the nearest npm project;
+global installs own `~/.config/opencode` and create its `package.json` when
+needed. Offline setups can provision the dependency by hand first:
+`npm install --save-exact @kisev/agentomatic`, then run
+`npx agentomatic install --dry-run` from that project so the executing version
+matches the installed package. Run the exact confirmation command
+printed by the preview. If the selected
 assets need core integration, connect the package into the user-owned OpenCode
 configuration yourself or through the confirmed `config` command, which merges
 the `plugin` entry while preserving existing entries:
 
 ```shell
-npx --yes @kisev/agentomatic@latest config --global --dry-run
+npx agentomatic config --global --dry-run
 ```
 
 ```json

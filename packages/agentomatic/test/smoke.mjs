@@ -70,7 +70,12 @@ try {
     XDG_STATE_HOME: join(home, ".state"),
   };
   const cli = (arguments_) =>
-    JSON.parse(run(executable, [...arguments_, "--json"], { cwd: project, env: environment }));
+    JSON.parse(
+      run(executable, [...arguments_, "--no-dependency", "--json"], {
+        cwd: project,
+        env: environment,
+      }),
+    );
   const dryRun = cli(["install", "--global", ...selection, "--dry-run"]);
   assert.equal(dryRun.applied, false);
   assert.equal(dryRun.plan.requires_restart, true);

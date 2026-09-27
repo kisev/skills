@@ -66,6 +66,7 @@ type Options = {
   plugins?: string[];
   configTargets?: string[];
   configFragments?: string[];
+  noDependency?: boolean;
   selectionFlag: boolean;
 };
 
@@ -114,6 +115,10 @@ function parseOptions(values: string[]): Options {
     } else if (value === "--json") {
       if (options.json) throw new InstallerError("invalid_input", "--json may be supplied once");
       options.json = true;
+    } else if (value === "--no-dependency") {
+      if (options.noDependency)
+        throw new InstallerError("invalid_input", "--no-dependency may be supplied once");
+      options.noDependency = true;
     } else if (["--commands", "--skill-commands", "--agents", "--plugins"].includes(value)) {
       const raw = values[++index];
       if (!raw)
@@ -329,6 +334,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         ["--global", "Use global scope; project scope is the default."],
         ["--dry-run", "Preview operations and issue a one-time confirmation digest."],
         ["--confirm <digest>", "Apply the exact unexpired preview."],
+        ["--no-dependency", "Skip provisioning the persistent npm dependency for the core plugin."],
         ["--commands <list|none>", "Select installed-skill adapters."],
         ["--skill-commands <list|none>", "Select installed-skill adapters."],
         ["--agents <list|none>", "Select fixed agents."],
@@ -1200,7 +1206,14 @@ async function run(arguments_: string[]): Promise<void> {
         : undefined;
     requireConfirmationMode(options);
     if (options.dryRun) {
-      const plan = await preview(action, options.scope!, process.cwd(), undefined, selection);
+      const plan = await preview(
+        action,
+        options.scope!,
+        process.cwd(),
+        undefined,
+        selection,
+        !options.noDependency,
+      );
       if (options.json)
         process.stdout.write(
           `${JSON.stringify({ status: "ok", applied: false, requires_restart: plan.requires_restart, plan }, null, 2)}\n`,
@@ -1213,6 +1226,7 @@ async function run(arguments_: string[]): Promise<void> {
               action,
               ...scopeArguments(options.scope),
               ...(action === "install" ? selectionArguments(plan.selection) : []),
+              ...(options.noDependency ? ["--no-dependency"] : []),
               "--confirm",
               plan.digest,
             ]),
@@ -1227,6 +1241,7 @@ async function run(arguments_: string[]): Promise<void> {
         undefined,
         {},
         selection,
+        !options.noDependency,
       );
       if (options.json)
         process.stdout.write(

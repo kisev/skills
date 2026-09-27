@@ -22,53 +22,52 @@ The package and generated wrappers must remain resolvable after the installer
 exits. Import, plugin loading, and npm lifecycle scripts do not install assets,
 install portable skills, or edit OpenCode configuration.
 
-## Persistent Package Install
+## Install
 
 ### Project Scope
 
-Install in the repository's npm project and run the CLI from that project root:
+Run the installer from the project root; the confirmed install also provisions
+the persistent npm dependency in the nearest npm project:
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/agentomatic
 npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
-The package remains in project `node_modules`; confirmed assets go under
-`.opencode`.
+The package lands in project `node_modules` and confirmed assets go under
+`.opencode`. Without an npm project upward of the working directory, the plan
+reports a manual dependency follow-up instead of creating files.
 
 ### Global Scope
 
-Use `~/.config/opencode` as the persistent npm project:
-
-```shell
-mkdir -p "$HOME/.config/opencode"
-cd "$HOME/.config/opencode"
-test -f package.json || npm init --yes
-npm install --save-exact @kisev/agentomatic
-```
-
-Keep the dependency in that npm project's `package.json` and lock file.
-Confirmed assets go under `~/.config/opencode`. After the persistent install,
-run global-scope CLI commands from any directory:
+Run the installer from any directory:
 
 ```shell
 npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
+The confirmed install owns the npm project at `~/.config/opencode`: it creates
+a minimal `package.json` when needed and pins the exact executing version with
+`npm install --save-exact`. Confirmed assets go under `~/.config/opencode`.
+Read-only commands such as `doctor`, `capabilities`, and `agent list` keep
+working from any directory through the same explicit form; run `reconcile` and
+`uninstall` from the owning npm project through `npx agentomatic`, where the
+executing version must match the installed package. Offline setups can install
+the dependency by hand first: `npm install --save-exact @kisev/agentomatic`,
+then `npx agentomatic install --dry-run`. Pass `--no-dependency` to skip the
+provisioning step entirely.
+
 ### Development Channel
 
-Use npm dist-tag `dev` explicitly for both the persistent dependency and the
-installer CLI:
+Address the `dev` dist-tag explicitly to pin its prerelease:
 
 ```shell
-npm install --save-exact @kisev/agentomatic@dev
-npx --yes @kisev/agentomatic@dev install --dry-run
+npx --yes @kisev/agentomatic@dev install --global --dry-run
 ```
 
 Each successful push to `dev` publishes a unique prerelease and moves only the
-`dev` dist-tag. Reinstall `@kisev/agentomatic` without `@dev` and run the
-stable `@latest` CLI to return to the stable channel.
+`dev` dist-tag. To return to the stable channel, rerun the stable installer
+command; it re-pins the dependency to the current stable release.
 
 ## Select Assets
 
@@ -84,7 +83,7 @@ Outside a TTY, pass all three selection groups. This example selects three
 commands, all fixed agents, and no wrapper:
 
 ```shell
-npx --yes @kisev/agentomatic@latest install \
+npx agentomatic install \
   --commands askme,code-review,goal \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
@@ -148,8 +147,8 @@ The `config` command connects the package and recommended fragments into
 user-owned configuration files:
 
 ```shell
-npx --yes @kisev/agentomatic@latest config --global --dry-run
-npx --yes @kisev/agentomatic@latest config --dry-run
+npx agentomatic config --global --dry-run
+npx agentomatic config --dry-run
 ```
 
 In a TTY, target and fragment selectors open when flags are omitted. Global
@@ -189,11 +188,12 @@ installer confirmation, then repeat reconcile; resolve ownership conflicts
 manually.
 
 ```shell
-npx --yes @kisev/agentomatic@latest install --dry-run
+npx agentomatic install --dry-run
 ```
 
-The mandatory OpenCode flow is: persistent npm install, `install --dry-run`, the
-exact confirmation command printed by that preview, the confirmed `config`
+The mandatory OpenCode flow is: `install --dry-run`, the exact confirmation
+command printed by that preview (which also provisions the persistent npm
+dependency), the confirmed `config`
 command (or a manual plugin entry), and restart OpenCode. The persistent npm
 project at `~/.config/opencode` keeps the global plugin resolvable. Scope-aware
 commands target the current directory by default. Add `--global` once
@@ -228,16 +228,15 @@ input or an incomplete probe failure.
 
 ## Update
 
-From the npm project that owns the dependency, install the current stable package
-and persist the resolved exact version, preview and confirm `install` with the
-same scope and desired selection, then restart OpenCode:
+Update by running the current stable installer with the same scope and desired
+selection, then restart OpenCode:
 
 ```shell
-npm install --save-exact @kisev/agentomatic
-npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
-Use the complete confirmation command printed by the preview. The installer
+Use the complete confirmation command printed by the preview; the confirmed
+install re-pins the persistent dependency to the executed version. The installer
 updates only files whose recorded ownership and SHA-256 still match. User-owned
 or modified managed files remain conflicts. Package update does not reset agent
 model choices, variants, additional critics, or retained profile configuration.
@@ -248,9 +247,9 @@ model choices, variants, additional critics, or retained profile configuration.
 and installation metadata for one scope:
 
 ```shell
-npx --yes @kisev/agentomatic@latest reconcile --dry-run
-npx --yes @kisev/agentomatic@latest reconcile --confirm <digest>
-npx --yes @kisev/agentomatic@latest reconcile --global --dry-run --json
+npx agentomatic reconcile --dry-run
+npx agentomatic reconcile --confirm <digest>
+npx agentomatic reconcile --global --dry-run --json
 ```
 
 Before reconcile, update the package through its owning installer. Manage
@@ -272,10 +271,10 @@ call:
 
 ```shell
 npx --yes @kisev/agentomatic@latest agent list --global
-npx --yes @kisev/agentomatic@latest agent configure manager --global --dry-run
-npx --yes @kisev/agentomatic@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
-npx --yes @kisev/agentomatic@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
-npx --yes @kisev/agentomatic@latest agent reconcile --global --dry-run
+npx agentomatic agent configure manager --global --dry-run
+npx agentomatic agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
+npx agentomatic critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
+npx agentomatic agent reconcile --global --dry-run
 ```
 
 Fixed roles keep their names, prompts, and permissions; only model and variant
@@ -292,14 +291,14 @@ Keep the package resolvable until its assets are removed:
 4. Restart OpenCode.
 
 ```shell
-npx --yes @kisev/agentomatic@latest uninstall --dry-run
-npx --yes @kisev/agentomatic@latest uninstall --confirm <digest>
+npx agentomatic uninstall --dry-run
+npx agentomatic uninstall --confirm <digest>
 npm uninstall @kisev/agentomatic
 ```
 
-For global scope, run the stable npx command from any directory with
-`--global`, then uninstall the dependency from the persistent npm project
-at `~/.config/opencode`. Uninstall archives exact manifest-owned assets and
+For global scope, run the same commands from the persistent npm project
+at `~/.config/opencode` with `--global`, then uninstall the dependency there.
+Uninstall archives exact manifest-owned assets and
 preserves modified files as conflicts, along with worktrees, runtime state, and
 retained profile configuration. It does not remove portable skills or edit
 `opencode.json`. No archive restore or purge command is provided.

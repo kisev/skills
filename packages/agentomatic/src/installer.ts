@@ -35,6 +35,12 @@ import {
 import { CATALOG } from "./catalog.js";
 import { FIXED_AGENT_ROLES, type FixedAgentRole } from "./agent-profiles.js";
 import { readPackageVersion } from "./package-metadata.js";
+import {
+  ensureDependency,
+  planDependency,
+  type DependencyPlan,
+  type DependencyRunner,
+} from "./self-install.js";
 
 export type { Scope } from "./lifecycle.js";
 
@@ -70,6 +76,7 @@ export type Plan = {
   package_version: string;
   selection: InstallerSelection;
   operations: PlanItem[];
+  dependency?: DependencyPlan & { applied?: "changed" | "unchanged" | "skipped" };
   plan_digest: string;
   confirmation_digest?: string;
   superseded_plan?: SupersededPlan;
@@ -521,6 +528,7 @@ async function build(
   cwd = process.cwd(),
   home = homedir(),
   requestedSelection?: Partial<InstallerSelection>,
+  provisionDependency = true,
 ): Promise<BuiltInstallerPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const owned = await currentManifest(root);
@@ -553,6 +561,10 @@ async function build(
     legacyRecord,
     selection.agents,
   );
+  const dependency =
+    action === "install" && provisionDependency && selection.core_activation
+      ? planDependency(scope, cwd, home)
+      : undefined;
   const operations: PlanItem[] = profiles.plan.operations.map((item) => ({
     path: item.path,
     operation: item.operation,
@@ -815,6 +827,7 @@ async function build(
     package_version: packageVersion(),
     selection,
     operations: sorted,
+    ...(dependency ? { dependency } : {}),
     requires_restart:
       (action === "install" && owned.manifest?.package_version !== packageVersion()) ||
       profiles.plan.requires_restart ||
@@ -840,6 +853,7 @@ export async function preview(
   cwd = process.cwd(),
   home = homedir(),
   selection?: Partial<InstallerSelection>,
+  provisionDependency = true,
 ): Promise<Plan> {
   // Infrastructure normalization like stale-lock reclamation: idempotent,
   // preserves every legacy byte, and never touches user configuration.
@@ -853,7 +867,7 @@ export async function preview(
           "recovered_transaction",
           "Recovered an interrupted transaction; request a fresh plan",
         );
-      const built = await build(action, scope, cwd, home, selection);
+      const built = await build(action, scope, cwd, home, selection, provisionDependency);
       const receipt = await saveReceipt(
         stateRoot,
         `installer:${action}`,
@@ -885,9 +899,11 @@ export async function apply(
   confirmationDigest: string,
   cwd = process.cwd(),
   home = homedir(),
-  options: TransactionOptions = {},
+  options: TransactionOptions & { dependencyRunner?: DependencyRunner } = {},
   selection?: Partial<InstallerSelection>,
+  provisionDependency = true,
 ): Promise<Plan> {
+  const { dependencyRunner, ...transactionOptions } = options;
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
   await migrateLegacyNamespaces(home);
@@ -905,7 +921,7 @@ export async function apply(
         scope,
         root,
       })) as { digest?: string };
-      const built = await build(action, scope, cwd, home, selection);
+      const built = await build(action, scope, cwd, home, selection, provisionDependency);
       const savedPlanDigest =
         (receipt as { plan_digest?: string; digest?: string }).plan_digest ??
         (receipt as { digest?: string }).digest;
@@ -931,7 +947,7 @@ export async function apply(
       )
         throw new InstallerError("conflict", "Installer plan contains managed drift");
       await applyTransaction(root, stateRoot, built.mutations, {
-        ...options,
+        ...transactionOptions,
         validateFinal: async () => {
           await options.validateFinal?.();
           await validateBuiltAgentProfilePlan(built.profiles);
@@ -960,7 +976,15 @@ export async function apply(
           }
         },
       });
-      return { ...built.plan, digest: confirmationDigest };
+      const dependencyOutcome =
+        action === "install" && built.plan.dependency
+          ? await ensureDependency(built.plan.dependency, dependencyRunner)
+          : undefined;
+      return {
+        ...built.plan,
+        digest: confirmationDigest,
+        ...(dependencyOutcome ? { dependency: dependencyOutcome } : {}),
+      };
     });
   } catch (error) {
     if (error instanceof InstallerError) throw error;

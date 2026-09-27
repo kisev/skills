@@ -49,16 +49,19 @@ updates, cleanup, and troubleshooting, or browse the
 - optional plugin wrappers: `rules-injector` and `zed-bell`, plus the `rtk`
   compression wrapper deployed by default and observable through `/rtk-stats`.
 
-Install the package persistently in the npm project that owns the integration,
-then preview its managed assets:
+Run the installer from any directory; the confirmed install also provisions the
+persistent npm dependency that keeps the plugin resolvable:
 
 ```shell
-npm install --save-exact @kisev/agentomatic
-npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
-Use `@kisev/agentomatic@dev` in both commands to opt into the current
-development snapshot.
+For project scope, run it from the project root without `--global`. Global
+installs own the npm project at `~/.config/opencode` and create its
+`package.json` when needed; project installs use the nearest npm project. Use
+`@kisev/agentomatic@dev` to opt into the development snapshot, or install the
+package once with `npm install -g @kisev/agentomatic` to call the `agentomatic`
+binary directly.
 
 This only starts the mandatory flow. Apply the exact confirmation command from
 the preview, add the package to the user-owned OpenCode `plugin` entry, and

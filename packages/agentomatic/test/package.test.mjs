@@ -116,10 +116,19 @@ test("rtk wrapper is the default plugin selection and an explicit opt-out is pre
     const home = join(directory, "home");
     await Promise.all([mkdir(project), mkdir(home)]);
     const { plan, applied } = await (async () => {
-      const plan = await preview("install", "global", project, home, { plugins: [] });
+      const plan = await preview("install", "global", project, home, { plugins: [] }, false);
       return {
         plan,
-        applied: await apply("install", "global", plan.digest, project, home, {}, { plugins: [] }),
+        applied: await apply(
+          "install",
+          "global",
+          plan.digest,
+          project,
+          home,
+          {},
+          { plugins: [] },
+          false,
+        ),
       };
     })();
     assert.equal(
@@ -354,8 +363,11 @@ test("committed contract instances match runtime validators", () => {
 });
 
 async function install(scope, cwd, home) {
-  const plan = await preview("install", scope, cwd, home);
-  return { plan, applied: await apply("install", scope, plan.digest, cwd, home) };
+  const plan = await preview("install", scope, cwd, home, undefined, false);
+  return {
+    plan,
+    applied: await apply("install", scope, plan.digest, cwd, home, {}, undefined, false),
+  };
 }
 
 test("registry generates twenty-eight thin skill command assets and one package command", () => {

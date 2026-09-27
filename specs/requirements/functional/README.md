@@ -116,3 +116,21 @@ not create a GitHub Release or change npm `latest`.
 
 Workflow and release tests verify the `dev` trigger, version derivation, npm
 dist-tag, Pages subpath, and isolation from stable publication.
+
+### REQ-F-010 - Provision the persistent npm dependency
+
+A confirmed `install` with core integration selected shall provision the exact
+executing package version as a persistent npm dependency in the owning project:
+global scope owns `~/.config/opencode`, and project scope owns the nearest npm
+project upward from the working directory. Provisioning creates a minimal
+`package.json` when the global project has none, pins the dependency with
+`npm install --save-exact`, and reports the outcome in the applied plan.
+Project scope without an npm project shall report a manual follow-up instead of
+creating files. `install --no-dependency` skips the step, and `uninstall` never
+changes the dependency.
+
+#### Verification
+
+Package tests stub the npm runner and verify plan states (`install`, `update`,
+`satisfied`, `manual`), package.json creation, argument shape, failure wrapping,
+and confirm-digest coupling through preview and apply.

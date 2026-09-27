@@ -144,6 +144,7 @@ test("applying an upgrade migrates legacy namespaces before installing", () => {
       "manager,architect,mapper,worker,review,critic",
       "--plugins",
       "none",
+      "--no-dependency",
       "--global",
       "--json",
     ];

@@ -22,53 +22,54 @@
 установщика. Импорт, загрузка плагина и сценарии жизненного цикла npm не
 устанавливают компоненты или переносимые навыки и не меняют конфигурацию OpenCode.
 
-## Постоянная установка пакета
+## Установка
 
 ### Область проекта
 
-Установите пакет в npm-проект репозитория и запускайте CLI из его корня:
+Запустите установщик из корня проекта; подтверждённая установка также пропишет
+постоянную npm-зависимость в ближайшем npm-проекте:
 
 ```shell
 cd /path/to/project
-npm install --save-exact @kisev/agentomatic
 npx --yes @kisev/agentomatic@latest install --dry-run
 ```
 
-Пакет остаётся в каталоге `node_modules` проекта, а подтверждённые компоненты
-размещаются в `.opencode`.
+Пакет попадает в `node_modules` проекта, а подтверждённые компоненты
+размещаются в `.opencode`. Если npm-проекта выше по дереву нет, план сообщит о
+необходимости ручного шага вместо создания файлов.
 
 ### Глобальная область
 
-Используйте `~/.config/opencode` как постоянный npm-проект:
-
-```shell
-mkdir -p "$HOME/.config/opencode"
-cd "$HOME/.config/opencode"
-test -f package.json || npm init --yes
-npm install --save-exact @kisev/agentomatic
-```
-
-Сохраните зависимость в `package.json` и файле блокировки этого npm-проекта.
-Подтверждённые компоненты размещаются в `~/.config/opencode`. После постоянной
-установки запускайте команды CLI для глобальной области из любого каталога:
+Запустите установщик из любого каталога:
 
 ```shell
 npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
+Подтверждённая установка владеет npm-проектом в `~/.config/opencode`: при
+необходимости создаёт минимальный `package.json` и закрепляет точную
+исполняемую версию через `npm install --save-exact`. Подтверждённые компоненты
+размещаются в `~/.config/opencode`. Команды только чтения - `doctor`,
+`capabilities` и `agent list` - работают из любого каталога в той же явной
+форме; `reconcile` и `uninstall` выполняйте из владеющего npm-проекта через
+`npx agentomatic`, где версия исполнения обязана совпадать с установленным
+пакетом. В офлайн-окружении зависимость можно поставить вручную:
+`npm install --save-exact @kisev/agentomatic`, затем
+`npx agentomatic install --dry-run`. Передайте `--no-dependency`, чтобы полностью
+пропустить шаг подготовки зависимости.
+
 ### Dev-канал
 
-Явно укажите npm dist-tag `dev` и для постоянной зависимости, и для CLI
-установщика:
+Укажите dist-tag `dev` явно, чтобы закрепить его prerelease-версию:
 
 ```shell
-npm install --save-exact @kisev/agentomatic@dev
-npx --yes @kisev/agentomatic@dev install --dry-run
+npx --yes @kisev/agentomatic@dev install --global --dry-run
 ```
 
 Каждый успешный push в `dev` публикует уникальную prerelease-версию и перемещает
-только dist-tag `dev`. Чтобы вернуться на стабильный канал, переустановите
-`@kisev/agentomatic` без `@dev` и запустите стабильный CLI `@latest`.
+только dist-tag `dev`. Чтобы вернуться на стабильный канал, повторите команду
+стабильного установщика; она перепривяжет зависимость к текущему стабильному
+выпуску.
 
 ## Выбор компонентов
 
@@ -85,7 +86,7 @@ npx --yes @kisev/agentomatic@dev install --dry-run
 три команды, все агенты с фиксированными ролями и ни одна обёртка:
 
 ```shell
-npx --yes @kisev/agentomatic@latest install \
+npx agentomatic install \
   --commands askme,code-review,goal \
   --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
@@ -151,8 +152,8 @@ npx --yes @kisev/agentomatic@latest doctor --json
 пользовательские файлы конфигурации:
 
 ```shell
-npx --yes @kisev/agentomatic@latest config --global --dry-run
-npx --yes @kisev/agentomatic@latest config --dry-run
+npx agentomatic config --global --dry-run
+npx agentomatic config --dry-run
 ```
 
 В терминале без флагов открываются селекторы целей и фрагментов. Глобальная
@@ -194,11 +195,12 @@ npx --yes @kisev/agentomatic@latest config --dry-run
 нужно разрешить вручную.
 
 ```shell
-npx --yes @kisev/agentomatic@latest install --dry-run
+npx agentomatic install --dry-run
 ```
 
-Обязательная последовательность для OpenCode: постоянная установка через npm,
-`install --dry-run`, точная команда подтверждения из предварительного просмотра,
+Обязательная последовательность для OpenCode: `install --dry-run`, точная
+команда подтверждения из предварительного просмотра (она же прописывает
+постоянную npm-зависимость),
 подтверждённая команда `config` (или ручная запись `plugin`) и перезапуск
 OpenCode. Постоянный npm-проект в `~/.config/opencode` сохраняет доступность
 глобального плагина. Команды с областью по умолчанию работают с текущим
@@ -235,17 +237,16 @@ npx --yes @kisev/agentomatic@latest doctor --json
 
 ## Обновление
 
-В npm-проекте, которому принадлежит зависимость, установите текущую стабильную
-версию пакета и зафиксируйте точную установленную версию. Затем выполните
-предварительный просмотр и подтвердите `install` с той же областью и нужным
-набором компонентов, после чего перезапустите OpenCode:
+Обновление выполняется текущим стабильным установщиком с той же областью и
+нужным набором компонентов, после чего перезапустите OpenCode:
 
 ```shell
-npm install --save-exact @kisev/agentomatic
-npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install --global --dry-run
 ```
 
-Используйте полную команду подтверждения из предварительного просмотра.
+Используйте полную команду подтверждения из предварительного просмотра;
+подтверждённая установка перепривязывает постоянную зависимость к исполняемой
+версии.
 Установщик обновляет только файлы, для которых совпадают сохранённые сведения о
 принадлежности и контрольная сумма SHA-256. Пользовательские или изменённые
 управляемые файлы остаются конфликтами. Обновление пакета не сбрасывает выбранные
@@ -258,9 +259,9 @@ npx --yes @kisev/agentomatic@latest install --dry-run
 метаданные установки в одной области:
 
 ```shell
-npx --yes @kisev/agentomatic@latest reconcile --dry-run
-npx --yes @kisev/agentomatic@latest reconcile --confirm <digest>
-npx --yes @kisev/agentomatic@latest reconcile --global --dry-run --json
+npx agentomatic reconcile --dry-run
+npx agentomatic reconcile --confirm <digest>
+npx agentomatic reconcile --global --dry-run --json
 ```
 
 Перед `reconcile` обновите пакет через его установщик. Переносимыми навыками
@@ -283,10 +284,10 @@ CLI напрямую управляет моделями агентов с фи�
 
 ```shell
 npx --yes @kisev/agentomatic@latest agent list --global
-npx --yes @kisev/agentomatic@latest agent configure manager --global --dry-run
-npx --yes @kisev/agentomatic@latest agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
-npx --yes @kisev/agentomatic@latest critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
-npx --yes @kisev/agentomatic@latest agent reconcile --global --dry-run
+npx agentomatic agent configure manager --global --dry-run
+npx agentomatic agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
+npx agentomatic critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
+npx agentomatic agent reconcile --global --dry-run
 ```
 
 Фиксированные роли сохраняют имена, инструкции и разрешения; меняются только
@@ -304,14 +305,14 @@ npx --yes @kisev/agentomatic@latest agent reconcile --global --dry-run
 4. Перезапустите OpenCode.
 
 ```shell
-npx --yes @kisev/agentomatic@latest uninstall --dry-run
-npx --yes @kisev/agentomatic@latest uninstall --confirm <digest>
+npx agentomatic uninstall --dry-run
+npx agentomatic uninstall --confirm <digest>
 npm uninstall @kisev/agentomatic
 ```
 
-Для глобальной области запустите стабильную команду npx из любого каталога с
-`--global`, затем удалите зависимость из постоянного npm-проекта в
-`~/.config/opencode`. `uninstall` архивирует компоненты, чья принадлежность точно
+Для глобальной области выполните те же команды с `--global` из постоянного
+npm-проекта в `~/.config/opencode`, затем удалите зависимость там же.
+`uninstall` архивирует компоненты, чья принадлежность точно
 подтверждена манифестом, и сохраняет изменённые файлы как конфликты вместе с
 рабочими деревьями, состоянием выполнения и сохранённой конфигурацией профилей.
 Команда не удаляет переносимые навыки и не меняет `opencode.json`. Команд
