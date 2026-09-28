@@ -1,10 +1,13 @@
 # ADR-0012: Compose memomatic learning memory
 
-- Status: accepted
+- Status: superseded
 - Date: 2026-09-26
-- Status changed: none
+- Status changed: 2026-09-28
 - Supersedes: none
-- Superseded by: none
+- Superseded by: [ADR-0015](0015-use-explicit-mcp-memory.md)
+
+The original decision below is retained as history. ADR-0015 removes the plugin
+and agentomatic dependency while preserving the standalone memory engine.
 
 ## Context and problem statement
 
@@ -99,5 +102,5 @@ is involved.
 
 ## Links
 
-- Requirements: [REQ-I-406](../../capabilities/plugins/memomatic.md#req-i-406---expose-memomatic-safely)
+- Requirements: [REQ-I-406](../../capabilities/applications/memomatic.md#req-i-406---expose-memomatic-safely)
 - Related ADRs: [ADR-0008](0008-compose-persistent-gitlab-task-triage.md)

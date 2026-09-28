@@ -82,7 +82,7 @@
     "team-sprint-start"
   ],
   "agents": ["manager", "architect", "mapper", "worker", "review", "critic"],
-  "plugins": ["rules-injector", "rtk", "zed-bell", "memomatic"],
+  "plugins": ["rules-injector", "rtk", "zed-bell"],
   "package_tools": ["route"],
   "infrastructure": ["core"]
 }

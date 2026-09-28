@@ -10,15 +10,13 @@ import {
 import rulesInjector, { type RulesInjectorOptions } from "./plugins/rules-injector.js";
 import rtk, { type RtkOptions } from "./plugins/rtk.js";
 import zedBell, { type ZedBellOptions } from "./plugins/zed-bell.js";
-import memomatic, { type MemomaticOptions } from "./plugins/memomatic.js";
 import { digest } from "./lifecycle.js";
 
-export { rulesInjector, rtk, zedBell, memomatic };
+export { rulesInjector, rtk, zedBell };
 export type OpenCodeOptions = {
   rulesInjector?: RulesInjectorOptions;
   rtk?: RtkOptions;
   zedBell?: ZedBellOptions;
-  memomatic?: MemomaticOptions;
 };
 
 const plugin = (async (input: PluginInput) => {

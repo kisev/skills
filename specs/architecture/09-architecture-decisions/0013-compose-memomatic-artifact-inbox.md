@@ -1,10 +1,13 @@
 # ADR-0013: Compose memomatic with XDG skill artifacts through an async inbox
 
-- Status: accepted
+- Status: superseded
 - Date: 2026-09-26
-- Status changed: none
+- Status changed: 2026-09-28
 - Supersedes: none
-- Superseded by: none
+- Superseded by: [ADR-0015](0015-use-explicit-mcp-memory.md)
+
+The original decision below is retained as history. ADR-0015 preserves the inbox
+and visibility contract but removes bootstrap recall and the host plugin.
 
 ## Context and problem statement
 
@@ -103,4 +106,4 @@ Revisit a dedicated vector store only when the corpus exceeds roughly 20,000
 entries or search latency exceeds roughly 50 ms; until then SQLite with
 SQL-side source/project/visibility filtering is sufficient.
 
-- Requirements: [REQ-I-407](../../capabilities/plugins/memomatic.md#req-i-407---compose-skill-artifacts-into-memory-through-the-inbox)
+- Requirements: [REQ-I-407](../../capabilities/applications/memomatic.md#req-i-407---compose-skill-artifacts-into-memory-through-the-inbox)

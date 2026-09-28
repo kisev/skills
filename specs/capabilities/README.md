@@ -57,7 +57,8 @@ commands have a separate contract below.
   [mapper](agents/mapper.md), [worker](agents/worker.md), [review](agents/review.md),
   and [critic](agents/critic.md).
 - Selectable plugins: [rules-injector](plugins/rules-injector.md), [rtk](plugins/rtk.md),
-  [zed-bell](plugins/zed-bell.md), and [memomatic](plugins/memomatic.md).
+  and [zed-bell](plugins/zed-bell.md).
+- Standalone application: [memomatic](applications/memomatic.md) (MCP and CLI).
 - Package tool: [route](package-tools/route.md).
 - Package command: [rtk-stats](commands/rtk-stats.md).
 - Administration: [config](package-tools/config-setup.md), [doctor](package-tools/doctor.md),

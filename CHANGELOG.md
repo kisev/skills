@@ -23,13 +23,8 @@ All notable changes to this project are documented in this file. Entries follow
 - Every memory entry can carry a `source` annotation; usage visibility derives
   from it (`team-*`, `gitlab`, and `spec-manage` entries are quotable in
   team-facing artifacts, everything else is personal-only). Search responses
-  and bootstrap blocks expose the label, and the `auto-clean` directive gains
+  expose the label, and the `auto-clean` directive gains
   an optional `source=` filter for transient sources such as `stopit`.
-
-- The memomatic plugin bootstrap resolves session facts (directory, title,
-  first user message) from the OpenCode database and injects two bounded
-  recall blocks: project-matched episodic entries through the new
-  `settings.json` `projects` longest-prefix map, and trigger-phrase matches.
 
 - The shared `memomatic_inbox.py` helper (materialized into dropping skills)
   mirrors durable events into the inbox with presence detection: people-journal
@@ -38,6 +33,20 @@ All notable changes to this project are documented in this file. Entries follow
   issue, superseded on re-triage), and task-prepare outcomes. docs, spec-manage
   ADR, mattermost-triage digest, and team artifact workflows offer confirmed
   drops through the same helper CLI.
+
+### Removed
+
+- The memomatic OpenCode plugin, its export and installer selection, and all
+  automatic memory injection. Agents use the standalone MCP server in every
+  host. Agentomatic no longer depends on memomatic. Installer upgrades archive
+  unchanged owned wrappers and preserve edited wrappers as conflicts. CLI,
+  Dream, embeddings, inbox processing, and stored memory remain available;
+  the obsolete `projects` bootstrap mapping is ignored.
+
+### Fixed
+
+- Explicit MCP forgetting removes the entry from search immediately and adjusts
+  remaining line references under the processing lock without calling embeddings.
 
 ## \[11.0.0] - 2026-09-26
 

@@ -15,8 +15,9 @@ npm install --global @kisev/memomatic
 
 The corpus lives under `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`,
 daily notes, `DREAMS.md`); rules live in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.
-Requires Node.js 22+. Explicitly select `memomatic` in the `@kisev/agentomatic`
-installer and restart OpenCode. For standalone use, run the CLI:
+Requires Node.js 22+. Connect `memomatic mcp-serve` as a local stdio MCP server
+in OpenCode, Kilo, MiMo, or another MCP host and restart that host. No plugin or
+automatic context injection is used. For background processing, run the CLI:
 
 ```bash
 memomatic process    # validate the inbox and index accepted entries (no model)
@@ -49,16 +50,17 @@ Every entry can carry a `source` annotation. Visibility derives from it:
 `team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing
 artifacts; every other source (`people-journal`, `stopit`,
 `mattermost-triage`, `task-*`, `docs-*`, `user`) is personal-only. The label
-is exposed in search responses and session bootstrap blocks.
+is exposed in search responses.
 
 ## Surfaces
 
 - `memomatic` CLI: `process`, `dream`, `search`, `status`, `index`.
 - MCP stdio server with `memory_search`, `memory_get`, `memory_write`, and
   `memory_forget` tools.
-- The OpenCode plugin re-exported by `@kisev/agentomatic`; its bootstrap
-  injects curated memory plus project- and trigger-matched recall blocks
-  resolved from the session database (`projects` map in `settings.json`).
+
+The model initiates memory searches through visible MCP tool calls. Dream
+processes OpenCode history separately; connecting another host does not import
+its session history. Agentomatic and memomatic are installed independently.
 
 Nothing is deleted without the explicit directives documented in
 `MEMORY_RULES.md`.

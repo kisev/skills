@@ -11,5 +11,4 @@ export {
   writeEntry,
 } from "./service.js";
 export type { MemomaticContext } from "./service.js";
-export { bootstrapContext, resolveProject } from "./bootstrap.js";
-export { opencodeDatabasePath, sessionFacts } from "./ingest.js";
+export { opencodeDatabasePath } from "./ingest.js";

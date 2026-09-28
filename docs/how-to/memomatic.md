@@ -1,6 +1,6 @@
 ---
 audience: user
-review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "apps/memomatic/assets/systemd/*", "packages/agentomatic/src/plugins/memomatic.ts", "packages/agentomatic/src/installer.ts"], "contracts": ["specs/capabilities/plugins/memomatic.md"]}
+review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "apps/memomatic/assets/systemd/*", "packages/agentomatic/src/installer.ts", "packages/agentomatic/test/stage19.test.mjs"], "contracts": ["specs/capabilities/applications/memomatic.md"]}
 ---
 
 # Set Up and Use Memomatic
@@ -19,12 +19,29 @@ memomatic --version
 For a project-local installation use `npm install @kisev/memomatic` and invoke
 the CLI as `npx memomatic`. The systemd example below expects a global binary.
 
-In the [agentomatic installer](opencode-integration.md), explicitly select the
-`memomatic` wrapper; only `rtk` is preselected. Restart OpenCode and check that
-`memory_write`, `memory_search`, `memory_get`, and `memory_forget` are available.
-Other MCP hosts can launch `memomatic mcp-serve` as a local stdio server.
+Connect `memomatic mcp-serve` as a local stdio MCP server in each host. OpenCode,
+Kilo, and MiMo use this fragment in their respective JSON configuration:
 
-The global CLI and the plugin's npm dependency are separate installations.
+```json
+{
+  "mcp": {
+    "memomatic": {
+      "type": "local",
+      "command": ["memomatic", "mcp-serve"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Merge it with existing MCP entries. If a service cannot resolve a shell-managed
+binary, use absolute executable paths. Restart the host and check that
+`memory_write`, `memory_search`, `memory_get`, and `memory_forget` appear under the
+MCP server (the host may prefix tool names). Models decide when to search; ask
+explicitly when recall is required. There is no automatic memory injection.
+
+Memomatic and agentomatic are separate installations; agentomatic does not install
+or depend on memomatic.
 `@dev` selects the latest successful publication from `dev` for all workspace
 packages: `@kisev/agentomatic`, `@kisev/memomatic`, and `@kisev/safe-fs`.
 `@latest` is the stable release channel; before a package's first stable release,
@@ -36,9 +53,21 @@ npm install --global @kisev/memomatic@dev
 npx --yes @kisev/agentomatic@dev install --global
 ```
 
-Check that the CLI version matches the plugin's `@kisev/memomatic` dependency;
-updating agentomatic alone does not update the global CLI. Install the same exact
-memomatic version if the `dev` channel advanced between those commands.
+Updating agentomatic alone does not update the memomatic CLI or MCP server.
+
+## Migrate from the OpenCode Plugin
+
+Rerun the [agentomatic installer](opencode-integration.md) with your existing
+selections except `memomatic`, which is no longer a plugin option. Review the
+preview: unchanged manifest-owned `plugins/memomatic.js` is archived and removed.
+An edited wrapper is a conflict; preserve your edits and resolve it before retrying.
+If you manually configured an import of `@kisev/agentomatic/plugins/memomatic`,
+remove that entry yourself. Then connect the MCP server as above and restart
+OpenCode. Installing only the newer npm dependency does not remove an old wrapper.
+
+Memory files, the inbox, embeddings, rules, and Dream scheduling are preserved.
+The former `projects` settings map is ignored; project and trigger annotations
+remain stored on existing entries but no longer drive automatic recall.
 
 ## Save and Retrieve a First Entry
 

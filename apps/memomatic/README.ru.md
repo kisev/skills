@@ -15,8 +15,9 @@ npm install --global @kisev/memomatic
 
 Корпус живёт в `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`, ежедневные
 записи, `DREAMS.md`); правила — в `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.
-Нужен Node.js 22+. Явно выберите `memomatic` в установщике `@kisev/agentomatic`
-и перезапустите OpenCode. Автономное использование доступно через CLI:
+Нужен Node.js 22+. Подключите `memomatic mcp-serve` как локальный MCP-сервер stdio
+в OpenCode, Kilo, MiMo или другом MCP-хосте и перезапустите хост. Плагин и
+автоматическая подстановка контекста не используются. Фоновая обработка доступна через CLI:
 
 ```bash
 memomatic process    # валидация inbox и индексация принятого (без модели)
@@ -49,15 +50,16 @@ memomatic dream      # полный проход: inbox + сессии + кон�
 записи `team-*`, `gitlab` и `spec-manage` можно цитировать в командных
 артефактах; остальные источники (`people-journal`, `stopit`,
 `mattermost-triage`, `task-*`, `docs-*`, `user`) — personal-only. Метка
-возвращается в поиске и в bootstrap-блоках сессий.
+возвращается в поиске.
 
 ## Поверхности
 
 - CLI `memomatic`: `process`, `dream`, `search`, `status`, `index`.
 - MCP-сервер stdio с инструментами `memory_search`, `memory_get`,
   `memory_write` и `memory_forget`.
-- Плагин OpenCode, реэкспортируемый пакетом `@kisev/agentomatic`; его
-  bootstrap добавляет к кураторской памяти блоки напоминаний по проекту и
-  trigger-фразам (контекст сессии и маппинг `projects` из `settings.json`).
+
+Модель сама инициирует поиск памяти через видимые MCP-вызовы. Dream отдельно
+обрабатывает историю OpenCode; подключение другого хоста не импортирует его
+сессии. Agentomatic и memomatic устанавливаются независимо.
 
 Без явных директив, описанных в `MEMORY_RULES.md`, ничего не удаляется.

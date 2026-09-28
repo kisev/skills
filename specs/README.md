@@ -15,9 +15,10 @@ roadmap, or implementation plans.
 
 ## Public Surface
 
-The verified public inventory is 38 skills, 39 commands, 6 agents, 4 selectable
+The verified public inventory is 38 skills, 39 commands, 6 agents, 3 selectable
 plugins, and 1 package tool. The core infrastructure plugin is always
-available; selectable plugins are `rules-injector`, `rtk`, `zed-bell`, and `memomatic`.
+available; selectable plugins are `rules-injector`, `rtk`, and `zed-bell`.
+Memomatic is a standalone MCP/CLI application, not a host plugin.
 Commands comprise 38 same-named skill adapters and the package command `rtk-stats`.
 
 ## Navigation

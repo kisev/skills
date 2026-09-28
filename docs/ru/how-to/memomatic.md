@@ -1,6 +1,6 @@
 ---
 audience: user
-review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "apps/memomatic/assets/systemd/*", "packages/agentomatic/src/plugins/memomatic.ts", "packages/agentomatic/src/installer.ts"], "contracts": ["specs/capabilities/plugins/memomatic.md"]}
+review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "apps/memomatic/assets/systemd/*", "packages/agentomatic/src/installer.ts", "packages/agentomatic/test/stage19.test.mjs"], "contracts": ["specs/capabilities/applications/memomatic.md"]}
 ---
 
 # Настройка и использование Memomatic
@@ -19,12 +19,30 @@ memomatic --version
 Для локальной установки используйте `npm install @kisev/memomatic` и вызывайте
 CLI через `npx memomatic`. Пример systemd ниже рассчитан на глобальный бинарник.
 
-В [установщике agentomatic](opencode-integration.md) явно выберите обёртку
-`memomatic`: по умолчанию выбрана только `rtk`. Перезапустите OpenCode и проверьте
-доступность `memory_write`, `memory_search`, `memory_get` и `memory_forget`.
-Другие MCP-хосты могут запускать `memomatic mcp-serve` как локальный stdio-сервер.
+Подключите `memomatic mcp-serve` как локальный MCP-сервер stdio в каждом хосте.
+В JSON-конфигурации OpenCode, Kilo и MiMo используется такой фрагмент:
 
-Глобальный CLI и npm-зависимость плагина установлены отдельно.
+```json
+{
+  "mcp": {
+    "memomatic": {
+      "type": "local",
+      "command": ["memomatic", "mcp-serve"],
+      "enabled": true
+    }
+  }
+}
+```
+
+Объедините его с существующими MCP-записями. Если сервис не находит бинарник,
+установленный через менеджер версий, задайте абсолютные пути исполняемых файлов.
+Перезапустите хост и проверьте наличие `memory_write`, `memory_search`, `memory_get`
+и `memory_forget` у MCP-сервера (хост может добавлять префикс к именам инструментов).
+Модель сама решает, когда искать; если поиск обязателен, попросите об этом явно.
+Автоматической подстановки памяти нет.
+
+Memomatic и agentomatic устанавливаются отдельно; agentomatic не устанавливает
+memomatic и не зависит от него.
 `@dev` выбирает последнюю успешную публикацию из `dev` для всех workspace-пакетов:
 `@kisev/agentomatic`, `@kisev/memomatic` и `@kisev/safe-fs`.
 `@latest` - канал стабильных релизов; до первого стабильного релиза пакета его
@@ -36,9 +54,22 @@ npm install --global @kisev/memomatic@dev
 npx --yes @kisev/agentomatic@dev install --global
 ```
 
-Проверьте, что версия CLI совпадает с зависимостью `@kisev/memomatic` у плагина:
-обновление agentomatic не обновляет глобальный CLI. Если между командами канал
-`dev` обновился, установите ту же точную версию memomatic.
+Обновление agentomatic не обновляет CLI и MCP-сервер memomatic.
+
+## Переход с плагина OpenCode
+
+Повторно запустите [установщик agentomatic](opencode-integration.md) с прежним
+выбором компонентов, кроме `memomatic`: такого варианта плагина больше нет.
+Проверьте предпросмотр: неизменённый `plugins/memomatic.js`, принадлежащий
+установщику по манифесту, архивируется и удаляется. Изменённая обёртка вызывает
+конфликт; сохраните свои правки и разрешите его перед повторным запуском.
+Если вы вручную прописали импорт `@kisev/agentomatic/plugins/memomatic`, удалите
+эту запись самостоятельно. Затем подключите MCP-сервер по примеру выше и
+перезапустите OpenCode. Обновление только npm-зависимости не удаляет старую обёртку.
+
+Файлы памяти, inbox, эмбеддинги, правила и расписание Dream сохраняются.
+Прежний маппинг `projects` в настройках игнорируется; аннотации проекта и
+триггеров остаются в существующих записях, но больше не вызывают автоматический recall.
 
 ## Первая запись и поиск
 

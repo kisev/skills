@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { OpenCodeExecutor } from "../dist/executor.js";
-import { loadRecentSessions, sessionFacts } from "../dist/ingest.js";
+import { loadRecentSessions } from "../dist/ingest.js";
 
 test("OpenCode executor sends a positional prompt and reads only text events", async () => {
   const root = mkdtempSync(join(tmpdir(), "memomatic-executor-"));
@@ -43,7 +43,7 @@ console.log(JSON.stringify({type: "error", error: {message: "unavailable"}}));
   }
 });
 
-test("session ingestion and bootstrap read the normalized OpenCode part table", () => {
+test("session ingestion reads the normalized OpenCode part table", () => {
   const root = mkdtempSync(join(tmpdir(), "memomatic-ingest-"));
   const file = join(root, "opencode.db");
   try {
@@ -68,11 +68,6 @@ test("session ingestion and bootstrap read the normalized OpenCode part table", 
     part.run("e", "assistant", '{"type":"text","text":"Answer"}', 105);
     part.run("f", "dream", '{"type":"text","text":"[memomatic-internal] Extraction"}', 200);
     db.close();
-    assert.deepEqual(sessionFacts(file, "normal"), {
-      directory: "/workspace",
-      title: "Decision",
-      firstMessage: "First\nSecond",
-    });
     const sessions = loadRecentSessions(file, 0);
     assert.equal(sessions.length, 1);
     assert.deepEqual(sessions[0].messages, [

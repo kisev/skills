@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 
 export type MemomaticSettings = {
   embedding: { url: string; model: string } | null;
-  projects: Record<string, string>;
   dream: {
     model: string | null;
     variant: string | null;
@@ -19,7 +18,6 @@ export type MemomaticSettings = {
 
 export const defaultSettings = (): MemomaticSettings => ({
   embedding: null,
-  projects: {},
   dream: {
     model: null,
     variant: null,
@@ -50,19 +48,11 @@ export function normalizeSettings(raw: unknown): MemomaticSettings {
   const defaults = defaultSettings();
   const source = (raw ?? {}) as Record<string, unknown>;
   const embedding = source.embedding as Record<string, unknown> | null | undefined;
-  const rawProjects = source.projects as Record<string, unknown> | undefined;
-  const projects: Record<string, string> = {};
-  if (rawProjects && typeof rawProjects === "object") {
-    for (const [prefix, name] of Object.entries(rawProjects)) {
-      if (typeof name === "string" && name.trim() && prefix.trim()) projects[prefix] = name.trim();
-    }
-  }
   return {
     embedding:
       embedding && typeof embedding.url === "string" && typeof embedding.model === "string"
         ? { url: embedding.url, model: embedding.model }
         : null,
-    projects,
     dream: mergeSection(defaults.dream, source.dream as Record<string, unknown> | undefined),
     search: mergeSection(defaults.search, source.search as Record<string, unknown> | undefined),
     archive: mergeSection(defaults.archive, source.archive as Record<string, unknown> | undefined),

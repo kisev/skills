@@ -62,8 +62,8 @@ registered package tools with the public inventory.
 
 ### REQ-I-004 - Plugin interface
 
-The package shall export the core infrastructure plugin and exactly four
-selectable plugin modules: `rules-injector`, `rtk`, `zed-bell`, and `memomatic`.
+The package shall export the core infrastructure plugin and exactly three
+selectable plugin modules: `rules-injector`, `rtk`, and `zed-bell`.
 
 #### Verification
 

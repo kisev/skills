@@ -27,7 +27,6 @@ import {
   forgetEntry,
   archiveOldEpisodic,
 } from "../dist/service.js";
-import { bootstrapContext, resolveProject } from "../dist/bootstrap.js";
 import { runDream, parseExtraction, parseConsolidation } from "../dist/dream.js";
 import { handleMcpRequest } from "../dist/mcp.js";
 import { stableIdFor } from "../dist/store.js";
@@ -241,67 +240,6 @@ test("processInbox deduplicates, supersedes by key, rejects invalid files, route
     const userBody = readFileSync(join(env.state, "memomatic", "USER.md"), "utf8");
     assert.match(userBody, /two-space indentation/);
     assert.ok(!/target:/.test(userBody));
-    ctx.store.close();
-  } finally {
-    rmSync(env.root, { force: true, recursive: true });
-  }
-});
-
-test("bootstrapContext injects project and trigger blocks with visibility labels", async () => {
-  const env = environment();
-  try {
-    const ctx = await context();
-    ctx.settings.projects = { "/home/kisev/work/skills": "skills-repo" };
-    await dropToInbox(
-      ctx.paths,
-      [
-        entryLine("Skills repo uses task check before every handoff", {
-          key: "skills-check",
-          origin: "agent",
-          project: "skills-repo",
-          source: "team-retro",
-        }),
-        entryLine("Release nights require registry propagation patience", {
-          key: "release-night",
-          origin: "agent",
-          source: "team-report",
-          trigger: ["release npm"],
-        }),
-        entryLine("Unrelated personal note about breakfast", {
-          key: "breakfast",
-          origin: "agent",
-          source: "user",
-        }),
-      ],
-      "team-retro",
-    );
-    await processInbox(ctx);
-    const block = await bootstrapContext(ctx, {
-      directory: "/home/kisev/work/skills/packages",
-      firstMessage: "please prepare the release npm publish",
-      title: "Release prep",
-    });
-    assert.ok(block);
-    assert.match(block, /project recall \(skills-repo\)/);
-    assert.match(block, /task check before every handoff/);
-    assert.match(block, /source: team-retro, team-only/);
-    assert.match(block, /triggered recall/);
-    assert.match(block, /registry propagation patience/);
-    assert.ok(!block.includes("breakfast"));
-    const bare = await bootstrapContext(ctx, {
-      directory: null,
-      firstMessage: null,
-      title: null,
-    });
-    assert.ok(bare === null || !bare.includes("project recall"));
-    assert.equal(
-      resolveProject("/home/kisev/work/skills", {
-        "/home/kisev/work": "a",
-        "/home/kisev/work/skills": "b",
-      }),
-      "b",
-    );
-    assert.equal(resolveProject("/elsewhere", { "/home/kisev/work": "a" }), null);
     ctx.store.close();
   } finally {
     rmSync(env.root, { force: true, recursive: true });
@@ -700,7 +638,7 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
   }
 });
 
-test("mcp server lists tools and answers a search call", async () => {
+test("MCP exposes the complete explicit memory lifecycle without plugin hooks", async () => {
   const env = environment();
   try {
     const ctx = await context();
@@ -726,6 +664,31 @@ test("mcp server lists tools and answers a search call", async () => {
     assert.match(payload[0].snippet, /tool names functional/);
     assert.equal(payload[0].source, "agent");
     assert.equal(payload[0].visibility, "personal");
+    const entry = { file: payload[0].file, line: payload[0].line };
+    const get = JSON.parse(
+      await handleMcpRequest({
+        id: 4,
+        method: "tools/call",
+        params: { arguments: entry, name: "memory_get" },
+      }),
+    );
+    assert.match(JSON.parse(get.result.content[0].text).content, /tool names functional/);
+    const forget = JSON.parse(
+      await handleMcpRequest({
+        id: 5,
+        method: "tools/call",
+        params: { arguments: entry, name: "memory_forget" },
+      }),
+    );
+    assert.equal(JSON.parse(forget.result.content[0].text).forgotten, true);
+    const afterForget = JSON.parse(
+      await handleMcpRequest({
+        id: 6,
+        method: "tools/call",
+        params: { arguments: { query: "functional tool names" }, name: "memory_search" },
+      }),
+    );
+    assert.deepEqual(JSON.parse(afterForget.result.content[0].text), []);
     const write = JSON.parse(
       await handleMcpRequest({
         id: 3,
@@ -743,6 +706,40 @@ test("mcp server lists tools and answers a search call", async () => {
     const writePayload = JSON.parse(write.result.content[0].text);
     assert.equal(writePayload.queued, true);
     assert.match(writePayload.flushHint, /memomatic process/);
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("forgetting preserves surviving vectors and line references without embedding access", async () => {
+  const env = environment();
+  try {
+    const ctx = await context();
+    writeFileSync(
+      ctx.paths.memoryFile,
+      "- Remove this fact. <!-- key: remove -->\n- Keep this fact. <!-- key: keep -->\n",
+    );
+    await rebuildIndex(ctx);
+    for (const entry of ctx.store.allEntries())
+      ctx.store.setVector(entry.stableId, new Float32Array([1, 0]));
+    ctx.settings.embedding = { url: "http://127.0.0.1:1/v1/embeddings", model: "unavailable" };
+    await withRunLock(ctx.paths, async () => {
+      await assert.rejects(
+        forgetEntry(ctx, { file: "MEMORY.md", line: 1 }),
+        /another memomatic run/,
+      );
+    });
+    await forgetEntry(ctx, { file: "MEMORY.md", line: 1 });
+    assert.deepEqual(
+      ctx.store.allEntries().map((entry) => [entry.key, entry.line]),
+      [["keep", 1]],
+    );
+    assert.deepEqual(
+      ctx.store.vectors().map((row) => row.stableId),
+      ["key:keep"],
+    );
+    assert.match((await getEntry(ctx, "MEMORY.md", 1)).content, /Keep this fact/);
+    ctx.store.close();
   } finally {
     rmSync(env.root, { force: true, recursive: true });
   }

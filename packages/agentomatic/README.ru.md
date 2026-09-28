@@ -16,8 +16,8 @@
 - Команда `config` с подтверждением: подключает пакет и рекомендованные
   фрагменты в `opencode.json(c)`, `tui.json`, `kilo.json(c)` и
   `mimocode.json(c)`, сохраняя существующие записи и комментарии.
-- Необязательные обертки плагинов `rules-injector`, `zed-bell` и персональная
-  обучающая память `memomatic`; обертка сжатия `rtk` развертывается по умолчанию
+- Необязательные обертки плагинов `rules-injector` и `zed-bell`;
+  обертка сжатия `rtk` развертывается по умолчанию
   и наблюдаема через `/rtk-stats` и `doctor`.
 
 Пакет не содержит, не устанавливает, не обновляет, не проверяет и не удаляет
@@ -37,24 +37,26 @@ Memomatic - персональная обучающая память по мот
   `$XDG_STATE_HOME/memomatic/inbox/`, куда скиллы и агенты кладут асинхронные
   Markdown-дропы.
 - Настройки: `$XDG_CONFIG_HOME/memomatic/settings.json` (эндпоинт эмбеддера,
-  модель и вариант мышления для сновидений, пороги, маппинг `projects`
-  каталог→проект для напоминаний) и `MEMORY_RULES.md` с ручными директивами:
+  модель и вариант мышления для сновидений, пороги) и `MEMORY_RULES.md` с ручными директивами:
   `- never-save: <тема>` и опциональная
   `- auto-clean: older-than=90d scope=episodic [source=name]`.
 - Инструменты: `memory_search`, `memory_get`, `memory_write`, `memory_forget` -
-  через плагин, MCP-сервер stdio (`memomatic mcp-serve`) и CLI
-  (`process`, `search`, `status`, `index`, `dream --dry-run`).
+  через отдельно установленный MCP-сервер stdio (`memomatic mcp-serve`).
+  CLI предоставляет `process`, `search`, `status`, `index` и `dream --dry-run`.
   `memory_write` кладёт дроп в inbox и отвечает подсказкой flush; записи несут
   аннотацию `source`, из которой выводится видимость (`team-*`, `gitlab` и
   `spec-manage` цитируемы в командных артефактах, остальные personal-only);
-  метка видна в поиске и в bootstrap сессии, куда также попадают блоки
-  напоминаний по проекту и trigger-фразам из базы сессий.
+  метка видна в поиске. Модель сама запрашивает память через инструменты;
+  автоматической подстановки и плагина memomatic нет.
 - Расписание: скопируйте `memomatic-dream.service` и `memomatic-dream.timer` из
   `assets/systemd/` пакета `@kisev/memomatic` в `~/.config/systemd/user/` и выполните
   `systemctl --user enable --now memomatic-dream.timer`; альтернативный запуск -
   командами `memomatic process` или `memomatic dream`.
 - Забывание явно или по правилу: ничего не удаляется без `memory_forget` или
   директивы `auto-clean`; закрепленные записи не затухают.
+
+Agentomatic не зависит от memomatic. См. [настройку MCP и переход со старого
+плагина](../../docs/ru/how-to/memomatic.md).
 
 ## Требования
 

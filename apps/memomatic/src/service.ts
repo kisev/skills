@@ -3,7 +3,7 @@ import { readTextIfExists, replaceEntryLine, writeCorpusFile } from "./corpus.js
 import { assertSafePath } from "@kisev/safe-fs";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { rm } from "node:fs/promises";
-import { dropToInbox } from "./inbox.js";
+import { dropToInbox, withRunLock } from "./inbox.js";
 import { isForbidden, loadRules, type MemoryRules } from "./rules.js";
 import { memomaticPaths, type MemomaticPaths } from "./paths.js";
 import { loadSettings, type MemomaticSettings } from "./settings.js";
@@ -119,14 +119,26 @@ export async function forgetEntry(
     line: number;
   },
 ): Promise<string> {
-  const file = await memoryPath(context, target.file);
-  const content = await readTextIfExists(file);
-  if (content === undefined) throw new Error(`memory file not found: ${target.file}`);
-  const lines = content.split("\n");
-  if (!Number.isSafeInteger(target.line) || target.line < 1 || target.line > lines.length)
-    throw new Error("line is out of range");
-  await replaceEntryLine(context.paths, file, target.line, null);
-  return file;
+  return withRunLock(context.paths, async () => {
+    const file = await memoryPath(context, target.file);
+    const content = await readTextIfExists(file);
+    if (content === undefined) throw new Error(`memory file not found: ${target.file}`);
+    const lines = content.split("\n");
+    if (!Number.isSafeInteger(target.line) || target.line < 1 || target.line > lines.length)
+      throw new Error("line is out of range");
+    await replaceEntryLine(context.paths, file, target.line, null);
+    context.store.replaceEntries(
+      context.store
+        .allEntries()
+        .filter((entry) => entry.file !== file || entry.line !== target.line)
+        .map((entry) =>
+          entry.file === file && entry.line > target.line
+            ? { ...entry, line: entry.line - 1 }
+            : entry,
+        ),
+    );
+    return file;
+  });
 }
 
 export async function archiveOldEpisodic(context: MemomaticContext): Promise<string[]> {

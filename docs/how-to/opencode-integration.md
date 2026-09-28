@@ -96,7 +96,7 @@ If any selection flag is present outside a TTY, `--commands`, `--agents`, and
 npx --yes @kisev/agentomatic@latest capabilities --json
 ```
 
-The selectable wrappers are `rules-injector`, `rtk`, `zed-bell`, and `memomatic`; `rtk` is
+The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`; `rtk` is
 preselected by the installer. OpenCode loads deployed wrapper files from the
 `plugins` directory automatically, so they need no `plugin` array entry; that
 array stays reserved for the npm core package. Opt out explicitly with

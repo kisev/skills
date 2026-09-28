@@ -15,8 +15,8 @@ update, and removal lifecycle.
 - A confirmed `config` command that connects the package and recommended
   fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
   `mimocode.json(c)` while preserving existing entries and comments.
-- Optional plugin wrappers: `rules-injector`, `zed-bell`, and `memomatic`
-  personal learning memory; the `rtk` compression wrapper is deployed by
+- Optional plugin wrappers: `rules-injector` and `zed-bell`;
+  the `rtk` compression wrapper is deployed by
   default and observable through `/rtk-stats` and `doctor`.
 
 The package does not contain, install, update, inspect, or remove portable skills.
@@ -35,23 +35,26 @@ outdated facts by key, and archives every pre-image.
   `$XDG_STATE_HOME/memomatic/inbox/` where skills and agents queue asynchronous
   Markdown drops.
 - Config: `$XDG_CONFIG_HOME/memomatic/settings.json` (embedding endpoint, dream
-  model and variant, thresholds, `projects` cwd-to-project map for recall) and
+  model and variant, thresholds) and
   `MEMORY_RULES.md` with manual directives: `- never-save: <topic>` and opt-in
   `- auto-clean: older-than=90d scope=episodic [source=name]`.
 - Tools: `memory_search`, `memory_get`, `memory_write`, `memory_forget`, exposed
-  by the plugin, by the MCP stdio server (`memomatic mcp-serve`),
-  and by the CLI (`process`, `search`, `status`, `index`, `dream --dry-run`).
+  by the independently installed MCP stdio server (`memomatic mcp-serve`).
+  The CLI provides `process`, `search`, `status`, `index`, and `dream --dry-run`.
   `memory_write` queues an inbox drop and answers with a flush hint; entries
   carry a `source` annotation whose derived visibility (`team-*`, `gitlab`,
   `spec-manage` are quotable in team artifacts, the rest personal-only) is
-  exposed in search results and the session bootstrap, which also injects
-  project- and trigger-matched recall blocks from the session database.
+  exposed in search results. The model initiates retrieval through tool calls;
+  there is no automatic memory injection or memomatic plugin.
 - Scheduling: copy `memomatic-dream.service` and `memomatic-dream.timer` from the
   `@kisev/memomatic` package `assets/systemd/` into `~/.config/systemd/user/` and run
   `systemctl --user enable --now memomatic-dream.timer`; run the sweep another
   way by invoking `memomatic process` or `memomatic dream` yourself.
 - Forgetting is explicit or rule-gated: nothing is deleted without
   `memory_forget` or an `auto-clean` directive; pinned entries never decay.
+
+Agentomatic does not depend on memomatic. See the [MCP setup and legacy plugin
+migration guide](../../docs/how-to/memomatic.md).
 
 ## Requirements
 

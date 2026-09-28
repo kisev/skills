@@ -29,10 +29,6 @@
       "types": "./dist/plugins/rules-injector.d.ts",
       "import": "./dist/plugins/rules-injector.js"
     },
-    "./plugins/memomatic": {
-      "types": "./dist/plugins/memomatic.d.ts",
-      "import": "./dist/plugins/memomatic.js"
-    },
     "./plugins/rtk": {
       "types": "./dist/plugins/rtk.d.ts",
       "import": "./dist/plugins/rtk.js"
@@ -44,13 +40,12 @@
   },
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json && node dist/generate-assets.js",
-    "test": "node --test test/agent-profiles.test.mjs test/config-setup.test.mjs test/legacy-migration.test.mjs test/doctor.test.mjs test/memomatic-plugin.test.mjs test/package.test.mjs test/rtk.test.mjs test/self-install.test.mjs test/stage19.test.mjs test/surface-coverage.test.mjs",
+    "test": "node --test test/agent-profiles.test.mjs test/config-setup.test.mjs test/legacy-migration.test.mjs test/doctor.test.mjs test/package.test.mjs test/rtk.test.mjs test/self-install.test.mjs test/stage19.test.mjs test/surface-coverage.test.mjs",
     "smoke": "node test/smoke.mjs",
     "pack:check": "node test/pack-allowlist.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
-    "@kisev/memomatic": "^1.0.0",
     "@kisev/safe-fs": "^1.0.0"
   },
   "devDependencies": {

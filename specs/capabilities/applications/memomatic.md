@@ -1,12 +1,12 @@
 ---
-review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "packages/agentomatic/src/plugins/memomatic.ts", "packages/agentomatic/test/memomatic-plugin.test.mjs"], "contracts": ["specs/architecture/08-crosscutting-concepts/security-trust-mutations.md"]}
+review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "packages/agentomatic/src/installer.ts", "packages/agentomatic/test/stage19.test.mjs"], "contracts": ["specs/architecture/08-crosscutting-concepts/security-trust-mutations.md"]}
 ---
 
-# Plugin `memomatic`
+# Application `memomatic`
 
 ## Purpose
 
-Provide optional personal learning memory: selective capture, hybrid search, gated background consolidation, and rule-gated forgetting, with OpenCode plugin tools, an MCP stdio server, and a scheduled dream CLI sharing one data model. Compose durable outcomes from portable skill artifacts into memory through an asynchronous inbox.
+Provide optional personal learning memory: selective capture, hybrid search, gated background consolidation, and rule-gated forgetting, with an MCP stdio server and a scheduled dream CLI sharing one data model. Compose durable outcomes from portable skill artifacts into memory through an asynchronous inbox. Models access memory through explicit MCP tool calls; no host plugin injects memory into system context.
 
 ## Triggers and Near-Misses
 
@@ -20,13 +20,13 @@ Input is an OpenCode session, an explicit tool call, an inbox drop from a skill 
 
 Capture (explicit `memory_write` queuing an inbox drop, skill mirrors through the shared `memomatic_inbox.py` helper, or dream ingestion of session transcripts from the OpenCode database), process (`memomatic process`: validate lines, enforce `never-save`, deduplicate exact texts, supersede by `key`, route user-origin `target` entries, rebuild the index with embeddings — no model turns), rank (hybrid FTS5 and optional local embeddings, recency decay with half-life 30 days for episodic entries, importance multiplier, pinned and curated entries exempt), account usage (surfaced on search hits, useful on line fetches), gate promotion deterministically (relevance 0.30, frequency 0.24, diversity 0.15, recency 0.15, consolidation 0.10, richness 0.06), consolidate through one bounded model turn via `opencode run` (merge, supersede by key, bounded prior-entry loss 0.25, line budget), and report to `DREAMS.md` with content-addressed pre-images in `history/`. Dream and process serialize through a stale-tolerant run lock; inbox processing runs only on the systemd timer or a manual CLI run.
 
-Every entry carries a `source` annotation; visibility derives from it: `team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing artifacts, every other source is personal-only. Search responses and the plugin bootstrap expose the label. The plugin bootstrap injects the curated `MEMORY.md` and `USER.md` heads plus two bounded recall blocks resolved from the OpenCode session database (directory, title, first user message): project-matched episodic entries through the `settings.json` `projects` longest-prefix map, and trigger-phrase matches.
+Every entry carries a `source` annotation; visibility derives from it: `team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing artifacts, every other source is personal-only. Search responses expose the label. The MCP server exposes exactly `memory_search`, `memory_get`, `memory_write`, and `memory_forget` to all supported hosts. Agent-initiated retrieval is observable through host tool-call logs; choosing when to search remains the model's responsibility.
 
 ## Dependencies
 
-OpenCode plugin API tools and `experimental.chat.system.transform`, `node:sqlite`, optional OpenAI-compatible local embedding endpoint, configured OpenCode provider for dream model turns, presence-detected `$XDG_STATE_HOME/memomatic/inbox/` for skill producers.
+Node.js 22+, `node:sqlite`, optional OpenAI-compatible local embedding endpoint, configured OpenCode provider for dream model turns, presence-detected `$XDG_STATE_HOME/memomatic/inbox/` for skill producers. Agentomatic does not depend on memomatic; the standalone application is installed and connected to each host separately.
 
-Session ingestion and bootstrap read text parts from OpenCode's normalized `part`
+Dream session ingestion reads text parts from OpenCode's normalized `part`
 table, ordered within each message; legacy databases with embedded message parts
 remain readable. Dream invokes `opencode run --format json` with a positional
 prompt and parses only text events, excluding tool and step metadata. Internal
@@ -38,7 +38,7 @@ No independent remote effect; dream model turns use the configured OpenCode prov
 
 ## Errors/Partial/Escalation
 
-Invalid consolidation falls back to append-only within the line budget; unreadable session databases produce an empty ingestion window; bootstrap context injection never breaks a session; `dry-run` reports without writes; malformed or forbidden inbox drops move to `rejected/` and are reported in the dream summary; a busy run lock fails with `another memomatic run is active`.
+Invalid consolidation falls back to append-only within the line budget; unreadable session databases produce an empty ingestion window; `dry-run` reports without writes; malformed or forbidden inbox drops move to `rejected/` and are reported in the dream summary; a busy run lock fails with `another memomatic run is active`.
 
 Dry-run uses an in-memory index and leaves the corpus, persistent index, run lock,
 and session watermark unchanged; configured model and embedding calls may still
@@ -54,19 +54,36 @@ Curated files are written only by dream consolidation, explicit user-origin writ
 
 ### REQ-I-406 - Expose memomatic safely
 
-The package shall expose `memomatic` as a selectable plugin whose forgetting is explicit or rule-gated and whose consolidation stays inside deterministic bounds.
+> Lifecycle: `superseded` | Changed: `2026-09-28` | Reason: MCP replaces the selectable plugin and automatic context injection. | Replacement: [REQ-I-418](#req-i-418---expose-memory-through-explicit-mcp-tools)
+
+Formerly exposed memomatic as a selectable OpenCode plugin with explicit or rule-gated forgetting and bounded consolidation.
+
+### REQ-I-418 - Expose memory through explicit MCP tools
+
+The application shall expose search, read, queued write, and explicit forgetting
+through MCP without registering a host plugin or automatically injecting memory
+into session context. Background processing remains a CLI or scheduled operation.
+Forgetting remains explicit or rule-gated and consolidation stays bounded.
+Explicit forgetting shares the processing lock, removes the indexed entry and
+its vector, and adjusts subsequent line references without an embedding request.
+
+Installer upgrades archive and remove unchanged manifest-owned legacy memomatic
+wrappers; edited wrappers are conflicts and remain untouched. Users connect MCP
+explicitly and restart their host. Existing memory, settings, inboxes, and timers
+are preserved; the obsolete `projects` bootstrap mapping is ignored.
 
 #### Verification
 
 Memory regression tests reject traversal, sibling-prefix and symlink paths,
 verify non-mutating dry-runs, retain unrelated entries during scoped cleanup,
 and preserve curated entries on model drops or invalid consolidation output.
+MCP tests exercise all four tools. Installer migration tests verify archival and
+edited-file conflicts; public exports and the plugin catalog exclude memomatic.
 
 ### REQ-I-407 - Compose skill artifacts into memory through the inbox
 
-The package shall accept asynchronous Markdown inbox drops from skills and agents, process them deterministically with batch indexing, derive usage visibility from the recorded source, and expose bounded project- and trigger-based recall in the session bootstrap.
+The application shall accept asynchronous Markdown inbox drops from skills and agents, process them deterministically with batch indexing, and derive usage visibility from the recorded source for explicit retrieval.
 
 #### Verification
 
-CLI/MCP and plugin tests process a sourced inbox entry and verify matching
-visibility in search results; bootstrap tests check project and trigger bounds.
+CLI/MCP tests process a sourced inbox entry and verify matching visibility in search results.

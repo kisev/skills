@@ -7,12 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import rootPlugin, {
-  rulesInjector,
-  rtk,
-  zedBell,
-  memomatic as memomaticPlugin,
-} from "../dist/index.js";
+import rootPlugin, { rulesInjector, rtk, zedBell } from "../dist/index.js";
 import { apply, preview } from "../dist/installer.js";
 import { archiveRoot } from "../dist/lifecycle.js";
 
@@ -172,15 +167,77 @@ test("stale install archival is transactional and recoverable", async () => {
   }
 });
 
+test("upgrade archives the retired memomatic wrapper but preserves user edits", async () => {
+  for (const edited of [false, true]) {
+    const base = mkdtempSync(join(tmpdir(), "agentomatic-memory-migration-"));
+    const project = join(base, "project");
+    const home = join(base, "home");
+    const deployment = join(project, ".opencode");
+    const path = "plugins/memomatic.js";
+    const content =
+      'import plugin from "@kisev/agentomatic/plugins/memomatic";\n\nexport default (input) => plugin(input);\n';
+    const selection = { commands: [], agents: [], plugins: [], core_activation: false };
+    try {
+      await mkdir(join(deployment, "plugins"), { recursive: true });
+      await mkdir(home);
+      await writeFile(join(deployment, path), edited ? `${content}// user edit\n` : content);
+      await writeFile(
+        join(deployment, ".agentomatic-manifest.json"),
+        JSON.stringify({
+          schema_version: 2,
+          package: "@kisev/agentomatic",
+          package_version: "11.0.0-dev.62.g445d44a8adf0",
+          version: "11.0.0-dev.62.g445d44a8adf0",
+          scope: "project",
+          commands: [],
+          agents: [],
+          plugins: ["memomatic"],
+          core_activation: false,
+          files: { [path]: { sha256: hash(content), mode: 0o644, kind: "plugin" } },
+        }),
+      );
+      const plan = await preview("install", "project", project, home, selection);
+      assert.equal(
+        plan.operations.find((item) => item.path === path).operation,
+        edited ? "conflict" : "archive-pending",
+      );
+      if (edited) {
+        await assert.rejects(apply("install", "project", project, home, {}, selection));
+        assert.equal(await readFile(join(deployment, path), "utf8"), `${content}// user edit\n`);
+      } else {
+        await apply("install", "project", project, home, {}, selection);
+        await assert.rejects(lstat(join(deployment, path)), { code: "ENOENT" });
+        assert.equal(
+          await readFile(
+            join(archiveRoot("project", project, home), "objects", hash(content)),
+            "utf8",
+          ),
+          content,
+        );
+        const manifest = JSON.parse(
+          await readFile(join(deployment, ".agentomatic-manifest.json"), "utf8"),
+        );
+        assert.deepEqual(manifest.plugins, []);
+        assert.equal(path in manifest.files, false);
+      }
+      await assert.rejects(
+        preview("install", "project", project, home, { ...selection, plugins: ["memomatic"] }),
+        /Unknown plugin selection/,
+      );
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  }
+});
+
 test("2.0.0 public surface and CLI contracts exclude retired APIs", () => {
+  assert.equal("@kisev/memomatic" in PACKAGE_METADATA.dependencies, false);
   assert.equal(typeof rootPlugin, "function");
   assert.equal(typeof rulesInjector, "function");
   assert.equal(typeof rtk, "function");
   assert.equal(typeof zedBell, "function");
-  assert.equal(typeof memomaticPlugin, "function");
   assert.deepEqual(Object.keys(PACKAGE_METADATA.exports).sort(), [
     ".",
-    "./plugins/memomatic",
     "./plugins/rtk",
     "./plugins/rules-injector",
     "./plugins/zed-bell",

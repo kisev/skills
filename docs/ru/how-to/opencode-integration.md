@@ -99,7 +99,7 @@ npx agentomatic install \
 npx --yes @kisev/agentomatic@latest capabilities --json
 ```
 
-Доступные обёртки: `rules-injector`, `rtk`, `zed-bell`, `memomatic`; `rtk` предварительно
+Доступные обёртки: `rules-injector`, `rtk`, `zed-bell`; `rtk` предварительно
 выбрана установщиком. OpenCode автоматически загружает размещённые файлы
 обёрток из каталога `plugins`, поэтому запись в массив `plugin` для них не
 нужна - он остаётся только для npm-пакета основной интеграции. Явно отключить
