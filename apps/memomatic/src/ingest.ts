@@ -41,9 +41,7 @@ export function sessionFacts(databaseFile: string, sessionId: string): SessionFa
       .prepare("SELECT directory, title FROM session WHERE id = ?;")
       .get(sessionId) as { directory?: string; title?: string } | undefined;
     let firstMessage: string | null = null;
-    const rows = db
-      .prepare(`SELECT data FROM message WHERE session_id = ? ORDER BY time_created ASC LIMIT 20;`)
-      .all(sessionId) as RawMessage[];
+    const rows = readMessages(db, sessionId, 20);
     for (const row of rows) {
       try {
         const parsed = JSON.parse(row.data) as { role?: string; parts?: unknown[] };
@@ -74,7 +72,37 @@ export function sessionFacts(databaseFile: string, sessionId: string): SessionFa
   }
 }
 
-type RawMessage = { data: string };
+type RawMessage = { data: string; id?: string };
+
+function readMessages(db: DatabaseSync, sessionId: string, limit = -1): RawMessage[] {
+  const hasParts = db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'part'")
+    .get();
+  const rows = db
+    .prepare(
+      `SELECT ${hasParts ? "id, " : ""}data FROM message WHERE session_id = ? ORDER BY time_created ASC LIMIT ?;`,
+    )
+    .all(sessionId, limit) as RawMessage[];
+  if (!hasParts) return rows;
+  const parts = db.prepare(
+    "SELECT data FROM part WHERE message_id = ? ORDER BY time_created ASC, id ASC",
+  );
+  return rows.map((row) => {
+    try {
+      const message = JSON.parse(row.data) as { parts?: unknown[] };
+      message.parts = (parts.all(row.id!) as RawMessage[]).flatMap((part) => {
+        try {
+          return [JSON.parse(part.data) as unknown];
+        } catch {
+          return [];
+        }
+      });
+      return { data: JSON.stringify(message) };
+    } catch {
+      return row;
+    }
+  });
+}
 
 export function loadRecentSessions(
   databaseFile: string,
@@ -108,9 +136,7 @@ export function loadRecentSessions(
       const messages: Array<{ role: string; text: string }> = [];
       let budget = options.maxCharsPerSession;
       let internal = false;
-      const rows = db
-        .prepare(`SELECT data FROM message WHERE session_id = ? ORDER BY time_created ASC;`)
-        .all(session.id) as RawMessage[];
+      const rows = readMessages(db, session.id);
       for (const row of rows) {
         if (budget <= 0) break;
         let parsed: { role?: string; parts?: unknown[] };

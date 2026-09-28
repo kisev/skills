@@ -33,14 +33,25 @@ export class OpenCodeExecutor implements ModelExecutor {
   ) {}
 
   async complete(request: { system: string; prompt: string }): Promise<string> {
-    const args = ["run", "--agent", "build"];
+    const args = ["run", "--agent", "build", "--format", "json"];
     if (this.options.model) args.push("--model", this.options.model);
     if (this.options.variant) args.push("--variant", this.options.variant);
-    args.push("--message", `[memomatic-internal] ${request.system}\n\n${request.prompt}`);
+    args.push("--", `[memomatic-internal] ${request.system}\n\n${request.prompt}`);
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const output = await this.spawnOnce(args);
       try {
-        const parsed = extractJson(output);
+        const texts: string[] = [];
+        for (const line of output.split("\n")) {
+          if (!line.trim()) continue;
+          const event = JSON.parse(line) as {
+            type?: string;
+            part?: { text?: string };
+          };
+          if (event.type === "error") throw new Error("opencode returned an error event");
+          if (event.type === "text" && typeof event.part?.text === "string")
+            texts.push(event.part.text);
+        }
+        const parsed = extractJson(texts.join("\n"));
         return JSON.stringify(parsed);
       } catch {
         if (attempt === 1) throw new Error("opencode run returned no parsable JSON twice");

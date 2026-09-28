@@ -24,6 +24,22 @@ In the [agentomatic installer](opencode-integration.md), explicitly select the
 `memory_write`, `memory_search`, `memory_get`, and `memory_forget` are available.
 Other MCP hosts can launch `memomatic mcp-serve` as a local stdio server.
 
+The global CLI and the plugin's npm dependency are separate installations.
+`@dev` selects the latest successful publication from `dev` for all workspace
+packages: `@kisev/agentomatic`, `@kisev/memomatic`, and `@kisev/safe-fs`.
+`@latest` is the stable release channel; before a package's first stable release,
+its initial registry tag can still point to a prerelease. Use explicit `@dev`
+for development installations:
+
+```shell
+npm install --global @kisev/memomatic@dev
+npx --yes @kisev/agentomatic@dev install --global
+```
+
+Check that the CLI version matches the plugin's `@kisev/memomatic` dependency;
+updating agentomatic alone does not update the global CLI. Install the same exact
+memomatic version if the `dev` channel advanced between those commands.
+
 ## Save and Retrieve a First Entry
 
 Ask the agent to call `memory_write` with `text: "Use a separate preview before publishing."`
@@ -61,6 +77,35 @@ unchanged; configured model and embedding calls can still run. Without a model,
 `dream` processes the inbox but does not extract sessions or advance their watermark.
 Use `process` for a model-free inbox pass. Invalid consolidation responses fall
 back to bounded append-only promotion, preserving existing curated entries.
+
+Dream reads OpenCode sessions, including text stored in its separate `part` table.
+MCP connections in other hosts share explicit memory entries but do not import
+those hosts' session histories. Model calls use OpenCode's positional prompt and
+JSON event output. Before enabling the timer, check `sessionsIngested` against the
+available unprocessed sessions; a zero-session pass does not test model access.
+
+## Configure Local Embeddings
+
+Embeddings are optional and disabled by default. Without them, memory uses FTS5
+text search. To add vector search with Ollama, start Ollama and install an embedding
+model such as `qwen3-embedding:4b`, then merge this block into `settings.json`
+alongside `dream`:
+
+```json
+{
+  "embedding": {
+    "url": "http://127.0.0.1:11434/v1/embeddings",
+    "model": "qwen3-embedding:4b"
+  }
+}
+```
+
+The URL must be an OpenAI-compatible embeddings endpoint, not Ollama's
+`/api/embed`. Memomatic sends entry and query text to this endpoint; a loopback
+endpoint keeps embedding requests local. No dimension setting is needed.
+Run `memomatic index` after changing the model, then check `memomatic search`.
+Keep the endpoint available for indexing and search: an embedding request failure
+is reported as an error rather than silently falling back to text-only search.
 
 ## Storage, Cleanup, and Recovery
 

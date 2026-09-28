@@ -26,6 +26,12 @@ Every entry carries a `source` annotation; visibility derives from it: `team-*`,
 
 OpenCode plugin API tools and `experimental.chat.system.transform`, `node:sqlite`, optional OpenAI-compatible local embedding endpoint, configured OpenCode provider for dream model turns, presence-detected `$XDG_STATE_HOME/memomatic/inbox/` for skill producers.
 
+Session ingestion and bootstrap read text parts from OpenCode's normalized `part`
+table, ordered within each message; legacy databases with embedded message parts
+remain readable. Dream invokes `opencode run --format json` with a positional
+prompt and parses only text events, excluding tool and step metadata. Internal
+Dream sessions remain excluded from extraction.
+
 ## Remote/Local Effects
 
 No independent remote effect; dream model turns use the configured OpenCode provider and carry a `[memomatic-internal]` marker so ingestion never re-extracts them. Deletion is explicit (`memory_forget`) or enabled only by a `- auto-clean: older-than=Nd scope=episodic [source=name]` directive in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`; `- never-save: <topic>` topics are rejected at write time, at inbox processing, and at dream extraction.
