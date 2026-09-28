@@ -158,7 +158,8 @@ npx agentomatic config --dry-run
 
 В терминале без флагов открываются селекторы целей и фрагментов. Глобальная
 область настраивает `~/.config/opencode/opencode.json(c)` и `tui.json`,
-`~/.config/kilo/kilo.json(c)` и `~/.config/mimocode/mimocode.json(c)`; область
+`~/.config/kilo/kilo.json(c)` и `tui.json[c]`, `~/.config/mimocode/mimocode.json(c)`
+и `tui.json`; область
 проекта - только файл `opencode.json(c)` проекта. Вне терминала передайте
 `--targets` и `--fragments` явно.
 
@@ -171,7 +172,7 @@ npx agentomatic config --dry-run
 | `lsp-preset` | opencode | Добавляет LSP-серверы из общего каталога со стандартными командами |
 | `secrets-guard` | opencode, kilo, mimo | Запрещает чтение и изменение распространённых файлов секретов (`.env*`, ключи, учётные данные) |
 | `kilo-display` | kilo | Разворачивает блоки reasoning, терминала, правок и инструментов |
-| `tui-schema` | tui | Добавляет схему `tui.json` и stacked-диффы |
+| `tui-schema` | opencode, kilo, mimo | Унифицирует TUI-файл каждого агента: своя `$schema` (OpenCode, MiMo), `theme: ayu`, `diff_style: stacked` и общая карта leader-биндов; Kilo пишет `tui.json[c]`, MiMo и OpenCode — `tui.json` |
 
 Слияние никогда не перезаписывает пользовательские данные: существующие ключи,
 комментарии и посторонние записи сохраняются; добавляются только отсутствующие

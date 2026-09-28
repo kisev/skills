@@ -151,11 +151,12 @@ npx agentomatic config --global --dry-run
 npx agentomatic config --dry-run
 ```
 
-In a TTY, target and fragment selectors open when flags are omitted. Global
-scope targets `~/.config/opencode/opencode.json(c)` and `tui.json`,
-`~/.config/kilo/kilo.json(c)`, and `~/.config/mimocode/mimocode.json(c)`;
-project scope targets the project `opencode.json(c)` file only. Outside a TTY,
-pass `--targets` and `--fragments` explicitly.
+In a TTY, target and fragment selectors open when flags are omitted. Targets
+are agents: global scope targets `~/.config/opencode/opencode.json(c)` and
+`tui.json`, `~/.config/kilo/kilo.json(c)` and `tui.json[c]`, and
+`~/.config/mimocode/mimocode.json(c)` and `tui.json`; project scope targets
+the project `opencode.json(c)` file only. Outside a TTY, pass `--targets` and
+`--fragments` explicitly.
 
 Selectable fragments:
 
@@ -166,7 +167,7 @@ Selectable fragments:
 | `lsp-preset` | opencode | Adds LSP servers from the shared catalog with standard commands |
 | `secrets-guard` | opencode, kilo, mimo | Denies reads and edits of common secret files (`.env*`, keys, credentials) |
 | `kilo-display` | kilo | Expands reasoning, terminal, edit, and tool blocks |
-| `tui-schema` | tui | Adds the `tui.json` schema and stacked diffs |
+| `tui-schema` | opencode, kilo, mimo | Unifies each agent TUI file: per-agent `$schema` (OpenCode, MiMo), `theme: ayu`, `diff_style: stacked`, and the shared leader keybind map; Kilo writes `tui.json[c]`, MiMo and OpenCode write `tui.json` |
 
 The merge never overwrites user data: existing keys, comments, and unrelated
 entries are preserved; only absent keys are added; a scalar permission map such

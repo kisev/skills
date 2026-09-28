@@ -30,7 +30,7 @@ async function homeWithConfigs(directory) {
 }
 
 const FULL_SELECTION = {
-  targets: ["opencode", "tui", "kilo", "mimo"],
+  targets: ["opencode", "kilo", "mimo"],
   fragments: [
     "core-plugin",
     "skills-state-permissions",
@@ -197,11 +197,22 @@ test("config setup preserves user entries, comments, and scalar permissions", as
       ].join("\n"),
       "utf8",
     );
+    await writeFile(
+      join(root, ".config", "opencode", "tui.json"),
+      ["{", '  "theme": "user-theme",', '  "keybinds": { "app_exit": "ctrl+q" }', "}"].join("\n"),
+      "utf8",
+    );
     await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
       dependencyRunner: async () => ({ stdout: "", stderr: "" }),
     });
     assert.equal(applied.operations.filter((item) => item.operation === "conflict").length, 0);
+    const preservedTui = parseJsonc(
+      readFileSync(join(root, ".config", "opencode", "tui.json"), "utf8"),
+    );
+    assert.equal(preservedTui.theme, "user-theme");
+    assert.equal(preservedTui.keybinds.app_exit, "ctrl+q");
+    assert.equal(preservedTui.keybinds.command_list, "alt+p");
 
     const raw = readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8");
     assert.match(raw, /\/\/ model choice stays/);
@@ -256,7 +267,7 @@ test("config setup selection validation and project scope behavior", async () =>
     await writeFile(join(root, ".config", "kilo", "kilo.jsonc"), "{}\n", "utf8");
     await writeFile(join(root, ".config", "mimocode", "mimocode.jsonc"), "{}\n", "utf8");
     const configured = await defaultConfigSelection("global", directory, root);
-    assert.deepEqual(configured.targets, ["opencode", "tui", "kilo", "mimo"]);
+    assert.deepEqual(configured.targets, ["opencode", "kilo", "mimo"]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

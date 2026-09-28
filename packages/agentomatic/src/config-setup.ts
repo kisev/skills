@@ -51,39 +51,46 @@ const SECRET_PATHS = [
 
 export class ConfigSetupError extends LifecycleError {}
 
-export const CONFIG_TARGETS = ["opencode", "tui", "kilo", "mimo"] as const;
+export const CONFIG_TARGETS = ["opencode", "kilo", "mimo"] as const;
 export type ConfigTargetName = (typeof CONFIG_TARGETS)[number];
+export type TargetFileKind = "main" | "tui";
 
 export const CONFIG_FRAGMENTS = [
   {
     name: "core-plugin",
     description: "Register @kisev/agentomatic in the plugin array (OpenCode only)",
     targets: ["opencode"],
+    file: "main",
   },
   {
     name: "skills-state-permissions",
     description: "Allow the standard skills XDG state paths without per-run prompts",
     targets: ["opencode", "kilo", "mimo"],
+    file: "main",
   },
   {
     name: "lsp-preset",
     description: "Add LSP servers from the shared catalog (OpenCode only)",
     targets: ["opencode"],
+    file: "main",
   },
   {
     name: "secrets-guard",
     description: "Deny reads and edits of common secret files",
     targets: ["opencode", "kilo", "mimo"],
+    file: "main",
   },
   {
     name: "kilo-display",
     description: "Expand Kilo reasoning, terminal, edit, and tool blocks",
     targets: ["kilo"],
+    file: "main",
   },
   {
     name: "tui-schema",
-    description: "Add the tui.json schema and stacked diffs",
-    targets: ["tui"],
+    description: "Unify each agent TUI file: schema, theme, stacked diffs, and leader keybinds",
+    targets: ["opencode", "kilo", "mimo"],
+    file: "tui",
   },
 ] as const;
 export type FragmentName = (typeof CONFIG_FRAGMENTS)[number]["name"];
@@ -122,6 +129,29 @@ type TargetFile = {
   path: string;
   absolute: string;
   exists: boolean;
+};
+
+const UNIFIED_TUI_KEYBINDS: Record<string, string> = {
+  command_list: "alt+p",
+  app_exit: "ctrl+d,<leader>q,<leader>й",
+  messages_first: "ctrl+g",
+  messages_last: "ctrl+alt+g",
+  editor_open: "<leader>e,<leader>у",
+  theme_list: "<leader>t,<leader>е",
+  sidebar_toggle: "<leader>b,<leader>и",
+  status_view: "<leader>s,<leader>ы",
+  session_export: "<leader>x,<leader>ч",
+  session_new: "<leader>n,<leader>т",
+  session_list: "<leader>l,<leader>д",
+  session_timeline: "<leader>g,<leader>п",
+  session_compact: "<leader>c,<leader>с",
+  model_list: "<leader>m,<leader>ь",
+  agent_list: "<leader>a,<leader>ф",
+  messages_copy: "<leader>y,<leader>н",
+  messages_undo: "<leader>u,<leader>г",
+  messages_redo: "<leader>r,<leader>к",
+  messages_toggle_conceal: "<leader>h,<leader>р",
+  tips_toggle: "<leader>h,<leader>р",
 };
 
 const LSP_SERVER_COMMANDS: Record<string, string[]> = {
@@ -234,9 +264,22 @@ function fragmentEdits(
       { kind: "set-if-absent", path: ["mcp_tool_display"], value: "expanded" },
     ];
   }
+  const tuiSchemas: Record<ConfigTargetName, string | undefined> = {
+    opencode: "https://opencode.ai/tui.json",
+    kilo: undefined,
+    mimo: "https://mimo.xiaomi.com/mimocode/tui.json",
+  };
   return [
-    { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/tui.json" },
+    ...(tuiSchemas[target]
+      ? [{ kind: "set-if-absent" as const, path: ["$schema"], value: tuiSchemas[target] }]
+      : []),
+    { kind: "set-if-absent", path: ["theme"], value: "ayu" },
     { kind: "set-if-absent", path: ["diff_style"], value: "stacked" },
+    ...Object.entries(UNIFIED_TUI_KEYBINDS).map(([key, value]) => ({
+      kind: "set-if-absent" as const,
+      path: ["keybinds", key],
+      value,
+    })),
   ];
 }
 
@@ -246,14 +289,24 @@ function applicable(fragment: FragmentName, target: ConfigTargetName): boolean {
   return targets.includes(target);
 }
 
+function fragmentFileKind(fragment: FragmentName): TargetFileKind {
+  return CONFIG_FRAGMENTS.find((item) => item.name === fragment)?.file ?? "main";
+}
+
 export function normalizeConfigSelection(
   scope: Scope,
   value: Partial<ConfigSetupSelection> = {},
 ): ConfigSetupSelection {
   const requestedTargets = value.targets ?? ["opencode"];
   const targets = CONFIG_TARGETS.filter((target) => requestedTargets.includes(target));
-  if (targets.length !== requestedTargets.length)
+  if (targets.length !== requestedTargets.length) {
+    if (requestedTargets.includes("tui" as ConfigTargetName))
+      throw new ConfigSetupError(
+        "invalid_selection",
+        "The tui target moved into opencode, kilo, and mimo as the tui-schema fragment",
+      );
     throw new ConfigSetupError("invalid_selection", "Unknown config target selection");
+  }
   if (scope === "project" && (targets.length !== 1 || targets[0] !== "opencode"))
     throw new ConfigSetupError(
       "invalid_selection",
@@ -275,7 +328,6 @@ export async function defaultConfigSelection(
     Boolean(await readRegular(path).catch(() => undefined));
   const targets: ConfigTargetName[] = ["opencode"];
   if (scope === "global") {
-    if (await exists(join(home, ".config", "opencode", "tui.json"))) targets.push("tui");
     if (await exists(join(home, ".config", "kilo", "kilo.json"))) targets.push("kilo");
     if (await exists(join(home, ".config", "kilo", "kilo.jsonc"))) targets.push("kilo");
     if (await exists(join(home, ".config", "mimocode", "mimocode.json"))) targets.push("mimo");
@@ -292,10 +344,43 @@ async function resolveTargetFile(
   scope: Scope,
   cwd: string,
   home: string,
+  kind: TargetFileKind = "main",
 ): Promise<TargetFile> {
   const existing = async (root: string, path: string): Promise<boolean> =>
     Boolean(await readRegular(join(root, path)).catch(() => undefined));
   const globalRoot = deploymentRoot("global", cwd, home);
+  if (kind === "tui") {
+    if (target === "kilo") {
+      const kiloRoot = join(home, ".config", "kilo");
+      for (const path of ["tui.jsonc", "tui.json"])
+        if (await existing(kiloRoot, path))
+          return { target, root: kiloRoot, path, absolute: join(kiloRoot, path), exists: true };
+      return {
+        target,
+        root: kiloRoot,
+        path: "tui.jsonc",
+        absolute: join(kiloRoot, "tui.jsonc"),
+        exists: false,
+      };
+    }
+    if (target === "mimo") {
+      const mimoRoot = join(home, ".config", "mimocode");
+      return {
+        target,
+        root: mimoRoot,
+        path: "tui.json",
+        absolute: join(mimoRoot, "tui.json"),
+        exists: await existing(mimoRoot, "tui.json"),
+      };
+    }
+    return {
+      target,
+      root: globalRoot,
+      path: "tui.json",
+      absolute: join(globalRoot, "tui.json"),
+      exists: await existing(globalRoot, "tui.json"),
+    };
+  }
   if (target === "opencode") {
     if (scope === "global") {
       for (const path of ["opencode.json", "opencode.jsonc"])
@@ -326,14 +411,6 @@ async function resolveTargetFile(
       exists: false,
     };
   }
-  if (target === "tui")
-    return {
-      target,
-      root: globalRoot,
-      path: "tui.json",
-      absolute: join(globalRoot, "tui.json"),
-      exists: await existing(globalRoot, "tui.json"),
-    };
   if (target === "kilo") {
     const root = join(home, ".config", "kilo");
     for (const path of ["kilo.jsonc", "kilo.json"])
@@ -369,83 +446,103 @@ async function build(
   const files: TargetFile[] = [];
 
   for (const target of CONFIG_TARGETS.filter((name) => selection.targets.includes(name))) {
-    let file: TargetFile;
-    let current: Buffer | undefined;
-    try {
-      file = await resolveTargetFile(target, scope, cwd, home);
-      current = file.exists ? await readRegular(file.absolute) : undefined;
-    } catch (error) {
-      const reason = error instanceof LifecycleError ? error.message : "target is unreadable";
-      for (const fragment of selection.fragments.filter((item) => applicable(item, target)))
-        operations.push({ target, path: "unknown", fragment, operation: "conflict", reason });
-      continue;
-    }
-    if (file.exists && current === undefined) {
-      for (const fragment of selection.fragments.filter((item) => applicable(item, target)))
-        operations.push({
-          target,
-          path: file.absolute,
-          fragment,
-          operation: "conflict",
-          reason: "target is unreadable",
-        });
-      continue;
-    }
-    files.push(file);
-    allowedRoots.add(file.root);
-    let text = current ? current.toString("utf8") : "{}\n";
-    let changed = false;
-    for (const fragment of selection.fragments) {
-      if (!applicable(fragment, target)) continue;
-      let parsed: unknown = undefined;
+    const kinds: TargetFileKind[] = ["main"];
+    const wantsTui = selection.fragments.some(
+      (fragment) => applicable(fragment, target) && fragmentFileKind(fragment) === "tui",
+    );
+    if (wantsTui && scope === "global") kinds.push("tui");
+    for (const kind of kinds) {
+      let file: TargetFile;
+      let current: Buffer | undefined;
       try {
-        parsed = parseJsonc(text);
-      } catch {
-        parsed = undefined;
+        file = await resolveTargetFile(target, scope, cwd, home, kind);
+        current = file.exists ? await readRegular(file.absolute) : undefined;
+      } catch (error) {
+        const reason = error instanceof LifecycleError ? error.message : "target is unreadable";
+        for (const fragment of selection.fragments.filter(
+          (item) => applicable(item, target) && fragmentFileKind(item) === kind,
+        ))
+          operations.push({ target, path: "unknown", fragment, operation: "conflict", reason });
+        continue;
       }
-      try {
-        const applied = applyJsoncEdits(text, fragmentEdits(fragment, target, parsed));
-        if (applied.changed) {
-          text = applied.text;
-          changed = true;
+      if (file.exists && current === undefined) {
+        for (const fragment of selection.fragments.filter(
+          (item) => applicable(item, target) && fragmentFileKind(item) === kind,
+        ))
           operations.push({
             target,
             path: file.absolute,
             fragment,
-            operation: file.exists ? "update" : "create",
+            operation: "conflict",
+            reason: "target is unreadable",
           });
-        } else {
-          operations.push({ target, path: file.absolute, fragment, operation: "unchanged" });
+        continue;
+      }
+      files.push(file);
+      allowedRoots.add(file.root);
+      let text = current ? current.toString("utf8") : "{}\n";
+      let changed = false;
+      for (const fragment of selection.fragments) {
+        if (!applicable(fragment, target) || fragmentFileKind(fragment) !== kind) continue;
+        let parsed: unknown = undefined;
+        try {
+          parsed = parseJsonc(text);
+        } catch {
+          parsed = undefined;
         }
-      } catch (error) {
-        operations.push({
-          target,
-          path: file.absolute,
-          fragment,
-          operation: "conflict",
-          reason:
-            error instanceof LifecycleError || error instanceof Error
-              ? error.message
-              : String(error),
+        try {
+          const applied = applyJsoncEdits(text, fragmentEdits(fragment, target, parsed));
+          if (applied.changed) {
+            text = applied.text;
+            changed = true;
+            operations.push({
+              target,
+              path: file.absolute,
+              fragment,
+              operation: file.exists ? "update" : "create",
+            });
+          } else {
+            operations.push({ target, path: file.absolute, fragment, operation: "unchanged" });
+          }
+        } catch (error) {
+          operations.push({
+            target,
+            path: file.absolute,
+            fragment,
+            operation: "conflict",
+            reason:
+              error instanceof LifecycleError || error instanceof Error
+                ? error.message
+                : String(error),
+          });
+        }
+      }
+      if (changed) {
+        const content = Buffer.from(text.endsWith("\n") ? text : `${text}\n`);
+        mutations.push({
+          ...(file.root === root ? {} : { root: file.root }),
+          path: file.path,
+          operation: "write",
+          content,
+          mode: 0o644,
+          expected: current ? { sha256: sha256(current) } : { absent: true },
         });
       }
-    }
-    if (changed) {
-      const content = Buffer.from(text.endsWith("\n") ? text : `${text}\n`);
-      mutations.push({
-        ...(file.root === root ? {} : { root: file.root }),
-        path: file.path,
-        operation: "write",
-        content,
-        mode: 0o644,
-        expected: current ? { sha256: sha256(current) } : { absent: true },
-      });
     }
   }
 
   const skipped = selection.fragments
-    .filter((fragment) => !selection.targets.some((target) => applicable(fragment, target)))
-    .map((fragment) => ({ fragment, reason: "no selected target supports this fragment" }));
+    .filter((fragment) => {
+      if (fragmentFileKind(fragment) === "tui" && scope === "project") return true;
+      return !selection.targets.some((target) => applicable(fragment, target));
+    })
+    .map((fragment) => ({
+      fragment,
+      reason:
+        fragmentFileKind(fragment) === "tui" && scope === "project"
+          ? "TUI files are global-only"
+          : "no selected target supports this fragment",
+    }));
   const sorted = operations.sort(
     (left, right) =>
       CONFIG_TARGETS.indexOf(left.target) - CONFIG_TARGETS.indexOf(right.target) ||
