@@ -343,7 +343,7 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
             "--ignore-scripts",
             "--no-audit",
             "--no-fund",
-            f"{agentomatic['name']}@{agentomatic['version']}",
+            *(f"{entry['name']}@{entry['version']}" for entry in entries),
             "@opencode-ai/plugin@1.18.29",
             cwd=root,
             env=env,
