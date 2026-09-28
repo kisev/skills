@@ -106,5 +106,9 @@ commit-msg:
 pre-push:
   jobs:
     - name: complete-gate
-      run: task pre-push
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task pre-push
       fail_text: "The single complete local push gate failed"

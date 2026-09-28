@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,7 +14,7 @@ def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
     hooks = (ROOT / "lefthook.yml").read_text(encoding="utf-8")
     assert "--diff-filter=ACMR" in hooks
     assert "--staged" in hooks
-    assert "run: task pre-push" in hooks
+    assert "        task pre-push" in hooks
     assert "commitlint --edit {1}" in hooks
     assert "--fix" not in hooks
     assert "git add" not in hooks
@@ -19,6 +22,45 @@ def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
     assert "mise exec -- ec" not in hooks
     for slow_check in ("pytest", "mypy", "build:skills", "version:check", "package:check"):
         assert slow_check not in hooks
+
+
+def test_prepush_git_environment_does_not_escape_into_fixture_repositories(tmp_path: Path) -> None:
+    hooks = (ROOT / "lefthook.yml").read_text(encoding="utf-8")
+    command = textwrap.dedent(
+        hooks.split("pre-push:\n", 1)[1].split("run: |\n", 1)[1].split("      fail_text:", 1)[0]
+    )
+    local_variables = subprocess.check_output(
+        ["git", "rev-parse", "--local-env-vars"], cwd=ROOT, text=True
+    ).splitlines()
+    environment = {key: value for key, value in os.environ.items() if key not in local_variables}
+    repositories = [tmp_path / "hook", tmp_path / "fixture"]
+    for repository in repositories:
+        subprocess.run(["git", "init", "-q", str(repository)], env=environment, check=True)
+    binary = tmp_path / "task"
+    binary.write_text(
+        '#!/bin/sh\n[ "$1" = pre-push ] || exit 1\n'
+        'git -C "$VERIFY_REPO" rev-parse --absolute-git-dir\n',
+        encoding="utf-8",
+    )
+    binary.chmod(0o700)
+    environment.update(
+        {
+            "PATH": f"{tmp_path}{os.pathsep}{environment.get('PATH', '')}",
+            "VERIFY_REPO": str(repositories[1]),
+            "GIT_DIR": str(repositories[0] / ".git"),
+            "GIT_WORK_TREE": str(repositories[0]),
+            "GIT_INDEX_FILE": str(repositories[0] / ".git" / "index"),
+        }
+    )
+    result = subprocess.run(
+        ["sh", "-eu", "-c", command],
+        cwd=repositories[0],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == str(repositories[1] / ".git")
 
 
 def test_workflows_delegate_quality_checks_to_task() -> None:
