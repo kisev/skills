@@ -1,7 +1,7 @@
 ---
 name: docs-prepare
 description: >-
-  Prepare or update user-facing Diataxis documentation, including instructions, mirrors, and navigation affected by an authorized behavior change. Preserve prerequisites, limitations, and recovery details. Russian discovery terms: подготовить документацию, обновить документацию при изменениях.
+  Prepare or update user-facing Diataxis documentation, including instructions, mirrors, and navigation affected by an authorized behavior change. Preserve prerequisites, limitations, and recovery details. Activate yourself after completing an authorized behavior change to assess affected documents and update them or record a concrete no-update reason; this trigger is owned by the skill and needs no project instructions. Russian discovery terms: подготовить документацию, обновить документацию при изменениях.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

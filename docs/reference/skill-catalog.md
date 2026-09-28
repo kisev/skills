@@ -70,8 +70,11 @@ asks one short question without writing when more than one mode remains possible
 - “Change the canonical timeout target to 30 seconds” selects `spec-update` when `specs/` exists.
 - “Check these specs against the implementation without changing files” selects `spec-review`, which preserves project files and retains private review evidence.
 
-An authorized behavior change includes assessment of its affected specs and
-user documentation. Mentioning architecture alone does not authorize a new contract.
+After an authorized behavior change, `spec-manage` and `docs-prepare` activate
+themselves for the affected canonical and user documentation steps; project
+instructions are not required for that trigger, and it never creates a missing
+`specs/` tree or documentation set. Mentioning architecture alone does not
+authorize a new contract.
 
 ## Review and Publication
 

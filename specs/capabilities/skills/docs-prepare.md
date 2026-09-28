@@ -7,7 +7,10 @@ including the bounded set affected by an authorized behavior change.
 
 ## Triggers and Near-Misses
 
-Trigger for README/tutorial/reference/how-to work; near-miss: canonical `specs/`.
+Trigger for README/tutorial/reference/how-to work, including self-activation
+after a completed authorized behavior change to update affected documents or
+record a concrete no-update reason without project instructions; near-miss:
+canonical `specs/`.
 
 ## Inputs and Outputs
 
@@ -40,7 +43,11 @@ Does not modify `specs/` or invent behavior.
 ### REQ-F-107 - Prepare factual documentation
 
 The skill shall keep user-facing documentation claims traceable to repository
-evidence and write only validated workspace documents.
+evidence and write only validated workspace documents. After a completed
+authorized behavior change it shall assess affected user-facing documents
+itself and update them or record a concrete no-update reason without relying
+on project instruction files, and shall never create a documentation set from
+that trigger alone.
 
 It follows [REQ-F-519](../../requirements/functional/README.md#req-f-519---maintain-change-linked-documentation-and-reusable-review-evidence)
 to preserve applicable details and assess affected contracts without changing

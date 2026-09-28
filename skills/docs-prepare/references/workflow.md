@@ -5,6 +5,16 @@ configuration, and related canonical specifications. Without a path or section,
 inspect the complete user-facing documentation set to select the relevant document.
 Apply `humanize` before drafting documentation prose.
 
+## Activation
+
+This skill owns its post-change trigger itself; project instruction files are
+not required to obtain it. After completing an authorized behavior change,
+assess the affected user-facing documents yourself (contracts, guides,
+examples, language mirrors, and navigation) and update them or record a
+concrete no-update reason within the same change authorization, applying
+`references/documentation-review.md`. The trigger never creates a
+documentation set where none exists: starting one stays a user decision.
+
 ## Document selection
 
 Choose one reader and one purpose: a tutorial teaches through a guided path, a

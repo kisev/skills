@@ -55,8 +55,6 @@
 - Write ordinary project files directly with bounded paths and atomic replacement or rollback; require preview and explicit confirmation only for external publication, user configuration, destructive cleanup, history changes, releases, and package lifecycle mutations.
 - Keep credentials, private endpoints, local paths, caches, live-eval output, and generated artifacts out of Git.
 - Do not weaken a failing gate with exclusions, warning baselines, missing-import ignores, or skipped tests without a documented compatibility reason.
-- Update canonical `specs/` for material behavior, compatibility, or security-boundary changes.
-- Before completing a behavior change, assess affected contracts, guides, examples, language mirrors, and navigation; update them or state a concrete no-update reason. Use document `review` metadata to select evidence, treat unmapped changes as needing assessment, and preserve applicable prerequisites, limitations, recovery details, and rationale. `task docs:check` validates links and structure, not semantic truth.
 - Never rewrite published tags or package versions; registry propagation alone is not a reason to bump: `task release:npm` waits up to 10 minutes, then inspect the failure and use `gh run rerun <run-id> --failed` with retained artifacts for transient failures; use a new patch only for actual release corrections.
 - Use `dev` as the integration branch; direct commits and feature/fix branches may target `dev`, while pull requests into `main` must come from `dev` and use a merge commit.
 - Never commit with skipped hooks (`git commit --no-verify` or equivalents); if a hook fails on a legitimate change, fix the hook configuration and include the fix in the same change.

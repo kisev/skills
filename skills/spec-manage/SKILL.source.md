@@ -1,7 +1,7 @@
 ---
 name: spec-manage
 description: >-
-  Create specs, describe an existing project, update agreed contracts as behavior changes, or review specs against implementation. Infer spec-init, spec-onboard, spec-update, or spec-review from intent and evidence. Use spec-update for the canonical part of an authorized implementation change; keep code and user documentation in their own steps. Russian discovery terms: спецификация проекта, обновить спецификацию, проверить спецификацию.
+  Create specs, describe an existing project, update agreed contracts as behavior changes, or review specs against implementation. Infer spec-init, spec-onboard, spec-update, or spec-review from intent and evidence. Use spec-update for the canonical part of an authorized implementation change; keep code and user documentation in their own steps. Activate yourself after completing an authorized change that alters material behavior, compatibility, or a security boundary when specs/ exists; this trigger is owned by the skill and needs no project instructions. Russian discovery terms: спецификация проекта, обновить спецификацию, проверить спецификацию.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

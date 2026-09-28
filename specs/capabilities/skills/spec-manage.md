@@ -9,8 +9,12 @@ the canonical target state, or review specifications without project edits.
 
 Trigger for canonical project specification work expressed either naturally or
 with an explicit mode token, including the canonical step of an authorized
-behavior change. Plans, roadmaps, code edits, and user-facing prose remain outside
-this skill's writing boundary.
+behavior change. After a completed authorized change that alters material
+behavior, compatibility, or a security boundary, the skill activates itself in
+`spec-update` mode when `specs/` exists; per-project instructions are not
+required for this trigger, and a missing tree stays user-initiated. Plans,
+roadmaps, code edits, and user-facing prose remain outside this skill's writing
+boundary.
 
 ## Inputs and Outputs
 
@@ -75,7 +79,10 @@ validated files under `specs/`. It shall distinguish normative intent from
 evidence of current behavior according to the selected mode. It shall preserve
 explicit mode and scope, otherwise infer mode from intent and repository evidence,
 keep read-only intent read-only, and stop without writing when routing is
-ambiguous. An audit shall classify atomic claims and boundaries by the first
+ambiguous. It shall activate itself for the canonical step of a completed
+authorized behavior change without depending on project instruction files and
+shall never create a missing `specs/` tree from that trigger. An audit shall
+classify atomic claims and boundaries by the first
 matching `UNKNOWN`, `CONFLICT`, `SPEC_AHEAD`, `IMPLEMENTATION_AHEAD`, or `OK`
 rule; use one severity scale for confirmed defects; preserve separate formal,
 quality, drift, boundary, and critic results; and derive `partial`, `findings`,
@@ -104,5 +111,7 @@ The shared review lifecycle implements [REQ-F-519](../../requirements/functional
 
 “Document this existing service as canonical specs” selects `spec-onboard` when
 implementation evidence exists and `specs/` does not. “Check the specs without
-changing project files” selects `spec-review`.
+changing project files” selects `spec-review`. After the agent completes an
+authorized fix that changes a public timeout, the skill performs the affected
+`spec-update` step itself.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

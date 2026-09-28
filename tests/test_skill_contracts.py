@@ -48,6 +48,34 @@ def test_askme_discovery_and_manual_continuation_contract() -> None:
     assert "confirmation of the proposed task permits it to continue" not in workflow
 
 
+def test_spec_and_docs_skills_own_post_change_triggers() -> None:
+    for name in ("spec-manage", "docs-prepare"):
+        entrypoint = (ROOT / "skills" / name / "SKILL.source.md").read_text(encoding="utf-8")
+        description = entrypoint.split("description:", 1)[1].split("license:", 1)[0]
+        assert "Activate yourself after" in description, name
+        assert "owned by the skill and needs no project instructions" in description, name
+
+    spec_workflow = (ROOT / "skills/spec-manage/references/workflow.md").read_text(encoding="utf-8")
+    docs_workflow = (ROOT / "skills/docs-prepare/references/workflow.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = {
+        "spec-manage": " ".join(spec_workflow.split()),
+        "docs-prepare": " ".join(docs_workflow.split()),
+    }
+    for name, workflow in normalized.items():
+        assert "owns its post-change trigger itself" in workflow, name
+        assert "project instruction files are not required" in workflow, name
+        assert "within the same change authorization" in workflow, name
+    assert "never creates a missing `specs/` tree" in normalized["spec-manage"]
+    assert "stay user-initiated" in normalized["spec-manage"]
+    assert "never creates a documentation set where none exists" in normalized["docs-prepare"]
+
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Update canonical `specs/` for material behavior" not in agents
+    assert "Before completing a behavior change" not in agents
+
+
 def test_briefing_retains_source_accuracy_and_privacy_contract() -> None:
     workflow = (ROOT / "skills/briefing/references/workflow.md").read_text(encoding="utf-8")
     for marker in (

@@ -2,6 +2,16 @@
 
 Maintain `specs/` as the shared source of truth for people and agents. Documents describe the agreed system state after merge and retain a compact lifecycle record for stable requirements and decisions; Git keeps the full edit history.
 
+## Activation
+
+This skill owns its post-change trigger itself; project instruction files are
+not required to obtain it. After completing an authorized change that alters
+material behavior, compatibility, or a security boundary, perform the affected
+canonical step yourself in `spec-update` mode when `specs/` exists, within the
+same change authorization. The trigger never creates a missing `specs/` tree:
+`spec-init` and `spec-onboard` stay user-initiated. An explicit user request
+for any mode always takes precedence over this automatic trigger.
+
 ## Mode selection
 
 Literal mode tokens remain supported but are optional. If the user explicitly

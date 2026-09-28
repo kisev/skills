@@ -148,6 +148,11 @@ guides, examples, language mirrors, and navigation, updating them or recording
 a concrete no-update reason. Existing prerequisites, limitations, recovery,
 compatibility, and rationale shall survive unless the agreed target changes.
 The agreed contract is normative; implementation evidence alone shall not weaken it.
+The portable specification and documentation skills shall own this trigger
+themselves: they activate for the affected canonical and user documentation
+steps after a completed authorized behavior change without per-project
+instruction files, while a missing `specs/` tree or documentation set is never
+created by the trigger alone.
 
 Document `review` metadata shall select dependencies, not assert correctness.
 Unmapped changes, including newly added sources, shall require impact assessment.
