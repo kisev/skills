@@ -38,6 +38,11 @@ Compression must not remove paths, exit status, or failure evidence.
 
 The skill shall summarize output without hiding exit status, errors, or actionable paths.
 
+#### Verification
+
+Compressed and fallback output carries its method, sizes, and incomplete-evidence
+marker. A decision requiring exact evidence uses the original bounded command.
+
 ## Example
 
 `rtk` shortens a successful test log but retains a failing selector and exit code.

@@ -38,6 +38,11 @@ Staged changes have priority and secrets are not repeated.
 
 The skill shall generate a message without changing Git history or the worktree.
 
+#### Verification
+
+For a known diff, the result is one message following repository conventions;
+the index, working tree, and history remain unchanged.
+
 ## Example
 
 `commit-msg` proposes an English message from staged specification changes.

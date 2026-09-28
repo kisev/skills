@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -87,6 +87,45 @@ export class MemoryStore {
   static async open(indexFile: string): Promise<MemoryStore> {
     await mkdir(dirname(indexFile), { mode: 0o700, recursive: true });
     return new MemoryStore(indexFile);
+  }
+
+  private static copy(database: DatabaseSync): MemoryStore {
+    const copy = new MemoryStore(":memory:");
+    try {
+      for (const table of ["entries", "usage", "vectors", "meta"]) {
+        for (const row of database.prepare(`SELECT * FROM ${table}`).all()) {
+          const columns = Object.keys(row);
+          copy.db
+            .prepare(
+              `INSERT INTO ${table} (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`,
+            )
+            .run(...Object.values(row));
+        }
+      }
+      return copy;
+    } catch (error) {
+      copy.close();
+      throw error;
+    }
+  }
+
+  fork(): MemoryStore {
+    return MemoryStore.copy(this.db);
+  }
+
+  static async preview(indexFile: string): Promise<MemoryStore> {
+    try {
+      await stat(indexFile);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return new MemoryStore(":memory:");
+      throw error;
+    }
+    const database = new DatabaseSync(indexFile, { readOnly: true });
+    try {
+      return MemoryStore.copy(database);
+    } finally {
+      database.close();
+    }
   }
 
   private ensureFts(): boolean {

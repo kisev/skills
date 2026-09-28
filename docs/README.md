@@ -13,14 +13,23 @@ make that boundary explicit.
 
 ## How-to Guides
 
+- [Maintain documentation with changes](how-to/documentation-review.md) - select affected contracts, preserve detail, and reuse review evidence.
+
+- [Set up Memomatic](how-to/memomatic.md) - connect memory, save and find an entry, configure dream, and schedule sweeps.
+
+- [Use Taskmatic](how-to/taskmatic.md) - create the first card, view the board, and connect an agent.
+
 - [Manage portable skills](how-to/portable-skills.md) - install by scope or host,
   update, rebind an older source, clean up retired names, and troubleshoot.
+
 - [Install and manage agentomatic](how-to/opencode-integration.md) - install
   the package, select assets, activate the plugin, configure user configs,
   update, reconcile, diagnose, configure agents, and uninstall safely.
+
 - [Add or rename an npm workspace package](how-to/npm-package-lifecycle.md) -
   rewire the publication graph, bootstrap a new package name on npm, and
   deprecate a retired name.
+
 - [Contribute to the repository](../CONTRIBUTING.md) - change authored sources and
   run the required checks.
 

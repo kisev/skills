@@ -22,7 +22,23 @@ roll-up, render and record, verify.
 
 ## Requirements
 
-- REQ-TEAM-REPORT-01: stakeholder artifacts exclude personal, medical, and
-  financial journal content.
-- REQ-TEAM-REPORT-02: the data-sources section and evidence completeness
-  rules match team-retro.
+### REQ-F-538 - Exclude private journal content from reports
+
+Stakeholder artifacts shall exclude personal, medical, and financial journal
+content. Former identifier: `REQ-TEAM-REPORT-01`, normalized without a behavior
+change on 2026-09-28.
+
+#### Verification
+
+An input containing private journal facts produces a stakeholder artifact without them.
+
+### REQ-F-539 - Preserve report evidence completeness
+
+The data-sources section and evidence completeness rules shall follow
+[REQ-F-509](team-retro.md#req-f-509---keep-collected-evidence-incremental-and-provenance-bound).
+Former identifier: `REQ-TEAM-REPORT-02`, normalized without a behavior change on 2026-09-28.
+
+#### Verification
+
+A report with an unavailable configured source names that boundary and does not
+present the missing source as successfully checked.

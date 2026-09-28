@@ -25,8 +25,33 @@ per person, verify, and report.
 
 ## Requirements
 
-- REQ-TEAM-PEOPLE-01: profile mutations follow the confirmed
-  prepare-present-confirm-apply contract with kind `people`.
-- REQ-TEAM-PEOPLE-02: the journal is append-only; resolutions reference entry
-  ids and never rewrite stored entries.
-- REQ-TEAM-PEOPLE-03: credential-like keys are rejected in the people profile.
+### REQ-F-533 - Confirm people profile mutations
+
+Profile mutations shall follow the confirmed prepare-present-confirm-apply
+contract with kind `people`. Former identifier: `REQ-TEAM-PEOPLE-01`, normalized
+without a behavior change on 2026-09-28.
+
+#### Verification
+
+An unconfirmed profile preview cannot apply; a confirmed matching digest saves
+only the selected people profile through the shared profile runner.
+
+### REQ-F-534 - Preserve journal history
+
+The journal shall be append-only; resolutions reference entry IDs and never
+rewrite stored entries. Former identifier: `REQ-TEAM-PEOPLE-02`, normalized
+without a behavior change on 2026-09-28.
+
+#### Verification
+
+Resolving a commitment appends a resolution referencing its original entry;
+the prior journal bytes remain intact.
+
+### REQ-F-535 - Reject credential-like profile fields
+
+Credential-like keys shall be rejected in the people profile. Former identifier:
+`REQ-TEAM-PEOPLE-03`, normalized without a behavior change on 2026-09-28.
+
+#### Verification
+
+People-profile validation rejects supplied credential keys before saving any profile.

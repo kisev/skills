@@ -3,13 +3,14 @@
 ## Purpose
 
 Infer whether to create greenfield specs, describe an existing project, change
-the canonical target state, or audit specifications read-only.
+the canonical target state, or review specifications without project edits.
 
 ## Triggers and Near-Misses
 
 Trigger for canonical project specification work expressed either naturally or
-with an explicit mode token. Near-misses include implementation, plans, roadmaps,
-and user-facing documentation even when they mention requirements or architecture.
+with an explicit mode token, including the canonical step of an authorized
+behavior change. Plans, roadmaps, code edits, and user-facing prose remain outside
+this skill's writing boundary.
 
 ## Inputs and Outputs
 
@@ -40,14 +41,15 @@ bundled Python 3.12+ standard-library-only structural validator.
 
 ## Remote/Local Effects
 
-Local reads and bounded atomic `specs/` writes; no remote effects.
+Local reads, bounded atomic `specs/` writes in writing modes, and private
+workspace-scoped review evidence under XDG state; no remote effects.
 The validator itself performs only bounded reads and invokes no Git, network, or
 external tools.
 
 ## Errors, Partial, Escalation
 
 When several modes remain plausible, one short question distinguishes their
-effects and no write occurs before the answer. Audit is always read-only.
+effects and no project write occurs before the answer. Review preserves project files.
 Unsafe, missing, non-regular, or non-UTF-8 validator inputs fail as input errors,
 not as validation findings. A mandatory failed or unchecked audit step, an
 unchecked or `UNKNOWN` in-scope boundary, or an unavailable required critic
@@ -79,16 +81,28 @@ rule; use one severity scale for confirmed defects; preserve separate formal,
 quality, drift, boundary, and critic results; and derive `partial`, `findings`,
 or `clean` by fixed precedence.
 
+#### Verification
+
+Mode-selection and drift scenarios distinguish intent from observed behavior,
+preserve explicit scope and language, and report contradictory sources without
+silently adopting either. Snapshot tests alone do not establish those judgments.
+
 ### REQ-F-506 - Validate formal specification invariants
 
 The skill shall run snapshot validation for complete canonical trees and shall
 run lifecycle validation only against an explicitly supplied complete baseline.
 It shall report unexecuted historical checks as `not_checked` and shall not use a
-successful formal result as a substitute for semantic `spec-audit`.
+successful formal result as a substitute for semantic `spec-review`.
+
+#### Verification
+
+`tests/test_spec_validate.py` exercises snapshot and lifecycle failures;
+`tests/test_documentation_review.py` exercises freshness and retained limitations.
+The shared review lifecycle implements [REQ-F-519](../../requirements/functional/README.md#req-f-519---maintain-change-linked-documentation-and-reusable-review-evidence).
 
 ## Example
 
 “Document this existing service as canonical specs” selects `spec-onboard` when
 implementation evidence exists and `specs/` does not. “Check the specs without
-changing files” selects `spec-audit`.
+changing project files” selects `spec-review`.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

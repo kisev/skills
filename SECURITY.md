@@ -20,13 +20,15 @@ system data. Use revoked or synthetic values.
   root.
 - Python runners use only the standard library and install no dependencies.
 - External, user-configuration, destructive, history, release, and package lifecycle flows require a preview and confirmation; the OpenCode installer
-  accepts only the digest of a previously shown plan.
-- Code review only prepares direct manual `glab` commands. It neither executes
-  them nor records publication state; the operator reviews each command and
-  GitLab remains the source of truth for published discussions and issues.
-- The installer does not modify `opencode.json`, has no npm lifecycle hooks, and
-  does not overwrite unmanaged or user-modified files.
-- Optional plugin wrappers are unselected by default. External authentication
+  requires interactive consent or an explicit `--yes`; config apply binds its
+  in-process preview to source bytes and a one-use expiring receipt.
+- Code review prepares guarded manual publication-helper commands. The separate
+  helper records reservations, verified receipts, and recovery state; uncertain
+  remote outcomes block retries until inspected. GitLab remains the remote authority.
+- A confirmed install with core selected merges the plugin into `opencode.json`
+  and may provision npm dependencies. It has no npm lifecycle hooks and preserves
+  unrelated user entries and modified assets.
+- Only the `rtk` wrapper is preselected by default. External authentication
   remains in user-owned configuration and must never pass through a prompt,
   `argv`, or logs.
 

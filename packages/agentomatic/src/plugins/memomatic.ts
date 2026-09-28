@@ -6,7 +6,7 @@ import {
   getEntry,
   opencodeDatabasePath,
   openMemomatic,
-  searchMemory,
+  searchMemoryResults,
   sessionFacts,
   writeEntry,
   type MemomaticContext,
@@ -36,7 +36,7 @@ export async function memomatic(options: MemomaticOptions = {}) {
     description:
       "Search personal long-term memory for durable decisions, discoveries, failed attempts, and session outcomes.",
     async execute(args: { query: string }) {
-      return withContext((context) => searchMemory(context, args.query));
+      return withContext((context) => searchMemoryResults(context, args.query));
     },
   });
   const memoryGet = tool({

@@ -1,0 +1,100 @@
+---
+audience: user
+review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "apps/memomatic/assets/systemd/*", "packages/agentomatic/src/plugins/memomatic.ts", "packages/agentomatic/src/installer.ts"], "contracts": ["specs/capabilities/plugins/memomatic.md"]}
+---
+
+# Настройка и использование Memomatic
+
+[English](../../how-to/memomatic.md)
+
+## Установка и подключение
+
+Нужны Node.js 22+ и npm. Для CLI, доступного за пределами npm-проекта:
+
+```shell
+npm install --global @kisev/memomatic
+memomatic --version
+```
+
+Для локальной установки используйте `npm install @kisev/memomatic` и вызывайте
+CLI через `npx memomatic`. Пример systemd ниже рассчитан на глобальный бинарник.
+
+В [установщике agentomatic](opencode-integration.md) явно выберите обёртку
+`memomatic`: по умолчанию выбрана только `rtk`. Перезапустите OpenCode и проверьте
+доступность `memory_write`, `memory_search`, `memory_get` и `memory_forget`.
+Другие MCP-хосты могут запускать `memomatic mcp-serve` как локальный stdio-сервер.
+
+## Первая запись и поиск
+
+Попросите агента вызвать `memory_write` с `text: "Use a separate preview before publishing."`
+и `source: "user"`. Результат указывает на файл в очереди inbox, а не на проиндексированный факт.
+Затем выполните:
+
+```shell
+memomatic process
+memomatic search "preview publishing"
+```
+
+Вызовите `memory_get` с полученными файлом и строкой для чтения полной записи.
+Результаты поиска указывают источник и личную или командную видимость. Личную запись
+нельзя копировать в общие артефакты. `memory_forget` удаляет одну явно выбранную
+строку; обычная модельная консолидация не разрешает удалять кураторскую память.
+
+## Настройка Dream
+
+Перед извлечением знаний из сессий установите OpenCode, настройте провайдера
+и выберите доступную модель через `opencode models`. Создайте
+`${XDG_CONFIG_HOME:-$HOME/.config}/memomatic/settings.json` с выбранным
+идентификатором `provider/model`:
+
+```json
+{"dream": {"model": "provider/model"}}
+```
+
+```shell
+memomatic dream --dry-run
+memomatic dream
+```
+
+Предпросмотр сохраняет файлы памяти, постоянный индекс и отметку обработанных
+сессий; настроенные вызовы модели и эмбеддингов могут выполняться. Без модели
+`dream` обрабатывает inbox, но не извлекает сессии и не продвигает их отметку.
+Для прохода inbox без модели используйте `process`. Невалидный ответ консолидации
+включает ограниченное добавление записей с сохранением существующей кураторской памяти.
+
+## Хранение, очистка и восстановление
+
+Корпус находится в `${XDG_STATE_HOME:-$HOME/.local/state}/memomatic/`:
+`MEMORY.md`, `USER.md`, ежедневные файлы в `memory/`, `DREAMS.md`, `inbox/`,
+`history/` и `archive/`. Правила находятся в
+`${XDG_CONFIG_HOME:-$HOME/.config}/memomatic/MEMORY_RULES.md`.
+
+```markdown
+- never-save: credentials
+- auto-clean: older-than=90d scope=episodic source=stopit
+```
+
+Очистка архивирует только подходящие старые незакреплённые записи и сохраняет
+остальные записи того же файла. Отклонённые файлы inbox остаются в `inbox/rejected/`.
+Проверяйте их после отказа. Чтобы отменить нежелательное изменение, найдите
+предыдущее содержимое по хэшу в `history/` или выбранные записи в `archive/`,
+восстановите нужный текст корпуса и выполните `memomatic index`. Эти данные
+должны оставаться приватными и вне Git.
+
+## Запуск по расписанию
+
+Юниты принадлежат `@kisev/memomatic`, а не agentomatic. Найдите их через
+`npm root --global`, затем скопируйте оба юнита из
+`<npm-root>/@kisev/memomatic/assets/systemd/` в `~/.config/systemd/user/`.
+Убедитесь, что пользовательский сервис находит `memomatic` и `opencode`; задайте
+абсолютные пути или явный PATH сервиса, если бинарники предоставляет менеджер версий оболочки.
+
+```shell
+systemctl --user daemon-reload
+systemctl --user enable --now memomatic-dream.timer
+systemctl --user status memomatic-dream.timer
+journalctl --user -u memomatic-dream.service
+```
+
+Включайте таймер после успешного ручного прохода. Команда
+`systemctl --user disable --now memomatic-dream.timer` отключает расписание и сохраняет память.

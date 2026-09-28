@@ -96,7 +96,7 @@ If any selection flag is present outside a TTY, `--commands`, `--agents`, and
 npx --yes @kisev/agentomatic@latest capabilities --json
 ```
 
-The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`; `rtk` is
+The selectable wrappers are `rules-injector`, `rtk`, `zed-bell`, and `memomatic`; `rtk` is
 preselected by the installer. OpenCode loads deployed wrapper files from the
 `plugins` directory automatically, so they need no `plugin` array entry; that
 array stays reserved for the npm core package. Opt out explicitly with
@@ -174,9 +174,29 @@ entries are preserved; only absent keys are added; a scalar permission map such
 as `"external_directory": "ask"` is widened to a map that keeps the scalar as
 the `"*"` entry. Fragments that cannot merge cleanly are reported as conflicts
 and skipped without blocking the rest of the plan. Like every mutation, `config`
-requires a `--dry-run` preview, an explicitly confirmed apply, and a restart of
-the affected tool afterwards. A successful `install` apply prints the matching
-`config` dry-run as its next step.
+requires a preview, an explicitly confirmed apply, and a restart of the affected
+tool afterwards. A confirmed `install` with core selected applies its core config
+step; a failed config step prints a retry command. Other fragments use `config`.
+
+Selecting `core-plugin` may access npm and update `package.json`,
+`package-lock.json`, and `node_modules`; the preview shows this dependency plan.
+An npm failure is reported separately from the committed config transaction.
+Fix the dependency error and repeat the preview. `install --no-dependency` disables
+provisioning through the whole install path.
+
+Config previews do not write locks or recover interrupted transactions. Interactive
+apply binds the displayed plan to a five-minute one-use in-process receipt;
+changed source bytes require a fresh preview. A separate `--dry-run` does not
+issue a reusable cross-process receipt; `--yes` authorizes a freshly built plan.
+For a pending config transaction, inspect and explicitly confirm recovery:
+
+```shell
+npx agentomatic config recover --global --dry-run
+npx agentomatic config recover --global
+```
+
+Omit `--global` for project scope. Recovery restores the interrupted transaction
+before a new config preview; changed recovery evidence requires another preview.
 
 ## Preview and Confirm
 
@@ -216,7 +236,7 @@ interactive selection wizards run first, the plan summary is printed, and
 nothing is written until the final question "Apply these changes?" is answered
 with Yes. Outside a TTY, pass the explicit selection flags plus `--yes`;
 without `--yes` the command fails with "Applying outside a terminal requires
---yes; use --dry-run to preview". Apply rejects unsafe conflicts and remains
+\--yes; use --dry-run to preview". Apply rejects unsafe conflicts and remains
 transactional.
 
 ## Doctor
@@ -321,8 +341,8 @@ retained profile configuration. It does not remove portable skills or edit
   authoritative and must be installed separately.
 - The only package tool is `route`; it has no slash command. Administrative
   operations use the direct `agentomatic` CLI.
-- `install` and `uninstall` never edit `opencode.json`; the `config` command is
-  the only confirmed path for configuration fragments.
+- A confirmed `install` with core selected merges its `plugin` entry into
+  `opencode.json` through the config executor. `uninstall` preserves user configuration.
 - Global scope is cwd-independent; project scope targets `.opencode` under the
   current directory.
 - The installer owns only files proved by manifests and exact hashes.

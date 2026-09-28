@@ -1,5 +1,10 @@
-import { forgetEntry, getEntry, openMemomatic, searchMemory, writeEntry } from "./service.js";
-import { visibilityForSource } from "./visibility.js";
+import {
+  forgetEntry,
+  getEntry,
+  openMemomatic,
+  searchMemoryResults,
+  writeEntry,
+} from "./service.js";
 
 const PROTOCOL_VERSION = "2025-06-18";
 
@@ -81,16 +86,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<un
       case "memory_search": {
         if (typeof args.query !== "string" || !args.query.trim())
           throw new Error("query is required");
-        const hits = await searchMemory(context, args.query);
-        return hits.map((hit) => ({
-          file: hit.entry.file.replace(`${context.paths.stateRoot}/`, ""),
-          kind: hit.entry.kind,
-          line: hit.entry.line,
-          score: Number(hit.score.toFixed(4)),
-          snippet: hit.snippet,
-          source: hit.entry.source,
-          visibility: visibilityForSource(hit.entry.source),
-        }));
+        return await searchMemoryResults(context, args.query);
       }
       case "memory_get": {
         if (typeof args.file !== "string" || !args.file) throw new Error("file is required");

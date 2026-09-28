@@ -10,13 +10,13 @@
 ## Установка
 
 ```bash
-npm install @kisev/memomatic
+npm install --global @kisev/memomatic
 ```
 
 Корпус живёт в `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`, ежедневные
 записи, `DREAMS.md`); правила — в `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.
-Установщик `@kisev/agentomatic` разворачивает плагин OpenCode автоматически;
-автономное использование — через CLI:
+Нужен Node.js 22+. Явно выберите `memomatic` в установщике `@kisev/agentomatic`
+и перезапустите OpenCode. Автономное использование доступно через CLI:
 
 ```bash
 memomatic process    # валидация inbox и индексация принятого (без модели)
@@ -25,6 +25,10 @@ memomatic dream      # полный проход: inbox + сессии + кон�
 
 Ночной проход планируют user-юниты systemd из `assets/systemd/`
 (`memomatic-dream.service` и `memomatic-dream.timer`).
+
+Перед извлечением сессий настройте `dream.model` и провайдера OpenCode;
+без модели отметка обработанных сессий сохраняется. См.
+[настройку, первую запись и расписание](../../docs/ru/how-to/memomatic.md).
 
 ## Inbox
 

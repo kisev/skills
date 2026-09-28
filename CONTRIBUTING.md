@@ -138,10 +138,15 @@ creating the annotated `vX.Y.Z` tag, and pushing that tag. The tag must referenc
 the resulting `main` merge commit.
 
 The tag starts `.github/workflows/publish.yml`. It revalidates the published tag
-and revision, builds one exact npm tarball and cross-channel digest manifest,
+and revision, builds exact npm tarballs for every workspace publication member
+and a cross-channel digest manifest,
 publishes and verifies stable GitHub Pages and npm `latest`, and only then creates
 the GitHub Release. npm publishing uses trusted publishing through OIDC and
 verifies the registry tarball, imports, CLI, signatures, and provenance.
+
+The manifest records `@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomatic`
+with their own versions and exact dependency pins. Every member must finish
+publication and verification before the workflow declares success.
 
 For every push to `dev`, the same workflow runs the complete gate, then replaces
 only the Pages `/dev` channel and publishes a unique npm prerelease under dist-tag

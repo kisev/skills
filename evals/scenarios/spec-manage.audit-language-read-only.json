@@ -20,7 +20,7 @@
     {
       "id": "audit-read-only",
       "path": "skills/spec-manage/references/workflow.md",
-      "contains": "This mode is completely read-only"
+      "contains": "This mode never edits the reviewed project"
     },
     {
       "id": "audit-checks-declared-language",
@@ -35,5 +35,5 @@
   ],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "5855195ff19d7541aa79db4d3c5be0cb7904901ecafa85b27eb05403d427cecb"
+  "digest": "94f33d532e6d994e61930f3b94c99f572d1d5b24ca537ad1b1c20b8c5efdad41"
 }

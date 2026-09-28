@@ -5,7 +5,7 @@
 ### REQ-F-001 - Expose the verified capability surface
 
 The repository shall expose exactly the public inventory in
-`evals/contracts/public-surfaces.json`: 38 skills, 38 commands, 6 agents, 3
+`evals/contracts/public-surfaces.json`: 38 skills, 39 commands, 6 agents, 4
 selectable plugins, and 1 package tool.
 
 #### Verification
@@ -38,8 +38,11 @@ bindings and assert non-success outcomes with retained useful partial results.
 ### REQ-F-004 - Publish one verified release
 
 On a validated release tag, CI shall pass the complete quality gate before any
-publication, build the exact tagged Pages distribution and one exact npm tarball,
-and bind both to one release manifest. CI shall verify deployed Pages bytes, npm
+publication, build the exact tagged Pages distribution and the npm tarballs for
+`@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomatic`, and bind all
+artifacts to one release manifest. Each package keeps its maintained version;
+development versions and exact dependency pins follow the manifest's member graph.
+CI shall verify every member's deployed npm artifact, deployed Pages bytes, npm
 integrity, signatures, provenance, imports, and CLI before creating the GitHub
 Release. The distribution version and source revision shall match the immutable
 tag, and a rerun shall accept only identical previously published bytes.
@@ -48,6 +51,9 @@ tag, and a rerun shall accept only identical previously published bytes.
 
 Release contract tests reject version, tag, provenance, and digest mismatches.
 The tag workflow verifies both remote channels before GitHub Release creation.
+
+Package-member tests verify dependency order, exact pins, and complete publication
+of all manifest members before declaring a release successful.
 
 ### REQ-F-005 - Archive owned retired assets
 
@@ -134,3 +140,68 @@ and `uninstall` never changes the dependency.
 Package tests stub the npm runner and verify plan states (`install`, `update`,
 `satisfied`, `manual`), package.json creation, argument shape, failure wrapping,
 and dependency coupling through preview and apply.
+
+### REQ-F-519 - Maintain change-linked documentation and reusable review evidence
+
+An authorized behavior change shall assess affected canonical contracts,
+guides, examples, language mirrors, and navigation, updating them or recording
+a concrete no-update reason. Existing prerequisites, limitations, recovery,
+compatibility, and rationale shall survive unless the agreed target changes.
+The agreed contract is normative; implementation evidence alone shall not weaken it.
+
+Document `review` metadata shall select dependencies, not assert correctness.
+Unmapped changes, including newly added sources, shall require impact assessment.
+Portable documentation and specification review shall retain private,
+workspace-scoped evidence outside the checkout and reuse compatible prior
+results in full, incremental, or unchanged modes. Previous findings, decisions,
+and unchecked boundaries shall remain visible. Changed evidence invalidates
+affected conclusions; full review requires one independent critic.
+
+#### Verification
+
+`tests/test_documentation_review.py` checks dependency selection, new unmapped
+sources, stale finalization, retained limitations, and finding continuity.
+Behavioral review evaluates preservation of prerequisites and explanations;
+`task docs:check` validates metadata and structure, not semantic truth.
+
+### REQ-F-520 - Preserve atomic private profile transactions
+
+This shared owner consolidates the transaction guarantees formerly repeated
+under REQ-F-126 and REQ-F-127, without changing those guarantees.
+
+Confirmed profile saves that also select the default profile shall update profile
+and settings atomically with rollback, recover interrupted transactions from a
+private schema v3 journal, and store bounded previous bytes in private
+content-addressed state files referenced by digest and exact path rather than
+inline encoding. Backup cleanup shall follow commit or completed rollback and
+shall preserve content still referenced by another journal. Existing schema v2
+journals shall remain recoverable under a separate compatible legacy bound. The
+runtime shall consume the receipt only after both writes and the report
+succeed, their parent directories are fsync-durable, and safe private reads match
+all three journal-declared postconditions immediately before receipt creation; a
+pre-receipt mismatch shall roll back without a receipt. The runtime shall fsync every transaction
+replace, create, and unlink including journal deletion, fsync the receipt
+namespace before recovery accepts either commit or rollback state, and report
+unavailable POSIX durability primitives or other expected local I/O failures as JSON errors.
+Recovery shall accept commit only for an exact receipt whose journal-bound
+profile, settings, and report existence and digests match durable files. It shall
+never remove an exact durable receipt: intended state shall finish commit, while
+prior, mixed, or unknown state shall preserve the receipt, journal, and backups
+and fail closed. Without such a receipt, recovery shall finish rollback for prior
+or mixed prior/intended state but preserve the journal, backups, and any current
+file that matches neither state. Confirmed context saves shall be serialized,
+roll back visible context and new report state after pre-receipt fsync, report, or
+required marker failure, and create the one-use receipt only at the safe commit
+point. A post-link receipt error shall finish as committed only when the exact
+receipt and intended context and report digests match. Existing persisted plans
+shall remain compatible. Backup paths, digests,
+sizes, ownership, and private permissions shall be verified before restoration.
+Mutation locking shall use non-blocking POSIX `flock` retries with a five-second
+monotonic deadline and reject a lock with more than one hardlink before changing
+its mode, while module import and read-only commands remain portable.
+
+#### Verification
+
+`tests/test_team_workflow.py` and the profile transaction regression tests inject
+write, fsync, report, and recovery failures and check preserved bytes, exact
+receipts, rollback, legacy journals, and rejection of unsafe backup or lock paths.

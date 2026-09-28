@@ -41,6 +41,11 @@ Portable runtime dependencies and locale contracts cannot be weakened.
 
 The skill shall preserve declared frontmatter, resources, and portability contracts.
 
+#### Verification
+
+The checker rejects broken resources and invalid metadata for one explicit target;
+improvement preserves its behavior and passes the target's available checks.
+
 ### REQ-F-132 - Ground skill improvements in session evidence
 
 The skill shall extract deterministic usage signals from opencode, kilo, and

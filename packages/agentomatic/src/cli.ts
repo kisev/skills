@@ -31,6 +31,7 @@ import {
   defaultConfigSelection,
   normalizeConfigSelection,
   previewConfigSetup,
+  recoverConfigSetup,
   type ConfigSetupPlan,
   type ConfigSetupSelection,
   type ConfigTargetName,
@@ -383,6 +384,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       [
         "agentomatic config [--global] --dry-run [selection options]",
         "agentomatic config [--global] [--dry-run | --yes] [selection options]",
+        "agentomatic config recover [--global] [--dry-run | --yes]",
       ],
       [
         ["--global", "Use global scope; project scope is the default."],
@@ -402,6 +404,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
         "Project scope edits the project opencode.json(c) file only.",
         "Existing entries, comments, and unrelated keys are preserved; only absent keys are added.",
         "Writes occur only after the exact confirmation; conflicting fragments are skipped as findings.",
+        "Interrupted config transactions require an explicit config recover preview and confirmation.",
       ],
       [
         shellCommand(["config", "--global", "--dry-run"]),
@@ -1251,7 +1254,10 @@ async function run(arguments_: string[]): Promise<void> {
     const applyCoreIntegration = async (): Promise<ConfigSetupPlan | null> => {
       if (!coreSelection) return null;
       try {
-        return await applyConfigSetup(coreSelection, options.scope!);
+        return await applyConfigSetup(coreSelection, options.scope!, process.cwd(), undefined, {
+          provisionDependency: false,
+          receipt: corePreview?.receipt,
+        });
       } catch (error) {
         const known =
           error instanceof LifecycleError
@@ -1268,6 +1274,9 @@ async function run(arguments_: string[]): Promise<void> {
       }
     };
     requireApplyMode(options);
+    const corePreview = coreSelection
+      ? await previewConfigSetup(coreSelection, options.scope!, process.cwd(), undefined, false)
+      : undefined;
     if (options.dryRun) {
       const plan = await preview(
         action,
@@ -1277,9 +1286,7 @@ async function run(arguments_: string[]): Promise<void> {
         selection,
         !options.noDependency,
       );
-      const corePlan = coreSelection
-        ? await previewConfigSetup(coreSelection, options.scope!)
-        : undefined;
+      const corePlan = corePreview;
       if (options.json)
         process.stdout.write(
           `${JSON.stringify({ status: "ok", applied: false, requires_restart: plan.requires_restart, plan, ...(corePlan ? { core_integration: corePlan } : {}) }, null, 2)}\n`,
@@ -1309,6 +1316,7 @@ async function run(arguments_: string[]): Promise<void> {
           !options.noDependency,
         );
         process.stdout.write(renderPlan(plan, { applied: false }));
+        if (corePreview) process.stdout.write(renderConfigSetup(corePreview, { applied: false }));
         await confirmSummary();
       }
       const plan = await apply(
@@ -1464,6 +1472,32 @@ async function run(arguments_: string[]): Promise<void> {
     }
     return;
   }
+  if (domain === "config" && operation === "recover") {
+    if (rest.some((value) => !["--global", "--dry-run", "--yes", "--json"].includes(value)))
+      throw new InstallerError(
+        "invalid_input",
+        "config recover accepts only --global, --dry-run, --yes, and --json",
+      );
+    const options = parseOptions(rest);
+    requireApplyMode(options);
+    const preview = await recoverConfigSetup(options.scope, true);
+    if (!options.json)
+      process.stdout.write(
+        `Config recovery restores these interrupted transaction paths:\n${preview.paths.map((path) => `  ${terminalSafe(path)}`).join("\n")}\n`,
+      );
+    if (!options.dryRun && !options.yes && preview.paths.length) await confirmSummary();
+    const result = options.dryRun
+      ? preview
+      : await recoverConfigSetup(options.scope, false, process.cwd(), undefined, preview.digest);
+    if (options.json) process.stdout.write(`${JSON.stringify(result)}\n`);
+    else
+      process.stdout.write(
+        options.dryRun
+          ? "Apply with config recover and confirmation.\n"
+          : "Recovery complete; request a fresh config preview.\n",
+      );
+    return;
+  }
   if (domain === "config") {
     if (operation?.startsWith("--") || operation === undefined)
       rest.unshift(...(operation ? [operation] : []));
@@ -1514,12 +1548,14 @@ async function run(arguments_: string[]): Promise<void> {
           }),
         );
     } else {
+      const preview = await previewConfigSetup(selection, options.scope!);
       if (!options.yes) {
-        const plan = await previewConfigSetup(selection, options.scope!);
-        process.stdout.write(renderConfigSetup(plan, { applied: false }));
+        process.stdout.write(renderConfigSetup(preview, { applied: false }));
         await confirmSummary();
       }
-      const plan = await applyConfigSetup(selection, options.scope!);
+      const plan = await applyConfigSetup(selection, options.scope!, process.cwd(), undefined, {
+        receipt: preview.receipt,
+      });
       if (options.json)
         process.stdout.write(
           `${JSON.stringify({ status: "ok", applied: true, requires_restart: plan.requires_restart, plan }, null, 2)}\n`,

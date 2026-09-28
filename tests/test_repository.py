@@ -153,10 +153,10 @@ WORKFLOW_CONTRACTS = {
         "`spec-init`",
         "`spec-onboard`",
         "`spec-update`",
-        "`spec-audit`",
+        "`spec-review`",
         "absence of `specs/` alone never proves greenfield",
         "all 19 minimum required `readme.md`",
-        "this mode is completely read-only",
+        "this mode never edits the reviewed project",
     ),
     "stopit": (
         "stable workspace-scoped path",

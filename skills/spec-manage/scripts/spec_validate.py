@@ -638,8 +638,12 @@ def check_links(snapshot: Snapshot, findings: list[Finding]) -> None:
 def check_placeholders(snapshot: Snapshot, findings: list[Finding]) -> None:
     for relative, document in sorted(snapshot.documents.items()):
         for line_number, line in enumerate(document.text.splitlines(), 1):
+            # A filename pattern is syntax documentation, not an unfinished date.
+            candidate = re.sub(
+                r"`[^`\n]*/YYYY-MM-DD\.[a-z]+`", lambda match: " " * len(match.group()), line
+            )
             for placeholder in PLACEHOLDERS:
-                column = line.find(placeholder)
+                column = candidate.find(placeholder)
                 if column >= 0:
                     add_finding(
                         findings,

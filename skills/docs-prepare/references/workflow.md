@@ -12,7 +12,13 @@ how-to reaches a concrete result, reference describes commands/API/configuration
 and explanation gives concepts and rationale. Create or improve one document
 using repository conventions or the appropriate Diataxis directory in `docs/`.
 Do not create an empty four-directory tree or overwrite a document with a different
-purpose or audience.
+purpose or audience. An authorized behavior change also covers its affected
+language mirrors, examples, and navigation as one bounded documentation set.
+Apply `references/documentation-review.md` to select that set, record source
+dependencies, and distinguish a necessary update from an unchanged contract.
+Before rewriting, identify existing prerequisites, limitations, failure effects,
+compatibility, recovery instructions, and rationale. Verify each still-applicable
+detail survives the edit or moves to a linked owner; never discard it for brevity.
 
 ## Language set
 
@@ -57,7 +63,10 @@ pause for confirmation before ordinary project-file edits.
 
 Report the resulting path, diff summary, verified sources, checks, and limitations.
 Do not modify `specs/`. If documentation reveals a specification mismatch,
-separately propose `spec-manage` audit or update; never combine workflows.
+use the specification step of the already-authorized change through `spec-manage`
+or report a conflict requiring a decision. Do not silently rewrite a guarantee to
+match code. Separate steps may share one change authorization; discovery of a
+new product decision does not authorize it.
 
 ## Memory integration
 

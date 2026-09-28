@@ -40,6 +40,11 @@ Close actions use the shared digest and fixed-action contract.
 
 The skill shall close only the selected sprint action with fresh validated evidence.
 
+#### Verification
+
+Closing preparation retains unfinished work and requests required confirmation
+before changing sprint state; it does not silently start the next sprint.
+
 ### REQ-F-512 - Make closing artifacts provenance-bound
 
 Closing artifacts shall end with a data-sources section rendered from the
@@ -49,6 +54,11 @@ time as specified by REQ-F-509, and each written artifact shall be snapshotted
 in the store with its period and contributing source keys. GitLab delivery
 evidence collected through the bundled metrics collector shall reuse complete
 stored windows and fetch only the missing delta.
+
+#### Verification
+
+The closing artifact binds its period and source evidence and distinguishes
+completed, carried, and unverified work without inventing missing outcomes.
 
 ## Example
 

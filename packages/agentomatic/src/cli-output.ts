@@ -160,6 +160,12 @@ export function renderConfigSetup(
     );
   else lines.push("Targets: none");
   const fragments = plan.operations.filter((item) => item.fragment !== "file");
+  if (plan.dependency)
+    lines.push(
+      "",
+      `Dependency: ${plan.dependency.status} ${plan.dependency.name}@${plan.dependency.version}`,
+      "  Provisioning may access npm and update package.json, package-lock.json, and node_modules.",
+    );
   if (fragments.length) {
     lines.push(
       "",

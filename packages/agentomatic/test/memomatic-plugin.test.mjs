@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import memomatic from "../dist/plugins/memomatic.js";
-import { entryLine, openMemomatic, writeCorpusFile } from "@kisev/memomatic";
+import { entryLine, openMemomatic, writeCorpusFile, processInbox } from "@kisev/memomatic";
 
 test("plugin exposes memory tools and injects system context", async () => {
   const root = mkdtempSync(join(tmpdir(), "agentomatic-memomatic-"));
@@ -45,6 +45,13 @@ test("plugin exposes memory tools and injects system context", async () => {
     assert.equal(inboxFiles.length, 1);
     assert.match(inboxFiles[0], /^team-retro-/);
     assert.match(String(queued), /inbox/);
+    const flush = await openMemomatic();
+    await processInbox(flush);
+    flush.store.close();
+    const hits = JSON.parse(
+      await hooks.tool.memory_search.execute({ query: "Plugin queues skill-sourced memory drops" }),
+    );
+    assert.ok(hits.some((hit) => hit.source === "team-retro" && hit.visibility === "team"));
 
     const noSession = { system: [] };
     await hooks["experimental.chat.system.transform"]({ sessionID: "missing" }, noSession);

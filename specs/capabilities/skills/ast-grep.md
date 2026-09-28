@@ -38,6 +38,11 @@ Rewrite requires atomic replacement, rollback, and stale-target rejection.
 
 The skill shall write syntax rewrites directly and reject stale, external, or unsafe targets.
 
+#### Verification
+
+An unsupported language or out-of-scope path fails without writes; a supported
+structural search reports actual matches and a rewrite preserves the confirmed boundary.
+
 ## Example
 
 `ast-grep` applies a function rename through an atomic rewrite.

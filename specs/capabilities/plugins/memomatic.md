@@ -1,3 +1,7 @@
+---
+review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "packages/agentomatic/src/plugins/memomatic.ts", "packages/agentomatic/test/memomatic-plugin.test.mjs"], "contracts": ["specs/architecture/08-crosscutting-concepts/security-trust-mutations.md"]}
+---
+
 # Plugin `memomatic`
 
 ## Purpose
@@ -30,6 +34,12 @@ No independent remote effect; dream model turns use the configured OpenCode prov
 
 Invalid consolidation falls back to append-only within the line budget; unreadable session databases produce an empty ingestion window; bootstrap context injection never breaks a session; `dry-run` reports without writes; malformed or forbidden inbox drops move to `rejected/` and are reported in the dream summary; a busy run lock fails with `another memomatic run is active`.
 
+Dry-run uses an in-memory index and leaves the corpus, persistent index, run lock,
+and session watermark unchanged; configured model and embedding calls may still
+run. Without a model, session extraction is skipped without advancing its
+watermark. Consolidation cannot authorize a curated `drop`; auto-clean selects
+individual matching unpinned old entries rather than removing a whole daily file.
+
 ## Unique Constraints
 
 Curated files are written only by dream consolidation, explicit user-origin writes, or inbox routing of user-origin targets; superseded entries are excluded from search and indexing; usage counters are keyed by stable entry identity (`key` annotation or content digest); state roots are absolute, normalized, symlink-free, with atomic mode-0600 writes; `memory_write` never touches corpus files directly.
@@ -40,6 +50,17 @@ Curated files are written only by dream consolidation, explicit user-origin writ
 
 The package shall expose `memomatic` as a selectable plugin whose forgetting is explicit or rule-gated and whose consolidation stays inside deterministic bounds.
 
+#### Verification
+
+Memory regression tests reject traversal, sibling-prefix and symlink paths,
+verify non-mutating dry-runs, retain unrelated entries during scoped cleanup,
+and preserve curated entries on model drops or invalid consolidation output.
+
 ### REQ-I-407 - Compose skill artifacts into memory through the inbox
 
 The package shall accept asynchronous Markdown inbox drops from skills and agents, process them deterministically with batch indexing, derive usage visibility from the recorded source, and expose bounded project- and trigger-based recall in the session bootstrap.
+
+#### Verification
+
+CLI/MCP and plugin tests process a sourced inbox entry and verify matching
+visibility in search results; bootstrap tests check project and trigger bounds.

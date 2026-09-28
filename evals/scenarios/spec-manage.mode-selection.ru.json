@@ -4,17 +4,17 @@
     "max_tokens": 2000,
     "timeout_seconds": 20
   },
-  "digest": "ad3d3a199a6441dc5faad532e3aafd7c25214e472f4f356d7785ff3d6fb93936",
+  "digest": "1695cea48270ba1c0b6d6c14730dc393a58c396cc78c40a60ba82a05fe5a44bb",
   "expected": {
     "case_outcomes": [
       { "id": "natural-init", "outcome": "spec-init" },
       { "id": "natural-onboard", "outcome": "spec-onboard" },
       { "id": "natural-update", "outcome": "spec-update" },
-      { "id": "natural-audit", "outcome": "spec-audit" },
+      { "id": "natural-audit", "outcome": "spec-review" },
       { "id": "evidence-init", "outcome": "spec-init" },
       { "id": "evidence-onboard", "outcome": "spec-onboard" },
       { "id": "ambiguous-update-audit", "outcome": "ask-no-writes" },
-      { "id": "explicit-mode", "outcome": "explicit-spec-audit" },
+      { "id": "explicit-mode", "outcome": "explicit-spec-review" },
       { "id": "explicit-failed-precondition", "outcome": "stop-failed-precondition" },
       { "id": "near-miss-user-docs", "outcome": "near-miss" },
       { "id": "near-miss-implementation", "outcome": "near-miss" },
@@ -48,7 +48,7 @@
         },
         {
           "id": "natural-audit",
-          "outcome": "spec-audit",
+          "outcome": "spec-review",
           "prompt": "Проверь существующие specs по коду и сообщи о проблемах, ничего не меняя."
         },
         {
@@ -68,8 +68,8 @@
         },
         {
           "id": "explicit-mode",
-          "outcome": "explicit-spec-audit",
-          "prompt": "spec-audit только requirements/quality; не переосмысливай режим и scope."
+          "outcome": "explicit-spec-review",
+          "prompt": "spec-review только requirements/quality; не переосмысливай режим и scope."
         },
         {
           "id": "explicit-failed-precondition",

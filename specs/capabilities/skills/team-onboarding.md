@@ -22,7 +22,22 @@ record, verify unconfirmed items.
 
 ## Requirements
 
-- REQ-TEAM-ONB-01: private fields of existing reports (cautions, growth areas,
-  journal) never enter the pack.
-- REQ-TEAM-ONB-02: items the profiles cannot confirm are marked for
-  verification instead of invented.
+### REQ-F-531 - Exclude private people context from onboarding
+
+Private fields of existing reports, including cautions, growth areas, and
+journal entries, shall never enter the pack. Former identifier: `REQ-TEAM-ONB-01`,
+normalized without a behavior change on 2026-09-28.
+
+#### Verification
+
+A profile containing private cautions produces a newcomer pack without those fields.
+
+### REQ-F-532 - Mark unconfirmed onboarding information
+
+Items the profiles cannot confirm shall be marked for verification instead of
+invented. Former identifier: `REQ-TEAM-ONB-02`, normalized without a behavior
+change on 2026-09-28.
+
+#### Verification
+
+Missing access instructions remain explicit verification items, not invented commands.

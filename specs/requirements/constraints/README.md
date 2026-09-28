@@ -26,11 +26,12 @@ OpenCode package owns only its integration assets and archive.
 Retired or stale package assets shall not be destructively removed when
 content-addressed archival can preserve recovery and auditability.
 
-### REQ-C-005 - Bounded distribution change in this target
+### REQ-C-005 - Bounded distribution change in this target (withdrawn)
 
-The current target changes portable build, publication, and installation transport
-without expanding the `28/28/6/3/1` capability inventory or the declared OpenCode
-compatibility range.
+> Lifecycle: `withdrawn` | Changed: `2026-09-28` | Reason: Later accepted team and application capabilities expanded the public inventory beyond the former transport-only target.
+
+This constraint formerly limited a transport change to inventory `28/28/6/3/1`.
+The current inventory is owned by REQ-F-001; compatibility remains separately bounded.
 
 ### REQ-C-006 - Specification traceability gate (withdrawn)
 

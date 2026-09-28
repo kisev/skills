@@ -19,6 +19,10 @@ uv tool install git+https://github.com/kisev/skills#subdirectory=apps/taskmatic
 
 ## Использование
 
+Установите скилл taskmatic и создайте первую карточку до запуска просмотра:
+приложению нужна существующая база. См. [руководство по первой доске](../../docs/ru/how-to/taskmatic.md)
+с командами раннера, общими путями хранения и настройкой MCP.
+
 ```bash
 taskmatic-web serve            # http://127.0.0.1:8765
 taskmatic-web serve --port 0   # занять свободный порт

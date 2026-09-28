@@ -16,7 +16,7 @@ technical terms when translating them would change their meaning.
 For deterministic validation in every project language, use the fixed machine
 declaration `Canonical language: <non-empty language>.` exactly once. This marker
 does not assert that the remaining prose uses the declared language; that is a
-semantic `spec-audit` responsibility.
+semantic `spec-review` responsibility.
 
 The canonical language is a property of the tree, not of the session. Apply
 `references/language-policy.md` independently to conversation, questions, audit
@@ -29,7 +29,7 @@ mixed-language user request does not override the canonical language.
   tree has no declaration, infer its language only when all substantive existing
   canonical prose unambiguously uses one language, then add the declaration. If
   the prose is mixed, absent, or otherwise ambiguous, stop and ask the user.
-- In `spec-audit`, check that the declaration exists and that canonical prose
+- In `spec-review`, check that the declaration exists and that canonical prose
   follows it. Report missing declarations and language violations without
   changing files. The report language may differ from the canonical language.
 - Never infer a language migration from the current request. Changing an
@@ -53,7 +53,7 @@ be authoritative for one claim and non-authoritative for another.
 - `spec-update`: the existing `specs/` tree is the normative baseline. Change it
   only with the agreed target state. Repository behavior can reveal drift or
   feasibility constraints but does not silently replace the baseline.
-- `spec-audit`: `specs/` states the claimed contract, while repository evidence
+- `spec-review`: `specs/` states the claimed contract, while repository evidence
   shows implementation behavior. Report disagreements; do not resolve them by
   silently preferring either side.
 
@@ -89,7 +89,7 @@ architecture instead of restating them.
 Use the fixed `## Extension Index` heading for deterministic validation. Record
 each additional top-level directory exactly once as
 `- [Name](name/README.md): Non-empty semantic boundary.` The validator proves
-only index correspondence and non-empty boundary text; `spec-audit` determines
+only index correspondence and non-empty boundary text; `spec-review` determines
 whether the boundary is valid and non-duplicating.
 
 If a proposed or existing additional section has no unambiguous canonical

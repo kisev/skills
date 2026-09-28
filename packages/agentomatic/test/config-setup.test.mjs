@@ -12,10 +12,54 @@ import {
   defaultConfigSelection,
   normalizeConfigSelection,
   previewConfigSetup,
+  recoverConfigSetup,
 } from "../dist/config-setup.js";
 import { applyJsoncEdits, JsoncError, parseJsonc } from "../dist/jsonc.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
+
+test("interrupted config recovery is read-only until its exact journal is confirmed", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  try {
+    const { applyTransaction, deploymentRoot, lifecycleRoot, sha256 } =
+      await import("../dist/lifecycle.js");
+    const root = deploymentRoot("global", directory, home);
+    const state = lifecycleRoot("global", directory, home);
+    const file = join(home, ".config", "opencode", "opencode.jsonc");
+    const original = Buffer.from('{"model":"original"}\n');
+    await writeFile(file, original);
+    await assert.rejects(
+      applyTransaction(
+        root,
+        state,
+        [
+          {
+            path: "opencode.jsonc",
+            operation: "write",
+            content: Buffer.from('{"model":"interrupted"}\n'),
+            mode: 0o644,
+            expected: { sha256: sha256(original) },
+          },
+        ],
+        { afterPublish: () => "interrupt" },
+      ),
+      { code: "test_interruption" },
+    );
+    const preview = await recoverConfigSetup("global", true, directory, home);
+    assert.ok(preview.paths.includes(file));
+    assert.match(readFileSync(file, "utf8"), /interrupted/);
+    await assert.rejects(recoverConfigSetup("global", false, directory, home, "changed"), {
+      code: "stale_receipt",
+    });
+    assert.match(readFileSync(file, "utf8"), /interrupted/);
+    const result = await recoverConfigSetup("global", false, directory, home, preview.digest);
+    assert.equal(result.recovered, true);
+    assert.deepEqual(readFileSync(file), original);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 function temporary() {
   return mkdtempSync(join(tmpdir(), "skills-config-setup-test-"));
@@ -291,6 +335,7 @@ test("applying the core-plugin fragment provisions the npm dependency", async ()
   const root = await homeWithConfigs(directory);
   const calls = [];
   try {
+    await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     const applied = await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
       dependencyRunner: async (command, args, options) => {
         calls.push({ command, args, options });
@@ -321,10 +366,12 @@ test("an unchanged config rerun still heals the plugin dependency", async () => 
     return { stdout: "", stderr: "" };
   };
   try {
+    await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
       dependencyRunner: runner,
     });
     const before = calls.length;
+    await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     const healed = await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
       dependencyRunner: runner,
     });
@@ -343,6 +390,7 @@ test("config apply archives the previous user configuration content", async () =
   const original = `${JSON.stringify({ model: "user/model" }, null, 2)}\n`;
   await writeFile(configPath, original);
   try {
+    await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
       dependencyRunner: async () => ({ stdout: "", stderr: "" }),
     });
@@ -356,6 +404,7 @@ test("config apply archives the previous user configuration content", async () =
 
     const evolved = `${JSON.stringify({ model: "user/model-2" }, null, 2)}\n`;
     await writeFile(configPath, evolved);
+    await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
       dependencyRunner: async () => ({ stdout: "", stderr: "" }),
     });
@@ -366,6 +415,57 @@ test("config apply archives the previous user configuration content", async () =
       ).length,
       2,
     );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("config preview is read-only and receipts reject changed bytes and replay", async () => {
+  const directory = temporary();
+  const root = join(directory, "home");
+  const selection = { targets: ["opencode"], fragments: ["core-plugin"] };
+  try {
+    const { existsSync } = await import("node:fs");
+    const preview = await previewConfigSetup(selection, "global", directory, root, false);
+    assert.equal(existsSync(root), false);
+    const config = join(root, ".config", "opencode", "opencode.jsonc");
+    await mkdir(join(root, ".config", "opencode"), { recursive: true });
+    await writeFile(config, '{"model":"changed"}\n');
+    const options = {
+      provisionDependency: false,
+      receipt: preview.receipt,
+      dependencyRunner: async () => {
+        throw new Error("npm must not run");
+      },
+    };
+    await assert.rejects(applyConfigSetup(selection, "global", directory, root, options), {
+      code: "stale_receipt",
+    });
+    assert.equal(readFileSync(config, "utf8"), '{"model":"changed"}\n');
+    const fresh = await previewConfigSetup(selection, "global", directory, root, false);
+    options.receipt = fresh.receipt;
+    await applyConfigSetup(selection, "global", directory, root, options);
+    await assert.rejects(applyConfigSetup(selection, "global", directory, root, options), {
+      code: "stale_receipt",
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("config preview preserves an interrupted transaction for explicit recovery", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  try {
+    const { lifecycleRoot } = await import("../dist/lifecycle.js");
+    const state = lifecycleRoot("global", directory, root);
+    await mkdir(state, { recursive: true });
+    const journal = join(state, "transaction-journal.json");
+    await writeFile(journal, "pending recovery");
+    await assert.rejects(previewConfigSetup(FULL_SELECTION, "global", directory, root), {
+      code: "recovery_required",
+    });
+    assert.equal(readFileSync(journal, "utf8"), "pending recovery");
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

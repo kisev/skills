@@ -15,3 +15,6 @@ items.
 - [ADR-0009: Share task release planning](0009-share-task-release-planning.md) - accepted
 - [ADR-0010: Separate review orchestration and guarded publication](0010-separate-review-and-publication.md) - accepted
 - [ADR-0011: Integrate on dev and isolate publication channels](0011-dev-integration-channel.md) - accepted
+- [ADR-0012: Compose memomatic learning memory](0012-compose-memomatic-learning-memory.md) - accepted
+- [ADR-0013: Compose memomatic artifact inbox](0013-compose-memomatic-artifact-inbox.md) - accepted
+- [ADR-0014: Change-linked documentation review](0014-change-linked-documentation-review.md) - accepted

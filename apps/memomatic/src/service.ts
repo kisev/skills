@@ -1,20 +1,23 @@
-import { entryLine } from "./entries.js";
-import { archiveFile, readTextIfExists, replaceEntryLine } from "./corpus.js";
+import { entryLine, parseEntryLine } from "./entries.js";
+import { readTextIfExists, replaceEntryLine, writeCorpusFile } from "./corpus.js";
+import { assertSafePath } from "@kisev/safe-fs";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { rm } from "node:fs/promises";
 import { dropToInbox } from "./inbox.js";
 import { isForbidden, loadRules, type MemoryRules } from "./rules.js";
 import { memomaticPaths, type MemomaticPaths } from "./paths.js";
 import { loadSettings, type MemomaticSettings } from "./settings.js";
 import { reindex, search, type SearchHit } from "./search.js";
 import { MemoryStore } from "./store.js";
-import { stat } from "node:fs/promises";
+import { visibilityForSource } from "./visibility.js";
 
-async function exists(path: string): Promise<boolean> {
-  try {
-    await stat(path);
-    return true;
-  } catch {
-    return false;
-  }
+async function memoryPath(context: MemomaticContext, file: string): Promise<string> {
+  const target = resolve(context.paths.stateRoot, file);
+  const part = relative(context.paths.stateRoot, target);
+  if (!part || part === ".." || part.startsWith(`..${sep}`) || isAbsolute(part))
+    throw new Error("path escapes memomatic state root");
+  await assertSafePath(target, { target: "file" });
+  return target;
 }
 
 export type WriteRequest = {
@@ -36,12 +39,14 @@ export type MemomaticContext = {
   store: MemoryStore;
 };
 
-export async function openMemomatic(): Promise<MemomaticContext> {
+export async function openMemomatic(
+  options: { readOnly?: boolean } = {},
+): Promise<MemomaticContext> {
   const paths = memomaticPaths();
   const [settings, rules, store] = await Promise.all([
     loadSettings(paths.settingsFile),
     loadRules(paths.rulesFile),
-    MemoryStore.open(paths.indexFile),
+    options.readOnly ? MemoryStore.preview(paths.indexFile) : MemoryStore.open(paths.indexFile),
   ]);
   return { paths, settings, rules, store };
 }
@@ -74,21 +79,30 @@ export async function searchMemory(context: MemomaticContext, query: string): Pr
   return search(context.store, query, context.settings);
 }
 
+export async function searchMemoryResults(context: MemomaticContext, query: string) {
+  return (await searchMemory(context, query)).map((hit) => ({
+    file: hit.entry.file.replace(`${context.paths.stateRoot}/`, ""),
+    kind: hit.entry.kind,
+    line: hit.entry.line,
+    score: Number(hit.score.toFixed(4)),
+    snippet: hit.snippet,
+    source: hit.entry.source,
+    visibility: visibilityForSource(hit.entry.source),
+  }));
+}
+
 export async function getEntry(
   context: MemomaticContext,
   file: string,
   line?: number,
 ): Promise<{ file: string; line: number; content: string }> {
-  const target = file.startsWith("/")
-    ? file
-    : `${context.paths.stateRoot}/${file.replace(/^\/+/, "")}`;
-  if (!target.startsWith(context.paths.stateRoot))
-    throw new Error("path escapes memomatic state root");
+  const target = await memoryPath(context, file);
   const content = await readTextIfExists(target);
   if (content === undefined) throw new Error(`memory file not found: ${file}`);
   if (line === undefined) return { file: target, line: 0, content };
   const lines = content.split("\n");
-  if (line < 1 || line > lines.length) throw new Error("line is out of range");
+  if (!Number.isSafeInteger(line) || line < 1 || line > lines.length)
+    throw new Error("line is out of range");
   context.store.markUseful(
     context.store
       .allEntries()
@@ -105,15 +119,12 @@ export async function forgetEntry(
     line: number;
   },
 ): Promise<string> {
-  const file = target.file.startsWith("/")
-    ? target.file
-    : `${context.paths.stateRoot}/${target.file.replace(/^\/+/, "")}`;
-  if (!file.startsWith(context.paths.stateRoot))
-    throw new Error("path escapes memomatic state root");
+  const file = await memoryPath(context, target.file);
   const content = await readTextIfExists(file);
   if (content === undefined) throw new Error(`memory file not found: ${target.file}`);
   const lines = content.split("\n");
-  if (target.line < 1 || target.line > lines.length) throw new Error("line is out of range");
+  if (!Number.isSafeInteger(target.line) || target.line < 1 || target.line > lines.length)
+    throw new Error("line is out of range");
   await replaceEntryLine(context.paths, file, target.line, null);
   return file;
 }
@@ -123,16 +134,43 @@ export async function archiveOldEpisodic(context: MemomaticContext): Promise<str
   if (!context.rules.autoClean) return archived;
   const rule = context.rules.autoClean;
   const cutoff = Date.now() - rule.olderThanDays * 86_400_000;
-  for (const entry of context.store.allEntries()) {
-    if (entry.kind !== "episodic" || !entry.observedAt || entry.observedAt >= cutoff) continue;
-    if (rule.source && entry.source !== rule.source) continue;
-    if (entry.pinned) continue;
-    if (!(await exists(entry.file))) continue;
-    const alreadyDone = archived.includes(entry.file);
-    if (!alreadyDone) {
-      await archiveFile(context.paths, entry.file);
-      archived.push(entry.file);
-    }
+  const files = new Set(
+    context.store
+      .allEntries()
+      .filter((entry) => entry.kind === "episodic")
+      .map((entry) => entry.file),
+  );
+  for (const file of files) {
+    await memoryPath(context, file);
+    const content = await readTextIfExists(file);
+    if (content === undefined) continue;
+    const selected: string[] = [];
+    const remaining = content.split("\n").filter((line) => {
+      const entry = parseEntryLine(line)?.annotations;
+      const observed = entry?.observed ? Date.parse(entry.observed) : NaN;
+      if (
+        !entry ||
+        !Number.isFinite(observed) ||
+        observed >= cutoff ||
+        entry.pinned ||
+        (rule.source && entry.source !== rule.source)
+      )
+        return true;
+      selected.push(line);
+      return false;
+    });
+    if (!selected.length) continue;
+    const target = join(context.paths.archiveDir, basename(file));
+    const prior = (await readTextIfExists(target)) ?? "";
+    const seen = new Set(prior.split("\n"));
+    await writeCorpusFile(
+      context.paths,
+      target,
+      `${[prior.trimEnd(), ...selected.filter((line) => !seen.has(line))].filter(Boolean).join("\n")}\n`,
+    );
+    await writeCorpusFile(context.paths, file, remaining.join("\n"));
+    if (!remaining.some((line) => line.trim())) await rm(file);
+    archived.push(file);
   }
   return archived;
 }

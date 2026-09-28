@@ -1,4 +1,4 @@
-import { skillsInstallerSpec } from "./package-metadata.js";
+import { skillsInstallerSpec, requirePackageVersion } from "./package-metadata.js";
 
 export type SkillCommandRegistration = {
   name: string;
@@ -64,7 +64,7 @@ const COMMANDS: readonly CommandRegistration[] = [
     description:
       name === "spec-manage"
         ? description(
-            "Create greenfield specs, onboard an existing project, update target state, or audit read-only",
+            "Create greenfield specs, onboard an existing project, update target state, or review specs",
             "спецификация проекта",
           )
         : description(`Run the ${name} Agent Skill`, name),
@@ -77,7 +77,7 @@ const COMMANDS: readonly CommandRegistration[] = [
     ),
     body: [
       "Show the RTK output-compression observability summary for this host.",
-      "Run `npx --yes @kisev/agentomatic@latest doctor --json` and render the `rtk.observability` check as a short human summary: wrapper status, rtk binary availability, event counters, characters saved, and the token estimate.",
+      `Run \`npx --yes @kisev/agentomatic@${requirePackageVersion()} doctor --json\` and render the \`rtk.observability\` check as a short human summary: wrapper status, rtk binary availability, event counters, characters saved, and the token estimate.`,
       "When the doctor command is unavailable, read the stats file directly: `$XDG_STATE_HOME/opencode/skills/rtk/stats.json`, or `~/.local/state/opencode/skills/rtk/stats.json` when that variable is unset.",
       "Zero counters with an active wrapper mean no verbose bash output has been compressed yet.",
       "The `/rtk` command still loads the portable rtk skill and is unaffected by this summary.",
@@ -104,7 +104,7 @@ export function renderCommand(command: CommandRegistration): string {
   const modeHelp =
     command.name === "spec-manage"
       ? [
-          "Choose `spec-init` for a genuinely empty project, `spec-onboard` for an existing project without specs, `spec-update` to change canonical target state, or read-only `spec-audit` to check it.",
+          "Choose `spec-init` for a genuinely empty project, `spec-onboard` for an existing project without specs, `spec-update` to change canonical target state, or `spec-review` to check it without editing the project.",
           "Natural requests are supported. Explicit mode and scope arguments are passed unchanged; the skill verifies safety preconditions and asks before writing if intent remains ambiguous.",
           "Examples: `Create canonical specs for this empty project`; `Document this existing service`; `Change the canonical timeout`; `Audit specs without changes`.",
         ]

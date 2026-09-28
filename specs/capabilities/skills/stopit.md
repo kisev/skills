@@ -61,6 +61,11 @@ acquisition shall use non-blocking bounded retries. The runner shall reject a
 lock file whose link count is not exactly one before changing its mode or
 acquiring its lock.
 
+#### Verification
+
+Handoff tests verify workspace isolation, redaction, stable state history, safe
+paths, and unchanged project files; the handoff retains blockers and next actions.
+
 ## Example
 
 `stopit` records a blocker and next step for one canonical workspace without

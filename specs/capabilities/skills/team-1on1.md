@@ -23,6 +23,23 @@ by proven commitments, draft the preparation, record outcomes, and verify.
 
 ## Requirements
 
-- REQ-TEAM-1ON1-01: agenda items trace to journal entries or profile facts;
-  fabricated history is out of contract.
-- REQ-TEAM-1ON1-02: outcomes are recorded as bounded facts, not transcripts.
+### REQ-F-521 - Ground the agenda
+
+Agenda items shall trace to journal entries or profile facts; fabricated history
+is out of contract. Former identifier: `REQ-TEAM-1ON1-01`, normalized without a
+behavior change on 2026-09-28.
+
+#### Verification
+
+Given a sparse profile, the preparation cites supplied facts and labels missing
+history rather than inventing earlier conversations.
+
+### REQ-F-522 - Record bounded outcomes
+
+Outcomes shall be recorded as bounded facts, not transcripts. Former identifier:
+`REQ-TEAM-1ON1-02`, normalized without a behavior change on 2026-09-28.
+
+#### Verification
+
+Compare a supplied conversation with the journal draft: retain decisions and
+commitments, excluding a verbatim transcript.

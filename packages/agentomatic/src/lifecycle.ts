@@ -497,6 +497,17 @@ export async function recoverTransaction(
   return true;
 }
 
+export async function inspectTransaction(
+  root: string,
+  stateRoot: string,
+  allowedRoots: readonly string[] = [],
+): Promise<string[]> {
+  const raw = await readRegular(journalPath(stateRoot));
+  if (!raw) return [];
+  const journal = parseJournal(raw, resolve(root), allowedRoots);
+  return journal.snapshots.map((item) => destination(item.root ?? root, item.path));
+}
+
 export type TransactionOptions = {
   beforePublish?: (index: number) => void;
   afterPublish?: (published: number) => "continue" | "fail" | "interrupt";

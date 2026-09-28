@@ -215,6 +215,13 @@ proof of semantic judgment. Completion shall be based on agreed acceptance,
 closed required findings, affected regressions, and named limitations, without
 an automatic final broad audit, fixed round limit, or severity-only cutoff.
 
+#### Verification
+
+The `tests/test_review_*.py` suites check exact-head collection, cumulative
+local findings, invalidated baselines, publication freshness, reservations,
+receipts, and recovery. Scenario evidence checks role-aware prose, necessity,
+and architecture assessment; structural success alone does not prove judgment.
+
 ## Example
 
 `code-review` maps a `major` SemVer assessment to the unique available

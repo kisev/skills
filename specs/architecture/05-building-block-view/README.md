@@ -1,6 +1,6 @@
 # Building Block View
 
-- `skills/` contains 28 authored capability definitions and unique resources.
+- `skills/` contains the authored capability definitions and unique resources listed in [REQ-F-001](../../requirements/functional/README.md#req-f-001---expose-the-verified-capability-surface).
 - `shared/` and `shared/manifest.json` contain canonical reusable material and
   exact build destinations.
 - `packages/skills/`, `build_skills.py`, and `build_distribution.py` define the

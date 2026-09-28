@@ -49,7 +49,7 @@ python3 scripts/gitlab_period_metrics.py \
 
 `METRICS_ROOT` remains a unique private temporary directory per run. The
 `--resume-profile` flag routes collection through the private evidence store
-under `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team-evidence/<profile>/`:
+under `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/evidence/`:
 the collector fetches only windows missing from stored complete coverage,
 merges the remaining windows from content-addressed snapshots, and records
 each newly collected window. Complete GitLab windows stay reusable forever

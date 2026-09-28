@@ -2,6 +2,50 @@
   "version": 1,
   "files": [
     {
+      "source": "references/documentation-review.md",
+      "destination": "docs-review/references/documentation-review.md"
+    },
+    {
+      "source": "references/documentation-review.md",
+      "destination": "docs-prepare/references/documentation-review.md"
+    },
+    {
+      "source": "references/documentation-review.md",
+      "destination": "spec-manage/references/documentation-review.md"
+    },
+    {
+      "source": "references/documentation-review.md",
+      "destination": "code-review/references/documentation-review.md"
+    },
+    {
+      "source": "references/documentation_review.py",
+      "destination": "docs-review/scripts/documentation_review.py"
+    },
+    {
+      "source": "references/documentation_review.py",
+      "destination": "docs-prepare/scripts/documentation_review.py"
+    },
+    {
+      "source": "references/documentation_review.py",
+      "destination": "spec-manage/scripts/documentation_review.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "docs-review/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "docs-prepare/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "spec-manage/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-people/references/team-profile-workflow.md"
+    },
+    {
       "source": "references/gitlab-workflow.md",
       "destination": "code-review/references/gitlab-workflow.md"
     },

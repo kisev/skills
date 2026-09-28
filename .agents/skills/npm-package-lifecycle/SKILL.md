@@ -43,8 +43,9 @@ for each name. The next `dev` push publishes through OIDC.
 
 - Locally published versions carry no provenance. Never rerun a Publish run
   covering them; verification fails by design and the next push supersedes.
-- npm sets `latest` to the first published dev version; run
-  `npm dist-tag rm <name> latest` until the first stable release.
+- npm sets `latest` to the first published dev version. Do not remove that
+  last tag: the registry rejects it. Follow the bootstrap exception in
+  `docs/how-to/npm-package-lifecycle.md` until the first stable release.
 - New names propagate slowly through the CDN: a failed Publish run is rerun
   with `gh run rerun <run-id> --failed` only after the exact versions answer
   200 on the registry. Dev versions embed a 12-hex short revision.

@@ -159,7 +159,7 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "Literal mode tokens remain supported but are optional",
             "Absence of `specs/` alone never proves greenfield",
             "spec-update",
-            "mode is completely read-only",
+            "mode never edits the reviewed project",
             "scripts/spec_validate.py",
             "lifecycle as `not_checked`",
         ),
@@ -167,10 +167,10 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
         "docs-prepare": (
             "write it directly with atomic replacement",
             "Do not create a private preview artifact",
-            "never combine workflows",
+            "Separate steps may share one change authorization",
         ),
         "docs-review": (
-            "spec-manage` in `spec-audit` mode",
+            "spec-manage` in `spec-review` mode",
             "only confirmed findings",
             "never publish them",
         ),
@@ -238,7 +238,7 @@ def test_project_spec_language_authority_and_extension_contract() -> None:
     assert "`specs/capabilities/` section is valid" in normalized_contract
     assert "explicit project-language choice before preparing files" in workflow
     assert "Never select the canonical language from the current request" in workflow
-    assert "This mode is completely read-only" in workflow
+    assert "This mode never edits the reviewed project" in workflow
     assert "The conversational report may use a different language" in audit
     assert "Canonical language: PROJECT-LANGUAGE." in root_template
     assert "## Extension Index" in root_template
@@ -254,7 +254,7 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
             "external contributors",
             "verification_command",
             "--resume-profile PROFILE",
-            "agent-skills/team-evidence/<profile>/",
+            "agent-skills/team/<profile>/evidence/",
             "`resume.incomplete` is empty",
             '"Data sources" section',
             "artifact-record",
@@ -273,7 +273,7 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
             '"Data sources" section',
             "evidence-record",
             "artifact-record",
-            "agent-skills/team-evidence",
+            "agent-skills/team/<profile>/evidence/",
         ),
         "team-sprint-close": (
             '"Data sources" section',

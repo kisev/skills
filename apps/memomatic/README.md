@@ -10,13 +10,13 @@ rebuildable SQLite index with FTS5 and optional local embeddings, and a nightly
 ## Install
 
 ```bash
-npm install @kisev/memomatic
+npm install --global @kisev/memomatic
 ```
 
 The corpus lives under `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`,
 daily notes, `DREAMS.md`); rules live in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.
-The `@kisev/agentomatic` installer deploys the OpenCode plugin automatically;
-standalone use runs the CLI:
+Requires Node.js 22+. Explicitly select `memomatic` in the `@kisev/agentomatic`
+installer and restart OpenCode. For standalone use, run the CLI:
 
 ```bash
 memomatic process    # validate the inbox and index accepted entries (no model)
@@ -25,6 +25,10 @@ memomatic dream      # full sweep: inbox + sessions + consolidation
 
 The nightly sweep is scheduled by the systemd user units in `assets/systemd/`
 (`memomatic-dream.service` and `memomatic-dream.timer`).
+
+Configure `dream.model` and an OpenCode provider before expecting session
+extraction; without a model, the session watermark is preserved. Follow the
+[setup, first-entry, and scheduling guide](../../docs/how-to/memomatic.md).
 
 ## Inbox
 

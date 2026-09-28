@@ -56,8 +56,9 @@ purge command is exposed.
 
 ## Current Surface
 
-The current inventory covers 27 portable skills, 27 command adapters, 6 fixed
-agents, 3 selectable plugin wrappers, 1 package tool, and the core plugin. The
+The current inventory covers 38 portable skills, 38 command adapters, the
+`rtk-stats` package command, 6 fixed agents, 4 selectable plugin wrappers,
+1 package tool, and the core plugin. The
 package tool `route` has no slash command.
 
 The catalog descriptions are checked against the current skill contracts:

@@ -2,7 +2,7 @@
 
 [Русский](../ru/reference/skill-catalog.md)
 
-The current stable release publishes 29 portable Agent Skills. Its release
+The maintained catalog contains 38 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
 of `@kisev/agentomatic`.
@@ -41,6 +41,15 @@ install recommendations only; every archive works on its own.
 | `task-review` | Review semantic quality and release-milestone compatibility standalone or inside other task workflows. |
 | `task-triage` | Triage GitLab issues into persistent decisions, release milestones, priorities, dependencies, and manual update commands. |
 | `taskmatic` | Run a local-first task board for people and agents with a markdown mirror, claims, and a read-only web board. |
+| `team-1on1` | Prepare a private one-to-one conversation from people context. |
+| `team-agreements` | Maintain explicit team working agreements. |
+| `team-feedback` | Prepare evidence-based feedback and rehearse the conversation. |
+| `team-health` | Review team health from bounded evidence. |
+| `team-incident` | Prepare an incident review and its lessons. |
+| `team-onboarding` | Prepare role-specific onboarding from a private profile. |
+| `team-people` | Maintain a private people profile, journal, and commitments. |
+| `team-performance` | Prepare evidence-based performance assessments. |
+| `team-report` | Prepare a bounded team delivery report. |
 | `team-retro` | Prepare an evidence-based retrospective or delivery presentation from a private profile. |
 | `team-roadmap` | Review or update an evidence-based roadmap from a private profile. |
 | `team-sprint-close` | Close one sprint cycle from a private profile or explicit context. |
@@ -52,17 +61,17 @@ Exact active and retired names are recorded in the
 ## Specification Modes
 
 `spec-manage` accepts explicit `spec-init`, `spec-onboard`, `spec-update`, and
-`spec-audit` tokens, but ordinary requests can state intent naturally. It checks
+`spec-review` tokens, but ordinary requests can state intent naturally. It checks
 repository evidence before distinguishing a new project from an existing one and
 asks one short question without writing when more than one mode remains possible.
 
 - “Create the canonical specification for this new empty project” selects `spec-init` only when no meaningful code, tests, schemas, configuration, CI, or deployment exists.
 - “Document this existing service as canonical specs” selects `spec-onboard` when the repository already contains implementation evidence but no `specs/`.
 - “Change the canonical timeout target to 30 seconds” selects `spec-update` when `specs/` exists.
-- “Check these specs against the implementation without changing files” selects read-only `spec-audit`.
+- “Check these specs against the implementation without changing files” selects `spec-review`, which preserves project files and retains private review evidence.
 
-Implementation, planning, roadmap, and user-documentation requests do not select
-`spec-manage` merely because they mention requirements or architecture.
+An authorized behavior change includes assessment of its affected specs and
+user documentation. Mentioning architecture alone does not authorize a new contract.
 
 ## Review and Publication
 
@@ -87,11 +96,13 @@ returns to the already-authorized workflow without expanding its scope.
 ## Team Profiles
 
 Team skills resolve a default private profile from
-`${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts/`. On first use they can
+`${XDG_CONFIG_HOME:-~/.config}/agent-skills/team/`. On first use they can
 build one from user answers and explicit files, URLs, repositories, or connector
 evidence, ask only for missing fields, and save it after a confirmation-bound
 preview. A request to remember a member, project, source, or visual preference
 updates the private profile rather than the public skill.
+
+Delivery profiles also support the legacy `${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts/` fallback. Evidence belongs under `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/evidence/`; the profile workflow provides explicit migration from the legacy `team-evidence` layout without silently deleting user state.
 
 The versioned public schema and sanitized example ship with every team skill as
 `references/team-context.schema.json` and

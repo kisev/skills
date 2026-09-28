@@ -83,7 +83,7 @@
       "from": "docs-review",
       "to": "spec-manage",
       "type": "uses",
-      "reason": "specs/ content routes to its spec-audit mode"
+      "reason": "specs/ content routes to its spec-review mode"
     },
     {
       "from": "commit-msg",

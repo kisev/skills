@@ -47,7 +47,7 @@ outdated facts by key, and archives every pre-image.
   exposed in search results and the session bootstrap, which also injects
   project- and trigger-matched recall blocks from the session database.
 - Scheduling: copy `memomatic-dream.service` and `memomatic-dream.timer` from the
-  package `assets/systemd/` into `~/.config/systemd/user/` and run
+  `@kisev/memomatic` package `assets/systemd/` into `~/.config/systemd/user/` and run
   `systemctl --user enable --now memomatic-dream.timer`; run the sweep another
   way by invoking `memomatic process` or `memomatic dream` yourself.
 - Forgetting is explicit or rule-gated: nothing is deleted without
@@ -77,10 +77,10 @@ needed. Offline setups can provision the dependency by hand first:
 `npx agentomatic install --dry-run` from that project so the executing version
 matches the installed package. Apply by rerunning the install command without
 `--dry-run` and confirming the printed plan summary, or by adding `--yes`
-outside a terminal. If the selected
-assets need core integration, connect the package into the user-owned OpenCode
-configuration yourself or through the confirmed `config` command, which merges
-the `plugin` entry while preserving existing entries:
+outside a terminal. When core integration is selected, the same confirmed install
+merges the `plugin` entry into user-owned OpenCode configuration while preserving
+existing entries. The separate `config` command can apply additional fragments
+or retry a failed configuration step:
 
 ```shell
 npx agentomatic config --global --dry-run

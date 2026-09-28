@@ -45,11 +45,11 @@ async function main(): Promise<void> {
     process.stdout.write(`${version}\n`);
     return;
   }
-  const context = await openMemomatic();
+  const dryRun = (command === "dream" || command === "process") && rest.includes("--dry-run");
+  const context = await openMemomatic({ readOnly: dryRun });
   try {
     if (command === "dream" || command === "process") {
-      const dryRun = rest.includes("--dry-run");
-      const result = await withRunLock(context.paths, async () => {
+      const execute = async () => {
         if (command === "process") return processInbox(context, { dryRun });
         const executor = context.settings.dream.model
           ? new OpenCodeExecutor({
@@ -58,7 +58,8 @@ async function main(): Promise<void> {
             })
           : null;
         return runDream(context, executor, { dryRun });
-      });
+      };
+      const result = dryRun ? await execute() : await withRunLock(context.paths, execute);
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       return;
     }

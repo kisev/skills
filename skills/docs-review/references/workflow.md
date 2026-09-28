@@ -1,14 +1,14 @@
 # Documentation Review Workflow
 
-The input is a path or scope. Without one, review the complete user-facing documentation set. An explicit path or section narrows the scope. If it is in `specs/`, stop and offer `spec-manage` in `spec-audit` mode. Do not change the repository, documents, external systems, or create artifacts; report findings only in chat and never publish them.
+The input is a path or scope. Without one, review the complete user-facing documentation set. An explicit path or section narrows the scope. If it is in `specs/`, route that part to `spec-manage` in `spec-review` mode. Do not change the repository, documents, or external systems. Use `references/documentation-review.md` for private evidence, incremental reuse, impact selection, and a full-review independent critic. Report findings in chat and never publish them.
 
 Identify the target reader and purpose in scope. Check claims, commands, APIs, configuration, and examples against source, tests, canonical specifications, and repository instructions. Check prerequisites, sequence, error consequences, compatibility, stale links, and terminology. Report only confirmed findings, each with severity, exact evidence, consequence, and minimal correction. If none exist, say so briefly and list unverified boundaries.
 
 ## Boundary
 
 - Input is a path or area. Without either, review the complete user-facing documentation set in the current project and report any unchecked boundaries explicitly.
-- If the area is in `specs/`, stop and propose `spec-manage` in `spec-audit` mode.
-- Do not modify the repository, documents, external systems, or create artifacts.
+- If the area is in `specs/`, use `spec-manage` in `spec-review` mode.
+- Do not modify the repository, documents, external systems, or publication targets. Private review state is permitted only under the shared review contract.
 - Output findings only in chat; do not publish them to external systems.
 
 ## Review

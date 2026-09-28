@@ -449,7 +449,7 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
         len(expected["skill"]) != 38
         or len(expected["command"]) != 39
         or len(expected["agent"]) != 6
-        or len(expected["plugin"]) != 3
+        or len(expected["plugin"]) != 4
         or len(expected["package-tool"]) != 1
     ):
         raise EvalError("stale_package_inventory", "public surface counts do not match stage 20")

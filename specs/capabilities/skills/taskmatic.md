@@ -27,19 +27,20 @@ separate `taskmatic-web` application under `apps/taskmatic/`.
 Resolve the absolute state root, open the versioned SQLite store, apply one
 mutation (create, edit, move, claim, heartbeat, release, complete, note) inside an
 immediate transaction with recorded activity, regenerate the mirror, then read
-through `list`, `show`, `snapshot`, `serve`, or MCP tools with computed claim
-state.
+through `list`, `show`, `snapshot`, or MCP tools with computed claim state.
+The separately installed `taskmatic-web serve` reads an existing store.
 
 ## Dependencies
 
-Python 3.12+ standard library (sqlite3, http.server), a writable XDG state
-directory, and a loopback socket for `serve`.
+Python 3.12+ standard library and a writable XDG state directory. The web
+application additionally needs a loopback socket and an existing store.
 
 ## Remote/Local Effects
 
 Private local state only: the SQLite store, the derived mirror, and derived web
 files are atomically replaced inside the state root. No network access except the
-loopback listener in `serve`, which is read-only. No repository or remote effects.
+loopback listener in `taskmatic-web serve`, which is read-only and rejects
+non-loopback addresses. No repository or remote effects.
 
 ## Errors, Partial, Escalation
 
@@ -70,9 +71,15 @@ on completion. Views (`snapshot`, list and show output, the static export) shall
 read-only and never require dependencies beyond the Python 3.12+ standard
 library; the separate user-run `taskmatic-web` application owns live serving.
 
+#### Verification
+
+Taskmatic tests compare database snapshots with mirrors, reject conflicting
+claims, and verify rollback. Web tests reject missing stores and public binds
+and read live updates without mutating the database.
+
 ## Example
 
 `taskmatic add "Investigate flaky test" --labels ci` then
 `taskmatic claim <id> --agent review-bot --ttl 30m` while
-`taskmatic serve` shows the board in a browser.
+`taskmatic-web serve` shows the board in a browser after separate installation.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

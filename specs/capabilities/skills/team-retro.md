@@ -54,36 +54,12 @@ One fixed action is selected; every configured project is accounted for, and
 ### REQ-F-126 - Keep retrospective actions explicit
 
 The skill shall execute only the selected fixed action against its declared team context.
-Confirmed profile saves that also select the default profile shall update profile
-and settings atomically with rollback, recover interrupted transactions from a
-private schema v3 journal, and store bounded previous bytes in private
-content-addressed state files referenced by digest and exact path rather than
-inline encoding. Backup cleanup shall follow commit or completed rollback and
-shall preserve content still referenced by another journal. Existing schema v2
-journals shall remain recoverable under a separate compatible legacy bound. The
-runtime shall consume the receipt only after both writes and the report
-succeed, their parent directories are fsync-durable, and safe private reads match
-all three journal-declared postconditions immediately before receipt creation; a
-pre-receipt mismatch shall roll back without a receipt. The runtime shall fsync every transaction
-replace, create, and unlink including journal deletion, fsync the receipt
-namespace before recovery accepts either commit or rollback state, and report
-unavailable POSIX durability primitives or other expected local I/O failures as JSON errors.
-Recovery shall accept commit only for an exact receipt whose journal-bound
-profile, settings, and report existence and digests match durable files. It shall
-never remove an exact durable receipt: intended state shall finish commit, while
-prior, mixed, or unknown state shall preserve the receipt, journal, and backups
-and fail closed. Without such a receipt, recovery shall finish rollback for prior
-or mixed prior/intended state but preserve the journal, backups, and any current
-file that matches neither state. Confirmed context saves shall be serialized,
-roll back visible context and new report state after pre-receipt fsync, report, or
-required marker failure, and create the one-use receipt only at the safe commit
-point. A post-link receipt error shall finish as committed only when the exact
-receipt and intended context and report digests match. Existing persisted plans
-shall remain compatible. Backup paths, digests,
-sizes, ownership, and private permissions shall be verified before restoration.
-Mutation locking shall use non-blocking POSIX `flock` retries with a five-second
-monotonic deadline and reject a lock with more than one hardlink before changing
-its mode, while module import and read-only commands remain portable.
+Profile saves follow the shared [REQ-F-520](../../requirements/functional/README.md#req-f-520---preserve-atomic-private-profile-transactions).
+
+#### Verification
+
+Action checks reject missing or ambiguous action selection; shared profile
+transaction tests verify the referenced save and recovery contract.
 
 ### REQ-F-509 - Keep collected evidence incremental and provenance-bound
 
@@ -99,6 +75,12 @@ data. Every rendered artifact shall end with a data-sources section listing
 each contributing source's kind, exact location, collected window or point
 timestamp, completeness, and collection time, and every written artifact shall
 be snapshotted in the store with its period and contributing source keys.
+
+#### Verification
+
+Evidence-store tests distinguish complete and missing configured sources and
+retain immutable provenance; report review verifies merged, tagged, and shipped
+results remain distinct in the selected period.
 
 ## Example
 

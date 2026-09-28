@@ -18,6 +18,10 @@ and never writes to the store.
 
 ## Use
 
+Install the taskmatic skill and create a first card before starting the viewer;
+the viewer requires an existing store. See the [first-board guide](../../docs/how-to/taskmatic.md)
+for runner commands, shared state paths, and MCP setup.
+
 ```bash
 taskmatic-web serve            # http://127.0.0.1:8765
 taskmatic-web serve --port 0   # pick a free port

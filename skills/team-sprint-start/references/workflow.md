@@ -28,7 +28,7 @@ language: one row per contributing source with the kind, the exact location
 (URL or path), the collected `[since, until)` window or point timestamp,
 completeness, and `collected_at`. Record contributing sources in the private
 evidence store under
-`${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team-evidence/<profile>/` with `scripts/evidence_store.py evidence-record --profile
+`${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/evidence/` with `scripts/evidence_store.py evidence-record --profile
 PROFILE` (`--kind mattermost --location URL` for chats, `--kind file --location PATH` for protocols and planning documents); render the section
 from `evidence-show --profile PROFILE --since START --until END`. After
 `artifact-write`, snapshot the artifact with `artifact-record --profile

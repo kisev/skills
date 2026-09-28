@@ -103,6 +103,7 @@ async function ingestSessions(
   watermark: number | null;
   rejected: Array<{ text: string; reason: string }>;
 }> {
+  if (!executor) return { sessions: 0, extracted: [], watermark: null, rejected: [] };
   const watermark = Number.parseInt(context.store.getMeta(WATERMARK_KEY) ?? "0", 10) || 0;
   const sessions = loadRecentSessions(opencodeDatabasePath(), watermark, {
     before: Date.now() - 10 * 60_000,
@@ -114,7 +115,6 @@ async function ingestSessions(
   let latest = watermark;
   for (const session of sessions) {
     latest = Math.max(latest, session.timeCreated);
-    if (!executor) continue;
     const transcript = session.messages
       .map((message) => `${message.role}: ${message.text}`)
       .join("\n\n")
@@ -143,6 +143,20 @@ export async function runDream(
   context: MemomaticContext,
   executor: ModelExecutor | null,
   options: { dryRun?: boolean } = {},
+): Promise<DreamReport> {
+  if (!options.dryRun) return executeDream(context, executor, options);
+  const store = context.store.fork();
+  try {
+    return await executeDream({ ...context, store }, executor, options);
+  } finally {
+    store.close();
+  }
+}
+
+async function executeDream(
+  context: MemomaticContext,
+  executor: ModelExecutor | null,
+  options: { dryRun?: boolean },
 ): Promise<DreamReport> {
   const dryRun = options.dryRun === true;
   const report: DreamReport = {
@@ -211,12 +225,26 @@ export async function runDream(
         )
         .join("\n")}`,
     });
-    const operations = parseConsolidation(response);
+    let operations: ConsolidationOperation[];
+    let invalidResponse = false;
+    try {
+      operations = parseConsolidation(response);
+    } catch {
+      invalidResponse = true;
+      operations = finalCandidates.map(({ entry }) => ({
+        op: "add",
+        line: entryLine(entry.text.replace(/^- /, ""), {
+          key: entry.key ?? undefined,
+          origin: entry.origin ?? "agent",
+          source: entry.source ?? undefined,
+        }),
+      }));
+    }
     const outcome = await applyConsolidation(context, operations, current, dryRun);
     report.promoted = outcome.promoted;
     report.superseded = outcome.superseded;
     report.dropped = outcome.dropped;
-    report.appendOnlyFallback = outcome.appendOnlyFallback;
+    report.appendOnlyFallback = invalidResponse || outcome.appendOnlyFallback;
   }
 
   if (!dryRun) report.archived = await archiveOldEpisodic(context);
@@ -278,6 +306,8 @@ async function applyConsolidation(
     (operation): operation is { op: "drop"; key: string } =>
       operation.op === "drop" && existingKeys.has(operation.key),
   );
+  // Consolidation never grants permission to delete curated memory.
+  if (drops.length) result.appendOnlyFallback = true;
   if (removals.length !== supersessions.length + drops.length) result.appendOnlyFallback = true;
   if (!result.appendOnlyFallback && lossRatio > context.settings.dream.maxPriorEntryLoss)
     result.appendOnlyFallback = true;

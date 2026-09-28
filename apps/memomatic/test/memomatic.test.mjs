@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  mkdirSync,
+  writeFileSync,
+  symlinkSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -15,6 +24,7 @@ import {
   searchMemory,
   writeEntry,
   getEntry,
+  forgetEntry,
   archiveOldEpisodic,
 } from "../dist/service.js";
 import { bootstrapContext, resolveProject } from "../dist/bootstrap.js";
@@ -426,6 +436,9 @@ test("usage signals and gates drive promotion, then dream consolidates", async (
     assert.equal(second.promoted.length, 1);
     assert.ok(existsSync(historyDir));
     assert.ok(readdirSync(historyDir).length >= 1);
+    const fallback = await runDream(dream, { name: "invalid", complete: async () => "not JSON" });
+    assert.equal(fallback.appendOnlyFallback, true);
+    assert.match(readFileSync(dream.paths.memoryFile, "utf8"), /deterministic gates/);
     dream.store.close();
   } finally {
     rmSync(env.root, { force: true, recursive: true });
@@ -465,7 +478,6 @@ test("consolidation falls back to append-only when drop loss exceeds the bound",
         JSON.stringify({
           operations: [
             { key: "first", op: "drop" },
-            { key: "second", op: "drop" },
             {
               line: entryLine("Consolidated promotion bounds entry", {
                 key: "fifth",
@@ -495,6 +507,9 @@ test("dry-run dream writes nothing", async () => {
   const env = environment();
   try {
     const dream = await context();
+    dream.store.setMeta("ingest-watermark", "123");
+    const before = readFileSync(dream.paths.indexFile);
+    const walBefore = readFileSync(`${dream.paths.indexFile}-wal`);
     const executor = {
       complete: async () =>
         JSON.stringify({ candidates: [{ key: null, reason: "r", text: "Dry run only." }] }),
@@ -504,7 +519,113 @@ test("dry-run dream writes nothing", async () => {
     assert.equal(report.dryRun, true);
     const dailyDir = join(env.state, "memomatic", "memory");
     assert.ok(!existsSync(dailyDir) || readdirSync(dailyDir).length === 0);
+    assert.deepEqual(readFileSync(dream.paths.indexFile), before);
+    assert.deepEqual(readFileSync(`${dream.paths.indexFile}-wal`), walBefore);
+    assert.equal(dream.store.getMeta("ingest-watermark"), "123");
+    await runDream(dream, null);
+    assert.equal(dream.store.getMeta("ingest-watermark"), "123");
     dream.store.close();
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("CLI previews do not create state, a database, or run locks", () => {
+  const env = environment();
+  try {
+    for (const command of ["process", "dream"]) {
+      execFileSync(process.execPath, ["dist/cli.js", command, "--dry-run"], {
+        env: process.env,
+        cwd: new URL("..", import.meta.url),
+      });
+      assert.equal(existsSync(env.state), false);
+      assert.equal(existsSync(env.config), false);
+    }
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("sessions skipped without a model remain available after model setup", async () => {
+  const env = environment();
+  try {
+    const { DatabaseSync } = await import("node:sqlite");
+    const data = join(env.root, "data", "opencode");
+    mkdirSync(data, { recursive: true });
+    const database = new DatabaseSync(join(data, "opencode.db"));
+    database.exec(
+      "CREATE TABLE session(id TEXT, title TEXT, directory TEXT, time_created INTEGER); CREATE TABLE message(session_id TEXT, data TEXT, time_created INTEGER);",
+    );
+    database
+      .prepare("INSERT INTO session VALUES (?, ?, ?, ?)")
+      .run("example", "A decision", env.root, 2000);
+    database.prepare("INSERT INTO message VALUES (?, ?, ?)").run(
+      "example",
+      JSON.stringify({
+        role: "user",
+        parts: [{ type: "text", text: "Remember a standing decision." }],
+      }),
+      2000,
+    );
+    database.close();
+    const ctx = await context();
+    ctx.store.setMeta("ingest-watermark", "123");
+    const skipped = await runDream(ctx, null);
+    assert.equal(skipped.sessionsIngested, 0);
+    assert.equal(ctx.store.getMeta("ingest-watermark"), "123");
+    const processed = await runDream(ctx, {
+      name: "fixture",
+      complete: async () => '{"candidates":[]}',
+    });
+    assert.equal(processed.sessionsIngested, 1);
+    assert.equal(ctx.store.getMeta("ingest-watermark"), "2000");
+    ctx.store.close();
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("memory reads and deletes reject traversal, sibling roots, symlinks, and invalid lines", async () => {
+  const env = environment();
+  try {
+    const ctx = await context();
+    const outside = join(env.state, "memomatic-sibling", "private.md");
+    mkdirSync(join(env.state, "memomatic-sibling"));
+    writeFileSync(outside, "private");
+    symlinkSync(outside, join(ctx.paths.stateRoot, "link.md"));
+    for (const file of ["../memomatic-sibling/private.md", outside, "link.md"]) {
+      await assert.rejects(getEntry(ctx, file));
+      await assert.rejects(forgetEntry(ctx, { file, line: 1 }));
+      assert.equal(readFileSync(outside, "utf8"), "private");
+    }
+    writeFileSync(ctx.paths.memoryFile, "- safe\n");
+    for (const line of [0, 1.5, NaN]) await assert.rejects(getEntry(ctx, "MEMORY.md", line));
+    ctx.store.close();
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("auto-clean preserves unrelated, pinned, and fresh entries in the same daily file", async () => {
+  const env = environment();
+  try {
+    const ctx = await context();
+    ctx.rules.autoClean = { olderThanDays: 30, scope: "episodic", source: "stopit" };
+    const { writeCorpusFile, dailyNotePath } = await import("../dist/corpus.js");
+    const file = dailyNotePath(ctx.paths);
+    const lines = [
+      entryLine("remove", { observed: "2020-01-01", source: "stopit" }),
+      entryLine("other source", { observed: "2020-01-01", source: "user" }),
+      entryLine("pinned", { observed: "2020-01-01", source: "stopit", pinned: true }),
+      entryLine("fresh", { observed: new Date().toISOString().slice(0, 10), source: "stopit" }),
+    ];
+    await writeCorpusFile(ctx.paths, file, `${lines.join("\n")}\n`);
+    await rebuildIndex(ctx);
+    await archiveOldEpisodic(ctx);
+    assert.equal(readFileSync(file, "utf8"), `${lines.slice(1).join("\n")}\n`);
+    await rebuildIndex(ctx);
+    assert.deepEqual(await archiveOldEpisodic(ctx), []);
+    ctx.store.close();
   } finally {
     rmSync(env.root, { force: true, recursive: true });
   }

@@ -22,7 +22,22 @@ contributing factors, define owned actions, write and verify.
 
 ## Requirements
 
-- REQ-TEAM-INC-01: human error is analyzed as a condition, never recorded as
-  a root cause or conclusion.
-- REQ-TEAM-INC-02: unowned or undated actions stay proposed until the user
-  decides.
+### REQ-F-529 - Analyze conditions behind human error
+
+Human error shall be analyzed as a condition, never recorded as a root cause
+or conclusion. Former identifier: `REQ-TEAM-INC-01`, normalized without a
+behavior change on 2026-09-28.
+
+#### Verification
+
+A supplied operator mistake leads to examination of contributing conditions,
+not a blame-based root-cause conclusion.
+
+### REQ-F-530 - Keep undecided incident actions proposed
+
+Unowned or undated actions shall remain proposed until the user decides.
+Former identifier: `REQ-TEAM-INC-02`, normalized without a behavior change on 2026-09-28.
+
+#### Verification
+
+Missing ownership or dates are visible and never silently filled in the final actions.

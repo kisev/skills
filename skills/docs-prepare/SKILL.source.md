@@ -1,7 +1,7 @@
 ---
 name: docs-prepare
 description: >-
-  Prepare or update one user-facing Diataxis document from source facts. Russian discovery terms: подготовить документацию.
+  Prepare or update user-facing Diataxis documentation, including instructions, mirrors, and navigation affected by an authorized behavior change. Preserve prerequisites, limitations, and recovery details. Russian discovery terms: подготовить документацию, обновить документацию при изменениях.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

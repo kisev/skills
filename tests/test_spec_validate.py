@@ -80,6 +80,17 @@ def add_requirement(root: Path, identifier: str) -> None:
         stream.write(f"\n### {identifier} - Test requirement\n\nThe system shall behave.\n")
 
 
+def test_filename_pattern_is_not_an_unfinished_date(specs_factory: Callable[[str], Path]) -> None:
+    root = specs_factory("filename-pattern")
+    path = root / "requirements/functional/README.md"
+    path.write_text("# Files\n\nDaily notes use `memory/YYYY-MM-DD.md`.\n", encoding="utf-8")
+    result = parse_result(run_validator("check", "--path", str(root)))
+    assert not any(item["code"] == "SNAPSHOT_TEMPLATE_PLACEHOLDER" for item in result["findings"])
+    path.write_text("# Files\n\nDate: YYYY-MM-DD\n", encoding="utf-8")
+    result = parse_result(run_validator("check", "--path", str(root)))
+    assert any(item["code"] == "SNAPSHOT_TEMPLATE_PLACEHOLDER" for item in result["findings"])
+
+
 def add_adr(root: Path, number: int, slug: str = "test-decision") -> None:
     identifier = f"ADR-{number:04d}"
     filename = f"{number:04d}-{slug}.md"

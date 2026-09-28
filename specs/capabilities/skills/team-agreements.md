@@ -22,7 +22,20 @@ owners and dates, review open items, verify.
 
 ## Requirements
 
-- REQ-TEAM-AGR-01: intentions are recorded as notes, only owned checkable
-  commitments as agreements.
-- REQ-TEAM-AGR-02: the log is symmetric - the manager's own promises are
-  recorded with the same discipline.
+### REQ-F-523 - Distinguish intentions from commitments
+
+Intentions shall be notes; only owned checkable commitments shall be agreements.
+Former identifier: `REQ-TEAM-AGR-01`, normalized without a behavior change on 2026-09-28.
+
+#### Verification
+
+An unowned intention remains a note until an owner and observable commitment exist.
+
+### REQ-F-524 - Keep agreements symmetric
+
+The manager's own promises shall be recorded with the same discipline.
+Former identifier: `REQ-TEAM-AGR-02`, normalized without a behavior change on 2026-09-28.
+
+#### Verification
+
+Equivalent manager and report promises produce equivalent ownership and review fields.

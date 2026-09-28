@@ -314,6 +314,13 @@ tasks:
       - mise exec -- uv run --locked python scripts/check_locales.py
       - mise exec -- uv run --locked python scripts/check_locales.py --built .build/skills
 
+  docs:check:
+    desc: Validate documentation dependencies and canonical structure
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_documentation.py
+      - mise exec -- uv run --locked python shared/references/documentation_review.py check --root .
+      - mise exec -- uv run --locked python skills/spec-manage/scripts/spec_validate.py check --path specs
+
   eval:check:
     desc: Validate behavioral eval schemas and run the hostless deterministic suite
     cmds:
@@ -349,6 +356,7 @@ tasks:
       - task: typecheck
       - task: test:python
       - task: locale:check
+      - task: docs:check
       - task: distribution:check
       - task: skills:validate
       - task: eval:check

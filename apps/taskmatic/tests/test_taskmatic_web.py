@@ -2,6 +2,7 @@
 
 import importlib.util
 import io
+import ipaddress
 import json
 import sys
 import tempfile
@@ -63,6 +64,12 @@ class WebBoardTestCase(unittest.TestCase):
         with tempfile.TemporaryDirectory() as empty:
             with self.assertRaises(APP_MODULE.WebBoardError):
                 APP_MODULE.Board.open(empty)
+
+    def test_public_bind_is_rejected_before_server_creation(self):
+        board = APP_MODULE.Board.open(self.home.name)
+        for host in (str(ipaddress.IPv4Address(0)), "192.0.2.1", "::", "example.invalid"):
+            with self.subTest(host=host), self.assertRaises(APP_MODULE.WebBoardError):
+                APP_MODULE.serve(board, host, 0)
 
     def test_page_embeds_escaped_snapshot(self):
         SKILL_MODULE.create_card(

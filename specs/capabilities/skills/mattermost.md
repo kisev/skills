@@ -84,6 +84,11 @@ failure, and prepare digest-bound manual message publications without invoking
 their apply or inspect commands. Only the separate helper may perform bounded
 POST requests for one confirmed message action.
 
+#### Verification
+
+Exact-link reader tests verify bounded message collection and redacted failures;
+preparing a response never sends a message or executes a publication command.
+
 ### REQ-F-513 - Bound network reads with a configurable per-request timeout
 
 The skill shall bound every GET request by a configurable timeout of at most
@@ -91,6 +96,11 @@ The skill shall bound every GET request by a configurable timeout of at most
 `network_timeout` errors scoped to one target, and continue a multi-target
 read past a timed-out target so the remaining targets are still read and the
 timed-out target can be resumed from the coverage cache.
+
+#### Verification
+
+Timeout tests inject stalled requests and invalid limits and verify a controlled
+failure within the configured bound without leaking credentials.
 
 ## Example
 

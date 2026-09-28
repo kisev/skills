@@ -55,36 +55,12 @@ has an explicit destination, and roadmap output is not an implementation commitm
 ### REQ-F-127 - Keep roadmap output non-executing
 
 The skill shall report roadmap context without silently creating work or changing external state.
-Confirmed profile saves that also select the default profile shall update profile
-and settings atomically with rollback, recover interrupted transactions from a
-private schema v3 journal, and store bounded previous bytes in private
-content-addressed state files referenced by digest and exact path rather than
-inline encoding. Backup cleanup shall follow commit or completed rollback and
-shall preserve content still referenced by another journal. Existing schema v2
-journals shall remain recoverable under a separate compatible legacy bound. The
-runtime shall consume the receipt only after both writes and the report
-succeed, their parent directories are fsync-durable, and safe private reads match
-all three journal-declared postconditions immediately before receipt creation; a
-pre-receipt mismatch shall roll back without a receipt. The runtime shall fsync every transaction
-replace, create, and unlink including journal deletion, fsync the receipt
-namespace before recovery accepts either commit or rollback state, and report
-unavailable POSIX durability primitives or other expected local I/O failures as JSON errors.
-Recovery shall accept commit only for an exact receipt whose journal-bound
-profile, settings, and report existence and digests match durable files. It shall
-never remove an exact durable receipt: intended state shall finish commit, while
-prior, mixed, or unknown state shall preserve the receipt, journal, and backups
-and fail closed. Without such a receipt, recovery shall finish rollback for prior
-or mixed prior/intended state but preserve the journal, backups, and any current
-file that matches neither state. Confirmed context saves shall be serialized,
-roll back visible context and new report state after pre-receipt fsync, report, or
-required marker failure, and create the one-use receipt only at the safe commit
-point. A post-link receipt error shall finish as committed only when the exact
-receipt and intended context and report digests match. Existing persisted plans
-shall remain compatible. Backup paths, digests,
-sizes, ownership, and private permissions shall be verified before restoration.
-Mutation locking shall use non-blocking POSIX `flock` retries with a five-second
-monotonic deadline and reject a lock with more than one hardlink before changing
-its mode, while module import and read-only commands remain portable.
+Profile saves follow the shared [REQ-F-520](../../requirements/functional/README.md#req-f-520---preserve-atomic-private-profile-transactions).
+
+#### Verification
+
+Roadmap preparation leaves external work trackers unchanged; shared profile
+transaction tests verify the referenced save and recovery contract.
 
 ### REQ-F-510 - Bind roadmap evidence to the incremental store
 
@@ -93,6 +69,11 @@ updates shall record contributing sources in the private evidence store, render
 a data-sources section with exact locations, collected windows, completeness,
 and collection times, and snapshot the written document with its period and
 contributing source keys, as specified by REQ-F-509.
+
+#### Verification
+
+A changed or missing source invalidates affected roadmap conclusions; unchanged
+evidence remains reusable and no work item is created during roadmap preparation.
 
 ## Example
 

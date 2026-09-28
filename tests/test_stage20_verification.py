@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.check_documentation import validate as validate_documentation
 from scripts.eval_runner import (
     discover,
     validate_compatibility_inventory,
@@ -10,6 +11,10 @@ from scripts.eval_runner import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_documented_public_surfaces_match_authored_sources() -> None:
+    validate_documentation(ROOT)
 
 
 def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts() -> None:

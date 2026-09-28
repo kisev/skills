@@ -47,6 +47,11 @@ policy, remain factual and concise, and never duplicate the slide title.
 
 The skill shall prepare prompts without sending messages or publishing slides.
 
+#### Verification
+
+Given a selected theme and supplied team facts, prompts preserve that theme and
+cite no invented facts; preparation creates no image or publication action.
+
 ## Example
 
 `slides-prompts-prepare` returns an English visual prompt with no embedded text.

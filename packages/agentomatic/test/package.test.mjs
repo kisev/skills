@@ -412,7 +412,7 @@ test("spec-manage command help explains intent-based safe mode selection", () =>
   assert.ok(command);
   assert.match(command.description, /greenfield specs/);
   const rendered = renderCommand(command);
-  for (const mode of ["spec-init", "spec-onboard", "spec-update", "spec-audit"])
+  for (const mode of ["spec-init", "spec-onboard", "spec-update", "spec-review"])
     assert.match(rendered, new RegExp(mode));
   assert.match(rendered, /Explicit mode and scope arguments are passed unchanged/);
   assert.match(rendered, /asks before writing if intent remains ambiguous/);

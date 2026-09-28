@@ -181,6 +181,12 @@ numbers followed by a word character shall remain plain, and conflicting
 explicit and shall not be reported as complete. The workflow shall never execute
 generated commands or mutate GitLab.
 
+#### Verification
+
+Triage tests cover collection completeness, retained item decisions, scoped
+release planning, stale evidence, and ambiguous mutation outcomes. Final plans
+account for each selected issue and never publish automatically.
+
 ## Example
 
 `task-triage` reuses an unchanged issue analysis, recomputes collection-level

@@ -54,3 +54,11 @@ This ownership and isolation mechanism provides
 [REQ-F-005](../../requirements/functional/README.md#req-f-005---archive-owned-retired-assets),
 [REQ-Q-002](../../requirements/quality/README.md#req-q-002---mutation-safety), and
 [REQ-C-003](../../requirements/constraints/README.md#req-c-003---explicit-ownership-boundaries).
+
+The shared team-profile runner implements
+[REQ-F-520](../../requirements/functional/README.md#req-f-520---preserve-atomic-private-profile-transactions)
+for all delivery and people workflows, rather than assigning one transaction
+protocol to each skill. Documentation review stores content-addressed snapshots
+and results outside the checkout, keyed by workspace and scope, to provide
+[REQ-F-519](../../requirements/functional/README.md#req-f-519---maintain-change-linked-documentation-and-reusable-review-evidence).
+File digests identify reusable evidence; semantic conclusions still require review.

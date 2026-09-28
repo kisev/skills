@@ -90,7 +90,7 @@ For an OpenCode MCP registration, add to the user-owned `opencode.json`:
   "mcp": {
     "taskmatic": {
       "type": "local",
-      "command": ["python3", "<installed-skill-path>/taskmatic/scripts/taskmatic.py", "mcp"],
+      "command": ["python3", "<installed-skill-path>/scripts/taskmatic.py", "mcp"],
       "enabled": true
     }
   }

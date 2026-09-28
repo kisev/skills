@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -9,9 +10,11 @@ import { requirePackageVersion } from "./package-metadata.js";
 import { ensureDependency, planDependency, type DependencyRunner } from "./self-install.js";
 import {
   applyTransaction,
+  archiveRoot,
   deploymentRoot,
   LifecycleError,
   lifecycleRoot,
+  inspectTransaction,
   readRegular,
   recoverTransaction,
   sha256,
@@ -121,7 +124,37 @@ export type ConfigSetupPlan = {
   skipped_fragments: Array<{ fragment: FragmentName; reason: string }>;
   requires_restart: boolean;
   confirmable: boolean;
+  receipt?: string;
+  dependency?: ReturnType<typeof planDependency>;
 };
+
+const configReceipts = new Map<string, { digest: string; expires: number; key: string }>();
+
+async function configSnapshot(built: BuiltPlan): Promise<string> {
+  const sources = await Promise.all(
+    built.plan.targets.map(async (target) => [
+      target.path,
+      (await readRegular(target.path))?.toString("base64") ?? null,
+    ]),
+  );
+  if (built.plan.dependency?.dir) {
+    for (const name of ["package.json", "package-lock.json"]) {
+      const path = join(built.plan.dependency.dir, name);
+      sources.push([path, (await readRegular(path))?.toString("base64") ?? null]);
+    }
+  }
+  return sha256(
+    Buffer.from(JSON.stringify({ plan: built.plan, mutations: built.mutations, sources })),
+  );
+}
+
+async function requireNoRecovery(stateRoot: string): Promise<void> {
+  if (await readRegular(join(stateRoot, "transaction-journal.json")))
+    throw new ConfigSetupError(
+      "recovery_required",
+      "An interrupted transaction requires config recover --dry-run, then confirmed config recover before a fresh preview",
+    );
+}
 
 type TargetFile = {
   target: ConfigTargetName;
@@ -130,6 +163,39 @@ type TargetFile = {
   absolute: string;
   exists: boolean;
 };
+
+export async function recoverConfigSetup(
+  scope: Scope,
+  dryRun: boolean,
+  cwd = process.cwd(),
+  home = homedir(),
+  expectedDigest?: string | null,
+): Promise<{ paths: string[]; recovered: boolean; digest: string | null }> {
+  const root = deploymentRoot(scope, cwd, home);
+  const state = lifecycleRoot(scope, cwd, home);
+  const built = await build(
+    { targets: [...CONFIG_TARGETS], fragments: [...FRAGMENT_NAMES] },
+    scope,
+    cwd,
+    home,
+  );
+  const allowed = [...built.allowedRoots, archiveRoot(scope, cwd, home)];
+  const paths = await inspectTransaction(root, state, allowed);
+  const journalPath = join(state, "transaction-journal.json");
+  const journal = await readRegular(journalPath);
+  const digest = journal ? sha256(journal) : null;
+  if (dryRun || !paths.length) return { paths, recovered: false, digest };
+  const recovered = await withLifecycleLock(state, async () => {
+    const current = await readRegular(journalPath);
+    if (!current || !expectedDigest || sha256(current) !== expectedDigest)
+      throw new ConfigSetupError(
+        "stale_receipt",
+        "Recovery journal changed; preview recovery again",
+      );
+    return recoverTransaction(root, state, allowed);
+  });
+  return { paths, recovered, digest };
+}
 
 const UNIFIED_TUI_KEYBINDS: Record<string, string> = {
   command_list: "alt+p",
@@ -581,19 +647,34 @@ export async function previewConfigSetup(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
+  provisionDependency = true,
 ): Promise<ConfigSetupPlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
-  const root = deploymentRoot(scope, cwd, home);
   try {
-    return await withLifecycleLock(stateRoot, async () => {
-      const built = await build(selection, scope, cwd, home);
-      if (await recoverTransaction(root, stateRoot, built.allowedRoots))
-        throw new ConfigSetupError(
-          "recovered_transaction",
-          "Recovered an interrupted transaction; request a fresh plan",
-        );
-      return built.plan;
+    await requireNoRecovery(stateRoot);
+    const built = await build(selection, scope, cwd, home);
+    if (
+      provisionDependency &&
+      selection.fragments.includes("core-plugin") &&
+      selection.targets.includes("opencode")
+    )
+      built.plan.dependency = planDependency(scope, cwd, home);
+    const receipt = randomUUID();
+    const key = JSON.stringify([
+      selection,
+      scope,
+      resolve(cwd),
+      resolve(home),
+      provisionDependency,
+    ]);
+    for (const [id, prior] of configReceipts)
+      if (prior.key === key || prior.expires < Date.now()) configReceipts.delete(id);
+    configReceipts.set(receipt, {
+      digest: await configSnapshot(built),
+      expires: Date.now() + 300_000,
+      key,
     });
+    return { ...built.plan, receipt };
   } catch (error) {
     if (error instanceof ConfigSetupError) throw error;
     if (error instanceof LifecycleError) throw new ConfigSetupError(error.code, error.message);
@@ -606,17 +687,44 @@ export async function applyConfigSetup(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
-  options: { dependencyRunner?: DependencyRunner } = {},
+  options: {
+    dependencyRunner?: DependencyRunner;
+    provisionDependency?: boolean;
+    receipt?: string;
+  } = {},
 ): Promise<ConfigSetupPlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
+      await requireNoRecovery(stateRoot);
       const built = await build(selection, scope, cwd, home);
-      if (await recoverTransaction(root, stateRoot, built.allowedRoots))
+      const provisionDependency = options.provisionDependency !== false;
+      if (
+        provisionDependency &&
+        selection.fragments.includes("core-plugin") &&
+        selection.targets.includes("opencode")
+      )
+        built.plan.dependency = planDependency(scope, cwd, home);
+      const key = JSON.stringify([
+        selection,
+        scope,
+        resolve(cwd),
+        resolve(home),
+        provisionDependency,
+      ]);
+      const id = options.receipt ?? [...configReceipts].find(([, entry]) => entry.key === key)?.[0];
+      const receipt = id ? configReceipts.get(id) : undefined;
+      if (id) configReceipts.delete(id);
+      if (
+        !receipt ||
+        receipt.key !== key ||
+        receipt.expires < Date.now() ||
+        receipt.digest !== (await configSnapshot(built))
+      )
         throw new ConfigSetupError(
-          "recovered_transaction",
-          "Recovered an interrupted transaction; request a fresh plan",
+          "stale_receipt",
+          "Missing, stale, expired, or consumed config preview; request a fresh preview",
         );
       const corePluginActive = built.plan.operations.some(
         (item) =>
@@ -625,6 +733,7 @@ export async function applyConfigSetup(
           item.operation !== "conflict",
       );
       const provision = async (): Promise<void> => {
+        if (!provisionDependency) return;
         try {
           await ensureDependency(planDependency(scope, cwd, home), options.dependencyRunner);
         } catch (error) {

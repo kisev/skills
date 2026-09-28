@@ -21,6 +21,10 @@ For local WIP, use only the current existing checkout and `prepare-local --incre
 
 ## Necessity and completion
 
+Apply `references/documentation-review.md` to the changed behavior's contract,
+guide, mirror, and navigation impact. Missing metadata does not exempt a change;
+report consequential omissions without launching an unrelated full document review.
+
 Apply the shared necessity and completion doctrine in
 `references/necessity-doctrine.md` to every candidate, remedy, and follow-up.
 Independent reviewers receive these decisions even when previous reviewer

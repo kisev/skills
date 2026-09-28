@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import sqlite3
@@ -199,6 +200,14 @@ class BoardHandler(BaseHTTPRequestHandler):
 
 
 def serve(board: Board, host: str, port: int) -> None:
+    if host == "localhost":
+        host = "127.0.0.1"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError as error:
+        raise WebBoardError("host must be a numeric loopback address or localhost") from error
+    if address.version != 4 or not address.is_loopback:
+        raise WebBoardError("host must be an IPv4 loopback address")
     server = BoardHTTPServer((host, port), board)
     assigned = server.server_address[1]
     print(f"taskmatic board: http://{host}:{assigned}/", flush=True)

@@ -96,6 +96,12 @@ lock, reject symlinks and altered immutable content, and never remove the stable
 plan as an update step. Generated mutations shall leave advisory post-success XDG
 markers without treating them as publication proof.
 
+#### Verification
+
+Task preparation cases preserve the agreed goal, supported scenarios, acceptance,
+dependencies, and release scope. Publication commands remain manual and bound to
+the reviewed local plan; clarification does not create remote work.
+
 ## Example
 
 `task-prepare` converts inline migration notes into a self-contained task in chat without adding tracker fields.
