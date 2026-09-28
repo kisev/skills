@@ -1,0 +1,128 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "question-guidelines.rounds.ru",
+  "revision": 1,
+  "locale": "ru",
+  "pair_id": "question-guidelines.rounds",
+  "kind": "golden",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Проверь каждое предлагаемое взаимодействие по общим правилам вопросов указанного скилла. Верни по одной записи case_outcomes на случай, выбрав insufficient-context, defer-dependent, rebuild-followup, valid-round или use-evidence. Оцени фактический диалог и предлагаемый следующий ход; не считай рекомендуемые ответы выбранными. Ничего не записывай.",
+    "fixture": {
+      "selected": [
+        "skill:askme",
+        "skill:spec-manage",
+        "skill:goal",
+        "skill:task-triage",
+        "skill:team-people",
+        "skill:release-prepare"
+      ],
+      "cases": [
+        {
+          "id": "askme-context",
+          "skill": "askme",
+          "conversation": "Новая операция импорта иногда превышает таймаут запроса. Агент измерил это, но ещё не показал результаты пользователю.",
+          "proposed": "Спросить только: очередь (рекомендуется) или синхронно? Никаких пояснений к вопросу нет."
+        },
+        {
+          "id": "spec-option-effects",
+          "skill": "spec-manage",
+          "conversation": "Изменение канонического API требует выбрать несовместимую замену или переходный период. Все существующие клиенты не могут обновиться одновременно. Пользователь знает причину выбора.",
+          "proposed": "Рекомендовать замену как более простую, не описав сбои клиентов, затраты на миграцию и стоимость поддержки совместимого варианта."
+        },
+        {
+          "id": "askme-prerequisite",
+          "skill": "askme",
+          "conversation": "Нужна ли очередь для импорта, ещё не решено. Агент рекомендует очередь.",
+          "proposed": "В одном вызове инструмента спросить, нужна ли очередь, какой сервис очередей выбрать и сколько повторных попыток разрешить."
+        },
+        {
+          "id": "askme-nonrecommended",
+          "skill": "askme",
+          "conversation": "Агент: выбери импорт через очередь или синхронно. Пользователь: синхронно, ограничим размер входных данных и будем отклонять большие файлы. Агент уже подготовил вопросы о провайдере очереди.",
+          "proposed": "Следующим вопросом предложить выбрать провайдера очереди, не пересмотрев продолжение после ответа пользователя."
+        },
+        {
+          "id": "spec-custom",
+          "skill": "spec-manage",
+          "conversation": "Агент: хранить загруженные файлы локально или в объектном хранилище? Пользователь: ни то ни другое, обрабатывать поток и не сохранять загруженные файлы. Пока неизвестно, поддерживает ли существующий API обработки потоковый режим.",
+          "proposed": "Истолковать ответ как локальное хранение и спросить срок хранения, не проверив поддержку потоковой обработки."
+        },
+        {
+          "id": "spec-independent",
+          "skill": "spec-manage",
+          "conversation": "Границы сервиса и архитектура согласованы. Осталось выбрать язык канонического текста и целевую задержку сервиса. Ни один выбор не влияет на варианты, контекст или рекомендацию другого. Агент поясняет причину и значимые компромиссы каждого.",
+          "proposed": "Задать эти два независимых вопроса вместе через интерактивный инструмент."
+        },
+        {
+          "id": "goal-known-fact",
+          "skill": "goal",
+          "conversation": "Агент изучил репозиторий и подтвердил версию среды выполнения. Менять её в рамках задачи не требуется.",
+          "proposed": "Перед подготовкой цели попросить пользователя указать эту версию среды выполнения."
+        },
+        {
+          "id": "profile-missing-fields",
+          "skill": "team-people",
+          "conversation": "Проверка профиля обнаружила незаполненную команду и список подчинённых. Пользователь указал две возможные команды с разными составами, нужная команда ещё не выбрана.",
+          "proposed": "В одном раунде спросить команду и предложить выбрать подчинённых из состава рекомендуемой команды."
+        },
+        {
+          "id": "release-conditional-theme",
+          "skill": "release-prepare",
+          "conversation": "Пользователь ещё не выбрал тему иллюстрации. Среди вариантов есть литературный мир и нейтральная абстракция, литературная тема рекомендована.",
+          "proposed": "Одновременно спросить тему и книгу или серию, потребовав ответить на оба вопроса сейчас."
+        },
+        {
+          "id": "triage-recommendation-dependency",
+          "skill": "task-triage",
+          "conversation": "Агенту нужны решения о приоритете задачи A и релизе для задачи B. Все варианты релиза для B остаются допустимыми, но рекомендуемый milestone зависит от приоритета A.",
+          "proposed": "Спросить оба решения сразу, рекомендуя milestone для B на основании рекомендуемого, но ещё не выбранного приоритета A."
+        },
+        {
+          "id": "chat-context",
+          "skill": "spec-manage",
+          "conversation": "В хосте нет инструмента вопросов. Агент объясняет, почему нужен выбор совместимости API, известные ограничения клиентов, последствия и существенные риски каждого варианта, а также почему рекомендует переходный период, если все клиенты не могут обновиться вместе.",
+          "proposed": "Задать этот один вопрос в чате и принять свободный ответ без добавления варианта Other."
+        }
+      ]
+    }
+  },
+  "expected": {
+    "selected": [
+      "skill:askme",
+      "skill:spec-manage",
+      "skill:goal",
+      "skill:task-triage",
+      "skill:team-people",
+      "skill:release-prepare"
+    ],
+    "not_selected": [],
+    "structured_outcome": "question-guidelines-rounds",
+    "mutation_boundary": "no-writes",
+    "case_outcomes": [
+      { "id": "askme-context", "outcome": "insufficient-context" },
+      { "id": "spec-option-effects", "outcome": "insufficient-context" },
+      { "id": "askme-prerequisite", "outcome": "defer-dependent" },
+      { "id": "askme-nonrecommended", "outcome": "rebuild-followup" },
+      { "id": "spec-custom", "outcome": "rebuild-followup" },
+      { "id": "spec-independent", "outcome": "valid-round" },
+      { "id": "goal-known-fact", "outcome": "use-evidence" },
+      { "id": "profile-missing-fields", "outcome": "defer-dependent" },
+      { "id": "release-conditional-theme", "outcome": "defer-dependent" },
+      { "id": "triage-recommendation-dependency", "outcome": "defer-dependent" },
+      { "id": "chat-context", "outcome": "valid-round" }
+    ]
+  },
+  "invariants": [
+    { "id": "question-guidelines.shared", "path": "shared/references/question-guidelines.md" },
+    { "id": "question-guidelines.materialization", "path": "shared/manifest.json" },
+    {
+      "id": "question-guidelines.native-interview",
+      "path": "skills/spec-manage/references/interviewing.md"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 60, "max_tokens": 4000, "max_cost": 1 },
+  "digest": "d02d1b53d5b1ea066b4148a1533901b9b35f41e6b53e20e71ffbf4936d30b249"
+}

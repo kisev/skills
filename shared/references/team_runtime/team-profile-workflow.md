@@ -48,7 +48,10 @@ Use `references/team-context.example.json` (delivery kind) or
 `references/people-context.example.json` (people kind) as a shape guide. Build a
 candidate profile in a private temporary file, then run `profile-inspect --input FILE` with the matching `--kind`.
 Ask only for the reported missing fields that cannot be derived from the
-supplied evidence. Do not ask users to repeat discovered facts. Never infer a
+supplied evidence. Apply `references/question-guidelines.md`: explain why a field
+is needed and defer fields whose meaning depends on an unanswered choice. A
+list of missing fields is not automatically one independent question round.
+Do not ask users to repeat discovered facts. Never infer a
 private project catalog, participants, or current goals from unrelated
 repository activity.
 

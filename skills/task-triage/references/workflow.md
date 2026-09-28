@@ -96,7 +96,9 @@ priority, an already-made decision, private context, or a bounded technical choi
 between two or three concrete, understood, reversible alternatives when the answer
 immediately changes planning. Turn open-ended technical uncertainty into the
 agent's recommendation or a research step instead of delegating analysis to the
-user. Collect the minimum independent questions into one interaction round.
+user. Apply `references/question-guidelines.md` and collect only the current
+independent questions into one interaction round. After actual answers, rebuild
+dependent follow-ups and ask another round only if a material decision remains.
 Represent priority questions as `authority` and questions about an already-made
 decision as `private_context`; do not add separate kinds for these cases.
 

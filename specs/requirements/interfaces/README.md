@@ -15,6 +15,17 @@ digest. Stable skills shall carry cleanup provenance
 `task-prepare`, `task-review`, and `task-triage` skills shall
 normalize their documented inputs to `work-item/v1` before semantic processing.
 
+Every skill shall reference and bundle the canonical question guidelines for
+native-tool and chat questions, its own interviews, missing facts, profile setup,
+and confirmations. Before a choice, it shall explain why the question arose,
+relevant evidence and assumptions, practical option effects and material risks,
+and the basis of any recommendation, proportionate to the consequences. It shall
+group only questions whose necessity, wording, options, recommendations, and
+context cannot be changed by plausible answers to one another, including custom
+or non-recommended answers. It shall wait for prerequisites and rebuild affected
+follow-ups from actual answers, without adding questions or authorization gates
+when its workflow does not require them.
+
 ### REQ-I-002 - Command interface
 
 Each public command shall route to its same-named skill, shall treat

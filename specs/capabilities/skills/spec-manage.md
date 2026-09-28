@@ -26,6 +26,13 @@ configuration, CI, and deployment before distinguishing initialization from
 onboarding, classify claims, write bounded specs, run formal validation, perform
 semantic review where required, and report checked and `not_checked` scopes.
 
+The adaptive interview follows the shared question contract in
+[REQ-I-001](../../requirements/interfaces/README.md#req-i-001---skill-interface).
+Mode, language, scope, and design choices include their context, effects, material
+risks, and recommendation rationale. Related questions may share a round only
+when their prerequisites are known and their answers cannot change one another;
+custom and non-recommended answers trigger reassessment before follow-ups.
+
 ## Dependencies
 
 Templates, repository evidence, requirements, architecture, ADR rules, and the

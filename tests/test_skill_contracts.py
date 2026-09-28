@@ -71,6 +71,33 @@ def test_built_skill_files_match_canonical_sources() -> None:
         assert destination.read_bytes() == source.read_bytes(), destination
 
 
+def test_every_skill_loads_and_bundles_shared_question_guidelines() -> None:
+    reference = "references/question-guidelines.md"
+    canonical = ROOT / "shared" / reference
+    sources = sorted((ROOT / "skills").glob("*/SKILL.source.md"))
+    destinations = {
+        destination for source, destination in manifest_entries() if source == canonical
+    }
+    assert destinations == {Path(skill.parent.name) / reference for skill in sources}
+    for source in sources:
+        built = BUILT_SKILLS / source.parent.name
+        for entrypoint in (source, built / "SKILL.md"):
+            assert f"Before asking the user, apply `{reference}`." in entrypoint.read_text(), (
+                entrypoint
+            )
+        assert (built / reference).read_bytes() == canonical.read_bytes(), built
+
+
+def test_native_interviews_use_dependency_rounds_instead_of_related_batches() -> None:
+    interview = (BUILT_SKILLS / "spec-manage/references/interviewing.md").read_text()
+    triage = (BUILT_SKILLS / "task-triage/references/workflow.md").read_text()
+    assert "references/question-guidelines.md" in interview
+    assert "one to five" not in interview
+    assert "ask the prerequisite first and wait" in interview
+    assert "including non-recommended and custom choices" in interview
+    assert "rebuild dependent follow-ups" in " ".join(triage.split())
+
+
 def test_review_followups_preserve_the_decision_boundary() -> None:
     askme = (BUILT_SKILLS / "askme/references/workflow.md").read_text(encoding="utf-8")
     askme_doctrine = (BUILT_SKILLS / "askme/references/necessity-doctrine.md").read_text(

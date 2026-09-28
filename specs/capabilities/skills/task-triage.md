@@ -23,7 +23,7 @@ private XDG state.
 Resolve the bounded collection, collect GET-only GitLab evidence, reuse current
 per-issue analysis when its issue and related-MR fingerprint is unchanged,
 normalize each issue to `work-item/v1`, invoke the task-review quality contract,
-assess the collection, ask one consolidated user-question round only for authority,
+assess the collection, ask dependency-bounded user-question rounds only for authority,
 private context, or a bounded reversible technical choice, persist immutable
 evidence and analysis, atomically
 replace stable Markdown views, present, and report.
@@ -46,7 +46,10 @@ Target failures are isolated per issue. Incomplete pagination, unavailable issue
 or MR evidence, stale bindings, and unanswered user questions make analysis
 partial and remain explicit. Non-ready planning and prepared information requests
 instead make follow-up pending, with counts and affected issues. Independent
-analysis continues before one consolidated question round. Missing task facts
+analysis continues before the current independent question round. Dependent
+follow-ups are rebuilt only after actual answers under
+[REQ-I-001](../../requirements/interfaces/README.md#req-i-001---skill-interface).
+Missing task facts
 that the user cannot supply become role-authored GitLab question proposals rather
 than silent blockers.
 

@@ -22,6 +22,10 @@ different operation.
 
 ## Question and Confirmation
 
+Apply `references/question-guidelines.md` to question context, option effects,
+recommendations, dependency-safe rounds, and interpretation of actual answers,
+including confirmations and profile setup.
+
 Ask a **Question** only before `prepare` when a person must decide target,
 scope, outcome, or acceptable risk. First inspect facts that can be verified.
 Ask independent decision questions in rounds; do not repeat answered questions

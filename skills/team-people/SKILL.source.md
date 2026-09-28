@@ -13,6 +13,8 @@ metadata:
 
 # team-people
 
+Before asking the user, apply `references/question-guidelines.md`.
+
 Read `references/people-workflow.md`, then follow `references/workflow.md`.
 Apply `references/language-policy.md` for user-facing prose. Preserve exact
 code, commands, paths, IDs, JSON fields, and quotations.

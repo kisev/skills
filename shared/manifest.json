@@ -646,6 +646,154 @@
       "destination": "askme/references/question-guidelines.md"
     },
     {
+      "source": "references/question-guidelines.md",
+      "destination": "agents-md/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "ast-grep/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "briefing/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "code-explain/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "code-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "commit-msg/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "docs-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "docs-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "goal/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "humanize/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "mattermost/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "mattermost-triage/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "mr-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "release-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "release-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "rtk/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "skill-improve/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "slides-prompts-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "spec-manage/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "stopit/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "task-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "task-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "task-triage/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "taskmatic/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-1on1/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-agreements/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-feedback/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-health/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-incident/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-onboarding/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-people/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-performance/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-report/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-retro/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-roadmap/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-sprint-close/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-sprint-start/references/question-guidelines.md"
+    },
+    {
       "source": "references/state_artifacts.py",
       "destination": "code-review/scripts/portable_runtime/state_artifacts.py"
     },
