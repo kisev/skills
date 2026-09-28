@@ -66,7 +66,10 @@ Autonomously classify every item as `accepted`, `deferred`, `rejected`,
 `duplicate`, or `obsolete`. Accept only a current, non-duplicate task whose
 semantic quality verdict is `ready` and whose SemVer is known. Every accepted
 task, not only the first five, requires the nearest compatible open milestone on
-its project or independently versioned component release line. Patch tasks fit
+its project or independently versioned component release line, unless observed
+evidence shows the team decided not to use milestones, for example a
+sprint-label workflow: then use milestone status `none` with a rationale naming
+that decision. Patch tasks fit
 patch, minor, or major releases; minor tasks fit minor or major; major tasks fit
 major. Treat `none` and `not_applicable` as patch planning impact. Dates do not
 affect compatibility. Use documented project milestone naming conventions.

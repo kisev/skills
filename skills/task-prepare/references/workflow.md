@@ -62,7 +62,9 @@ If none is supplied, run scoped single-item triage through the shared
 release-planning contract; do not copy or approximate its SemVer, release-line,
 or milestone logic. A request to prepare a new task is its planning intent, but
 the task is accepted only after semantic review returns `ready`. Translate only
-an observed selected milestone ID into publication metadata. When triage proposes
+an observed selected milestone ID into publication metadata; an accepted
+milestone status `none` decision, documented in the release plan rationale,
+publishes a version 3 item without a milestone. When triage proposes
 a new milestone, keep publication partial, point to its manual creation command,
 and recollect before generating the issue command.
 

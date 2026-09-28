@@ -28,8 +28,9 @@ bounded duplicate, relationship, label, priority, and SemVer evidence.
 GitLab mode consumes a current accepted triage release plan. When none is
 supplied, it invokes the same shared release-planning contract through scoped
 single-item triage rather than implementing milestone selection independently.
-Ready issue creation requires an observed compatible milestone ID; a missing
-milestone keeps publication partial and points to the triage creation proposal.
+Ready version 2 issue creation requires an observed compatible milestone ID;
+version 3 items may publish without one only from an accepted milestone status
+`none` decision recorded in the release plan.
 
 ## Dependencies
 
@@ -41,7 +42,7 @@ semantic checks. Local rendering uses Python 3.12+ and the standard library.
 
 Neutral output stays in chat unless a workspace-relative output is requested.
 GitLab intent automatically requests a bounded local publication bundle. New
-version 2 drafts name a safe lowercase `plan_key`; the default bundle is isolated
+drafts name a safe lowercase `plan_key`; the default bundle is isolated
 by canonical workspace and `plan_key` below XDG state, independent of draft
 content. An explicit workspace-relative output directory remains supported.
 Identical reruns reuse the slot. Changed drafts install retained immutable support
@@ -65,10 +66,18 @@ new immutable support directory retained for retry.
 ## Unique Constraints
 
 The skill does not invent tracker identifiers, labels, owners, or metadata.
-Project issues and supported group epics have distinct targets. Other group work
-items require clarification rather than invented REST endpoints. Several tasks
-require a user request or agreed split. Existing IIDs suppress creation commands;
-cross-project blocking links require observed IIDs on the same instance.
+Project issues and tasks and supported group epics have distinct targets; version 3
+creations require the observed work item type global ID, and labels are set from
+observed numeric label IDs. Other group work items require clarification rather
+than invented API endpoints. Several tasks require a user request or agreed
+split. Existing IIDs suppress creation commands; a version 3 task may name an
+observed plan item as its parent, and the child creation stays deferred until
+the parent's observed work item ID is recorded. Closed initial state renders a
+close command only after the observed work item ID is recorded. Cross-project
+blocking links require observed work item IDs on the same instance and use the
+GraphQL linked-items mutation. All publication commands target the GitLab
+GraphQL endpoint through `glab api`; version 2 drafts render through the legacy
+issue and epic mutations, version 3 through work item mutations.
 Blocked review suppresses publication commands for that item, while
 `needs_clarification` keeps its plan partial.
 
@@ -87,8 +96,9 @@ target, template, metadata, duplicate, and semantic checks are verified.
 Unresolved targets and unsupported group APIs shall remain blocked. Dependencies
 shall use real observed IIDs or remain deferred, never executable placeholders.
 Existing objects shall not receive creation commands. The workflow shall never
-execute publication commands or mutate GitLab. Each version 2 publication draft
-shall provide a safe lowercase `plan_key`; unless an output directory is explicit,
+execute publication commands or mutate GitLab. Each version 2 or version 3
+publication draft shall provide a safe lowercase `plan_key`; unless an output
+directory is explicit,
 the renderer shall use a canonical-workspace-scoped XDG slot, retain
 content-addressed support and Markdown history, and atomically replace only the
 stable Markdown after its support files are present. It shall use a slot-scoped

@@ -10,6 +10,11 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- `task-prepare` publication commands now target the GitLab GraphQL endpoint
+  through `glab api --method POST ../graphql`. Regenerated plans for unchanged
+  version 2 drafts issue `createIssue`, `createEpic`, and `updateIssue`
+  mutations instead of REST calls, and payload files hold the exact GraphQL
+  request with its query and variables.
 - Taskmatic CLI, MCP, exports and read-only web board now share the independent
   `@kisev/taskmatic` TypeScript npm application. Existing SQLite v1 data, state
   paths, card IDs and tool names remain compatible. The skill no longer bundles
@@ -21,6 +26,15 @@ All notable changes to this project are documented in this file. Entries follow
   old indices require `memomatic index` once. Learned memory is context, not policy.
 
 ### Added
+
+- Publication bundle version 3 for `task-prepare`: task work items created with
+  an observed work item type global ID, parent/child hierarchy inside one plan
+  with a two-phase parent creation, items created directly in a closed state,
+  labels set from observed numeric label IDs, and milestone-optional publication.
+  An accepted `task-triage` release plan may now record milestone status `none`
+  with a rationale documenting the team's decision not to use milestones, and
+  blocking-link commands use the GraphQL linked-items mutation with observed
+  work item global IDs.
 
 - memomatic composes with XDG skill artifacts through an asynchronous inbox
   under `$XDG_STATE_HOME/memomatic/inbox/`. Skills and agents append

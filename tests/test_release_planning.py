@@ -128,6 +128,33 @@ def test_missing_milestone_is_a_creation_proposal_until_recollected() -> None:
     assert "created and recollected" in result["findings"][0]
 
 
+def test_accepted_work_may_skip_milestones_on_a_documented_decision() -> None:
+    value = plan()
+    value["milestone"] = {
+        "status": "none",
+        "candidate": None,
+        "rationale": "The team plans with sprint labels and does not use milestones.",
+        "confidence": "high",
+    }
+    result = release_planning.validate(
+        value,
+        quality_verdict="ready",
+        milestone_catalog=[],
+        current_milestone_id=None,
+    )
+    assert result["planning_verdict"] == "ready"
+    assert result["milestone"]["status"] == "none"
+
+    value["milestone"]["candidate"] = copy.deepcopy(plan())["milestone"]["candidate"]
+    with pytest.raises(release_planning.PlanningError, match="null candidate"):
+        validate(value)
+
+    no_milestone = plan()
+    no_milestone["milestone"]["status"] = "unknown"
+    with pytest.raises(release_planning.PlanningError, match="selected or proposed milestone"):
+        validate(no_milestone)
+
+
 @pytest.mark.parametrize("decision", ["deferred", "rejected", "duplicate", "obsolete"])
 def test_nonaccepted_work_has_no_milestone_or_removes_existing(decision: str) -> None:
     value = plan()

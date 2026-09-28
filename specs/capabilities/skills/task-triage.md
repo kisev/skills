@@ -62,7 +62,9 @@ Each assessment also contains one primary agent recommendation with its rational
 assumptions, confidence, alternatives, and reconsideration evidence.
 Only semantically ready current work may be accepted. Every accepted item binds
 the nearest compatible open milestone on its own project or component release
-line; `none` and `not_applicable` impact require at least a patch release.
+line unless observed evidence shows the team decided not to use milestones, in
+which case the accepted item records milestone status `none` with that
+rationale; `none` and `not_applicable` impact require at least a patch release.
 Deferred work has no milestone, while rejected, duplicate, and obsolete work is
 removed from an active release milestone. The collection reports at most five
 first tasks plus dependency and parallel-execution groups. Every execution-plan
