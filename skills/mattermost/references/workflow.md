@@ -23,6 +23,22 @@ and `retryable=true`, while the remaining URLs are still read. Re-run the
 exact URL to resume it from the coverage cache instead of repeating the bulk
 export.
 
+For long `read` results, use `--view transcript` to display posts in chronological
+windows without emitting their bulky API metadata. The default window contains
+10 posts; `--offset N --limit N` selects another window, with a limit of 1 to 50.
+Follow `window.next_offset` until it is `null`, keeping the exact URL and period
+unchanged. The first chat or channel transcript read freezes the current time in
+`period.until`; pass its exact `period.since` and `period.until` as `--since` and
+`--until` for every later window. For a
+post thread, or if posts are edited during paging, windows are not a durable
+snapshot: recheck the IDs and coverage before claiming an exhaustive transcript.
+Each response retains the read status, coverage, counts, warnings,
+errors, and cache facts. `complete` describes the fetched interval, not how many
+windows have been displayed; use `window.total` and `window.returned` for that.
+Plain `read` still returns the full JSON result, and the view never truncates a
+post's message. If a single message exceeds the host output limit, inspect its
+saved output instead of interpreting a truncated excerpt as the complete text.
+
 Reactions are fetched by default through separate GET requests and returned as
 exact `{emoji, user}` pairs. Use `--no-reactions` only when the user asks to omit
 them, or on Band origins: Band, a Mattermost fork, does not serve the reactions
@@ -50,6 +66,14 @@ created in the requested period. If an in-period reply has an older root, fetch
 only that root and mark it `context_only`; do not load the rest of the old thread.
 Resolve direct and group chats only from the URL's exact username, channel ID, or
 direct-channel name. Do not broaden resolution into search.
+
+For direct chats, `identity.self_id` and `identity.peer_id` come from the
+authenticated account and the validated direct-channel name. A verified
+`@username` URL also supplies `identity.peer_username`. The transcript labels
+only these IDs as `self` or `peer`; all other authors are `unverified` and retain
+their exact `user_id`. Do not infer authors from ID prefixes, channel ordering,
+or group membership. `created_at_utc` is explicitly in UTC; use one timezone for
+all date filtering rather than mixing local time with a different UTC offset.
 
 ## Cache
 
@@ -164,8 +188,9 @@ Apply or Inspect and never claims an unknown outcome succeeded.
 
 Read JSON from stdout. Check `status`, `complete`, `scope`, `period`, `counts`,
 `pages`, `errors`, `warnings`, `cache_hit`, `cache_age`, and
-`access_revalidated` before using `posts` or `members`. A successful empty period
-is `status=ok`, `complete=true`, and `posts=[]`. Preserve partial evidence, but do
+`access_revalidated` before using `posts` or `members`, including transcript
+windows. A successful empty period is `status=ok`, `complete=true`, and
+`posts=[]`. Preserve partial evidence, but do
 not describe it as complete. A `network_timeout` error is retryable and covers
 only the affected target; other targets in the same `read-many` result are
 unaffected.

@@ -16,7 +16,11 @@ search and edit, delete, reaction, channel, or member mutations.
 
 ## Inputs and Outputs
 
-Read input is one exact URL and bounded period or scope. Publication preparation
+Read input is one exact URL and bounded period or scope. The default read result
+remains full JSON; a transcript view exposes bounded chronological windows with
+the same coverage status and unmodified message text. Validated direct chats
+identify the authenticated account and its peer by ID without guessing authors
+from the order of the channel name. Publication preparation
 accepts JSON stdin with `messages[{target,message,files}]`: exact HTTPS targets on
 one origin and zero to five absolute regular source files per message, each at
 most 100 MiB. Output is redacted read evidence or a stable private XDG manual
@@ -101,6 +105,34 @@ timed-out target can be resumed from the coverage cache.
 
 Timeout tests inject stalled requests and invalid limits and verify a controlled
 failure within the configured bound without leaking credentials.
+
+### REQ-F-540 - Read long conversations in bounded transcript windows
+
+For one exact read target and period, the skill shall offer chronological
+transcript windows without truncating message bodies or replacing the default
+full JSON result. Each window shall retain the original read status, completeness,
+errors, warnings, and coverage counts, and distinguish displayed posts from total
+retrieved posts. Channel and chat windows shall expose a fixed end bound for
+subsequent reads; windows are not a durable snapshot if posts are edited during
+paging. Timestamps shall identify their UTC timezone explicitly.
+
+#### Verification
+
+Reader tests recover every post of a long conversation exactly once across
+windows, preserve a partial result as partial, and leave the default output
+unchanged.
+
+### REQ-F-541 - Attribute direct-chat messages from verified identities
+
+For a validated direct chat, the skill shall identify the authenticated user and
+the peer by exact IDs derived from that direct channel. A peer username shall be
+shown only when validated through the explicit `@username` URL; unknown authors
+shall remain unverified rather than being inferred from ID prefixes.
+
+#### Verification
+
+Direct-chat tests verify both sides, unknown authors, and malformed channel
+names without broad participant enumeration or extra-origin requests.
 
 ## Example
 

@@ -99,6 +99,61 @@ class MattermostTests(unittest.TestCase):
         self.assertEqual(CHANNEL_ID, resolved["id"])
         self.assertNotIn("search", " ".join(client.calls))
 
+    def test_direct_chat_identity_uses_exact_resolved_channel(self):
+        peer_id = "p" * 26
+        channel = {"id": CHANNEL_ID, "type": "D", "name": "__".join(sorted((USER_ID, peer_id)))}
+        target = MODULE.classify_url("https://chat.example.com/team/messages/@alice")
+
+        self.assertEqual(
+            {"self_id": USER_ID, "peer_id": peer_id, "peer_username": "alice"},
+            MODULE.direct_chat_identity(channel, target, USER_ID),
+        )
+        self.assertIsNone(
+            MODULE.direct_chat_identity({**channel, "name": "other__person"}, target, USER_ID)
+        )
+        self.assertIsNone(MODULE.direct_chat_identity({**channel, "type": "G"}, target, USER_ID))
+
+    def test_read_one_identifies_direct_chat_without_member_enumeration(self):
+        peer_id = "p" * 26
+        channel = {"id": CHANNEL_ID, "type": "D", "name": "__".join(sorted((USER_ID, peer_id)))}
+
+        def handler(path):
+            if path == "/users/me":
+                return {"id": USER_ID}
+            if path == "/teams/name/team":
+                return {"id": TEAM_ID}
+            if path == "/users/username/alice":
+                return {"id": peer_id}
+            if path == f"/users/{USER_ID}/teams/{TEAM_ID}/channels":
+                return [channel]
+            if path.startswith(f"/channels/{CHANNEL_ID}/posts?"):
+                return post_page({**post("p" * 26, 1_500_000), "user_id": peer_id})
+            self.fail(f"unexpected GET {path}")
+            return None
+
+        client = FakeClient(handler=handler)
+        with (
+            mock.patch.object(MODULE, "read_token", return_value="secret"),
+            mock.patch.object(MODULE, "Client", return_value=client),
+            mock.patch.object(MODULE.time, "time", return_value=2000),
+        ):
+            result = MODULE.read_one(
+                "https://chat.example.com/team/messages/@alice",
+                "1970-01-01T00:16:40+00:00",
+                None,
+                False,
+                False,
+                include_reactions=False,
+            )
+
+        self.assertEqual("ok", result["status"])
+        self.assertEqual(peer_id, result["posts"][0]["user_id"])
+        self.assertEqual(
+            {"self_id": USER_ID, "peer_id": peer_id, "peer_username": "alice"},
+            result["identity"],
+        )
+        self.assertFalse(any("/members" in path for path in client.calls))
+
     def test_chat_channel_id_is_resolved_directly(self):
         channel = {"id": CHANNEL_ID, "type": "G", "name": "group"}
         client = FakeClient(
@@ -927,6 +982,83 @@ class MattermostTests(unittest.TestCase):
         self.assertEqual(0, exit_code)
         self.assertFalse(read_one.call_args.kwargs["include_reactions"])
         self.assertEqual("ok", json.loads(output.getvalue())["status"])
+
+    def test_transcript_windows_preserve_coverage_and_full_messages(self):
+        posts = [
+            {
+                **post(f"{index:026d}", 1000 + index),
+                "user_id": "p" * 26 if index % 2 else USER_ID,
+                "message": f"message {index}\nsecond line",
+                "props": {"large": "x" * 1000},
+            }
+            for index in range(57)
+        ]
+        result = {
+            **MODULE.result_base(scope="chat"),
+            "status": "partial",
+            "complete": False,
+            "counts": {"posts": 57},
+            "errors": [{"code": "network_timeout"}],
+            "warnings": [{"code": "page_unavailable"}],
+            "posts": list(reversed(posts)),
+            "identity": {"self_id": USER_ID, "peer_id": "p" * 26},
+        }
+
+        windows = [MODULE.transcript_result(result, offset, 10) for offset in range(0, 57, 10)]
+
+        self.assertEqual([10, 10, 10, 10, 10, 7], [len(item["posts"]) for item in windows])
+        self.assertEqual(
+            [item["id"] for item in posts],
+            [item["id"] for window in windows for item in window["posts"]],
+        )
+        self.assertEqual(10, windows[0]["window"]["next_offset"])
+        self.assertIsNone(windows[-1]["window"]["next_offset"])
+        self.assertEqual(57, windows[0]["window"]["total"])
+        self.assertEqual("self", windows[0]["posts"][0]["author_role"])
+        self.assertEqual("peer", windows[0]["posts"][1]["author_role"])
+        stranger = {**posts[0], "user_id": "x" * 26}
+        unknown = MODULE.transcript_result({**result, "posts": [stranger]}, 0, 10)
+        self.assertEqual("unverified", unknown["posts"][0]["author_role"])
+        self.assertEqual("1970-01-01T00:00:01+00:00", windows[0]["posts"][0]["created_at_utc"])
+        self.assertEqual("message 0\nsecond line", windows[0]["posts"][0]["message"])
+        self.assertNotIn("props", windows[0]["posts"][0])
+        self.assertFalse(windows[0]["complete"])
+        self.assertEqual(result["errors"], windows[0]["errors"])
+        self.assertEqual(result["warnings"], windows[0]["warnings"])
+        self.assertEqual(57, len(result["posts"]))
+
+    def test_cli_transcript_requires_valid_window_and_preserves_default_json(self):
+        completed = {
+            **MODULE.result_base(scope="chat"),
+            "status": "ok",
+            "complete": True,
+            "posts": [post("p" * 26, 1000)],
+        }
+        url = "https://chat.example.com/team/messages/@alice"
+        with mock.patch.object(MODULE, "read_one", return_value=completed) as reader:
+            for flags in ([], ["--view", "transcript"], ["--view", "transcript", "--offset", "1"]):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    self.assertEqual(0, MODULE.main(["read", url, *flags]))
+                value = json.loads(output.getvalue())
+                if flags:
+                    self.assertEqual("transcript", value["view"])
+                    self.assertEqual(1, value["window"]["total"])
+                else:
+                    self.assertEqual(completed, value)
+            self.assertEqual(3, reader.call_count)
+            for call in reader.call_args_list[1:]:
+                self.assertIsNotNone(call.args[2])
+                self.assertIsNotNone(MODULE.datetime.fromisoformat(call.args[2]).tzinfo)
+            for flags in (
+                ["--limit", "10"],
+                ["--view", "transcript", "--limit", "0"],
+                ["--view", "transcript", "--limit", "51"],
+                ["--view", "transcript", "--offset", "-1"],
+            ):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(2, MODULE.main(["read", url, *flags]))
+            self.assertEqual(3, reader.call_count)
 
     def test_cli_reports_cache_error_with_distinct_exit(self):
         output = io.StringIO()

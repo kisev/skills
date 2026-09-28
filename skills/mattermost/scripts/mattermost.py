@@ -95,6 +95,56 @@ def emit(value: object) -> None:
     print(json.dumps(value, ensure_ascii=False, sort_keys=True))
 
 
+def transcript_result(result: dict[str, object], offset: int, limit: int) -> dict[str, object]:
+    posts = result.get("posts", [])
+    assert isinstance(posts, list)
+    identity = result.get("identity")
+    participants = identity if isinstance(identity, dict) else {}
+    selected = sorted(posts, key=lambda post: (post["create_at"], post["id"]))[
+        offset : offset + limit
+    ]
+    visible = []
+    for post in selected:
+        created = post["create_at"]
+        try:
+            created_at = datetime.fromtimestamp(created / 1000, UTC).isoformat()
+        except (OverflowError, OSError, ValueError):
+            created_at = None
+        item = {
+            "id": post["id"],
+            "user_id": post["user_id"],
+            "author_role": (
+                "self"
+                if post["user_id"] == participants.get("self_id")
+                else "peer"
+                if post["user_id"] == participants.get("peer_id")
+                else "unverified"
+            ),
+            "create_at": created,
+            "created_at_utc": created_at,
+            "root_id": post.get("root_id"),
+            "context_only": post.get("context_only", False),
+            "message": post["message"],
+        }
+        for name in ("reactions", "file_ids"):
+            if name in post:
+                item[name] = post[name]
+        visible.append(item)
+    next_offset = offset + len(selected) if offset + len(selected) < len(posts) else None
+    return {
+        **result,
+        "view": "transcript",
+        "posts": visible,
+        "window": {
+            "offset": offset,
+            "limit": limit,
+            "returned": len(visible),
+            "total": len(posts),
+            "next_offset": next_offset,
+        },
+    }
+
+
 def now() -> int:
     return int(time.time())
 
@@ -577,6 +627,31 @@ def resolve_channel(client: Client, target: dict[str, str | None], user_id: str)
     if target["kind"] == "chat":
         validate_chat_type(data, target.get("route"))
     return data
+
+
+def direct_chat_identity(
+    channel: dict[str, Any], target: dict[str, str | None], user_id: str
+) -> dict[str, str] | None:
+    if channel.get("type") != "D":
+        return None
+    name = channel.get("name")
+    if not isinstance(name, str):
+        return None
+    parts = name.split("__")
+    if len(parts) != 2 or user_id not in parts or parts[0] == parts[1]:
+        return None
+    if not all(MATTERMOST_ID.fullmatch(part) for part in parts):
+        return None
+    peer_id = parts[0] if parts[1] == user_id else parts[1]
+    identity = {"self_id": user_id, "peer_id": peer_id}
+    channel_value = target.get("channel")
+    if (
+        target["kind"] == "chat"
+        and isinstance(channel_value, str)
+        and channel_value.startswith("@")
+    ):
+        identity["peer_username"] = channel_value[1:]
+    return identity
 
 
 def revalidate_access(
@@ -1862,6 +1937,9 @@ def read_one(
         else:
             assert access_channel is not None
             assert period is not None
+            identity = direct_chat_identity(access_channel, target, user_id)
+            if identity is not None:
+                result["identity"] = identity
             since_ms, until_ms = period_bounds(period, current_ms)
             (
                 posts,
@@ -2731,6 +2809,9 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--no-cache", action="store_true")
     read.add_argument("--no-reactions", action="store_true")
     read.add_argument("--timeout", type=int, default=DEFAULT_HTTP_TIMEOUT_SECONDS)
+    read.add_argument("--view", choices=("transcript",))
+    read.add_argument("--offset", type=int)
+    read.add_argument("--limit", type=int)
     many = subparsers.add_parser("read-many")
     many.add_argument("urls", nargs="+")
     many.add_argument("--since")
@@ -2876,19 +2957,33 @@ def main(argv: list[str] | None = None) -> int:
                 raise MattermostError("--refresh and --no-cache cannot be combined")
             read_cache, write_cache = (not args.no_cache and not args.refresh), not args.no_cache
             if args.command == "read":
+                if args.view is None and (args.offset is not None or args.limit is not None):
+                    raise MattermostError("--offset and --limit require --view transcript")
+                if args.view == "transcript" and (
+                    (args.offset is not None and args.offset < 0)
+                    or (args.limit is not None and not 1 <= args.limit <= 50)
+                ):
+                    raise MattermostError("transcript offset must be nonnegative and limit 1..50")
                 target = classify_url(args.url)
+                until = args.until
+                if args.view == "transcript" and target["kind"] != "post" and until is None:
+                    until = datetime.now(UTC).isoformat()
                 result = read_one(
                     args.url,
                     args.since
                     if args.since is not None
                     else (None if target["kind"] == "post" else default_since()),
-                    args.until,
+                    until,
                     read_cache,
                     write_cache,
                     include_reactions=not args.no_reactions,
                     timeout_seconds=args.timeout,
                 )
-                emit(result)
+                emit(
+                    transcript_result(result, args.offset or 0, args.limit or 10)
+                    if args.view == "transcript"
+                    else result
+                )
                 return 0 if result["status"] == "ok" else 1 if result["status"] == "partial" else 2
             results: list[dict[str, object]] = []
             for url in dict.fromkeys(args.urls):
