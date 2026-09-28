@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 from scripts import build_distribution, build_release_artifacts  # noqa: E402
 
 MEMOMATIC = ROOT / "apps" / "memomatic"
+TASKMATIC = ROOT / "apps" / "taskmatic"
 SAFE_FS = ROOT / "packages" / "safe-fs"
 PACKAGE = ROOT / "packages" / "agentomatic"
 OUTPUT = ROOT / ".build" / "release"
@@ -106,6 +107,7 @@ def build(version: str, revision: str) -> dict[str, Any]:
     members = (
         (SAFE_FS, "safe-fs.tgz", ("dist/",)),
         (MEMOMATIC, "memomatic.tgz", ("dist/", "assets/")),
+        (TASKMATIC, "taskmatic.tgz", ("dist/", "assets/")),
         (PACKAGE, "package.tgz", ("dist/",)),
     )
     pins: dict[str, str] = {}
@@ -142,6 +144,7 @@ def build(version: str, revision: str) -> dict[str, Any]:
         **os.environ,
         "AGENTOMATIC_TARBALL": str(tarballs["@kisev/agentomatic"]),
         "MEMOMATIC_TARBALL": str(tarballs["@kisev/memomatic"]),
+        "TASKMATIC_TARBALL": str(tarballs["@kisev/taskmatic"]),
         "SAFE_FS_TARBALL": str(tarballs["@kisev/safe-fs"]),
         "OPENCODE_BINARY": build_release_artifacts.command("mise", "which", "opencode").strip(),
     }

@@ -2,7 +2,7 @@
 
 Validated release tags run the complete gate, deploy the stable well-known
 distribution at `https://kisev.github.io/skills`, and publish preflighted
-`@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomatic` tarballs in
+`@kisev/safe-fs`, `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/agentomatic` tarballs in
 dependency order under npm `latest`. The release manifest binds each member's
 version, dependency pins, and digest. A push to `dev` runs the
 complete publication gate, then updates `https://kisev.github.io/skills/dev` and

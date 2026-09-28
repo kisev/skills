@@ -144,6 +144,7 @@ tasks:
     deps: [package:build]
     cmds:
       - mise exec -- tsc --project apps/memomatic/tsconfig.json --noEmit
+      - mise exec -- tsc --project apps/taskmatic/tsconfig.json --noEmit
       - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
 
   typecheck:python:
@@ -368,12 +369,13 @@ tasks:
     deps: [check, dependency:audit]
 
   package:check:
-    desc: Verify the complete agentomatic and memomatic package lifecycle and tarballs
+    desc: Verify the complete npm package lifecycle and tarballs
     deps: [package:test]
     dir: packages/agentomatic
     cmds:
       - mise exec -- npm run smoke
       - mise exec -- npm run pack:check
+      - mise exec -- npm --prefix ../../apps/taskmatic run pack:check
       - mise exec -- npm test
       - mise exec -- npm --prefix ../../apps/memomatic test
 
@@ -384,6 +386,7 @@ tasks:
     cmds:
       - mise exec -- npm test
       - mise exec -- npm --prefix ../../apps/memomatic test
+      - mise exec -- npm --prefix ../../apps/taskmatic test
 
   package:generate:
     internal: true
@@ -396,6 +399,7 @@ tasks:
     cmds:
       - mise exec -- npm run build --workspace @kisev/safe-fs
       - mise exec -- npm run build --workspace @kisev/memomatic
+      - mise exec -- npm run build --workspace @kisev/taskmatic
       - mise exec -- npm run build --workspace @kisev/agentomatic
 
   package:install:

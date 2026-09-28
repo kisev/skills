@@ -30,7 +30,10 @@ try {
   await mkdir(home);
   await writeFile(join(project, "package.json"), '{"private":true}\n');
   const packed =
-    process.env.AGENTOMATIC_TARBALL && process.env.MEMOMATIC_TARBALL && process.env.SAFE_FS_TARBALL
+    process.env.AGENTOMATIC_TARBALL &&
+    process.env.MEMOMATIC_TARBALL &&
+    process.env.TASKMATIC_TARBALL &&
+    process.env.SAFE_FS_TARBALL
       ? null
       : JSON.parse(
           execFileSync("npm", ["pack", "--json", "--workspaces", "--pack-destination", temporary], {
@@ -42,11 +45,13 @@ try {
     ({
       "@kisev/agentomatic": process.env.AGENTOMATIC_TARBALL,
       "@kisev/memomatic": process.env.MEMOMATIC_TARBALL,
+      "@kisev/taskmatic": process.env.TASKMATIC_TARBALL,
       "@kisev/safe-fs": process.env.SAFE_FS_TARBALL,
     })[name] ?? join(temporary, packed.find((record) => record.name === name).filename);
   const tarballs = [
     tarballFor("@kisev/safe-fs"),
     tarballFor("@kisev/memomatic"),
+    tarballFor("@kisev/taskmatic"),
     tarballFor("@kisev/agentomatic"),
   ];
   execFileSync("npm", ["install", "--ignore-scripts", ...tarballs], {
@@ -61,6 +66,11 @@ try {
     await installedVersion("@kisev/memomatic"),
   );
   run(memomaticExecutable, ["--help"]);
+  for (const name of ["taskmatic", "taskmatic-web"]) {
+    const executable = join(project, "node_modules", ".bin", name);
+    assert.equal(run(executable, ["--version"]).trim(), await installedVersion("@kisev/taskmatic"));
+    run(executable, ["--help"]);
+  }
   const executable = join(project, "node_modules", ".bin", "agentomatic");
   assert.equal(run(executable, ["--version"]).trim(), await installedVersion("@kisev/agentomatic"));
   const environment = {

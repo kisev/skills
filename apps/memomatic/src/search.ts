@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { cosineSimilarity, type IndexedEntry, MemoryStore, stableIdFor } from "./store.js";
 import { entryKind, parseCorpusEntries } from "./corpus.js";
 import { entryImportance, entryObservedAt } from "./entries.js";
-import { embedTexts } from "./settings.js";
+import { embedTexts, embeddingFingerprint } from "./settings.js";
 import type { MemomaticPaths } from "./paths.js";
 import type { MemomaticSettings } from "./settings.js";
 
@@ -12,6 +12,16 @@ export type SearchHit = {
   entry: IndexedEntry;
   score: number;
   snippet: string;
+  explanation: {
+    matchedTokens: string[];
+    lexical: number;
+    semantic: number | null;
+    relevance: number;
+    exact: boolean;
+    recency: number;
+    importance: number;
+    reason: "lexical" | "semantic" | "both";
+  };
 };
 
 export async function corpusFiles(paths: MemomaticPaths): Promise<string[]> {
@@ -38,12 +48,16 @@ export async function reindex(
   store: MemoryStore,
 ): Promise<number> {
   const entries: IndexedEntry[] = [];
+  const indexedIds = new Set<string>();
   for (const file of await corpusFiles(paths)) {
     const markdown = await readFile(file, "utf8");
     for (const entry of parseCorpusEntries(markdown, file)) {
       if (entry.annotations.status === "superseded") continue;
+      const stableId = stableIdFor(file, entry.text, entry.annotations.key ?? null);
+      if (indexedIds.has(stableId)) continue;
+      indexedIds.add(stableId);
       entries.push({
-        stableId: stableIdFor(file, entry.text, entry.annotations.key ?? null),
+        stableId,
         file: entry.file,
         line: entry.line,
         kind: entryKind(file),
@@ -60,15 +74,11 @@ export async function reindex(
       });
     }
   }
-  store.replaceEntries(entries);
   const vectors = await embedTexts(
     settings,
     entries.map((entry) => entry.text),
-  ).catch(() => null);
-  if (vectors)
-    for (let index = 0; index < entries.length; index += 1) {
-      if (vectors[index].length) store.setVector(entries[index].stableId, vectors[index]);
-    }
+  );
+  store.replaceIndex(entries, vectors, embeddingFingerprint(settings));
   return entries.length;
 }
 
@@ -79,46 +89,96 @@ function recencyMultiplier(entry: IndexedEntry, halfLifeDays: number, now = Date
   return Math.pow(0.5, ageDays / halfLifeDays);
 }
 
-function importanceMultiplier(entry: IndexedEntry): number {
-  return 1 + (entry.importance - 5) * 0.06;
+export type SearchOptions = { includeArchived?: boolean; markSurfaced?: boolean; project?: string };
+
+export function queryTokens(query: string): string[] {
+  return [
+    ...new Set(
+      query
+        .normalize("NFKC")
+        .toLowerCase()
+        .match(/[\p{L}\p{N}]+/gu) ?? [],
+    ),
+  ].filter((token) => token.length >= 2);
 }
 
 export async function search(
   store: MemoryStore,
   query: string,
   settings: MemomaticSettings,
-  options: { includeArchived?: boolean; markSurfaced?: boolean } = {},
+  options: SearchOptions = {},
 ): Promise<SearchHit[]> {
+  if (!query.trim()) throw new Error("query is required");
+  const tokens = queryTokens(query);
   const keyword = store.ftsSearch(query, 200);
   const vector = new Map<string, number>();
-  const queryVector = (await embedTexts(settings, [query]).catch(() => null))?.[0];
+  const storedVectors = store.vectors();
+  if (
+    settings.embedding &&
+    store.allEntries().length &&
+    store.getMeta("embeddingFingerprint") !== embeddingFingerprint(settings)
+  )
+    throw new Error("embedding index is missing or belongs to another model; run memomatic index");
+  const queryVector = (await embedTexts(settings, [query], "query"))?.[0];
   if (queryVector?.length) {
-    for (const row of store.vectors()) {
+    for (const row of storedVectors) {
+      if (row.data.length !== queryVector.length)
+        throw new Error("embedding dimensions changed; run memomatic index");
       const similarity = cosineSimilarity(queryVector, row.data);
       if (similarity > 0.05) vector.set(row.stableId, similarity);
     }
   }
   const candidates = new Set([...keyword.keys(), ...vector.keys()]);
-  const entries = store.allEntries().filter((item) => item.status === null);
+  const entries = store
+    .allEntries()
+    .filter(
+      (item) =>
+        options.project === undefined || item.project === options.project || item.kind === "user",
+    );
   const byId = new Map(entries.map((entry) => [entry.stableId, entry]));
   const hits: SearchHit[] = [];
   for (const stableId of candidates) {
     const entry = byId.get(stableId);
     if (!entry) continue;
-    const keywordScore = keyword.get(stableId) ?? 0;
-    const vectorScore = vector.get(stableId) ?? 0;
-    const hybrid = vectorScore
-      ? keywordScore
-        ? 0.65 * vectorScore + 0.35 * keywordScore
-        : vectorScore
-      : keywordScore;
-    if (hybrid <= 0) continue;
-    const score =
-      hybrid * recencyMultiplier(entry, settings.search.halfLifeDays) * importanceMultiplier(entry);
+    const words = queryTokens(entry.text);
+    const matchedTokens = tokens.filter((token) => words.some((word) => word.startsWith(token)));
+    const lexical =
+      keyword.has(stableId) && tokens.length ? matchedTokens.length / tokens.length : 0;
+    const semantic = vector.get(stableId) ?? null;
+    const lexicalAccepted = lexical >= settings.search.minScore && lexical >= 0.5;
+    const semanticAccepted =
+      semantic !== null &&
+      semantic >= settings.search.minSemanticScore &&
+      semantic >= settings.search.minScore;
+    if (!lexicalAccepted && !semanticAccepted) continue;
+    const relevance = Math.max(lexicalAccepted ? lexical : 0, semanticAccepted ? semantic! : 0);
+    const recency = recencyMultiplier(entry, settings.search.halfLifeDays);
+    const importance = Math.max(0, Math.min(1, (entry.importance - 1) / 9));
+    const score = relevance * recency * (0.85 + 0.15 * importance);
     if (score < settings.search.minScore) continue;
-    hits.push({ entry, score, snippet: entry.text.slice(0, 240) });
+    hits.push({
+      entry,
+      score,
+      snippet: entry.text.slice(0, 240),
+      explanation: {
+        matchedTokens,
+        lexical,
+        semantic,
+        relevance,
+        recency,
+        importance,
+        exact: tokens.length > 0 && tokens.every((token) => words.includes(token)),
+        reason: lexicalAccepted ? (semanticAccepted ? "both" : "lexical") : "semantic",
+      },
+    });
   }
-  hits.sort((left, right) => right.score - left.score);
+  hits.sort(
+    (left, right) =>
+      Number(right.explanation.exact) - Number(left.explanation.exact) ||
+      right.score - left.score ||
+      (right.explanation.semantic ?? 0) - (left.explanation.semantic ?? 0) ||
+      left.entry.stableId.localeCompare(right.entry.stableId),
+  );
   const limited = hits.slice(0, settings.search.maxResults);
   if (options.markSurfaced !== false && limited.length)
     store.markSurfaced(

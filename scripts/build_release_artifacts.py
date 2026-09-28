@@ -44,6 +44,13 @@ PACKAGE_MEMBERS: tuple[PackageMember, ...] = (
         prefixes=("dist/", "assets/"),
     ),
     PackageMember(
+        name="@kisev/taskmatic",
+        directory=ROOT / "apps" / "taskmatic",
+        filename="taskmatic.tgz",
+        allowed=frozenset({"README.md", "README.ru.md", "package.json"}),
+        prefixes=("dist/", "assets/"),
+    ),
+    PackageMember(
         name="@kisev/agentomatic",
         directory=ROOT / "packages" / "agentomatic",
         filename="package.tgz",
@@ -185,6 +192,7 @@ def build(tag: str, revision: str) -> dict[str, Any]:
         **os.environ,
         "AGENTOMATIC_TARBALL": str(agentomatic_tarball),
         "MEMOMATIC_TARBALL": str(OUTPUT / by_name["@kisev/memomatic"]),
+        "TASKMATIC_TARBALL": str(OUTPUT / by_name["@kisev/taskmatic"]),
         "SAFE_FS_TARBALL": str(OUTPUT / by_name["@kisev/safe-fs"]),
         "OPENCODE_BINARY": command("mise", "which", "opencode").strip(),
     }

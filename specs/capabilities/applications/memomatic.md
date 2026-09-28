@@ -22,6 +22,43 @@ Capture (explicit `memory_write` queuing an inbox drop, skill mirrors through th
 
 Every entry carries a `source` annotation; visibility derives from it: `team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing artifacts, every other source is personal-only. Search responses expose the label. The MCP server exposes exactly `memory_search`, `memory_get`, `memory_write`, and `memory_forget` to all supported hosts. Agent-initiated retrieval is observable through host tool-call logs; choosing when to search remains the model's responsibility.
 
+## Retrieval Contract
+
+### REQ-F-543 - Retrieve bounded learned context with observable relevance
+
+Search shall return relevant learned context or an empty result, not fill the
+result limit with unrelated entries. A lexical match shall never reduce the
+relevance score. Semantic-only candidates must pass `search.minSemanticScore`
+(default 0.45) before ranking; lexical coverage must reach at least 0.5 and
+`search.minScore`. The default general threshold remains 0.35. Scores are ranking
+signals, not probabilities. Importance and age cannot admit a candidate that
+failed relevance gates. Full token matches rank first; age decay still excludes
+old low-ranking episodic entries.
+
+Qwen3 embedding queries use an English task instruction in `Instruct`/`Query`
+format; documents remain raw. Other models keep raw queries unless an explicit
+`embedding.queryInstruction` is configured. The index records a fingerprint of
+endpoint, model and document format. Missing/mismatched fingerprints or dimensions
+require explicit reindexing. Invalid, incomplete or unavailable embeddings fail
+visibly; failed indexing preserves the previous committed index. A completed
+reindex replaces entries, vectors and the fingerprint in one transaction.
+
+CLI `search --explain` and MCP `memory_search` with `explain: true` expose matched
+tokens, lexical coverage, vector similarity, relevance, age/importance factors
+and acceptance reason. Optional `project` limits recall to that exact project
+plus user-level memory; unscoped entries are not guessed into a project. Returned
+source, origin, kind and project identify learned context. Such context does not
+override repository instructions, policy or current user decisions. No automatic
+injection or full historical rebuild is introduced.
+
+#### Verification
+
+Regression tests cover exact matches, paraphrases, an unknown name, unrelated
+queries, project filtering, inactive embedding endpoints, malformed vectors and
+model changes with equal dimensions. Local Qwen3 calibration uses anonymized
+positive and negative examples; thresholds remain configurable rather than a
+claim of universal semantic accuracy.
+
 ## Dependencies
 
 Node.js 22+, `node:sqlite`, optional OpenAI-compatible local embedding endpoint, configured OpenCode provider for dream model turns, presence-detected `$XDG_STATE_HOME/memomatic/inbox/` for skill producers. Agentomatic does not depend on memomatic; the standalone application is installed and connected to each host separately.

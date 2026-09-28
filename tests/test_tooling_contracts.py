@@ -127,6 +127,7 @@ def test_root_npm_workspace_is_private_exact_and_python_stays_detached() -> None
     assert root["private"] is True
     assert root["workspaces"] == [
         "apps/memomatic",
+        "apps/taskmatic",
         "packages/agentomatic",
         "packages/safe-fs",
     ]
@@ -167,7 +168,9 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
         "    deps: [package:build]" in taskfile
     ), "typecheck must build workspace packages so clean checkouts resolve types"
     safe_fs_pos = taskfile.index(f"{build_cmd}safe-fs")
-    for consumer in ("memomatic", "agentomatic"):
+    assert "mise exec -- npm --prefix ../../apps/taskmatic test" in taskfile
+    assert "mise exec -- npm --prefix ../../apps/taskmatic run pack:check" in taskfile
+    for consumer in ("memomatic", "taskmatic", "agentomatic"):
         assert taskfile.index(f"{build_cmd}{consumer}") > safe_fs_pos, (
             f"{consumer} must build after safe-fs"
         )

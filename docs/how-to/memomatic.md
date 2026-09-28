@@ -43,7 +43,7 @@ explicitly when recall is required. There is no automatic memory injection.
 Memomatic and agentomatic are separate installations; agentomatic does not install
 or depend on memomatic.
 `@dev` selects the latest successful publication from `dev` for all workspace
-packages: `@kisev/agentomatic`, `@kisev/memomatic`, and `@kisev/safe-fs`.
+packages: `@kisev/agentomatic`, `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/safe-fs`.
 `@latest` is the stable release channel; before a package's first stable release,
 its initial registry tag can still point to a prerelease. Use explicit `@dev`
 for development installations:
@@ -135,6 +135,48 @@ endpoint keeps embedding requests local. No dimension setting is needed.
 Run `memomatic index` after changing the model, then check `memomatic search`.
 Keep the endpoint available for indexing and search: an embedding request failure
 is reported as an error rather than silently falling back to text-only search.
+
+## Search Quality and Diagnostics
+
+```shell
+memomatic index
+memomatic search "routing decisions" --explain
+memomatic search "deployment" --project atlas --explain
+```
+
+After upgrading from an index without model metadata, run `memomatic index` once.
+This rebuilds derived search data and embeddings, not your Markdown knowledge or
+session history. Changing the embedding endpoint/model requires another reindex;
+same-sized vectors from different models are not compatible. A failed embedding
+rebuild preserves the previous committed index and reports an error.
+
+For Qwen3-Embedding, search automatically adds the model's `Instruct`/`Query`
+retrieval instruction to queries; documents remain raw. Other models use raw
+queries unless `embedding.queryInstruction` is configured. An explicit empty
+instruction disables query wrapping. Query-only instruction changes do not require
+rewriting document vectors.
+
+Full token matches rank first. Lexical coverage and vector similarity are checked
+before importance and age adjustments; lexical evidence never lowers relevance.
+Semantic-only hits must reach `search.minSemanticScore` (default `0.45`). The
+general `search.minScore` remains `0.35`; thresholds are configurable and are not
+probabilities. These defaults were checked with a small local Qwen3 positive/negative
+sample, not a universal benchmark. The same query can behave differently with a
+different model. A high threshold may miss a weak but useful paraphrase.
+
+`--explain` shows matched tokens, lexical coverage, cosine similarity, relevance,
+age and importance factors, and the acceptance reason. MCP accepts `explain: true`
+and `project` on `memory_search`. No accepted hits prints `No relevant memory found.`
+in the CLI and returns `[]` through MCP. An embedding error is not reported as an
+empty successful search.
+
+A project filter includes exactly that project's entries plus user-level memory;
+old entries without project annotations are not assigned a scope automatically.
+Keep human-authored instructions in repository/host instruction files. Retrieved
+experiences and preferences are evidence, not authority to override those rules.
+This follows the [Z.ai memory principles](https://docs.z.ai/devpack/resources/memory-mechanism):
+separate instructions from learned memory, scope retrieval, and keep updates
+inspectable. Explicit MCP retrieval remains the only agent interface.
 
 ## Storage, Cleanup, and Recovery
 

@@ -39,7 +39,7 @@ bindings and assert non-success outcomes with retained useful partial results.
 
 On a validated release tag, CI shall pass the complete quality gate before any
 publication, build the exact tagged Pages distribution and the npm tarballs for
-`@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomatic`, and bind all
+`@kisev/safe-fs`, `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/agentomatic`, and bind all
 artifacts to one release manifest. Each package keeps its maintained version;
 development versions and exact dependency pins follow the manifest's member graph.
 CI shall verify every member's deployed npm artifact, deployed Pages bytes, npm

@@ -143,8 +143,8 @@ export class MemoryStore {
     return this.fts;
   }
 
-  replaceEntries(entries: IndexedEntry[]): void {
-    this.db.exec("BEGIN IMMEDIATE;");
+  replaceEntries(entries: IndexedEntry[], manageTransaction = true): void {
+    if (manageTransaction) this.db.exec("BEGIN IMMEDIATE;");
     try {
       this.db.exec("DELETE FROM entries;");
       if (this.fts) this.db.exec("DELETE FROM entries_fts;");
@@ -180,9 +180,24 @@ export class MemoryStore {
       }
       this.db.exec("DELETE FROM usage WHERE stable_id NOT IN (SELECT stable_id FROM entries);");
       this.db.exec("DELETE FROM vectors WHERE stable_id NOT IN (SELECT stable_id FROM entries);");
-      this.db.exec("COMMIT;");
+      if (manageTransaction) this.db.exec("COMMIT;");
     } catch (error) {
-      this.db.exec("ROLLBACK;");
+      if (manageTransaction) this.db.exec("ROLLBACK;");
+      throw error;
+    }
+  }
+
+  replaceIndex(entries: IndexedEntry[], vectors: Float32Array[] | null, fingerprint: string): void {
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.replaceEntries(entries, false);
+      this.db.exec("DELETE FROM vectors");
+      if (vectors)
+        entries.forEach((entry, index) => this.setVector(entry.stableId, vectors[index]));
+      this.setMeta("embeddingFingerprint", fingerprint);
+      this.db.exec("COMMIT");
+    } catch (error) {
+      this.db.exec("ROLLBACK");
       throw error;
     }
   }

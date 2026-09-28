@@ -19,7 +19,7 @@ commands:
 function parseArguments(argv: string[]): { command: string; rest: string[] } {
   const [command, ...rest] = argv;
   if (!command || command === "help" || command === "--help") {
-    process.stderr.write(USAGE);
+    process.stderr.write(`${USAGE}\nSearch options: --explain, --project NAME\n`);
     process.exitCode = command ? 0 : 2;
     return { command: "", rest };
   }
@@ -64,12 +64,26 @@ async function main(): Promise<void> {
       return;
     }
     if (command === "search") {
-      const query = rest.join(" ").trim();
+      const parts: string[] = [];
+      let explain = false;
+      let project: string | undefined;
+      for (let index = 0; index < rest.length; index += 1) {
+        if (rest[index] === "--explain") explain = true;
+        else if (rest[index] === "--project") {
+          project = rest[++index];
+          if (!project || project.startsWith("--")) throw new Error("--project requires a value");
+        } else parts.push(rest[index]);
+      }
+      const query = parts.join(" ").trim();
       if (!query) throw new Error("search requires a query");
-      for (const hit of await searchMemory(context, query))
+      const hits = await searchMemory(context, query, { project });
+      if (!hits.length) process.stdout.write("No relevant memory found.\n");
+      for (const hit of hits) {
         process.stdout.write(
           `${hit.score.toFixed(3)}  ${hit.entry.file.replace(`${context.paths.stateRoot}/`, "")}:${hit.entry.line}  ${hit.snippet}\n`,
         );
+        if (explain) process.stdout.write(`  ${JSON.stringify(hit.explanation)}\n`);
+      }
       return;
     }
     if (command === "status") {

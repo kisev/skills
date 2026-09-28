@@ -16,6 +16,6 @@ metadata:
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md` when it is present. Preserve exact commands, paths,
-IDs, JSON fields, and quotations. The bundled runtime is `scripts/taskmatic.py`
-(Python 3.12+, standard library only); `scripts/viewer.html` is its read-only page
-template.
+IDs, JSON fields, and quotations. Use the independently installed
+`@kisev/taskmatic` application (Node.js 22.13+) through CLI or MCP. This skill
+contains instructions and the snapshot contract, not a bundled runtime.

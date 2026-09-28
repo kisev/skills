@@ -22,8 +22,9 @@ can show a stale `claim_state` until the next mutation or explicit
 
 ## Human surface
 
-Run the runner as `python3 scripts/taskmatic.py` (adjust the path to the installed
-skill) or through any wrapper the host provides.
+Install `@kisev/taskmatic` separately with npm (Node.js 22.13+) and run `taskmatic`.
+The skill does not install the application. Use `@dev` for the development channel;
+check the installed version with `taskmatic --version`.
 
 - `boards`, `board-create <slug> [--title TITLE]`
 - `add <title> [--board SLUG] [--priority low|normal|high|urgent] [--labels a,b]`
@@ -32,18 +33,16 @@ skill) or through any wrapper the host provides.
 - `show <id>` — full card with activity; add `--json` for machine output.
 - `move <id> <status>`, `complete <id>`
 - `edit <id> [--title ...] [--priority ...] [--labels ...]`
-  `[--assignee NAME|unset] [--linked REF|unset] [--notes ... | --notes-file -]`
+  `[--assignee NAME | --clear-assignee] [--linked REF | --clear-linked] [--notes ... | --notes-file -]`
 - `note <id> <text> [--actor NAME]`
 - `claim <id> --agent NAME [--ttl 30m]`, `heartbeat <id> --agent NAME [--ttl 30m]`,
   `release <id> --agent NAME`
 - `export` — regenerate the mirror; `snapshot [--board ...]` — print snapshot JSON;
   `path [root|db|export|web]`
 
-The live web board is the standalone `taskmatic-web` application (see
-`apps/taskmatic/` in the skills repository), installed with `uv tool install` or
-`pipx install` and run as `taskmatic-web serve [--host 127.0.0.1] [--port 8765]`.
-It is a user-run application, not part of the skill runner. Without it, open the
-static `export/web/index.html` from any file browser or static server.
+Run the live read-only board with `taskmatic serve [--host 127.0.0.1] [--port 8765]`.
+`taskmatic-web serve` remains a compatibility alias from the same npm package.
+Alternatively open the static `export/web/index.html` export.
 
 Statuses: `todo`, `doing`, `review`, `blocked`, `done`. TTL accepts seconds
 (`1800`) or `30m`, `2h`, `1d`. All list and show output is also available as
@@ -51,8 +50,8 @@ Statuses: `todo`, `doing`, `review`, `blocked`, `done`. TTL accepts seconds
 
 ## Agent contract
 
-Agents act through the same runner or through the MCP server (`... taskmatic.py
-mcp`, newline-delimited JSON-RPC 2.0 over stdio; tools `taskmatic_boards`,
+Agents act through the same CLI or through the MCP server (`taskmatic mcp`,
+newline-delimited JSON-RPC 2.0 over stdio; tools `taskmatic_boards`,
 `taskmatic_list`, `taskmatic_read`, `taskmatic_create`, `taskmatic_edit`,
 `taskmatic_move`, `taskmatic_claim`, `taskmatic_heartbeat`, `taskmatic_release`,
 `taskmatic_complete`, `taskmatic_note`).
@@ -90,24 +89,26 @@ For an OpenCode MCP registration, add to the user-owned `opencode.json`:
   "mcp": {
     "taskmatic": {
       "type": "local",
-      "command": ["python3", "<installed-skill-path>/scripts/taskmatic.py", "mcp"],
+      "command": ["taskmatic", "mcp"],
       "enabled": true
     }
   }
 }
 ```
 
-`<installed-skill-path>` is the directory containing this skill's `SKILL.md`; the
-exact location depends on the host installation.
+Use an absolute executable path when the host cannot resolve the npm binary.
+The same MCP command works in OpenCode, Kilo and MiMo. Existing SQLite v1 stores
+remain compatible: preserve the state root when replacing the former Python
+command. Preview and confirm host configuration changes, then restart the host.
 
 ## Boundaries
 
-- The runner and the MCP server never open network connections. All views are
-  read-only; only the separate user-run `taskmatic-web` application binds a
+- The CLI and the MCP server never open outbound network connections. All views are
+  read-only; only the explicit `serve` command binds a
   local loopback socket.
 - The board is private state: never commit `taskmatic.db` or `export/` to a
   repository and never publish a snapshot that contains private data.
 - The web board is strictly read-only; every mutation goes through the CLI or MCP.
-- The runner is standard-library-only Python 3.12+; do not add dependencies.
+- The installed runtime is TypeScript/Node.js; there is no Python runtime in this skill.
 - Do not hand-edit the database. Corrections go through `edit`, `note`, or a new
   card.

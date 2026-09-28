@@ -1,6 +1,6 @@
 ---
 audience: user
-review: {"components": ["taskmatic"], "sources": ["skills/taskmatic/scripts/*", "apps/taskmatic/src/taskmatic_web/*", "apps/taskmatic/tests/*"], "contracts": ["specs/capabilities/skills/taskmatic.md"]}
+review: {"components": ["taskmatic"], "sources": ["skills/taskmatic/references/*", "apps/taskmatic/src/*", "apps/taskmatic/test/*"], "contracts": ["specs/capabilities/skills/taskmatic.md"]}
 ---
 
 # Создание и использование доски Taskmatic
@@ -9,18 +9,20 @@ review: {"components": ["taskmatic"], "sources": ["skills/taskmatic/scripts/*", 
 
 ## Установка и создание базы
 
-Нужен Python 3.12+. Установите скилл `taskmatic` по
-[инструкции для переносимых скиллов](portable-skills.md). Задайте `TASKMATIC_SKILL`
-как каталог установленного скилла с `SKILL.md`, затем создайте первую карточку:
+Нужен Node.js 22.13+. Приложение устанавливается отдельно от скилла `taskmatic`
+(см. [инструкцию для переносимых скиллов](portable-skills.md)). После публикации
+в npm используйте dev-канал или выберите опубликованную стабильную версию:
 
 ```shell
-python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" add "Check the first board" --board main
-python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" list --board main
+npm install --global @kisev/taskmatic@dev
+taskmatic --version
+taskmatic add "Check the first board" --board main
+taskmatic list --board main
 ```
 
-Раннер создаёт приватную SQLite-базу и производные экспорты. Отдельное
-веб-приложение не создаёт отсутствующую базу: сначала создайте карточку.
-Оба инструмента должны использовать один абсолютный `TASKMATIC_HOME` или стандартный
+CLI создаёт приватную SQLite-базу и производные экспорты. Веб-сервер только
+читает базу: сначала создайте карточку или доску.
+CLI, MCP и просмотр должны использовать один абсолютный `TASKMATIC_HOME` или стандартный
 `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/taskmatic/`.
 
 ## Работа с карточками
@@ -28,10 +30,10 @@ python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" list --board main
 Замените `CARD_ID` идентификатором из результата создания или списка:
 
 ```shell
-python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" show CARD_ID
-python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" claim CARD_ID --agent review-bot --ttl 30m
-python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" note CARD_ID "Checked the setup" --actor review-bot
-python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" complete CARD_ID
+taskmatic show CARD_ID
+taskmatic claim CARD_ID --agent review-bot --ttl 30m
+taskmatic note CARD_ID "Checked the setup" --actor review-bot
+taskmatic complete CARD_ID
 ```
 
 Статусы: `todo`, `doing`, `review`, `blocked`, `done`. Действующий захват
@@ -42,22 +44,20 @@ python3 "$TASKMATIC_SKILL/scripts/taskmatic.py" complete CARD_ID
 ## Просмотр доски
 
 ```shell
-uv tool install git+https://github.com/kisev/skills#subdirectory=apps/taskmatic
-taskmatic-web serve
+taskmatic serve
 ```
 
 Откройте `http://127.0.0.1:8765`. Параметр `--port 0` выбирает свободный порт. Адреса
 вне loopback отклоняются; у доски нет аутентификации для сетевого доступа. Карточки и
-захваты меняются только через раннер или MCP. Без приложения можно открыть производный
+захваты меняются только через CLI или MCP. Без живого сервера можно открыть производный
 `export/web/index.html`; он обновляется только при повторном экспорте.
 
 ## Подключение агента
 
-Для OpenCode добавьте блок в пользовательскую конфигурацию, заменив placeholder
-каталогом установленного скилла с `SKILL.md`, затем перезапустите хост:
+Для OpenCode, Kilo или MiMo добавьте блок в пользовательскую конфигурацию и перезапустите хост:
 
 ```json
-{"mcp": {"taskmatic": {"type": "local", "command": ["python3", "<installed-skill-path>/scripts/taskmatic.py", "mcp"], "enabled": true}}}
+{"mcp": {"taskmatic": {"type": "local", "command": ["taskmatic", "mcp"], "enabled": true}}}
 ```
 
 Проверьте `taskmatic_list` и `taskmatic_read`, затем вызывайте `taskmatic_claim` перед
@@ -65,3 +65,29 @@ taskmatic-web serve
 производные Markdown-зеркала; исправляйте карточки командами. Не добавляйте базу,
 заметки и экспорты в Git. Ошибка отсутствующей базы означает, что выбран другой каталог
 или ещё не создана первая карточка, а не необходимость создать базу веб-сервером.
+
+## Переход с Python
+
+Npm-приложение напрямую открывает прежнюю SQLite-базу v1. Идентификаторы, доски,
+заметки, метки, родительские связи, история и захваты сохраняются; импорт,
+сброс и смена схемы не нужны. Скилл теперь содержит инструкции и контракт
+снапшота, без Python-раннера.
+
+1. Запишите текущий каталог данных (`TASKMATIC_HOME` или стандартный путь выше).
+   Остановите запись перед созданием согласованной резервной копии всего каталога,
+   включая SQLite WAL-файлы. Сохраните старый исполняемый файл для отката.
+2. Установите npm-приложение. Проверьте `taskmatic --version` и
+   `taskmatic --home /absolute/state/root snapshot` на существующей доске.
+3. Замените Python-команду MCP на `taskmatic mcp` в каждом хосте. В `ExecStart`
+   сервиса укажите абсолютный путь npm-приложения с `serve`; сохраните каталог
+   данных, loopback-адрес и порт. Подтвердите предпросмотр этих пользовательских
+   правок, перечитайте systemd-конфигурацию, если она используется, и перезапустите
+   сервис и хосты.
+4. Проверьте доски, известную карточку, захваты и веб-страницу. `taskmatic-web`
+   остаётся npm-алиасом, но старый бинарник uv/pipx может его перекрыть; в сервисах
+   лучше использовать абсолютный путь `taskmatic`. Удаляйте прежнюю установку
+   только после успешной проверки и явного подтверждения очистки.
+
+Для отката верните команды на сохранённую Python-установку с той же базой v1.
+Не затирайте новые задачи старой резервной копией. Markdown и HTML остаются
+производными; их можно пересоздать командой `taskmatic export`.

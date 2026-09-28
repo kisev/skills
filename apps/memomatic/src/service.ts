@@ -7,7 +7,7 @@ import { dropToInbox, withRunLock } from "./inbox.js";
 import { isForbidden, loadRules, type MemoryRules } from "./rules.js";
 import { memomaticPaths, type MemomaticPaths } from "./paths.js";
 import { loadSettings, type MemomaticSettings } from "./settings.js";
-import { reindex, search, type SearchHit } from "./search.js";
+import { reindex, search, type SearchHit, type SearchOptions } from "./search.js";
 import { MemoryStore } from "./store.js";
 import { visibilityForSource } from "./visibility.js";
 
@@ -75,17 +75,28 @@ export async function writeEntry(
   return dropToInbox(context.paths, [line], request.source ?? origin);
 }
 
-export async function searchMemory(context: MemomaticContext, query: string): Promise<SearchHit[]> {
-  return search(context.store, query, context.settings);
+export async function searchMemory(
+  context: MemomaticContext,
+  query: string,
+  options: SearchOptions = {},
+): Promise<SearchHit[]> {
+  return search(context.store, query, context.settings, options);
 }
 
-export async function searchMemoryResults(context: MemomaticContext, query: string) {
-  return (await searchMemory(context, query)).map((hit) => ({
+export async function searchMemoryResults(
+  context: MemomaticContext,
+  query: string,
+  options: SearchOptions & { explain?: boolean } = {},
+) {
+  return (await searchMemory(context, query, options)).map((hit) => ({
     file: hit.entry.file.replace(`${context.paths.stateRoot}/`, ""),
     kind: hit.entry.kind,
     line: hit.entry.line,
     score: Number(hit.score.toFixed(4)),
     snippet: hit.snippet,
+    project: hit.entry.project,
+    origin: hit.entry.origin,
+    ...(options.explain ? { explanation: hit.explanation } : {}),
     source: hit.entry.source,
     visibility: visibilityForSource(hit.entry.source),
   }));
@@ -188,5 +199,5 @@ export async function archiveOldEpisodic(context: MemomaticContext): Promise<str
 }
 
 export async function rebuildIndex(context: MemomaticContext): Promise<number> {
-  return reindex(context.paths, context.settings, context.store);
+  return withRunLock(context.paths, () => reindex(context.paths, context.settings, context.store));
 }

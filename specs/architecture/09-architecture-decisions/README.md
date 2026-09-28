@@ -19,3 +19,4 @@ items.
 - [ADR-0013: Compose memomatic artifact inbox](0013-compose-memomatic-artifact-inbox.md) - superseded by ADR-0015
 - [ADR-0014: Change-linked documentation review](0014-change-linked-documentation-review.md) - accepted
 - [ADR-0015: Use explicit MCP memory](0015-use-explicit-mcp-memory.md) - accepted
+- [ADR-0016: Unify task runtime and explicit recall](0016-unify-task-runtime-and-explicit-recall.md) - accepted

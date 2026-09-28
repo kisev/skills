@@ -1,0 +1,57 @@
+{
+  "schema": "taskmatic/snapshot/v1",
+  "generated_at": "2026-01-01T00:00:00Z",
+  "boards": [
+    { "slug": "main", "title": "Main", "created_at": "2026-01-01T00:00:00Z" },
+    { "slug": "ops", "title": "Operations", "created_at": "2026-01-01T00:00:00Z" }
+  ],
+  "cards": [
+    {
+      "id": "0123abcd",
+      "board": "main",
+      "title": "Review the snapshot contract",
+      "notes": "Validate the emitted snapshot.",
+      "status": "todo",
+      "priority": "high",
+      "labels": ["contract"],
+      "assignee": null,
+      "parent": null,
+      "children": ["4567abcd"],
+      "linked": null,
+      "claimed_by": null,
+      "claim_expires_at": null,
+      "claim_state": null,
+      "claim_remaining_seconds": null,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z",
+      "activity": []
+    },
+    {
+      "id": "4567abcd",
+      "board": "ops",
+      "title": "Child card",
+      "notes": "",
+      "status": "doing",
+      "priority": "normal",
+      "labels": [],
+      "assignee": null,
+      "parent": "0123abcd",
+      "children": [],
+      "linked": null,
+      "claimed_by": "agent-a",
+      "claim_expires_at": "2026-01-01T00:10:00Z",
+      "claim_state": "held",
+      "claim_remaining_seconds": 600,
+      "created_at": "2026-01-01T00:00:00Z",
+      "updated_at": "2026-01-01T00:00:00Z",
+      "activity": [
+        {
+          "at": "2026-01-01T00:00:00Z",
+          "kind": "note",
+          "actor": "agent-a",
+          "detail": "claimed for review"
+        }
+      ]
+    }
+  ]
+}

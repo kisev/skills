@@ -15,7 +15,7 @@ the root workspace list and the publication graph diverge.
 ## Rewire the Repository Graph
 
 Update every surface for the new name, in dependency order (`@kisev/safe-fs`
-before `@kisev/memomatic` and `@kisev/agentomatic`):
+before `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/agentomatic`):
 
 | Surface | What to update |
 | - | - |
@@ -62,6 +62,7 @@ gh run download <run-id> -n npm-dev-<run-id>-1 -D .build/release
 # Publish in dependency order, then bind the trusted publisher
 npm publish .build/release/safe-fs.tgz   --tag dev --access public
 npm publish .build/release/memomatic.tgz --tag dev --access public
+npm publish .build/release/taskmatic.tgz --tag dev --access public
 npm publish .build/release/package.tgz   --tag dev --access public
 
 # npm never allows deleting `latest`; point it at a stable release when one exists
@@ -69,6 +70,7 @@ npm dist-tag add @kisev/agentomatic@<stable-version> latest    # name with a sta
 
 npm trust github @kisev/safe-fs    --repo kisev/skills --file publish.yml --allow-publish --yes
 npm trust github @kisev/memomatic --repo kisev/skills --file publish.yml --allow-publish --yes
+npm trust github @kisev/taskmatic --repo kisev/skills --file publish.yml --allow-publish --yes
 npm trust github @kisev/agentomatic --repo kisev/skills --file publish.yml --allow-publish --yes
 ```
 
@@ -83,6 +85,7 @@ exists, and that consumers never need `latest` to reach a development build:
 npm dist-tag ls @kisev/agentomatic
 npm dist-tag ls @kisev/safe-fs
 npm dist-tag ls @kisev/memomatic
+npm dist-tag ls @kisev/taskmatic
 ```
 
 Traps:

@@ -8,6 +8,18 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+### Changed
+
+- Taskmatic CLI, MCP, exports and read-only web board now share the independent
+  `@kisev/taskmatic` TypeScript npm application. Existing SQLite v1 data, state
+  paths, card IDs and tool names remain compatible. The skill no longer bundles
+  a Python runtime; host commands and services require an explicit migration.
+- Memory retrieval uses instructed Qwen3 queries, relevance gates before ranking,
+  exact-match priority, optional project filtering and `--explain`/MCP diagnostics.
+  Unknown names and unrelated queries can return no hits. Embedding indices carry
+  model identity and are replaced atomically only after successful embedding;
+  old indices require `memomatic index` once. Learned memory is context, not policy.
+
 ### Added
 
 - memomatic composes with XDG skill artifacts through an asynchronous inbox
