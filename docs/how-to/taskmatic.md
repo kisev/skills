@@ -10,8 +10,8 @@ review: {"components": ["taskmatic"], "sources": ["skills/taskmatic/references/*
 ## Install and Create the Store
 
 Use Node.js 22.13+. Install the application separately from the `taskmatic` skill
-(see the [portable skills guide](portable-skills.md)). After npm publication, use
-the development channel or select a published stable version:
+(see the [portable skills guide](portable-skills.md)). Use the development
+channel, or select a stable version once a stable release is available:
 
 ```shell
 npm install --global @kisev/taskmatic@dev
@@ -24,6 +24,9 @@ The CLI creates the private SQLite store and derived exports. The read-only
 web server cannot initialize a missing store; create a card or board first.
 CLI, MCP and viewer must use the same absolute `TASKMATIC_HOME`, or the default
 `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/taskmatic/`.
+
+Rerun the npm installation to update the application independently of the skill.
+Restart MCP hosts and the web service after an update so they use the new runtime.
 
 ## Work with Cards
 

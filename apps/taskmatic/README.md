@@ -13,8 +13,8 @@ taskmatic mcp
 taskmatic serve
 ```
 
-The npm package must be published before registry installation. The portable
-`taskmatic` skill supplies instructions; it does not install the application.
+The `dev` tag supplies the development build. Updating the portable `taskmatic`
+skill does not update the application; rerun the npm installation to update it.
 See the [setup and migration guide](../../docs/how-to/taskmatic.md).
 
 ## Compatibility
