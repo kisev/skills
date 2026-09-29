@@ -24,13 +24,6 @@ RESULT_SCHEMA = "eval-result/v1"
 ADAPTER_PROTOCOLS = {"opencode": "opencode-cli-json/v1", "codex": "codex-cli-json/v1"}
 OFFLINE_RUNNERS = {
     "assertions-v1": {("docs-prepare", "scripts/goal_authorization.py")},
-    "portable-gitlab-v2": {("code-review", "scripts/review_mr.py")},
-}
-LEGACY_GITLAB_V2_DIGEST = "60641989df03379e5a79a39dec59588b7e359f7424ca985b74b08265e8b52979"
-LEGACY_GITLAB_V2_RUNNER = {
-    "skill": "code-review",
-    "script": "scripts/review_mr.py",
-    "target": "https://gitlab.example/group/project/-/merge_requests/7",
 }
 PUBLIC_SURFACES = ROOT / "evals" / "contracts" / "public-surfaces.json"
 SENSITIVE_KEY = re.compile(r"(?:token|secret|password|authorization|cookie|api[_-]?key)", re.I)
@@ -133,19 +126,6 @@ def safe_relative(value: str) -> Path:
     return path
 
 
-def is_legacy_gitlab_v2(scenario: dict[str, Any], runner: dict[str, Any]) -> bool:
-    fixture = scenario.get("input", {}).get("fixture")
-    return (
-        scenario.get("schema") == SCENARIO_SCHEMA
-        and scenario.get("id") == "gitlab.evidence-contract"
-        and scenario.get("revision") == 2
-        and scenario.get("digest") == LEGACY_GITLAB_V2_DIGEST
-        and scenario_digest(scenario) == LEGACY_GITLAB_V2_DIGEST
-        and fixture == {"selected": []}
-        and runner == LEGACY_GITLAB_V2_RUNNER
-    )
-
-
 def offline_runner_config(
     scenario: dict[str, Any], filename: str
 ) -> tuple[str, str, str, str] | None:
@@ -153,23 +133,12 @@ def offline_runner_config(
     if runner is None:
         return None
     required = {"protocol", "skill", "script", "target"}
-    legacy = {"skill", "script", "target"}
     if not isinstance(runner, dict):
         raise EvalError("malformed_scenario", f"{filename}: offline_runner fields are invalid")
-    fields = frozenset(runner)
-    if fields not in {frozenset(required), frozenset(legacy)}:
+    if frozenset(runner) != frozenset(required):
         raise EvalError("malformed_scenario", f"{filename}: offline_runner fields are invalid")
     skill, script, target = runner.get("skill"), runner.get("script"), runner.get("target")
     protocol = runner.get("protocol")
-    legacy_gitlab = False
-    if fields == frozenset(legacy):
-        legacy_gitlab = is_legacy_gitlab_v2(scenario, runner)
-        if not legacy_gitlab:
-            raise EvalError(
-                "unsupported_runner_protocol",
-                f"{filename}: legacy offline_runner is not allowlisted",
-            )
-        protocol = "portable-gitlab-v2"
     if not isinstance(protocol, str) or protocol not in OFFLINE_RUNNERS:
         raise EvalError(
             "unsupported_runner_protocol", f"{filename}: offline_runner protocol is unsupported"
@@ -185,8 +154,6 @@ def offline_runner_config(
         raise EvalError("sandbox_escape", f"{filename}: offline_runner path is unsafe")
     fixture = scenario["input"].get("fixture")
     selected = fixture.get("selected") if isinstance(fixture, dict) else None
-    if legacy_gitlab:
-        selected = [f"skill:{skill}"]
     if not isinstance(selected, list) or f"skill:{skill}" not in selected:
         raise EvalError("unselected_runner", f"{filename}: offline_runner skill is not selected")
     if (skill, script) not in OFFLINE_RUNNERS[protocol]:

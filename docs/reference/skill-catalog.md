@@ -85,8 +85,9 @@ separate fixing phase. Portable `code-review` also works without this agent laye
 
 1. Request a code review and read the resulting `review-publication.md`.
 2. Inspect each proposed action and its exact body before running its command.
-3. Run one generated `review_publication.py apply` command at a time. A thread
-   closure requires the successful receipt for its preceding explanation.
+3. Publication runs through the manual `reviewmatic plan` walkthrough, which
+   executes one guarded `reviewmatic publication apply` action at a time. A
+   thread closure requires the successful receipt for its preceding explanation.
 4. If the result is `unknown`, follow the helper's interactive recovery or run its
    exact `inspect` command. If bounded reads still do not find the effect, only the
    explicit `retry` command can repeat the write, with a duplicate-write warning.

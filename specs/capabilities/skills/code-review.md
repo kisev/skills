@@ -15,12 +15,14 @@ compact role-aware assessment and a stable manual publication plan containing
 ranked findings, thread actions, previous-finding dispositions, recommended
 issues, exhaustive project-label applicability, a compact label delta, metadata
 assessment, SemVer rationale, validated per-item suggestions or unified patches,
-and direct manual `glab` commands that consume generated body files. Published
-patches are copy-ready `git apply` heredocs, while explanation and thread-state
-commands remain separate.
+and guarded one-action publication commands that consume generated body files.
+Published patches are copy-ready `git apply` heredocs, while explanation and
+thread-state commands remain separate.
 The human publication plan identifies the skill and review-contract versions,
 keeps label delta beside compact MR metadata, and omits internal action IDs,
 operations, positions, body paths, and digests.
+The executable runtime is the external `reviewmatic` application; the portable
+archive ships only authored prompt material and materialized references.
 
 ## Workflow Stages
 
@@ -186,10 +188,10 @@ suggestion, it shall prepare no duplicate reply; a new reply is permitted only
 when it adds a confirmed correction or independent information. Publication
 prose shall apply `humanize`, avoid semicolons outside exact code, commands, and
 quotations, and never claim to close a thread that is already resolved.
-The plan shall display its producer release version stamped from the portable
-release manifest during build, without a maintained version literal or runtime
-checkout dependency. Metadata shall be compact, label changes and their command
-shall appear once beside it, and actions shall have human-readable captions.
+The plan shall display its producer release version without a maintained version
+literal or runtime checkout dependency. Metadata shall be compact, label changes
+and their command shall appear once beside it, and actions shall have
+human-readable captions.
 Local fixes shall retain copy-ready patch previews. Semantically equivalent
 labels shall prefer namespaced labels based on their names and descriptions,
 replacing existing plain equivalents without hardcoded alias matching.
@@ -229,7 +231,7 @@ an automatic final broad audit, fixed round limit, or severity-only cutoff.
 
 #### Verification
 
-The `tests/test_review_*.py` suites check exact-head collection, cumulative
+The `apps/reviewmatic/test/` suites check exact-head collection, cumulative
 local findings, invalidated baselines, publication freshness, reservations,
 receipts, and recovery. Scenario evidence checks role-aware prose, necessity,
 and architecture assessment; structural success alone does not prove judgment.

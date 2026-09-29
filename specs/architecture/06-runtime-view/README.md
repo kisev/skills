@@ -55,8 +55,10 @@ source, tests, schemas, configuration, CI, and deployment. If multiple modes
 remain possible, it asks one bounded question and performs no write; read-only
 intent cannot enter a writing lifecycle.
 
-Code-review's skill-owned `review_workflow.py` coordinates collection, independent
-review, finalization, and plan creation using shared GitLab primitives. Its separate
-`review_publication.py` implements the one-action lifecycle owned by
-[the code-review requirement](../../capabilities/skills/code-review.md). Preparation
-never starts that lifecycle. Manual local patches remain a separate operation.
+Code-review preparation runs in the external `reviewmatic` application, which
+coordinates collection, independent review, finalization, and plan creation
+against the shared GitLab artifact contracts. Its `reviewmatic publication`
+commands implement the one-action lifecycle owned by
+[the code-review requirement](../../capabilities/skills/code-review.md). The
+skill archive itself never starts that lifecycle. Manual local patches remain a
+separate operation.

@@ -2,6 +2,7 @@
   "private": true,
   "workspaces": [
     "apps/memomatic",
+    "apps/reviewmatic",
     "apps/taskmatic",
     "packages/agentomatic",
     "packages/safe-fs"

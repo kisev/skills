@@ -144,6 +144,7 @@ tasks:
     deps: [package:build]
     cmds:
       - mise exec -- tsc --project apps/memomatic/tsconfig.json --noEmit
+      - mise exec -- tsc --project apps/reviewmatic/tsconfig.json --noEmit
       - mise exec -- tsc --project apps/taskmatic/tsconfig.json --noEmit
       - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
 
@@ -381,6 +382,7 @@ tasks:
     cmds:
       - mise exec -- uv run --locked python ../../scripts/check_opencode_compatibility.py
       - mise exec -- npm run pack:check
+      - mise exec -- npm --prefix ../../apps/reviewmatic run pack:check
       - mise exec -- npm --prefix ../../apps/taskmatic run pack:check
       - mise exec -- npm test
       - mise exec -- npm --prefix ../../apps/memomatic test
@@ -392,6 +394,7 @@ tasks:
     cmds:
       - mise exec -- npm test
       - mise exec -- npm --prefix ../../apps/memomatic test
+      - mise exec -- npm --prefix ../../apps/reviewmatic test
       - mise exec -- npm --prefix ../../apps/taskmatic test
 
   package:generate:
@@ -406,6 +409,7 @@ tasks:
       - mise exec -- npm run build --workspace @kisev/safe-fs
       - mise exec -- node scripts/materialize_cli_runtime.mjs
       - mise exec -- npm run build --workspace @kisev/memomatic
+      - mise exec -- npm run build --workspace @kisev/reviewmatic
       - mise exec -- npm run build --workspace @kisev/taskmatic
       - mise exec -- npm run build --workspace @kisev/agentomatic
 

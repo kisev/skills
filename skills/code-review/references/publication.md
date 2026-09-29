@@ -1,15 +1,24 @@
 # Guarded publication
 
 Review preparation never publishes. It creates one immutable action per remote
-mutation and prints the exact `review_publication.py apply --action <path> --confirm <sha256>` command beside its body preview. Only the user's separate
-invocation starts publication. Do not execute these commands during review.
+mutation. The primary manual flow is `reviewmatic plan`, an interactive terminal
+walkthrough of the finalized plan: every existing thread shows the remark, an
+editable reply draft, and explicit send, send-and-resolve, or skip choices; new
+threads with suggestions or git patches additionally offer staged local
+application in a dedicated git worktree — preview, apply, diff, then separate
+commit and push confirmations. Behind each choice reviewmatic executes the same
+closed action set through `reviewmatic publication apply --action <path> --confirm <sha256>`; only the user's separate invocation starts a mutation. Do not
+execute these commands during review.
 
 Each action belongs to the current finalized review plan, expires after 24 hours,
 and binds the GitLab user, MR identity and refs, conversation, labels, request
-payload, and any body file. The helper accepts only the generated operation set:
+payload, and any body file. The runner accepts only the generated operation set:
 new general or line discussions, replies, recommended issues, thread state, and
 label updates. It invokes `glab api` without a shell and prints a compact JSON
-result instead of the remote response.
+result instead of the remote response. Editing a reply draft in the walkthrough
+amends the plan first: the body is rewritten as a new content-addressed file, the
+affected actions are rebound to fresh digests, and the progress pointer moves to
+the amended plan before anything is sent.
 
 A thread state action requires the successful receipt for its preceding
 explanation. Freshness checks are scoped to what the action itself changes:

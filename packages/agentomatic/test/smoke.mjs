@@ -32,6 +32,7 @@ try {
   const packed =
     process.env.AGENTOMATIC_TARBALL &&
     process.env.MEMOMATIC_TARBALL &&
+    process.env.REVIEWMATIC_TARBALL &&
     process.env.TASKMATIC_TARBALL &&
     process.env.SAFE_FS_TARBALL
       ? null
@@ -45,12 +46,14 @@ try {
     ({
       "@kisev/agentomatic": process.env.AGENTOMATIC_TARBALL,
       "@kisev/memomatic": process.env.MEMOMATIC_TARBALL,
+      "@kisev/reviewmatic": process.env.REVIEWMATIC_TARBALL,
       "@kisev/taskmatic": process.env.TASKMATIC_TARBALL,
       "@kisev/safe-fs": process.env.SAFE_FS_TARBALL,
     })[name] ?? join(temporary, packed.find((record) => record.name === name).filename);
   const tarballs = [
     tarballFor("@kisev/safe-fs"),
     tarballFor("@kisev/memomatic"),
+    tarballFor("@kisev/reviewmatic"),
     tarballFor("@kisev/taskmatic"),
     tarballFor("@kisev/agentomatic"),
   ];
@@ -66,6 +69,12 @@ try {
     await installedVersion("@kisev/memomatic"),
   );
   run(memomaticExecutable, ["--help"]);
+  const reviewmaticExecutable = join(project, "node_modules", ".bin", "reviewmatic");
+  assert.equal(
+    run(reviewmaticExecutable, ["--version"]).trim(),
+    await installedVersion("@kisev/reviewmatic"),
+  );
+  run(reviewmaticExecutable, ["--help"]);
   for (const name of ["taskmatic", "taskmatic-web"]) {
     const executable = join(project, "node_modules", ".bin", name);
     assert.equal(run(executable, ["--version"]).trim(), await installedVersion("@kisev/taskmatic"));

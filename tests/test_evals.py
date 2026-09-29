@@ -26,7 +26,6 @@ from scripts.eval_runner import (
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "eval_runner.py"
 GOAL_AUTHORIZATION = ROOT / ".build/skills/docs-prepare/scripts/goal_authorization.py"
-LEGACY_GITLAB_V2 = ROOT / "tests/fixtures/evals/gitlab-evidence-contract-v2.json"
 
 
 def run_eval(
@@ -122,19 +121,6 @@ def goal_scenario() -> dict[str, Any]:
     )
 
 
-def gitlab_scenario() -> dict[str, Any]:
-    return cast(
-        "dict[str, Any]",
-        json.loads(
-            (ROOT / "evals/scenarios/gitlab.evidence-contract.json").read_text(encoding="utf-8")
-        ),
-    )
-
-
-def legacy_gitlab_scenario() -> dict[str, Any]:
-    return cast("dict[str, Any]", json.loads(LEGACY_GITLAB_V2.read_text(encoding="utf-8")))
-
-
 def run_goal_authorization(
     *arguments: str, input_value: dict[str, Any] | str | None = None, cwd: Path | None = None
 ) -> subprocess.CompletedProcess[str]:
@@ -187,10 +173,7 @@ def test_goal_authorization_offline_runner_exercises_decision_cases() -> None:
 def test_offline_runner_schema_and_validation_reject_unsafe_configurations() -> None:
     schema = json.loads((ROOT / "evals/schemas/scenario-v1.schema.json").read_text())
     runner_schema = schema["properties"]["input"]["properties"]["offline_runner"]
-    assert set(runner_schema["properties"]["protocol"]["enum"]) == {
-        "assertions-v1",
-        "portable-gitlab-v2",
-    }
+    assert set(runner_schema["properties"]["protocol"]["enum"]) == {"assertions-v1"}
     script_pattern = runner_schema["properties"]["script"]["pattern"]
     assert re.fullmatch(script_pattern, "scripts/goal_authorization.py")
     assert not re.fullmatch(script_pattern, "../goal_authorization.py")
@@ -226,6 +209,13 @@ def test_offline_runner_schema_and_validation_reject_unsafe_configurations() -> 
         validate_scenario(scenario, "project-path-escape.json")
     assert raised.value.code == "sandbox_escape"
 
+    scenario = goal_scenario()
+    scenario["input"]["offline_runner"].pop("protocol")
+    scenario["digest"] = scenario_digest(scenario)
+    with pytest.raises(EvalError) as raised:
+        validate_scenario(scenario, "legacy-fields.json")
+    assert raised.value.code == "malformed_scenario"
+
 
 def test_offline_runner_rejects_symlink_without_execution(tmp_path: Path) -> None:
     marker = tmp_path / "executed"
@@ -259,71 +249,6 @@ def test_offline_runner_timeout_is_bounded_and_classified(tmp_path: Path) -> Non
         "classification": "offline_runner_timeout",
         "message": "offline_runner exceeded timeout_seconds=0.01",
     }
-
-
-def test_portable_gitlab_uses_one_deadline_for_every_subprocess(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    deadlines: list[float] = []
-    commands: list[str] = []
-
-    def recording_deadline(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
-        deadlines.append(cast("float", kwargs["deadline"]))
-        argv = cast("list[str]", args[0])
-        commands.append(
-            next(
-                value
-                for value in argv
-                if value
-                in {
-                    "prepare",
-                    "context",
-                    "finalize",
-                    "record-artifact",
-                    "finalize-review",
-                    "scaffold-review",
-                    "report-review",
-                }
-            )
-        )
-        return run_with_deadline(*args, **kwargs)
-
-    monkeypatch.setattr("scripts.eval_runner.run_with_deadline", recording_deadline)
-
-    observation = offline_observation(gitlab_scenario(), ROOT)
-
-    assert observation["runner_assertions"]
-    assert commands == [
-        "prepare",
-        "context",
-        "finalize",
-        "report-review",
-        "record-artifact",
-        "finalize",
-        "finalize-review",
-        "scaffold-review",
-        "report-review",
-        "prepare",
-        "report-review",
-    ]
-    assert len(set(deadlines)) == 1
-
-
-def test_portable_gitlab_timeout_and_exhausted_deadline_are_classified(tmp_path: Path) -> None:
-    runner = tmp_path / ".build/skills/code-review/scripts/review_mr.py"
-    runner.parent.mkdir(parents=True)
-    runner.write_text("import time\ntime.sleep(10)\n", encoding="utf-8")
-    scenario = gitlab_scenario()
-    scenario["budgets"]["timeout_seconds"] = 0.01
-    args = argparse.Namespace(offline=True, host=None, model=None, max_tokens=None, max_cost=None)
-
-    result = result_for(scenario, args, tmp_path)
-
-    assert result["status"] == "error"
-    assert result["error"] == {
-        "classification": "offline_runner_timeout",
-        "message": "offline_runner exceeded timeout_seconds=0.01",
-    }
     with pytest.raises(EvalError) as raised:
         run_with_deadline(
             ["must-not-run"],
@@ -333,33 +258,6 @@ def test_portable_gitlab_timeout_and_exhausted_deadline_are_classified(tmp_path:
             timeout_seconds=1,
         )
     assert raised.value.code == "offline_runner_timeout"
-
-
-def test_exact_legacy_gitlab_runner_is_normalized_but_arbitrary_legacy_is_rejected() -> None:
-    assert gitlab_scenario()["input"]["offline_runner"]["protocol"] == "portable-gitlab-v2"
-    legacy = legacy_gitlab_scenario()
-    assert legacy["revision"] == 2
-    assert legacy["input"]["fixture"]["selected"] == []
-    assert "protocol" not in legacy["input"]["offline_runner"]
-    assert validate_scenario(legacy, "legacy-gitlab.json") == ["gitlab.evidence-contract"]
-    assert offline_observation(legacy, ROOT)["runner_assertions"]
-
-    changed_identity = copy.deepcopy(legacy)
-    changed_identity["id"] = "gitlab.other-contract"
-    changed_identity["digest"] = scenario_digest(changed_identity)
-    changed_config = copy.deepcopy(legacy)
-    changed_config["input"]["fixture"]["selected"] = ["skill:code-review"]
-    changed_config["digest"] = scenario_digest(changed_config)
-    changed_runner = copy.deepcopy(legacy)
-    changed_runner["input"]["offline_runner"]["script"] = "scripts/other.py"
-    changed_runner["digest"] = scenario_digest(changed_runner)
-    arbitrary = goal_scenario()
-    arbitrary["input"]["offline_runner"].pop("protocol")
-    arbitrary["digest"] = scenario_digest(arbitrary)
-    for scenario in (changed_identity, changed_config, changed_runner, arbitrary):
-        with pytest.raises(EvalError) as raised:
-            validate_scenario(scenario, "legacy-arbitrary.json")
-        assert raised.value.code == "unsupported_runner_protocol"
 
 
 def test_goal_authorization_cli_capabilities_and_exit_contract(tmp_path: Path) -> None:

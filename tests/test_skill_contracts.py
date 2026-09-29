@@ -457,7 +457,9 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "complete absolute filesystem paths",
         "label_assessments",
         "references/publication.md",
-        "one-action publication",
+        "reviewmatic prepare",
+        "reviewmatic finalize --artifact-root",
+        "reviewmatic plan --artifact-root",
         "never include local",
         "fix_mode=patch",
         "temporary index",
@@ -465,7 +467,6 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "print its `chat` field verbatim",
         "On every invocation, read every non-system discussion and every reply",
         "resolved thread uses `no_publication`",
-        "ordered explanation and state commands",
         "`git apply`",
         "thread_sha256",
         "accepted` requires a valid `suggestion` or `patch`",
@@ -510,6 +511,14 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "independent critic",
     ):
         assert marker in incremental
+    publication = (ROOT / "skills/code-review/references/publication.md").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "reviewmatic plan",
+        "reviewmatic publication apply --action <path> --confirm <sha256>",
+    ):
+        assert marker in publication
     assert "Local WIP always receives" not in incremental
     author_snapshot = (
         (ROOT / "tests/fixtures/code-review/author-chat.snapshot.md")

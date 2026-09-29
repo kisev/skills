@@ -205,7 +205,6 @@ RUNNERS = {
     "task-review": "scripts/review_task.py",
     "task-prepare": "scripts/prepare_task.py",
     "mr-prepare": "scripts/prepare_mr.py",
-    "code-review": "scripts/review_mr.py",
     "release-prepare": "scripts/prepare_release.py",
     "release-review": "scripts/review_release.py",
     "mattermost": "scripts/mattermost.py",
@@ -453,7 +452,6 @@ class PortableSkillValidationTests(unittest.TestCase):
     def test_gitlab_skills_materialize_their_own_contract_and_runtime(self) -> None:
         names = (
             "mr-prepare",
-            "code-review",
             "release-prepare",
             "release-review",
         )
@@ -476,6 +474,12 @@ class PortableSkillValidationTests(unittest.TestCase):
                         ROOT / "shared/references/portable_gitlab/artifact-contracts-v2.schema.json"
                     ).read_bytes(),
                 )
+        thin = BUILT_SKILLS / "code-review"
+        self.assertFalse((thin / "scripts").exists())
+        self.assertEqual(
+            (thin / "references/portable-gitlab-contracts-v2.md").read_bytes(),
+            (ROOT / "shared/references/portable_gitlab/contracts-v2.md").read_bytes(),
+        )
 
     def test_task_skills_materialize_their_declared_runtimes(self) -> None:
         runtime = (ROOT / "shared/references/work_item_runtime/contract.py").read_bytes()

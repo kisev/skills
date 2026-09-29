@@ -119,7 +119,13 @@ def require_trusted_publishing_npm() -> None:
         raise PublicationError("npm 11.5.1 or newer is required for trusted publishing")
 
 
-NPM_PUBLISH_ORDER = ("@kisev/safe-fs", "@kisev/memomatic", "@kisev/taskmatic", "@kisev/agentomatic")
+NPM_PUBLISH_ORDER = (
+    "@kisev/safe-fs",
+    "@kisev/memomatic",
+    "@kisev/reviewmatic",
+    "@kisev/taskmatic",
+    "@kisev/agentomatic",
+)
 
 
 def _tarball_entry(release_dir: Path, entry: dict[str, Any]) -> dict[str, Any]:
@@ -333,6 +339,7 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
     by_name = {entry["name"]: entry for entry in entries}
     agentomatic = by_name["@kisev/agentomatic"]
     memomatic = by_name["@kisev/memomatic"]
+    reviewmatic = by_name["@kisev/reviewmatic"]
     taskmatic = by_name["@kisev/taskmatic"]
     with tempfile.TemporaryDirectory(prefix="skills-registry-smoke-") as temporary:
         root = Path(temporary)
@@ -353,13 +360,14 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
             "node",
             "--input-type=module",
             "--eval",
-            "await import('@kisev/agentomatic'); await import('@kisev/agentomatic/plugins/rules-injector'); await import('@kisev/agentomatic/plugins/rtk'); await import('@kisev/agentomatic/plugins/zed-bell'); await import('@kisev/memomatic'); await import('@kisev/taskmatic');",
+            "await import('@kisev/agentomatic'); await import('@kisev/agentomatic/plugins/rules-injector'); await import('@kisev/agentomatic/plugins/rtk'); await import('@kisev/agentomatic/plugins/zed-bell'); await import('@kisev/memomatic'); await import('@kisev/reviewmatic'); await import('@kisev/taskmatic');",
             cwd=root,
             env=env,
         )
         for name, version in (
             ("agentomatic", agentomatic["version"]),
             ("memomatic", memomatic["version"]),
+            ("reviewmatic", reviewmatic["version"]),
             ("taskmatic", taskmatic["version"]),
             ("taskmatic-web", taskmatic["version"]),
         ):

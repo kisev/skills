@@ -70,6 +70,10 @@
       "ru": "apps/memomatic/README.ru.md"
     },
     {
+      "en": "apps/reviewmatic/README.md",
+      "ru": "apps/reviewmatic/README.ru.md"
+    },
+    {
       "en": "packages/safe-fs/README.md",
       "ru": "packages/safe-fs/README.ru.md"
     },

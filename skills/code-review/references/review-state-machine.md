@@ -28,7 +28,7 @@ again.
 
 ## Remote sequence
 
-1. Run `scripts/review_mr.py prepare --url MR_URL --repo-root CHECKOUT --review-mode MODE --locale LOCALE --incremental INCREMENTAL`, where the last
+1. Run `reviewmatic prepare --url MR_URL --repo-root CHECKOUT --review-mode MODE --locale LOCALE --incremental INCREMENTAL`, where the last
    three values use `fast|normal|deep`, `en|ru`, and `auto|off` respectively.
    The response creates the current progress pointer and returns a fully bound
    context action. If an old caller omits the checkout,

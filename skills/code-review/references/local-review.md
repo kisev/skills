@@ -5,7 +5,7 @@
 Use the existing checkout and run:
 
 ```sh
-python3 -I -S -B scripts/review_mr.py prepare-local --repo-root <checkout> --incremental auto
+reviewmatic prepare-local --repo-root <checkout> --incremental auto
 ```
 
 Retain the original `--ref <comparison-ref>` when one was supplied. Do not infer a
@@ -94,7 +94,7 @@ Optional or accepted limitations may remain in a ready report.
 ## Finalize and stop
 
 ```sh
-python3 -I -S -B scripts/review_mr.py finalize-local --bundle <snapshot> --report <draft>
+reviewmatic finalize-local --bundle <snapshot> --report <draft>
 ```
 
 This rechecks snapshot freshness, validates the report, writes an immutable

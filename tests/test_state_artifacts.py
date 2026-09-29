@@ -391,7 +391,7 @@ def test_all_python_state_runtimes_reject_relative_xdg(
         "iid": 2,
     }
     with pytest.raises(ValueError, match="absolute normalized"):
-        portable_gitlab.state_directory("code-review", target)
+        portable_gitlab.state_directory("mr-prepare", target)
     with pytest.raises(ValueError, match="absolute normalized"):
         triage.state_root({"target": "example"})
     with pytest.raises(ValueError, match="absolute normalized"):

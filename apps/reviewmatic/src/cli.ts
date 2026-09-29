@@ -1,0 +1,611 @@
+#!/usr/bin/env node
+import {
+  artifactPayload,
+  artifactRoot,
+  capabilities,
+  collect,
+  error as contractError,
+  emit,
+  finalizePayload,
+  parseTarget,
+  redact,
+  writeArtifact,
+  writeJson,
+  WorkflowError,
+} from "./contract.js";
+import { finalizeLocal, localBundle, prepareFollowup, recordReview } from "./local-review.js";
+import { MutationNotAttempted, MutationOutcomeUnknown } from "./mutation-process.js";
+import { execute, interactiveRecovery, SCHEMA } from "./publication.js";
+import { markerRun, StateArtifactError } from "./state-artifacts.js";
+import { VERSION } from "./version.js";
+import { dispatch, prepared, type WorkflowArguments } from "./workflow.js";
+import { discoverArtifactRoot, loadPlan, planItems } from "./tui/support.js";
+import { runTui } from "./tui/app.js";
+import { stringsFor } from "./tui/strings.js";
+import { registrySummary } from "./worktree.js";
+import {
+  program,
+  common,
+  fail,
+  Option,
+  applyConfig,
+  configFile,
+  reporter,
+  type Command,
+} from "./generated/cli.js";
+
+type Fields = Record<string, unknown>;
+type Json = Record<string, unknown>;
+
+interface OptionSpec {
+  name: string;
+  description: string;
+  required?: boolean;
+  default?: string;
+  choices?: string[];
+  flag?: boolean;
+  collect?: boolean;
+}
+
+interface CommandSpec {
+  signature: string;
+  description: string;
+  options: OptionSpec[];
+}
+
+const definitions: CommandSpec[] = [
+  {
+    signature: "prepare",
+    description: "Collect GET-only GitLab evidence and initialize review progress",
+    options: [
+      { name: "url", description: "exact HTTPS GitLab merge request URL", collect: true },
+      { name: "project-url", description: "exact HTTPS GitLab project URL" },
+      { name: "repo-root", description: "local checkout root" },
+      {
+        name: "review-mode",
+        description: "review depth",
+        default: "normal",
+        choices: ["fast", "normal", "deep"],
+      },
+      { name: "locale", description: "response language", default: "en", choices: ["en", "ru"] },
+      {
+        name: "incremental",
+        description: "incremental baseline policy",
+        default: "auto",
+        choices: ["auto", "off"],
+      },
+    ],
+  },
+  {
+    signature: "context",
+    description: "Collect the review context for selected evidence",
+    options: [
+      { name: "evidence", description: "evidence snapshot path", required: true },
+      { name: "repo-root", description: "local checkout root", required: true },
+      {
+        name: "incremental",
+        description: "incremental baseline policy",
+        default: "auto",
+        choices: ["auto", "off"],
+      },
+      {
+        name: "review-mode",
+        description: "review depth",
+        default: "normal",
+        choices: ["fast", "normal", "deep"],
+      },
+      { name: "locale", description: "response language", default: "en", choices: ["en", "ru"] },
+    ],
+  },
+  {
+    signature: "scaffold-review",
+    description: "Scaffold the immutable review plan",
+    options: [
+      { name: "evidence", description: "evidence snapshot path", required: true },
+      { name: "context", description: "review context path", required: true },
+      { name: "decision", description: "review decision path", required: true },
+      { name: "content", description: "plan content file", required: true },
+    ],
+  },
+  {
+    signature: "status",
+    description: "Print the current review status",
+    options: [{ name: "artifact-root", description: "artifact root", required: true }],
+  },
+  {
+    signature: "next",
+    description: "Print the current review status and next action",
+    options: [{ name: "artifact-root", description: "artifact root", required: true }],
+  },
+  {
+    signature: "template-review",
+    description: "Emit a review template for the current stage",
+    options: [
+      { name: "artifact-root", description: "artifact root", required: true },
+      {
+        name: "kind",
+        description: "template kind",
+        required: true,
+        choices: ["critic", "decision", "content"],
+      },
+    ],
+  },
+  {
+    signature: "report-review",
+    description: "Revalidate and report the finished review",
+    options: [{ name: "artifact-root", description: "artifact root", required: true }],
+  },
+  {
+    signature: "finalize",
+    description: "Recheck evidence freshness and record the finalize report",
+    options: [
+      { name: "artifact-root", description: "artifact root", required: true },
+      { name: "report", description: "readiness report path" },
+    ],
+  },
+  {
+    signature: "prepare-local",
+    description: "Collect local WIP evidence: staged, unstaged, and untracked",
+    options: [
+      { name: "repo-root", description: "local checkout root", required: true },
+      { name: "ref", description: "base ref for the WIP diff" },
+      {
+        name: "incremental",
+        description: "incremental baseline policy",
+        default: "auto",
+        choices: ["auto", "off"],
+      },
+    ],
+  },
+  {
+    signature: "finalize-local",
+    description: "Check local WIP evidence freshness",
+    options: [
+      { name: "bundle", description: "local WIP snapshot path", required: true },
+      { name: "report", description: "local review draft path" },
+    ],
+  },
+  {
+    signature: "assess-mode",
+    description: "Check whether a review mode is supported",
+    options: [
+      {
+        name: "mode",
+        description: "requested review mode",
+        required: true,
+        choices: ["fast", "normal", "deep"],
+      },
+      { name: "critic-available", description: "an independent critic is available", flag: true },
+    ],
+  },
+  {
+    signature: "finalize-review",
+    description: "Verify the finalized review decision without external mutations",
+    options: [
+      { name: "evidence", description: "evidence snapshot path", required: true },
+      { name: "report", description: "review decision path", required: true },
+      {
+        name: "mode",
+        description: "review mode",
+        required: true,
+        choices: ["fast", "normal", "deep", "incremental", "unchanged"],
+      },
+      { name: "critic-receipt", description: "critic receipt path" },
+      { name: "finalize-report", description: "finalize report path", required: true },
+      { name: "context", description: "review context path", required: true },
+    ],
+  },
+  {
+    signature: "record-artifact",
+    description: "Record a private schema-valid review artifact",
+    options: [
+      {
+        name: "kind",
+        description: "artifact kind",
+        required: true,
+        choices: ["analysis_report", "critic_receipt", "release_readiness"],
+      },
+      { name: "evidence", description: "evidence snapshot path", required: true },
+      { name: "input", description: "artifact input path", required: true },
+    ],
+  },
+  {
+    signature: "plan",
+    description: "Open the finalized review plan interactively",
+    options: [
+      {
+        name: "artifact-root",
+        description: "artifact root; discovered automatically when omitted",
+      },
+      { name: "print", description: "print the plan overview without a terminal UI", flag: true },
+    ],
+  },
+  {
+    signature: "worktree list",
+    description: "List review worktrees recorded by local patch application",
+    options: [],
+  },
+  {
+    signature: "publication [mode]",
+    description: "Apply, inspect, or retry a publication action",
+    options: [
+      { name: "action", description: "publication action path" },
+      { name: "confirm", description: "action SHA-256 digest" },
+    ],
+  },
+  {
+    signature: "capabilities",
+    description: "Print machine capabilities JSON",
+    options: [],
+  },
+  {
+    signature: "marker-run [mutation...]",
+    description: "Run a mutation and record its post-success marker",
+    options: [],
+  },
+];
+
+const cli = common(
+  program("reviewmatic", "Interactive terminal companion for GitLab code reviews", VERSION),
+  "REVIEWMATIC",
+).option("--capabilities", "print machine capabilities JSON and exit");
+
+function workflowArguments(command: string, fields: Fields): WorkflowArguments {
+  return {
+    command,
+    artifactRoot: fields.artifactRoot as string | undefined,
+    evidence: fields.evidence as string | undefined,
+    repoRoot: fields.repoRoot as string | null | undefined,
+    incremental: fields.incremental as string | undefined,
+    reviewMode: fields.reviewMode as string | undefined,
+    locale: fields.locale as string | undefined,
+    kind: fields.kind as string | undefined,
+    input: fields.input as string | undefined,
+    report: fields.report as string | undefined,
+    criticReceipt: (fields.criticReceipt as string | undefined) ?? null,
+    finalizeReport: fields.finalizeReport as string | undefined,
+    context: fields.context as string | undefined,
+    mode: fields.mode as string | undefined,
+    decision: fields.decision as string | undefined,
+    content: fields.content as string | undefined,
+  };
+}
+
+async function runPrepare(fields: Fields): Promise<void> {
+  const urls = (fields.url as string[] | undefined) ?? [];
+  const projectUrl = fields.projectUrl as string | undefined;
+  if (urls.length > 0 === Boolean(projectUrl)) {
+    throw new WorkflowError("provide exact --url target or --project-url, but not both");
+  }
+  if (projectUrl !== undefined) {
+    throw new WorkflowError("project creation mode is only available for task preparation");
+  }
+  if (urls.length !== 1) {
+    throw new WorkflowError("code-review accepts exactly one --url target");
+  }
+  const target = parseTarget(urls[0], new Set(["merge_requests"]));
+  const results: Json[] = [];
+  try {
+    const bundle = await collect(target, "code-review", {
+      locale: (fields.locale as string) ?? "en",
+    });
+    const item: Json = {
+      target: target.url,
+      status: "ok",
+      artifact_path: bundle.preview_artifact_path,
+      digest: bundle.preview_digest,
+      artifact_root: bundle.artifact_root,
+      head_sha: bundle.head_sha,
+      base_sha: bundle.base_sha ?? null,
+      start_sha: bundle.start_sha ?? null,
+      complete: bundle.retrieval_complete,
+      components_complete: bundle.components_complete,
+    };
+    Object.assign(
+      item,
+      await prepared(
+        {
+          command: "prepare",
+          repoRoot: fields.repoRoot as string | null | undefined,
+          reviewMode: (fields.reviewMode as string) ?? "normal",
+          locale: (fields.locale as string) ?? "en",
+          incremental: (fields.incremental as string) ?? "auto",
+        },
+        bundle,
+      ),
+    );
+    results.push(item);
+  } catch (caught) {
+    if (!(caught instanceof WorkflowError)) throw caught;
+    process.stderr.write(`${redact(caught.message)}\n`);
+    results.push({ target: target.url, status: "error", error: redact(caught.message) });
+  }
+  const status = results.every((item) => item.status === "ok") ? "ok" : "partial";
+  emit({
+    status: status,
+    summary: {
+      tldr: "Completed GET-only GitLab evidence preparation.",
+      scope: results.map((item) => item.target),
+      risks: status !== "ok" ? ["one or more targets failed"] : [],
+      checks: [
+        "exact target identity",
+        "endpoint allowlist",
+        "pagination completeness",
+        "exact SHA",
+      ],
+    },
+    items: results,
+    external_mutations: false,
+  });
+  process.exitCode = status === "ok" ? 0 : 1;
+}
+
+async function runPrepareLocal(fields: Fields): Promise<void> {
+  const bundle = await localBundle(
+    String(fields.repoRoot),
+    "code-review",
+    (fields.ref as string | undefined) ?? null,
+  );
+  const root = await artifactRoot(String(bundle.artifact_root));
+  const [path, digestValue] = await writeArtifact(root, "local_wip_snapshot", bundle);
+  const review = prepareFollowup(
+    root,
+    bundle,
+    digestValue,
+    (fields.incremental as string) ?? "auto",
+  );
+  writeJson(`${root}/current-local.json`, {
+    evidence_path: path,
+    evidence_digest: digestValue,
+  });
+  const complete = bundle.retrieval_complete === true;
+  emit({
+    status: complete ? "ok" : "incomplete",
+    summary: {
+      tldr: "Collected local WIP evidence: staged, unstaged, and untracked.",
+      scope: [String(bundle.repo_root)],
+      risks: complete ? [] : ["local evidence incomplete"],
+      checks: ["HEAD", "staged", "unstaged", "non-ignored untracked", "symlink/binary/size"],
+    },
+    bundle: path,
+    artifact_path: path,
+    digest: digestValue,
+    head_sha: bundle.head_sha,
+    complete: bundle.retrieval_complete,
+    review: review,
+    external_mutations: false,
+  });
+  process.exitCode = complete ? 0 : 2;
+}
+
+async function runFinalizeLocal(fields: Fields): Promise<void> {
+  let result = await finalizeLocal(String(fields.bundle));
+  const [, bundle] = artifactPayload(String(fields.bundle), "local_wip_snapshot");
+  const root = await artifactRoot(String(bundle.artifact_root));
+  result = finalizePayload(result, String(fields.bundle), bundle, "local_wip_snapshot");
+  const [path, digestValue] = await writeArtifact(root, "finalize_report", result);
+  let reviewResult: Record<string, unknown> | null = null;
+  if (fields.report !== undefined && result.status === "ok") {
+    reviewResult = await recordReview(root, String(fields.bundle), String(fields.report));
+  }
+  emit({
+    status: result.status,
+    summary: {
+      tldr: "Checked local WIP evidence freshness.",
+      scope: [String(bundle.repo_root)],
+      risks: (result.changed as string[] | undefined) ?? [],
+      checks: ["HEAD", "all WIP sections"],
+    },
+    artifact_path: path,
+    digest: digestValue,
+    result: result,
+    review: reviewResult,
+    external_mutations: false,
+  });
+  process.exitCode = result.status === "ok" ? 0 : 2;
+}
+
+function runAssessMode(fields: Fields): void {
+  const mode = fields.mode as string;
+  if (["normal", "deep"].includes(mode) && fields.criticAvailable !== true) {
+    emit({
+      status: "unsupported",
+      reason: "independent critic receipt is required",
+      details: { mode: mode },
+    });
+    process.exitCode = 4;
+    return;
+  }
+  emit({
+    status: "ok",
+    mode: mode,
+    independent_critic_required: ["normal", "deep"].includes(mode),
+  });
+  process.exitCode = 0;
+}
+
+async function runPublication(args: string[], fields: Fields): Promise<void> {
+  try {
+    const mode = args[0];
+    if (mode !== undefined && !["apply", "inspect", "retry"].includes(mode)) {
+      throw new WorkflowError(
+        `argument mode: invalid choice: '${mode}' (choose from 'apply', 'inspect', 'retry')`,
+      );
+    }
+    const action = fields.action;
+    const confirm = fields.confirm;
+    if (mode === undefined || action === undefined || confirm === undefined) {
+      throw new WorkflowError("mode, --action and --confirm are required");
+    }
+    let result = await execute(String(action), String(confirm), {
+      inspect: mode === "inspect",
+      retry: mode === "retry",
+    });
+    if (mode === "apply" || mode === "inspect") {
+      result = await interactiveRecovery(String(action), String(confirm), result, {
+        inspected: mode === "inspect",
+      });
+    }
+    emit(result);
+    process.exitCode = result.status !== "blocked" ? 0 : 1;
+  } catch (caught) {
+    if (
+      !(
+        caught instanceof WorkflowError ||
+        caught instanceof MutationNotAttempted ||
+        caught instanceof MutationOutcomeUnknown ||
+        caught instanceof Error
+      )
+    ) {
+      throw caught;
+    }
+    emit({ status: "blocked", error: redact(caught.message), external_mutations: false });
+    process.exitCode = 2;
+  }
+}
+
+async function runPlan(fields: Fields): Promise<void> {
+  const root = (fields.artifactRoot as string | undefined) ?? discoverArtifactRoot();
+  if (root === null) {
+    throw new WorkflowError("no finalized review plan was found; run a review first");
+  }
+  const bundle = loadPlan(root);
+  if (fields.print === true || process.stdout.isTTY !== true) {
+    const strings = stringsFor(bundle.plan.locale as string | undefined);
+    const items = planItems(bundle);
+    const lines = [
+      `${strings.title}: ${String(bundle.plan.verdict ?? "?")}`,
+      `${strings.target}: ${String((bundle.plan.target as Json | undefined)?.url ?? "")}`,
+      "",
+      ...items.map(
+        (item) =>
+          `- (${item.kind}) ${item.path !== null ? `${item.path}${item.line !== null ? `:${item.line}` : ""} ` : ""}${item.title}`,
+      ),
+    ];
+    process.stdout.write(`${lines.join("\n")}\n`);
+    process.exitCode = 0;
+    return;
+  }
+  process.exitCode = await runTui(bundle);
+}
+
+async function runCommand(command: string, args: string[], fields: Fields): Promise<void> {
+  if (command === "publication" && process.argv.slice(3).includes("--capabilities")) {
+    emit({
+      schema: SCHEMA,
+      operations: ["apply", "inspect", "retry"],
+      platform: "posix",
+      confirmation: "one action SHA-256",
+      external_mutations: false,
+    });
+    return;
+  }
+  if (cli.opts().capabilities === true || command === "capabilities") {
+    process.exitCode = capabilities("code-review");
+    return;
+  }
+  if (command === "publication") {
+    await runPublication(args, fields);
+    return;
+  }
+  if (command === "plan") {
+    try {
+      await runPlan(fields);
+    } catch (caught) {
+      if (!(caught instanceof WorkflowError)) throw caught;
+      process.exitCode = contractError("invalid_input", caught.message, 2);
+    }
+    return;
+  }
+  if (command === "worktree" && args[0] === "list") {
+    emit({
+      status: "ok",
+      items: registrySummary().map((record) => ({
+        path: record.path,
+        branch: record.branch,
+        head_sha: record.head_sha,
+        mr_url: record.mr_url,
+        created_at: record.created_at,
+        commit_sha: record.commit_sha,
+        pushed: record.pushed,
+      })),
+      external_mutations: false,
+    });
+    return;
+  }
+  try {
+    const code = await dispatch(workflowArguments(command, fields));
+    if (code !== null) {
+      process.exitCode = code;
+      return;
+    }
+    if (command === "prepare") await runPrepare(fields);
+    else if (command === "prepare-local") await runPrepareLocal(fields);
+    else if (command === "finalize-local") await runFinalizeLocal(fields);
+    else if (command === "assess-mode") runAssessMode(fields);
+    else process.exitCode = contractError("invalid_command", "a supported subcommand is required");
+  } catch (caught) {
+    if (!(caught instanceof WorkflowError)) throw caught;
+    const code = caught.message.includes("unavailable") ? "tool_unavailable" : "invalid_input";
+    process.exitCode = contractError(code, caught.message, code === "tool_unavailable" ? 3 : 2);
+  }
+}
+
+for (const spec of definitions) {
+  const command = cli.command(spec.signature).description(spec.description);
+  for (const option of spec.options) {
+    const instance = new Option(
+      `--${option.name}${option.flag ? "" : " <value>"}`,
+      option.description,
+    );
+    if (option.choices !== undefined) instance.choices(option.choices);
+    if (option.default !== undefined) instance.default(option.default);
+    if (option.required === true) instance.makeOptionMandatory();
+    if (option.collect === true) {
+      instance.argParser((value: string, previous: string[] = []) => [...previous, value]);
+    }
+    command.addOption(instance);
+  }
+  command.action(async (...values: unknown[]) => {
+    const cmd = values.at(-1) as Command;
+    const config = await configFile(cli.opts().config);
+    applyConfig(cli, config);
+    applyConfig(cmd, config);
+    const fields: Fields = { ...cmd.optsWithGlobals() };
+    const logs = reporter(fields);
+    try {
+      logs.emit({ phase: cmd.name(), message: "Executing command", level: "debug" });
+      await runCommand(cmd.name(), cmd.args, fields);
+      logs.emit({ phase: `${cmd.name()}.done`, message: "Command complete", level: "debug" });
+    } finally {
+      logs.close();
+    }
+  });
+}
+
+cli.action(() => {
+  if (cli.opts().capabilities === true) {
+    process.exitCode = capabilities("code-review");
+    return;
+  }
+  process.exitCode = contractError("invalid_command", "a supported subcommand is required");
+});
+
+try {
+  if (process.argv.length === 2) {
+    if (process.stdout.isTTY === true) {
+      await runPlan({});
+    } else {
+      cli.outputHelp();
+    }
+  } else if (process.argv[2] === "marker-run") {
+    process.exitCode = await markerRun(process.argv.slice(3));
+  } else await cli.parseAsync(process.argv);
+} catch (caught) {
+  if (caught instanceof StateArtifactError) {
+    process.stderr.write(`error: ${caught.message}\n`);
+    process.exitCode = 2;
+  } else {
+    fail("reviewmatic", caught, process.argv.includes("--json"));
+  }
+}

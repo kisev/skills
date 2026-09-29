@@ -20,9 +20,9 @@ snapshot. Incremental metadata keeps exact baseline and delta refs private.
 Local WIP uses a separate `local_review_report` bound to its immutable snapshot.
 It retains the agreed task boundary, accepted risks, cumulative finding
 dispositions, checks, and explicit blocking decisions independent of severity.
-`prepare-local --incremental auto` compares compatible finalized local snapshots;
-`finalize-local --report` validates freshness and continuity before atomically
-replacing `local-review.json`. Remote publication state is not involved.
+Incremental local preparation compares compatible finalized local snapshots;
+local finalization with a report validates freshness and continuity before
+atomically replacing `local-review.json`. Remote publication state is not involved.
 `publication_plan`, `review_plan`, `analysis_report`, and `critic_receipt` bind
 their evidence digest; the latter records `run_id` and `session_id`.
 Release and legacy MR publication plans may contain a semantic `label_review`. It maps

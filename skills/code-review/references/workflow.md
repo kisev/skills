@@ -15,7 +15,7 @@ Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `ref
 
 A release MR — one that publishes or tags a version — routes to the `release-review` skill, which owns the release verdict and its SemVer, compatibility, migration, rollback, and CI gates. Review such an MR here only when the user explicitly requests this skill in addition.
 
-For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter URLs, and branch inference before any API call or artifact creation. Run `scripts/review_mr.py prepare --url <mr-url> --repo-root <checkout> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto`, then execute the returned fully bound `context` action. Use `--incremental off` only for an explicit request such as "without incremental review", "start from scratch", or "ignore the previous review"; "full review" alone is not an opt-out. The context must bind the numeric ID and username of the current GitLab user, MR author, role, all paginated discussions and notes, project issue templates from the exact MR head, exact note permalinks, and a local repository containing the exact base/start/head commits. Do not duplicate canonical collection with direct `glab mr view` or parallel MR reads.
+For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter URLs, and branch inference before any API call or artifact creation. Run `reviewmatic prepare --url <mr-url> --repo-root <checkout> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto`, then execute the returned fully bound `context` action. Use `--incremental off` only for an explicit request such as "without incremental review", "start from scratch", or "ignore the previous review"; "full review" alone is not an opt-out. The context must bind the numeric ID and username of the current GitLab user, MR author, role, all paginated discussions and notes, project issue templates from the exact MR head, exact note permalinks, and a local repository containing the exact base/start/head commits. Do not duplicate canonical collection with direct `glab mr view` or parallel MR reads.
 
 For local WIP, use only the current existing checkout and `prepare-local --incremental auto`; do not clone, fetch, checkout, stash, reset, clean, or create a worktree. The role is `author`, there is no GitLab publication target, and unavailable remote context must remain explicit. A repeated review starts from the previous finalized local report and snapshot, not from a new zero-context audit.
 
@@ -84,18 +84,21 @@ If neither a valid suggestion nor an applicable patch can be prepared,
 stop before creating the final plan. Use `fix_mode=not_required` only for a thread
 that requires no code correction; findings and `local_fix` outcomes cannot use it.
 
-Use the runner-owned stages and generated templates in `references/review-state-machine.md`. A normal, deep, or incremental review remains `critic_missing` until an independent template is completed and stored through `record-artifact`; raw subagent output is not evidence. Immediately before the final decision, follow the returned `scripts/review_mr.py finalize --artifact-root <artifact-root>` action, then the generated `finalize-review` action with the exact evidence, review context, decision report, selected full or `incremental` mode, finalize report, and recorded critic receipt when required. The decision report must bind the context digest. Changed MR facts, user identity, discussions, notes, local Git context, or incomplete evidence block the decision.
+Use the runner-owned stages and generated templates in `references/review-state-machine.md`. A normal, deep, or incremental review remains `critic_missing` until an independent template is completed and stored through `record-artifact`; raw subagent output is not evidence. Immediately before the final decision, follow the returned `reviewmatic finalize --artifact-root <artifact-root>` action, then the generated `finalize-review` action with the exact evidence, review context, decision report, selected full or `incremental` mode, finalize report, and recorded critic receipt when required. The decision report must bind the context digest. Changed MR facts, user identity, discussions, notes, local Git context, or incomplete evidence block the decision.
 
 For a remote MR, generate the model-ready content draft through `template-review --kind content`, complete every empty field, and run its exact `scaffold-review` action. The content JSON contains exactly `locale`, `chat_assessment`, `summary`, `architecture_assessment`, `semver_impact`, `semver_rationale`, `semver_assessment`, `mr_metadata_assessment`, `label_assessments`, `checks`, `findings`, `finding_publications`, `previous_finding_assessments`, `issue_templates`, `recommended_issues`, `rejected_candidates`, `rejected_candidate_assessments`, and `thread_decisions`. The draft includes `.gitlab/issue_templates` from the exact MR head. Each recommended issue must select and fill its nearest template; when only one exists, it must use it. `label_assessments` covers every exact catalog name once; assess semantic equivalence from each label's name and description, prefer a namespaced label to a plain equivalent, and replace a current plain equivalent with the chosen namespaced label. The runner owns descriptions, current membership, exhaustive ledger, SemVer invariant, add/remove delta, standard presentation labels, and compact chat layout. `mr_metadata_assessment` must give `ok`, `needs_change`, or `unverified`, rationale, and an optional recommendation for title, description, labels, workflow state, and overall formatting. Observed values come from evidence, not model input.
 
 Scaffold writes body files and content-addressed `.patch` files, then atomically
-replaces `<artifact-root>/review-publication.md` and the review baseline. Show
-absolute paths, exact body previews, full patches in collapsed details, local
-`git apply --check` and `git apply`, and the generated one-action publication
-commands. Read `references/publication.md` for their confirmation, freshness,
-receipt, and recovery contract. A `resolve` or `reopen` outcome produces separate
-ordered explanation and state commands. State that nothing was executed. Never
-publish automatically or retry an uncertain action.
+replaces `<artifact-root>/review-publication.md` and the review baseline. After
+`report-review`, print its `chat` field verbatim as the compact review summary and
+append exactly one fenced code block with the manual launch command
+`reviewmatic plan --artifact-root <artifact-root>`. The user copies and runs it
+themselves; never execute it, and never publish, retry, or apply anything during
+review. The interactive plan walkthrough, thread replies with editable drafts,
+label and issue publication, and local patch application through a dedicated git
+worktree belong to that manual `reviewmatic plan` session; read
+`references/publication.md` for the guard, freshness, receipt, and recovery
+contract behind its actions. State that nothing was executed.
 
 Bind every local patch command to the canonical review checkout and exact reviewed
 head. Show the read-only `git apply --check` command first. The marked `git apply`

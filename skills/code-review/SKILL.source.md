@@ -10,6 +10,8 @@ metadata:
 
 # code-review
 
+The executable runtime is the external npm package `@kisev/reviewmatic` (bin `reviewmatic`); install it once like `glab`. Every runner command in this archive is that bin.
+
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

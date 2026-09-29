@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import stat
 import tempfile
@@ -180,20 +179,6 @@ def copy_source(destination: Path) -> None:
         source_entrypoint.rename(skill / "SKILL.md")
 
 
-def stamp_release(root: Path) -> None:
-    if not (root / "code-review").exists():
-        return
-    version = json.loads((ROOT / "packages/skills/package.json").read_text())["version"]
-    if not isinstance(version, str) or re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
-        raise BuildError("invalid portable release version")
-    target = root / "code-review/scripts/review_context.py"
-    text = target.read_text(encoding="utf-8")
-    token = "@PORTABLE_RELEASE_VERSION@"
-    if text.count(token) != 1:
-        raise BuildError("code-review release placeholder must occur exactly once")
-    target.write_text(text.replace(token, version), encoding="utf-8")
-
-
 def stamp_source(root: Path, source_url: str) -> None:
     if source_url not in {STABLE_SOURCE_URL, f"{STABLE_SOURCE_URL}/dev"}:
         raise BuildError("unsupported portable skill source URL")
@@ -275,7 +260,6 @@ def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int
         staged = Path(temporary) / "skills"
         copy_source(staged)
         stamp_source(staged, source_url)
-        stamp_release(staged)
         inject_relations(staged, related)
         materialize(staged, entries)
         check_materialized(staged, entries)

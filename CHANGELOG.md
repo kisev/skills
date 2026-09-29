@@ -13,6 +13,23 @@ All notable changes to this project are documented in this file. Entries follow
 - Agentomatic plugins now expose both the OpenCode V1 `server` and V2 `setup`
   entrypoints. All patches in the `1.18.x` and `2.0.x` minors are supported;
   repository checks exercise the current patch of each minor from Mise.
+- The `code-review` skill is now a thin portable archive: its Python runners
+  are removed and the executable runtime is the external `@kisev/reviewmatic`
+  npm package (installed like `glab`). References invoke the `reviewmatic` CLI,
+  and after a review the skill prints the compact chat summary plus one manual
+  `reviewmatic plan --artifact-root <root>` command instead of per-action
+  publication commands.
+- The shared GitLab contract drops the code-review-only local WIP branches and
+  the `local_review` module; local reviews moved into `reviewmatic
+  prepare-local`/`finalize-local`. The `portable-gitlab-v2` offline eval
+  protocol and its evidence-contract scenario are removed with the runner.
+- The shared GitLab contract also drops its now-dead code-review validation
+  surface: review-plan/decision/critic artifacts and their validators, the
+  `code-review` profile, and the code-review-only presentation/label helpers
+  (TypeScript owns them in `@kisev/reviewmatic`). A repository-level
+  `TODO-ts-migration.md` records the remaining parity-tested duplication and
+  the staged plan to migrate mr-prepare, release-\*, and task-triage onto the
+  same runtime.
 
 - Memomatic splits OpenCode session analysis into the standalone `sessions`
   command; `dream` is now pure consolidation (inbox, usage-gated promotion,
@@ -22,6 +39,18 @@ All notable changes to this project are documented in this file. Entries follow
   overridden.
 
 ### Added
+
+- New workspace app `@kisev/reviewmatic` (`apps/reviewmatic`): the TypeScript
+  runtime of the code-review chain with byte-compatible artifacts and digests.
+  It ports evidence collection, the review state machine, immutable plans, and
+  guarded publication (receipts, postconditions, inspect/retry) and adds
+  `reviewmatic plan`, an interactive terminal walkthrough of a finished plan:
+  thread remarks with editable `$EDITOR` reply drafts and explicit send,
+  send-and-resolve, or skip choices, label updates, recommended issues, and
+  staged local application of suggestions and git patches in a dedicated git
+  worktree at the exact reviewed head with separate commit and push
+  confirmations. A worktree registry records every created worktree. The npm
+  publication graph now includes the package in dependency order.
 
 - `memomatic status` now reports the pending queue without model calls: pending
   inbox files, the session backlog from the OpenCode database (or `null` when
