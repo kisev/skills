@@ -35,12 +35,18 @@ make that boundary explicit.
 
 ## Reference
 
+- [Command-line conventions](reference/cli.md) - help, configuration precedence, logs, progress and exit codes.
+
 - [Skill catalog](reference/skill-catalog.md) - active skills, requirements, team
   profiles, and external tool boundaries.
+
 - [Migration inventory](migration-inventory.md) - active and retired names,
   replacements, package surfaces, and ownership records.
+
 - [Verification](verification.md) - release contracts covered by tests and quality gates.
+
 - [Security policy](../SECURITY.md) - supported reporting process.
+
 - [Release history](../CHANGELOG.md) - published changes by version.
 
 ## Explanation

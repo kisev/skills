@@ -9,7 +9,7 @@ review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/
 
 ## Install and Connect
 
-Use Node.js 22+ and npm. For a CLI available outside an npm project:
+Use Node.js 22.13+ and npm. For a CLI available outside an npm project:
 
 ```shell
 npm install --global @kisev/memomatic
@@ -109,9 +109,78 @@ back to bounded append-only promotion, preserving existing curated entries.
 
 Dream reads OpenCode sessions, including text stored in its separate `part` table.
 MCP connections in other hosts share explicit memory entries but do not import
-those hosts' session histories. Model calls use OpenCode's positional prompt and
-JSON event output. Before enabling the timer, check `sessionsIngested` against the
+those hosts' session histories. Model calls reuse one isolated OpenCode server per
+run, with tools denied, or an explicitly configured existing server. Before enabling the timer, check `sessionsIngested` against the
 available unprocessed sessions; a zero-session pass does not test model access.
+
+## Observe, Limit and Resume Dream
+
+```shell
+memomatic dream --plan --json
+memomatic dream --max-duration 15m --timeout 3m --log-format json
+memomatic dream --max-sessions 2 --progress never
+memomatic dream --help
+```
+
+`--plan` only reads the session snapshot and checkpoints: no model calls, embeddings,
+or persistent writes. Unlike `--plan`, `--dry-run` can still incur model and
+embedding usage. Normal Dream drains all eligible work captured at startup;
+messages arriving later belong to the next run. There is no default 20-session cap.
+The first upgrade from the legacy creation-time watermark checks existing history
+once, because that watermark cannot identify processed message revisions. Current
+memory is retained. Inspect `--plan` and use limits to spread a large migration
+over multiple invocations. This is re-ingestion, not deletion or replacement of
+the existing memory corpus.
+
+| CLI option | Environment | `dream` setting / default |
+| - | - | - |
+| `--model` | `MEMOMATIC_MODEL` | `model`: configured provider/model |
+| `--variant` | `MEMOMATIC_VARIANT` | `variant`: provider default |
+| `--timeout` | `MEMOMATIC_TIMEOUT` | `timeoutMs`: 180000 |
+| `--max-duration` | `MEMOMATIC_MAX_DURATION` | `maxDurationMs`: 0 (unlimited) |
+| `--max-sessions` | `MEMOMATIC_MAX_SESSIONS` | `maxSessions`: 0 (all) |
+| `--chunk-chars` | `MEMOMATIC_CHUNK_CHARS` | `maxChars`: 24000 |
+| `--retries` | `MEMOMATIC_RETRIES` | `retries`: 1 additional attempt |
+| `--idle` | `MEMOMATIC_IDLE` | `idleMs`: 600000 |
+| `--opencode-url` | `MEMOMATIC_OPENCODE_URL` | `opencodeUrl`: private server per run |
+| `--database` | `MEMOMATIC_DATABASE` | OpenCode XDG database |
+
+Duration flags accept `ms`, `s`, `m`, or `h`; a bare number means milliseconds.
+Settings-file durations are numeric milliseconds. Common logging, JSON and color
+controls follow the [CLI reference](../reference/cli.md).
+
+Local SQL filters text parts before loading them. Unchanged modern session
+revisions skip body parsing; changed messages are fingerprinted and split without
+truncating the final outcome. Only adjacent exact duplicate messages are dropped;
+there is no heuristic "important message" filter. Each fragment includes a bounded
+overlap of preceding context. Model interpretation can still miss a distant
+reference; it is instructed not to invent unresolved meaning.
+
+Completed extraction responses are stored privately under `history/ingestion/`
+with source session/message identifiers, not full transcripts. Each fragment is
+applied idempotently before its checkpoint is advanced. Ctrl-C, a timeout or a
+later failure retains earlier completed work. Run the same command to continue;
+do not remove the run lock while its owner is alive. The lock no longer expires
+merely because a run exceeds 30 minutes. After interruption the index may lag
+committed Markdown; resume Dream or run `memomatic index` to refresh it.
+
+Stages, counts, elapsed time, retries and wait heartbeats go to stderr. The final
+JSON report includes model call counts, sent characters and actual token/cache
+usage when OpenCode supplies it; absent usage is explicitly marked unavailable,
+not estimated as exact. A session limit reports unscanned sessions separately
+from the remaining fragments in the selected batch.
+
+The default executor reuses provider configuration and authentication through
+OpenCode, disables external plugins/skills for its own server, and denies tools
+in its extraction sessions. Its loopback server uses an ephemeral password and
+is stopped on completion or cancellation. `--opencode-url` instead uses a server
+you own, with `OPENCODE_SERVER_USERNAME`/`OPENCODE_SERVER_PASSWORD` when required;
+it never stops that server. Credentials are not CLI arguments or log fields.
+
+`memomatic index` now reuses vectors when model identity and text are unchanged.
+Use `memomatic index --force` to deliberately regenerate all vectors or repair
+an index after a model alias changes weights/dimensions. `memomatic status`
+only inspects state and no longer rebuilds the index.
 
 ## Configure Local Embeddings
 

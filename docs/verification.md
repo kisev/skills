@@ -7,7 +7,7 @@
 The supported portable source is the GitHub Pages stable channel at
 `https://kisev.github.io/skills`; the optional package is
 `@kisev/agentomatic`. Portable installation follows
-`npx --yes skills@latest`. The package requires Node.js 22+ and declares OpenCode
+`npx --yes skills@latest`. The package requires Node.js 22.13+ and declares OpenCode
 `>=1.18.29 <1.19.0`.
 
 ## Portable Installation

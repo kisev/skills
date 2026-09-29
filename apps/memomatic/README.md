@@ -15,7 +15,7 @@ npm install --global @kisev/memomatic
 
 The corpus lives under `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`,
 daily notes, `DREAMS.md`); rules live in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.
-Requires Node.js 22+. Connect `memomatic mcp-serve` as a local stdio MCP server
+Requires Node.js 22.13+. Connect `memomatic mcp-serve` as a local stdio MCP server
 in OpenCode, Kilo, MiMo, or another MCP host and restart that host. No plugin or
 automatic context injection is used. For background processing, run the CLI:
 
@@ -30,6 +30,15 @@ The nightly sweep is scheduled by the systemd user units in `assets/systemd/`
 Configure `dream.model` and an OpenCode provider before expecting session
 extraction; without a model, the session watermark is preserved. Follow the
 [setup, first-entry, and scheduling guide](../../docs/how-to/memomatic.md).
+
+## CLI and Dream
+
+See [CLI conventions](../../docs/reference/cli.md) and
+[Dream controls](../../docs/how-to/memomatic.md#observe-limit-and-resume-dream).
+`dream --plan` inspects pending work without a model; `dream --dry-run` may call
+models. Normal Dream drains the eligible snapshot with per-fragment checkpoints,
+reusing one OpenCode server and unchanged embeddings. The first legacy-cursor
+migration checks prior history once without discarding existing memory.
 
 ## Inbox
 

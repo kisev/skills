@@ -145,3 +145,33 @@ section, which points to the source recorded in the skill's `metadata.source`.
 
 Build tests reject unknown nodes, self-relations, and duplicate edges and verify
 that each materialized archive remains independently installable.
+
+### REQ-I-419 - Share CLI parsing and observability without another npm package
+
+Agentomatic, memomatic and taskmatic shall use Commander and one authored common
+CLI runtime in `shared/references/cli_runtime.ts`. `shared/manifest.json` declares
+the generated package copies; public generation tasks materialize and verify
+them. Each existing npm archive includes its compiled copy and declares its own
+Commander dependency. No fourth application or new npm name is introduced.
+
+Commands expose contextual help, environment bindings, choices, examples and
+configuration precedence: CLI > environment > JSON file > defaults. Help/version
+do not start models or create application state. Common result/log options keep
+stdout machine-readable when selected and stderr diagnostic; MCP stdout remains
+protocol-only. JSON logs and non-TTY defaults do not contain animation. Terminal
+progress reflects known counts and elapsed wait time, with `NO_COLOR` respected.
+Agentomatic retains its wizard, contextual guidance, confirmation boundaries and
+legacy versioned JSON error envelopes; configuration and environment cannot supply
+implicit `--yes` approval.
+
+The runtime requires Node.js 22.13+. Memomatic/taskmatic parser errors exit 2,
+operational/configuration failures 1, timeout 124, interruption 130 and success 0.
+Agentomatic retains its existing doctor/error codes. Application configuration
+overrides do not persist themselves or restart services.
+
+#### Verification
+
+CLI subprocess tests check contextual non-mutating help/status, unknown options,
+CLI/env/file precedence, protocol-only stdout and configuration unable to confirm
+mutations. Materialization tests compare all generated copies with the authored
+source. Packed-package smoke tests cover the existing npm graph.

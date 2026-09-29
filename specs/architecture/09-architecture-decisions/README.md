@@ -20,3 +20,4 @@ items.
 - [ADR-0014: Change-linked documentation review](0014-change-linked-documentation-review.md) - accepted
 - [ADR-0015: Use explicit MCP memory](0015-use-explicit-mcp-memory.md) - accepted
 - [ADR-0016: Unify task runtime and explicit recall](0016-unify-task-runtime-and-explicit-recall.md) - accepted
+- [ADR-0017: Observable incremental CLI processing](0017-observable-incremental-cli-processing.md) - accepted

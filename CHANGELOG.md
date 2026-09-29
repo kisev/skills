@@ -10,15 +10,28 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- Agentomatic, memomatic and taskmatic share Commander-based option parsing and
+  build-materialized CLI utilities without a new npm package. Node.js 22.13+ is
+  required. Contextual help, env/config overrides and stderr diagnostics preserve
+  MCP stdout and the agentomatic wizard. Memory status no longer indexes data.
+
+- Dream drains an eligible startup snapshot by default, tracks message revisions
+  and completed fragments, reuses one isolated OpenCode server and unchanged
+  embeddings, and exposes progress, timeouts, retries and actual usage. `--plan`
+  previews the queue without model calls. A first legacy-cursor migration rechecks
+  existing history once while retaining the corpus; limits allow incremental runs.
+
 - `task-prepare` publication commands now target the GitLab GraphQL endpoint
   through `glab api --method POST ../graphql`. Regenerated plans for unchanged
   version 2 drafts issue `createIssue`, `createEpic`, and `updateIssue`
   mutations instead of REST calls, and payload files hold the exact GraphQL
   request with its query and variables.
+
 - Taskmatic CLI, MCP, exports and read-only web board now share the independent
   `@kisev/taskmatic` TypeScript npm application. Existing SQLite v1 data, state
   paths, card IDs and tool names remain compatible. The skill no longer bundles
   a Python runtime; host commands and services require an explicit migration.
+
 - Memory retrieval uses instructed Qwen3 queries, relevance gates before ranking,
   exact-match priority, optional project filtering and `--explain`/MCP diagnostics.
   Unknown names and unrelated queries can return no hits. Embedding indices carry

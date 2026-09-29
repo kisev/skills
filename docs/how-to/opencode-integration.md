@@ -8,7 +8,9 @@ skills have a separate lifecycle and must be installed independently through the
 
 ## Requirements and Ownership
 
-The package requires Node.js 22+ and OpenCode `>=1.18.29 <1.19.0`.
+The package requires Node.js 22.13+ and OpenCode `>=1.18.29 <1.19.0`.
+See [common CLI conventions](../reference/cli.md) for configuration precedence,
+environment variables, diagnostics and machine output. The existing wizard remains available.
 
 | Component | Project scope | Global scope |
 | - | - | - |

@@ -18,7 +18,12 @@ Input is an OpenCode session, an explicit tool call, an inbox drop from a skill 
 
 ## Workflow Stages
 
-Capture (explicit `memory_write` queuing an inbox drop, skill mirrors through the shared `memomatic_inbox.py` helper, or dream ingestion of session transcripts from the OpenCode database), process (`memomatic process`: validate lines, enforce `never-save`, deduplicate exact texts, supersede by `key`, route user-origin `target` entries, rebuild the index with embeddings — no model turns), rank (hybrid FTS5 and optional local embeddings, recency decay with half-life 30 days for episodic entries, importance multiplier, pinned and curated entries exempt), account usage (surfaced on search hits, useful on line fetches), gate promotion deterministically (relevance 0.30, frequency 0.24, diversity 0.15, recency 0.15, consolidation 0.10, richness 0.06), consolidate through one bounded model turn via `opencode run` (merge, supersede by key, bounded prior-entry loss 0.25, line budget), and report to `DREAMS.md` with content-addressed pre-images in `history/`. Dream and process serialize through a stale-tolerant run lock; inbox processing runs only on the systemd timer or a manual CLI run.
+Capture (explicit `memory_write` queuing an inbox drop, skill mirrors through the shared `memomatic_inbox.py` helper, or incremental ingestion from the OpenCode database), process (`memomatic process`: validate lines, enforce `never-save`, deduplicate exact texts, supersede by `key`, route user-origin targets, index changed text — no model turns), rank (hybrid retrieval, episodic age decay, pinned and curated exemptions), account usage, gate promotion deterministically, consolidate through bounded OpenCode model calls, and report to `DREAMS.md`. Content-addressed pre-images and compact extraction receipts live in `history/`. Dream and process serialize through a live-owner-aware run lock; processing runs on the timer or a manual CLI invocation.
+
+Promotion weights remain relevance 0.30, frequency 0.24, diversity 0.15, recency
+0.15, consolidation 0.10 and richness 0.06. Consolidation keeps the configured
+line budget and bounded prior-entry loss (default 0.25); curated drops remain
+rejected by deterministic application rather than relying on the prompt.
 
 Every entry carries a `source` annotation; visibility derives from it: `team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing artifacts, every other source is personal-only. Search responses expose the label. The MCP server exposes exactly `memory_search`, `memory_get`, `memory_write`, and `memory_forget` to all supported hosts. Agent-initiated retrieval is observable through host tool-call logs; choosing when to search remains the model's responsibility.
 
@@ -61,13 +66,14 @@ claim of universal semantic accuracy.
 
 ## Dependencies
 
-Node.js 22+, `node:sqlite`, optional OpenAI-compatible local embedding endpoint, configured OpenCode provider for dream model turns, presence-detected `$XDG_STATE_HOME/memomatic/inbox/` for skill producers. Agentomatic does not depend on memomatic; the standalone application is installed and connected to each host separately.
+Node.js 22.13+, `node:sqlite`, Commander, the build-materialized common CLI runtime, an optional OpenAI-compatible embedding endpoint, and a configured OpenCode provider for Dream. Agentomatic does not depend on memomatic; applications remain independently installed.
 
 Dream session ingestion reads text parts from OpenCode's normalized `part`
 table, ordered within each message; legacy databases with embedded message parts
-remain readable. Dream invokes `opencode run --format json` with a positional
-prompt and parses only text events, excluding tool and step metadata. Internal
-Dream sessions remain excluded from extraction.
+remain readable. Dream uses one owned, authenticated loopback OpenCode server
+per run or an explicitly selected existing server. Extraction sessions deny
+tools; only response text and actual usage metadata are consumed. Internal Dream
+sessions remain excluded from extraction.
 
 ## Remote/Local Effects
 
@@ -75,7 +81,11 @@ No independent remote effect; dream model turns use the configured OpenCode prov
 
 ## Errors/Partial/Escalation
 
-Invalid consolidation falls back to append-only within the line budget; unreadable session databases produce an empty ingestion window; `dry-run` reports without writes; malformed or forbidden inbox drops move to `rejected/` and are reported in the dream summary; a busy run lock fails with `another memomatic run is active`.
+Invalid consolidation falls back to append-only within the line budget. A missing
+default session database is visibly skipped; an explicitly supplied missing or
+unreadable database fails. Malformed or forbidden inbox drops move to `rejected/`.
+A busy run lock fails with `another memomatic run is active`. A live owner is not
+evicted merely because a sweep exceeds thirty minutes.
 
 Dry-run uses an in-memory index and leaves the corpus, persistent index, run lock,
 and session watermark unchanged; configured model and embedding calls may still
@@ -84,6 +94,55 @@ watermark. Consolidation cannot authorize a curated `drop`; auto-clean selects
 individual matching unpinned old entries rather than removing a whole daily file.
 
 ## Unique Constraints
+
+### REQ-F-544 - Drain a bounded snapshot with observable resumable processing
+
+Normal Dream shall drain all eligible work captured at startup, without a default
+session-count limit. Explicit limits bound sessions, request time, whole-run time,
+fragment size and retries. `dream --plan` shall report pending work without model
+calls or writes. `status`, command help and version shall not index or call models.
+Per-call timeout defaults to 180 seconds, additional retries to one, fragment body
+size to 24000 characters, and session idle age to ten minutes. Whole-run duration
+and session-count limits default to zero (unlimited).
+
+Local SQL shall select text parts before transferring payloads. Modern session,
+message and part revisions allow unchanged sessions to bypass body parsing;
+message/content fingerprints retain correctness for changed and legacy sessions.
+Long messages are processed through bounded fragments without truncating the end
+or splitting Unicode surrogate pairs. Only adjacent exact duplicates of the same
+role are removed; semantic importance is not guessed by a local filter. Fragments
+retain ordered roles, source IDs and a bounded preceding context overlap.
+
+Completed extraction results shall be persisted as private versioned receipts
+before idempotent corpus application and checkpoint advancement. Cancellation or
+later failure preserves completed work and avoids paying again for saved model
+responses. Existing legacy creation-time cursors require one conservative replay
+of eligible history; this retains the corpus and is visible in diagnostics and
+documentation. Source histories are never stored wholesale in memomatic.
+
+Indexing shall reuse vectors only for unchanged text and matching model identity,
+embedding changed entries in bounded batches. Incompatible dimensions fail before
+index commit. `index --force` bypasses that cache. Unchanged consolidation inputs
+reuse a prior response. The index may lag committed Markdown after interruption;
+a subsequent successful index pass repairs it.
+
+Progress shall expose stages, elapsed time, fragment counts, retries, cache counts,
+sent characters and actual token usage when available. Wait heartbeats identify
+an outstanding model request; no fictitious percentage or token certainty is
+reported. Diagnostic logs exclude transcript and authentication content. No
+parallel model requests are started by default. An owned OpenCode process group
+is terminated on exit; an attached server is never stopped. Model sessions are
+aborted on timeout/cancellation and persistent checkpoints remain available.
+
+#### Verification
+
+Tests cover continuation and edits of old sessions, complete long-message tails,
+revision-cache hits, interrupted extraction and response reuse, model timeout and
+retry events, unchanged embedding reuse and force, live-owner locks, safe help and
+status, JSON/stdout separation, and owned-server reuse and shutdown. A bounded
+live check validates the OpenCode HTTP contract without processing user history.
+
+### Corpus constraints
 
 Curated files are written only by dream consolidation, explicit user-origin writes, or inbox routing of user-origin targets; superseded entries are excluded from search and indexing; usage counters are keyed by stable entry identity (`key` annotation or content digest); state roots are absolute, normalized, symlink-free, with atomic mode-0600 writes; `memory_write` never touches corpus files directly.
 

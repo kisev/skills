@@ -30,6 +30,9 @@ Restart MCP hosts and the web service after an update so they use the new runtim
 
 ## Work with Cards
 
+Each command has its own `--help`. Use the [CLI reference](../reference/cli.md)
+for JSON configuration, environment overrides and stderr diagnostics.
+
 Replace `CARD_ID` with the ID returned by the create or list command:
 
 ```shell
