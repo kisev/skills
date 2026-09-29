@@ -4,8 +4,8 @@
 
 `@kisev/memomatic` is a personal learning memory for agents following the OpenClaw
 memory architecture: a tiered Markdown corpus you can read as plain files, a
-rebuildable SQLite index with FTS5 and optional local embeddings, and a nightly
-`dream` consolidation sweep.
+rebuildable SQLite index with FTS5 and optional local embeddings, a `sessions`
+extraction pass, and a nightly `dream` consolidation sweep.
 
 ## Install
 
@@ -21,24 +21,32 @@ automatic context injection is used. For background processing, run the CLI:
 
 ```bash
 memomatic process    # validate the inbox and index accepted entries (no model)
-memomatic dream      # full sweep: inbox + sessions + consolidation
+memomatic sessions   # extract episodic memory from OpenCode sessions (model)
+memomatic dream      # consolidation: inbox + promotion + bounded rewrite + archive
 ```
 
-The nightly sweep is scheduled by the systemd user units in `assets/systemd/`
-(`memomatic-dream.service` and `memomatic-dream.timer`).
+Nightly runs are scheduled by the systemd user units in `assets/systemd/`
+(`memomatic-sessions.service`/`.timer` for extraction and
+`memomatic-dream.service`/`.timer` for consolidation).
 
-Configure `dream.model` and an OpenCode provider before expecting session
-extraction; without a model, the session watermark is preserved. Follow the
+Configure `sessions.model` (or keep a legacy `dream.model`) and an OpenCode
+provider before expecting session extraction; without a model, the session
+watermark is preserved. Follow the
 [setup, first-entry, and scheduling guide](../../docs/how-to/memomatic.md).
 
-## CLI and Dream
+## CLI, Sessions, and Dream
 
 See [CLI conventions](../../docs/reference/cli.md) and
 [Dream controls](../../docs/how-to/memomatic.md#observe-limit-and-resume-dream).
-`dream --plan` inspects pending work without a model; `dream --dry-run` may call
-models. Normal Dream drains the eligible snapshot with per-fragment checkpoints,
-reusing one OpenCode server and unchanged embeddings. The first legacy-cursor
-migration checks prior history once without discarding existing memory.
+`sessions --plan` inspects pending session work without a model; `dream --plan`
+counts pending inbox files and promotion candidates. `--dry-run` previews
+either command and may still call models. Sessions drain the eligible snapshot
+with per-fragment checkpoints, reusing one OpenCode server and unchanged
+embeddings; Dream then promotes usage-gated episodic entries into `MEMORY.md`
+through bounded consolidation and archives old entries. The first
+legacy-cursor migration checks prior history once without discarding existing
+memory. `status` shows the queue: pending inbox files, session backlog,
+promotion candidates, and the last run of each sweep.
 
 ## Inbox
 
@@ -63,13 +71,14 @@ is exposed in search responses.
 
 ## Surfaces
 
-- `memomatic` CLI: `process`, `dream`, `search`, `status`, `index`.
+- `memomatic` CLI: `process`, `sessions`, `dream`, `search`, `status`, `index`.
 - MCP stdio server with `memory_search`, `memory_get`, `memory_write`, and
   `memory_forget` tools.
 
-The model initiates memory searches through visible MCP tool calls. Dream
-processes OpenCode history separately; connecting another host does not import
-its session history. Agentomatic and memomatic are installed independently.
+The model initiates memory searches through visible MCP tool calls. The
+`sessions` command processes OpenCode history separately; connecting another
+host does not import its session history. Agentomatic and memomatic are
+installed independently.
 
 Nothing is deleted without the explicit directives documented in
 `MEMORY_RULES.md`.

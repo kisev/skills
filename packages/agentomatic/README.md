@@ -46,10 +46,12 @@ outdated facts by key, and archives every pre-image.
   `spec-manage` are quotable in team artifacts, the rest personal-only) is
   exposed in search results. The model initiates retrieval through tool calls;
   there is no automatic memory injection or memomatic plugin.
-- Scheduling: copy `memomatic-dream.service` and `memomatic-dream.timer` from the
+- Scheduling: copy `memomatic-sessions.service`, `memomatic-sessions.timer`,
+  `memomatic-dream.service`, and `memomatic-dream.timer` from the
   `@kisev/memomatic` package `assets/systemd/` into `~/.config/systemd/user/` and run
-  `systemctl --user enable --now memomatic-dream.timer`; run the sweep another
-  way by invoking `memomatic process` or `memomatic dream` yourself.
+  `systemctl --user enable --now memomatic-sessions.timer memomatic-dream.timer`;
+  run the sweeps another way by invoking `memomatic process`, `memomatic sessions`,
+  or `memomatic dream` yourself.
 - Forgetting is explicit or rule-gated: nothing is deleted without
   `memory_forget` or an `auto-clean` directive; pinned entries never decay.
 

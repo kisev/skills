@@ -10,6 +10,22 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- Memomatic splits OpenCode session analysis into the standalone `sessions`
+  command; `dream` is now pure consolidation (inbox, usage-gated promotion,
+  bounded rewrite, archiving) and never reads OpenCode history. Separate
+  systemd units schedule the two sweeps, and a legacy `dream` extraction
+  configuration migrates to the new `sessions` settings section until
+  overridden.
+
+### Added
+
+- `memomatic status` now reports the pending queue without model calls: pending
+  inbox files, the session backlog from the OpenCode database (or `null` when
+  absent), the promotion-candidate count, and the last dream/sessions run
+  timestamps. The optional `auto-clean ... unused-after=Nd` rule archives old
+  episodic entries with no useful recalls earlier than the age-only cutoff;
+  decay stays inactive unless the suffix is declared.
+
 - Agentomatic, memomatic and taskmatic share Commander-based option parsing and
   build-materialized CLI utilities without a new npm package. Node.js 22.13+ is
   required. Contextual help, env/config overrides and stderr diagnostics preserve

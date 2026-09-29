@@ -16,6 +16,7 @@ interactive configuration wizard and command-specific guidance.
 
 ```shell
 agentomatic install --help
+memomatic sessions --help
 memomatic dream --help
 taskmatic claim --help
 ```
@@ -23,16 +24,20 @@ taskmatic claim --help
 Help and version requests do not create application state or call a model.
 Help lists supported options, environment names, choices and examples. Unknown
 options fail rather than becoming search text or silently starting a workflow.
-`memomatic status` is read-only; indexing is an explicit `index` operation.
+`memomatic status` is read-only and reports the queue (pending inbox files,
+session backlog, promotion candidates, last runs) without model calls; indexing
+is an explicit `index` operation.
 
 Values resolve in this order: **CLI arguments > environment > JSON configuration > application defaults**.
 `--config FILE` selects a JSON file, or use
 `AGENTOMATIC_CONFIG`, `MEMOMATIC_CONFIG`, or `TASKMATIC_CONFIG`. Generic option keys
 in that file are camelCase (`logLevel`, `logFormat`, `progress`, `color`, `json`).
 Taskmatic also accepts command fields such as `home`, `board`, `host`, and `port`.
-Memomatic keeps its existing `dream`, `embedding`, `search`, and `archive` sections.
-Run-specific overrides such as `--model` take precedence over `dream.model`.
-No configuration file is written automatically by these overrides.
+Memomatic keeps its `sessions`, `dream`, `embedding`, `search`, and `archive`
+sections. Run-specific overrides such as `--model` take precedence over the
+matching `sessions.model`/`dream.model` setting, and a legacy `dream` extraction
+value migrates to `sessions` until the new section overrides it. No
+configuration file is written automatically by these overrides.
 
 Environment names for application options appear in help: for example,
 `MEMOMATIC_MODEL`, `MEMOMATIC_TIMEOUT`, `TASKMATIC_AGENT`, `TASKMATIC_TTL`,
@@ -64,10 +69,11 @@ a concise summary in a terminal; `--json` explicitly selects JSON. Search and
 task lists retain their human defaults unless `--json` is supplied. Existing
 agentomatic JSON error envelopes stay on stdout for compatibility.
 
-Dream progress reports stage, elapsed time and known fragment counts. It does
-not invent a percentage for a model request: a waiting message is emitted every
-15 seconds until the response arrives or its timeout expires. Diagnostics do
-not print transcripts, prompts, provider response bodies or authentication data.
+Sessions and Dream progress reports stage, elapsed time and known fragment
+counts. Neither invents a percentage for a model request: a waiting message is
+emitted every 15 seconds until the response arrives or its timeout expires.
+Diagnostics do not print transcripts, prompts, provider response bodies or
+authentication data.
 
 ## Exit Codes
 

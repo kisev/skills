@@ -18,7 +18,7 @@ Input is an OpenCode session, an explicit tool call, an inbox drop from a skill 
 
 ## Workflow Stages
 
-Capture (explicit `memory_write` queuing an inbox drop, skill mirrors through the shared `memomatic_inbox.py` helper, or incremental ingestion from the OpenCode database), process (`memomatic process`: validate lines, enforce `never-save`, deduplicate exact texts, supersede by `key`, route user-origin targets, index changed text — no model turns), rank (hybrid retrieval, episodic age decay, pinned and curated exemptions), account usage, gate promotion deterministically, consolidate through bounded OpenCode model calls, and report to `DREAMS.md`. Content-addressed pre-images and compact extraction receipts live in `history/`. Dream and process serialize through a live-owner-aware run lock; processing runs on the timer or a manual CLI invocation.
+Capture (explicit `memory_write` queuing an inbox drop, skill mirrors through the shared `memomatic_inbox.py` helper, or incremental ingestion from the OpenCode database through the separate `memomatic sessions` command), process (`memomatic process`: validate lines, enforce `never-save`, deduplicate exact texts, supersede by `key`, route user-origin targets, index changed text — no model turns), rank (hybrid retrieval, episodic age decay, pinned and curated exemptions), account usage, gate promotion deterministically, consolidate through bounded OpenCode model calls, and report to `DREAMS.md`. Content-addressed pre-images and compact extraction receipts live in `history/`. Sessions, Dream, and process serialize through a live-owner-aware run lock; each runs on its own timer or a manual CLI invocation. Dream follows the OpenClaw consolidation shape: it never reads OpenCode history; it drains the inbox, promotes usage-gated episodic entries into `MEMORY.md`, applies the bounded consolidation rewrite, and archives decayed entries.
 
 Promotion weights remain relevance 0.30, frequency 0.24, diversity 0.15, recency
 0.15, consolidation 0.10 and richness 0.06. Consolidation keeps the configured
@@ -66,18 +66,18 @@ claim of universal semantic accuracy.
 
 ## Dependencies
 
-Node.js 22.13+, `node:sqlite`, Commander, the build-materialized common CLI runtime, an optional OpenAI-compatible embedding endpoint, and a configured OpenCode provider for Dream. Agentomatic does not depend on memomatic; applications remain independently installed.
+Node.js 22.13+, `node:sqlite`, Commander, the build-materialized common CLI runtime, an optional OpenAI-compatible embedding endpoint, and a configured OpenCode provider for Sessions extraction and Dream consolidation (a legacy `dream` extraction configuration migrates to `sessions` until overridden). Agentomatic does not depend on memomatic; applications remain independently installed.
 
-Dream session ingestion reads text parts from OpenCode's normalized `part`
+Session ingestion (the `sessions` command) reads text parts from OpenCode's normalized `part`
 table, ordered within each message; legacy databases with embedded message parts
-remain readable. Dream uses one owned, authenticated loopback OpenCode server
+remain readable. Sessions use one owned, authenticated loopback OpenCode server
 per run or an explicitly selected existing server. Extraction sessions deny
-tools; only response text and actual usage metadata are consumed. Internal Dream
-sessions remain excluded from extraction.
+tools; only response text and actual usage metadata are consumed. Internal
+extraction sessions remain excluded from later extraction.
 
 ## Remote/Local Effects
 
-No independent remote effect; dream model turns use the configured OpenCode provider and carry a `[memomatic-internal]` marker so ingestion never re-extracts them. Deletion is explicit (`memory_forget`) or enabled only by a `- auto-clean: older-than=Nd scope=episodic [source=name]` directive in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`; `- never-save: <topic>` topics are rejected at write time, at inbox processing, and at dream extraction.
+No independent remote effect; sessions and dream model turns use the configured OpenCode provider and carry a `[memomatic-internal]` marker so ingestion never re-extracts them. Deletion is explicit (`memory_forget`) or enabled only by a `- auto-clean: older-than=Nd scope=episodic [source=name] [unused-after=Nd]` directive in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`; the optional `unused-after` suffix archives old episodic entries with zero useful recalls earlier than the age-only cutoff and is inactive unless declared. `- never-save: <topic>` topics are rejected at write time, at inbox processing, and at session extraction.
 
 ## Errors/Partial/Escalation
 
@@ -93,14 +93,33 @@ run. Without a model, session extraction is skipped without advancing its
 watermark. Consolidation cannot authorize a curated `drop`; auto-clean selects
 individual matching unpinned old entries rather than removing a whole daily file.
 
+### REQ-F-545 - Expose the queue and split extraction from consolidation
+
+The application shall expose OpenCode session extraction as the standalone
+`sessions` command and keep `dream` as consolidation only: inbox processing,
+usage-gated promotion, bounded rewrite, and rule-gated archiving. Two
+independent timers schedule the sweeps, and both commands serialize through the
+shared run lock. `status` shall report the pending queue without model calls or
+writes: pending inbox files, the session backlog from the OpenCode database
+(or `null` when it does not exist), the current promotion-candidate count, and
+the last dream/sessions run timestamps recorded in the index metadata.
+
+#### Verification
+
+CLI tests verify help and malformed-argument handling for both commands, the
+status queue report against a fixture database and inbox, and the no-database
+`null` backlog; regression tests cover watermark preservation and last-run
+recording for each sweep.
+
 ## Unique Constraints
 
 ### REQ-F-544 - Drain a bounded snapshot with observable resumable processing
 
-Normal Dream shall drain all eligible work captured at startup, without a default
+Normal Sessions shall drain all eligible work captured at startup, without a default
 session-count limit. Explicit limits bound sessions, request time, whole-run time,
-fragment size and retries. `dream --plan` shall report pending work without model
-calls or writes. `status`, command help and version shall not index or call models.
+fragment size and retries. `sessions --plan` and `dream --plan` shall report
+pending work without model calls or writes. `status`, command help and version
+shall not index or call models.
 Per-call timeout defaults to 180 seconds, additional retries to one, fragment body
 size to 24000 characters, and session idle age to ten minutes. Whole-run duration
 and session-count limits default to zero (unlimited).

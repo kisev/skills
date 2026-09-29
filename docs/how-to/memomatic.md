@@ -65,7 +65,8 @@ If you manually configured an import of `@kisev/agentomatic/plugins/memomatic`,
 remove that entry yourself. Then connect the MCP server as above and restart
 OpenCode. Installing only the newer npm dependency does not remove an old wrapper.
 
-Memory files, the inbox, embeddings, rules, and Dream scheduling are preserved.
+Memory files, the inbox, embeddings, rules, and existing sweep scheduling are
+preserved.
 The former `projects` settings map is ignored; project and trigger annotations
 remain stored on existing entries but no longer drive automatic recall.
 
@@ -85,7 +86,12 @@ Search results identify source and personal/team visibility. A personal entry mu
 not be copied into shared artifacts. `memory_forget` removes one explicitly selected
 line; ordinary model consolidation cannot authorize deletion of curated memory.
 
-## Configure Dream
+## Configure Sessions and Dream
+
+Sessions and Dream are separate sweeps. `memomatic sessions` extracts episodic
+memory from OpenCode session transcripts; `memomatic dream` consolidates:
+inbox, promotion of usage-gated episodic entries into `MEMORY.md`, a bounded
+rewrite, and archiving. Dream never reads OpenCode history itself.
 
 Before enabling session extraction, install OpenCode, configure its provider,
 and choose an available model with `opencode models`. Create
@@ -93,46 +99,58 @@ and choose an available model with `opencode models`. Create
 `provider/model` identifier:
 
 ```json
-{"dream": {"model": "provider/model"}}
+{"sessions": {"model": "provider/model"}}
 ```
 
+A legacy `{"dream": {"model": "provider/model"}}` value is still adopted for
+sessions until the `sessions` section overrides it.
+
 ```shell
-memomatic dream --dry-run
+memomatic sessions --dry-run
+memomatic sessions
 memomatic dream
 ```
 
-The preview leaves memory files, the persistent index, and the ingestion watermark
+The previews leave memory files, the persistent index, and the ingestion watermark
 unchanged; configured model and embedding calls can still run. Without a model,
-`dream` processes the inbox but does not extract sessions or advance their watermark.
-Use `process` for a model-free inbox pass. Invalid consolidation responses fall
+`sessions` is skipped without advancing the watermark; `dream` still processes
+the inbox and archives by rules, but performs no consolidation model calls. Use
+`process` for a model-free inbox pass. Invalid consolidation responses fall
 back to bounded append-only promotion, preserving existing curated entries.
 
-Dream reads OpenCode sessions, including text stored in its separate `part` table.
-MCP connections in other hosts share explicit memory entries but do not import
-those hosts' session histories. Model calls reuse one isolated OpenCode server per
-run, with tools denied, or an explicitly configured existing server. Before enabling the timer, check `sessionsIngested` against the
+The sessions command reads OpenCode sessions, including text stored in its
+separate `part` table. MCP connections in other hosts share explicit memory
+entries but do not import those hosts' session histories. Model calls reuse one
+isolated OpenCode server per run, with tools denied, or an explicitly configured
+existing server. Before enabling the timer, check `sessionsIngested` against the
 available unprocessed sessions; a zero-session pass does not test model access.
 
 ## Observe, Limit and Resume Dream
 
 ```shell
+memomatic sessions --plan --json
+memomatic sessions --max-duration 15m --timeout 3m --log-format json
+memomatic sessions --max-sessions 2 --progress never
 memomatic dream --plan --json
-memomatic dream --max-duration 15m --timeout 3m --log-format json
-memomatic dream --max-sessions 2 --progress never
-memomatic dream --help
+memomatic status
+memomatic sessions --help
 ```
 
-`--plan` only reads the session snapshot and checkpoints: no model calls, embeddings,
-or persistent writes. Unlike `--plan`, `--dry-run` can still incur model and
-embedding usage. Normal Dream drains all eligible work captured at startup;
-messages arriving later belong to the next run. There is no default 20-session cap.
-The first upgrade from the legacy creation-time watermark checks existing history
-once, because that watermark cannot identify processed message revisions. Current
-memory is retained. Inspect `--plan` and use limits to spread a large migration
-over multiple invocations. This is re-ingestion, not deletion or replacement of
-the existing memory corpus.
+`sessions --plan` only reads the session snapshot and checkpoints: no model
+calls, embeddings, or persistent writes. `dream --plan` counts pending inbox
+files and promotion candidates the same way. `status` reports the queue
+without a model: pending inbox files, the session backlog (or `null` when no
+OpenCode database exists), promotion candidates, and the last dream/sessions
+run. Unlike `--plan`, `--dry-run` can still incur model and embedding usage.
+Normal Sessions drains all eligible work captured at startup; messages
+arriving later belong to the next run. There is no default 20-session cap.
+The first upgrade from the legacy creation-time watermark checks existing
+history once, because that watermark cannot identify processed message
+revisions. Current memory is retained. Inspect `--plan` and use limits to
+spread a large migration over multiple invocations. This is re-ingestion, not
+deletion or replacement of the existing memory corpus.
 
-| CLI option | Environment | `dream` setting / default |
+| CLI option | Environment | `sessions` setting / default |
 | - | - | - |
 | `--model` | `MEMOMATIC_MODEL` | `model`: configured provider/model |
 | `--variant` | `MEMOMATIC_VARIANT` | `variant`: provider default |
@@ -144,6 +162,12 @@ the existing memory corpus.
 | `--idle` | `MEMOMATIC_IDLE` | `idleMs`: 600000 |
 | `--opencode-url` | `MEMOMATIC_OPENCODE_URL` | `opencodeUrl`: private server per run |
 | `--database` | `MEMOMATIC_DATABASE` | OpenCode XDG database |
+
+Dream keeps `--model`, `--variant`, `--timeout`, `--max-duration` and
+`--retries` for its consolidation model; the matching settings live in the
+`dream` section (`model` also serves as the sessions fallback). Legacy
+extraction knobs previously read from `dream` migrate to `sessions`
+automatically on first load.
 
 Duration flags accept `ms`, `s`, `m`, or `h`; a bare number means milliseconds.
 Settings-file durations are numeric milliseconds. Common logging, JSON and color
@@ -162,7 +186,8 @@ applied idempotently before its checkpoint is advanced. Ctrl-C, a timeout or a
 later failure retains earlier completed work. Run the same command to continue;
 do not remove the run lock while its owner is alive. The lock no longer expires
 merely because a run exceeds 30 minutes. After interruption the index may lag
-committed Markdown; resume Dream or run `memomatic index` to refresh it.
+committed Markdown; resume the interrupted command or run `memomatic index` to
+refresh it.
 
 Stages, counts, elapsed time, retries and wait heartbeats go to stderr. The final
 JSON report includes model call counts, sent characters and actual token/cache
@@ -187,7 +212,7 @@ only inspects state and no longer rebuilds the index.
 Embeddings are optional and disabled by default. Without them, memory uses FTS5
 text search. To add vector search with Ollama, start Ollama and install an embedding
 model such as `qwen3-embedding:4b`, then merge this block into `settings.json`
-alongside `dream`:
+alongside `sessions` and `dream`:
 
 ```json
 {
@@ -257,29 +282,41 @@ The corpus is under `${XDG_STATE_HOME:-$HOME/.local/state}/memomatic/`:
 ```markdown
 - never-save: credentials
 - auto-clean: older-than=90d scope=episodic source=stopit
+- auto-clean: older-than=180d scope=episodic unused-after=30d
 ```
 
 Cleanup archives only matching unpinned old entries, preserving other entries in
-the same daily file. Rejected inbox files remain in `inbox/rejected/`. Review
+the same daily file. The optional `unused-after=Nd` suffix adds usage-aware
+decay: episodic entries older than `Nd` days that never earned a useful recall
+are archived earlier, while recalled entries live up to the full `older-than`
+window or promotion. Decay is inactive unless the suffix is present. Rejected
+inbox files remain in `inbox/rejected/`. Review
 those files after a rejection. To recover an unwanted change, inspect the
 content-addressed pre-image in `history/` or the selected entries in `archive/`,
 restore the intended corpus content, then run `memomatic index`. Keep all of this
 private and outside Git.
 
-## Schedule a Sweep
+## Schedule the Sweeps
 
 The units belong to `@kisev/memomatic`, not agentomatic. Locate them with
-`npm root --global`, then copy the two units from
+`npm root --global`, then copy the four units from
 `<npm-root>/@kisev/memomatic/assets/systemd/` to `~/.config/systemd/user/`.
 Ensure the user service can resolve both `memomatic` and `opencode`; use absolute
 executable paths or an explicit service PATH when a shell version manager supplies them.
 
 ```shell
 systemctl --user daemon-reload
-systemctl --user enable --now memomatic-dream.timer
-systemctl --user status memomatic-dream.timer
+systemctl --user enable --now memomatic-sessions.timer memomatic-dream.timer
+systemctl --user status memomatic-sessions.timer memomatic-dream.timer
+journalctl --user -u memomatic-sessions.service
 journalctl --user -u memomatic-dream.service
 ```
 
-Enable the timer only after the manual sweep succeeds. Stop scheduling with
-`systemctl --user disable --now memomatic-dream.timer`; this preserves memory.
+Sessions run early (02:00 with jitter) and Dream later (04:30 with jitter), so
+extraction normally finishes before consolidation starts. Both sweeps share one
+run lock: if an unusually long sessions run ever overlaps Dream, that Dream
+invocation fails fast with `another memomatic run is active` and the next
+scheduled run takes over. Enable the timers only after the manual sweeps
+succeed. Stop scheduling with
+`systemctl --user disable --now memomatic-sessions.timer memomatic-dream.timer`;
+this preserves memory.

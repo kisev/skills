@@ -48,10 +48,12 @@ Memomatic - персональная обучающая память по мот
   `spec-manage` цитируемы в командных артефактах, остальные personal-only);
   метка видна в поиске. Модель сама запрашивает память через инструменты;
   автоматической подстановки и плагина memomatic нет.
-- Расписание: скопируйте `memomatic-dream.service` и `memomatic-dream.timer` из
+- Расписание: скопируйте `memomatic-sessions.service`, `memomatic-sessions.timer`,
+  `memomatic-dream.service` и `memomatic-dream.timer` из
   `assets/systemd/` пакета `@kisev/memomatic` в `~/.config/systemd/user/` и выполните
-  `systemctl --user enable --now memomatic-dream.timer`; альтернативный запуск -
-  командами `memomatic process` или `memomatic dream`.
+  `systemctl --user enable --now memomatic-sessions.timer memomatic-dream.timer`;
+  альтернативный запуск - командами `memomatic process`, `memomatic sessions`
+  или `memomatic dream`.
 - Забывание явно или по правилу: ничего не удаляется без `memory_forget` или
   директивы `auto-clean`; закрепленные записи не затухают.
 
