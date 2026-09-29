@@ -27,7 +27,8 @@ import {
   forgetEntry,
   archiveOldEpisodic,
 } from "../dist/service.js";
-import { runDream, parseExtraction, parseConsolidation } from "../dist/dream.js";
+import { runDream, parseConsolidation } from "../dist/dream.js";
+import { runSessions, parseExtraction } from "../dist/sessions.js";
 import { handleMcpRequest } from "../dist/mcp.js";
 import { stableIdFor } from "../dist/store.js";
 
@@ -100,6 +101,18 @@ test("rules parsing extracts never-save topics and auto-clean", () => {
   assert.ok(!isForbidden("ordinary engineering fact", rules));
   const sourced = parseRules("- auto-clean: older-than=30d scope=episodic source=stopit\n");
   assert.deepEqual(sourced.autoClean, { olderThanDays: 30, scope: "episodic", source: "stopit" });
+  const decaying = parseRules("- auto-clean: older-than=90d scope=episodic unused-after=30d\n");
+  assert.deepEqual(decaying.autoClean, {
+    olderThanDays: 90,
+    scope: "episodic",
+    source: undefined,
+    unusedAfterDays: 30,
+  });
+  assert.equal(
+    parseRules("- auto-clean: older-than=90d scope=episodic unused-after=0d\n").autoClean
+      .unusedAfterDays,
+    undefined,
+  );
 });
 
 test("writeEntry queues to the inbox and processInbox moves entries into the corpus", async () => {
@@ -331,28 +344,17 @@ test("usage signals and gates drive promotion, then dream consolidates", async (
 
     let consolidationCalls = 0;
     const executor = {
-      complete: async (request) => {
-        if (request.prompt.includes("Current MEMORY.md")) {
-          consolidationCalls += 1;
-          const key =
-            consolidationCalls === 1
-              ? "memory-consolidation-policy"
-              : "memory-consolidation-policy-v2";
-          return JSON.stringify({
-            operations: [
-              {
-                line: `- Memory consolidation follows the dream sweep with deterministic gates. <!-- key: ${key} --> <!-- origin: user --> <!-- observed: 2026-09-26 -->`,
-                op: "add",
-              },
-            ],
-          });
-        }
+      complete: async () => {
+        consolidationCalls += 1;
+        const key =
+          consolidationCalls === 1
+            ? "memory-consolidation-policy"
+            : "memory-consolidation-policy-v2";
         return JSON.stringify({
-          candidates: [
+          operations: [
             {
-              key: "memory-consolidation-policy",
-              reason: "repeated decision",
-              text: "Memory consolidation follows the dream sweep with deterministic gates.",
+              line: `- Memory consolidation follows the dream sweep with deterministic gates. <!-- key: ${key} --> <!-- origin: user --> <!-- observed: 2026-09-26 -->`,
+              op: "add",
             },
           ],
         });
@@ -441,7 +443,7 @@ test("consolidation falls back to append-only when drop loss exceeds the bound",
   }
 });
 
-test("dry-run dream writes nothing", async () => {
+test("dry-run dream writes nothing and non-dry runs record their sweep", async () => {
   const env = environment();
   try {
     const dream = await context();
@@ -450,18 +452,25 @@ test("dry-run dream writes nothing", async () => {
     const walBefore = readFileSync(`${dream.paths.indexFile}-wal`);
     const executor = {
       complete: async () =>
-        JSON.stringify({ candidates: [{ key: null, reason: "r", text: "Dry run only." }] }),
+        JSON.stringify({
+          operations: [{ op: "add", line: "- Dry run only. <!-- key: dry -->" }],
+        }),
       name: "fake",
     };
     const report = await runDream(dream, executor, { dryRun: true });
     assert.equal(report.dryRun, true);
+    assert.equal(report.promoted.length, 0);
     const dailyDir = join(env.state, "memomatic", "memory");
     assert.ok(!existsSync(dailyDir) || readdirSync(dailyDir).length === 0);
     assert.deepEqual(readFileSync(dream.paths.indexFile), before);
     assert.deepEqual(readFileSync(`${dream.paths.indexFile}-wal`), walBefore);
     assert.equal(dream.store.getMeta("ingest-watermark"), "123");
+    assert.equal(dream.store.getMeta("last-dream-at"), null);
+    assert.ok(!existsSync(dream.paths.dreamsFile));
     await runDream(dream, null);
     assert.equal(dream.store.getMeta("ingest-watermark"), "123");
+    assert.ok(dream.store.getMeta("last-dream-at"));
+    assert.match(readFileSync(dream.paths.dreamsFile, "utf8"), /inbox files processed: 0/);
     dream.store.close();
   } finally {
     rmSync(env.root, { force: true, recursive: true });
@@ -471,7 +480,7 @@ test("dry-run dream writes nothing", async () => {
 test("CLI previews do not create state, a database, or run locks", () => {
   const env = environment();
   try {
-    for (const command of ["process", "dream"]) {
+    for (const command of ["process", "dream", "sessions"]) {
       execFileSync(process.execPath, ["dist/cli.js", command, "--dry-run"], {
         env: process.env,
         cwd: new URL("..", import.meta.url),
@@ -508,15 +517,17 @@ test("sessions skipped without a model remain available after model setup", asyn
     database.close();
     const ctx = await context();
     ctx.store.setMeta("ingest-watermark", "123");
-    const skipped = await runDream(ctx, null);
+    const skipped = await runSessions(ctx, null);
     assert.equal(skipped.sessionsIngested, 0);
     assert.equal(ctx.store.getMeta("ingest-watermark"), "123");
-    const processed = await runDream(ctx, {
+    assert.equal(ctx.store.getMeta("last-sessions-at"), null);
+    const processed = await runSessions(ctx, {
       name: "fixture",
       complete: async () => '{"candidates":[]}',
     });
     assert.equal(processed.sessionsIngested, 1);
     assert.equal(ctx.store.getMeta("ingest-watermark"), "2000");
+    assert.ok(ctx.store.getMeta("last-sessions-at"));
     ctx.store.close();
   } finally {
     rmSync(env.root, { force: true, recursive: true });
@@ -563,6 +574,57 @@ test("auto-clean preserves unrelated, pinned, and fresh entries in the same dail
     assert.equal(readFileSync(file, "utf8"), `${lines.slice(1).join("\n")}\n`);
     await rebuildIndex(ctx);
     assert.deepEqual(await archiveOldEpisodic(ctx), []);
+    ctx.store.close();
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("unused-after decays only old entries without useful recalls", async () => {
+  const env = environment();
+  try {
+    const ctx = await context();
+    ctx.rules.autoClean = { olderThanDays: 180, scope: "episodic", unusedAfterDays: 30 };
+    const { writeCorpusFile, dailyNotePath } = await import("../dist/corpus.js");
+    const old = new Date(Date.now() - 60 * 86_400_000);
+    const file = dailyNotePath(ctx.paths, old);
+    const lines = [
+      entryLine("unused old entry", { observed: old.toISOString().slice(0, 10), origin: "agent" }),
+      entryLine("used old entry", {
+        key: "used-old",
+        observed: old.toISOString().slice(0, 10),
+        origin: "agent",
+      }),
+      entryLine("pinned old entry", {
+        observed: old.toISOString().slice(0, 10),
+        origin: "agent",
+        pinned: true,
+      }),
+      entryLine("fresh entry", {
+        observed: new Date().toISOString().slice(0, 10),
+        origin: "agent",
+      }),
+    ];
+    await writeCorpusFile(ctx.paths, file, `${lines.join("\n")}\n`);
+    await rebuildIndex(ctx);
+    const used = ctx.store.allEntries().find((item) => item.key === "used-old");
+    ctx.store.markUseful([used.stableId]);
+    const archived = await archiveOldEpisodic(ctx);
+    assert.deepEqual(archived, [file]);
+    const remaining = readFileSync(file, "utf8")
+      .split("\n")
+      .filter((line) => line.trim());
+    assert.equal(remaining.length, 3);
+    assert.match(remaining.join("\n"), /used old entry/);
+    assert.match(remaining.join("\n"), /pinned old entry/);
+    assert.match(remaining.join("\n"), /fresh entry/);
+    assert.ok(!/unused old entry/.test(remaining.join("\n")));
+    const recovered = readdirSync(join(env.state, "memomatic", "archive"));
+    assert.equal(recovered.length, 1);
+    assert.match(
+      readFileSync(join(env.state, "memomatic", "archive", recovered[0]), "utf8"),
+      /unused old entry/,
+    );
     ctx.store.close();
   } finally {
     rmSync(env.root, { force: true, recursive: true });

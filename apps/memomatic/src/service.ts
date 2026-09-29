@@ -165,6 +165,15 @@ export async function archiveOldEpisodic(
   if (!context.rules.autoClean) return archived;
   const rule = context.rules.autoClean;
   const cutoff = Date.now() - rule.olderThanDays * 86_400_000;
+  const unusedCutoff = rule.unusedAfterDays ? Date.now() - rule.unusedAfterDays * 86_400_000 : null;
+  const usefulByLine = new Map(
+    context.store
+      .allEntries()
+      .map((entry) => [
+        `${entry.file}:${entry.line}`,
+        context.store.usageFor(entry.stableId).useful,
+      ]),
+  );
   const files = new Set(
     context.store
       .allEntries()
@@ -177,19 +186,26 @@ export async function archiveOldEpisodic(
     const content = await readTextIfExists(file);
     if (content === undefined) continue;
     const selected: string[] = [];
-    const remaining = content.split("\n").filter((line) => {
+    const remaining = content.split("\n").filter((line, index) => {
       const entry = parseEntryLine(line)?.annotations;
       const observed = entry?.observed ? Date.parse(entry.observed) : NaN;
-      if (
+      const protectedEntry =
         !entry ||
         !Number.isFinite(observed) ||
-        observed >= cutoff ||
         entry.pinned ||
-        (rule.source && entry.source !== rule.source)
-      )
-        return true;
-      selected.push(line);
-      return false;
+        (rule.source && entry.source !== rule.source);
+      // Unused entries decay earlier than the age-only cutoff.
+      const decayed =
+        !protectedEntry &&
+        (observed < cutoff ||
+          (unusedCutoff !== null &&
+            observed < unusedCutoff &&
+            (usefulByLine.get(`${file}:${index + 1}`) ?? 0) === 0));
+      if (decayed) {
+        selected.push(line);
+        return false;
+      }
+      return true;
     });
     if (!selected.length) continue;
     const target = join(context.paths.archiveDir, basename(file));

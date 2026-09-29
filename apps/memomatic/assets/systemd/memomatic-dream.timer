@@ -1,8 +1,8 @@
 [Unit]
-Description=Run the Memomatic dream sweep nightly
+Description=Run the Memomatic dream sweep nightly after session extraction
 
 [Timer]
-OnCalendar=*-*-* 03:30:00
+OnCalendar=*-*-* 04:30:00
 RandomizedDelaySec=30m
 Persistent=true
 

@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, utimesSync, existsSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  utimesSync,
+  existsSync,
+} from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { DatabaseSync } from "node:sqlite";
@@ -7,7 +15,7 @@ import { createServer } from "node:http";
 import test from "node:test";
 import { openMemomatic } from "../dist/service.js";
 import { planIngestion } from "../dist/ingestion.js";
-import { runDream } from "../dist/dream.js";
+import { runSessions } from "../dist/sessions.js";
 import { reindex } from "../dist/search.js";
 import { OpenCodeExecutor } from "../dist/executor.js";
 import { withRunLock } from "../dist/inbox.js";
@@ -29,8 +37,8 @@ async function fixture(t) {
     });
   }
   const context = await openMemomatic();
-  context.settings.dream.maxChars = 256;
-  context.settings.dream.idleMs = 0;
+  context.settings.sessions.maxChars = 256;
+  context.settings.sessions.idleMs = 0;
   const path = join(root, "sessions.db");
   const db = new DatabaseSync(path);
   db.exec(
@@ -136,22 +144,46 @@ test("aborted extraction reuses completed response and commits each fragment onc
     },
   };
   await assert.rejects(
-    runDream(context, executor, { databaseFile: path, signal: controller.signal }),
+    runSessions(context, executor, { databaseFile: path, signal: controller.signal }),
     /interrupted/,
   );
   const afterAbort = calls;
   const plan = planIngestion(path, context.store, { before: Date.now(), maxChars: 256 });
-  const report = await runDream(context, executor, { databaseFile: path });
+  const report = await runSessions(context, executor, { databaseFile: path });
   assert.equal(calls - afterAbort, plan.fragments.length - 1);
   assert.equal(report.ingestion.remaining, 0);
+  assert.ok(report.ingestion.completed >= 1);
   const before = calls;
-  await runDream(context, executor, { databaseFile: path });
+  await runSessions(context, executor, { databaseFile: path });
   assert.equal(calls, before);
   const corpus = readFileSync(
     join(context.paths.dailyDir, new Date().toISOString().slice(0, 10) + ".md"),
     "utf8",
   );
   assert.equal(corpus.split("Retain this durable result").length - 1, 1);
+});
+
+test("dry-run sessions leave the corpus, index and watermark unchanged", async (t) => {
+  const { context, path, message } = await fixture(t);
+  message("a", "Dry-run only durable decision");
+  context.store.setMeta("ingest-watermark", "7");
+  const before = readFileSync(context.paths.indexFile);
+  const executor = {
+    name: "fake",
+    async complete() {
+      return JSON.stringify({
+        candidates: [{ text: "Dry run only durable result", key: "dry-run" }],
+      });
+    },
+  };
+  const report = await runSessions(context, executor, { databaseFile: path, dryRun: true });
+  assert.equal(report.dryRun, true);
+  assert.equal(report.sessionsIngested, 1);
+  const dailyDir = context.paths.dailyDir;
+  assert.ok(!existsSync(dailyDir) || readdirSync(dailyDir).length === 0);
+  assert.deepEqual(readFileSync(context.paths.indexFile), before);
+  assert.equal(context.store.getMeta("ingest-watermark"), "7");
+  assert.equal(context.store.getMeta("last-sessions-at"), null);
 });
 
 test("discussing the internal marker does not hide a normal session", async (t) => {

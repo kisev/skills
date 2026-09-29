@@ -82,3 +82,21 @@ export function promotionCandidates(
     .sort((left, right) => right.score - left.score)
     .slice(0, settings.dream.maxCandidates);
 }
+
+/**
+ * Self-relevance of episodic entries that already passed the useful-signal
+ * gate: an entry matching its own text through FTS is consolidation-relevant.
+ */
+export function relevanceByFts(
+  store: MemoryStore,
+  settings: MemomaticSettings,
+): Map<string, number> {
+  const relevance = new Map<string, number>();
+  for (const entry of store.allEntries()) {
+    if (entry.kind !== "episodic") continue;
+    if (store.usageFor(entry.stableId).useful < settings.dream.minUseful) continue;
+    const match = store.ftsSearch(entry.text, 10).get(entry.stableId);
+    if (match) relevance.set(entry.stableId, match);
+  }
+  return relevance;
+}

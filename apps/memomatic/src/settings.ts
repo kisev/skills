@@ -3,6 +3,17 @@ import { createHash } from "node:crypto";
 
 export type MemomaticSettings = {
   embedding: { url: string; model: string; queryInstruction?: string } | null;
+  sessions: {
+    model: string | null;
+    variant: string | null;
+    timeoutMs: number;
+    maxDurationMs: number;
+    maxSessions: number;
+    maxChars: number;
+    retries: number;
+    idleMs: number;
+    opencodeUrl: string | null;
+  };
   dream: {
     model: string | null;
     variant: string | null;
@@ -14,11 +25,7 @@ export type MemomaticSettings = {
     maxPriorEntryLoss: number;
     timeoutMs: number;
     maxDurationMs: number;
-    maxSessions: number;
-    maxChars: number;
     retries: number;
-    idleMs: number;
-    opencodeUrl: string | null;
   };
   search: { maxResults: number; minScore: number; minSemanticScore: number; halfLifeDays: number };
   archive: { enabled: boolean; days: number };
@@ -26,6 +33,17 @@ export type MemomaticSettings = {
 
 export const defaultSettings = (): MemomaticSettings => ({
   embedding: null,
+  sessions: {
+    model: null,
+    variant: null,
+    timeoutMs: 180000,
+    maxDurationMs: 0,
+    maxSessions: 0,
+    maxChars: 24000,
+    retries: 1,
+    idleMs: 600000,
+    opencodeUrl: null,
+  },
   dream: {
     model: null,
     variant: null,
@@ -37,11 +55,7 @@ export const defaultSettings = (): MemomaticSettings => ({
     maxPriorEntryLoss: 0.25,
     timeoutMs: 180000,
     maxDurationMs: 0,
-    maxSessions: 0,
-    maxChars: 24000,
     retries: 1,
-    idleMs: 600000,
-    opencodeUrl: null,
   },
   search: { maxResults: 6, minScore: 0.35, minSemanticScore: 0.45, halfLifeDays: 30 },
   archive: { enabled: false, days: 60 },
@@ -59,6 +73,18 @@ function mergeSection<T extends Record<string, unknown>>(
   return merged as T;
 }
 
+const SESSIONS_KEYS = [
+  "model",
+  "variant",
+  "timeoutMs",
+  "maxDurationMs",
+  "maxSessions",
+  "maxChars",
+  "retries",
+  "idleMs",
+  "opencodeUrl",
+] as const;
+
 export function normalizeSettings(raw: unknown): MemomaticSettings {
   const defaults = defaultSettings();
   const source = (raw ?? {}) as Record<string, unknown>;
@@ -68,6 +94,16 @@ export function normalizeSettings(raw: unknown): MemomaticSettings {
     source.search as Record<string, unknown> | undefined,
   );
   const dream = mergeSection(defaults.dream, source.dream as Record<string, unknown> | undefined);
+  // Legacy single-model configs put extraction knobs under `dream`; adopt them
+  // for `sessions` unless the new section overrides the key.
+  const migrated: Record<string, unknown> = {
+    ...((source.sessions as Record<string, unknown> | undefined) ?? {}),
+  };
+  const legacyDream = (source.dream as Record<string, unknown> | undefined) ?? {};
+  for (const key of SESSIONS_KEYS)
+    if (migrated[key] === undefined && legacyDream[key] !== undefined)
+      migrated[key] = legacyDream[key];
+  const sessions = mergeSection(defaults.sessions, migrated);
   for (const key of [
     "timeoutMs",
     "maxDurationMs",
@@ -76,16 +112,34 @@ export function normalizeSettings(raw: unknown): MemomaticSettings {
     "retries",
     "idleMs",
   ] as const)
+    if (!Number.isSafeInteger(sessions[key]) || sessions[key] < 0)
+      throw new Error(`invalid sessions.${key}`);
+  for (const key of ["timeoutMs", "maxDurationMs", "retries"] as const)
     if (!Number.isSafeInteger(dream[key]) || dream[key] < 0)
       throw new Error(`invalid dream.${key}`);
-  if (dream.timeoutMs < 1 || dream.maxChars < 256 || dream.maxChars > 200000 || dream.retries > 5)
-    throw new Error("invalid Dream request limits");
-  if (dream.model !== null && (typeof dream.model !== "string" || !/^[^/]+\/.+/.test(dream.model)))
-    throw new Error("model must use provider/model format");
+  if (
+    sessions.timeoutMs < 1 ||
+    sessions.maxChars < 256 ||
+    sessions.maxChars > 200000 ||
+    sessions.retries > 5
+  )
+    throw new Error("invalid sessions request limits");
+  if (dream.timeoutMs < 1 || dream.retries > 5) throw new Error("invalid dream request limits");
+  for (const [section, value] of [
+    ["sessions", sessions],
+    ["dream", dream],
+  ] as const)
+    if (
+      value.model !== null &&
+      (typeof value.model !== "string" || !/^[^/]+\/.+/.test(value.model))
+    )
+      throw new Error(`${section}.model must use provider/model format`);
+  if (sessions.variant !== null && typeof sessions.variant !== "string")
+    throw new Error("sessions.variant must be a string or null");
   if (dream.variant !== null && typeof dream.variant !== "string")
     throw new Error("dream.variant must be a string or null");
-  if (dream.opencodeUrl !== null && typeof dream.opencodeUrl !== "string")
-    throw new Error("dream.opencodeUrl must be a string or null");
+  if (sessions.opencodeUrl !== null && typeof sessions.opencodeUrl !== "string")
+    throw new Error("sessions.opencodeUrl must be a string or null");
   if (
     !Number.isInteger(search.maxResults) ||
     search.maxResults < 1 ||
@@ -108,6 +162,7 @@ export function normalizeSettings(raw: unknown): MemomaticSettings {
               : {}),
           }
         : null,
+    sessions,
     dream,
     search,
     archive: mergeSection(defaults.archive, source.archive as Record<string, unknown> | undefined),
