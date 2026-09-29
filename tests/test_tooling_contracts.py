@@ -33,6 +33,7 @@ def test_hooks_keep_precommit_fast_and_prepush_scoped() -> None:
         assert slow_check not in pre_commit
     # The hook stays scoped: the delta resolves against the branch upstream and
     # falls back to every tracked file, so first pushes run the complete gate.
+    assert pre_push.lstrip().startswith("parallel: false")
     assert "git diff --name-only @{upstream} HEAD 2>/dev/null || git ls-files" in pre_push
     for job in (
         "task check:core",
