@@ -1254,7 +1254,7 @@ test("published package metadata and tarball expose only the OpenCode integratio
   assert.equal(packageJson.homepage, "https://github.com/kisev/skills#readme");
   assert.equal(packageJson.bugs.url, "https://github.com/kisev/skills/issues");
   assert.deepEqual(packageJson.files, ["dist", "README.md"]);
-  assert.equal(packageJson.engines.node, ">=22");
+  assert.equal(packageJson.engines.node, ">=22.13");
   assert.equal(packageJson.exports["."].import, "./dist/index.js");
   assert.equal(packageJson.bin["agentomatic"], "./dist/cli.js");
   const invalid = spawnSync(

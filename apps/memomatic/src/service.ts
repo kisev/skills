@@ -7,6 +7,7 @@ import { dropToInbox, withRunLock } from "./inbox.js";
 import { isForbidden, loadRules, type MemoryRules } from "./rules.js";
 import { memomaticPaths, type MemomaticPaths } from "./paths.js";
 import { loadSettings, type MemomaticSettings } from "./settings.js";
+import { check, type OperationOptions } from "./operations.js";
 import { reindex, search, type SearchHit, type SearchOptions } from "./search.js";
 import { MemoryStore } from "./store.js";
 import { visibilityForSource } from "./visibility.js";
@@ -40,14 +41,18 @@ export type MemomaticContext = {
 };
 
 export async function openMemomatic(
-  options: { readOnly?: boolean } = {},
+  options: {
+    readOnly?: boolean;
+    configure?: (settings: MemomaticSettings) => MemomaticSettings;
+  } = {},
 ): Promise<MemomaticContext> {
   const paths = memomaticPaths();
-  const [settings, rules, store] = await Promise.all([
-    loadSettings(paths.settingsFile),
-    loadRules(paths.rulesFile),
-    options.readOnly ? MemoryStore.preview(paths.indexFile) : MemoryStore.open(paths.indexFile),
-  ]);
+  const loaded = await loadSettings(paths.settingsFile);
+  const settings = options.configure ? options.configure(loaded) : loaded;
+  const rules = await loadRules(paths.rulesFile);
+  const store = options.readOnly
+    ? await MemoryStore.preview(paths.indexFile)
+    : await MemoryStore.open(paths.indexFile);
   return { paths, settings, rules, store };
 }
 
@@ -152,7 +157,10 @@ export async function forgetEntry(
   });
 }
 
-export async function archiveOldEpisodic(context: MemomaticContext): Promise<string[]> {
+export async function archiveOldEpisodic(
+  context: MemomaticContext,
+  options: OperationOptions = {},
+): Promise<string[]> {
   const archived: string[] = [];
   if (!context.rules.autoClean) return archived;
   const rule = context.rules.autoClean;
@@ -164,6 +172,7 @@ export async function archiveOldEpisodic(context: MemomaticContext): Promise<str
       .map((entry) => entry.file),
   );
   for (const file of files) {
+    check(options);
     await memoryPath(context, file);
     const content = await readTextIfExists(file);
     if (content === undefined) continue;
@@ -198,6 +207,11 @@ export async function archiveOldEpisodic(context: MemomaticContext): Promise<str
   return archived;
 }
 
-export async function rebuildIndex(context: MemomaticContext): Promise<number> {
-  return withRunLock(context.paths, () => reindex(context.paths, context.settings, context.store));
+export async function rebuildIndex(
+  context: MemomaticContext,
+  options: OperationOptions = {},
+): Promise<number> {
+  return withRunLock(context.paths, () =>
+    reindex(context.paths, context.settings, context.store, options),
+  );
 }

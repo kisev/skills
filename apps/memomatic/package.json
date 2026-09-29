@@ -34,13 +34,14 @@
     "pack:check": "node test/pack-allowlist.mjs"
   },
   "dependencies": {
-    "@kisev/safe-fs": "^1.0.0"
+    "@kisev/safe-fs": "^1.0.0",
+    "commander": "15.0.0"
   },
   "devDependencies": {
     "@types/node": "22.15.30",
     "typescript": "7.0.2"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   }
 }

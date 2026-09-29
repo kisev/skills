@@ -46,7 +46,8 @@
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
-    "@kisev/safe-fs": "^1.0.0"
+    "@kisev/safe-fs": "^1.0.0",
+    "commander": "15.0.0"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "1.18.29",
@@ -62,7 +63,7 @@
     }
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "skillsInstallerVersion": "1.7.0"
 }

@@ -102,6 +102,8 @@ export class MemoryStore {
             .run(...Object.values(row));
         }
       }
+      if (copy.fts)
+        copy.db.exec("INSERT INTO entries_fts(stable_id,text) SELECT stable_id,text FROM entries");
       return copy;
     } catch (error) {
       copy.close();

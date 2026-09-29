@@ -43,7 +43,12 @@ async function assertDirectory(path: string): Promise<void> {
 }
 
 export function memomaticPaths(): MemomaticPaths {
-  const stateRoot = join(safeXdg("XDG_STATE_HOME", ".local/state"), "memomatic");
+  const configured = process.env.MEMOMATIC_HOME;
+  if (configured && (!isAbsolute(configured) || configured.split(sep).includes("..")))
+    throw new Error("MEMOMATIC_HOME must be an absolute safe path");
+  const stateRoot = configured
+    ? resolve(configured)
+    : join(safeXdg("XDG_STATE_HOME", ".local/state"), "memomatic");
   const configRoot = join(safeXdg("XDG_CONFIG_HOME", ".config"), "memomatic");
   return {
     stateRoot,
@@ -52,7 +57,7 @@ export function memomaticPaths(): MemomaticPaths {
     userFile: join(stateRoot, "USER.md"),
     dreamsFile: join(stateRoot, "DREAMS.md"),
     rulesFile: join(configRoot, "MEMORY_RULES.md"),
-    settingsFile: join(configRoot, "settings.json"),
+    settingsFile: process.env.MEMOMATIC_CONFIG ?? join(configRoot, "settings.json"),
     dailyDir: join(stateRoot, "memory"),
     archiveDir: join(stateRoot, "archive"),
     historyDir: join(stateRoot, "history"),

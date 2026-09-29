@@ -12,6 +12,13 @@ export type MemomaticSettings = {
     maxCandidates: number;
     memoryBudgetLines: number;
     maxPriorEntryLoss: number;
+    timeoutMs: number;
+    maxDurationMs: number;
+    maxSessions: number;
+    maxChars: number;
+    retries: number;
+    idleMs: number;
+    opencodeUrl: string | null;
   };
   search: { maxResults: number; minScore: number; minSemanticScore: number; halfLifeDays: number };
   archive: { enabled: boolean; days: number };
@@ -28,6 +35,13 @@ export const defaultSettings = (): MemomaticSettings => ({
     maxCandidates: 12,
     memoryBudgetLines: 80,
     maxPriorEntryLoss: 0.25,
+    timeoutMs: 180000,
+    maxDurationMs: 0,
+    maxSessions: 0,
+    maxChars: 24000,
+    retries: 1,
+    idleMs: 600000,
+    opencodeUrl: null,
   },
   search: { maxResults: 6, minScore: 0.35, minSemanticScore: 0.45, halfLifeDays: 30 },
   archive: { enabled: false, days: 60 },
@@ -53,6 +67,25 @@ export function normalizeSettings(raw: unknown): MemomaticSettings {
     defaults.search,
     source.search as Record<string, unknown> | undefined,
   );
+  const dream = mergeSection(defaults.dream, source.dream as Record<string, unknown> | undefined);
+  for (const key of [
+    "timeoutMs",
+    "maxDurationMs",
+    "maxSessions",
+    "maxChars",
+    "retries",
+    "idleMs",
+  ] as const)
+    if (!Number.isSafeInteger(dream[key]) || dream[key] < 0)
+      throw new Error(`invalid dream.${key}`);
+  if (dream.timeoutMs < 1 || dream.maxChars < 256 || dream.maxChars > 200000 || dream.retries > 5)
+    throw new Error("invalid Dream request limits");
+  if (dream.model !== null && (typeof dream.model !== "string" || !/^[^/]+\/.+/.test(dream.model)))
+    throw new Error("model must use provider/model format");
+  if (dream.variant !== null && typeof dream.variant !== "string")
+    throw new Error("dream.variant must be a string or null");
+  if (dream.opencodeUrl !== null && typeof dream.opencodeUrl !== "string")
+    throw new Error("dream.opencodeUrl must be a string or null");
   if (
     !Number.isInteger(search.maxResults) ||
     search.maxResults < 1 ||
@@ -75,7 +108,7 @@ export function normalizeSettings(raw: unknown): MemomaticSettings {
               : {}),
           }
         : null,
-    dream: mergeSection(defaults.dream, source.dream as Record<string, unknown> | undefined),
+    dream,
     search,
     archive: mergeSection(defaults.archive, source.archive as Record<string, unknown> | undefined),
   };
@@ -94,6 +127,7 @@ export async function embedTexts(
   settings: MemomaticSettings,
   texts: string[],
   purpose: "document" | "query" = "document",
+  signal?: AbortSignal,
 ): Promise<Float32Array[] | null> {
   if (!settings.embedding || !texts.length) return null;
   const response = await fetch(settings.embedding.url, {
@@ -103,7 +137,9 @@ export async function embedTexts(
     }),
     headers: { "content-type": "application/json" },
     method: "POST",
-    signal: AbortSignal.timeout(30_000),
+    signal: signal
+      ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+      : AbortSignal.timeout(30_000),
   });
   if (!response.ok)
     throw new Error(`embedding request failed: ${response.status} ${await response.text()}`);

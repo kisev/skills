@@ -1,6 +1,7 @@
 import { mkdir, open, readdir, rename, rm, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { check, type OperationOptions } from "./operations.js";
 
 import { writeAtomic } from "@kisev/safe-fs";
 
@@ -98,7 +99,7 @@ function routeFor(annotations: EntryAnnotations): "user" | "curated" | "episodic
  */
 export async function processInbox(
   context: MemomaticContext,
-  options: { dryRun?: boolean } = {},
+  options: OperationOptions & { dryRun?: boolean; deferIndex?: boolean } = {},
 ): Promise<InboxReport> {
   const dryRun = options.dryRun === true;
   const report: InboxReport = {
@@ -117,6 +118,13 @@ export async function processInbox(
   if (!names.length) return report;
   const corpus = await scanCorpus(context.paths);
   for (const name of names) {
+    check(options);
+    options.observe?.({
+      phase: "inbox",
+      message: "Processing inbox file",
+      completed: report.filesProcessed + report.filesRejected,
+      total: names.length,
+    });
     const markdown = (await readTextIfExists(join(context.paths.inboxDir, name))) ?? "";
     const rawLines = markdown.split("\n");
     const parsedLines = rawLines.filter((line) => line.trim()).map((line) => parseEntryLine(line));
@@ -136,6 +144,7 @@ export async function processInbox(
     }
     let accepted = false;
     for (const parsed of allowed) {
+      check(options);
       if (corpus.texts.has(parsed.text)) {
         report.entriesDuplicated += 1;
         continue;
@@ -177,7 +186,8 @@ export async function processInbox(
       report.filesRejected += 1;
     }
   }
-  if (!dryRun) await reindex(context.paths, context.settings, context.store);
+  if (!dryRun && !options.deferIndex)
+    await reindex(context.paths, context.settings, context.store, options);
   return report;
 }
 
@@ -186,11 +196,12 @@ export async function processInbox(
  * nightly sweep and a manual CLI invocation never mutate the corpus together.
  */
 export async function withRunLock<T>(paths: MemomaticPaths, work: () => Promise<T>): Promise<T> {
+  const owner = `${process.pid} ${new Date().toISOString()} ${randomBytes(12).toString("hex")}\n`;
   const acquire = async (): Promise<void> => {
     try {
       const handle = await open(paths.runLockFile, "wx", 0o600);
       try {
-        await handle.writeFile(`${process.pid} ${new Date().toISOString()}\n`);
+        await handle.writeFile(owner);
       } finally {
         await handle.close();
       }
@@ -201,12 +212,19 @@ export async function withRunLock<T>(paths: MemomaticPaths, work: () => Promise<
         const handle = await open(paths.runLockFile, "r");
         try {
           const info = await handle.stat();
-          stale = Date.now() - info.mtimeMs > LOCK_STALE_MS;
+          const owner = Number.parseInt((await handle.readFile("utf8")).split(" ")[0], 10);
+          if (Number.isSafeInteger(owner) && owner > 0) {
+            try {
+              process.kill(owner, 0);
+            } catch (cause) {
+              stale = (cause as NodeJS.ErrnoException).code === "ESRCH";
+            }
+          } else stale = Date.now() - info.mtimeMs > LOCK_STALE_MS;
         } finally {
           await handle.close();
         }
       } catch {
-        return;
+        return acquire();
       }
       if (!stale) throw new Error("another memomatic run is active");
       await rm(paths.runLockFile, { force: true });
@@ -217,6 +235,7 @@ export async function withRunLock<T>(paths: MemomaticPaths, work: () => Promise<
   try {
     return await work();
   } finally {
-    await rm(paths.runLockFile, { force: true }).catch(() => undefined);
+    if ((await readTextIfExists(paths.runLockFile)) === owner)
+      await rm(paths.runLockFile, { force: true }).catch(() => undefined);
   }
 }

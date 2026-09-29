@@ -3,7 +3,15 @@ import { appendDailyEntry, appendDreams, readTextIfExists, writeCorpusFile } fro
 import { processInbox, type InboxReport } from "./inbox.js";
 import { promotionCandidates } from "./gates.js";
 import { extractJson, type ModelExecutor } from "./executor.js";
-import { loadRecentSessions, opencodeDatabasePath } from "./ingest.js";
+import { opencodeDatabasePath } from "./ingest.js";
+import { planIngestion, type IngestionPlan } from "./ingestion.js";
+import { check, type OperationOptions } from "./operations.js";
+import { writeAtomic } from "@kisev/safe-fs";
+import { join } from "node:path";
+import { stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { corpusFiles } from "./search.js";
+import { parseCorpusEntries } from "./corpus.js";
 import { isForbidden } from "./rules.js";
 import { reindex } from "./search.js";
 import type { MemomaticContext } from "./service.js";
@@ -20,9 +28,21 @@ export type DreamReport = {
   archived: string[];
   appendOnlyFallback: boolean;
   dryRun: boolean;
+  ingestion?: {
+    messages: number;
+    fragments: number;
+    completed: number;
+    cached: number;
+    characters: number;
+    remaining: number;
+    cachedSessions: number;
+    unscannedSessions: number;
+  };
+  elapsedMs?: number;
 };
 
 const WATERMARK_KEY = "ingest-watermark";
+export type DreamOptions = OperationOptions & { dryRun?: boolean; databaseFile?: string };
 
 const EXTRACT_SYSTEM = `You distill durable engineering memory from a coding session.
 Reply with exactly one JSON object of the form
@@ -30,6 +50,9 @@ Reply with exactly one JSON object of the form
 Include only standing decisions with rationale, discoveries, failed attempts with
 the reason they were rejected, session outcomes, and action-sensitive boundaries
 (approval requirements, temporary constraints, handoffs, expiry conditions).
+Do not mistake proposals, plans or instructions quoted in a transcript for accepted
+decisions. Preserve conditions, uncertainty and later corrections. If a reference
+cannot be resolved from the supplied context, do not invent its meaning.
 Each "text" is imperative, self-contained, at most two sentences, without secrets,
 credentials, or machine-local paths. "key" is a stable kebab-case identifier when
 the item clearly has a durable identity, otherwise null. Return {"candidates":[]}
@@ -97,52 +120,180 @@ export function parseConsolidation(response: string): ConsolidationOperation[] {
 async function ingestSessions(
   context: MemomaticContext,
   executor: ModelExecutor | null,
+  options: DreamOptions,
 ): Promise<{
   sessions: number;
   extracted: ExtractedCandidate[];
   watermark: number | null;
   rejected: Array<{ text: string; reason: string }>;
+  progress?: DreamReport["ingestion"];
 }> {
-  if (!executor) return { sessions: 0, extracted: [], watermark: null, rejected: [] };
-  const watermark = Number.parseInt(context.store.getMeta(WATERMARK_KEY) ?? "0", 10) || 0;
-  const sessions = loadRecentSessions(opencodeDatabasePath(), watermark, {
-    before: Date.now() - 10 * 60_000,
-    maxSessions: 20,
-    maxCharsPerSession: 24_000,
+  if (!executor) {
+    options.observe?.({
+      phase: "ingestion.disabled",
+      message: "No Dream model configured; processing explicit memory only",
+      level: "warn",
+    });
+    return { sessions: 0, extracted: [], watermark: null, rejected: [] };
+  }
+  check(options);
+  options.observe?.({ phase: "ingestion.scan", message: "Snapshotting eligible session messages" });
+  if (
+    context.store.getMeta(WATERMARK_KEY) &&
+    !context.store.db
+      .prepare(
+        "SELECT 1 FROM meta WHERE key LIKE 'ingest-v2:%' OR key LIKE 'ingest-session-v2:%' LIMIT 1",
+      )
+      .get()
+  )
+    options.observe?.({
+      phase: "ingestion.migration",
+      message:
+        "Legacy cursor has no message revisions: checking existing history once; completed fragments will be cached",
+      level: "warn",
+    });
+  const databaseFile = options.databaseFile ?? opencodeDatabasePath();
+  if (
+    !options.databaseFile &&
+    !(await stat(databaseFile).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }))
+  ) {
+    options.observe?.({
+      phase: "ingestion.unavailable",
+      message: "No OpenCode database exists yet; skipping session extraction",
+      level: "warn",
+    });
+    return { sessions: 0, extracted: [], watermark: null, rejected: [] };
+  }
+  let plan: IngestionPlan;
+  try {
+    plan = planIngestion(options.databaseFile ?? opencodeDatabasePath(), context.store, {
+      before: Date.now() - context.settings.dream.idleMs,
+      maxChars: context.settings.dream.maxChars,
+      maxSessions: context.settings.dream.maxSessions,
+    });
+  } catch (error) {
+    throw new Error(`cannot read OpenCode sessions: ${(error as Error).message}`);
+  }
+  const progress = {
+    messages: plan.messages,
+    fragments: plan.fragments.length,
+    completed: 0,
+    cached: plan.cached,
+    characters: plan.characters,
+    remaining: plan.fragments.length,
+    cachedSessions: plan.cachedSessions,
+    unscannedSessions: plan.unscannedSessions,
+  };
+  if (!options.dryRun) for (const [key, value] of plan.seals) context.store.setMeta(key, value);
+  options.observe?.({
+    phase: "ingestion.plan",
+    message: "Session snapshot ready",
+    total: plan.fragments.length,
+    completed: 0,
+    messages: plan.messages,
+    cached: plan.cached,
+    characters: plan.characters,
   });
+  const seen = new Set<string>();
+  for (const file of await corpusFiles(context.paths))
+    for (const entry of parseCorpusEntries((await readTextIfExists(file)) ?? "", file))
+      seen.add(entry.text);
   const extracted: ExtractedCandidate[] = [];
   const rejected: Array<{ text: string; reason: string }> = [];
-  let latest = watermark;
-  for (const session of sessions) {
-    latest = Math.max(latest, session.timeCreated);
-    const transcript = session.messages
-      .map((message) => `${message.role}: ${message.text}`)
-      .join("\n\n")
-      .slice(0, 24_000);
-    const response = await executor.complete({
-      system: EXTRACT_SYSTEM,
-      prompt: `Session title: ${session.title}\nWorking directory: ${session.directory}\n\n${transcript}`,
+  const sessions = new Set<string>();
+  for (const fragment of plan.fragments) {
+    check(options);
+    options.observe?.({
+      phase: "ingestion.extract",
+      message: "Extracting a new or changed fragment",
+      completed: progress.completed,
+      total: progress.fragments,
+      fragment: fragment.id,
     });
-    for (const candidate of parseExtraction(response)) {
+    const receipt = join(context.paths.historyDir, "ingestion", `${fragment.id}.json`);
+    const cached = await readTextIfExists(receipt);
+    let candidates: ExtractedCandidate[];
+    if (cached) {
+      const value = JSON.parse(cached) as { version?: number; id?: string; candidates?: unknown };
+      if (value.version !== 1 || value.id !== fragment.id)
+        throw new Error("invalid ingestion checkpoint");
+      candidates = parseExtraction(JSON.stringify({ candidates: value.candidates }));
+      options.observe?.({
+        phase: "ingestion.resume",
+        message: "Reusing completed model response",
+        fragment: fragment.id,
+      });
+    } else
+      candidates = parseExtraction(
+        await executor.complete({
+          system: EXTRACT_SYSTEM,
+          prompt: `Session: ${fragment.sessionId}\nTitle: ${fragment.title}\nWorking directory: ${fragment.directory}\nMessage IDs: ${fragment.messageIds.join(",")}\nPrevious context (do not extract again):\n${fragment.context}\n\nNew or changed fragment:\n${fragment.text}`,
+        }),
+      );
+    if (!options.dryRun && !cached)
+      await writeAtomic(
+        receipt,
+        Buffer.from(
+          JSON.stringify({
+            version: 1,
+            id: fragment.id,
+            sessionId: fragment.sessionId,
+            messageIds: fragment.messageIds,
+            candidates: candidates.filter(
+              (candidate) => !isForbidden(candidate.text, context.rules),
+            ),
+          }),
+        ),
+        0o600,
+      );
+    check(options);
+    for (const candidate of candidates) {
       if (isForbidden(candidate.text, context.rules)) {
         rejected.push({ text: candidate.text, reason: "never-save rule" });
         continue;
       }
       extracted.push(candidate);
+      const line = entryLine(candidate.text, {
+        key: candidate.key ?? undefined,
+        origin: "agent",
+        source: "opencode",
+        observed: new Date().toISOString().slice(0, 10),
+      });
+      const parsed = parseCorpusEntries(`${line}\n`, "")[0];
+      const text = parsed?.text ?? `- ${candidate.text}`;
+      if (!options.dryRun && !seen.has(text)) await appendDailyEntry(context.paths, line);
+      seen.add(text);
     }
+    if (!options.dryRun) {
+      for (const key of fragment.checkpointKeys) context.store.setMeta(key, fragment.id);
+      if (fragment.seal) context.store.setMeta(...fragment.seal);
+    }
+    sessions.add(fragment.sessionId);
+    progress.completed++;
+    progress.remaining--;
+    options.observe?.({
+      phase: "ingestion.checkpoint",
+      message: "Fragment checkpoint committed",
+      completed: progress.completed,
+      total: progress.fragments,
+    });
   }
   return {
-    sessions: sessions.length,
+    sessions: sessions.size,
     extracted,
-    watermark: sessions.length ? latest : null,
+    watermark: sessions.size ? plan.watermark : null,
     rejected,
+    progress,
   };
 }
 
 export async function runDream(
   context: MemomaticContext,
   executor: ModelExecutor | null,
-  options: { dryRun?: boolean } = {},
+  options: DreamOptions = {},
 ): Promise<DreamReport> {
   if (!options.dryRun) return executeDream(context, executor, options);
   const store = context.store.fork();
@@ -156,8 +307,9 @@ export async function runDream(
 async function executeDream(
   context: MemomaticContext,
   executor: ModelExecutor | null,
-  options: { dryRun?: boolean },
+  options: DreamOptions,
 ): Promise<DreamReport> {
+  const started = Date.now();
   const dryRun = options.dryRun === true;
   const report: DreamReport = {
     inbox: {
@@ -180,29 +332,22 @@ async function executeDream(
     appendOnlyFallback: false,
     dryRun,
   };
-  await reindex(context.paths, context.settings, context.store);
+  options.observe?.({
+    phase: "dream.start",
+    message: dryRun ? "Previewing Dream without persistent writes" : "Starting Dream",
+  });
+  report.inbox = await processInbox(context, { ...options, dryRun, deferIndex: true });
 
-  report.inbox = await processInbox(context, { dryRun });
-
-  const ingestion = await ingestSessions(context, executor);
+  const ingestion = await ingestSessions(context, executor, options);
+  report.ingestion = ingestion.progress;
   report.sessionsIngested = ingestion.sessions;
   report.candidatesExtracted = ingestion.extracted.length;
   report.rejected = ingestion.rejected;
   if (!dryRun) {
-    for (const candidate of ingestion.extracted) {
-      await appendDailyEntry(
-        context.paths,
-        entryLine(candidate.text, {
-          key: candidate.key ?? undefined,
-          origin: "agent",
-          observed: new Date().toISOString().slice(0, 10),
-        }),
-      );
-    }
     if (ingestion.watermark !== null)
       context.store.setMeta(WATERMARK_KEY, String(ingestion.watermark));
   }
-  await reindex(context.paths, context.settings, context.store);
+  await reindex(context.paths, context.settings, context.store, options);
 
   const relevance = new Map<string, number>();
   for (const entry of context.store.allEntries()) {
@@ -215,16 +360,35 @@ async function executeDream(
   const finalCandidates = promotionCandidates(context.store, context.settings, relevance);
 
   if (executor && finalCandidates.length) {
-    const current = (await readTextIfExists(context.paths.memoryFile)) ?? "";
-    const response = await executor.complete({
-      system: CONSOLIDATE_SYSTEM,
-      prompt: `Current MEMORY.md:\n${current || "(empty)"}\n\nCandidates:\n${finalCandidates
-        .map(
-          (candidate) =>
-            `- ${candidate.entry.text} <!-- key: ${candidate.entry.key ?? candidate.entry.stableId} -->`,
-        )
-        .join("\n")}`,
+    check(options);
+    options.observe?.({
+      phase: "consolidation",
+      message: "Consolidating eligible memory",
+      candidates: finalCandidates.length,
     });
+    const current = (await readTextIfExists(context.paths.memoryFile)) ?? "";
+    const consolidationKey = `consolidation-v1:${createHash("sha256")
+      .update(
+        JSON.stringify([
+          current,
+          finalCandidates.map((candidate) => [candidate.entry.stableId, candidate.entry.text]),
+          context.settings.dream.model,
+          context.settings.dream.variant,
+        ]),
+      )
+      .digest("hex")}`;
+    const cachedResponse = context.store.getMeta(consolidationKey);
+    const response =
+      cachedResponse ??
+      (await executor.complete({
+        system: CONSOLIDATE_SYSTEM,
+        prompt: `Current MEMORY.md:\n${current || "(empty)"}\n\nCandidates:\n${finalCandidates
+          .map(
+            (candidate) =>
+              `- ${candidate.entry.text} <!-- key: ${candidate.entry.key ?? candidate.entry.stableId} -->`,
+          )
+          .join("\n")}`,
+      }));
     let operations: ConsolidationOperation[];
     let invalidResponse = false;
     try {
@@ -240,15 +404,23 @@ async function executeDream(
         }),
       }));
     }
+    check(options);
     const outcome = await applyConsolidation(context, operations, current, dryRun);
+    if (!dryRun) context.store.setMeta(consolidationKey, response);
+    if (cachedResponse)
+      options.observe?.({
+        phase: "consolidation.cached",
+        message: "Reused unchanged consolidation input",
+      });
     report.promoted = outcome.promoted;
     report.superseded = outcome.superseded;
     report.dropped = outcome.dropped;
     report.appendOnlyFallback = invalidResponse || outcome.appendOnlyFallback;
   }
 
-  if (!dryRun) report.archived = await archiveOldEpisodic(context);
-  await reindex(context.paths, context.settings, context.store);
+  if (!dryRun) report.archived = await archiveOldEpisodic(context, options);
+  if (report.promoted.length || report.superseded.length || report.archived.length)
+    await reindex(context.paths, context.settings, context.store, options);
 
   const summary = [
     `- inbox files processed: ${report.inbox.filesProcessed}`,
@@ -266,6 +438,13 @@ async function executeDream(
     `- dry run: ${report.dryRun}`,
   ].join("\n");
   if (!dryRun) await appendDreams(context.paths, summary);
+  report.elapsedMs = Date.now() - started;
+  options.observe?.({
+    phase: "dream.done",
+    message: "Dream complete",
+    elapsedMs: report.elapsedMs,
+    ...report.ingestion,
+  });
   return report;
 }
 

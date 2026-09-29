@@ -5,94 +5,19 @@ import { exportAll, cardMarkdown } from "./export.js";
 import { runMcp, VERSION } from "./mcp.js";
 import { filterCards, rootPath, Store, ttl, type Input } from "./store.js";
 import { serve } from "./web.js";
+import {
+  program,
+  common,
+  Option,
+  configFile,
+  applyConfig,
+  reporter,
+  fail,
+  integer,
+  type Command,
+} from "./generated/cli.js";
 
-const HELP = `taskmatic [--home PATH] COMMAND [options]
-Commands: boards, board-create SLUG [--title TITLE], add TITLE, list, show ID,
-  edit ID, move ID STATUS, claim ID --agent NAME [--ttl 30m], heartbeat ID --agent NAME,
-  release ID --agent NAME, complete ID, note ID TEXT, export, snapshot, mcp,
-  path [root|db|export|web], serve [--host 127.0.0.1] [--port 8765]
-Fields: --board --title --priority --labels a,b --assignee --parent --linked
-  --notes TEXT | --notes-file FILE (or - for stdin); --clear-assignee --clear-linked
-Filters: --board --status --assignee --label. Output: --json.
-Use --version for the installed package version. taskmatic-web is a compatibility alias.
-`;
-async function main(argv: string[]): Promise<void> {
-  if (argv.includes("--version")) {
-    console.log(VERSION);
-    return;
-  }
-  if (!argv.length || argv.includes("--help") || argv[0] === "help") {
-    console.log(HELP);
-    return;
-  }
-  const fields: Input = {};
-  const positional: string[] = [];
-  const valueOptions = new Set([
-    "home",
-    "title",
-    "board",
-    "priority",
-    "labels",
-    "assignee",
-    "parent",
-    "linked",
-    "notes",
-    "notes-file",
-    "status",
-    "label",
-    "agent",
-    "ttl",
-    "actor",
-    "host",
-    "port",
-  ]);
-  let json = false;
-  let literal = false;
-  for (let index = 0; index < argv.length; index++) {
-    const value = argv[index];
-    if (value === "--") {
-      literal = true;
-      continue;
-    }
-    if (literal || !value.startsWith("--")) {
-      positional.push(value);
-      continue;
-    }
-    const key = value.slice(2);
-    if (key === "json") {
-      json = true;
-      continue;
-    }
-    if (key === "clear-assignee" || key === "clear-linked") {
-      fields[key.slice(6)] = null;
-      continue;
-    }
-    if (!valueOptions.has(key) || index + 1 >= argv.length || argv[index + 1].startsWith("--"))
-      throw new Error(`unknown or incomplete option ${value}`);
-    fields[key] = argv[++index];
-  }
-  const [command, ...args] = positional;
-  if (!command) throw new Error("command is required");
-  const commands = new Set([
-    "boards",
-    "board-create",
-    "add",
-    "list",
-    "show",
-    "edit",
-    "move",
-    "claim",
-    "heartbeat",
-    "release",
-    "complete",
-    "note",
-    "export",
-    "snapshot",
-    "mcp",
-    "path",
-    "serve",
-  ]);
-  if (!commands.has(command)) throw new Error(`unknown command ${command}`);
+async function main(command: string, args: string[], fields: Input, json: boolean): Promise<void> {
   const home = typeof fields.home === "string" ? fields.home : undefined;
   if (command === "path") {
     const root = rootPath(home);
@@ -113,9 +38,8 @@ async function main(argv: string[]): Promise<void> {
       Number(fields.port ?? 8765),
     );
     const address = server.address();
-    console.log(
-      `taskmatic board: http://${typeof address === "object" && address ? address.address : "127.0.0.1"}:${typeof address === "object" && address ? address.port : fields.port}/`,
-    );
+    const url = `http://${typeof address === "object" && address ? address.address : "127.0.0.1"}:${typeof address === "object" && address ? address.port : fields.port}/`;
+    console.log(json ? JSON.stringify({ url, readOnly: true }) : `taskmatic board: ${url}`);
     for (const signal of ["SIGINT", "SIGTERM"] as const) process.once(signal, () => server.close());
     return;
   }
@@ -216,9 +140,104 @@ async function main(argv: string[]): Promise<void> {
     store.close();
   }
 }
+const cli = common(
+  program("taskmatic", "Private task boards for people and agents", VERSION),
+  "TASKMATIC",
+).addOption(new Option("--home <path>", "absolute state directory").env("TASKMATIC_HOME"));
+const definitions: Array<[string, string, string[]]> = [
+  ["boards", "List boards and card counts", []],
+  ["board-create <slug>", "Create an empty board", ["title"]],
+  [
+    "add <title>",
+    "Create a task card",
+    ["board", "priority", "labels", "assignee", "parent", "linked", "notes", "notes-file"],
+  ],
+  ["list", "List matching cards", ["board", "status", "assignee", "label"]],
+  ["show <id>", "Read a card with its activity", []],
+  [
+    "edit <id>",
+    "Change only explicitly supplied card fields",
+    [
+      "title",
+      "priority",
+      "labels",
+      "assignee",
+      "linked",
+      "notes",
+      "notes-file",
+      "clear-assignee",
+      "clear-linked",
+    ],
+  ],
+  ["move <id> <status>", "Move a card to another status", []],
+  ["claim <id>", "Claim work without taking another agent's live claim", ["agent", "ttl"]],
+  ["heartbeat <id>", "Extend your live claim without rewriting exports", ["agent", "ttl"]],
+  ["release <id>", "Release your claim", ["agent"]],
+  ["complete <id>", "Mark a card done and clear its claim", []],
+  ["note <id> <text>", "Append a progress note", ["actor"]],
+  ["export", "Regenerate derived Markdown and HTML", []],
+  ["snapshot", "Print the current snapshot JSON", ["board", "status", "assignee", "label"]],
+  ["mcp", "Serve MCP on stdio; stdout is protocol-only", []],
+  ["path [kind]", "Print root, db, export or web path without creating it", []],
+  ["serve", "Serve the existing board on IPv4 loopback (read-only)", ["host", "port"]],
+];
+for (const [signature, description, names] of definitions) {
+  const command = cli.command(signature).description(description);
+  for (const name of names) {
+    const option = new Option(
+      `--${name}${name.startsWith("clear-") ? "" : " <value>"}`,
+      (
+        {
+          ttl: "claim duration, e.g. 30m (default 30m)",
+          port: "loopback port (default 8765)",
+          host: "loopback address (default 127.0.0.1)",
+          "notes-file": "read notes from a UTF-8 file or - for stdin",
+        } as Record<string, string>
+      )[name] ?? name.replaceAll("-", " "),
+    );
+    if (!name.startsWith("clear-"))
+      option.env(`TASKMATIC_${name.toUpperCase().replaceAll("-", "_")}`);
+    if (name === "port") option.argParser(integer);
+    if (name === "ttl") option.argParser((value) => ttl(value));
+    if (name === "agent") option.makeOptionMandatory();
+    if (name === "priority") option.choices(["low", "normal", "high", "urgent"]);
+    if (name === "status") option.choices(["todo", "doing", "review", "blocked", "done"]);
+    command.addOption(option);
+  }
+  command.addHelpText(
+    "after",
+    `\nExample: taskmatic ${signature.replace(/<([^>]+)>/g, (_, value) => value.toUpperCase()).replace(/\[.*?\]/g, "")}\n\nUse --json for automation; logs use stderr. Configuration precedence: CLI > env > file > defaults.`,
+  );
+  command.action(async (...values: unknown[]) => {
+    const cmd = values.at(-1) as Command;
+    const config = await configFile(cli.opts().config);
+    applyConfig(cli, config);
+    applyConfig(cmd, config);
+    const fields: Input = { ...cmd.optsWithGlobals() };
+    if (fields.notesFile !== undefined) fields["notes-file"] = fields.notesFile;
+    if (fields.clearAssignee) fields.assignee = null;
+    if (fields.clearLinked) fields.linked = null;
+    const logs = reporter(command.name() === "mcp" ? { logLevel: "silent" } : fields);
+    try {
+      logs.emit({ phase: command.name(), message: "Executing command", level: "debug" });
+      await main(command.name(), cmd.args, fields, fields.json === true);
+      logs.emit({
+        phase: `${command.name()}.${command.name() === "serve" ? "ready" : "done"}`,
+        message: command.name() === "serve" ? "Server ready" : "Command complete",
+        level: "debug",
+      });
+    } finally {
+      logs.close();
+    }
+  });
+}
 try {
-  await main(process.argv.slice(2));
+  if (process.argv.length === 2) cli.outputHelp();
+  else await cli.parseAsync(process.argv);
 } catch (error) {
-  console.error(`taskmatic: ${(error as Error).message}`);
-  process.exitCode = 2;
+  fail(
+    "taskmatic",
+    error,
+    process.argv.includes("--json") || cli.opts().json === true || cli.opts().logFormat === "json",
+  );
 }

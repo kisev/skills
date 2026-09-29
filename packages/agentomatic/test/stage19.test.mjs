@@ -252,6 +252,43 @@ test("2.0.0 public surface and CLI contracts exclude retired APIs", () => {
   assert.equal(version.stdout.trim(), PACKAGE_VERSION);
 });
 
+test("common CLI runtime is materialized from one authored source and env cannot confirm mutations", async () => {
+  const source = await readFile(
+    new URL("../../../shared/references/cli_runtime.ts", import.meta.url),
+    "utf8",
+  );
+  for (const target of [
+    "../src/generated/cli.ts",
+    "../../../apps/memomatic/src/generated/cli.ts",
+    "../../../apps/taskmatic/src/generated/cli.ts",
+  ])
+    assert.equal(await readFile(new URL(target, import.meta.url), "utf8"), source);
+  const root = mkdtempSync(join(tmpdir(), "agentomatic-cli-config-"));
+  try {
+    const config = join(root, "cli.json");
+    await writeFile(config, JSON.stringify({ yes: true, global: true, json: true }));
+    const result = spawnSync(
+      process.execPath,
+      [join(PACKAGE, "dist/cli.js"), "install", "--config", config],
+      {
+        cwd: root,
+        env: {
+          ...process.env,
+          HOME: root,
+          XDG_CONFIG_HOME: join(root, "config"),
+          XDG_STATE_HOME: join(root, "state"),
+          AGENTOMATIC_YES: "true",
+        },
+        encoding: "utf8",
+      },
+    );
+    assert.notEqual(result.status, 0);
+    await assert.rejects(lstat(join(root, "config/opencode")), { code: "ENOENT" });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("CLI help is structured and explains commands options workflow and scope", () => {
   const help = spawnSync("node", [join(PACKAGE, "dist", "cli.js"), "--help"], {
     encoding: "utf8",

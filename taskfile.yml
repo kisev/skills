@@ -276,6 +276,7 @@ tasks:
   generate:check:
     desc: Check the generated portable distribution without changing authored sources
     cmds:
+      - mise exec -- node scripts/materialize_cli_runtime.mjs --check
       - task: build:skills
       - task: distribution:check
 
@@ -398,6 +399,7 @@ tasks:
     deps: [package:install]
     cmds:
       - mise exec -- npm run build --workspace @kisev/safe-fs
+      - mise exec -- node scripts/materialize_cli_runtime.mjs
       - mise exec -- npm run build --workspace @kisev/memomatic
       - mise exec -- npm run build --workspace @kisev/taskmatic
       - mise exec -- npm run build --workspace @kisev/agentomatic

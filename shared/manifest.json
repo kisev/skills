@@ -1,5 +1,13 @@
 {
   "version": 1,
+  "npmRuntime": {
+    "source": "references/cli_runtime.ts",
+    "destinations": [
+      "apps/memomatic/src/generated/cli.ts",
+      "apps/taskmatic/src/generated/cli.ts",
+      "packages/agentomatic/src/generated/cli.ts"
+    ]
+  },
   "files": [
     {
       "source": "references/documentation-review.md",

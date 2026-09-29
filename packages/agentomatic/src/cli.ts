@@ -52,6 +52,11 @@ import { LifecycleError, type Scope } from "./lifecycle.js";
 import { skillsInstallerSpec } from "./package-metadata.js";
 import { applyReconcile, previewReconcile } from "./reconcile.js";
 import { confirmQuestion, promptText, selectOption, selectOptions } from "./terminal-wizard.js";
+import { Command, Option, common, applyConfig, configFileSync, reporter } from "./generated/cli.js";
+
+let diagnostics: ReturnType<typeof reporter> | undefined;
+let machineOutput = false;
+let diagnosticJSON = false;
 
 type Options = {
   scope: Scope;
@@ -74,106 +79,118 @@ type Options = {
 };
 
 function parseOptions(values: string[]): Options {
-  const options: Options = {
-    scope: "project",
-    global: false,
-    dryRun: false,
-    json: false,
-    yes: false,
-    selectionFlag: false,
-  };
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index];
-    if (!value.startsWith("--")) {
-      if (options.name) throw new InstallerError("invalid_input", `Unexpected argument: ${value}`);
-      options.name = value;
-    } else if (value === "--global") {
-      if (options.global)
-        throw new InstallerError("invalid_input", "--global may be supplied once");
-      options.global = true;
-      options.scope = "global";
-    } else if (value === "--dry-run") {
-      if (options.dryRun)
-        throw new InstallerError("invalid_input", "--dry-run may be supplied once");
-      options.dryRun = true;
-    } else if (value === "--yes") {
-      if (options.yes) throw new InstallerError("invalid_input", "--yes may be supplied once");
-      options.yes = true;
-    } else if (value === "--core") {
-      if (options.core === true || options.core === false)
-        throw new InstallerError("invalid_input", "Use only one core integration option");
-      options.core = true;
-    } else if (value === "--no-core") {
-      if (options.core === true || options.core === false)
-        throw new InstallerError("invalid_input", "Use only one core integration option");
-      options.core = false;
-    } else if (value === "--provider") {
-      options.provider = values[++index];
-      if (!options.provider)
-        throw new InstallerError("invalid_input", "--provider requires a value");
-    } else if (value === "--model") {
-      options.model = values[++index];
-      if (!options.model) throw new InstallerError("invalid_input", "--model requires a value");
-    } else if (value === "--variant") {
-      options.variant = values[++index];
-      if (!options.variant) throw new InstallerError("invalid_input", "--variant requires a value");
-    } else if (value === "--clear-variant") {
-      if (options.variant !== undefined)
-        throw new InstallerError("invalid_input", "Use only one variant option");
-      options.variant = null;
-    } else if (value === "--json") {
-      if (options.json) throw new InstallerError("invalid_input", "--json may be supplied once");
-      options.json = true;
-    } else if (value === "--no-dependency") {
-      if (options.noDependency)
-        throw new InstallerError("invalid_input", "--no-dependency may be supplied once");
-      options.noDependency = true;
-    } else if (["--commands", "--skill-commands", "--agents", "--plugins"].includes(value)) {
-      const raw = values[++index];
-      if (!raw)
-        throw new InstallerError("invalid_input", `${value} requires a comma-separated value`);
-      const target =
-        value === "--agents" ? "agents" : value === "--plugins" ? "plugins" : "commands";
-      const names =
-        raw === "none"
-          ? []
-          : raw
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean);
-      options.selectionFlag = true;
-      if (value === "--skill-commands") {
-        options.commands = [...(options.commands ?? []), ...names];
-      } else {
-        options[target] = names;
-      }
-    } else if (value === "--targets" || value === "--fragments") {
-      const raw = values[++index];
-      if (!raw)
-        throw new InstallerError(
-          "invalid_input",
-          `${value} requires a comma-separated value or none`,
-        );
-      const names =
-        raw === "none"
-          ? []
-          : raw
-              .split(",")
-              .map((item) => item.trim())
-              .filter(Boolean);
-      options.selectionFlag = true;
-      if (value === "--targets") options.configTargets = names;
-      else options.configFragments = names;
-    } else {
-      throw new InstallerError("invalid_input", `Unknown argument: ${value}`);
-    }
+  const parser = common(
+    new Command()
+      .exitOverride()
+      .helpOption(false)
+      .configureOutput({ writeErr: () => {} }),
+    "AGENTOMATIC",
+  ).argument("[name]");
+  for (const [flags, description] of [
+    ["--global", "global user scope"],
+    ["--dry-run", "preview changes"],
+    ["--yes", "explicitly confirm the displayed operation"],
+    ["--core", "activate core integration"],
+    ["--no-core", "disable core integration"],
+    ["--provider <value>", "provider"],
+    ["--model <value>", "model"],
+    ["--variant <value>", "reasoning variant"],
+    ["--clear-variant", "clear the variant"],
+    ["--no-dependency", "do not provision dependencies"],
+    ["--commands <value>", "command selection"],
+    ["--skill-commands <value>", "command selection alias"],
+    ["--agents <value>", "agent selection"],
+    ["--plugins <value>", "plugin selection"],
+    ["--targets <value>", "config targets"],
+    ["--fragments <value>", "config fragments"],
+  ]) {
+    const option = new Option(flags, description);
+    if (!["--yes", "--core", "--no-core", "--clear-variant", "--no-dependency"].includes(flags))
+      option.env(
+        `AGENTOMATIC_${option
+          .attributeName()
+          .replace(/[A-Z]/g, (char) => `_${char}`)
+          .toUpperCase()}`,
+      );
+    parser.addOption(option);
   }
-  return options;
+  try {
+    for (const flag of ["--global", "--dry-run", "--yes", "--json", "--no-dependency"])
+      if (values.filter((value) => value === flag).length > 1)
+        throw new Error(`${flag} may be supplied once`);
+    if (values.includes("--core") && values.includes("--no-core"))
+      throw new Error("Use only one core integration option");
+    if (values.includes("--variant") && values.includes("--clear-variant"))
+      throw new Error("Use only one variant option");
+    parser.parse(values, { from: "user" });
+    applyConfig(parser, configFileSync(parser.opts().config));
+    const parsed = parser.opts();
+    machineOutput = parsed.json === true;
+    diagnosticJSON = parsed.logFormat === "json";
+    diagnostics ??= reporter({ ...parsed, progress: parsed.progress ?? "never" });
+    diagnostics.emit({
+      phase: "agentomatic",
+      message: "Validated command options",
+      level: "debug",
+    });
+    const list = (value: unknown): string[] | undefined =>
+      value === undefined
+        ? undefined
+        : Array.isArray(value)
+          ? value.map(String)
+          : String(value) === "none"
+            ? []
+            : String(value)
+                .split(",")
+                .map((item) => item.trim())
+                .filter(Boolean);
+    return {
+      scope: parsed.global ? "global" : "project",
+      global: parsed.global === true,
+      dryRun: parsed.dryRun === true,
+      json: parsed.json === true,
+      yes: parsed.yes === true,
+      name: parser.args[0],
+      core: ["cli", "env", "config"].includes(parser.getOptionValueSource("core") ?? "")
+        ? parsed.core
+        : undefined,
+      provider: parsed.provider,
+      model: parsed.model,
+      variant: parsed.clearVariant ? null : parsed.variant,
+      noDependency: parsed.dependency === false,
+      commands: list(parsed.commands ?? parsed.skillCommands),
+      agents: list(parsed.agents),
+      plugins: list(parsed.plugins),
+      configTargets: list(parsed.targets),
+      configFragments: list(parsed.fragments),
+      selectionFlag: [
+        "commands",
+        "skillCommands",
+        "agents",
+        "plugins",
+        "targets",
+        "fragments",
+      ].some((key) => parsed[key] !== undefined),
+    };
+  } catch (error) {
+    throw new InstallerError(
+      "invalid_input",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 function helpRows(rows: readonly (readonly [string, string])[]): string[] {
   const width = Math.max(...rows.map(([label]) => label.length));
   return rows.map(([label, description]) => `  ${label.padEnd(width)}  ${description}`);
+}
+
+function commonRows(): Array<readonly [string, string]> {
+  const parser = common(new Command("agentomatic"), "AGENTOMATIC");
+  const help = parser.createHelp();
+  return parser.options
+    .filter((option) => option.attributeName() !== "json")
+    .map((option) => [help.optionTerm(option), help.optionDescription(option)] as const);
 }
 
 function rootHelp(): string {
@@ -214,6 +231,7 @@ function rootHelp(): string {
       ["--json", "Emit stable machine-readable output when supported."],
       ["--help", "Show this help and exit."],
       ["--version", "Show the package version and exit."],
+      ...commonRows(),
     ]),
     "",
     "Install selection:",
@@ -292,7 +310,22 @@ function commandHelp(
     ...usage.map((line) => `  ${line}`),
     "",
     "Options:",
-    ...helpRows(options),
+    ...helpRows(
+      options.map(([flag, description]) => {
+        const match = /^--([a-z][a-z-]*)/.exec(flag);
+        const environment =
+          match &&
+          !["yes", "core", "no-core", "no-dependency", "clear-variant", "help"].includes(match[1]);
+        return [
+          flag,
+          environment
+            ? `${description} (env: AGENTOMATIC_${match[1].replaceAll("-", "_").toUpperCase()})`
+            : description,
+        ] as const;
+      }),
+    ),
+    "",
+    ...helpRows(commonRows()),
     "",
     "Behavior:",
     ...behavior.map((line) => `  ${line}`),
@@ -1578,7 +1611,11 @@ async function run(arguments_: string[]): Promise<void> {
 
 async function main(): Promise<void> {
   try {
-    await run(process.argv.slice(2));
+    let args = process.argv
+      .slice(2)
+      .map((value) => (value === "-h" ? "--help" : value === "-V" ? "--version" : value));
+    if (args[0] === "help") args = [...args.slice(1), "--help"];
+    await run(args);
   } catch (error) {
     const known =
       error instanceof LifecycleError
@@ -1587,12 +1624,19 @@ async function main(): Promise<void> {
             "internal_error",
             error instanceof Error ? error.message : String(error),
           );
-    if (process.argv.includes("--json"))
+    if (process.argv.includes("--json") || machineOutput)
       process.stdout.write(
         `${JSON.stringify({ status: "error", error: { code: known.code, message: known.message } })}\n`,
       );
+    else if (diagnosticJSON)
+      process.stderr.write(
+        `${JSON.stringify({ level: "error", phase: "agentomatic.error", code: known.code, message: known.message })}\n`,
+      );
     else process.stderr.write(`Error [${known.code}]: ${terminalSafe(known.message)}\n`);
     process.exitCode = 2;
+  } finally {
+    diagnostics?.emit({ phase: "agentomatic.done", message: "Command finished", level: "debug" });
+    diagnostics?.close();
   }
 }
 

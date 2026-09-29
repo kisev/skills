@@ -7,6 +7,7 @@ import { entryImportance, entryObservedAt } from "./entries.js";
 import { embedTexts, embeddingFingerprint } from "./settings.js";
 import type { MemomaticPaths } from "./paths.js";
 import type { MemomaticSettings } from "./settings.js";
+import { check, type OperationOptions } from "./operations.js";
 
 export type SearchHit = {
   entry: IndexedEntry;
@@ -46,7 +47,10 @@ export async function reindex(
   paths: MemomaticPaths,
   settings: MemomaticSettings,
   store: MemoryStore,
+  options: OperationOptions = {},
 ): Promise<number> {
+  check(options);
+  options.observe?.({ phase: "index.scan", message: "Reading memory files" });
   const entries: IndexedEntry[] = [];
   const indexedIds = new Set<string>();
   for (const file of await corpusFiles(paths)) {
@@ -74,11 +78,62 @@ export async function reindex(
       });
     }
   }
-  const vectors = await embedTexts(
-    settings,
-    entries.map((entry) => entry.text),
-  );
+  const prior = new Map(store.allEntries().map((entry) => [entry.stableId, entry.text]));
+  const cache = new Map(store.vectors().map((row) => [row.stableId, row.data]));
+  const compatible =
+    !options.force && store.getMeta("embeddingFingerprint") === embeddingFingerprint(settings);
+  const vectors: Float32Array[] | null = settings.embedding ? [] : null;
+  const missing = entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry, index }) => {
+      const cached =
+        compatible && prior.get(entry.stableId) === entry.text
+          ? cache.get(entry.stableId)
+          : undefined;
+      if (cached && vectors) {
+        vectors[index] = cached;
+        return false;
+      }
+      return Boolean(vectors);
+    });
+  options.observe?.({
+    phase: "index.embeddings",
+    message: "Embedding changed entries",
+    total: missing.length,
+    completed: 0,
+    cached: entries.length - missing.length,
+  });
+  for (let start = 0; start < missing.length; start += 32) {
+    check(options);
+    const batch = missing.slice(start, start + 32);
+    const computed = await embedTexts(
+      settings,
+      batch.map((item) => item.entry.text),
+      "document",
+      options.signal,
+    );
+    if (vectors && computed)
+      batch.forEach((item, index) => {
+        vectors[item.index] = computed[index];
+      });
+    options.observe?.({
+      phase: "index.embeddings",
+      message: "Embedding batch complete",
+      total: missing.length,
+      completed: Math.min(start + 32, missing.length),
+    });
+  }
+  check(options);
+  if (vectors?.length && vectors.some((vector) => vector.length !== vectors[0].length))
+    throw new Error("embedding dimensions changed; run memomatic index --force");
   store.replaceIndex(entries, vectors, embeddingFingerprint(settings));
+  options.observe?.({
+    phase: "index.done",
+    message: "Index committed",
+    entries: entries.length,
+    embedded: missing.length,
+    cached: entries.length - missing.length,
+  });
   return entries.length;
 }
 
