@@ -146,11 +146,10 @@ def build(version: str, revision: str) -> dict[str, Any]:
         "MEMOMATIC_TARBALL": str(tarballs["@kisev/memomatic"]),
         "TASKMATIC_TARBALL": str(tarballs["@kisev/taskmatic"]),
         "SAFE_FS_TARBALL": str(tarballs["@kisev/safe-fs"]),
-        "OPENCODE_BINARY": build_release_artifacts.command("mise", "which", "opencode").strip(),
     }
     build_release_artifacts.command(
-        "node",
-        "test/smoke.mjs",
+        "python3",
+        str(ROOT / "scripts/check_opencode_compatibility.py"),
         cwd=PACKAGE,
         env=smoke_env,
     )

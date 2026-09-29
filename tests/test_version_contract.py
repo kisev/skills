@@ -22,8 +22,11 @@ def version_root(root: Path) -> Path:
         {
             "version": "2.2.3",
             "skillsInstallerVersion": "1.5.23",
-            "peerDependencies": {"@opencode-ai/plugin": ">=1.18.29 <1.19.0"},
-            "devDependencies": {"@opencode-ai/plugin": "1.18.29"},
+            "peerDependencies": {
+                "@opencode-ai/plugin": ">=1.18.0 <1.19.0",
+                "@opencode/plugin": ">=2.0.0 <2.1.0",
+            },
+            "devDependencies": {"@opencode-ai/plugin": "1.18.32", "@opencode/plugin": "2.0.19"},
         },
     )
     write_json(
@@ -43,10 +46,17 @@ def version_root(root: Path) -> Path:
     )
     write_json(
         root / "evals/contracts/opencode-compatibility.json",
-        {"range": ">=1.18.29 <1.19.0", "versions": ["1.18.29", "1.18.31"]},
+        {
+            "range": ">=1.18.0 <1.19.0 || >=2.0.0 <2.1.0",
+            "peers": {
+                "@opencode-ai/plugin": ">=1.18.0 <1.19.0",
+                "@opencode/plugin": ">=2.0.0 <2.1.0",
+            },
+            "versions": ["1.18.32", "2.0.19"],
+        },
     )
     (root / "mise.toml").write_text(
-        '[tools]\n"npm:skills" = "1.5.23"\n"aqua:anomalyco/opencode" = "1.18.29"\n',
+        '[tools]\n"npm:skills" = "1.5.23"\n"npm:opencode-ai" = "1.18.32"\n"npm:@opencode/cli" = "2.0.19"\n',
         encoding="utf-8",
     )
     (root / "CHANGELOG.md").write_text("## [2.2.3] - 2026-09-15\n", encoding="utf-8")

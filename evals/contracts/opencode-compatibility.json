@@ -1,8 +1,8 @@
 {
   "schema": "opencode-compatibility/v1",
   "package": "@kisev/agentomatic",
-  "range": ">=1.18.29 <1.19.0",
-  "versions": ["1.18.29", "1.18.31", "1.18.32"],
+  "range": ">=1.18.0 <1.19.0 || >=2.0.0 <2.1.0",
+  "versions": ["1.18.32", "2.0.19"],
   "checks": [
     "package-build",
     "tool-registration",
@@ -11,5 +11,9 @@
     "agent-discovery"
   ],
   "credentials": false,
-  "network": false
+  "network": false,
+  "peers": {
+    "@opencode-ai/plugin": ">=1.18.0 <1.19.0",
+    "@opencode/plugin": ">=2.0.0 <2.1.0"
+  }
 }

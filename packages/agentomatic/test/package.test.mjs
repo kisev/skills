@@ -18,7 +18,7 @@ import { pathToFileURL } from "node:url";
 
 for (const variable of ["GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete process.env[variable];
 
-import plugin from "../dist/index.js";
+import { server as plugin } from "../dist/index.js";
 import { COMMAND_REGISTRY, renderCommand } from "../dist/registry.js";
 import {
   CATEGORIES,
@@ -36,7 +36,6 @@ import {
   worktreeStatus,
 } from "../dist/runtime/worktree.js";
 import { stateRoot } from "../dist/runtime/state.js";
-import zedBell from "../dist/plugins/zed-bell.js";
 import {
   InstallerError,
   apply,
@@ -1320,7 +1319,8 @@ test("published package metadata and tarball expose only the OpenCode integratio
     assert.equal(unpackedMetadata.readPackageVersion(), PACKAGE_VERSION);
     assert.equal(unpackedMetadata.skillsInstallerSpec(), SKILLS_INSTALLER_SPEC);
     const imported = await import(pathToFileURL(join(unpacked, "dist", "index.js")).href);
-    assert.equal(typeof imported.default, "function");
+    assert.equal(typeof imported.default.server, "function");
+    assert.equal(typeof imported.default.setup, "function");
     assert.equal(typeof imported.server, "function");
     assert.equal(typeof imported.apply, "undefined");
   } finally {

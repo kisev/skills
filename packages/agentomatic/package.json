@@ -40,25 +40,31 @@
   },
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json && node dist/generate-assets.js",
-    "test": "node --test test/agent-profiles.test.mjs test/config-setup.test.mjs test/legacy-migration.test.mjs test/doctor.test.mjs test/package.test.mjs test/rtk.test.mjs test/self-install.test.mjs test/stage19.test.mjs test/surface-coverage.test.mjs",
+    "test": "node --test test/agent-profiles.test.mjs test/config-setup.test.mjs test/legacy-migration.test.mjs test/doctor.test.mjs test/package.test.mjs test/rtk.test.mjs test/self-install.test.mjs test/stage19.test.mjs test/surface-coverage.test.mjs test/opencode-compatibility.test.mjs",
     "smoke": "node test/smoke.mjs",
     "pack:check": "node test/pack-allowlist.mjs"
   },
   "dependencies": {
     "@clack/prompts": "^1.8.1",
     "@kisev/safe-fs": "^1.0.0",
-    "commander": "15.0.0"
+    "commander": "15.0.0",
+    "zod": "4.1.8"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.18.29",
+    "@opencode-ai/plugin": "1.18.32",
+    "@opencode/plugin": "2.0.19",
     "@types/node": "22.15.30",
     "typescript": "7.0.2"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.18.29 <1.19.0"
+    "@opencode-ai/plugin": ">=1.18.0 <1.19.0",
+    "@opencode/plugin": ">=2.0.0 <2.1.0"
   },
   "peerDependenciesMeta": {
     "@opencode-ai/plugin": {
+      "optional": true
+    },
+    "@opencode/plugin": {
       "optional": true
     }
   },

@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import rtk, {
+import {
+  rtk,
   emptyRtkStats,
   readRtkStats,
   rtkCharsSaved,

@@ -1,3 +1,5 @@
+import type { Plugin } from "@opencode/plugin";
+import { registerV2Hooks } from "./compatibility.js";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -110,7 +112,7 @@ export async function rulesInjector(options: RulesInjectorOptions = {}) {
     }: {
       event?: { type?: string; properties?: Record<string, unknown> };
     }) => {
-      if (event?.type?.includes("compaction")) {
+      if (event?.type === "session.compacted" || event?.type?.includes("compaction")) {
         const identifier = sessionID(event.properties);
         if (identifier) state(identifier).replay = true;
       }
@@ -127,4 +129,15 @@ export async function rulesInjector(options: RulesInjectorOptions = {}) {
   };
 }
 
-export default rulesInjector;
+export default {
+  id: "agentomatic.rules-injector",
+  server: async (input: { directory?: string }, options: RulesInjectorOptions = {}) =>
+    rulesInjector({ ...options, cwd: options.cwd ?? input.directory }),
+  async setup(ctx) {
+    return registerV2Hooks(
+      ctx,
+      await rulesInjector({ ...ctx.options, cwd: ctx.location.directory }),
+      { sessionDirectory: true },
+    );
+  },
+} satisfies Plugin.Plugin & { server: unknown };

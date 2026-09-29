@@ -8,7 +8,7 @@ skills have a separate lifecycle and must be installed independently through the
 
 ## Requirements and Ownership
 
-The package requires Node.js 22.13+ and OpenCode `>=1.18.29 <1.19.0`.
+The package requires Node.js 22.13+ and OpenCode `>=1.18.0 <1.19.0 || >=2.0.0 <2.1.0`.
 See [common CLI conventions](../reference/cli.md) for configuration precedence,
 environment variables, diagnostics and machine output. The existing wizard remains available.
 
@@ -23,6 +23,28 @@ environment variables, diagnostics and machine output. The existing wizard remai
 The package and generated wrappers must remain resolvable after the installer
 exits. Import, plugin loading, and npm lifecycle scripts do not install assets,
 install portable skills, or edit OpenCode configuration.
+
+## OpenCode V1 and V2
+
+All patch releases in the `1.18.x` and `2.0.x` minors are supported. Exact versions
+in `evals/contracts/opencode-compatibility.json` are verification samples, not an
+allowlist. The same package and optional wrappers expose a V1 `server` entrypoint
+and a V2 `setup` entrypoint; routing receipts, output compression, and nested
+rules retain their behavior across both APIs.
+
+After upgrading an existing installation, use the installer upgrade preview and
+confirm it to replace the managed plugin wrappers, then restart OpenCode. Old
+function-only wrappers cannot load in V2. Preserve user-modified wrapper files;
+the installer reports conflicts instead of overwriting them.
+
+V2 uses `plugins` in `opencode.json(c)` and accepts the legacy `plugin` spelling.
+Config setup updates `plugins` when that key exists; otherwise it keeps `plugin`
+for V1 compatibility. Do not register the same package in both arrays.
+
+Maintainers install both CLI generations through the npm backend in `mise.toml`.
+`task package:check` runs installed-tarball smoke checks on the current
+patches of both minors, alongside hostless behavior tests. These checks need no
+model credentials; dependency provisioning can require registry access.
 
 ## Install
 

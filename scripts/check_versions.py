@@ -136,8 +136,14 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     peer_dependencies = agentomatic.get("peerDependencies")
     if not isinstance(peer_dependencies, dict):
         raise VersionError("OpenCode peer dependencies are missing")
-    if peer_dependencies.get("@opencode-ai/plugin") != compatibility_range:
-        raise VersionError("OpenCode peer range differs from compatibility authority")
+    peers = compatibility.get("peers")
+    if not isinstance(peers, dict) or not peers:
+        raise VersionError("OpenCode compatibility peer ranges are missing")
+    if " || ".join(peers.values()) != compatibility_range:
+        raise VersionError("OpenCode combined range differs from compatibility authority")
+    for name, peer_range in peers.items():
+        if peer_dependencies.get(name) != peer_range:
+            raise VersionError("OpenCode peer range differs from compatibility authority")
     versions = compatibility.get("versions")
     if (
         not isinstance(versions, list)
@@ -151,7 +157,13 @@ def validate(root: Path = ROOT) -> dict[str, object]:
         raise VersionError("OpenCode development dependencies are missing")
     checked_versions = {
         "package dev dependency": dev_dependencies.get("@opencode-ai/plugin"),
-        "mise OpenCode": tools.get("aqua:anomalyco/opencode"),
+        "package V2 dev dependency": dev_dependencies.get("@opencode/plugin"),
+        "mise OpenCode V1": tools.get("npm:opencode-ai"),
+        "mise OpenCode V2": tools.get("npm:@opencode/cli"),
+    }
+    checked_versions = {
+        name: value.get("version") if isinstance(value, dict) else value
+        for name, value in checked_versions.items()
     }
     unsupported = {
         name: value for name, value in checked_versions.items() if value not in compatible

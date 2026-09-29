@@ -10,6 +10,10 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- Agentomatic plugins now expose both the OpenCode V1 `server` and V2 `setup`
+  entrypoints. All patches in the `1.18.x` and `2.0.x` minors are supported;
+  repository checks exercise the current patch of each minor from Mise.
+
 - Memomatic splits OpenCode session analysis into the standalone `sessions`
   command; `dream` is now pure consolidation (inbox, usage-gated promotion,
   bounded rewrite, archiving) and never reads OpenCode history. Separate

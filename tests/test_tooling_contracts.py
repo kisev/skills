@@ -174,8 +174,9 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     assert "npm run lint" not in taskfile
     assert "npm run typecheck" not in taskfile
     assert "npm run generate-assets" not in taskfile
-    for script in ("build", "smoke", "pack:check"):
+    for script in ("build", "pack:check"):
         assert f"mise exec -- npm run {script}" in taskfile
+    assert "scripts/check_opencode_compatibility.py" in taskfile
     assert "mise exec -- npm test" in taskfile
     assert "mise exec -- gitleaks" in taskfile
     assert "mise exec -- uv" in taskfile

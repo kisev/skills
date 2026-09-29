@@ -271,16 +271,17 @@ function fragmentEdits(
       ? (value.permission as Record<string, unknown>)
       : {};
   if (fragment === "core-plugin") {
+    const key = "plugins" in value ? "plugins" : "plugin";
     return [
       { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/config.json" },
-      { kind: "set-if-absent", path: ["plugin"], value: [] },
+      { kind: "set-if-absent", path: [key], value: [] },
       {
         kind: "replace-array-value",
-        path: ["plugin"],
+        path: [key],
         from: LEGACY_PACKAGE_NAME,
         to: PACKAGE_NAME,
       },
-      { kind: "append-unique", path: ["plugin"], value: PACKAGE_NAME },
+      { kind: "append-unique", path: [key], value: PACKAGE_NAME },
     ];
   }
   if (fragment === "skills-state-permissions") {

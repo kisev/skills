@@ -61,7 +61,7 @@ migration guide](../../docs/how-to/memomatic.md).
 ## Requirements
 
 - Node.js 22 or later.
-- OpenCode `>=1.18.29 <1.19.0`.
+- OpenCode `>=1.18.0 <1.19.0 || >=2.0.0 <2.1.0`.
 - A persistent npm project that owns the dependency.
 
 ## Project Install

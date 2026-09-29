@@ -1,4 +1,8 @@
-import { tool, type Plugin, type PluginInput } from "@opencode-ai/plugin";
+import type { Plugin } from "@opencode-ai/plugin";
+import type { Plugin as V2Plugin } from "@opencode/plugin";
+import { z } from "zod";
+
+import { registerV2Hooks } from "./plugins/compatibility.js";
 
 import {
   CATEGORIES,
@@ -7,9 +11,9 @@ import {
   RoutingGate,
   type RoutingInput,
 } from "./routing.js";
-import rulesInjector, { type RulesInjectorOptions } from "./plugins/rules-injector.js";
-import rtk, { type RtkOptions } from "./plugins/rtk.js";
-import zedBell, { type ZedBellOptions } from "./plugins/zed-bell.js";
+import { rulesInjector, type RulesInjectorOptions } from "./plugins/rules-injector.js";
+import { rtk, type RtkOptions } from "./plugins/rtk.js";
+import { zedBell, type ZedBellOptions } from "./plugins/zed-bell.js";
 import { digest } from "./lifecycle.js";
 
 export { rulesInjector, rtk, zedBell };
@@ -19,7 +23,14 @@ export type OpenCodeOptions = {
   zedBell?: ZedBellOptions;
 };
 
-const plugin = (async (input: PluginInput) => {
+type RuntimeInput = {
+  directory: string;
+  client?: {
+    app?: { agents?: (input: { query: { directory: string } }) => Promise<{ data?: unknown }> };
+  };
+};
+
+const plugin = (async (input: RuntimeInput) => {
   const gate = new RoutingGate();
   const hostInventory = async (): Promise<{ agents: AvailableAgent[]; revision: string }> => {
     if (!input.client?.app?.agents)
@@ -62,24 +73,24 @@ const plugin = (async (input: PluginInput) => {
     });
     return { agents, revision: digest(raw) };
   };
-  const route = tool({
+  const route = {
     description:
       "Resolve a capability category and dispatch one eligible agent through a one-use Task receipt gate.",
     args: {
-      action: tool.schema.enum(["preview", "dispatch"]),
-      category: tool.schema.enum(CATEGORIES),
-      task: tool.schema.string(),
-      requirements: tool.schema.array(tool.schema.string()).default([]),
-      execution_card: tool.schema.any().optional(),
-      override: tool.schema.string().optional(),
-      trusted_override: tool.schema.boolean().optional(),
-      budget: tool.schema
+      action: z.enum(["preview", "dispatch"]),
+      category: z.enum(CATEGORIES),
+      task: z.string(),
+      requirements: z.array(z.string()).default([]),
+      execution_card: z.any().optional(),
+      override: z.string().optional(),
+      trusted_override: z.boolean().optional(),
+      budget: z
         .object({
-          cost_class: tool.schema.string().optional(),
-          latency_class: tool.schema.string().optional(),
+          cost_class: z.string().optional(),
+          latency_class: z.string().optional(),
         })
         .optional(),
-      decision: tool.schema.any().optional(),
+      decision: z.any().optional(),
     },
     async execute(
       args: {
@@ -118,7 +129,7 @@ const plugin = (async (input: PluginInput) => {
       });
       return JSON.stringify({ decision, receipt, status: "routed" });
     },
-  });
+  };
   return {
     tool: { route },
     "tool.execute.before": async (
@@ -174,4 +185,64 @@ const plugin = (async (input: PluginInput) => {
 }) satisfies Plugin;
 
 export const server = plugin;
-export default plugin;
+export default {
+  id: "agentomatic",
+  server,
+  async setup(ctx) {
+    const hooks = await plugin({
+      directory: ctx.location.directory,
+      client: {
+        app: {
+          agents: async () => {
+            const { data: agents } = await ctx.agent.list({
+              location: { directory: ctx.location.directory },
+            });
+            return {
+              data: agents.map((agent) => ({
+                name: agent.id,
+                tools: Object.fromEntries(
+                  ["read", "glob", "grep", "edit", "bash"].map((tool) => [
+                    tool,
+                    [...agent.permissions]
+                      .reverse()
+                      .find(
+                        (rule) =>
+                          (rule.action === (tool === "bash" ? "shell" : tool) ||
+                            rule.action === "*") &&
+                          rule.resource === "*",
+                      )?.effect !== "deny",
+                  ]),
+                ),
+                permission: {
+                  edit: agent.permissions.some(
+                    (rule) =>
+                      rule.action === "edit" && rule.resource === "*" && rule.effect === "deny",
+                  )
+                    ? "deny"
+                    : "allow",
+                  bash: Object.fromEntries(
+                    agent.permissions
+                      .filter((rule) => rule.action === "shell")
+                      .map((rule) => [rule.resource, rule.effect]),
+                  ),
+                },
+              })),
+            };
+          },
+        },
+      },
+    });
+    await ctx.tool.transform((editor) => {
+      const route = hooks.tool.route;
+      editor.add({
+        name: "route",
+        description: route.description,
+        input: z.object(route.args),
+        async execute(args, context) {
+          return { content: await route.execute(args, context) };
+        },
+      });
+    });
+    return registerV2Hooks(ctx, hooks);
+  },
+} satisfies V2Plugin.Plugin & { server: typeof server };

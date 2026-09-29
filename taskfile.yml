@@ -379,7 +379,7 @@ tasks:
     deps: [package:test]
     dir: packages/agentomatic
     cmds:
-      - mise exec -- npm run smoke
+      - mise exec -- uv run --locked python ../../scripts/check_opencode_compatibility.py
       - mise exec -- npm run pack:check
       - mise exec -- npm --prefix ../../apps/taskmatic run pack:check
       - mise exec -- npm test

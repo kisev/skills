@@ -1,3 +1,5 @@
+import type { Plugin } from "@opencode/plugin";
+import { registerV2Hooks } from "./compatibility.js";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -222,4 +224,10 @@ export async function rtk(options: RtkOptions = {}) {
   };
 }
 
-export default rtk;
+export default {
+  id: "agentomatic.rtk",
+  server: async (_input: unknown, options: RtkOptions = {}) => rtk(options),
+  async setup(ctx) {
+    return registerV2Hooks(ctx, await rtk(ctx.options));
+  },
+} satisfies Plugin.Plugin & { server: unknown };

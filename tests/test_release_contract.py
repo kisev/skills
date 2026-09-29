@@ -509,7 +509,7 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
     for name in publish_npm_release.NPM_PUBLISH_ORDER:
         assert f"{name}@{RELEASE_VERSION}" in install
-    assert "@opencode-ai/plugin@1.18.29" in install
+    assert "@opencode-ai/plugin@1.18.32" in install
     assert ("npm", "audit", "signatures", "--json") in calls
 
 

@@ -85,6 +85,33 @@ const FULL_SELECTION = {
   ],
 };
 
+test("core-plugin setup preserves V2 plugins and does not create a legacy array", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const file = join(home, ".config/opencode/opencode.jsonc");
+  try {
+    await writeFile(
+      file,
+      '{\n  // V2 plugins\n  "plugins": ["user-plugin", "@kisev/skills-opencode"]\n}\n',
+    );
+    const selection = { targets: ["opencode"], fragments: ["core-plugin"] };
+    const setup = await previewConfigSetup(selection, "global", directory, home);
+    await applyConfigSetup(selection, "global", directory, home, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: setup.receipt,
+    });
+    const source = readFileSync(file, "utf8");
+    const config = parseJsonc(source);
+    assert.deepEqual(config.plugins, ["user-plugin", "@kisev/agentomatic"]);
+    assert.equal(config.plugin, undefined);
+    assert.match(source, /\/\/ V2 plugins/);
+    const preview = await previewConfigSetup(selection, "global", directory, home);
+    assert.ok(preview.operations.every((operation) => operation.operation === "unchanged"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("jsonc editor appends unique values while preserving comments and formatting", () => {
   const text = [
     "{",

@@ -200,10 +200,13 @@ function redactedConfig(value: unknown): {
 } {
   const object =
     value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
-  const rawPlugins = Array.isArray(object.plugin)
-    ? object.plugin.flatMap((item) => {
+  const configuredPlugins = object.plugins ?? object.plugin;
+  const rawPlugins = Array.isArray(configuredPlugins)
+    ? configuredPlugins.flatMap((item) => {
         if (typeof item === "string") return [item];
         if (Array.isArray(item) && typeof item[0] === "string") return [item[0]];
+        if (item && typeof item === "object" && typeof item.package === "string")
+          return [item.package];
         return [];
       })
     : [];
@@ -229,6 +232,7 @@ function redactedConfig(value: unknown): {
           "command",
           "watcher",
           "plugin",
+          "plugins",
           "lsp",
           "formatter",
           "provider",
