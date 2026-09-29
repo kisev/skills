@@ -2922,19 +2922,26 @@ def stop_process_group(process: subprocess.Popen[bytes]) -> None:
             raise WorkflowError("GitLab job trace process could not be reaped") from exc
 
 
-def split_glab_trace_response(response: bytes | bytearray) -> tuple[bytes, bytes] | None:
+def trace_boundary(response: bytes | bytearray) -> tuple[int, int] | None:
     boundaries = [
-        (position, separator)
+        (position, len(separator))
         for separator in (b"\r\n\r\n", b"\n\n")
         if (position := response.find(separator)) >= 0
     ]
     if not boundaries:
         return None
-    position, separator = min(boundaries, key=lambda boundary: boundary[0])
-    return bytes(response[:position]), bytes(response[position + len(separator) :])
+    return min(boundaries, key=lambda boundary: boundary[0])
 
 
-def streamed_glab_trace(arguments: list[str]) -> tuple[bytes, bytes]:
+def split_glab_trace_response(response: bytes | bytearray) -> tuple[bytes, bytes] | None:
+    boundary = trace_boundary(response)
+    if boundary is None:
+        return None
+    position, length = boundary
+    return bytes(response[:position]), bytes(response[position + length :])
+
+
+def streamed_glab_trace(arguments: list[str]) -> tuple[bytes, bytes, bool]:
     if os.name != "posix" or not hasattr(os, "killpg"):
         raise WorkflowError("GitLab job trace streaming requires POSIX process capabilities")
     process: subprocess.Popen[bytes] | None = None
@@ -2942,6 +2949,7 @@ def streamed_glab_trace(arguments: list[str]) -> tuple[bytes, bytes]:
     primary_error: BaseException | None = None
     stdout = bytearray()
     stderr = bytearray()
+    tail_dropped = False
     deadline = time.monotonic() + TRACE_TIMEOUT_SECONDS
     try:
         process = subprocess.Popen(
@@ -2972,18 +2980,22 @@ def streamed_glab_trace(arguments: list[str]) -> tuple[bytes, bytes]:
                     selector.unregister(key.fileobj)
                     continue
                 target.extend(chunk)
-                if len(stdout) > stdout_limit or len(stderr) > MAX_TRACE_HEADER_BYTES:
+                if len(stderr) > MAX_TRACE_HEADER_BYTES:
                     raise WorkflowError("GitLab job trace response exceeds the size limit")
-                response_parts = split_glab_trace_response(stdout)
-                if response_parts is None:
+                boundary = trace_boundary(stdout)
+                if boundary is None:
                     if len(stdout) > MAX_TRACE_HEADER_BYTES:
                         raise WorkflowError(
                             "GitLab job trace response headers exceed the size limit"
                         )
-                else:
-                    headers, body = response_parts
-                    if len(headers) > MAX_TRACE_HEADER_BYTES or len(body) > MAX_TRACE_BYTES:
-                        raise WorkflowError("GitLab job trace response exceeds the size limit")
+                    continue
+                position, length = boundary
+                if position > MAX_TRACE_HEADER_BYTES:
+                    raise WorkflowError("GitLab job trace response headers exceed the size limit")
+                excess = len(stdout) - position - length - MAX_TRACE_BYTES
+                if excess > 0:
+                    del stdout[position + length : position + length + excess]
+                    tail_dropped = True
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise WorkflowError("GitLab job trace request timed out")
@@ -2993,7 +3005,7 @@ def streamed_glab_trace(arguments: list[str]) -> tuple[bytes, bytes]:
             raise WorkflowError("GitLab job trace request timed out") from exc
         if returncode:
             raise WorkflowError(f"GitLab job trace request failed with status {returncode}")
-        return bytes(stdout), bytes(stderr)
+        return bytes(stdout), bytes(stderr), tail_dropped
     except WorkflowError as exc:
         primary_error = exc
         raise
@@ -3017,7 +3029,7 @@ def streamed_glab_trace(arguments: list[str]) -> tuple[bytes, bytes]:
                 raise
 
 
-def parse_glab_trace(response: bytes) -> tuple[str, bool]:
+def parse_glab_trace(response: bytes, *, tail_dropped: bool = False) -> tuple[str, bool]:
     response_parts = split_glab_trace_response(response)
     if response_parts is None:
         raise WorkflowError("GitLab job trace response headers are unavailable")
@@ -3037,7 +3049,7 @@ def parse_glab_trace(response: bytes) -> tuple[str, bool]:
         ),
         None,
     )
-    complete = status == 200 and content_range is None
+    complete = status == 200 and content_range is None and not tail_dropped
     if status in {200, 206} and content_range is not None:
         range_match = re.fullmatch(r"bytes ([0-9]+)-([0-9]+)/([0-9]+)", content_range)
         if range_match is not None:
@@ -3054,7 +3066,7 @@ def glab_text(hostname: str, endpoint: str) -> tuple[str, bool]:
     glab = shutil.which("glab")
     if glab is None:
         raise WorkflowError("glab is unavailable; install and authenticate it outside this skill")
-    stdout, _stderr = streamed_glab_trace(
+    stdout, _stderr, tail_dropped = streamed_glab_trace(
         [
             glab,
             "api",
@@ -3068,7 +3080,7 @@ def glab_text(hostname: str, endpoint: str) -> tuple[str, bool]:
             endpoint,
         ]
     )
-    return parse_glab_trace(stdout)
+    return parse_glab_trace(stdout, tail_dropped=tail_dropped)
 
 
 def paginated(hostname: str, endpoint: str, *, max_pages: int = MAX_PAGES) -> dict[str, object]:
@@ -3235,13 +3247,13 @@ def collect_pipeline_jobs(
             )
             if raw.get("status") in {"failed", "canceled"}:
                 if traces >= MAX_CI_TRACES:
+                    traces += 1
                     normalized["trace"] = {
                         "complete": False,
                         "truncated": True,
                         "excerpt": "",
                         "sha256": None,
                     }
-                    pipeline_errors.append("CI job trace limit reached")
                     truncated = True
                 else:
                     traces += 1
@@ -3249,12 +3261,7 @@ def collect_pipeline_jobs(
                         trace, trace_complete = glab_text(
                             hostname, f"projects/{current_project}/jobs/{raw['id']}/trace"
                         )
-                        trace_value = trace_excerpt(trace, trace_complete)
-                        normalized["trace"] = trace_value
-                        if trace_value["complete"] is not True:
-                            pipeline_errors.append(
-                                "CI job trace completeness could not be confirmed"
-                            )
+                        normalized["trace"] = trace_excerpt(trace, trace_complete)
                     except WorkflowError as exc:
                         normalized["trace"] = {
                             "complete": False,

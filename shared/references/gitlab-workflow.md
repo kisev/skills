@@ -12,7 +12,10 @@ it never performs mutation, clone, branch/worktree lifecycle, or push.
 Collection identity is `hostname`, resolved `project_id`, object kind, and IID.
 An MR snapshot records `base_sha`, `start_sha`, and `head_sha`; paginated data is
 bound to exact `head_sha`. Page errors, repetition, protective limits,
-truncation/overflow, or unknown completeness mean `complete=false`.
+truncation/overflow, or unknown completeness mean `complete=false`. Failed-job
+traces stream as bounded tail excerpts: an oversized response or an ignored
+Range keeps the last bounded tail as truncated per-job trace evidence without
+failing pipeline collection, while an unfetchable trace stays incomplete.
 
 A local WIP snapshot with `--ref` records the merge-base-to-HEAD range plus
 staged, unstaged, and non-ignored untracked sections. Do not resolve symlinks;

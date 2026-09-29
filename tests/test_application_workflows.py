@@ -2069,6 +2069,10 @@ print(json.dumps(value))
 
         self.assertEqual(module.parse_glab_trace(response("bytes 4-7/8", b"tail")), ("tail", False))
         self.assertEqual(module.parse_glab_trace(response("bytes 0-3/4", b"full")), ("full", True))
+        self.assertEqual(
+            module.parse_glab_trace(b"HTTP/1.1 200 OK\r\n\r\nwhole", tail_dropped=True),
+            ("whole", False),
+        )
 
         def paginated(_hostname: str, endpoint: str, **_kwargs: object) -> dict[str, object]:
             items: list[object] = (
@@ -2083,9 +2087,11 @@ print(json.dumps(value))
             patch.object(module, "glab_text", return_value=("tail", False)),
         ):
             evidence = module.collect_pipeline_jobs("gitlab.example", 19, {"id": 41})
-        self.assertFalse(evidence["complete"])
-        self.assertFalse(evidence["pipelines"][0]["jobs"][0]["trace"]["complete"])
-        self.assertIn("CI job trace completeness could not be confirmed", evidence["errors"])
+        self.assertTrue(evidence["complete"])
+        self.assertFalse(evidence["truncated"])
+        trace = evidence["pipelines"][0]["jobs"][0]["trace"]
+        self.assertFalse(trace["complete"])
+        self.assertTrue(trace["truncated"])
 
     @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
     def test_gitlab_trace_streaming_preserves_other_separator_in_body(self) -> None:
@@ -2094,11 +2100,12 @@ print(json.dumps(value))
         )
         response = b"HTTP/1.1 200 OK\nContent-Type: text/plain\n\nfirst\r\n\r\nsecond"
 
-        stdout, _stderr = module.streamed_glab_trace(
+        stdout, _stderr, tail_dropped = module.streamed_glab_trace(
             [sys.executable, "-c", f"import os; os.write(1, {response!r})"]
         )
 
         self.assertEqual(module.parse_glab_trace(stdout), ("first\r\n\r\nsecond", True))
+        self.assertFalse(tail_dropped)
 
     @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
     def test_gitlab_trace_streaming_accepts_exact_header_body_and_crlf_limits(self) -> None:
@@ -2116,9 +2123,10 @@ print(json.dumps(value))
             f"+ b'\\r\\n\\r\\n' + b'y' * {module.MAX_TRACE_BYTES})"
         )
 
-        stdout, _stderr = module.streamed_glab_trace([sys.executable, "-c", command])
+        stdout, _stderr, tail_dropped = module.streamed_glab_trace([sys.executable, "-c", command])
 
         self.assertEqual(module.split_glab_trace_response(stdout), (headers, body))
+        self.assertFalse(tail_dropped)
 
     @unittest.skipUnless(os.name == "posix", "POSIX process group test")
     def test_stop_process_group_kills_descendant_after_leader_exits(self) -> None:
@@ -2220,13 +2228,15 @@ print(json.dumps(value))
             executable.write_text(
                 "#!/usr/bin/env python3\n"
                 "import sys\n"
-                "sys.stdout.buffer.write(b'HTTP/1.1 200 OK\\r\\n\\r\\n' + b'x' * 65537)\n",
+                "sys.stdout.buffer.write(b'HTTP/1.1 200 OK\\r\\n\\r\\nhead\\n' + b'x' * 65537)\n",
                 encoding="utf-8",
             )
             executable.chmod(0o755)
             with patch.object(module.shutil, "which", return_value=str(executable)):
-                with self.assertRaisesRegex(module.WorkflowError, "size limit"):
-                    module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+                text, complete = module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+            self.assertFalse(complete)
+            self.assertEqual(len(text.encode()), module.MAX_TRACE_BYTES)
+            self.assertFalse(text.startswith("head"))
 
             pid_path = directory / "pid"
             executable.write_text(
