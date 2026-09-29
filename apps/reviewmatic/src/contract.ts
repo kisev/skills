@@ -23,7 +23,7 @@ import {
   StateArtifactError,
   xdgStateHome,
 } from "./state-artifacts.js";
-import { ARTIFACT_SCHEMA, ARTIFACT_SCHEMA_ID } from "./generated/artifact-schema.js";
+import { ARTIFACT_SCHEMA, ARTIFACT_SCHEMA_ID } from "./artifact-schema.js";
 import { assessmentIsValid, evidenceIsValid } from "./review-semver.js";
 
 export const MAX_BYTES = 8 * 1024 * 1024;

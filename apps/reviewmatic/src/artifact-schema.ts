@@ -1,0 +1,4539 @@
+export const ARTIFACT_SCHEMA_ID = "https://kisev.dev/schemas/portable-gitlab-artifacts/v2";
+
+export const ARTIFACT_SCHEMA: Record<string, unknown> = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "https://kisev.dev/schemas/portable-gitlab-artifacts/v2",
+  title: "Portable GitLab private artifacts v2",
+  oneOf: [
+    {
+      $ref: "#/$defs/evidence_snapshot",
+    },
+    {
+      $ref: "#/$defs/local_wip_snapshot",
+    },
+    {
+      $ref: "#/$defs/local_review_report",
+    },
+    {
+      $ref: "#/$defs/release_inventory",
+    },
+    {
+      $ref: "#/$defs/review_context",
+    },
+    {
+      $ref: "#/$defs/publication_plan",
+    },
+    {
+      $ref: "#/$defs/review_plan",
+    },
+    {
+      $ref: "#/$defs/analysis_report",
+    },
+    {
+      $ref: "#/$defs/critic_receipt",
+    },
+    {
+      $ref: "#/$defs/review_decision",
+    },
+    {
+      $ref: "#/$defs/release_readiness",
+    },
+    {
+      $ref: "#/$defs/finalize_report",
+    },
+  ],
+  $defs: {
+    local_review_report: {
+      type: "object",
+      required: ["schema", "schema_version", "kind", "created_at", "payload"],
+      properties: {
+        schema: {
+          const: "portable-gitlab/local_review_report/v2",
+        },
+        schema_version: {
+          const: 2,
+        },
+        kind: {
+          const: "local_review_report",
+        },
+        created_at: {
+          type: "string",
+          format: "date-time",
+        },
+        payload: {
+          $ref: "#/$defs/local_review_payload",
+        },
+      },
+      additionalProperties: false,
+    },
+    local_review_text: {
+      type: "string",
+      minLength: 1,
+    },
+    local_review_texts: {
+      type: "array",
+      items: {
+        $ref: "#/$defs/local_review_text",
+      },
+    },
+    local_review_payload: {
+      type: "object",
+      required: [
+        "evidence_digest",
+        "previous_review_digest",
+        "mode",
+        "task",
+        "task_change_reason",
+        "findings",
+        "checks",
+        "assessment",
+        "verdict",
+        "external_mutations",
+      ],
+      properties: {
+        evidence_digest: {
+          $ref: "#/$defs/digest",
+        },
+        previous_review_digest: {
+          anyOf: [
+            {
+              $ref: "#/$defs/digest",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        mode: {
+          enum: ["full", "incremental", "unchanged"],
+        },
+        task: {
+          type: "object",
+          required: [
+            "goal",
+            "acceptance_criteria",
+            "constraints",
+            "accepted_risks",
+            "deferred",
+            "decision_evidence",
+          ],
+          properties: {
+            goal: {
+              $ref: "#/$defs/local_review_text",
+            },
+            acceptance_criteria: {
+              allOf: [
+                {
+                  $ref: "#/$defs/local_review_texts",
+                },
+                {
+                  minItems: 1,
+                },
+              ],
+            },
+            constraints: {
+              $ref: "#/$defs/local_review_texts",
+            },
+            accepted_risks: {
+              $ref: "#/$defs/local_review_texts",
+            },
+            deferred: {
+              $ref: "#/$defs/local_review_texts",
+            },
+            decision_evidence: {
+              $ref: "#/$defs/local_review_text",
+            },
+          },
+          additionalProperties: false,
+        },
+        task_change_reason: {
+          anyOf: [
+            {
+              $ref: "#/$defs/local_review_text",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        findings: {
+          type: "array",
+          items: {
+            type: "object",
+            required: [
+              "id",
+              "severity",
+              "status",
+              "summary",
+              "requirement",
+              "scenario",
+              "evidence",
+              "consequence",
+              "origin",
+              "minimum_fix",
+              "blocking",
+              "rationale",
+              "decision_evidence",
+              "reopen_reason",
+            ],
+            properties: {
+              id: {
+                $ref: "#/$defs/local_review_text",
+              },
+              severity: {
+                enum: ["critical", "high", "medium", "low"],
+              },
+              status: {
+                enum: ["open", "fixed", "accepted_risk", "deferred", "rejected"],
+              },
+              summary: {
+                $ref: "#/$defs/local_review_text",
+              },
+              requirement: {
+                $ref: "#/$defs/local_review_text",
+              },
+              scenario: {
+                $ref: "#/$defs/local_review_text",
+              },
+              evidence: {
+                $ref: "#/$defs/local_review_text",
+              },
+              consequence: {
+                $ref: "#/$defs/local_review_text",
+              },
+              origin: {
+                enum: ["regression", "missed_requirement", "pre_existing", "new_requirement"],
+              },
+              minimum_fix: {
+                $ref: "#/$defs/local_review_text",
+              },
+              blocking: {
+                type: "boolean",
+              },
+              rationale: {
+                $ref: "#/$defs/local_review_text",
+              },
+              decision_evidence: {
+                anyOf: [
+                  {
+                    $ref: "#/$defs/local_review_text",
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+              reopen_reason: {
+                anyOf: [
+                  {
+                    $ref: "#/$defs/local_review_text",
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        checks: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "object",
+            required: ["name", "status", "required", "evidence"],
+            properties: {
+              name: {
+                $ref: "#/$defs/local_review_text",
+              },
+              status: {
+                enum: ["passed", "failed", "not_run"],
+              },
+              required: {
+                type: "boolean",
+              },
+              evidence: {
+                $ref: "#/$defs/local_review_text",
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        assessment: {
+          $ref: "#/$defs/local_review_text",
+        },
+        verdict: {
+          enum: ["ready", "not_ready", "blocked"],
+        },
+        external_mutations: {
+          const: false,
+        },
+      },
+      additionalProperties: false,
+    },
+    digest: {
+      type: "string",
+      pattern: "^[a-f0-9]{64}$",
+    },
+    sha: {
+      type: "string",
+      pattern: "^[0-9a-fA-F]{1,128}$",
+    },
+    identity: {
+      type: "object",
+      required: ["base_sha", "start_sha", "head_sha"],
+      properties: {
+        base_sha: {
+          anyOf: [
+            {
+              $ref: "#/$defs/sha",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        start_sha: {
+          anyOf: [
+            {
+              $ref: "#/$defs/sha",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        head_sha: {
+          anyOf: [
+            {
+              $ref: "#/$defs/sha",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    component: {
+      type: "object",
+      required: ["items", "complete", "errors", "pages", "truncated"],
+      properties: {
+        items: {
+          type: "array",
+        },
+        complete: {
+          type: "boolean",
+        },
+        errors: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        pages: {
+          type: "integer",
+          minimum: 0,
+        },
+        truncated: {
+          type: "boolean",
+        },
+      },
+      additionalProperties: false,
+    },
+    companion: {
+      type: "object",
+      required: ["name", "content", "sha256"],
+      properties: {
+        name: {
+          type: "string",
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$",
+        },
+        content: {
+          type: "string",
+        },
+        sha256: {
+          $ref: "#/$defs/digest",
+        },
+      },
+      additionalProperties: false,
+    },
+    label_intent: {
+      type: "object",
+      required: ["change_type", "workflow_state", "urgency", "impact", "compatibility", "origin"],
+      properties: {
+        change_type: {
+          anyOf: [
+            {
+              enum: ["release", "feature", "bug", "maintenance", "documentation", "security"],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        workflow_state: {
+          anyOf: [
+            {
+              enum: [
+                "in_progress",
+                "review",
+                "blocked",
+                "completed",
+                "declined",
+                "needs_info",
+                "stale",
+              ],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        urgency: {
+          anyOf: [
+            {
+              enum: ["emergency", "urgent", "standard", "low"],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        impact: {
+          anyOf: [
+            {
+              enum: ["critical", "high", "medium", "low"],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        compatibility: {
+          anyOf: [
+            {
+              enum: ["major", "minor", "patch"],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        origin: {
+          anyOf: [
+            {
+              enum: ["internal", "external", "inner_source"],
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    label_decision: {
+      type: "object",
+      required: ["role", "intent", "current", "desired_label", "action", "reason"],
+      properties: {
+        role: {
+          enum: ["change_type", "workflow_state", "urgency", "impact", "compatibility", "origin"],
+        },
+        intent: {
+          anyOf: [
+            {
+              type: "string",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        current: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        desired_label: {
+          anyOf: [
+            {
+              type: "string",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        action: {
+          enum: ["keep", "change", "unsupported", "unresolved"],
+        },
+        reason: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      additionalProperties: false,
+    },
+    label_review: {
+      type: "object",
+      required: [
+        "complete",
+        "intent",
+        "current",
+        "proposed",
+        "add",
+        "remove",
+        "decisions",
+        "unresolved",
+      ],
+      properties: {
+        complete: {
+          type: "boolean",
+        },
+        intent: {
+          $ref: "#/$defs/label_intent",
+        },
+        current: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        proposed: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        add: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        remove: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        decisions: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/label_decision",
+          },
+        },
+        unresolved: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    code_review_label_review: {
+      type: "object",
+      required: [
+        "complete",
+        "catalog_sha256",
+        "catalog",
+        "assessments",
+        "current",
+        "add",
+        "remove",
+        "proposed",
+        "unresolved",
+        "semver",
+      ],
+      properties: {
+        complete: {
+          const: true,
+        },
+        catalog_sha256: {
+          $ref: "#/$defs/digest",
+        },
+        catalog: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["name", "description"],
+            properties: {
+              name: {
+                type: "string",
+                minLength: 1,
+              },
+              description: {
+                anyOf: [
+                  {
+                    type: "string",
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        assessments: {
+          type: "array",
+          items: {
+            type: "object",
+            required: ["name", "description", "status", "rationale", "current"],
+            properties: {
+              name: {
+                type: "string",
+                minLength: 1,
+              },
+              description: {
+                anyOf: [
+                  {
+                    type: "string",
+                  },
+                  {
+                    type: "null",
+                  },
+                ],
+              },
+              status: {
+                enum: ["applicable", "inapplicable", "unresolved"],
+              },
+              rationale: {
+                type: "string",
+                minLength: 1,
+              },
+              current: {
+                type: "boolean",
+              },
+            },
+            additionalProperties: false,
+          },
+        },
+        current: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        add: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        remove: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        proposed: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        unresolved: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        semver: {
+          type: "object",
+          required: ["impact", "candidates", "selected"],
+          properties: {
+            impact: {
+              enum: ["major", "minor", "patch", "none", "not_applicable"],
+            },
+            candidates: {
+              type: "array",
+              items: {
+                type: "string",
+              },
+            },
+            selected: {
+              anyOf: [
+                {
+                  type: "string",
+                },
+                {
+                  type: "null",
+                },
+              ],
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    },
+    finding: {
+      type: "object",
+      required: ["id"],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        severity: {
+          enum: ["critical", "high", "medium", "low"],
+        },
+        summary: {
+          type: "string",
+          minLength: 1,
+        },
+        risk: {
+          type: "string",
+          minLength: 1,
+        },
+        evidence: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+        },
+        consequence: {
+          type: "string",
+          minLength: 1,
+        },
+        relation_to_change: {
+          type: "string",
+          minLength: 1,
+        },
+        minimum_fix: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      additionalProperties: false,
+    },
+    thread_decision: {
+      type: "object",
+      anyOf: [
+        {
+          required: [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response",
+          ],
+        },
+        {
+          required: [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response",
+            "last_note_id",
+            "last_note_body_sha256",
+          ],
+        },
+        {
+          required: [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response",
+            "suggestion_applicable",
+            "last_note_id",
+            "last_note_body_sha256",
+          ],
+        },
+        {
+          required: [
+            "id",
+            "url",
+            "state",
+            "assessment",
+            "rationale",
+            "outcome",
+            "proposed_response",
+            "fix_mode",
+            "patch",
+            "fixing_commit",
+            "patch_path",
+            "patch_sha256",
+            "last_note_id",
+            "last_note_body_sha256",
+          ],
+        },
+      ],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        url: {
+          type: "string",
+          minLength: 1,
+        },
+        state: {
+          enum: ["open", "resolved", "plain"],
+        },
+        assessment: {
+          enum: [
+            "accepted",
+            "fixed",
+            "false_positive",
+            "duplicate",
+            "not_related",
+            "question",
+            "neutral",
+          ],
+        },
+        rationale: {
+          type: "string",
+          minLength: 1,
+        },
+        outcome: {
+          enum: ["no_publication", "local_fix", "reply", "resolve", "reopen"],
+        },
+        proposed_response: {
+          anyOf: [
+            {
+              type: "string",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        suggestion_applicable: {
+          type: "boolean",
+        },
+        fix_mode: {
+          enum: ["suggestion", "patch", "not_required"],
+        },
+        patch: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        fixing_commit: {
+          anyOf: [
+            {
+              type: "null",
+            },
+            {
+              type: "object",
+              required: ["title", "url"],
+              properties: {
+                title: {
+                  type: "string",
+                  minLength: 1,
+                },
+                url: {
+                  type: "string",
+                  minLength: 1,
+                },
+              },
+              additionalProperties: false,
+            },
+          ],
+        },
+        patch_path: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        patch_sha256: {
+          anyOf: [
+            {
+              $ref: "#/$defs/digest",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        last_note_id: {},
+        last_note_body_sha256: {
+          $ref: "#/$defs/digest",
+        },
+        thread_sha256: {
+          $ref: "#/$defs/digest",
+        },
+      },
+      allOf: [
+        {
+          if: {
+            required: ["fix_mode"],
+            properties: {
+              fix_mode: {
+                const: "patch",
+              },
+            },
+          },
+          then: {
+            properties: {
+              patch: {
+                type: "string",
+                minLength: 1,
+              },
+              patch_path: {
+                type: "string",
+                minLength: 1,
+              },
+              patch_sha256: {
+                $ref: "#/$defs/digest",
+              },
+            },
+          },
+          else: {
+            properties: {
+              patch: {
+                type: "null",
+              },
+              patch_path: {
+                type: "null",
+              },
+              patch_sha256: {
+                type: "null",
+              },
+            },
+          },
+        },
+      ],
+      additionalProperties: false,
+    },
+    metadata_assessment_item: {
+      type: "object",
+      required: ["status", "rationale", "recommendation"],
+      properties: {
+        status: {
+          enum: ["ok", "needs_change", "unverified"],
+        },
+        rationale: {
+          type: "string",
+          minLength: 1,
+        },
+        recommendation: {
+          anyOf: [
+            {
+              type: "string",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    mr_metadata_assessment: {
+      type: "object",
+      required: ["observed", "assessment"],
+      properties: {
+        observed: {
+          type: "object",
+          required: ["title", "description", "labels", "workflow_state"],
+          properties: {
+            title: {
+              type: "string",
+            },
+            description: {
+              anyOf: [
+                {
+                  type: "string",
+                },
+                {
+                  type: "null",
+                },
+              ],
+            },
+            labels: {
+              type: "array",
+              items: {
+                type: "string",
+              },
+            },
+            workflow_state: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+          additionalProperties: false,
+        },
+        assessment: {
+          type: "object",
+          required: ["title", "description", "labels", "workflow_state", "overall"],
+          properties: {
+            title: {
+              $ref: "#/$defs/metadata_assessment_item",
+            },
+            description: {
+              $ref: "#/$defs/metadata_assessment_item",
+            },
+            labels: {
+              $ref: "#/$defs/metadata_assessment_item",
+            },
+            workflow_state: {
+              $ref: "#/$defs/metadata_assessment_item",
+            },
+            overall: {
+              $ref: "#/$defs/metadata_assessment_item",
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    },
+    review_chat_assessment: {
+      type: "object",
+      required: ["necessity", "relevance", "change"],
+      properties: {
+        necessity: {
+          type: "object",
+          required: ["status", "rationale"],
+          properties: {
+            status: {
+              enum: ["supported", "doubtful", "unconfirmed"],
+            },
+            rationale: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+          additionalProperties: false,
+        },
+        relevance: {
+          type: "object",
+          required: ["status", "rationale"],
+          properties: {
+            status: {
+              enum: ["current", "partly_outdated", "outdated"],
+            },
+            rationale: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+          additionalProperties: false,
+        },
+        change: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      additionalProperties: false,
+    },
+    publication_body: {
+      type: "object",
+      anyOf: [
+        {
+          required: ["finding_id", "path", "sha256", "content"],
+        },
+        {
+          required: ["publication_id", "revision", "kind", "path", "sha256", "content"],
+        },
+        {
+          required: ["publication_id", "revision", "kind", "path", "content"],
+        },
+      ],
+      properties: {
+        finding_id: {
+          type: "string",
+          minLength: 1,
+        },
+        publication_id: {
+          type: "string",
+          minLength: 1,
+        },
+        revision: {
+          type: "integer",
+          minimum: 1,
+        },
+        kind: {
+          enum: ["finding", "thread", "issue"],
+        },
+        path: {
+          type: "string",
+          minLength: 1,
+        },
+        sha256: {
+          $ref: "#/$defs/digest",
+        },
+        content: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      additionalProperties: false,
+    },
+    publication_command: {
+      type: "object",
+      anyOf: [
+        {
+          required: ["finding_id", "command"],
+        },
+        {
+          required: [
+            "publication_id",
+            "revision",
+            "kind",
+            "outcome",
+            "command",
+            "recovery_command",
+          ],
+        },
+      ],
+      properties: {
+        finding_id: {
+          type: "string",
+          minLength: 1,
+        },
+        publication_id: {
+          type: "string",
+          minLength: 1,
+        },
+        revision: {
+          type: "integer",
+          minimum: 1,
+        },
+        kind: {
+          enum: ["finding", "thread", "issue"],
+        },
+        outcome: {
+          enum: [
+            "create_general",
+            "create_line",
+            "create_issue",
+            "update_issue",
+            "reply",
+            "resolve",
+            "reopen",
+          ],
+        },
+        command: {
+          type: "string",
+          minLength: 1,
+        },
+        recovery_command: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    review_publication_action: {
+      type: "object",
+      anyOf: [
+        {
+          required: [
+            "id",
+            "sha256",
+            "kind",
+            "publication_id",
+            "revision",
+            "operation",
+            "command",
+            "spec",
+          ],
+        },
+        {
+          required: ["id", "kind", "publication_id", "operation", "command", "path", "line"],
+        },
+      ],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        sha256: {
+          $ref: "#/$defs/digest",
+        },
+        kind: {
+          enum: ["finding", "thread", "issue", "labels"],
+        },
+        publication_id: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        revision: {
+          anyOf: [
+            {
+              type: "integer",
+              minimum: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        operation: {
+          enum: [
+            "create_general",
+            "create_line",
+            "create_issue",
+            "update_issue",
+            "reply",
+            "resolve",
+            "reopen",
+            "update_labels",
+          ],
+        },
+        command: {
+          type: "string",
+          minLength: 1,
+        },
+        path: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        line: {
+          anyOf: [
+            {
+              type: "integer",
+              minimum: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        spec: {
+          type: "object",
+          required: [
+            "schema",
+            "preflight_sha256",
+            "operation",
+            "publication",
+            "body",
+            "expected",
+            "mutation",
+          ],
+          properties: {
+            schema: {
+              const: "code-review/publication-action/v1",
+            },
+            preflight_sha256: {
+              $ref: "#/$defs/digest",
+            },
+            operation: {
+              enum: [
+                "create_general",
+                "create_line",
+                "create_issue",
+                "update_issue",
+                "reply",
+                "resolve",
+                "reopen",
+                "update_labels",
+              ],
+            },
+            publication: {
+              anyOf: [
+                {
+                  type: "object",
+                },
+                {
+                  type: "null",
+                },
+              ],
+            },
+            body: {
+              anyOf: [
+                {
+                  type: "object",
+                },
+                {
+                  type: "null",
+                },
+              ],
+            },
+            expected: {
+              type: "object",
+            },
+            mutation: {
+              type: "object",
+            },
+          },
+          additionalProperties: false,
+        },
+      },
+      additionalProperties: false,
+    },
+    review_publication_preview: {
+      type: "object",
+      anyOf: [
+        {
+          required: ["mr_state", "warning", "preflight_command", "body_files", "commands"],
+        },
+        {
+          required: ["mr_state", "warning", "body_files", "actions"],
+        },
+        {
+          required: [
+            "mr_state",
+            "warning",
+            "preflight_path",
+            "preflight_sha256",
+            "preflight_command",
+            "body_files",
+            "commands",
+          ],
+        },
+        {
+          required: [
+            "mr_state",
+            "warning",
+            "preflight_path",
+            "preflight_sha256",
+            "body_files",
+            "actions",
+          ],
+        },
+      ],
+      properties: {
+        mr_state: {
+          type: "string",
+          minLength: 1,
+        },
+        warning: {
+          type: "string",
+          minLength: 1,
+        },
+        preflight_path: {
+          type: "string",
+          minLength: 1,
+        },
+        preflight_sha256: {
+          $ref: "#/$defs/digest",
+        },
+        preflight_command: {
+          type: "string",
+          minLength: 1,
+        },
+        body_files: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/publication_body",
+          },
+        },
+        commands: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/publication_command",
+          },
+        },
+        actions: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/review_publication_action",
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    publication_marker: {
+      type: "object",
+      required: [
+        "id",
+        "revision",
+        "kind",
+        "note_id",
+        "note_url",
+        "discussion_id",
+        "author_username",
+        "body_sha256",
+        "resource_type",
+        "is_root",
+        "position",
+        "root_note_id",
+        "target",
+        "resource_title",
+        "resource_body",
+      ],
+      properties: {
+        id: {
+          type: "string",
+          pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+        },
+        revision: {
+          type: "integer",
+          minimum: 1,
+        },
+        kind: {
+          enum: ["finding", "thread", "issue"],
+        },
+        note_id: {},
+        note_url: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        discussion_id: {},
+        author_username: {
+          type: "string",
+          minLength: 1,
+        },
+        body_sha256: {
+          $ref: "#/$defs/digest",
+        },
+        resource_type: {
+          enum: ["note", "issue"],
+        },
+        is_root: {
+          type: "boolean",
+        },
+        position: {
+          anyOf: [
+            {
+              type: "object",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        root_note_id: {},
+        target: {
+          type: "string",
+          pattern: "^[a-f0-9]{16}$",
+        },
+        resource_title: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        resource_body: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    incremental_delta: {
+      type: "object",
+      required: [
+        "from_head",
+        "to_head",
+        "changed_paths",
+        "changed_thread_ids",
+        "unchanged_thread_ids",
+        "changed_note_ids",
+        "unchanged_note_ids",
+        "metadata_fields",
+        "pipelines_changed",
+      ],
+      properties: {
+        from_head: {
+          anyOf: [
+            {
+              $ref: "#/$defs/sha",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        to_head: {
+          anyOf: [
+            {
+              $ref: "#/$defs/sha",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        changed_paths: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        changed_thread_ids: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        unchanged_thread_ids: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        changed_note_ids: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        unchanged_note_ids: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        metadata_fields: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        pipelines_changed: {
+          type: "boolean",
+        },
+      },
+      additionalProperties: false,
+    },
+    incremental_baseline: {
+      type: "object",
+      required: ["plan_path", "plan_digest", "state_digest"],
+      properties: {
+        plan_path: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        plan_digest: {
+          anyOf: [
+            {
+              $ref: "#/$defs/digest",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        state_digest: {
+          anyOf: [
+            {
+              $ref: "#/$defs/digest",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    finding_publication: {
+      type: "object",
+      anyOf: [
+        {
+          required: ["finding_id", "revision", "type", "path", "line", "old_line", "body"],
+        },
+        {
+          required: [
+            "finding_id",
+            "revision",
+            "type",
+            "path",
+            "line",
+            "old_line",
+            "body",
+            "fix_mode",
+            "patch",
+            "patch_path",
+            "patch_sha256",
+          ],
+        },
+      ],
+      properties: {
+        finding_id: {
+          type: "string",
+          minLength: 1,
+        },
+        revision: {
+          type: "integer",
+          minimum: 1,
+        },
+        type: {
+          enum: ["general", "line", "local_fix"],
+        },
+        path: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        line: {
+          anyOf: [
+            {
+              type: "integer",
+              minimum: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        old_line: {
+          anyOf: [
+            {
+              type: "integer",
+              minimum: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        body: {
+          type: "string",
+          minLength: 1,
+        },
+        fix_mode: {
+          enum: ["suggestion", "patch"],
+        },
+        patch: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        patch_path: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        patch_sha256: {
+          anyOf: [
+            {
+              $ref: "#/$defs/digest",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      allOf: [
+        {
+          if: {
+            required: ["fix_mode"],
+            properties: {
+              fix_mode: {
+                const: "patch",
+              },
+            },
+          },
+          then: {
+            properties: {
+              patch: {
+                type: "string",
+                minLength: 1,
+              },
+              patch_path: {
+                type: "string",
+                minLength: 1,
+              },
+              patch_sha256: {
+                $ref: "#/$defs/digest",
+              },
+            },
+          },
+          else: {
+            properties: {
+              patch: {
+                type: "null",
+              },
+              patch_path: {
+                type: "null",
+              },
+              patch_sha256: {
+                type: "null",
+              },
+            },
+          },
+        },
+      ],
+      additionalProperties: false,
+    },
+    previous_finding_assessment: {
+      type: "object",
+      required: [
+        "id",
+        "kind",
+        "status",
+        "previous_status",
+        "current_status",
+        "rationale",
+        "action",
+        "publication_action",
+        "publication_body",
+        "critic_required",
+      ],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        kind: {
+          enum: ["finding", "issue"],
+        },
+        status: {
+          enum: ["active", "fixed", "withdrawn", "changed", "unverified"],
+        },
+        previous_status: {
+          type: "string",
+          minLength: 1,
+        },
+        current_status: {
+          type: "string",
+          minLength: 1,
+        },
+        rationale: {
+          type: "string",
+          minLength: 1,
+        },
+        action: {
+          type: "string",
+          minLength: 1,
+        },
+        publication_action: {
+          enum: ["no_publication", "reply", "resolve", "reopen", "update_issue"],
+        },
+        publication_body: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        critic_required: {
+          type: "boolean",
+        },
+      },
+      additionalProperties: false,
+    },
+    rejected_candidate: {
+      type: "object",
+      required: [
+        "id",
+        "source",
+        "finding",
+        "reason",
+        "paths",
+        "thread_ids",
+        "metadata_fields",
+        "ci",
+      ],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        source: {
+          enum: ["primary", "critic"],
+        },
+        finding: {
+          $ref: "#/$defs/finding",
+        },
+        reason: {
+          type: "string",
+          minLength: 1,
+        },
+        paths: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        thread_ids: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        metadata_fields: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        ci: {
+          type: "boolean",
+        },
+      },
+      additionalProperties: false,
+    },
+    rejected_candidate_assessment: {
+      type: "object",
+      required: ["id", "decision", "reason"],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        decision: {
+          enum: ["still_rejected", "promoted"],
+        },
+        reason: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      additionalProperties: false,
+    },
+    recommended_issue: {
+      type: "object",
+      required: [
+        "id",
+        "revision",
+        "title",
+        "problem",
+        "risk",
+        "evidence",
+        "reason_out_of_scope",
+        "minimum_fix",
+        "body",
+      ],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        revision: {
+          type: "integer",
+          minimum: 1,
+        },
+        title: {
+          type: "string",
+          minLength: 1,
+        },
+        problem: {
+          type: "string",
+          minLength: 1,
+        },
+        risk: {
+          type: "string",
+          minLength: 1,
+        },
+        evidence: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+        },
+        reason_out_of_scope: {
+          type: "string",
+          minLength: 1,
+        },
+        minimum_fix: {
+          type: "string",
+          minLength: 1,
+        },
+        body: {
+          type: "string",
+          minLength: 1,
+        },
+        template_path: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    finding_ledger_entry: {
+      type: "object",
+      required: ["id", "kind", "status", "revision", "record"],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        kind: {
+          enum: ["finding", "issue"],
+        },
+        status: {
+          enum: ["active", "fixed", "withdrawn", "changed", "unverified"],
+        },
+        revision: {
+          type: "integer",
+          minimum: 1,
+        },
+        record: {
+          type: "object",
+          properties: {
+            finding: {
+              $ref: "#/$defs/finding",
+            },
+            publication: {
+              $ref: "#/$defs/finding_publication",
+            },
+            issue: {
+              $ref: "#/$defs/recommended_issue",
+            },
+          },
+          additionalProperties: false,
+          anyOf: [
+            {
+              required: ["finding", "publication"],
+            },
+            {
+              required: ["issue"],
+            },
+          ],
+        },
+      },
+      additionalProperties: false,
+    },
+    review_presentation: {
+      type: "object",
+      required: [
+        "title",
+        "incremental_notice",
+        "target_label",
+        "role_label",
+        "role_value",
+        "verdict_label",
+        "verdict_value",
+        "metadata_heading",
+        "previous_findings_heading",
+        "open_threads_heading",
+        "closed_threads_heading",
+        "local_fixes_heading",
+        "new_findings_heading",
+        "recommended_issues_heading",
+        "checked_heading",
+        "architecture_heading",
+        "semver_heading",
+        "checks_heading",
+        "publication_heading",
+        "no_items",
+        "publication_warning",
+        "previous_table_headers",
+        "evidence_label",
+        "relation_label",
+        "severity_labels",
+        "recovery_label",
+      ],
+      properties: {
+        title: {
+          type: "string",
+          minLength: 1,
+        },
+        incremental_notice: {
+          anyOf: [
+            {
+              type: "string",
+              minLength: 1,
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        target_label: {
+          type: "string",
+          minLength: 1,
+        },
+        role_label: {
+          type: "string",
+          minLength: 1,
+        },
+        role_value: {
+          type: "string",
+          minLength: 1,
+        },
+        verdict_label: {
+          type: "string",
+          minLength: 1,
+        },
+        verdict_value: {
+          type: "string",
+          minLength: 1,
+        },
+        metadata_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        labels_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        previous_findings_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        open_threads_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        closed_threads_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        local_fixes_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        new_findings_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        recommended_issues_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        checked_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        architecture_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        semver_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        checks_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        publication_heading: {
+          type: "string",
+          minLength: 1,
+        },
+        no_items: {
+          type: "string",
+          minLength: 1,
+        },
+        publication_warning: {
+          type: "string",
+          minLength: 1,
+        },
+        evidence_label: {
+          type: "string",
+          minLength: 1,
+        },
+        relation_label: {
+          type: "string",
+          minLength: 1,
+        },
+        severity_labels: {
+          type: "object",
+          required: ["critical", "high", "medium", "low"],
+          properties: {
+            critical: {
+              type: "string",
+              minLength: 1,
+            },
+            high: {
+              type: "string",
+              minLength: 1,
+            },
+            medium: {
+              type: "string",
+              minLength: 1,
+            },
+            low: {
+              type: "string",
+              minLength: 1,
+            },
+          },
+          additionalProperties: false,
+        },
+        recovery_label: {
+          type: "string",
+          minLength: 1,
+        },
+        previous_table_headers: {
+          type: "array",
+          minItems: 5,
+          maxItems: 5,
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    incremental_review: {
+      type: "object",
+      required: [
+        "contract_version",
+        "requested",
+        "mode",
+        "reason",
+        "incremental_baseline",
+        "previous_findings",
+        "previous_finding_publications",
+        "previous_recommended_issues",
+        "previous_finding_ledger",
+        "previous_publication_ledger",
+        "previous_thread_decisions",
+        "previous_rejected_candidates",
+        "reconsidered_rejected_candidates",
+        "incremental_delta",
+        "incremental_delta_digest",
+        "critic_required",
+        "fallback_reasons",
+      ],
+      properties: {
+        contract_version: {
+          const: 1,
+        },
+        requested: {
+          enum: ["auto", "off"],
+        },
+        mode: {
+          enum: ["full", "incremental", "unchanged"],
+        },
+        reason: {
+          type: "string",
+          minLength: 1,
+        },
+        incremental_baseline: {
+          $ref: "#/$defs/incremental_baseline",
+        },
+        previous_findings: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/finding",
+          },
+        },
+        previous_finding_publications: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/finding_publication",
+          },
+        },
+        previous_recommended_issues: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/recommended_issue",
+          },
+        },
+        previous_finding_ledger: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/finding_ledger_entry",
+          },
+        },
+        previous_publication_ledger: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/publication_marker",
+          },
+        },
+        previous_thread_decisions: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/thread_decision",
+          },
+        },
+        previous_rejected_candidates: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/rejected_candidate",
+          },
+        },
+        reconsidered_rejected_candidates: {
+          type: "array",
+          items: {
+            $ref: "#/$defs/rejected_candidate",
+          },
+        },
+        incremental_delta: {
+          $ref: "#/$defs/incremental_delta",
+        },
+        incremental_delta_digest: {
+          $ref: "#/$defs/digest",
+        },
+        critic_required: {
+          type: "boolean",
+        },
+        fallback_reasons: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    response: {
+      type: "object",
+      required: ["id", "decision", "reason"],
+      properties: {
+        id: {
+          type: "string",
+          minLength: 1,
+        },
+        decision: {
+          enum: ["accept", "reject"],
+        },
+        reason: {
+          type: "string",
+          minLength: 1,
+        },
+      },
+      additionalProperties: false,
+    },
+    gate: {
+      type: "object",
+      required: ["status", "evidence", "range"],
+      properties: {
+        status: {
+          enum: ["passed", "failed", "blocked", "not_applicable"],
+        },
+        evidence: {
+          type: "array",
+          minItems: 1,
+        },
+        range: {
+          $ref: "#/$defs/identity",
+        },
+      },
+      additionalProperties: false,
+    },
+    release_counts: {
+      type: "object",
+      required: [
+        "commits",
+        "merge_requests",
+        "direct_commits",
+        "contributors",
+        "reviewers",
+        "milestone_candidates",
+        "work_item_candidates",
+        "errors",
+        "warnings",
+      ],
+      properties: {
+        commits: {
+          type: "integer",
+          minimum: 0,
+        },
+        merge_requests: {
+          type: "integer",
+          minimum: 0,
+        },
+        direct_commits: {
+          type: "integer",
+          minimum: 0,
+        },
+        contributors: {
+          type: "integer",
+          minimum: 0,
+        },
+        reviewers: {
+          type: "integer",
+          minimum: 0,
+        },
+        milestone_candidates: {
+          type: "integer",
+          minimum: 0,
+        },
+        work_item_candidates: {
+          type: "integer",
+          minimum: 0,
+        },
+        errors: {
+          type: "integer",
+          minimum: 0,
+        },
+        warnings: {
+          type: "integer",
+          minimum: 0,
+        },
+      },
+      additionalProperties: false,
+    },
+    review_counts: {
+      type: "object",
+      required: [
+        "discussions",
+        "notes",
+        "content_notes",
+        "system_notes",
+        "open_resolvable",
+        "resolved_resolvable",
+        "plain_discussions",
+      ],
+      properties: {
+        discussions: {
+          type: "integer",
+          minimum: 0,
+        },
+        notes: {
+          type: "integer",
+          minimum: 0,
+        },
+        content_notes: {
+          type: "integer",
+          minimum: 0,
+        },
+        system_notes: {
+          type: "integer",
+          minimum: 0,
+        },
+        open_resolvable: {
+          type: "integer",
+          minimum: 0,
+        },
+        resolved_resolvable: {
+          type: "integer",
+          minimum: 0,
+        },
+        plain_discussions: {
+          type: "integer",
+          minimum: 0,
+        },
+      },
+      additionalProperties: false,
+    },
+    exact_git: {
+      type: "object",
+      required: ["repo_root", "refs", "changed_paths", "diff_sha256", "complete", "errors"],
+      properties: {
+        repo_root: {
+          type: "string",
+          minLength: 1,
+        },
+        refs: {
+          type: "object",
+        },
+        changed_paths: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+        diff_sha256: {
+          anyOf: [
+            {
+              $ref: "#/$defs/digest",
+            },
+            {
+              type: "null",
+            },
+          ],
+        },
+        complete: {
+          type: "boolean",
+        },
+        errors: {
+          type: "array",
+          items: {
+            type: "string",
+          },
+        },
+      },
+      additionalProperties: false,
+    },
+    envelope: {
+      type: "object",
+      required: ["schema", "schema_version", "kind", "created_at", "payload"],
+      properties: {
+        schema: {
+          type: "string",
+        },
+        schema_version: {
+          const: 2,
+        },
+        kind: {
+          type: "string",
+        },
+        created_at: {
+          type: "string",
+          format: "date-time",
+        },
+        payload: {
+          type: "object",
+        },
+      },
+      additionalProperties: false,
+    },
+    evidence_snapshot: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/evidence_snapshot/v2",
+            },
+            kind: {
+              const: "evidence_snapshot",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "schema_version",
+                "profile",
+                "external_mutations",
+                "target",
+                "project",
+                "object",
+                "labels",
+                "changed_files",
+                "commits",
+                "pipelines",
+                "discussions",
+                "head_sha",
+                "base_sha",
+                "start_sha",
+                "artifact_root",
+                "prepared_at",
+                "components_complete",
+                "retrieval_complete",
+              ],
+              additionalProperties: false,
+              properties: {
+                schema_version: {
+                  const: 2,
+                },
+                profile: {
+                  type: "string",
+                  minLength: 1,
+                },
+                external_mutations: {
+                  const: false,
+                },
+                target: {
+                  type: "object",
+                },
+                project: {
+                  type: "object",
+                },
+                object: {
+                  type: "object",
+                },
+                labels: {
+                  $ref: "#/$defs/component",
+                },
+                changed_files: {
+                  $ref: "#/$defs/component",
+                },
+                commits: {
+                  $ref: "#/$defs/component",
+                },
+                pipelines: {
+                  $ref: "#/$defs/component",
+                },
+                discussions: {
+                  $ref: "#/$defs/component",
+                },
+                head_sha: {
+                  anyOf: [
+                    {
+                      $ref: "#/$defs/sha",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                base_sha: {
+                  anyOf: [
+                    {
+                      $ref: "#/$defs/sha",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                start_sha: {
+                  anyOf: [
+                    {
+                      $ref: "#/$defs/sha",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                artifact_root: {
+                  type: "string",
+                  minLength: 1,
+                },
+                prepared_at: {
+                  type: "string",
+                  format: "date-time",
+                },
+                components_complete: {
+                  type: "object",
+                  required: [
+                    "project",
+                    "labels",
+                    "object",
+                    "changed_files",
+                    "commits",
+                    "pipelines",
+                    "discussions",
+                  ],
+                  additionalProperties: false,
+                  properties: {
+                    project: {
+                      type: "boolean",
+                    },
+                    labels: {
+                      type: "boolean",
+                    },
+                    object: {
+                      type: "boolean",
+                    },
+                    changed_files: {
+                      type: "boolean",
+                    },
+                    commits: {
+                      type: "boolean",
+                    },
+                    pipelines: {
+                      type: "boolean",
+                    },
+                    discussions: {
+                      type: "boolean",
+                    },
+                  },
+                },
+                retrieval_complete: {
+                  type: "boolean",
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    local_wip_snapshot: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/local_wip_snapshot/v2",
+            },
+            kind: {
+              const: "local_wip_snapshot",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "schema_version",
+                "profile",
+                "external_mutations",
+                "repo_root",
+                "base_sha",
+                "head_sha",
+                "ref",
+                "sections",
+                "artifact_root",
+                "retrieval_complete",
+              ],
+              additionalProperties: false,
+              properties: {
+                schema_version: {
+                  const: 2,
+                },
+                profile: {
+                  type: "string",
+                  minLength: 1,
+                },
+                external_mutations: {
+                  const: false,
+                },
+                repo_root: {
+                  type: "string",
+                  minLength: 1,
+                },
+                base_sha: {
+                  $ref: "#/$defs/sha",
+                },
+                head_sha: {
+                  $ref: "#/$defs/sha",
+                },
+                ref: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                sections: {
+                  type: "object",
+                  required: ["committed", "staged", "unstaged", "untracked"],
+                  additionalProperties: false,
+                  properties: {
+                    committed: {
+                      type: "object",
+                    },
+                    staged: {
+                      type: "object",
+                    },
+                    unstaged: {
+                      type: "object",
+                    },
+                    untracked: {
+                      type: "object",
+                    },
+                  },
+                },
+                artifact_root: {
+                  type: "string",
+                  minLength: 1,
+                },
+                retrieval_complete: {
+                  type: "boolean",
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    release_inventory: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/release_inventory/v2",
+            },
+            kind: {
+              const: "release_inventory",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "schema_version",
+                "profile",
+                "external_mutations",
+                "evidence_digest",
+                "target",
+                "repo_root",
+                "project_id",
+                "hostname",
+                "head_sha",
+                "component_target_branch",
+                "previous_ref",
+                "previous_ref_explicit",
+                "previous_sha",
+                "previous_tag",
+                "revision_range",
+                "commits",
+                "merge_requests",
+                "direct_commits",
+                "contributors",
+                "reviewers",
+                "milestone_candidates",
+                "work_item_candidates",
+                "collection_completeness",
+                "errors",
+                "warnings",
+                "complete",
+                "artifact_root",
+                "prepared_at",
+                "counts",
+              ],
+              additionalProperties: false,
+              properties: {
+                schema_version: {
+                  const: 2,
+                },
+                profile: {
+                  const: "release-prepare",
+                },
+                external_mutations: {
+                  const: false,
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                target: {
+                  type: "object",
+                },
+                repo_root: {
+                  type: "string",
+                  minLength: 1,
+                },
+                project_id: {
+                  type: "integer",
+                  minimum: 1,
+                },
+                hostname: {
+                  type: "string",
+                  minLength: 1,
+                },
+                head_sha: {
+                  $ref: "#/$defs/sha",
+                },
+                component_target_branch: {
+                  type: "string",
+                  minLength: 1,
+                },
+                previous_ref: {
+                  anyOf: [
+                    {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                previous_ref_explicit: {
+                  type: "boolean",
+                },
+                previous_sha: {
+                  anyOf: [
+                    {
+                      $ref: "#/$defs/sha",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                previous_tag: {
+                  anyOf: [
+                    {
+                      type: "object",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                revision_range: {
+                  type: "string",
+                  minLength: 1,
+                },
+                commits: {
+                  type: "array",
+                },
+                merge_requests: {
+                  type: "array",
+                },
+                direct_commits: {
+                  type: "array",
+                },
+                contributors: {
+                  type: "array",
+                },
+                reviewers: {
+                  type: "array",
+                },
+                milestone_candidates: {
+                  type: "array",
+                },
+                work_item_candidates: {
+                  type: "array",
+                },
+                collection_completeness: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["component_merge_requests", "project_milestones", "work_items"],
+                  properties: {
+                    component_merge_requests: {
+                      type: "boolean",
+                    },
+                    project_milestones: {
+                      type: "boolean",
+                    },
+                    work_items: {
+                      type: "boolean",
+                    },
+                  },
+                },
+                errors: {
+                  type: "array",
+                },
+                warnings: {
+                  type: "array",
+                },
+                complete: {
+                  type: "boolean",
+                },
+                artifact_root: {
+                  type: "string",
+                  minLength: 1,
+                },
+                prepared_at: {
+                  type: "string",
+                  format: "date-time",
+                },
+                counts: {
+                  $ref: "#/$defs/release_counts",
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    semver_assessment: {
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "mode",
+        "policy",
+        "sources",
+        "baseline",
+        "target_branch",
+        "target_sha",
+        "target_revision",
+        "fallback_reason",
+        "release_impact",
+        "release_rationale",
+      ],
+      properties: {
+        mode: {
+          enum: ["release", "target_fallback"],
+        },
+        policy: {
+          type: "string",
+          minLength: 1,
+        },
+        sources: {
+          type: "array",
+          minItems: 1,
+          items: {
+            type: "string",
+            minLength: 1,
+          },
+        },
+        target_branch: {
+          type: "string",
+          minLength: 1,
+        },
+        target_sha: {
+          $ref: "#/$defs/sha",
+        },
+        target_revision: {
+          enum: ["current", "mr_snapshot"],
+        },
+        baseline: {
+          anyOf: [
+            {
+              type: "null",
+            },
+            {
+              type: "object",
+              additionalProperties: false,
+              required: ["name", "sha", "source"],
+              properties: {
+                name: {
+                  type: "string",
+                  minLength: 1,
+                },
+                sha: {
+                  $ref: "#/$defs/sha",
+                },
+                source: {
+                  enum: ["releases", "tags"],
+                },
+              },
+            },
+          ],
+        },
+        fallback_reason: {
+          type: ["string", "null"],
+          minLength: 1,
+        },
+        release_impact: {
+          enum: ["major", "minor", "patch", "none", "not_applicable", null],
+        },
+        release_rationale: {
+          type: ["string", "null"],
+          minLength: 1,
+        },
+      },
+      allOf: [
+        {
+          if: {
+            properties: {
+              mode: {
+                const: "release",
+              },
+            },
+          },
+          then: {
+            properties: {
+              baseline: {
+                type: "object",
+              },
+              fallback_reason: {
+                type: "null",
+              },
+              target_revision: {
+                const: "current",
+              },
+              release_impact: {
+                type: "string",
+              },
+              release_rationale: {
+                type: "string",
+              },
+            },
+          },
+          else: {
+            properties: {
+              baseline: {
+                type: "null",
+              },
+              fallback_reason: {
+                type: "string",
+              },
+              release_impact: {
+                type: "null",
+              },
+              release_rationale: {
+                type: "null",
+              },
+            },
+          },
+        },
+      ],
+    },
+    review_context: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/review_context/v2",
+            },
+            kind: {
+              const: "review_context",
+            },
+            payload: {
+              type: "object",
+              anyOf: [
+                {
+                  required: [
+                    "schema_version",
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "target",
+                    "role",
+                    "current_user_username",
+                    "mr_author_username",
+                    "discussions",
+                    "notes",
+                    "counts",
+                    "exact_git",
+                    "complete",
+                    "errors",
+                    "artifact_root",
+                    "prepared_at",
+                  ],
+                },
+                {
+                  required: [
+                    "schema_version",
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "target",
+                    "role",
+                    "current_user_username",
+                    "mr_author_username",
+                    "discussions",
+                    "notes",
+                    "issue_templates",
+                    "counts",
+                    "exact_git",
+                    "incremental",
+                    "complete",
+                    "errors",
+                    "artifact_root",
+                    "prepared_at",
+                  ],
+                },
+                {
+                  required: [
+                    "schema_version",
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "target",
+                    "role",
+                    "current_user_id",
+                    "current_user_username",
+                    "mr_author_username",
+                    "discussions",
+                    "notes",
+                    "issue_templates",
+                    "counts",
+                    "exact_git",
+                    "incremental",
+                    "complete",
+                    "errors",
+                    "artifact_root",
+                    "prepared_at",
+                  ],
+                },
+              ],
+              additionalProperties: false,
+              properties: {
+                schema_version: {
+                  const: 2,
+                },
+                profile: {
+                  const: "code-review",
+                },
+                external_mutations: {
+                  const: false,
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                target: {
+                  type: "object",
+                },
+                role: {
+                  enum: ["author", "reviewer"],
+                },
+                current_user_id: {
+                  type: "integer",
+                  minimum: 1,
+                },
+                current_user_username: {
+                  type: "string",
+                  minLength: 1,
+                },
+                mr_author_username: {
+                  type: "string",
+                  minLength: 1,
+                },
+                discussions: {
+                  type: "array",
+                },
+                notes: {
+                  type: "array",
+                },
+                issue_templates: {
+                  type: "array",
+                },
+                release_evidence: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["target_branch", "target_sha", "releases", "tags", "errors"],
+                  properties: {
+                    target_branch: {
+                      type: ["string", "null"],
+                    },
+                    target_sha: {
+                      anyOf: [
+                        {
+                          $ref: "#/$defs/sha",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    releases: {
+                      $ref: "#/$defs/component",
+                    },
+                    tags: {
+                      $ref: "#/$defs/component",
+                    },
+                    errors: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                      },
+                    },
+                  },
+                },
+                counts: {
+                  $ref: "#/$defs/review_counts",
+                },
+                exact_git: {
+                  $ref: "#/$defs/exact_git",
+                },
+                incremental: {
+                  $ref: "#/$defs/incremental_review",
+                },
+                complete: {
+                  type: "boolean",
+                },
+                errors: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                  },
+                },
+                artifact_root: {
+                  type: "string",
+                  minLength: 1,
+                },
+                prepared_at: {
+                  type: "string",
+                  format: "date-time",
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    publication_plan: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/publication_plan/v2",
+            },
+            kind: {
+              const: "publication_plan",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "profile",
+                "target",
+                "external_mutations",
+                "evidence_digest",
+                "complete",
+                "markdown",
+                "plan_name",
+              ],
+              allOf: [
+                {
+                  if: {
+                    properties: {
+                      profile: {
+                        const: "release-prepare",
+                      },
+                    },
+                  },
+                  then: {
+                    required: [
+                      "inventory_digest",
+                      "release_version",
+                      "companions",
+                      "label_review",
+                      "stage",
+                      "release_content",
+                      "requests",
+                      "post_merge_sha",
+                      "release_target_state",
+                    ],
+                  },
+                },
+                {
+                  if: {
+                    properties: {
+                      stage: {
+                        const: "pre_merge",
+                      },
+                    },
+                  },
+                  then: {
+                    properties: {
+                      post_merge_sha: {
+                        type: "null",
+                      },
+                      release_target_state: {
+                        type: "null",
+                      },
+                    },
+                  },
+                  else: {
+                    if: {
+                      properties: {
+                        stage: {
+                          const: "post_merge",
+                        },
+                      },
+                    },
+                    then: {
+                      properties: {
+                        post_merge_sha: {
+                          $ref: "#/$defs/sha",
+                        },
+                        release_target_state: {
+                          type: "object",
+                        },
+                      },
+                    },
+                  },
+                },
+              ],
+              additionalProperties: false,
+              properties: {
+                profile: {
+                  type: "string",
+                  minLength: 1,
+                },
+                target: {
+                  type: "object",
+                },
+                external_mutations: {
+                  const: false,
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                complete: {
+                  type: "boolean",
+                },
+                markdown: {
+                  type: "string",
+                },
+                plan_name: {
+                  type: "string",
+                  minLength: 1,
+                },
+                inventory_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                release_version: {
+                  type: "string",
+                  pattern:
+                    "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+                },
+                companions: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/companion",
+                  },
+                },
+                stage: {
+                  enum: ["pre_merge", "post_merge"],
+                },
+                post_merge_sha: {
+                  anyOf: [
+                    {
+                      $ref: "#/$defs/sha",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                release_target_state: {
+                  anyOf: [
+                    {
+                      type: "null",
+                    },
+                    {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["tag_name", "tag_exists", "tag_sha", "release_exists"],
+                      properties: {
+                        tag_name: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                        tag_exists: {
+                          type: "boolean",
+                        },
+                        tag_sha: {
+                          anyOf: [
+                            {
+                              $ref: "#/$defs/sha",
+                            },
+                            {
+                              type: "null",
+                            },
+                          ],
+                        },
+                        release_exists: {
+                          const: false,
+                        },
+                      },
+                    },
+                  ],
+                },
+                release_content: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: [
+                    "title",
+                    "description",
+                    "version",
+                    "announcement",
+                    "illustration_prompt",
+                    "label_intent",
+                    "milestone_title",
+                    "contributors",
+                    "reviewers",
+                    "illustration_style",
+                    "work_items",
+                  ],
+                  properties: {
+                    title: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    description: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    version: {
+                      type: "string",
+                      pattern:
+                        "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$",
+                    },
+                    announcement: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    illustration_prompt: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    label_intent: {
+                      $ref: "#/$defs/label_intent",
+                    },
+                    milestone_title: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    contributors: {
+                      type: "array",
+                      uniqueItems: true,
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    reviewers: {
+                      type: "array",
+                      uniqueItems: true,
+                      items: {
+                        type: "string",
+                        pattern: "^@[A-Za-z0-9_.-]+$",
+                      },
+                    },
+                    illustration_style: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["preset", "reference", "custom"],
+                      properties: {
+                        preset: {
+                          enum: ["pixel_art", "literary", "neutral_abstract", "custom"],
+                        },
+                        reference: {
+                          type: ["string", "null"],
+                        },
+                        custom: {
+                          type: ["string", "null"],
+                        },
+                      },
+                      allOf: [
+                        {
+                          if: {
+                            properties: {
+                              preset: {
+                                const: "literary",
+                              },
+                            },
+                          },
+                          then: {
+                            properties: {
+                              reference: {
+                                type: "string",
+                                minLength: 1,
+                              },
+                              custom: {
+                                type: "null",
+                              },
+                            },
+                          },
+                          else: {
+                            properties: {
+                              reference: {
+                                type: "null",
+                              },
+                            },
+                          },
+                        },
+                        {
+                          if: {
+                            properties: {
+                              preset: {
+                                const: "custom",
+                              },
+                            },
+                          },
+                          then: {
+                            properties: {
+                              custom: {
+                                type: "string",
+                                minLength: 1,
+                              },
+                            },
+                          },
+                          else: {
+                            properties: {
+                              custom: {
+                                type: "null",
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    work_items: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: [
+                          "project_id",
+                          "iid",
+                          "action",
+                          "rationale",
+                          "uncertain",
+                          "comment",
+                        ],
+                        properties: {
+                          project_id: {
+                            type: "integer",
+                            minimum: 1,
+                          },
+                          iid: {
+                            type: "integer",
+                            minimum: 1,
+                          },
+                          action: {
+                            enum: ["close", "comment", "no_action"],
+                          },
+                          rationale: {
+                            type: "string",
+                            minLength: 1,
+                          },
+                          uncertain: {
+                            type: "boolean",
+                          },
+                          comment: {
+                            type: ["string", "null"],
+                          },
+                        },
+                        allOf: [
+                          {
+                            if: {
+                              properties: {
+                                action: {
+                                  const: "comment",
+                                },
+                              },
+                            },
+                            then: {
+                              properties: {
+                                comment: {
+                                  type: "string",
+                                  minLength: 1,
+                                },
+                              },
+                            },
+                            else: {
+                              properties: {
+                                comment: {
+                                  type: "null",
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+                label_review: {
+                  oneOf: [
+                    {
+                      $ref: "#/$defs/label_review",
+                    },
+                    {
+                      $ref: "#/$defs/code_review_label_review",
+                    },
+                  ],
+                },
+                mr_content: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: [
+                    "locale",
+                    "title",
+                    "description",
+                    "change_summary",
+                    "limitations",
+                    "template",
+                    "preservation_notes",
+                    "label_assessments",
+                    "semver_impact",
+                    "semver_rationale",
+                  ],
+                  properties: {
+                    locale: {
+                      enum: ["en", "ru"],
+                    },
+                    title: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    description: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                    change_summary: {
+                      type: "array",
+                      minItems: 1,
+                      maxItems: 4,
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    limitations: {
+                      type: "array",
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    preservation_notes: {
+                      type: "array",
+                      minItems: 1,
+                      items: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                    template: {
+                      type: "object",
+                      additionalProperties: false,
+                      required: ["id", "rationale"],
+                      properties: {
+                        id: {
+                          type: ["string", "null"],
+                        },
+                        rationale: {
+                          type: "string",
+                          minLength: 1,
+                        },
+                      },
+                    },
+                    label_assessments: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["name", "status", "rationale"],
+                        properties: {
+                          name: {
+                            type: "string",
+                            minLength: 1,
+                          },
+                          status: {
+                            enum: ["applicable", "inapplicable", "unresolved"],
+                          },
+                          rationale: {
+                            type: "string",
+                            minLength: 1,
+                          },
+                        },
+                      },
+                    },
+                    semver_impact: {
+                      enum: ["major", "minor", "patch", "none", "not_applicable"],
+                    },
+                    semver_rationale: {
+                      type: "string",
+                      minLength: 1,
+                    },
+                  },
+                },
+                requests: {
+                  type: "array",
+                  items: {
+                    oneOf: [
+                      {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["name", "content", "sha256", "field", "command"],
+                        properties: {
+                          name: {
+                            type: "string",
+                            pattern: "^[0-9a-f]{64}-(title|description|labels)\\.json$",
+                          },
+                          content: {
+                            type: "string",
+                          },
+                          sha256: {
+                            $ref: "#/$defs/digest",
+                          },
+                          field: {
+                            enum: ["title", "description", "labels"],
+                          },
+                          command: {
+                            type: "string",
+                            minLength: 1,
+                          },
+                        },
+                      },
+                      {
+                        type: "object",
+                        additionalProperties: false,
+                        required: ["id", "stage", "operation", "command", "assets"],
+                        properties: {
+                          id: {
+                            type: "string",
+                            minLength: 1,
+                          },
+                          stage: {
+                            enum: ["pre_merge", "post_merge"],
+                          },
+                          operation: {
+                            type: "string",
+                            minLength: 1,
+                          },
+                          command: {
+                            type: ["string", "null"],
+                          },
+                          assets: {
+                            type: "array",
+                            items: {
+                              type: "object",
+                              additionalProperties: false,
+                              required: ["role", "name", "path", "sha256", "content"],
+                              properties: {
+                                role: {
+                                  type: "string",
+                                  minLength: 1,
+                                },
+                                name: {
+                                  type: "string",
+                                  minLength: 1,
+                                },
+                                path: {
+                                  type: "string",
+                                  minLength: 1,
+                                },
+                                sha256: {
+                                  $ref: "#/$defs/digest",
+                                },
+                                content: {
+                                  type: "string",
+                                },
+                              },
+                            },
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    review_plan: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/review_plan/v2",
+            },
+            kind: {
+              const: "review_plan",
+            },
+            payload: {
+              type: "object",
+              anyOf: [
+                {
+                  required: [
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "context_digest",
+                    "decision_digest",
+                    "target",
+                    "role",
+                    "mode",
+                    "verdict",
+                    "complete",
+                    "summary",
+                    "architecture_assessment",
+                    "semver_impact",
+                    "checks",
+                    "findings",
+                    "thread_decisions",
+                    "markdown",
+                  ],
+                },
+                {
+                  required: [
+                    "profile",
+                    "external_mutations",
+                    "evidence_digest",
+                    "context_digest",
+                    "decision_digest",
+                    "target",
+                    "role",
+                    "mode",
+                    "verdict",
+                    "complete",
+                    "summary",
+                    "architecture_assessment",
+                    "semver_impact",
+                    "semver_rationale",
+                    "mr_metadata_assessment",
+                    "publication_preview",
+                    "checks",
+                    "findings",
+                    "thread_decisions",
+                    "markdown",
+                  ],
+                },
+                {
+                  required: [
+                    "profile",
+                    "review_contract_version",
+                    "external_mutations",
+                    "evidence_digest",
+                    "context_digest",
+                    "decision_digest",
+                    "target",
+                    "role",
+                    "mode",
+                    "incremental",
+                    "verdict",
+                    "complete",
+                    "summary",
+                    "architecture_assessment",
+                    "semver_impact",
+                    "semver_rationale",
+                    "mr_metadata_assessment",
+                    "publication_preview",
+                    "presentation",
+                    "checks",
+                    "findings",
+                    "finding_publications",
+                    "previous_finding_assessments",
+                    "recommended_issues",
+                    "finding_ledger",
+                    "publication_ledger",
+                    "rejected_candidates",
+                    "rejected_candidate_assessments",
+                    "rejected_candidate_ledger",
+                    "thread_decisions",
+                    "markdown",
+                  ],
+                },
+              ],
+              additionalProperties: false,
+              properties: {
+                profile: {
+                  const: "code-review",
+                },
+                review_contract_version: {
+                  enum: [1, 2, 3, 4, 5, 6],
+                },
+                external_mutations: {
+                  const: false,
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                context_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                decision_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                target: {
+                  type: "object",
+                },
+                role: {
+                  enum: ["author", "reviewer"],
+                },
+                mode: {
+                  enum: ["fast", "normal", "deep", "incremental", "unchanged"],
+                },
+                locale: {
+                  enum: ["en", "ru"],
+                },
+                incremental: {
+                  $ref: "#/$defs/incremental_review",
+                },
+                verdict: {
+                  enum: ["ready", "not_ready", "blocked"],
+                },
+                complete: {
+                  type: "boolean",
+                },
+                summary: {
+                  type: "string",
+                  minLength: 1,
+                },
+                architecture_assessment: {
+                  type: "string",
+                  minLength: 1,
+                },
+                semver_impact: {
+                  enum: ["major", "minor", "patch", "none", "not_applicable", "unknown"],
+                },
+                semver_rationale: {
+                  type: "string",
+                  minLength: 1,
+                },
+                semver_assessment: {
+                  $ref: "#/$defs/semver_assessment",
+                },
+                mr_metadata_assessment: {
+                  $ref: "#/$defs/mr_metadata_assessment",
+                },
+                label_review: {
+                  $ref: "#/$defs/code_review_label_review",
+                },
+                publication_preview: {
+                  $ref: "#/$defs/review_publication_preview",
+                },
+                presentation: {
+                  $ref: "#/$defs/review_presentation",
+                },
+                chat_assessment: {
+                  $ref: "#/$defs/review_chat_assessment",
+                },
+                checks: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                  },
+                },
+                findings: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding",
+                  },
+                },
+                finding_publications: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding_publication",
+                  },
+                },
+                previous_finding_assessments: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/previous_finding_assessment",
+                  },
+                },
+                recommended_issues: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/recommended_issue",
+                  },
+                },
+                finding_ledger: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding_ledger_entry",
+                  },
+                },
+                publication_ledger: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/publication_marker",
+                  },
+                },
+                rejected_candidates: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/rejected_candidate",
+                  },
+                },
+                rejected_candidate_assessments: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/rejected_candidate_assessment",
+                  },
+                },
+                rejected_candidate_ledger: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/rejected_candidate",
+                  },
+                },
+                thread_decisions: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/thread_decision",
+                  },
+                },
+                markdown: {
+                  type: "string",
+                },
+              },
+              allOf: [
+                {
+                  if: {
+                    required: ["review_contract_version"],
+                    properties: {
+                      review_contract_version: {
+                        enum: [3, 4, 5, 6],
+                      },
+                    },
+                  },
+                  then: {
+                    properties: {
+                      finding_publications: {
+                        items: {
+                          required: ["fix_mode", "patch", "patch_path", "patch_sha256"],
+                        },
+                      },
+                      thread_decisions: {
+                        items: {
+                          required: [
+                            "fix_mode",
+                            "patch",
+                            "fixing_commit",
+                            "patch_path",
+                            "patch_sha256",
+                          ],
+                          not: {
+                            required: ["suggestion_applicable"],
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  if: {
+                    required: ["review_contract_version"],
+                    properties: {
+                      review_contract_version: {
+                        enum: [4, 5, 6],
+                      },
+                    },
+                  },
+                  then: {
+                    required: ["chat_assessment", "locale"],
+                  },
+                  else: {
+                    not: {
+                      anyOf: [
+                        {
+                          required: ["chat_assessment"],
+                        },
+                        {
+                          required: ["locale"],
+                        },
+                      ],
+                    },
+                  },
+                },
+                {
+                  if: {
+                    required: ["review_contract_version"],
+                    properties: {
+                      review_contract_version: {
+                        enum: [5, 6],
+                      },
+                    },
+                  },
+                  then: {
+                    properties: {
+                      thread_decisions: {
+                        items: {
+                          required: ["thread_sha256"],
+                        },
+                      },
+                    },
+                  },
+                },
+                {
+                  if: {
+                    required: ["review_contract_version"],
+                    properties: {
+                      review_contract_version: {
+                        const: 6,
+                      },
+                    },
+                  },
+                  then: {
+                    required: ["semver_assessment", "label_review"],
+                  },
+                  else: {
+                    not: {
+                      required: ["semver_assessment"],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      ],
+    },
+    analysis_report: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/analysis_report/v2",
+            },
+            kind: {
+              const: "analysis_report",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "schema",
+                "evidence_digest",
+                "run_id",
+                "session_id",
+                "findings",
+                "external_mutations",
+              ],
+              additionalProperties: false,
+              properties: {
+                schema: {
+                  const: "portable-gitlab/analysis-report/v2",
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                run_id: {
+                  type: "string",
+                  minLength: 1,
+                },
+                session_id: {
+                  type: "string",
+                  minLength: 1,
+                },
+                scope_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                target_finding_ids: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                  },
+                },
+                external_mutations: {
+                  const: false,
+                },
+                findings: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding",
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    critic_receipt: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/critic_receipt/v2",
+            },
+            kind: {
+              const: "critic_receipt",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "schema",
+                "evidence_digest",
+                "run_id",
+                "session_id",
+                "findings",
+                "external_mutations",
+              ],
+              additionalProperties: false,
+              properties: {
+                schema: {
+                  const: "portable-gitlab/critic-receipt/v2",
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                run_id: {
+                  type: "string",
+                  minLength: 1,
+                },
+                session_id: {
+                  type: "string",
+                  minLength: 1,
+                },
+                scope_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                target_finding_ids: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                  },
+                },
+                external_mutations: {
+                  const: false,
+                },
+                findings: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding",
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    review_decision: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/review_decision/v2",
+            },
+            kind: {
+              const: "review_decision",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "schema",
+                "evidence_digest",
+                "finalize_digest",
+                "mode",
+                "external_mutations",
+                "run_id",
+                "session_id",
+                "verdict",
+                "findings",
+                "unresolved_threads",
+                "responses",
+              ],
+              additionalProperties: false,
+              properties: {
+                schema: {
+                  const: "portable-gitlab/review-decision/v2",
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                finalize_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                context_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                critic_receipt_digest: {
+                  anyOf: [
+                    {
+                      $ref: "#/$defs/digest",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                mode: {
+                  enum: ["fast", "normal", "deep", "incremental", "unchanged"],
+                },
+                external_mutations: {
+                  const: false,
+                },
+                run_id: {
+                  type: "string",
+                  minLength: 1,
+                },
+                session_id: {
+                  type: "string",
+                  minLength: 1,
+                },
+                verdict: {
+                  enum: ["ready", "not_ready", "blocked"],
+                },
+                low_risk: {
+                  type: "boolean",
+                },
+                blocking_findings: {
+                  type: "boolean",
+                },
+                blocking_finding_ids: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                  },
+                },
+                owner_decision_reasons: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                  },
+                },
+                ci_job_assessments: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    required: [
+                      "project_id",
+                      "pipeline_id",
+                      "job_id",
+                      "classification",
+                      "rationale",
+                      "trace_evidence",
+                    ],
+                    additionalProperties: false,
+                    properties: {
+                      project_id: {
+                        type: "integer",
+                        minimum: 1,
+                      },
+                      pipeline_id: {
+                        type: "integer",
+                        minimum: 1,
+                      },
+                      job_id: {
+                        type: "integer",
+                        minimum: 1,
+                      },
+                      classification: {
+                        enum: ["process_gate", "code_failure", "infrastructure_failure", "unknown"],
+                      },
+                      rationale: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                      trace_evidence: {
+                        type: "string",
+                        minLength: 1,
+                      },
+                    },
+                  },
+                },
+                findings: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding",
+                  },
+                },
+                critic_findings: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding",
+                  },
+                },
+                accepted_findings: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding",
+                  },
+                },
+                critic_target_finding_ids: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                    minLength: 1,
+                  },
+                },
+                unresolved_threads: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/finding",
+                  },
+                },
+                responses: {
+                  type: "array",
+                  items: {
+                    $ref: "#/$defs/response",
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    release_readiness: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/release_readiness/v2",
+            },
+            kind: {
+              const: "release_readiness",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "schema",
+                "evidence_digest",
+                "verdict",
+                "readiness",
+                "gates",
+                "external_mutations",
+              ],
+              additionalProperties: false,
+              properties: {
+                schema: {
+                  const: "portable-gitlab/release-readiness/v2",
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                verdict: {
+                  enum: ["ready", "not_ready", "blocked"],
+                },
+                readiness: {
+                  type: "boolean",
+                },
+                external_mutations: {
+                  const: false,
+                },
+                gates: {
+                  type: "object",
+                  required: ["semver", "compatibility", "migration", "rollback", "ci"],
+                  additionalProperties: false,
+                  properties: {
+                    semver: {
+                      $ref: "#/$defs/gate",
+                    },
+                    compatibility: {
+                      $ref: "#/$defs/gate",
+                    },
+                    migration: {
+                      $ref: "#/$defs/gate",
+                    },
+                    rollback: {
+                      $ref: "#/$defs/gate",
+                    },
+                    ci: {
+                      $ref: "#/$defs/gate",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+    finalize_report: {
+      allOf: [
+        {
+          $ref: "#/$defs/envelope",
+        },
+        {
+          properties: {
+            schema: {
+              const: "portable-gitlab/finalize_report/v2",
+            },
+            kind: {
+              const: "finalize_report",
+            },
+            payload: {
+              type: "object",
+              required: [
+                "status",
+                "changed",
+                "complete",
+                "evidence_digest",
+                "evidence_kind",
+                "evidence_fingerprint_digest",
+                "external_mutations",
+              ],
+              additionalProperties: false,
+              properties: {
+                status: {
+                  enum: ["ok", "stale", "not_applicable"],
+                },
+                changed: {
+                  type: "array",
+                  items: {
+                    type: "string",
+                  },
+                },
+                complete: {
+                  type: "boolean",
+                },
+                evidence_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                evidence_kind: {
+                  enum: ["evidence_snapshot", "local_wip_snapshot"],
+                },
+                evidence_fingerprint_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                publication_plan_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                external_mutations: {
+                  const: false,
+                },
+                head_sha: {
+                  anyOf: [
+                    {
+                      $ref: "#/$defs/sha",
+                    },
+                    {
+                      type: "null",
+                    },
+                  ],
+                },
+                release_readiness_digest: {
+                  $ref: "#/$defs/digest",
+                },
+                release_readiness_valid: {
+                  const: true,
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+  },
+};
