@@ -349,21 +349,26 @@ tasks:
       - mise exec -- gitleaks git --config .gitleaks.toml --redact --no-banner
       - mise exec -- gitleaks dir . --config .gitleaks.toml --redact --no-banner
 
-  check:
-    desc: Run the complete local and CI quality gate
+  check:core:
+    desc: Run the always-on core shared by every push gate
     cmds:
       - task: build:skills
       - task: version:check
       - task: lint
       - task: typecheck
-      - task: test:python
       - task: locale:check
       - task: docs:check
       - task: distribution:check
       - task: skills:validate
       - task: eval:check
-      - task: package:check
       - task: security
+
+  check:
+    desc: Run the complete local and CI quality gate
+    cmds:
+      - task: check:core
+      - task: test:python
+      - task: package:check
 
   pre-push:
     desc: Run the single complete local gate before push

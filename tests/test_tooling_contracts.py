@@ -10,25 +10,48 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
+def test_hooks_keep_precommit_fast_and_prepush_scoped() -> None:
     hooks = (ROOT / "lefthook.yml").read_text(encoding="utf-8")
-    assert "--diff-filter=ACMR" in hooks
-    assert "--staged" in hooks
-    assert "        task pre-push" in hooks
+    pre_commit = hooks.split("pre-push:", 1)[0]
+    pre_push = hooks.split("pre-push:", 1)[1]
+    assert "--diff-filter=ACMR" in pre_commit
+    assert "--staged" in pre_commit
     assert "commitlint --edit {1}" in hooks
     assert "--fix" not in hooks
     assert "git add" not in hooks
-    assert "mise exec -- editorconfig-checker" in hooks
+    assert "mise exec -- editorconfig-checker" in pre_commit
     assert "mise exec -- ec" not in hooks
-    for slow_check in ("pytest", "mypy", "build:skills", "version:check", "package:check"):
-        assert slow_check not in hooks
+    for slow_check in (
+        "pytest",
+        "mypy",
+        "build:skills",
+        "version:check",
+        "test:python",
+        "package:check",
+        "check:core",
+    ):
+        assert slow_check not in pre_commit
+    # The hook stays scoped: the delta resolves against the branch upstream and
+    # falls back to every tracked file, so first pushes run the complete gate.
+    assert "git diff --name-only @{upstream} HEAD 2>/dev/null || git ls-files" in pre_push
+    for job in (
+        "task check:core",
+        "task test:python",
+        "task package:check",
+        "task dependency:audit",
+    ):
+        assert job in pre_push
+    assert "task pre-push" not in hooks
 
 
 def test_prepush_git_environment_does_not_escape_into_fixture_repositories(tmp_path: Path) -> None:
     hooks = (ROOT / "lefthook.yml").read_text(encoding="utf-8")
-    command = textwrap.dedent(
-        hooks.split("pre-push:\n", 1)[1].split("run: |\n", 1)[1].split("      fail_text:", 1)[0]
-    )
+    pre_push = hooks.split("pre-push:\n", 1)[1]
+    commands = [
+        textwrap.dedent(block.split("      fail_text:", 1)[0])
+        for block in pre_push.split("run: |\n")[1:]
+    ]
+    assert commands
     local_variables = subprocess.check_output(
         ["git", "rev-parse", "--local-env-vars"], cwd=ROOT, text=True
     ).splitlines()
@@ -38,8 +61,7 @@ def test_prepush_git_environment_does_not_escape_into_fixture_repositories(tmp_p
         subprocess.run(["git", "init", "-q", str(repository)], env=environment, check=True)
     binary = tmp_path / "task"
     binary.write_text(
-        '#!/bin/sh\n[ "$1" = pre-push ] || exit 1\n'
-        'git -C "$VERIFY_REPO" rev-parse --absolute-git-dir\n',
+        '#!/bin/sh\ngit -C "$VERIFY_REPO" rev-parse --absolute-git-dir\n',
         encoding="utf-8",
     )
     binary.chmod(0o700)
@@ -52,15 +74,16 @@ def test_prepush_git_environment_does_not_escape_into_fixture_repositories(tmp_p
             "GIT_INDEX_FILE": str(repositories[0] / ".git" / "index"),
         }
     )
-    result = subprocess.run(
-        ["sh", "-eu", "-c", command],
-        cwd=repositories[0],
-        env=environment,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert result.stdout.strip() == str(repositories[1] / ".git")
+    for command in commands:
+        result = subprocess.run(
+            ["sh", "-eu", "-c", command],
+            cwd=repositories[0],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == str(repositories[1] / ".git")
 
 
 def test_workflows_delegate_quality_checks_to_task() -> None:

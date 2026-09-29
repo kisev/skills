@@ -51,8 +51,9 @@ The main public tasks divide the checks as follows:
 | `eval:check` | Validate evaluation data and run the hostless offline suite. |
 | `dependency:audit` | Audit the locked Python and npm dependency graphs. |
 | `security` | Scan Git history and the working tree for secrets with gitleaks. |
+| `check:core` | Run the always-on core shared by every push gate. |
 | `check` | Run the complete local and CI quality gate. |
-| `pre-push` | Run the complete local push gate used by Lefthook. |
+| `pre-push` | Run the complete unscoped local gate for manual and release use. |
 
 `task format` may change tracked files, while `task generate` writes only
 ignored artifacts. Portable authored entrypoints are named `SKILL.source.md`;
@@ -114,10 +115,14 @@ lefthook install
 staged files with pinned Mise tools. Deleted paths are excluded; builds, tests,
 generation, and release checks do not run.
 
-`pre-push` invokes `task pre-push`, which runs `task check` and
-`task dependency:audit` concurrently. The full gate runs the package lifecycle
-once, without separate package type checking, testing, or generation before
-`package:check`. Hooks do not apply fixes or run `git add`.
+`pre-push` scopes its jobs to the push delta: the delta resolves against the
+branch upstream and falls back to every tracked file when there is none, so
+first pushes run the complete gate. The always-on jobs run `task check:core`
+and `task dependency:audit`; `task test:python` and `task package:check` run
+only when the delta touches their stack inputs. CI reruns the complete gate on
+every push, so scoping never reduces verification, and `task pre-push` remains
+the unscoped gate for manual diagnosis and releases. Hooks do not apply fixes
+or run `git add`.
 
 ## Releases
 
