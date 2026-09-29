@@ -17,24 +17,43 @@ Portable skills do not require the npm package. The package does not contain,
 install, update, inspect, or remove them. Their lifecycle is owned by the
 `skills` CLI.
 
-## Portable Skills
+## Install Everything
 
-Install the current stable portable distribution globally. The default agent
-selection covers every host that reads `.agents/skills`, including Codex and
-OpenCode:
+The complete setup: portable skills, `agentomatic`, and the user-run
+applications [memomatic](docs/how-to/memomatic.md) (agent memory) and
+[taskmatic](docs/how-to/taskmatic.md) (local task board). Rerun the same
+commands to update. `install` and `config` print a plan and ask for
+confirmation in a terminal, or take the explicit selection flags with `--yes`
+outside one. Until a package's first stable release, its `latest` tag still
+points to a prerelease. Restart OpenCode and other running hosts, including
+MCP hosts and the taskmatic web service, afterwards.
+
+Everything on `latest`:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --global
+npx --yes @kisev/agentomatic@latest install --global
+npx --yes @kisev/agentomatic@latest config --global
+npm install --global @kisev/memomatic
+npm install --global @kisev/taskmatic
 ```
 
-The installer opens a skill picker with every skill preselected; deselect what
-you do not need, or pass `--skill <name>` to choose explicitly.
+Everything on `dev` (moves after every successful push to `dev`):
 
-The stable channel exposes current release metadata and digest-bound archives.
-To opt into the moving development channel instead, install from
-`https://kisev.github.io/skills/dev`; it updates after successful pushes to
-`dev` and does not change the stable installation source.
-Start with the [guided installation](docs/tutorials/getting-started.md), use the
+```shell
+npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+npx --yes @kisev/agentomatic@dev install --global
+npx --yes @kisev/agentomatic@dev config --global
+npm install --global @kisev/memomatic@dev
+npm install --global @kisev/taskmatic@dev
+```
+
+## Portable Skills
+
+The default selection covers every host that reads `.agents/skills`,
+including Codex and OpenCode, and the installer opens a picker with every
+skill preselected; pass `--skill <name>` to choose explicitly. Start with the
+[guided installation](docs/tutorials/getting-started.md), use the
 [portable skills how-to](docs/how-to/portable-skills.md) for project installs,
 updates, cleanup, and troubleshooting, or browse the
 [skill catalog](docs/reference/skill-catalog.md).
@@ -49,24 +68,11 @@ updates, cleanup, and troubleshooting, or browse the
 - optional plugin wrappers: `rules-injector` and `zed-bell`, plus the `rtk`
   compression wrapper deployed by default and observable through `/rtk-stats`.
 
-Run the installer from any directory; the confirmed install also provisions the
-persistent npm dependency that keeps the plugin resolvable:
-
-```shell
-npx --yes @kisev/agentomatic@latest install --global --dry-run
-```
-
-For project scope, run it from the project root without `--global`. Global
-installs own the npm project at `~/.config/opencode` and create its
-`package.json` when needed; project installs use the nearest npm project. Use
-`@kisev/agentomatic@dev` to opt into the development snapshot, or install the
-package once with `npm install -g @kisev/agentomatic` to call the `agentomatic`
-binary directly.
-
-This only starts the mandatory flow. Rerun the install command without
-`--dry-run` and answer the confirmation question for the printed plan summary,
-or add `--yes` outside a terminal. Then add the package to the user-owned
-OpenCode `plugin` entry and restart OpenCode. Follow the complete
+Global installs own the npm project at `~/.config/opencode` and create its
+`package.json` when needed; for project scope, run the installer from the
+project root without `--global`. The confirmed install also provisions the
+persistent npm dependency that keeps the plugin resolvable. Restart OpenCode
+after activation or asset changes, and follow the complete
 [OpenCode integration guide](docs/how-to/opencode-integration.md).
 
 ## Documentation
