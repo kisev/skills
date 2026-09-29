@@ -12,9 +12,17 @@ label updates. It invokes `glab api` without a shell and prints a compact JSON
 result instead of the remote response.
 
 A thread state action requires the successful receipt for its preceding
-explanation. Earlier verified actions from the same evidence snapshot are
-accounted for during freshness checks; unrelated edits or replies invalidate the
-remaining plan. Success requires a separate GitLab read proving the exact effect.
+explanation. Freshness checks are scoped to what the action itself changes:
+earlier verified actions from the same evidence snapshot are credited, label
+updates compare observed labels with the planned snapshot and the intended set,
+thread replies and state changes revalidate only their target thread, and new
+notes, discussions, and issues require no conversation match. Drift outside
+that scope never blocks the action. An intended effect already visible in
+GitLab, such as labels applied by hand or the exact reply posted manually,
+completes as `already_applied` without another write and records its receipt.
+Effect matching compares note bodies and issue descriptions with trailing
+whitespace normalized, matching how GitLab stores posted text. Success requires
+a separate GitLab read proving the exact effect.
 Repeated successful actions return `already_applied` without another write.
 
 ## Failure and inspection
@@ -22,7 +30,9 @@ Repeated successful actions return `already_applied` without another write.
 The helper persists an in-progress reservation before starting the mutation.
 Only a proven process-start failure removes it without a remote postcondition.
 Timeout, nonzero exit, oversized output, or an unverified postcondition leaves the
-result `unknown` and blocks further writes for this collection. Before reporting
+result `unknown` and suspends only that action; unrelated actions from the same
+plan stay applicable, while actions depending on its receipt remain blocked by
+the dependency check. Before reporting
 that result, the helper performs bounded read-only polling. Its redacted JSON
 diagnostic names the pending action and includes exact `inspect` and `retry`
 commands.

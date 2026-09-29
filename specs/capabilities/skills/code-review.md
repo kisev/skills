@@ -130,12 +130,20 @@ exact payload, body digest, user, MR identity and refs, conversation, labels, an
 a 24-hour expiry. The separately invoked helper shall serialize publication,
 revalidate before writing, persist an in-progress reservation, and require a fresh
 GitLab postcondition before recording success. Thread state shall depend on the
-successful explanation receipt. Known successful effects from the same evidence
-snapshot may satisfy freshness checks; unrelated conversation or label changes
-shall require regeneration. Successful action replay shall not write again.
+successful explanation receipt. Freshness checks shall be scoped to what the
+action itself changes: verified effects from the same evidence snapshot shall be
+credited, label updates shall compare observed labels with the planned snapshot
+and the intended set, thread replies and state changes shall revalidate only
+their target thread, and new notes, discussions, and issues shall require no
+conversation match. An intended effect already visible at the target shall
+complete as already applied without another write and record its receipt.
+Successful action replay shall not write again.
 Only a proven process-start failure shall clear a reservation without a remote
-postcondition. Ambiguous outcomes shall block further writes; explicit inspection
-may resolve them through bounded read-only GitLab observations. The helper shall
+postcondition. An ambiguous outcome shall suspend only its own action and the
+actions depending on its receipt; unrelated actions shall remain applicable.
+Effect matching shall compare note bodies and issue descriptions with trailing
+whitespace normalized as GitLab stores posted text. Explicit inspection
+may resolve an ambiguous outcome through bounded read-only GitLab observations. The helper shall
 retain a bounded redacted cause and exact recovery commands. It may retry an
 unobserved effect only after the user explicitly selects the retry mode or accepts
 its interactive duplicate-write warning; retry shall revalidate freshness and

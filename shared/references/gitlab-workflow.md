@@ -30,7 +30,10 @@ explicit freshness preflight. Prepare and review runners never execute them and
 return `external_mutations=false`. A profile-specific Python helper may expose a
 separate apply lifecycle for one exact action: the command supplies its digest as
 Confirmation, revalidates actor, target, refs, conversations, labels, catalog,
-markers, and body immediately before writing, then verifies the postcondition.
+markers, and body immediately before writing, scoped to what the action itself
+changes so unrelated drift never blocks it, then verifies the postcondition.
+An intended effect already visible at the target completes as already applied
+without another write.
 It invokes `glab` with argv and no shell, inherits the caller environment without
 persisting it, and rejects batch, force, stale state, changed digests, and path
 escapes. A code-review action binds its validated suggestion or patch before
@@ -39,7 +42,8 @@ definitive non-mutating 4xx rejection as explicitly retryable after fresh
 revalidation, and treats timeout, 5xx, malformed response, and unknown outcomes
 as uncertain. It never substitutes another fix or repeats an uncertain
 publication; an already posted reply may continue only its pending idempotent
-thread-state transition.
+thread-state transition. An uncertain outcome suspends only its own action;
+unrelated confirmed actions from the same plan remain applicable.
 Direct code-review commands keep those same operations visibly separate: first
 publish the complete-context explanation, then run the `resolve` or `reopen`
 command. A prepared state command never stands alone without its explanation.
