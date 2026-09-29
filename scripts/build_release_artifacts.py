@@ -48,7 +48,7 @@ PACKAGE_MEMBERS: tuple[PackageMember, ...] = (
         directory=ROOT / "apps" / "reviewmatic",
         filename="reviewmatic.tgz",
         allowed=frozenset({"README.md", "README.ru.md", "package.json"}),
-        prefixes=("dist/", "assets/"),
+        prefixes=("dist/",),
     ),
     PackageMember(
         name="@kisev/taskmatic",

@@ -108,7 +108,7 @@ def build(version: str, revision: str) -> dict[str, Any]:
     members = (
         (SAFE_FS, "safe-fs.tgz", ("dist/",)),
         (MEMOMATIC, "memomatic.tgz", ("dist/", "assets/")),
-        (REVIEWMATIC, "reviewmatic.tgz", ("dist/", "assets/")),
+        (REVIEWMATIC, "reviewmatic.tgz", ("dist/",)),
         (TASKMATIC, "taskmatic.tgz", ("dist/", "assets/")),
         (PACKAGE, "package.tgz", ("dist/",)),
     )
