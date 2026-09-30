@@ -8,111 +8,7 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
-### Changed
-
-- Stable releases resolve their publication channel from the tagged commit: a
-  tag on `main` publishes npm `latest` and the Pages root, while a tag on a
-  `release/vX.Y` maintenance branch publishes only the npm `vX.Y` dist-tag and
-  never redeploys Pages. The branch model is now a `dev` trunk with pull
-  requests into `main` (feature releases from `dev` or a release prep branch,
-  latest-line patches also from `fix/*`); maintenance branches are cut from the
-  previous feature line when the next feature release ships and carry the
-  current publication automation, because tag pushes run the workflow from the
-  tagged commit.
-- Memomatic splits OpenCode session analysis into the standalone `sessions`
-  command; `dream` is now pure consolidation (inbox, usage-gated promotion,
-  bounded rewrite, archiving) and never reads OpenCode history. Separate
-  systemd units schedule the two sweeps, and a legacy `dream` extraction
-  configuration migrates to the new `sessions` settings section until
-  overridden.
-
-### Added
-
-- `memomatic status` now reports the pending queue without model calls: pending
-  inbox files, the session backlog from the OpenCode database (or `null` when
-  absent), the promotion-candidate count, and the last dream/sessions run
-  timestamps. The optional `auto-clean ... unused-after=Nd` rule archives old
-  episodic entries with no useful recalls earlier than the age-only cutoff;
-  decay stays inactive unless the suffix is declared.
-
-- Agentomatic, memomatic and taskmatic share Commander-based option parsing and
-  build-materialized CLI utilities without a new npm package. Node.js 22.13+ is
-  required. Contextual help, env/config overrides and stderr diagnostics preserve
-  MCP stdout and the agentomatic wizard. Memory status no longer indexes data.
-
-- Dream drains an eligible startup snapshot by default, tracks message revisions
-  and completed fragments, reuses one isolated OpenCode server and unchanged
-  embeddings, and exposes progress, timeouts, retries and actual usage. `--plan`
-  previews the queue without model calls. A first legacy-cursor migration rechecks
-  existing history once while retaining the corpus; limits allow incremental runs.
-
-- `task-prepare` publication commands now target the GitLab GraphQL endpoint
-  through `glab api --method POST ../graphql`. Regenerated plans for unchanged
-  version 2 drafts issue `createIssue`, `createEpic`, and `updateIssue`
-  mutations instead of REST calls, and payload files hold the exact GraphQL
-  request with its query and variables.
-
-- Taskmatic CLI, MCP, exports and read-only web board now share the independent
-  `@kisev/taskmatic` TypeScript npm application. Existing SQLite v1 data, state
-  paths, card IDs and tool names remain compatible. The skill no longer bundles
-  a Python runtime; host commands and services require an explicit migration.
-
-- Memory retrieval uses instructed Qwen3 queries, relevance gates before ranking,
-  exact-match priority, optional project filtering and `--explain`/MCP diagnostics.
-  Unknown names and unrelated queries can return no hits. Embedding indices carry
-  model identity and are replaced atomically only after successful embedding;
-  old indices require `memomatic index` once. Learned memory is context, not policy.
-
-### Added
-
-- Publication bundle version 3 for `task-prepare`: task work items created with
-  an observed work item type global ID, parent/child hierarchy inside one plan
-  with a two-phase parent creation, items created directly in a closed state,
-  labels set from observed numeric label IDs, and milestone-optional publication.
-  An accepted `task-triage` release plan may now record milestone status `none`
-  with a rationale documenting the team's decision not to use milestones, and
-  blocking-link commands use the GraphQL linked-items mutation with observed
-  work item global IDs.
-
-- memomatic composes with XDG skill artifacts through an asynchronous inbox
-  under `$XDG_STATE_HOME/memomatic/inbox/`. Skills and agents append
-  single-format Markdown entry lines; the new deterministic `memomatic process`
-  CLI pass (also run first by every dream sweep) validates drops, enforces
-  `never-save`, deduplicates exact texts, supersedes entries by `key`, routes
-  user-origin targets, rebuilds the index with batch embeddings, and moves
-  rejected drops to `inbox/rejected/`. A stale-tolerant run lock serializes
-  dream and process runs; `memory_write` and the MCP server now queue inbox
-  drops and answer with a flush hint instead of touching corpus files.
-
-- Every memory entry can carry a `source` annotation; usage visibility derives
-  from it (`team-*`, `gitlab`, and `spec-manage` entries are quotable in
-  team-facing artifacts, everything else is personal-only). Search responses
-  expose the label, and the `auto-clean` directive gains
-  an optional `source=` filter for transient sources such as `stopit`.
-
-- The shared `memomatic_inbox.py` helper (materialized into dropping skills)
-  mirrors durable events into the inbox with presence detection: people-journal
-  appends (`people-<profile>-<id>` keys, superseded on repeat), stopit handoff
-  distillates (keyed per workspace), task-triage per-issue decisions (keyed per
-  issue, superseded on re-triage), and task-prepare outcomes. docs, spec-manage
-  ADR, mattermost-triage digest, and team artifact workflows offer confirmed
-  drops through the same helper CLI.
-
-### Removed
-
-- The memomatic OpenCode plugin, its export and installer selection, and all
-  automatic memory injection. Agents use the standalone MCP server in every
-  host. Agentomatic no longer depends on memomatic. Installer upgrades archive
-  unchanged owned wrappers and preserve edited wrappers as conflicts. CLI,
-  Dream, embeddings, inbox processing, and stored memory remain available;
-  the obsolete `projects` bootstrap mapping is ignored.
-
-### Fixed
-
-- Explicit MCP forgetting removes the entry from search immediately and adjusts
-  remaining line references under the processing lock without calling embeddings.
-
-## \[11.0.0] - 2026-09-26
+## \[11.0.0] - 2026-09-30
 
 ### Added
 
@@ -175,12 +71,106 @@ All notable changes to this project are documented in this file. Entries follow
 - The askme and code-review skills now share one materialized necessity and
   completion doctrine instead of duplicated copies.
 
+- `memomatic status` now reports the pending queue without model calls: pending
+  inbox files, the session backlog from the OpenCode database (or `null` when
+  absent), the promotion-candidate count, and the last dream/sessions run
+  timestamps. The optional `auto-clean ... unused-after=Nd` rule archives old
+  episodic entries with no useful recalls earlier than the age-only cutoff;
+  decay stays inactive unless the suffix is declared.
+
+- Agentomatic, memomatic and taskmatic share Commander-based option parsing and
+  build-materialized CLI utilities without a new npm package. Node.js 22.13+ is
+  required. Contextual help, env/config overrides and stderr diagnostics preserve
+  MCP stdout and the agentomatic wizard. Memory status no longer indexes data.
+
+- Dream drains an eligible startup snapshot by default, tracks message revisions
+  and completed fragments, reuses one isolated OpenCode server and unchanged
+  embeddings, and exposes progress, timeouts, retries and actual usage. `--plan`
+  previews the queue without model calls. A first legacy-cursor migration rechecks
+  existing history once while retaining the corpus; limits allow incremental runs.
+
+- `task-prepare` publication commands now target the GitLab GraphQL endpoint
+  through `glab api --method POST ../graphql`. Regenerated plans for unchanged
+  version 2 drafts issue `createIssue`, `createEpic`, and `updateIssue`
+  mutations instead of REST calls, and payload files hold the exact GraphQL
+  request with its query and variables.
+
+- Taskmatic CLI, MCP, exports and read-only web board now share the independent
+  `@kisev/taskmatic` TypeScript npm application. Existing SQLite v1 data, state
+  paths, card IDs and tool names remain compatible. The skill no longer bundles
+  a Python runtime; host commands and services require an explicit migration.
+
+- Memory retrieval uses instructed Qwen3 queries, relevance gates before ranking,
+  exact-match priority, optional project filtering and `--explain`/MCP diagnostics.
+  Unknown names and unrelated queries can return no hits. Embedding indices carry
+  model identity and are replaced atomically only after successful embedding;
+  old indices require `memomatic index` once. Learned memory is context, not policy.
+
+
+- Publication bundle version 3 for `task-prepare`: task work items created with
+  an observed work item type global ID, parent/child hierarchy inside one plan
+  with a two-phase parent creation, items created directly in a closed state,
+  labels set from observed numeric label IDs, and milestone-optional publication.
+  An accepted `task-triage` release plan may now record milestone status `none`
+  with a rationale documenting the team's decision not to use milestones, and
+  blocking-link commands use the GraphQL linked-items mutation with observed
+  work item global IDs.
+
+- memomatic composes with XDG skill artifacts through an asynchronous inbox
+  under `$XDG_STATE_HOME/memomatic/inbox/`. Skills and agents append
+  single-format Markdown entry lines; the new deterministic `memomatic process`
+  CLI pass (also run first by every dream sweep) validates drops, enforces
+  `never-save`, deduplicates exact texts, supersedes entries by `key`, routes
+  user-origin targets, rebuilds the index with batch embeddings, and moves
+  rejected drops to `inbox/rejected/`. A stale-tolerant run lock serializes
+  dream and process runs; `memory_write` and the MCP server now queue inbox
+  drops and answer with a flush hint instead of touching corpus files.
+
+- Every memory entry can carry a `source` annotation; usage visibility derives
+  from it (`team-*`, `gitlab`, and `spec-manage` entries are quotable in
+  team-facing artifacts, everything else is personal-only). Search responses
+  expose the label, and the `auto-clean` directive gains
+  an optional `source=` filter for transient sources such as `stopit`.
+
+- The shared `memomatic_inbox.py` helper (materialized into dropping skills)
+  mirrors durable events into the inbox with presence detection: people-journal
+  appends (`people-<profile>-<id>` keys, superseded on repeat), stopit handoff
+  distillates (keyed per workspace), task-triage per-issue decisions (keyed per
+  issue, superseded on re-triage), and task-prepare outcomes. docs, spec-manage
+  ADR, mattermost-triage digest, and team artifact workflows offer confirmed
+  drops through the same helper CLI.
+
 ### Changed
 
 - `code-review` routes release MRs to `release-review`; `goal` and
   `task-prepare` reference each other by audience; `briefing` and `team-retro`
   state their boundary; Mattermost publication ownership is fixed on
   `mattermost`.
+
+- Stable releases resolve their publication channel from the tagged commit: a
+  tag on `main` publishes npm `latest` and the Pages root, while a tag on a
+  `release/vX.Y` maintenance branch publishes only the npm `vX.Y` dist-tag and
+  never redeploys Pages. The branch model is now a `dev` trunk with pull
+  requests into `main` (feature releases from `dev` or a release prep branch,
+  latest-line patches also from `fix/*`); maintenance branches are cut from the
+  previous feature line when the next feature release ships and carry the
+  current publication automation, because tag pushes run the workflow from the
+  tagged commit.
+- Memomatic splits OpenCode session analysis into the standalone `sessions`
+  command; `dream` is now pure consolidation (inbox, usage-gated promotion,
+  bounded rewrite, archiving) and never reads OpenCode history. Separate
+  systemd units schedule the two sweeps, and a legacy `dream` extraction
+  configuration migrates to the new `sessions` settings section until
+  overridden.
+
+### Removed
+
+- The memomatic OpenCode plugin, its export and installer selection, and all
+  automatic memory injection. Agents use the standalone MCP server in every
+  host. Agentomatic no longer depends on memomatic. Installer upgrades archive
+  unchanged owned wrappers and preserve edited wrappers as conflicts. CLI,
+  Dream, embeddings, inbox processing, and stored memory remain available;
+  the obsolete `projects` bootstrap mapping is ignored.
 
 ### Fixed
 
@@ -189,6 +179,9 @@ All notable changes to this project are documented in this file. Entries follow
   `rtk/<filter>`.
 - `task-prepare` no longer references a nonexistent `glab` skill; the duplicated
   paragraph in `release-review` was removed.
+
+- Explicit MCP forgetting removes the entry from search immediately and adjusts
+  remaining line references under the processing lock without calling embeddings.
 
 ## \[10.1.0] - 2026-09-25
 
