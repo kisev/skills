@@ -10,19 +10,32 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- Stable releases resolve their publication channel from the tagged commit: a
+  tag on `main` publishes npm `latest` and the Pages root, while a tag on a
+  `release/vX.Y` maintenance branch publishes only the npm `vX.Y` dist-tag and
+  never redeploys Pages. The branch model is now a `dev` trunk with pull
+  requests into `main` (feature releases from `dev` or a release prep branch,
+  latest-line patches also from `fix/*`); maintenance branches are cut from the
+  previous feature line when the next feature release ships and carry the
+  current publication automation, because tag pushes run the workflow from the
+  tagged commit.
+
 - Agentomatic plugins now expose both the OpenCode V1 `server` and V2 `setup`
   entrypoints. All patches in the `1.18.x` and `2.0.x` minors are supported;
   repository checks exercise the current patch of each minor from Mise.
+
 - The `code-review` skill is now a thin portable archive: its Python runners
   are removed and the executable runtime is the external `@kisev/reviewmatic`
   npm package (installed like `glab`). References invoke the `reviewmatic` CLI,
   and after a review the skill prints the compact chat summary plus one manual
   `reviewmatic plan --artifact-root <root>` command instead of per-action
   publication commands.
+
 - The shared GitLab contract drops the code-review-only local WIP branches and
   the `local_review` module; local reviews moved into `reviewmatic
   prepare-local`/`finalize-local`. The `portable-gitlab-v2` offline eval
   protocol and its evidence-contract scenario are removed with the runner.
+
 - The shared GitLab contract also drops its now-dead code-review validation
   surface: review-plan/decision/critic artifacts and their validators, the
   `code-review` profile, and the code-review-only presentation/label helpers

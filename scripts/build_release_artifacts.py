@@ -9,12 +9,18 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts import release_channel  # noqa: E402
+
 PAGES = ROOT / ".build" / "packages" / "skills"
 OUTPUT = ROOT / ".build" / "release"
 
@@ -161,6 +167,10 @@ def build(tag: str, revision: str) -> dict[str, Any]:
     actual_revision = command("git", "rev-parse", "HEAD").strip()
     if revision != actual_revision:
         raise ArtifactError("release revision does not match HEAD")
+    try:
+        release_dist_tag = release_channel.dist_tag(tag, os.environ.get("RELEASE_DIST_TAG"))
+    except release_channel.ChannelError as error:
+        raise ArtifactError(str(error)) from error
 
     if OUTPUT.exists():
         shutil.rmtree(OUTPUT)
@@ -215,6 +225,7 @@ def build(tag: str, revision: str) -> dict[str, Any]:
         "tag": tag,
         "version": version,
         "revision": revision,
+        "dist_tag": release_dist_tag,
         "npm": npm_entries,
         "pages": {"files": page_hashes()},
     }

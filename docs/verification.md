@@ -128,5 +128,6 @@ before creating the GitHub Release.
 
 Development publication tests additionally check deterministic snapshot version
 derivation, `dev` source provenance, Pages root and `/dev` composition, and the
-required npm `dev` dist-tag. CI rejects pull requests into `main` from any branch
-other than `dev`; repository branch protection remains an external setting.
+required npm `dev` dist-tag. CI rejects pull requests into `main` from branches
+outside `dev`, `release/*`, and `fix/*` and rejects non-merge pushes to `main`;
+repository branch protection remains an external setting.
