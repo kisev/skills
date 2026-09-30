@@ -1,0 +1,20 @@
+---
+import { useUi, type Locale } from "../i18n/ui";
+import { withBase } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = useUi(locale);
+---
+
+<div class="site-footer">
+  <div class="inner">
+    <span>{t.footer.license}</span>
+    <a href={withBase("/skills/")}>{t.nav.skills}</a>
+    <a href="https://github.com/kisev/skills/tree/dev/docs">{t.footer.docs}</a>
+    <a href="https://github.com/kisev/skills">{t.footer.source}</a>
+  </div>
+</div>

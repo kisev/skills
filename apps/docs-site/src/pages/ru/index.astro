@@ -1,0 +1,55 @@
+---
+import Base from "../../layouts/Base.astro";
+import { useUi } from "../../i18n/ui";
+import { withBase } from "../../i18n/utils";
+import { catalog } from "../../generated/skills";
+
+const t = useUi("ru");
+const count = catalog.skills.length;
+const lead = t.hero.lead.replace("{count}", String(count));
+const installLatest = "npx --yes skills@latest add https://kisev.github.io/skills --global\nnpx --yes @kisev/agentomatic@latest install --global";
+const installDev = "npx --yes skills@latest add https://kisev.github.io/skills/dev --global\nnpx --yes @kisev/agentomatic@dev install --global";
+---
+
+<Base locale="ru" title={t.hero.title} description={t.site.tagline}>
+  <section class="hero">
+    <h1>{t.hero.title}</h1>
+    <p class="lead">{lead}</p>
+    <div class="actions">
+      <a class="button primary" href={withBase("/skills/")}>{t.hero.browse}</a>
+      <a class="button" href={withBase("/examples/")}>{t.hero.examples}</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>{t.install.title}</h2>
+    <p class="lead">{t.install.lead}</p>
+    <h3>{t.install.latest}</h3>
+    <pre><code>{installLatest}</code></pre>
+    <h3>{t.install.dev}</h3>
+    <pre><code>{installDev}</code></pre>
+  </section>
+
+  <section>
+    <h2>{t.components.title}</h2>
+    <p class="lead">{t.components.lead}</p>
+    <table class="components">
+      <thead>
+        <tr>
+          <th>{t.components.table.component}</th>
+          <th>{t.components.table.provides}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{t.components.table.portable}</td>
+          <td>{t.components.table.portableProvides}</td>
+        </tr>
+        <tr>
+          <td>{t.components.table.agentomatic}</td>
+          <td>{t.components.table.agentomaticProvides}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</Base>

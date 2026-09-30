@@ -1,0 +1,31 @@
+---
+import { getCollection } from "astro:content";
+import SkillCard from "../../../components/SkillCard.astro";
+import Base from "../../../layouts/Base.astro";
+import { useUi } from "../../../i18n/ui";
+import { catalog } from "../../../generated/skills";
+
+const t = useUi("ru");
+const examples = (await getCollection("examples")).filter((entry) => entry.id.startsWith("ru/"));
+const withExamples = new Set(examples.map((entry) => entry.data.skill));
+---
+
+<Base locale="ru" title={t.catalog.title} description={t.catalog.lead}>
+  <h1>{t.catalog.title}</h1>
+  <p class="lead">{t.catalog.lead}</p>
+  <div class="search" id="search"></div>
+  <div class="grid">
+    {
+      catalog.skills.map((skill) => (
+        <SkillCard skill={skill} locale="ru" hasExample={withExamples.has(skill.name)} />
+      ))
+    }
+  </div>
+</Base>
+
+<script is:inline src="/skills/pagefind/pagefind.js"></script>
+<script is:inline>
+  window.addEventListener("DOMContentLoaded", () => {
+    new window.PagefindUI({ element: "#search", baseUrl: "/", showSubResults: true });
+  });
+</script>

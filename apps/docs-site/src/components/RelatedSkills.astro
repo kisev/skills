@@ -1,0 +1,50 @@
+---
+import { useUi, type Locale } from "../i18n/ui";
+import { withBase } from "../i18n/utils";
+import { catalog, type RelationEntry } from "../generated/skills";
+
+interface Props {
+  name: string;
+  locale: Locale;
+}
+
+const { name, locale } = Astro.props;
+const t = useUi(locale);
+const related = catalog.relations.filter(
+  (relation: RelationEntry) => relation.from === name || relation.to === name,
+);
+const labels = {
+  requires: t.relations.requires,
+  uses: t.relations.uses,
+  recommends: t.relations.recommends,
+} as const;
+---
+
+{
+  related.length > 0 && (
+    <section>
+      <h2>{t.skillPage.relationsTitle}</h2>
+      <dl class="relations">
+        {(["requires", "uses", "recommends"] as const).map((type) => {
+          const group = related.filter((relation: RelationEntry) => relation.type === type);
+          return (
+            group.length > 0 && (
+              <>
+                <dt>{labels[type]}</dt>
+                {group.map((relation: RelationEntry) => {
+                  const other = relation.from === name ? relation.to : relation.from;
+                  return (
+                    <dd>
+                      <a href={withBase(`/skills/${other}/`)}>{other}</a>
+                      {relation.reason !== "" && <span> — {relation.reason}</span>}
+                    </dd>
+                  );
+                })}
+              </>
+            )
+          );
+        })}
+      </dl>
+    </section>
+  )
+}

@@ -1,0 +1,36 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import { useUi } from "../../i18n/ui";
+import { catalog, type SkillEntry } from "../../generated/skills";
+import { withBase } from "../../i18n/utils";
+
+const t = useUi("en");
+const examples = (await getCollection("examples"))
+  .filter((entry) => entry.id.startsWith("en/"))
+  .sort((left, right) => left.data.skill.localeCompare(right.data.skill) || left.data.order - right.data.order);
+const byName = new Map<string, SkillEntry>(catalog.skills.map((skill) => [skill.name, skill]));
+---
+
+<Base locale="en" title={t.examplesIndex.title} description={t.examplesIndex.lead}>
+  <h1>{t.examplesIndex.title}</h1>
+  <p class="lead">{t.examplesIndex.lead}</p>
+  <div class="grid">
+    {
+      examples.map((entry) => {
+        const skill = byName.get(entry.data.skill);
+        return (
+          skill && (
+            <a class="card" href={withBase(`/skills/${entry.data.skill}/`)}>
+              <h3>
+                {entry.data.skill}
+                <span class="badge">{skill.description.split(".")[0]}</span>
+              </h3>
+              <p>{entry.data.title}</p>
+            </a>
+          )
+        );
+      })
+    }
+  </div>
+</Base>

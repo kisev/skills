@@ -1,0 +1,24 @@
+---
+import { useUi, type Locale } from "../i18n/ui";
+import { withBase } from "../i18n/utils";
+import type { SkillEntry } from "../generated/skills";
+
+interface Props {
+  skill: SkillEntry;
+  locale: Locale;
+  hasExample?: boolean;
+}
+
+const { skill, locale, hasExample = false } = Astro.props;
+const t = useUi(locale);
+---
+
+<a class="card" href={withBase(`/skills/${skill.name}/`)}>
+  <h3>
+    {skill.name}
+    {
+      hasExample && <span class="badge">{t.nav.examples}</span>
+    }
+  </h3>
+  <p>{skill.description}</p>
+</a>
