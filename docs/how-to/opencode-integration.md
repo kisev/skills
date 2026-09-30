@@ -197,7 +197,7 @@ Selectable fragments:
 | Fragment | Targets | Effect |
 | - | - | - |
 | `core-plugin` | opencode | Adds `$schema` and registers `@kisev/agentomatic` in `plugins` |
-| `skills-state-permissions` | opencode, kilo, mimo | Allows reads, edits, and external-directory access to standard skills state paths under `~/.local/state/agent-skills/**`; OpenCode also allows reads and external-directory access under `~/.config/opencode/skills/**`. OpenCode uses ordered `permissions`; Kilo/MiMo retain their `permission` maps |
+| `skills-state-permissions` | opencode, kilo, mimo | Allows reads, edits, and external-directory access to standard skills state paths under `~/.local/state/agent-skills/**`; OpenCode also allows reads and external-directory access under the canonical portable-skills tree `~/.agents/skills/**` and the legacy `~/.config/opencode/skills/**`. OpenCode uses ordered `permissions`; Kilo/MiMo retain their `permission` maps |
 | `secrets-guard` | opencode, kilo, mimo | Denies reads and edits of common secret files (`.env*`, keys, credentials) |
 | `kilo-display` | kilo | Expands reasoning, terminal, edit, and tool blocks |
 | `tui-schema` | opencode, kilo, mimo | OpenCode writes global `cli.json` with its V2 schema, `theme.name: ayu`, and native keybind IDs. Kilo/MiMo retain their TUI formats, `theme: ayu`, stacked diffs, and existing keybind IDs |

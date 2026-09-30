@@ -210,6 +210,12 @@ try {
   await permission("external_directory", join(home, ".local/state/agent-skills/*"), "allow");
   await permission("read", join(home, ".config/opencode/skills/test/SKILL.md"), "allow");
   await permission("external_directory", join(home, ".config/opencode/skills/*"), "allow");
+  await permission("read", join(home, ".agents/skills/code-review/SKILL.md"), "allow");
+  await permission(
+    "external_directory",
+    join(home, ".agents/skills/code-review/references"),
+    "allow",
+  );
   for (const resource of [".env", "nested/.env", ".env.local", "nested/.ssh/id_rsa"]) {
     await permission("read", resource, "deny");
     await permission("edit", resource, "deny");

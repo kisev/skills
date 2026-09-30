@@ -26,6 +26,7 @@ import { corePluginEdits, permissionEdits, type PermissionRule } from "./opencod
 const PACKAGE_NAME = "@kisev/agentomatic";
 const XDG_STATE_GLOB = "~/.local/state/agent-skills/**";
 const OPENCODE_SKILLS_GLOB = "~/.config/opencode/skills/**";
+const AGENTS_SKILLS_GLOB = "~/.agents/skills/**";
 const SECRET_PATHS = [
   "**/.env",
   "**/.env.*",
@@ -64,7 +65,8 @@ export const CONFIG_FRAGMENTS = [
   },
   {
     name: "skills-state-permissions",
-    description: "Allow the standard skills XDG state paths without per-run prompts",
+    description:
+      "Allow the canonical ~/.agents/skills tree and legacy skills state paths without per-run prompts",
     targets: ["opencode", "kilo", "mimo"],
     file: "main",
   },
@@ -263,7 +265,9 @@ function fragmentEdits(
   }
   if (fragment === "skills-state-permissions") {
     const statePaths =
-      target === "opencode" ? [XDG_STATE_GLOB, OPENCODE_SKILLS_GLOB] : [XDG_STATE_GLOB];
+      target === "opencode"
+        ? [XDG_STATE_GLOB, OPENCODE_SKILLS_GLOB, AGENTS_SKILLS_GLOB]
+        : [XDG_STATE_GLOB];
     if (target === "opencode")
       return permissionEdits(value, [
         ...statePaths.flatMap((resource): PermissionRule[] => [

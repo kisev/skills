@@ -65,6 +65,11 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Fixed
 
+- The skills-state permissions preset now also allows reads and external-directory
+  access under `~/.agents/skills/**`, the canonical portable-skills tree. The
+  preset previously covered only legacy skills state paths, so every skill
+  reference read outside a project directory prompted for access in OpenCode V2.
+
 - The GitLab trace-streaming timeout test no longer races process startup: its
   patched deadline of 50 ms could expire before the fake `glab` child wrote its
   pid file under parallel suite load, failing the cleanup check. The deadline is
