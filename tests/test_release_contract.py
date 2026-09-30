@@ -695,6 +695,7 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
         [
             {"name": "@kisev/safe-fs", "version": RELEASE_VERSION},
             {"name": "@kisev/memomatic", "version": RELEASE_VERSION},
+            {"name": "@kisev/reviewmatic", "version": RELEASE_VERSION},
             {"name": "@kisev/taskmatic", "version": RELEASE_VERSION},
             {"name": "@kisev/agentomatic", "version": RELEASE_VERSION},
         ]
@@ -702,7 +703,7 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
     for name in publish_npm_release.NPM_PUBLISH_ORDER:
         assert f"{name}@{RELEASE_VERSION}" in install
-    assert "@opencode-ai/plugin@1.18.29" in install
+    assert "@opencode-ai/plugin@1.18.32" in install
     assert ("npm", "audit", "signatures", "--json") in calls
 
 
@@ -1066,7 +1067,13 @@ def test_release_manifest_rejects_tampered_tarball(
 
     release = tmp_path / "release"
     release.mkdir()
-    for filename in ("safe-fs.tgz", "memomatic.tgz", "taskmatic.tgz", "package.tgz"):
+    for filename in (
+        "safe-fs.tgz",
+        "memomatic.tgz",
+        "reviewmatic.tgz",
+        "taskmatic.tgz",
+        "package.tgz",
+    ):
         (release / filename).write_bytes(content)
     (release / "release.json").write_text(
         json.dumps(
@@ -1075,6 +1082,7 @@ def test_release_manifest_rejects_tampered_tarball(
                 "npm": [
                     entry("@kisev/safe-fs", "safe-fs.tgz"),
                     entry("@kisev/memomatic", "memomatic.tgz"),
+                    entry("@kisev/reviewmatic", "reviewmatic.tgz"),
                     entry("@kisev/taskmatic", "taskmatic.tgz"),
                     entry("@kisev/agentomatic", "package.tgz"),
                 ],
