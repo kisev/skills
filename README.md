@@ -35,6 +35,7 @@ npx --yes skills@latest add https://kisev.github.io/skills --global
 npx --yes @kisev/agentomatic@latest install --global
 npx --yes @kisev/agentomatic@latest config --global
 npm install --global @kisev/memomatic
+npm install --global @kisev/reviewmatic
 npm install --global @kisev/taskmatic
 ```
 
@@ -45,6 +46,7 @@ npx --yes skills@latest add https://kisev.github.io/skills/dev --global
 npx --yes @kisev/agentomatic@dev install --global
 npx --yes @kisev/agentomatic@dev config --global
 npm install --global @kisev/memomatic@dev
+npm install --global @kisev/reviewmatic@dev
 npm install --global @kisev/taskmatic@dev
 ```
 
