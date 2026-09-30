@@ -8,6 +8,17 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+## \[11.0.2] - 2026-09-30
+
+### Fixed
+
+- `release_channel --github-output` now writes the output names the publish
+  workflow reads (`dist-tag`, `deploys-pages`); the previous snake\_case names
+  left the stable preflight with an empty dist-tag, failing closed before any
+  artifact was built or published. A contract test now simulates the workflow
+  output wiring. The `v11.0.0` and `v11.0.1` tags both failed their preflight
+  before publishing anything, so `11.0.2` is the effective stable release.
+
 ## \[11.0.1] - 2026-09-30
 
 ### Fixed
@@ -15,8 +26,7 @@ All notable changes to this project are documented in this file. Entries follow
 - The stable publication preflight passes again when the workflow exports
   `RELEASE_REVISION`: the published-channel contract tests pin it to their
   fixture revision instead of inheriting the environment. The `v11.0.0` tag
-  failed its preflight on this defect before publishing any artifact, so
-  `11.0.1` is the effective stable release of the same changes.
+  failed its preflight on this defect before publishing any artifact.
 
 ## \[11.0.0] - 2026-09-30
 
