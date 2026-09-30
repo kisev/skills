@@ -21,12 +21,11 @@ install, update, inspect, or remove them. Their lifecycle is owned by the
 
 The complete setup: portable skills, `agentomatic`, and the user-run
 applications [memomatic](docs/how-to/memomatic.md) (agent memory) and
-[taskmatic](docs/how-to/taskmatic.md) (local task board). Rerun the same
-commands to update. `install` and `config` print a plan and ask for
-confirmation in a terminal, or take the explicit selection flags with `--yes`
-outside one. Until a package's first stable release, its `latest` tag still
-points to a prerelease. Restart OpenCode and other running hosts, including
-MCP hosts and the taskmatic web service, afterwards.
+[taskmatic](docs/how-to/taskmatic.md) (local task board); rerun the same
+commands to update. `install` and `config` ask for confirmation in a
+terminal, or take explicit selection flags with `--yes` outside one. Until
+a first stable release, `latest` is a prerelease. Restart OpenCode and
+other running hosts, including MCP hosts and the taskmatic web service.
 
 Everything on `latest`:
 
