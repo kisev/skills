@@ -428,6 +428,7 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
           "--fragments <list|none>",
           `Select fragments: ${CONFIG_FRAGMENTS.map((item) => item.name).join(", ")}.`,
         ],
+        ["--no-dependency", "Skip provisioning the persistent npm dependency for the core plugin."],
         ["--json", "Emit stable machine-readable output."],
         ["--help", "Show this command help and exit."],
       ],
@@ -1582,12 +1583,19 @@ async function run(arguments_: string[]): Promise<void> {
           }),
         );
     } else {
-      const preview = await previewConfigSetup(selection, options.scope!);
+      const preview = await previewConfigSetup(
+        selection,
+        options.scope!,
+        process.cwd(),
+        undefined,
+        !options.noDependency,
+      );
       if (!options.yes) {
         process.stdout.write(renderConfigSetup(preview, { applied: false }));
         await confirmSummary();
       }
       const plan = await applyConfigSetup(selection, options.scope!, process.cwd(), undefined, {
+        provisionDependency: !options.noDependency,
         receipt: preview.receipt,
       });
       if (options.json)

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -405,6 +405,42 @@ test("cli exposes the config command and install hints at it", () => {
 
   const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
   assert.match(source, /"config", \.\.\.scopeArguments\(options\.scope\), "--dry-run"/);
+});
+
+test("config --no-dependency applies the core fragment without provisioning npm", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const project = join(directory, "project");
+  const manifest = join(home, ".config", "opencode", "package.json");
+  try {
+    await mkdir(project);
+    await writeFile(manifest, '{"name":"opencode","private":true}\n');
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "config",
+        "--global",
+        "--targets",
+        "opencode",
+        "--fragments",
+        "core-plugin",
+        "--no-dependency",
+        "--yes",
+      ],
+      { cwd: project, env: { ...process.env, HOME: home }, encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(await readFile(manifest, "utf8"), '{"name":"opencode","private":true}\n');
+    assert.equal(existsSync(join(home, ".config", "opencode", "node_modules")), false);
+    assert.deepEqual(
+      parseJsonc(await readFile(join(home, ".config", "opencode", "opencode.jsonc"), "utf8"))
+        .plugins,
+      [PINNED],
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("applying the core-plugin fragment provisions the npm dependency", async () => {
