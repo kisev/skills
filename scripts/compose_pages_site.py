@@ -24,6 +24,11 @@ MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_DISTRIBUTION_BYTES = 256 * 1024 * 1024
 
 
+SITE_RESERVED_NAMES = frozenset(
+    {"index.json", "skills-lock.json", "archives", ".well-known", "dev"}
+)
+
+
 class ComposeError(Exception):
     pass
 
@@ -143,6 +148,18 @@ def copy_local(source: Path, target: Path) -> None:
             shutil.copyfile(path, destination)
 
 
+def copy_site(source: Path, target: Path) -> None:
+    if source.is_symlink() or not source.is_dir():
+        raise ComposeError(f"documentation site build is invalid: {source}")
+    observed = {entry.name for entry in source.iterdir()}
+    collision = sorted(observed & SITE_RESERVED_NAMES)
+    if collision:
+        raise ComposeError(f"documentation site build collides with the distribution: {collision}")
+    copy_local(source, target)
+    # Astro emits underscore-prefixed asset directories that Jekyll would drop.
+    (target / ".nojekyll").write_bytes(b"")
+
+
 def compose(
     output: Path,
     *,
@@ -150,6 +167,7 @@ def compose(
     stable_url: str | None,
     dev_dir: Path | None,
     dev_url: str | None,
+    site_dir: Path | None,
 ) -> None:
     if (stable_dir is None) == (stable_url is None) or (dev_dir is None) == (dev_url is None):
         raise ComposeError("choose exactly one local or remote source for each channel")
@@ -157,6 +175,8 @@ def compose(
     with tempfile.TemporaryDirectory(prefix="skills-pages-", dir=output.parent) as temporary:
         staged = Path(temporary) / "site"
         staged.mkdir()
+        if site_dir is not None:
+            copy_site(site_dir, staged)
         if stable_dir is not None:
             copy_local(stable_dir, staged)
         else:
@@ -183,6 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stable-url")
     parser.add_argument("--dev-dir", type=Path)
     parser.add_argument("--dev-url")
+    parser.add_argument("--site-dir", type=Path)
     args = parser.parse_args(argv)
     try:
         compose(
@@ -191,6 +212,7 @@ def main(argv: list[str] | None = None) -> int:
             stable_url=args.stable_url,
             dev_dir=args.dev_dir.resolve() if args.dev_dir else None,
             dev_url=args.dev_url,
+            site_dir=args.site_dir.resolve() if args.site_dir else None,
         )
     except (ComposeError, OSError, ValueError, urllib.error.URLError) as error:
         parser.error(str(error))

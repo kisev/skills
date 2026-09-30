@@ -937,21 +937,27 @@ def test_maintenance_manifest_publishes_under_its_line_dist_tag(
 def test_pages_composition_keeps_stable_root_and_dev_subpath(tmp_path: Path) -> None:
     stable = tmp_path / "stable"
     dev = tmp_path / "dev-source"
+    site = tmp_path / "site"
     stable.mkdir()
     dev.mkdir()
+    site.mkdir()
     (stable / "index.json").write_text("stable\n", encoding="utf-8")
     (stable / ".nojekyll").write_text("", encoding="utf-8")
     (dev / "index.json").write_text("dev\n", encoding="utf-8")
-    output = tmp_path / "site"
+    (site / "index.html").write_text("<html></html>", encoding="utf-8")
+    output = tmp_path / "pages"
     compose_pages_site.compose(
         output,
         stable_dir=stable,
         stable_url=None,
         dev_dir=dev,
         dev_url=None,
+        site_dir=site,
     )
     assert (output / "index.json").read_text(encoding="utf-8") == "stable\n"
     assert (output / "dev/index.json").read_text(encoding="utf-8") == "dev\n"
+    assert (output / "index.html").read_text(encoding="utf-8") == "<html></html>"
+    assert (output / ".nojekyll").exists()
 
 
 def test_remote_pages_copy_rejects_lock_drift(

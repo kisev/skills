@@ -203,11 +203,13 @@ tasks:
 
   pages:compose:stable:
     desc: Compose the stable Pages distribution with the current dev channel
+    deps: [site:build]
     cmds:
       - >-
         mise exec -- uv run --locked python scripts/compose_pages_site.py
         --stable-dir .build/packages/skills
         --dev-url https://kisev.github.io/skills/dev
+        --site-dir apps/docs-site/dist
         --output .build/pages
 
   dev:version:
@@ -227,11 +229,13 @@ tasks:
         mise exec -- uv run --locked python scripts/build_distribution.py
         --version "$DEV_VERSION"
       - task: package:build
+      - task: site:build
       - mise exec -- uv run --locked python scripts/build_dev_artifacts.py
       - >-
         mise exec -- uv run --locked python scripts/compose_pages_site.py
         --stable-url https://kisev.github.io/skills
         --dev-dir .build/packages/skills
+        --site-dir apps/docs-site/dist
         --output .build/pages
 
   dev:npm:
@@ -267,6 +271,7 @@ tasks:
       - task: build:skills
       - task: test:python
       - task: package:test
+      - task: site:test
 
   test:python:
     desc: Run Python tests against materialized skills
@@ -364,6 +369,7 @@ tasks:
       - task: typecheck
       - task: locale:check
       - task: docs:check
+      - task: site:build
       - task: distribution:check
       - task: skills:validate
       - task: eval:check
@@ -430,3 +436,22 @@ tasks:
     dir: .
     cmds:
       - mise exec -- npm audit --package-lock-only
+      - mise exec -- npm audit --package-lock-only --prefix apps/docs-site
+
+  site:install:
+    internal: true
+    run: once
+    cmds:
+      - mise exec -- npm ci --prefix apps/docs-site
+
+  site:build:
+    desc: Build the documentation site into apps/docs-site/dist
+    deps: [site:install]
+    cmds:
+      - mise exec -- npm run build --prefix apps/docs-site
+
+  site:test:
+    desc: Run documentation site content contracts
+    deps: [site:install]
+    cmds:
+      - mise exec -- npm test --prefix apps/docs-site
