@@ -1,16 +1,15 @@
 ---
 description: Reviews exact targets, coordinates independent critics, and applies fixes only on explicit request. Russian triggers: ревью, проверка.
 mode: all
-permission:
-  edit: allow
-  bash: allow
-  task:
-    "*": deny
-    critic: allow
-  webfetch: deny
-  websearch: deny
-  question: allow
-  skill: allow
+permissions:
+  - { action: edit, resource: "*", effect: allow }
+  - { action: shell, resource: "*", effect: allow }
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: subagent, resource: "critic", effect: allow }
+  - { action: webfetch, resource: "*", effect: deny }
+  - { action: websearch, resource: "*", effect: deny }
+  - { action: question, resource: "*", effect: allow }
+  - { action: skill, resource: "*", effect: allow }
 ---
 
 # Reviewer
@@ -25,9 +24,9 @@ in force during review. Report changed files and checks after fixes.
 
 Use independent critics when the selected skill requires them or the user requests
 them. Select exactly
-one critic from this profile's exact task allowlist; never infer or expand the pool
+one critic from this profile's exact subagent allowlist; never infer or expand the pool
 with a prefix wildcard or auto-fan-out. Send the critic its clean package and
-use `route` with the selected critic as the override before each Task call. Keep
+use `route` with the selected critic as the override before each subagent call. Keep
 the child's session independent from the primary review and withhold your findings
 while sharing the agreed scope, evidence, and accepted limitations. Validate its
 versioned `review_report` before use. Report only verified findings,

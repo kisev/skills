@@ -118,12 +118,14 @@ the inbox and archives by rules, but performs no consolidation model calls. Use
 `process` for a model-free inbox pass. Invalid consolidation responses fall
 back to bounded append-only promotion, preserving existing curated entries.
 
-The sessions command reads OpenCode sessions, including text stored in its
-separate `part` table. MCP connections in other hosts share explicit memory
-entries but do not import those hosts' session histories. Model calls reuse one
-isolated OpenCode server per run, with tools denied, or an explicitly configured
-existing server. Before enabling the timer, check `sessionsIngested` against the
-available unprocessed sessions; a zero-session pass does not test model access.
+The sessions command reads OpenCode sessions from its V2 database, ingesting
+only user and assistant text. A pre-V2 database is not parsed; start OpenCode V2
+once so it migrates the history, then rerun the sweep. MCP connections in other
+hosts share explicit memory entries but do not import those hosts' session
+histories. Model calls reuse one isolated OpenCode V2 server per run, with tools
+denied, or an explicitly configured existing server. Before enabling the timer,
+check `sessionsIngested` against the available unprocessed sessions; a
+zero-session pass does not test model access.
 
 ## Observe, Limit and Resume Dream
 

@@ -72,8 +72,40 @@ try {
     join(project, ".opencode/opencode.json"),
     JSON.stringify({
       plugins: [pathToFileURL(join(project, "node_modules/@kisev/agentomatic/dist")).href],
+      permissions: [
+        { action: "read", resource: "*", effect: "ask" },
+        { action: "external_directory", resource: "*", effect: "ask" },
+      ],
     }),
   );
+  execFileSync(
+    join(project, "node_modules/.bin/agentomatic"),
+    [
+      "config",
+      "--targets",
+      "opencode",
+      "--fragments",
+      "skills-state-permissions,secrets-guard",
+      "--no-dependency",
+      "--yes",
+    ],
+    { cwd: project, env, encoding: "utf8" },
+  );
+  const configured = await readFile(join(project, ".opencode/opencode.json"), "utf8");
+  execFileSync(
+    join(project, "node_modules/.bin/agentomatic"),
+    [
+      "config",
+      "--targets",
+      "opencode",
+      "--fragments",
+      "skills-state-permissions,secrets-guard",
+      "--no-dependency",
+      "--yes",
+    ],
+    { cwd: project, env, encoding: "utf8" },
+  );
+  assert.equal(await readFile(join(project, ".opencode/opencode.json"), "utf8"), configured);
   let logs = "";
   server = spawn(
     binary,
@@ -107,6 +139,19 @@ try {
       headers: {
         authorization: `Basic ${Buffer.from("opencode:agentomatic-smoke").toString("base64")}`,
       },
+      signal: AbortSignal.timeout(30_000),
+    });
+    assert.equal(response.status, 200, `${path}: ${await response.clone().text()}\n${logs}`);
+    return response.json();
+  };
+  const post = async (path, body) => {
+    const response = await fetch(`${url}${path}`, {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from("opencode:agentomatic-smoke").toString("base64")}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
     });
     assert.equal(response.status, 200, `${path}: ${await response.clone().text()}\n${logs}`);
@@ -148,7 +193,44 @@ try {
   }
   assert.ok(agents.some((agent) => agent.id === "manager"));
   assert.ok(agents.some((agent) => agent.id === "mapper"));
-  process.stdout.write("Packed OpenCode V2 plugin loading and agent discovery smoke test passed\n");
+  const mapper = agents.find((agent) => agent.id === "mapper");
+  assert.ok(mapper.permissions.some((rule) => rule.action === "shell" && rule.effect === "deny"));
+  const session = (await post("/api/session", { agent: "build", location: { directory: project } }))
+    .data;
+  const permission = async (action, resource, effect, agent = "build") => {
+    const reply = await post(`/api/session/${session.id}/permission`, {
+      action,
+      resources: [resource],
+      agent,
+    });
+    assert.equal(reply.data.effect, effect, `${action}: ${resource}`);
+  };
+  await permission("read", join(home, ".local/state/agent-skills/test.json"), "allow");
+  await permission("edit", join(home, ".local/state/agent-skills/test.json"), "allow");
+  await permission("external_directory", join(home, ".local/state/agent-skills/*"), "allow");
+  await permission("read", join(home, ".config/opencode/skills/test/SKILL.md"), "allow");
+  await permission("external_directory", join(home, ".config/opencode/skills/*"), "allow");
+  for (const resource of [".env", "nested/.env", ".env.local", "nested/.ssh/id_rsa"]) {
+    await permission("read", resource, "deny");
+    await permission("edit", resource, "deny");
+  }
+  await permission("read", ".env.example", "allow");
+  await permission("read", "nested/.env.example", "allow");
+  await permission("edit", ".env.example", "deny");
+  await permission("edit", "source.ts", "deny", "mapper");
+  await permission("shell", "git push origin dev", "deny", "critic");
+  await permission(
+    "shell",
+    "git --no-optional-locks -c core.fsmonitor=false status --porcelain=v1 --untracked-files=all",
+    "allow",
+    "critic",
+  );
+  await permission("subagent", "critic", "allow", "review");
+  await permission("subagent", "worker", "deny", "review");
+  assert.deepEqual((await get(`/api/session/${session.id}/permission`)).data, []);
+  process.stdout.write(
+    "Packed OpenCode V2 plugin loading, agent discovery, and permission evaluation smoke test passed\n",
+  );
 } finally {
   if (server && server.exitCode === null) {
     const exited = once(server, "exit");

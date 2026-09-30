@@ -35,7 +35,6 @@ min_version = "2026.9.11"
   "npm:@commitlint/cli" = "21.2.3"
   "npm:@opencode/cli" = { version = "2.0.19", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
   "npm:markdownlint-cli2" = "0.23.3"
-  "npm:opencode-ai" = { version = "1.18.32", npm_args = "--ignore-scripts=false --allow-scripts=opencode-ai" }
   "npm:oxfmt" = "0.70.0"
   "npm:oxlint" = "1.85.0"
   "npm:remark-cli" = { version = "12.0.1", npm_args = "remark-gfm@4.0.1 remark-frontmatter@5.0.0" }

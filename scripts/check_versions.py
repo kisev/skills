@@ -139,6 +139,8 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     peers = compatibility.get("peers")
     if not isinstance(peers, dict) or not peers:
         raise VersionError("OpenCode compatibility peer ranges are missing")
+    if set(peers) != {"@opencode/plugin"} or set(peer_dependencies) != set(peers):
+        raise VersionError("Only the native OpenCode V2 plugin peer is supported")
     if " || ".join(peers.values()) != compatibility_range:
         raise VersionError("OpenCode combined range differs from compatibility authority")
     for name, peer_range in peers.items():
@@ -155,10 +157,13 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     dev_dependencies = agentomatic.get("devDependencies")
     if not isinstance(dev_dependencies, dict):
         raise VersionError("OpenCode development dependencies are missing")
+    if (
+        any(name.startswith("@opencode-ai/") for name in dev_dependencies)
+        or "npm:opencode-ai" in tools
+    ):
+        raise VersionError("OpenCode V1 dependencies and verification hosts are retired")
     checked_versions = {
-        "package dev dependency": dev_dependencies.get("@opencode-ai/plugin"),
         "package V2 dev dependency": dev_dependencies.get("@opencode/plugin"),
-        "mise OpenCode V1": tools.get("npm:opencode-ai"),
         "mise OpenCode V2": tools.get("npm:@opencode/cli"),
     }
     checked_versions = {

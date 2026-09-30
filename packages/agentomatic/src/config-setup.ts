@@ -1,9 +1,7 @@
-import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { archiveMutations, type ArchiveCandidate } from "./installer.js";
 import { requirePackageVersion } from "./package-metadata.js";
@@ -23,10 +21,9 @@ import {
   type Scope,
 } from "./lifecycle.js";
 import { applyJsoncEdits, parseJsonc, type JsoncEdit } from "./jsonc.js";
+import { corePluginEdits, permissionEdits, type PermissionRule } from "./opencode-config.js";
 
 const PACKAGE_NAME = "@kisev/agentomatic";
-const LEGACY_PACKAGE_NAME = "@kisev/skills-opencode";
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const XDG_STATE_GLOB = "~/.local/state/agent-skills/**";
 const OPENCODE_SKILLS_GLOB = "~/.config/opencode/skills/**";
 const SECRET_PATHS = [
@@ -72,12 +69,6 @@ export const CONFIG_FRAGMENTS = [
     file: "main",
   },
   {
-    name: "lsp-preset",
-    description: "Add LSP servers from the shared catalog (OpenCode only)",
-    targets: ["opencode"],
-    file: "main",
-  },
-  {
     name: "secrets-guard",
     description: "Deny reads and edits of common secret files",
     targets: ["opencode", "kilo", "mimo"],
@@ -91,7 +82,7 @@ export const CONFIG_FRAGMENTS = [
   },
   {
     name: "tui-schema",
-    description: "Unify each agent TUI file: schema, theme, stacked diffs, and leader keybinds",
+    description: "Configure terminal settings: OpenCode V2 cli.json or Kilo/MiMo TUI files",
     targets: ["opencode", "kilo", "mimo"],
     file: "tui",
   },
@@ -220,29 +211,26 @@ const UNIFIED_TUI_KEYBINDS: Record<string, string> = {
   tips_toggle: "<leader>h,<leader>р",
 };
 
-const LSP_SERVER_COMMANDS: Record<string, string[]> = {
-  python: ["basedpyright-langserver", "--stdio"],
-  typescript: ["typescript-language-server", "--stdio"],
-  yaml: ["yaml-language-server", "--stdio"],
-  shell: ["bash-language-server", "start"],
+const OPENCODE_KEYBINDS: Record<string, string> = {
+  "command.palette.show": "alt+p",
+  "app.exit": "ctrl+d,<leader>q,<leader>й",
+  "session.first": "ctrl+g",
+  "session.last": "ctrl+alt+g",
+  "prompt.editor": "<leader>e,<leader>у",
+  "theme.switch": "<leader>t,<leader>е",
+  "session.sidebar.toggle": "<leader>b,<leader>и",
+  "opencode.status": "<leader>s,<leader>ы",
+  "session.export": "<leader>x,<leader>ч",
+  "session.new": "<leader>n,<leader>т",
+  "session.list": "<leader>l,<leader>д",
+  "session.timeline": "<leader>g,<leader>п",
+  "session.compact": "<leader>c,<leader>с",
+  "model.list": "<leader>m,<leader>ь",
+  "agent.list": "<leader>a,<leader>ф",
+  "messages.copy": "<leader>y,<leader>н",
+  "session.undo": "<leader>u,<leader>г",
+  "session.redo": "<leader>r,<leader>к",
 };
-
-function lspCatalog(): Array<{ name: string; extensions: string[] }> {
-  const raw = readFileSync(resolve(packageRoot, "dist", "assets", "lsp-catalog.json"), "utf8");
-  const catalog = JSON.parse(raw) as {
-    servers?: Array<{ name?: unknown; extensions?: unknown }>;
-  };
-  if (!Array.isArray(catalog.servers))
-    throw new ConfigSetupError("invalid_package", "LSP catalog is unavailable");
-  return catalog.servers
-    .filter(
-      (server): server is { name: string; extensions: string[] } =>
-        typeof server.name === "string" &&
-        Array.isArray(server.extensions) &&
-        server.extensions.every((extension) => typeof extension === "string"),
-    )
-    .filter((server) => LSP_SERVER_COMMANDS[server.name]);
-}
 
 function mapAllowsAll(value: unknown): boolean {
   return Boolean(
@@ -271,22 +259,19 @@ function fragmentEdits(
       ? (value.permission as Record<string, unknown>)
       : {};
   if (fragment === "core-plugin") {
-    const key = "plugins" in value ? "plugins" : "plugin";
-    return [
-      { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/config.json" },
-      { kind: "set-if-absent", path: [key], value: [] },
-      {
-        kind: "replace-array-value",
-        path: [key],
-        from: LEGACY_PACKAGE_NAME,
-        to: PACKAGE_NAME,
-      },
-      { kind: "append-unique", path: [key], value: PACKAGE_NAME },
-    ];
+    return corePluginEdits(value);
   }
   if (fragment === "skills-state-permissions") {
     const statePaths =
       target === "opencode" ? [XDG_STATE_GLOB, OPENCODE_SKILLS_GLOB] : [XDG_STATE_GLOB];
+    if (target === "opencode")
+      return permissionEdits(value, [
+        ...statePaths.flatMap((resource): PermissionRule[] => [
+          { action: "read", resource, effect: "allow" },
+          { action: "external_directory", resource, effect: "allow" },
+        ]),
+        { action: "edit", resource: XDG_STATE_GLOB, effect: "allow" },
+      ]);
     const edits: JsoncEdit[] = [];
     if (!mapAllowsAll(permission.read))
       edits.push(
@@ -306,14 +291,15 @@ function fragmentEdits(
       );
     return edits;
   }
-  if (fragment === "lsp-preset") {
-    return lspCatalog().map((server) => ({
-      kind: "set-if-absent" as const,
-      path: ["lsp", server.name],
-      value: { command: LSP_SERVER_COMMANDS[server.name], extensions: server.extensions },
-    }));
-  }
   if (fragment === "secrets-guard") {
+    if (target === "opencode")
+      return permissionEdits(value, [
+        ...SECRET_PATHS.flatMap((glob): PermissionRule[] => [
+          { action: "read", resource: glob.replace(/^\*\*\//, "*"), effect: "deny" },
+          { action: "edit", resource: glob.replace(/^\*\*\//, "*"), effect: "deny" },
+        ]),
+        { action: "read", resource: "*.env.example", effect: "allow" },
+      ]);
     const deny = Object.fromEntries(SECRET_PATHS.map((glob) => [glob, "deny"]));
     return [
       ...permissionMapEdits(["permission", "read"], {
@@ -331,8 +317,18 @@ function fragmentEdits(
       { kind: "set-if-absent", path: ["mcp_tool_display"], value: "expanded" },
     ];
   }
+  if (target === "opencode")
+    return [
+      { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/v2/cli.json" },
+      { kind: "set-if-absent", path: ["theme", "name"], value: "ayu" },
+      ...Object.entries(OPENCODE_KEYBINDS).map(([key, value]) => ({
+        kind: "set-if-absent" as const,
+        path: ["keybinds", key],
+        value,
+      })),
+    ];
   const tuiSchemas: Record<ConfigTargetName, string | undefined> = {
-    opencode: "https://opencode.ai/tui.json",
+    opencode: undefined,
     kilo: undefined,
     mimo: "https://mimo.xiaomi.com/mimocode/tui.json",
   };
@@ -443,9 +439,9 @@ async function resolveTargetFile(
     return {
       target,
       root: globalRoot,
-      path: "tui.json",
-      absolute: join(globalRoot, "tui.json"),
-      exists: await existing(globalRoot, "tui.json"),
+      path: "cli.json",
+      absolute: join(globalRoot, "cli.json"),
+      exists: await existing(globalRoot, "cli.json"),
     };
   }
   if (target === "opencode") {
@@ -551,6 +547,23 @@ async function build(
       let changed = false;
       for (const fragment of selection.fragments) {
         if (!applicable(fragment, target) || fragmentFileKind(fragment) !== kind) continue;
+        if (
+          target === "opencode" &&
+          kind === "tui" &&
+          !file.exists &&
+          ((await readRegular(join(file.root, "tui.json"))) ||
+            (await readRegular(join(file.root, "tui.jsonc"))))
+        ) {
+          operations.push({
+            target,
+            path: file.absolute,
+            fragment,
+            operation: "conflict",
+            reason:
+              "Start OpenCode V2 once to migrate existing TUI preferences into cli.json before applying terminal presets",
+          });
+          continue;
+        }
         let parsed: unknown = undefined;
         try {
           parsed = parseJsonc(text);
@@ -748,6 +761,8 @@ export async function applyConfigSetup(
           await provision();
           return built.plan;
         }
+        if (!built.plan.operations.some((operation) => operation.operation === "conflict"))
+          return built.plan;
         throw new ConfigSetupError("invalid_state", "Config setup plan has no applicable changes");
       }
       const backups: ArchiveCandidate[] = [];

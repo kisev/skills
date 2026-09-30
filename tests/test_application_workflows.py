@@ -1702,7 +1702,7 @@ print(json.dumps(value))
             )
             with (
                 patch.object(module.shutil, "which", return_value=str(executable)),
-                patch.object(module, "TRACE_TIMEOUT_SECONDS", 0.05),
+                patch.object(module, "TRACE_TIMEOUT_SECONDS", 2.0),
             ):
                 with self.assertRaisesRegex(module.WorkflowError, "timed out"):
                     module.glab_text("gitlab.example", "projects/19/jobs/7/trace")

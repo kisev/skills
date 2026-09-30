@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
+import { createSessionTables, insertMessage } from "./opencode-fixture.mjs";
 
 test("help and status never start a model, index, or create state; malformed arguments fail early", () => {
   const root = mkdtempSync(join(tmpdir(), "memory-cli-"));
@@ -85,14 +86,11 @@ test("status reports the queue: inbox files, session backlog and promotion candi
   const data = join(root, "data", "opencode");
   mkdirSync(data, { recursive: true });
   const database = new DatabaseSync(join(data, "opencode.db"));
-  database.exec(
-    "CREATE TABLE session(id TEXT, title TEXT, directory TEXT, time_created INTEGER); CREATE TABLE message(id TEXT, session_id TEXT, data TEXT, time_created INTEGER); CREATE TABLE part(id TEXT, message_id TEXT, data TEXT, time_created INTEGER);",
-  );
-  database.prepare("INSERT INTO session VALUES (?,?,?,?)").run("s", "Backlog", root, 1000);
-  database.prepare("INSERT INTO message VALUES (?,?,?,?)").run("m", "s", '{"role":"user"}', 1000);
+  createSessionTables(database);
   database
-    .prepare("INSERT INTO part VALUES (?,?,?,?)")
-    .run("p", "m", JSON.stringify({ type: "text", text: "A queued decision." }), 1000);
+    .prepare("INSERT INTO session_v2 VALUES (?,?,?,?,?)")
+    .run("s", "Backlog", root, 1000, 1000);
+  insertMessage(database, "m", "s", "user", "A queued decision.", 1, 1000);
   database.close();
   mkdirSync(join(state, "memomatic", "inbox"), { recursive: true });
   writeFileSync(join(state, "memomatic", "inbox", "user-test.md"), "- Queued entry.\n");

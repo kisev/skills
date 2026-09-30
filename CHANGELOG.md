@@ -10,9 +10,19 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
-- Agentomatic plugins now expose both the OpenCode V1 `server` and V2 `setup`
-  entrypoints. All patches in the `1.18.x` and `2.0.x` minors are supported;
-  repository checks exercise the current patch of each minor from Mise.
+- Agentomatic now supports only OpenCode `2.0.x`: V1 dependencies, entrypoints,
+  adapters, and checks are removed. V1 users can retain the pre-V2 stable release.
+  Config setup writes native `plugins`, ordered `permissions`, and global
+  `cli.json`, migrating only touched sections and preserving user rules and
+  comments. Agent definitions and model discovery use V2 contracts. The inactive
+  `lsp-preset` is removed; permission smoke checks run against real V2 evaluation.
+
+- Memomatic's OpenCode client targets V2 only: model calls spawn an isolated
+  `opencode serve` with deny-all permissions, system prompts go through the V2
+  instructions API, and extraction reports mark token usage unavailable.
+  Session ingestion reads the V2 `session_v2`/`session_message` projections
+  read-only; pre-V2 databases fail with a start-V2 instruction instead of
+  parsing legacy layouts.
 
 - The `code-review` skill is now a thin portable archive: its Python runners
   are removed and the executable runtime is the external `@kisev/reviewmatic`
@@ -51,6 +61,12 @@ All notable changes to this project are documented in this file. Entries follow
 ## \[11.0.2] - 2026-09-30
 
 ### Fixed
+
+- The GitLab trace-streaming timeout test no longer races process startup: its
+  patched deadline of 50 ms could expire before the fake `glab` child wrote its
+  pid file under parallel suite load, failing the cleanup check. The deadline is
+  now 2 s while the child still sleeps past it, so the timeout and process-group
+  cleanup assertions are unchanged.
 
 - `release_channel --github-output` now writes the output names the publish
   workflow reads (`dist-tag`, `deploys-pages`); the previous snake\_case names

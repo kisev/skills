@@ -30,8 +30,9 @@ Nightly runs are scheduled by the systemd user units in `assets/systemd/`
 `memomatic-dream.service`/`.timer` for consolidation).
 
 Configure `sessions.model` (or keep a legacy `dream.model`) and an OpenCode
-provider before expecting session extraction; without a model, the session
-watermark is preserved. Follow the
+V2 provider before expecting session extraction; without a model, the session
+watermark is preserved. Session extraction and its model server require
+OpenCode `2.x`; a pre-V2 session database is not parsed. Follow the
 [setup, first-entry, and scheduling guide](../../docs/how-to/memomatic.md).
 
 ## CLI, Sessions, and Dream

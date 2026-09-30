@@ -40,7 +40,10 @@ type Node = ObjectNode | ArrayNode | ScalarNode;
 export type JsoncPath = Array<string | number>;
 
 export type JsoncEdit =
-  | { kind: "append-unique"; path: JsoncPath; value: string }
+  | { kind: "append-unique"; path: JsoncPath; value: unknown }
+  | { kind: "set-value"; path: JsoncPath; value: unknown }
+  | { kind: "rename-key"; path: JsoncPath; to: string }
+  | { kind: "remove-key"; path: JsoncPath }
   | { kind: "replace-array-value"; path: JsoncPath; from: string; to: string }
   | { kind: "set-if-absent"; path: JsoncPath; value: unknown }
   | { kind: "widen-scalar-map"; path: JsoncPath; entries: Record<string, string> };
@@ -181,6 +184,8 @@ function parseObject(parser: Parser): ObjectNode {
     if (next && next.type === "punct" && next.raw === ",") {
       parser.cursor += 1;
       trailingComma = true;
+    } else if (next && !(next.type === "punct" && next.raw === "}")) {
+      throw new JsoncError("invalid_jsonc", `Expected comma at offset ${next.start}`);
     }
   }
   if (!closed) throw new JsoncError("invalid_jsonc", `Unterminated object at offset ${open.start}`);
@@ -217,6 +222,8 @@ function parseArray(parser: Parser): ArrayNode {
     if (next && next.type === "punct" && next.raw === ",") {
       parser.cursor += 1;
       trailingComma = true;
+    } else if (next && !(next.type === "punct" && next.raw === "]")) {
+      throw new JsoncError("invalid_jsonc", `Expected comma at offset ${next.start}`);
     }
   }
   if (!closed) throw new JsoncError("invalid_jsonc", `Unterminated array at offset ${open.start}`);
@@ -235,7 +242,13 @@ export function nodeToValue(node: Node): unknown {
   if (node.kind === "scalar") return JSON.parse(node.raw);
   if (node.kind === "array") return node.items.map(nodeToValue);
   const value: Record<string, unknown> = {};
-  for (const key of node.propOrder) value[key] = nodeToValue(node.props.get(key)!);
+  for (const key of node.propOrder)
+    Object.defineProperty(value, key, {
+      value: nodeToValue(node.props.get(key)!),
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
   return value;
 }
 
@@ -326,11 +339,67 @@ function applyEdit(
   root: Node,
   edit: JsoncEdit,
 ): { text: string; result: JsoncEditResult } {
+  if (edit.kind === "rename-key" || edit.kind === "remove-key") {
+    const key = edit.path.at(-1);
+    const parent = resolve(root, edit.path.slice(0, -1));
+    if (typeof key !== "string" || !parent || parent.kind !== "object")
+      throw new JsoncError("conflict", "Key edit requires an object parent");
+    const target = parent.props.get(key);
+    if (!target) return { text, result: "present" };
+    const index = parent.propOrder.indexOf(key);
+    const previous = index ? parent.props.get(parent.propOrder[index - 1]) : undefined;
+    const tokens = tokenize(text).filter(
+      (token) => token.start >= (previous?.end ?? parent.start + 1) && token.end <= target.start,
+    );
+    const keyToken = tokens.find((token) => token.type === "string");
+    if (!keyToken) throw new JsoncError("conflict", "Object key token is unavailable");
+    if (edit.kind === "rename-key") {
+      if (parent.props.has(edit.to))
+        throw new JsoncError("conflict", `Destination key already exists: ${edit.to}`);
+      return {
+        text: text.slice(0, keyToken.start) + JSON.stringify(edit.to) + text.slice(keyToken.end),
+        result: "replaced",
+      };
+    }
+    const following = tokenize(text).find(
+      (token) => token.start >= target.end && token.type !== "ws" && token.type !== "comment",
+    );
+    const start = following?.raw === "," || !previous ? keyToken.start : previous.end;
+    const end = following?.raw === "," ? following.end : target.end;
+    const comments = tokenize(text.slice(start, end))
+      .filter((token) => token.type === "comment")
+      .map((token) => `${token.raw}\n`)
+      .join("");
+    return { text: text.slice(0, start) + comments + text.slice(end), result: "replaced" };
+  }
+  if (edit.kind === "set-value") {
+    const target = resolve(root, edit.path);
+    if (!target) return applyEdit(text, root, { ...edit, kind: "set-if-absent" });
+    if (JSON.stringify(nodeToValue(target)) === JSON.stringify(edit.value))
+      return { text, result: "present" };
+    const comments = tokenize(text.slice(target.start, target.end))
+      .filter((token) => token.type === "comment")
+      .map((token) => `${token.raw}\n${lineIndent(text, target.start)}`)
+      .join("");
+    return {
+      text:
+        text.slice(0, target.start) +
+        comments +
+        serialize(edit.value, lineIndent(text, target.start)) +
+        text.slice(target.end),
+      result: "replaced",
+    };
+  }
   if (edit.kind === "append-unique") {
     const target = resolve(root, edit.path);
     if (!target || target.kind !== "array")
       throw new JsoncError("conflict", "append-unique target is missing or not an array");
-    if (target.items.map(nodeToValue).includes(edit.value)) return { text, result: "present" };
+    if (
+      target.items
+        .map(nodeToValue)
+        .some((value) => JSON.stringify(value) === JSON.stringify(edit.value))
+    )
+      return { text, result: "present" };
     const insertion = target.empty ? JSON.stringify(edit.value) : `, ${JSON.stringify(edit.value)}`;
     const at = target.empty ? target.start + 1 : target.items.at(-1)!.end;
     return { text: text.slice(0, at) + insertion + text.slice(at), result: "appended" };
@@ -417,9 +486,28 @@ function at(value: unknown, path: JsoncPath): unknown {
 }
 
 function verifyEdit(before: unknown, after: unknown, edit: JsoncEdit): void {
+  if (edit.kind === "set-value") {
+    if (JSON.stringify(at(after, edit.path)) !== JSON.stringify(edit.value))
+      throw new JsoncError("merge_validation_failed", "set-value postcondition failed");
+    return;
+  }
+  if (edit.kind === "rename-key" || edit.kind === "remove-key") {
+    if (at(after, edit.path) !== undefined)
+      throw new JsoncError("merge_validation_failed", "Old key remains after key edit");
+    if (
+      edit.kind === "rename-key" &&
+      JSON.stringify(at(before, edit.path)) !==
+        JSON.stringify(at(after, [...edit.path.slice(0, -1), edit.to]))
+    )
+      throw new JsoncError("merge_validation_failed", "Renamed key lost its value");
+    return;
+  }
   if (edit.kind === "append-unique") {
     const target = at(after, edit.path);
-    if (!Array.isArray(target) || !target.includes(edit.value))
+    if (
+      !Array.isArray(target) ||
+      !target.some((value) => JSON.stringify(value) === JSON.stringify(edit.value))
+    )
       throw new JsoncError("merge_validation_failed", "append-unique postcondition failed");
     return;
   }
@@ -479,12 +567,12 @@ export function applyJsoncEdits(
   text: string,
   edits: readonly JsoncEdit[],
 ): { text: string; results: JsoncEditResult[]; changed: boolean } {
-  const before = parseJsonc(text);
+  parseJsonc(text);
   let current = text;
   const results: JsoncEditResult[] = [];
   for (const edit of edits) {
     const applied = applyEdit(current, parseDocument(current), edit);
-    verifyEdit(before, parseJsonc(applied.text), edit);
+    verifyEdit(parseJsonc(current), parseJsonc(applied.text), edit);
     results.push(applied.result);
     current = applied.text;
   }

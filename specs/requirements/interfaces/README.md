@@ -86,13 +86,10 @@ offline results explicitly identify fixture-only evidence.
 
 ### REQ-I-006 - Compatibility interface
 
-The package shall declare `@opencode-ai/plugin >=1.18.29 <1.19.0` and preserve
-the checked versions and no-network/no-credentials compatibility boundary.
+> Lifecycle: `superseded` | Changed: `2026-09-30` | Reason: OpenCode V1 support remains in the pre-V2 release; the current integration targets V2 only | Replacement: [REQ-I-420](#req-i-420---native-opencode-v2-interface)
 
-#### Verification
-
-The compatibility matrix loads exports and host commands at every declared
-tested version without live providers or credentials.
+Formerly required the V1 `@opencode-ai/plugin` peer range and checked host
+versions without live providers or credentials.
 
 ### REQ-I-007 - Support location-independent direct CLI invocation
 
@@ -175,3 +172,29 @@ CLI subprocess tests check contextual non-mutating help/status, unknown options,
 CLI/env/file precedence, protocol-only stdout and configuration unable to confirm
 mutations. Materialization tests compare all generated copies with the authored
 source. Packed-package smoke tests cover the existing npm graph.
+
+### REQ-I-420 - Native OpenCode V2 interface
+
+The current integration shall expose only native OpenCode V2 plugin entrypoints,
+hooks, tool names, agent definitions, and configuration output. The compatibility
+inventory `evals/contracts/opencode-compatibility.json` owns the supported peer
+range and exact checked patches; package metadata and Mise shall agree with it
+without V1 plugin dependencies or a V1 verification host. The pre-V2 release
+remains the V1 distribution; current code shall not provide simultaneous V1/V2
+runtime support or edit session databases.
+
+Selected config fragments shall normalize only their touched legacy sections
+to native V2 while preserving user entries, comments, and permission-rule order.
+Ambiguous legacy/native sections and preset conflicts shall remain unchanged
+as conflicts. OpenCode terminal presets shall target global `cli.json`, not
+`tui.json` or project-local client settings. When legacy TUI preferences exist
+without `cli.json`, setup shall defer to V2's built-in migration rather than
+prevent it by creating a replacement. Kilo/MiMo retain their own formats.
+
+#### Verification
+
+Hostless tests check native-only exports, bounded migration, comments, order,
+conflicts, retained model selections, and idempotence. Installed-tarball tests
+load plugins and agents in the pinned V2 server and evaluate allow/deny rules
+without model calls or credentials; npm dependency provisioning may access the
+registry. Root and nested secret paths and allowed skills-state paths are covered.

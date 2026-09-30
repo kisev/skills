@@ -433,9 +433,9 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       ],
       [
         "In a TTY, target and fragment selectors open when flags are omitted.",
-        "Global scope edits opencode.json(c), tui.json, kilo.json(c), and mimocode.json(c).",
+        "Global scope edits OpenCode opencode.json(c)/cli.json and Kilo/MiMo config/TUI files.",
         "Project scope edits the project opencode.json(c) file only.",
-        "Existing entries, comments, and unrelated keys are preserved; only absent keys are added.",
+        "Selected OpenCode legacy sections migrate to native V2; user rules, comments, and unrelated keys are preserved.",
         "Writes occur only after the exact confirmation; conflicting fragments are skipped as findings.",
         "Interrupted config transactions require an explicit config recover preview and confirmation.",
       ],
@@ -569,7 +569,8 @@ function contextualHelp(arguments_: readonly string[]): string | undefined {
       ],
       [
         "Opens a TTY wizard unless the agent and model are explicit.",
-        "Uses the cached OpenCode model catalog and makes no LLM call.",
+        "Reads the V2 model snapshot through opencode api; no LLM call or forced catalog refresh.",
+        "OpenCode may start its managed background service; explicit models need no discovery.",
         "The preview normally prints an agent model-set Apply command.",
       ],
       [
@@ -844,7 +845,7 @@ async function interactiveConfigSelection(options: Options): Promise<ConfigSetup
   process.stderr.write(
     [
       "This command edits user-owned configuration files after an exact confirmation.",
-      "Global scope targets opencode.json(c), tui.json, kilo.json(c), and mimocode.json(c).",
+      "Global scope targets OpenCode opencode.json(c)/cli.json and Kilo/MiMo config/TUI files.",
       "Existing entries, comments, and unrelated keys are preserved.",
       "\n",
     ].join("\n"),

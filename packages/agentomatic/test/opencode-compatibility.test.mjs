@@ -8,67 +8,13 @@ import core from "../dist/index.js";
 import rtk from "../dist/plugins/rtk.js";
 import rules from "../dist/plugins/rules-injector.js";
 import bell from "../dist/plugins/zed-bell.js";
+import { host } from "./host.mjs";
 
-function host(directory = "/project", options = {}) {
-  const hooks = {};
-  const tools = new Map();
-  let emit;
-  let aborted = false;
-  const context = {
-    location: { directory },
-    options,
-    agent: {
-      list: async () => ({
-        data: [
-          {
-            id: "mapper",
-            name: "Mapper",
-            permissions: [{ action: "edit", resource: "*", effect: "deny" }],
-          },
-        ],
-      }),
-    },
-    tool: {
-      hook: async (name, callback) => {
-        hooks[name] = callback;
-      },
-      transform: async (callback) => callback({ add: (tool) => tools.set(tool.name, tool) }),
-    },
-    session: {
-      hook: async (name, callback) => {
-        hooks[name] = callback;
-      },
-      get: async () => ({ location: { directory } }),
-    },
-    event: {
-      subscribe: async function* ({ signal }) {
-        signal.addEventListener(
-          "abort",
-          () => {
-            aborted = true;
-            emit?.();
-          },
-          { once: true },
-        );
-        while (!signal.aborted) {
-          const event = await new Promise((resolve) => {
-            emit = resolve;
-          });
-          if (event) yield event;
-        }
-      },
-    },
-  };
-  return { context, hooks, tools, emit: (event) => emit(event), aborted: () => aborted };
-}
-
-test("all entrypoints expose independently callable V1 and V2 implementations", async () => {
+test("all entrypoints expose only the native V2 implementation", async () => {
   for (const plugin of [core, rtk, rules, bell]) {
     assert.equal(typeof plugin.id, "string");
     assert.equal(typeof plugin.setup, "function");
-    assert.equal(typeof plugin.server, "function");
-    const hooks = await plugin.server({ directory: "/project" }, { enabled: false });
-    assert.equal(typeof hooks, "object");
+    assert.equal(plugin.server, undefined);
   }
 });
 

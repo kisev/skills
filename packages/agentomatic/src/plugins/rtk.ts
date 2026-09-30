@@ -1,5 +1,5 @@
 import type { Plugin } from "@opencode/plugin";
-import { registerV2Hooks } from "./compatibility.js";
+import { resultText, replaceResultText, toolInput, type ToolAfter } from "./events.js";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -20,8 +20,6 @@ const FILTERS: ReadonlyArray<{ prefix: readonly string[]; filter: string }> = [
 ];
 const RECENT_EVENTS_CAP = 20;
 const CHARS_PER_TOKEN = 4;
-type HookInput = { tool: string; args?: { command?: unknown } };
-type HookOutput = { output?: unknown };
 export type RtkMethod =
   | "compressed-rtk"
   | "truncated-head-tail"
@@ -173,7 +171,9 @@ export async function rtk(options: RtkOptions = {}) {
     ((selected: string, input: string) => external(options.bin ?? "rtk", selected, input));
   const statsPath = options.statsPath === null ? undefined : (options.statsPath ?? rtkStatsPath());
   return {
-    "tool.execute.after": async (input: HookInput, output: HookOutput) => {
+    "execute.after": async (input: ToolAfter) => {
+      if (input.status !== "completed") return;
+      const output = { output: resultText(input.result) };
       try {
         if (
           input.tool === "edit" &&
@@ -184,21 +184,23 @@ export async function rtk(options: RtkOptions = {}) {
         )
           output.output = `${output.output}\nSTOP. Read the file before retrying Edit.`;
         if (
-          input.tool !== "bash" ||
+          input.tool !== "shell" ||
           typeof output.output !== "string" ||
           output.output.length < (options.threshold ?? THRESHOLD)
         ) {
-          if (input.tool === "bash" && typeof output.output === "string" && statsPath)
+          if (input.tool === "shell" && typeof output.output === "string" && statsPath)
             await recordStats(
               statsPath,
               "below-threshold",
               output.output.length,
               output.output.length,
             );
+          if (output.output !== undefined)
+            input.result = replaceResultText(input.result, output.output);
           return;
         }
-        const selected =
-          typeof input.args?.command === "string" ? filter(input.args.command) : undefined;
+        const command = toolInput(input.input).command;
+        const selected = typeof command === "string" ? filter(command) : undefined;
         const compressed = selected ? await run(selected, output.output) : undefined;
         const result =
           compressed && compressed.length < output.output.length
@@ -206,6 +208,7 @@ export async function rtk(options: RtkOptions = {}) {
             : truncate(output.output);
         const originalSize = output.output.length;
         output.output = `${result}\n[rtk: compressed method=${result === compressed ? `rtk/${selected}` : "head+tail"}; sizes=${originalSize}->${result.length}; evidence_complete=false; loss=possible]`;
+        input.result = replaceResultText(input.result, output.output);
         if (statsPath) {
           const method: RtkMethod =
             result === compressed
@@ -226,8 +229,8 @@ export async function rtk(options: RtkOptions = {}) {
 
 export default {
   id: "agentomatic.rtk",
-  server: async (_input: unknown, options: RtkOptions = {}) => rtk(options),
   async setup(ctx) {
-    return registerV2Hooks(ctx, await rtk(ctx.options));
+    const hooks = await rtk(ctx.options);
+    if (hooks["execute.after"]) await ctx.tool.hook("execute.after", hooks["execute.after"]);
   },
-} satisfies Plugin.Plugin & { server: unknown };
+} satisfies Plugin.Plugin;

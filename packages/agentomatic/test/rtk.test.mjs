@@ -22,7 +22,15 @@ function statsFile() {
 
 async function hook(payload, command, options) {
   const hooks = await rtk(options);
-  return hooks["tool.execute.after"]({ tool: "bash", args: { command } }, payload);
+  const event = {
+    tool: "shell",
+    sessionID: "s",
+    input: { command },
+    status: "completed",
+    result: { content: payload.output },
+  };
+  await hooks["execute.after"](event);
+  payload.output = event.result.content;
 }
 
 test("rtk hook compresses eligible output and records compressed-rtk stats", async () => {
@@ -89,14 +97,22 @@ test("rtk hook leaves below-threshold output untouched and counts it", async () 
   }
 });
 
-test("rtk stats cap recent events and ignore non-bash tools", async () => {
+test("rtk stats cap recent events and ignore non-shell tools", async () => {
   const item = statsFile();
   try {
     for (let index = 0; index < 25; index += 1)
       await hook({ output: "ok" }, "pytest tests/", { statsPath: item.path });
     const edited = { output: "oldString not found" };
     const hooks = await rtk({ statsPath: item.path });
-    await hooks["tool.execute.after"]({ tool: "edit" }, edited);
+    const event = {
+      tool: "edit",
+      sessionID: "s",
+      input: {},
+      status: "completed",
+      result: { content: edited.output },
+    };
+    await hooks["execute.after"](event);
+    edited.output = event.result.content;
     assert.equal(edited.output, "oldString not found\nSTOP. Read the file before retrying Edit.");
     const stats = await readRtkStats(item.path);
     assert.equal(stats.counters["below-threshold"], 25);

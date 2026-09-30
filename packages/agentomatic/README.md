@@ -13,7 +13,7 @@ update, and removal lifecycle.
   `critic`.
 - Capability routing plus direct CLI diagnostics, reconciliation, and profiles.
 - A confirmed `config` command that connects the package and recommended
-  fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
+  fragments into OpenCode `opencode.json(c)`/`cli.json`, `kilo.json(c)`, and
   `mimocode.json(c)` while preserving existing entries and comments.
 - Optional plugin wrappers: `rules-injector` and `zed-bell`;
   the `rtk` compression wrapper is deployed by
@@ -61,7 +61,8 @@ migration guide](../../docs/how-to/memomatic.md).
 ## Requirements
 
 - Node.js 22 or later.
-- OpenCode `>=1.18.0 <1.19.0 || >=2.0.0 <2.1.0`.
+- OpenCode `>=2.0.0 <2.1.0`. V1 users retain the last `11.0.x`
+  [release](https://github.com/kisev/skills/releases), not `dev`.
 - A persistent npm project that owns the dependency.
 
 ## Project Install
@@ -83,7 +84,7 @@ needed. Offline setups can provision the dependency by hand first:
 matches the installed package. Apply by rerunning the install command without
 `--dry-run` and confirming the printed plan summary, or by adding `--yes`
 outside a terminal. When core integration is selected, the same confirmed install
-merges the `plugin` entry into user-owned OpenCode configuration while preserving
+merges the `plugins` entry into user-owned OpenCode configuration while preserving
 existing entries. The separate `config` command can apply additional fragments
 or retry a failed configuration step:
 
@@ -94,14 +95,15 @@ npx agentomatic config --global --dry-run
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@kisev/agentomatic"]
+  "plugins": ["@kisev/agentomatic"]
 }
 ```
 
-Restart OpenCode after activation or asset changes. The `install` and
-`uninstall` commands never edit `opencode.json`; `config` is the only confirmed
-path for configuration fragments, and command adapter selections do not install
-portable skills.
+Restart OpenCode after activation or asset changes. A confirmed `install` can
+apply its core config step; `uninstall` never edits user configuration. Other
+fragments use `config`, and command adapter selections do not install portable
+skills. OpenCode config output uses native V2 `plugins` and `permissions`;
+only touched legacy sections migrate, with ambiguous cases reported as conflicts.
 
 ## Documentation
 

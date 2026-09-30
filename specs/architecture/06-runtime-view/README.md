@@ -28,7 +28,7 @@ separately confirmed text-response commands remain manual and unexecuted. This
 runtime provides [REQ-F-507](../../capabilities/skills/mattermost-triage.md#req-f-507---triage-bounded-mattermost-attention).
 
 Routing resolves host inventory, creates a receipt, consumes it once for a
-matching Task, validates the structured result, and expires the receipt.
+matching native subagent call, validates the structured result, and expires the receipt.
 Installation and reconciliation validate ownership and digests before
 publishing or archiving package assets. Reconcile ignores portable skill trees
 and installer lock files; their update and removal lifecycle belongs to the

@@ -8,7 +8,7 @@ The supported portable source is the GitHub Pages stable channel at
 `https://kisev.github.io/skills`; the optional package is
 `@kisev/agentomatic`. Portable installation follows
 `npx --yes skills@latest`. The package requires Node.js 22.13+ and declares OpenCode
-`>=1.18.29 <1.19.0`.
+`>=2.0.0 <2.1.0`.
 
 ## Portable Installation
 
@@ -40,10 +40,12 @@ Scope-aware direct commands default to the current directory and accept one
 requires preview/confirmation. It writes only selected managed assets after
 confirmation and never creates or edits `opencode.json`. The separate `config`
 command is the confirmed path for user configuration: it merges selected
-fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
-`mimocode.json(c)` behind a preview/confirmation receipt, preserving existing
-entries, comments, and unrelated keys, adding only absent keys, and widening
-scalar permission maps while keeping the scalar as the `"*"` entry. Update is
+fragments into `opencode.json(c)` with native V2 `plugins`/`permissions` and
+global `cli.json`, plus `kilo.json(c)` and `mimocode.json(c)` for those hosts,
+behind a preview/confirmation receipt, preserving comments, unrelated entries,
+and user rule order, migrating only the touched legacy sections and reporting
+ambiguities as conflicts; Kilo/MiMo widen scalar permission maps while keeping
+the scalar as the `"*"` entry. Update is
 an exact npm install followed by install preview, exact confirmation, and
 OpenCode restart.
 
@@ -101,8 +103,10 @@ audit outcomes. Offline results use `observation_mode: hostless-contract`; only
 trusted-live results use `observation_mode: trusted-live` and may satisfy case
 outcome assertions.
 
-Compatibility checks exercise OpenCode `1.18.29`, `1.18.31`, and `1.18.32` inside
-`>=1.18.29 <1.19.0` without credentials.
+Compatibility checks exercise OpenCode `2.0.19` inside
+`>=2.0.0 <2.1.0` without credentials: installed-tarball package smoke, native
+server permission evaluation, and the memomatic V2 HTTP and read-only database
+contract.
 
 ## Live Evaluation and Clean Checkout
 

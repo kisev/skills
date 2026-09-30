@@ -232,7 +232,7 @@ test("upgrade archives the retired memomatic wrapper but preserves user edits", 
 
 test("2.0.0 public surface and CLI contracts exclude retired APIs", () => {
   assert.equal("@kisev/memomatic" in PACKAGE_METADATA.dependencies, false);
-  assert.equal(typeof rootPlugin.server, "function");
+  assert.equal(rootPlugin.server, undefined);
   assert.equal(typeof rootPlugin.setup, "function");
   assert.equal(typeof rulesInjector, "function");
   assert.equal(typeof rtk, "function");

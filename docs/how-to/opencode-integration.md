@@ -8,7 +8,7 @@ skills have a separate lifecycle and must be installed independently through the
 
 ## Requirements and Ownership
 
-The package requires Node.js 22.13+ and OpenCode `>=1.18.0 <1.19.0 || >=2.0.0 <2.1.0`.
+The package requires Node.js 22.13+ and OpenCode `>=2.0.0 <2.1.0`.
 See [common CLI conventions](../reference/cli.md) for configuration precedence,
 environment variables, diagnostics and machine output. The existing wizard remains available.
 
@@ -24,26 +24,30 @@ The package and generated wrappers must remain resolvable after the installer
 exits. Import, plugin loading, and npm lifecycle scripts do not install assets,
 install portable skills, or edit OpenCode configuration.
 
-## OpenCode V1 and V2
+## OpenCode V2
 
-All patch releases in the `1.18.x` and `2.0.x` minors are supported. Exact versions
+All patch releases in the `2.0.x` minor are supported. Exact versions
 in `evals/contracts/opencode-compatibility.json` are verification samples, not an
-allowlist. The same package and optional wrappers expose a V1 `server` entrypoint
-and a V2 `setup` entrypoint; routing receipts, output compression, and nested
-rules retain their behavior across both APIs.
+allowlist. The package and optional wrappers use the native V2 `setup` entrypoint,
+hooks, and ordered permissions. There is no V1 runtime or compatibility gate.
+For OpenCode V1, keep the last `11.0.x` stable
+[release](https://github.com/kisev/skills/releases)
+instead of installing the `dev` channel. V1 and V2 share configuration locations;
+do not run V1 against configuration converted to native V2 shapes.
 
 After upgrading an existing installation, use the installer upgrade preview and
 confirm it to replace the managed plugin wrappers, then restart OpenCode. Old
 function-only wrappers cannot load in V2. Preserve user-modified wrapper files;
 the installer reports conflicts instead of overwriting them.
 
-V2 uses `plugins` in `opencode.json(c)` and accepts the legacy `plugin` spelling.
-Config setup updates `plugins` when that key exists; otherwise it keeps `plugin`
-for V1 compatibility. Do not register the same package in both arrays.
+Config setup writes native `plugins` and `permissions` in `opencode.json(c)`.
+It converts only the sections needed by the selected fragments, not the entire
+configuration. Conflicting legacy/native sections are reported rather than merged
+by guesswork. Do not register the same package twice.
 
-Maintainers install both CLI generations through the npm backend in `mise.toml`.
-`task package:check` runs installed-tarball smoke checks on the current
-patches of both minors, alongside hostless behavior tests. These checks need no
+Maintainers install only V2 through the npm backend in `mise.toml`.
+`task package:check` runs installed-tarball smoke checks on its pinned patch,
+including real permission evaluation, alongside hostless behavior tests. These checks need no
 model credentials; dependency provisioning can require registry access.
 
 ## Install
@@ -128,7 +132,7 @@ array stays reserved for the npm core package. Opt out explicitly with
 
 ## RTK Compression Observability
 
-The `rtk` wrapper compresses verbose `bash` tool output above 8,000 characters
+The `rtk` wrapper compresses verbose `shell` tool output above 8,000 characters
 through the external RTK CLI, falls back to head+tail truncation when the
 binary is unavailable, and appends an
 `[rtk: compressed method=...; sizes=...; evidence_complete=false]` marker to
@@ -149,15 +153,16 @@ estimated token savings, and the statistics timestamp.
 
 ## Activate the Core Plugin
 
-The installer records whether the selection needs core integration, but
-`install` and `uninstall` never create or edit `opencode.json`. Connect the
-package with the confirmed `config` command, or add it to the user-owned
-`plugin` array for the same scope manually while preserving existing entries:
+The installer records whether the selection needs core integration. A confirmed
+`install` with core selected applies the same core config step as `config`;
+`uninstall` never edits user configuration. You can also connect the package with
+the confirmed `config` command, or add it to the user-owned `plugins` array for
+the same scope manually while preserving existing entries:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@kisev/agentomatic"]
+  "plugins": ["@kisev/agentomatic"]
 }
 ```
 
@@ -177,7 +182,7 @@ npx agentomatic config --dry-run
 
 In a TTY, target and fragment selectors open when flags are omitted. Targets
 are agents: global scope targets `~/.config/opencode/opencode.json(c)` and
-`tui.json`, `~/.config/kilo/kilo.json(c)` and `tui.json[c]`, and
+`cli.json`, `~/.config/kilo/kilo.json(c)` and `tui.json[c]`, and
 `~/.config/mimocode/mimocode.json(c)` and `tui.json`; project scope targets
 the project `opencode.json(c)` file only. Outside a TTY, pass `--targets` and
 `--fragments` explicitly.
@@ -186,21 +191,36 @@ Selectable fragments:
 
 | Fragment | Targets | Effect |
 | - | - | - |
-| `core-plugin` | opencode | Adds `$schema` and registers `@kisev/agentomatic` in `plugin` |
-| `skills-state-permissions` | opencode, kilo, mimo | Allows `~/.local/state/agent-skills/**` (plus `~/.config/opencode/skills/**` for OpenCode) in `permission.read`, `permission.edit`, and `permission.external_directory` so the standard skills state paths stop prompting |
-| `lsp-preset` | opencode | Adds LSP servers from the shared catalog with standard commands |
+| `core-plugin` | opencode | Adds `$schema` and registers `@kisev/agentomatic` in `plugins` |
+| `skills-state-permissions` | opencode, kilo, mimo | Allows reads, edits, and external-directory access to standard skills state paths under `~/.local/state/agent-skills/**`; OpenCode also allows reads and external-directory access under `~/.config/opencode/skills/**`. OpenCode uses ordered `permissions`; Kilo/MiMo retain their `permission` maps |
 | `secrets-guard` | opencode, kilo, mimo | Denies reads and edits of common secret files (`.env*`, keys, credentials) |
 | `kilo-display` | kilo | Expands reasoning, terminal, edit, and tool blocks |
-| `tui-schema` | opencode, kilo, mimo | Unifies each agent TUI file: per-agent `$schema` (OpenCode, MiMo), `theme: ayu`, `diff_style: stacked`, and the shared leader keybind map; Kilo writes `tui.json[c]`, MiMo and OpenCode write `tui.json` |
+| `tui-schema` | opencode, kilo, mimo | OpenCode writes global `cli.json` with its V2 schema, `theme.name: ayu`, and native keybind IDs. Kilo/MiMo retain their TUI formats, `theme: ayu`, stacked diffs, and existing keybind IDs |
 
-The merge never overwrites user data: existing keys, comments, and unrelated
-entries are preserved; only absent keys are added; a scalar permission map such
-as `"external_directory": "ask"` is widened to a map that keeps the scalar as
-the `"*"` entry. Fragments that cannot merge cleanly are reported as conflicts
+Comments and unrelated entries are preserved. OpenCode migrates the touched
+legacy `plugin`, `permission`, or standalone `tools` section to native V2.
+Permission scalars become wildcard rules; tool/action aliases become `shell`,
+`subagent`, or `edit`. Existing rule order is retained, and new preset rules
+follow it. Differing legacy/native sections, mixed legacy `tools` and
+`permission`, unsupported legacy actions, or explicit rules conflicting with
+the preset are conflicts, not silently overridden. Kilo/MiMo still widen scalar
+permission maps while retaining the scalar as `"*"`.
+Fragments that cannot merge cleanly are reported as conflicts
 and skipped without blocking the rest of the plan. Like every mutation, `config`
 requires a preview, an explicitly confirmed apply, and a restart of the affected
 tool afterwards. A confirmed `install` with core selected applies its core config
 step; a failed config step prints a retry command. Other fragments use `config`.
+
+V2 no longer reads `tui.json` as its terminal settings. If that file exists but
+`cli.json` does not, start V2 once so its built-in migration preserves your
+preferences, then repeat config setup. The preset leaves existing `cli.json`
+values unchanged and does not translate the old stacked-diff setting or retired
+keybindings into unrelated V2 settings. Project-local terminal configuration is
+not supported. Kilo and MiMo files are unaffected by this V2 migration.
+
+`lsp-preset` is removed: V2 accepts `lsp` but currently does not run language
+servers. Existing user `lsp` entries remain untouched; use your project's lint,
+typecheck, or compiler commands for validation.
 
 Selecting `core-plugin` may access npm and update `package.json`,
 `package-lock.json`, and `node_modules`; the preview shows this dependency plan.
@@ -274,7 +294,9 @@ npx --yes @kisev/agentomatic@latest doctor --json
 ```
 
 The report includes versions, ownership, drift, collisions, archive counts,
-redacted configuration projections, runtime summaries, and LSP facts. It does
+redacted JSON/JSONC configuration projections, runtime summaries, and LSP facts
+marked unsupported in V2 rather than active. Missing LSP binaries are not OpenCode
+dependency failures. It does
 not serialize raw configuration, environment values, credentials, or secrets.
 Exit status `0` is clean, `1` reports findings, and `2` reports invalid
 input or an incomplete probe failure.
@@ -336,12 +358,19 @@ Fixed roles keep their names, prompts, and permissions; only model and variant
 change. Additional critics use `critic-<safe-suffix>`. Every mutation uses the
 same preview and confirmation contract.
 
+Rendered agent files use `permissions` and `provider/model#variant`. The CLI
+retains separate `--model` and `--variant` flags and saved profile selections.
+Interactive model selection reads the V2 `/api/model` snapshot through
+`opencode api`; it does not call an LLM or force a catalog refresh. OpenCode may
+start its managed service. If the snapshot is unavailable, pass an exact model
+and variant explicitly.
+
 ## Uninstall
 
 Keep the package resolvable until its assets are removed:
 
 1. Preview and confirm package-owned asset removal.
-2. Remove `@kisev/agentomatic` from the user-owned `plugin` array.
+2. Remove `@kisev/agentomatic` from the user-owned `plugins` array.
 3. Uninstall the dependency from the same npm project.
 4. Restart OpenCode.
 

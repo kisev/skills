@@ -53,31 +53,25 @@ export function planIngestion(
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     db.exec("BEGIN");
-    const hasParts = Boolean(
-      db.prepare("SELECT 1 FROM sqlite_master WHERE name='part' AND type='table'").get(),
-    );
-    const hasUpdated = db
-      .prepare("PRAGMA table_info(session)")
-      .all()
-      .some((row) => row.name === "time_updated");
-    const fastRevision =
-      hasParts &&
-      hasUpdated &&
-      ["message", "part"].every((table) =>
+    const required: Record<string, string[]> = {
+      session_v2: ["id", "title", "directory", "time_created", "time_updated"],
+      session_message: ["id", "session_id", "type", "seq", "data", "time_created", "time_updated"],
+    };
+    for (const [table, fields] of Object.entries(required)) {
+      const columns = new Set(
         db
           .prepare(`PRAGMA table_info(${table})`)
           .all()
-          .some((row) => row.name === "time_updated"),
+          .map((row) => row.name),
       );
-    const partHasSession =
-      hasParts &&
-      db
-        .prepare("PRAGMA table_info(part)")
-        .all()
-        .some((row) => row.name === "session_id");
+      if (!fields.every((field) => columns.has(field)))
+        throw new Error(
+          "OpenCode V2 session projections are unavailable; start V2 to migrate history before ingestion",
+        );
+    }
     const sessions = db
       .prepare(
-        `SELECT id,title,directory,time_created,${hasUpdated ? "time_updated" : "time_created"} AS revision FROM session WHERE ${hasUpdated ? "time_updated" : "time_created"} < ? ORDER BY time_created,id`,
+        "SELECT id,COALESCE(title,'') AS title,directory,time_created,time_updated AS revision FROM session_v2 WHERE time_updated < ? ORDER BY time_created,id",
       )
       .all(options.before) as Array<{
       id: string;
@@ -93,23 +87,18 @@ export function planIngestion(
       }
       const sealKey = `ingest-session-v2:${digest(session.id)}`;
       let seal: [string, string] | undefined;
-      if (fastRevision) {
-        const messages = db
+      {
+        const revisions = db
           .prepare(
-            "SELECT COUNT(*) AS count,MAX(time_updated) AS updated FROM message WHERE session_id=?",
+            "SELECT id,seq,time_updated FROM session_message WHERE session_id=? ORDER BY seq,id",
           )
-          .get(session.id)!;
-        const parts = db
-          .prepare(
-            `SELECT COUNT(*) AS count,MAX(time_updated) AS updated FROM part WHERE ${partHasSession ? "session_id=?" : "message_id IN (SELECT id FROM message WHERE session_id=?)"}`,
-          )
-          .get(session.id)!;
-        if (Math.max(Number(messages.updated), Number(parts.updated)) >= options.before) {
+          .all(session.id);
+        if (revisions.some((message) => Number(message.time_updated) >= options.before)) {
           result.skipped++;
           continue;
         }
         const revision = digest(
-          JSON.stringify([session.revision, session.title, session.directory, messages, parts]),
+          JSON.stringify([session.revision, session.title, session.directory, revisions]),
         );
         if (store.getMeta(sealKey) === revision) {
           result.cachedSessions++;
@@ -117,54 +106,25 @@ export function planIngestion(
         }
         seal = [sealKey, revision];
       }
-      const rows = hasParts
-        ? (db
-            .prepare(
-              `SELECT m.id,m.data AS message,p.data AS part FROM message m JOIN part p ON p.message_id=m.id
-                WHERE ${partHasSession ? "p" : "m"}.session_id=?
-                AND CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.type') END='text'
-                AND CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.role') END IN ('user','assistant')
-                ORDER BY m.time_created,m.id,p.time_created,p.id`,
-            )
-            .all(session.id) as Array<{ id: string; message: string; part: string }>)
-        : (
-            db
-              .prepare(
-                "SELECT rowid AS id,data FROM message WHERE session_id=? ORDER BY time_created,rowid",
-              )
-              .all(session.id) as Array<{ id: number; data: string }>
-          ).flatMap((row) => {
-            try {
-              const message = JSON.parse(row.data);
-              return (message.parts ?? []).map((part: unknown) => ({
-                id: String(row.id),
-                message: row.data,
-                part: JSON.stringify(part),
-              }));
-            } catch {
-              return [];
-            }
-          });
+      const rows = db
+        .prepare(`
+        SELECT id,type AS role,json_extract(data,'$.text') AS text,seq,0 AS part_index
+        FROM session_message WHERE session_id=? AND type='user'
+          AND CASE WHEN json_valid(data) THEN json_type(data,'$.text') END='text'
+        UNION ALL
+        SELECT m.id,m.type AS role,json_extract(p.value,'$.text') AS text,m.seq,CAST(p.key AS INTEGER) AS part_index
+        FROM session_message m JOIN json_each(CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.content') ELSE '[]' END) p
+        WHERE m.session_id=? AND m.type='assistant'
+          AND CASE WHEN json_valid(p.value) THEN json_extract(p.value,'$.type') END='text'
+          AND CASE WHEN json_valid(p.value) THEN json_type(p.value,'$.text') END='text'
+        ORDER BY seq,part_index
+      `)
+        .all(session.id, session.id) as Array<{ id: string; role: string; text: string }>;
       const messages = new Map<string, { role: string; texts: string[] }>();
       for (const row of rows) {
-        try {
-          const message = JSON.parse(row.message);
-          const part = JSON.parse(row.part);
-          if (
-            !["user", "assistant"].includes(message.role) ||
-            part.type !== "text" ||
-            typeof part.text !== "string"
-          )
-            continue;
-          const item: { role: string; texts: string[] } = messages.get(row.id) ?? {
-            role: message.role,
-            texts: [],
-          };
-          item.texts.push(part.text);
-          messages.set(row.id, item);
-        } catch {
-          result.skipped++;
-        }
+        const item = messages.get(row.id) ?? { role: row.role, texts: [] };
+        item.texts.push(row.text);
+        messages.set(row.id, item);
       }
       const firstUser = [...messages.values()].find((message) => message.role === "user");
       if (firstUser?.texts.join("\n").trimStart().startsWith("[memomatic-internal]")) {

@@ -7,7 +7,6 @@ import { join, resolve } from "node:path";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 const temporary = mkdtempSync(join(tmpdir(), "agentomatic-smoke-"));
-const binary = process.env.OPENCODE_BINARY ?? "opencode";
 const selection = [
   "--commands",
   "agents-md",
@@ -147,15 +146,13 @@ try {
     join(project, "opencode.json"),
     JSON.stringify({
       $schema: "https://opencode.ai/config.json",
-      plugin: ["@kisev/agentomatic"],
+      plugins: ["@kisev/agentomatic"],
     }),
   );
-  const opencodeEnvironment = { ...environment, OPENCODE_CONFIG: join(project, "opencode.json") };
-  const agents = run(binary, ["agent", "list"], { cwd: project, env: opencodeEnvironment });
-  assert.match(agents, /manager \(primary\)/);
-  assert.match(agents, /review \(all\)/);
-  const config = run(binary, ["debug", "config"], { cwd: project, env: opencodeEnvironment });
-  assert.match(config, /@kisev\/agentomatic/);
+  const manager = await readFile(join(home, ".config/opencode/agents/manager.md"), "utf8");
+  assert.match(manager, /model: opencode\/gpt-5-nano#high/);
+  assert.match(manager, /permissions:/);
+  assert.doesNotMatch(manager, /^permission:|^variant:/m);
   const manifest = JSON.parse(
     await readFile(join(home, ".config", "opencode", ".agentomatic-manifest.json"), "utf8"),
   );

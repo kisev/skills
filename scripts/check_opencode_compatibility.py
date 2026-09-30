@@ -22,8 +22,9 @@ def main() -> None:
         raise RuntimeError("Mise and Node are required")
     tools = tomllib.loads((ROOT / "mise.toml").read_text(encoding="utf-8"))["tools"]
     for backend, script in (
-        ("npm:opencode-ai", "test/smoke.mjs"),
+        ("npm:@opencode/cli", "test/smoke.mjs"),
         ("npm:@opencode/cli", "test/smoke-v2.mjs"),
+        ("npm:@opencode/cli", "../../apps/memomatic/test/smoke-v2.mjs"),
     ):
         version = tools[backend]["version"]
         binary = command(mise, "which", "--tool", f"{backend}@{version}", "opencode").strip()

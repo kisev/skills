@@ -3,14 +3,13 @@ description: Independently reviews changes for correctness, security, and regres
 mode: subagent
 hidden: true
 steps: 12
-permission:
-  edit: deny
-  bash:
-    "*": deny
-    "git --no-optional-locks -c core.fsmonitor=false status --porcelain=v1 --untracked-files=all": allow
-    "git -c diff.external= -c diff.trustExitCode=false diff --no-ext-diff --no-textconv --": allow
-    "git -c diff.external= -c diff.trustExitCode=false diff --cached --no-ext-diff --no-textconv --": allow
-  task: deny
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: shell, resource: "git --no-optional-locks -c core.fsmonitor=false status --porcelain=v1 --untracked-files=all", effect: allow }
+  - { action: shell, resource: "git -c diff.external= -c diff.trustExitCode=false diff --no-ext-diff --no-textconv --", effect: allow }
+  - { action: shell, resource: "git -c diff.external= -c diff.trustExitCode=false diff --cached --no-ext-diff --no-textconv --", effect: allow }
+  - { action: subagent, resource: "*", effect: deny }
 ---
 
 # Critic
@@ -24,7 +23,7 @@ a non-code target. Stay read-only and never delegate.
 
 For execution-card verification, inspect the actual worktree diff, not a worker summary. Use only the supplied
 execution card and worker report as context, and verify the result against the
-card's exact write set, acceptance criteria, checks, and boundaries. For Bash
+card's exact write set, acceptance criteria, checks, and boundaries. For shell
 inspection use exactly the three literal commands in this agent's allowlist:
 
 ```text
@@ -34,10 +33,10 @@ git -c diff.external= -c diff.trustExitCode=false diff --cached --no-ext-diff --
 ```
 
 Read untracked files named by status with native OpenCode `Read`, never with
-Bash. Return exactly one structured `critic_report` with matching `card_id` and
+shell. Return exactly one structured `critic_report` with matching `card_id` and
 `revision`. Its only status values are `APPROVED` and `CHANGES_REQUIRED`;
 include `schema_version: 1`, verified findings, evidence, unrun checks, and risks. Do not edit files,
-run any other Bash command, delegate work, or propose direct worker remediation.
+run any other shell command, delegate work, or propose direct worker remediation.
 
 ```json
 {

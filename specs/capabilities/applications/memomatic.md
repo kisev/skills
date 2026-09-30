@@ -66,14 +66,17 @@ claim of universal semantic accuracy.
 
 ## Dependencies
 
-Node.js 22.13+, `node:sqlite`, Commander, the build-materialized common CLI runtime, an optional OpenAI-compatible embedding endpoint, and a configured OpenCode provider for Sessions extraction and Dream consolidation (a legacy `dream` extraction configuration migrates to `sessions` until overridden). Agentomatic does not depend on memomatic; applications remain independently installed.
+Node.js 22.13+, `node:sqlite`, Commander, `jsonc-parser`, the build-materialized common CLI runtime, an optional OpenAI-compatible embedding endpoint, and a configured OpenCode V2 provider for Sessions extraction and Dream consolidation (a legacy `dream` extraction configuration migrates to `sessions` until overridden). Agentomatic does not depend on memomatic; applications remain independently installed.
 
-Session ingestion (the `sessions` command) reads text parts from OpenCode's normalized `part`
-table, ordered within each message; legacy databases with embedded message parts
-remain readable. Sessions use one owned, authenticated loopback OpenCode server
-per run or an explicitly selected existing server. Extraction sessions deny
-tools; only response text and actual usage metadata are consumed. Internal
-extraction sessions remain excluded from later extraction.
+Session ingestion (the `sessions` command) reads user and assistant text from
+OpenCode's native V2 `session_v2`/`session_message` projections in sequence
+order; reasoning, tool, and synthetic parts stay unread. A pre-V2 database fails
+with a visible instruction to start V2 so it migrates history first. Sessions
+use one owned, authenticated loopback OpenCode V2 server per run or an
+explicitly selected existing server. Extraction sessions deny tools through
+ordered deny-all permissions; only response text is consumed because transient
+V2 generation reports no exact token usage. Internal extraction sessions remain
+excluded from later extraction.
 
 ## Remote/Local Effects
 
@@ -124,9 +127,9 @@ Per-call timeout defaults to 180 seconds, additional retries to one, fragment bo
 size to 24000 characters, and session idle age to ten minutes. Whole-run duration
 and session-count limits default to zero (unlimited).
 
-Local SQL shall select text parts before transferring payloads. Modern session,
-message and part revisions allow unchanged sessions to bypass body parsing;
-message/content fingerprints retain correctness for changed and legacy sessions.
+Local SQL shall select message rows before transferring payloads. Session and
+ordered-message revisions allow unchanged sessions to bypass body parsing;
+revision-list fingerprints retain correctness for changed sessions.
 Long messages are processed through bounded fragments without truncating the end
 or splitting Unicode surrogate pairs. Only adjacent exact duplicates of the same
 role are removed; semantic importance is not guessed by a local filter. Fragments
@@ -159,7 +162,8 @@ Tests cover continuation and edits of old sessions, complete long-message tails,
 revision-cache hits, interrupted extraction and response reuse, model timeout and
 retry events, unchanged embedding reuse and force, live-owner locks, safe help and
 status, JSON/stdout separation, and owned-server reuse and shutdown. A bounded
-live check validates the OpenCode HTTP contract without processing user history.
+live check validates the native V2 OpenCode HTTP, permission-denial, and
+read-only database contract without processing user history.
 
 ### Corpus constraints
 

@@ -1,7 +1,7 @@
 # Package Command `config`
 
 - Status: active
-- Status changed: 2026-09-26
+- Status changed: 2026-09-30
 
 ## Purpose
 
@@ -11,15 +11,15 @@ confirmed interactive or flag-driven setup.
 
 ## Triggers and Near-Misses
 
-Trigger for first-time activation, standard skills state permissions, or LSP
-preset setup; near-miss: repairing arbitrary user configuration, installing
+Trigger for first-time activation, standard skills state permissions, secret
+guards, or terminal presets; near-miss: repairing arbitrary user configuration, installing
 portable skills, or mutating provider credentials.
 
 ## Inputs/Outputs
 
 Input is optional global/project scope defaulting to project, target selection
-(`opencode`, `tui`, `kilo`, `mimo`), and fragment selection (`core-plugin`,
-`skills-state-permissions`, `lsp-preset`, `secrets-guard`, `kilo-display`,
+(`opencode`, `kilo`, `mimo`), and fragment selection (`core-plugin`,
+`skills-state-permissions`, `secrets-guard`, `kilo-display`,
 `tui-schema`); output is a preview or applied plan with per-target and
 per-fragment operations, conflicts, and skipped fragments.
 
@@ -34,8 +34,9 @@ and confirms within one process, while `--yes` authorizes a fresh bounded plan.
 
 ## Dependencies
 
-Lifecycle receipts and transactions, the shared LSP catalog asset, and the
-in-package JSONC editor.
+Lifecycle receipts and transactions, native V2 config normalization, and the
+in-package JSONC editor. The shared LSP catalog remains available to other
+consumers; config setup does not offer a nonfunctional V2 LSP preset.
 
 ## Remote/Local Effects
 
@@ -59,10 +60,12 @@ it does not claim to roll back npm's files or the completed config transaction.
 
 ## Unique Constraints
 
-Existing keys, comments, unrelated entries, and user values are never
-overwritten; only absent keys are added, arrays gain only missing entries, and
-a scalar permission map widens to a map that keeps the scalar as the `"*"`
-entry. Every written document must reparse as valid JSONC. A confirmed `install`
+Existing comments, unrelated entries, and user values are preserved. Native
+OpenCode output and bounded legacy-section conversion follow
+[REQ-I-420](../../requirements/interfaces/README.md#req-i-420---native-opencode-v2-interface).
+Permission scalars become wildcard rules; converted aliases use native actions.
+Kilo/MiMo scalar permission maps retain the scalar as the `"*"` entry. Every
+written document must reparse as valid JSONC. A confirmed `install`
 with core selected applies this fragment under REQ-F-010. Its dependency opt-out
 applies through the entire path; `uninstall` never edits user configuration.
 
@@ -74,7 +77,8 @@ Status: active since 2026-09-26.
 
 The `config` command shall merge selected fragments into user configuration
 files only after a confirmed preview, preserve user entries and comments, add
-only absent keys, validate every merged document before and after writing, and
+only absent preset values except for the behavior-preserving native conversion
+of touched legacy sections under REQ-I-420, validate every merged document before and after writing, and
 roll the whole plan back on any failed postcondition. The `core-plugin`
 fragment shall replace a legacy `@kisev/skills-opencode` plugin entry in place
 with `@kisev/agentomatic` instead of appending a duplicate, leaving unrelated
@@ -88,6 +92,7 @@ opt-out, and archived pre-images. CLI integration tests check core activation.
 
 ## Example
 
-`config --global --dry-run` widens `"external_directory": "ask"` into a map
-that keeps `"*": "ask"` and adds `~/.local/state/agent-skills/**` as allowed.
+`config --global --dry-run` converts a legacy OpenCode
+`"external_directory": "ask"` effect to an ordered wildcard rule and previews
+the selected skills-state exceptions after it. Kilo/MiMo retain map widening.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

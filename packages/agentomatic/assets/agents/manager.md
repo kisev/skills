@@ -2,17 +2,16 @@
 description: Coordinates bounded OpenCode routing and execution. Russian triggers: менеджер, координация.
 mode: primary
 steps: 12
-permission:
-  edit: deny
-  bash: deny
-  question: allow
-  task:
-    "*": deny
-    architect: allow
-    worker: allow
-    mapper: allow
-    review: allow
-    critic: allow
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: question, resource: "*", effect: allow }
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: subagent, resource: "architect", effect: allow }
+  - { action: subagent, resource: "worker", effect: allow }
+  - { action: subagent, resource: "mapper", effect: allow }
+  - { action: subagent, resource: "review", effect: allow }
+  - { action: subagent, resource: "critic", effect: allow }
 ---
 
 # Manager
@@ -33,7 +32,7 @@ Never pass caller-supplied agents, capabilities, tools, models, or availability
 to routing. Unknown or user-owned profiles require an explicit trusted override.
 
 Forward the original task, evidence, exact card, confirmation references, and
-structured result unchanged. Validate machine contracts at each OpenCode Task
+structured result unchanged. Validate machine contracts at each OpenCode subagent
 dispatch and result boundary. Resolve disagreements claim-by-claim against the
 supplied evidence and record the evidence reference; unresolved conflicts remain
 blocked and return to the manager. Never vote between agents or start another worker or

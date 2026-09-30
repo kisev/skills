@@ -18,7 +18,7 @@ import { pathToFileURL } from "node:url";
 
 for (const variable of ["GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete process.env[variable];
 
-import { server as plugin } from "../dist/index.js";
+import { setupCore } from "./host.mjs";
 import { COMMAND_REGISTRY, renderCommand } from "../dist/registry.js";
 import {
   CATEGORIES,
@@ -71,31 +71,21 @@ function capable(agent, capabilities, tools) {
   return { agent, available: true, capabilities, tools };
 }
 
-function hostClient() {
+function hostAgents() {
   const profiles = {
     mapper: ["read", "glob", "grep"],
     architect: ["read", "glob", "grep"],
-    worker: ["read", "edit", "bash"],
+    worker: ["read", "edit", "shell"],
     review: ["read", "glob", "grep"],
     critic: ["read", "glob", "grep"],
   };
-  return {
-    app: {
-      agents: async () => ({
-        data: Object.entries(profiles).map(([name, tools]) => ({
-          name,
-          mode: name === "worker" ? "subagent" : "primary",
-          builtIn: false,
-          permission: {
-            edit: tools.includes("edit") ? "allow" : "deny",
-            bash: tools.includes("bash") ? { "*": "allow" } : { "*": "deny" },
-          },
-          tools: Object.fromEntries(tools.map((tool) => [tool, true])),
-          options: {},
-        })),
-      }),
-    },
-  };
+  return Object.entries(profiles).map(([id, tools]) => ({
+    id,
+    permissions: [
+      { action: "*", resource: "*", effect: "deny" },
+      ...tools.map((action) => ({ action, resource: "*", effect: "allow" })),
+    ],
+  }));
 }
 
 test("installer wizard uses shared multi-select groups and keeps defaults", () => {
@@ -481,7 +471,7 @@ test("agent assets contain six contract-bound profiles without model selection",
     const frontmatter = content.slice(0, content.indexOf("---", 4));
     assert.doesNotMatch(frontmatter, /^(model|provider):/m);
     assert.doesNotMatch(content, /~\/\.config\/opencode/i);
-    assert.match(frontmatter, /permission:/);
+    assert.match(frontmatter, /permissions:/);
   }
   assert.match(
     readFileSync(join(PACKAGE, "dist", "assets", "agents", "mapper.md"), "utf8"),
@@ -505,7 +495,7 @@ test("agent assets contain six contract-bound profiles without model selection",
   assert.match(manager, /Own the OpenCode lifecycle for routed work/);
   assert.match(manager, /Do not infer completion/);
   assert.match(critic, /Do not edit files,[\s\S]*direct worker remediation/);
-  assert.match(review, /exact[\s\S]*task allowlist/);
+  assert.match(review, /exact[\s\S]*subagent allowlist/);
   assert.doesNotMatch(`${manager}\n${review}`, /critic-\*/);
 });
 
@@ -792,17 +782,18 @@ test("uninstall dry-run prints an applicable command without selection options",
 test("runtime plugin has no lifecycle writes and receipt gate is enforced", async () => {
   const directory = temporary();
   try {
-    const hooks = await plugin({ client: hostClient(), directory: "/project" });
-    assert.ok(hooks.tool.route);
+    const { hooks, route, tools } = await setupCore(hostAgents());
+    assert.ok(tools.get("route"));
     assert.equal(hooks.config, undefined);
     await assert.rejects(
-      hooks["tool.execute.before"](
-        { tool: "task", sessionID: "missing" },
-        { args: { agent: "worker" } },
-      ),
+      hooks["execute.before"]({
+        tool: "subagent",
+        sessionID: "missing",
+        input: { agent: "worker" },
+      }),
       /active routing receipt/,
     );
-    const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "bash"]);
+    const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "shell"]);
     const routeInput = {
       category: "implementation",
       task: "Implement one scoped change",
@@ -811,23 +802,18 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
       execution_card: executionCard(),
     };
     const decision = JSON.parse(
-      await hooks.tool.route.execute({ action: "preview", ...routeInput }, { sessionID: "bound" }),
+      await route({ action: "preview", ...routeInput }, { sessionID: "bound" }),
     );
-    await hooks.tool.route.execute(
-      { action: "dispatch", ...routeInput, decision },
-      { sessionID: "bound" },
-    );
+    await route({ action: "dispatch", ...routeInput, decision }, { sessionID: "bound" });
     await assert.rejects(
-      hooks["tool.execute.before"](
-        { tool: "task", sessionID: "bound" },
-        { args: { subagent_type: "critic" } },
-      ),
+      hooks["execute.before"]({ tool: "subagent", sessionID: "bound", input: { agent: "critic" } }),
       /does not match/,
     );
-    await hooks["tool.execute.before"](
-      { tool: "task", sessionID: "bound" },
-      { args: { subagent_type: "worker" } },
-    );
+    await hooks["execute.before"]({
+      tool: "subagent",
+      sessionID: "bound",
+      input: { agent: "worker" },
+    });
     const gate = new RoutingGate();
     const input = { category: "implementation", requirements: [], agents: [worker] };
     const selected = gate.preview(input);
@@ -865,7 +851,7 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
 });
 
 test("routing receipts bind task requirements card agent revision and expiry", () => {
-  const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "bash"]);
+  const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "shell"]);
   const card = {
     schema_version: 1,
     status: "READY",
@@ -979,7 +965,7 @@ test("routing receipts bind task requirements card agent revision and expiry", (
 });
 
 test("route ignores caller inventory and exposes exactly four host-backed destinations", async () => {
-  const hooks = await plugin({ client: hostClient(), directory: "/project" });
+  const { route } = await setupCore(hostAgents());
   const expected = {
     exploration: "mapper",
     architecture: "architect",
@@ -988,14 +974,14 @@ test("route ignores caller inventory and exposes exactly four host-backed destin
   };
   for (const [category, agent] of Object.entries(expected)) {
     const result = JSON.parse(
-      await hooks.tool.route.execute(
+      await route(
         {
           action: "preview",
           category,
           task: `route ${category}`,
           requirements: [],
           agents: [
-            { agent: "attacker", available: true, capabilities: ["write"], tools: ["bash"] },
+            { agent: "attacker", available: true, capabilities: ["write"], tools: ["shell"] },
           ],
         },
         { sessionID: `inventory-${category}` },
@@ -1033,8 +1019,8 @@ test("unknown profile requires an explicit trusted override", () => {
   );
 });
 
-test("real Task result hook rejects prose and accepts one versioned worker report", async () => {
-  const hooks = await plugin({ client: hostClient(), directory: "/project" });
+test("native subagent result hook rejects prose and accepts one versioned worker report", async () => {
+  const { hooks, route: callRoute } = await setupCore(hostAgents());
   const route = {
     action: "dispatch",
     category: "implementation",
@@ -1043,12 +1029,12 @@ test("real Task result hook rejects prose and accepts one versioned worker repor
     execution_card: executionCard(),
   };
   const routed = JSON.parse(
-    await hooks.tool.route.execute(
+    await callRoute(
       {
         ...route,
         decision: await (async () => {
           const preview = JSON.parse(
-            await hooks.tool.route.execute({ ...route, action: "preview" }, { sessionID: "hook" }),
+            await callRoute({ ...route, action: "preview" }, { sessionID: "hook" }),
           );
           return preview;
         })(),
@@ -1057,21 +1043,28 @@ test("real Task result hook rejects prose and accepts one versioned worker repor
     ),
   );
   assert.equal(routed.receipt.destination, "implementation");
-  await hooks["tool.execute.before"](
-    { tool: "task", sessionID: "hook" },
-    { args: { agent: "worker" } },
-  );
+  await hooks["execute.before"]({
+    tool: "subagent",
+    sessionID: "hook",
+    input: { agent: "worker" },
+  });
   await assert.rejects(
-    hooks["tool.execute.after"](
-      { tool: "task", sessionID: "hook", args: { agent: "worker" } },
-      { output: "finished" },
-    ),
+    hooks["execute.after"]({
+      tool: "subagent",
+      sessionID: "hook",
+      input: { agent: "worker" },
+      status: "completed",
+      result: { content: "finished" },
+    }),
     /JSON structured report/,
   );
-  await hooks["tool.execute.after"](
-    { tool: "task", sessionID: "hook", args: { agent: "worker" } },
-    {
-      output: JSON.stringify({
+  await hooks["execute.after"]({
+    tool: "subagent",
+    sessionID: "hook",
+    input: { agent: "worker" },
+    status: "completed",
+    result: {
+      content: JSON.stringify({
         worker_report: {
           schema_version: 1,
           status: "COMPLETED",
@@ -1084,7 +1077,7 @@ test("real Task result hook rejects prose and accepts one versioned worker repor
         },
       }),
     },
-  );
+  });
 });
 
 test("execution card validation and lifecycle reject malformed and replay transitions", () => {
@@ -1233,8 +1226,8 @@ test("runtime state rejects relative XDG_STATE_HOME", () => {
 });
 
 test("plugin exposes only the route package tool", async () => {
-  const hooks = await plugin({});
-  assert.deepEqual(Object.keys(hooks.tool), ["route"]);
+  const { tools } = await setupCore(hostAgents());
+  assert.deepEqual([...tools.keys()], ["route"]);
 });
 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
@@ -1319,9 +1312,9 @@ test("published package metadata and tarball expose only the OpenCode integratio
     assert.equal(unpackedMetadata.readPackageVersion(), PACKAGE_VERSION);
     assert.equal(unpackedMetadata.skillsInstallerSpec(), SKILLS_INSTALLER_SPEC);
     const imported = await import(pathToFileURL(join(unpacked, "dist", "index.js")).href);
-    assert.equal(typeof imported.default.server, "function");
+    assert.equal(imported.default.server, undefined);
     assert.equal(typeof imported.default.setup, "function");
-    assert.equal(typeof imported.server, "function");
+    assert.equal(imported.server, undefined);
     assert.equal(typeof imported.apply, "undefined");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -1578,7 +1571,7 @@ test("install core integration wires config and dependency in one run", async ()
     const opencode = JSON.parse(
       await readFile(join(home, ".config", "opencode", "opencode.jsonc"), "utf8"),
     );
-    assert.deepEqual(opencode.plugin, ["@kisev/agentomatic"]);
+    assert.deepEqual(opencode.plugins, ["@kisev/agentomatic"]);
     assert.ok(existsSync(join(home, ".config", "opencode", "commands", "agents-md.md")));
 
     const skipped = invoke([

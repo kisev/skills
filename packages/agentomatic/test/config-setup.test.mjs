@@ -15,6 +15,7 @@ import {
   recoverConfigSetup,
 } from "../dist/config-setup.js";
 import { applyJsoncEdits, JsoncError, parseJsonc } from "../dist/jsonc.js";
+import { corePluginEdits, permissionEdits } from "../dist/opencode-config.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
 
@@ -78,12 +79,18 @@ const FULL_SELECTION = {
   fragments: [
     "core-plugin",
     "skills-state-permissions",
-    "lsp-preset",
     "secrets-guard",
     "kilo-display",
     "tui-schema",
   ],
 };
+
+function assertRule(config, action, resource, effect) {
+  assert.deepEqual(
+    config.permissions.findLast((rule) => rule.action === action && rule.resource === resource),
+    { action, resource, effect },
+  );
+}
 
 test("core-plugin setup preserves V2 plugins and does not create a legacy array", async () => {
   const directory = temporary();
@@ -209,19 +216,21 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const opencode = parseJsonc(
       readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8"),
     );
-    assert.deepEqual(opencode.plugin, ["@kisev/agentomatic"]);
-    assert.equal(opencode.permission.read["~/.local/state/agent-skills/**"], "allow");
-    assert.equal(opencode.permission.read["~/.config/opencode/skills/**"], "allow");
-    assert.equal(opencode.permission.edit["~/.local/state/agent-skills/**"], "allow");
-    assert.equal(opencode.permission.read["**/.env"], "deny");
-    assert.equal(opencode.permission.edit["**/.ssh/**"], "deny");
-    assert.equal(opencode.permission.external_directory["~/.local/state/agent-skills/**"], "allow");
-    assert.deepEqual(opencode.lsp.python.command, ["basedpyright-langserver", "--stdio"]);
-    assert.deepEqual(opencode.lsp.typescript.extensions, [".ts", ".tsx", ".js", ".jsx"]);
+    assert.deepEqual(opencode.plugins, ["@kisev/agentomatic"]);
+    assert.equal(opencode.permission, undefined);
+    assertRule(opencode, "read", "~/.local/state/agent-skills/**", "allow");
+    assertRule(opencode, "read", "~/.config/opencode/skills/**", "allow");
+    assertRule(opencode, "edit", "~/.local/state/agent-skills/**", "allow");
+    assertRule(opencode, "read", "*.env", "deny");
+    assertRule(opencode, "edit", "*.ssh/**", "deny");
+    assertRule(opencode, "external_directory", "~/.local/state/agent-skills/**", "allow");
+    assert.equal(opencode.lsp, undefined);
 
-    const tui = parseJsonc(readFileSync(join(root, ".config", "opencode", "tui.json"), "utf8"));
-    assert.equal(tui.$schema, "https://opencode.ai/tui.json");
-    assert.equal(tui.diff_style, "stacked");
+    const cli = parseJsonc(readFileSync(join(root, ".config", "opencode", "cli.json"), "utf8"));
+    assert.equal(cli.$schema, "https://opencode.ai/v2/cli.json");
+    assert.deepEqual(cli.theme, { name: "ayu" });
+    assert.equal(cli.diff_style, undefined);
+    assert.equal(cli.keybinds["command.palette.show"], "alt+p");
 
     const kilo = parseJsonc(readFileSync(join(root, ".config", "kilo", "kilo.jsonc"), "utf8"));
     assert.equal(kilo.reasoning_display, "expanded");
@@ -269,8 +278,13 @@ test("config setup preserves user entries, comments, and scalar permissions", as
       "utf8",
     );
     await writeFile(
-      join(root, ".config", "opencode", "tui.json"),
-      ["{", '  "theme": "user-theme",', '  "keybinds": { "app_exit": "ctrl+q" }', "}"].join("\n"),
+      join(root, ".config", "opencode", "cli.json"),
+      [
+        "{",
+        '  "theme": { "name": "user-theme" },',
+        '  "keybinds": { "app.exit": "ctrl+q" }',
+        "}",
+      ].join("\n"),
       "utf8",
     );
     await previewConfigSetup(FULL_SELECTION, "global", directory, root);
@@ -279,17 +293,18 @@ test("config setup preserves user entries, comments, and scalar permissions", as
     });
     assert.equal(applied.operations.filter((item) => item.operation === "conflict").length, 0);
     const preservedTui = parseJsonc(
-      readFileSync(join(root, ".config", "opencode", "tui.json"), "utf8"),
+      readFileSync(join(root, ".config", "opencode", "cli.json"), "utf8"),
     );
-    assert.equal(preservedTui.theme, "user-theme");
-    assert.equal(preservedTui.keybinds.app_exit, "ctrl+q");
-    assert.equal(preservedTui.keybinds.command_list, "alt+p");
+    assert.equal(preservedTui.theme.name, "user-theme");
+    assert.equal(preservedTui.keybinds["app.exit"], "ctrl+q");
+    assert.equal(preservedTui.keybinds["command.palette.show"], "alt+p");
 
     const raw = readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8");
     assert.match(raw, /\/\/ model choice stays/);
     const opencode = parseJsonc(raw);
     assert.equal(opencode.model, "openai/gpt-5.6-luna");
-    assert.deepEqual(opencode.plugin, ["user-plugin", "@kisev/agentomatic"]);
+    assert.deepEqual(opencode.plugins, ["user-plugin", "@kisev/agentomatic"]);
+    assert.equal(opencode.plugin, undefined);
     assert.deepEqual(opencode.lsp.python.command, ["pyright-langserver", "--stdio"]);
     assert.equal(opencode.lsp.python.extensions, undefined);
 
@@ -496,4 +511,210 @@ test("config preview preserves an interrupted transaction for explicit recovery"
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("permission migration preserves legacy rule order, scalar defaults, aliases, and comments", () => {
+  const source = `{
+    "model": "user/model",
+    "providers": { "custom": { "settings": { "apiKey": "{env:USER_KEY}" } } },
+    "permission": {
+      // keep shell restrictions
+      "bash": { "*": "ask", "git push *": "deny" },
+      "task": "deny",
+      "edit": "ask",
+      "read": { "*": "allow", "secrets/*": "deny" }
+    }
+  }`;
+  const addition = { action: "read", resource: "~/state/*", effect: "allow" };
+  const edits = permissionEdits(parseJsonc(source), [addition]);
+  const migrated = applyJsoncEdits(source, edits);
+  const config = parseJsonc(migrated.text);
+  assert.deepEqual(config.permissions, [
+    { action: "shell", resource: "*", effect: "ask" },
+    { action: "shell", resource: "git push *", effect: "deny" },
+    { action: "subagent", resource: "*", effect: "deny" },
+    { action: "edit", resource: "*", effect: "ask" },
+    { action: "read", resource: "*", effect: "allow" },
+    { action: "read", resource: "secrets/*", effect: "deny" },
+    addition,
+  ]);
+  assert.equal(config.permission, undefined);
+  assert.match(migrated.text, /\/\/ keep shell restrictions/);
+  assert.equal(config.model, "user/model");
+  assert.deepEqual(config.providers, parseJsonc(source).providers);
+  assert.equal(applyJsoncEdits(migrated.text, permissionEdits(config, [addition])).changed, false);
+  const scalar = applyJsoncEdits(
+    '{"permission":"ask"}',
+    permissionEdits({ permission: "ask" }, [addition]),
+  );
+  assert.deepEqual(parseJsonc(scalar.text).permissions, [
+    { action: "*", resource: "*", effect: "ask" },
+    addition,
+  ]);
+});
+
+test("native permission edits preserve existing comments and ordered user exceptions", () => {
+  const source = `{
+    "permissions": [
+      { "action": "*", "resource": "*", "effect": "ask" }, // broad default
+      { "action": "shell", "resource": "git push *", "effect": "deny" }, // never push
+    ],
+    "mcp": { "servers": {} },
+  }`;
+  const original = parseJsonc(source);
+  const addition = { action: "read", resource: "~/state/*", effect: "allow" };
+  const migrated = applyJsoncEdits(source, permissionEdits(original, [addition]));
+  const config = parseJsonc(migrated.text);
+  assert.deepEqual(config.permissions, [...original.permissions, addition]);
+  assert.match(migrated.text, /\/\/ broad default/);
+  assert.match(migrated.text, /\/\/ never push/);
+  assert.deepEqual(config.mcp, original.mcp);
+});
+
+test("ambiguous or malformed permission sections conflict rather than weaken user rules", () => {
+  const allow = { action: "read", resource: "~/state/*", effect: "allow" };
+  for (const config of [
+    { permissions: "allow" },
+    { permissions: [{ action: "read", effect: "allow" }] },
+    { permission: { read: true } },
+    { permission: { lsp: "allow" } },
+    { tools: { read: "ask" } },
+    { permissions: [{ ...allow, effect: "deny" }] },
+    { permissions: [allow, { action: "*", resource: "*", effect: "ask" }] },
+  ])
+    assert.throws(() => permissionEdits(config, [allow]), JsoncError);
+  const source =
+    '{"permission":{"read":"allow"},/*keep*/"permissions":[{"action":"read","resource":"*","effect":"allow"}],"model":"user/model"}';
+  const migrated = applyJsoncEdits(source, permissionEdits(parseJsonc(source), []));
+  assert.equal(parseJsonc(migrated.text).permission, undefined);
+  assert.match(migrated.text, /\/\*keep\*\//);
+  assert.equal(parseJsonc(migrated.text).model, "user/model");
+});
+
+test("legacy tools migrate once and plugin options are not duplicated or discarded", () => {
+  const source = '{"tools":{"websearch":false,"bash":true,"patch":false},"model":"user/model"}';
+  const migrated = applyJsoncEdits(source, permissionEdits(parseJsonc(source), []));
+  assert.deepEqual(parseJsonc(migrated.text).permissions, [
+    { action: "websearch", resource: "*", effect: "deny" },
+    { action: "shell", resource: "*", effect: "allow" },
+    { action: "edit", resource: "*", effect: "deny" },
+  ]);
+  assert.equal(parseJsonc(migrated.text).tools, undefined);
+  const plugins =
+    '{"plugin":[["@kisev/skills-opencode",{"enabled":false}],"user-plugin"],"model":"user/model"}';
+  const config = applyJsoncEdits(plugins, corePluginEdits(parseJsonc(plugins)));
+  assert.deepEqual(parseJsonc(config.text).plugins, [
+    { package: "@kisev/agentomatic", options: { enabled: false } },
+    "user-plugin",
+  ]);
+  assert.equal(parseJsonc(config.text).plugin, undefined);
+  assert.equal(
+    applyJsoncEdits(config.text, corePluginEdits(parseJsonc(config.text))).changed,
+    false,
+  );
+  assert.throws(() => corePluginEdits({ plugin: ["old"], plugins: ["new"] }), JsoncError);
+});
+
+test("JSONC key edits preserve comments, first/last properties, and unrelated bytes", () => {
+  for (const source of [
+    '{"old":1,/*note*/"keep":2}',
+    '{"keep":2,/*note*/"old":1}',
+    '{"old":{/*note*/"nested":1}}',
+    '{"keep":2,"old":1,/*note*/}',
+  ]) {
+    const migrated = applyJsoncEdits(source, [{ kind: "remove-key", path: ["old"] }]);
+    const config = parseJsonc(migrated.text);
+    assert.equal(config.old, undefined);
+    assert.equal(config.keep, parseJsonc(source).keep);
+    assert.match(migrated.text, /\/\*note\*\//);
+  }
+});
+
+test("terminal setup leaves legacy TUI migration to V2 and never writes an inactive file", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  try {
+    const original = '{"theme":"user-theme","keybinds":{"app_exit":"ctrl+q"}}\n';
+    const file = join(home, ".config/opencode/tui.json");
+    await writeFile(file, original);
+    const selection = { targets: ["opencode"], fragments: ["tui-schema"] };
+    const preview = await previewConfigSetup(selection, "global", directory, home, false);
+    assert.equal(preview.confirmable, false);
+    assert.equal(preview.operations[0].operation, "conflict");
+    assert.match(preview.operations[0].reason, /Start OpenCode V2 once/);
+    assert.equal(readFileSync(file, "utf8"), original);
+    await assert.rejects(
+      applyConfigSetup(selection, "global", directory, home, {
+        receipt: preview.receipt,
+        provisionDependency: false,
+      }),
+      { code: "invalid_state" },
+    );
+    assert.equal(readFileSync(file, "utf8"), original);
+    assert.throws(
+      () =>
+        normalizeConfigSelection("global", { targets: ["opencode"], fragments: ["lsp-preset"] }),
+      ConfigSetupError,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a permission conflict leaves its whole section unchanged while unrelated fragments apply", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const file = join(home, ".config/opencode/opencode.jsonc");
+  try {
+    const original = {
+      permissions: [{ action: "read", resource: "~/.local/state/agent-skills/**", effect: "deny" }],
+      model: "user/model",
+    };
+    await writeFile(file, JSON.stringify(original));
+    const selection = {
+      targets: ["opencode"],
+      fragments: ["core-plugin", "skills-state-permissions"],
+    };
+    const preview = await previewConfigSetup(selection, "global", directory, home, false);
+    assert.ok(
+      preview.operations.some(
+        (item) => item.fragment === "skills-state-permissions" && item.operation === "conflict",
+      ),
+    );
+    await applyConfigSetup(selection, "global", directory, home, {
+      receipt: preview.receipt,
+      provisionDependency: false,
+    });
+    const config = parseJsonc(readFileSync(file, "utf8"));
+    assert.deepEqual(config.permissions, original.permissions);
+    assert.equal(config.model, original.model);
+    assert.deepEqual(config.plugins, ["@kisev/agentomatic"]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("mixed permission sections preserve the exact V2 normalization precedence", () => {
+  const source =
+    '{"tools":{"bash":false},"permission":{"bash":{"*":"ask","git push *":"deny"}},"permissions":[{"action":"shell","resource":"git status *","effect":"allow"}]}';
+  const result = applyJsoncEdits(source, permissionEdits(parseJsonc(source), []));
+  const config = parseJsonc(result.text);
+  assert.deepEqual(config.permissions, [
+    { action: "shell", resource: "*", effect: "deny" },
+    { action: "shell", resource: "*", effect: "ask" },
+    { action: "shell", resource: "git push *", effect: "deny" },
+    { action: "shell", resource: "git status *", effect: "allow" },
+  ]);
+  assert.equal(config.tools, undefined);
+  assert.equal(config.permission, undefined);
+  assert.equal(applyJsoncEdits(result.text, permissionEdits(config, [])).changed, false);
+});
+
+test("JSONC validation rejects missing separators and preserves prototype-named user fields", () => {
+  for (const source of ['{"permissions":[]"model":"user/model"}', '["a" "b"]'])
+    assert.throws(() => parseJsonc(source), JsoncError);
+  const config = parseJsonc('{"__proto__":{"permissions":"allow"},"model":"user/model"}');
+  assert.equal(Object.hasOwn(config, "__proto__"), true);
+  assert.equal(Object.getPrototypeOf(config), Object.prototype);
+  assert.equal(config.permissions, undefined);
 });

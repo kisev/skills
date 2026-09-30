@@ -107,7 +107,7 @@ const MATRIX = {
     implementation: {
       profiles: ["worker"],
       capabilities: ["read", "write", "verify"],
-      tools: ["read", "edit", "bash"],
+      tools: ["read", "edit", "shell"],
       cost: "medium",
       latency: "standard",
     },

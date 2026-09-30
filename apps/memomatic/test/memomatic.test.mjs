@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { createSessionTables, insertMessage } from "./opencode-fixture.mjs";
 
 import { parseEntryLine, entryLine } from "../dist/entries.js";
 import { parseRules, isForbidden } from "../dist/rules.js";
@@ -500,20 +501,11 @@ test("sessions skipped without a model remain available after model setup", asyn
     const data = join(env.root, "data", "opencode");
     mkdirSync(data, { recursive: true });
     const database = new DatabaseSync(join(data, "opencode.db"));
-    database.exec(
-      "CREATE TABLE session(id TEXT, title TEXT, directory TEXT, time_created INTEGER); CREATE TABLE message(session_id TEXT, data TEXT, time_created INTEGER);",
-    );
+    createSessionTables(database);
     database
-      .prepare("INSERT INTO session VALUES (?, ?, ?, ?)")
-      .run("example", "A decision", env.root, 2000);
-    database.prepare("INSERT INTO message VALUES (?, ?, ?)").run(
-      "example",
-      JSON.stringify({
-        role: "user",
-        parts: [{ type: "text", text: "Remember a standing decision." }],
-      }),
-      2000,
-    );
+      .prepare("INSERT INTO session_v2 VALUES (?, ?, ?, ?, ?)")
+      .run("example", "A decision", env.root, 2000, 2000);
+    insertMessage(database, "m", "example", "user", "Remember a standing decision.", 1, 2000);
     database.close();
     const ctx = await context();
     ctx.store.setMeta("ingest-watermark", "123");

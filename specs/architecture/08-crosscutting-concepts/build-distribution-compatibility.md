@@ -3,12 +3,13 @@
 Canonical definitions and shared files generate portable and OpenCode assets.
 Generated outputs are checked for parity, reproducibility, and undeclared files.
 Portable Pages archives are content-addressed and self-contained; the npm package
-is an independent OpenCode adapter supporting all patches of `1.18.x` and `2.0.x`.
+is an independent native OpenCode V2 adapter under
+[REQ-I-420](../../requirements/interfaces/README.md#req-i-420---native-opencode-v2-interface).
 The compatibility inventory owns the supported ranges and exact verification
-samples separately. One default object exposes V1 `server` and V2 `setup`;
-API adapters share routing and optional-plugin behavior without importing a
-host SDK at runtime. Mise pins both CLI generations through its npm backend.
-Installed-tarball smoke checks cover each minor's current patch.
+samples separately. Default plugin objects expose only `setup`; hooks operate on
+native events and preserve structured tool results without a V1 adapter or host
+SDK import at runtime. Mise pins only V2 through its npm backend. Installed-tarball
+smoke checks cover plugin loading, agent discovery, and real permission evaluation.
 One release manifest binds every Pages file and the exact npm tarball to the tag
 and revision. Publication verifies both remote channels before creating the
 GitHub Release. Compatibility checks are pinned, hostless where possible, and

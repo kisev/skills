@@ -79,7 +79,7 @@ const COMMANDS: readonly CommandRegistration[] = [
       "Show the RTK output-compression observability summary for this host.",
       `Run \`npx --yes @kisev/agentomatic@${requirePackageVersion()} doctor --json\` and render the \`rtk.observability\` check as a short human summary: wrapper status, rtk binary availability, event counters, characters saved, and the token estimate.`,
       "When the doctor command is unavailable, read the stats file directly: `$XDG_STATE_HOME/opencode/skills/rtk/stats.json`, or `~/.local/state/opencode/skills/rtk/stats.json` when that variable is unset.",
-      "Zero counters with an active wrapper mean no verbose bash output has been compressed yet.",
+      "Zero counters with an active wrapper mean no verbose shell output has been compressed yet.",
       "The `/rtk` command still loads the portable rtk skill and is unaffected by this summary.",
     ],
   },

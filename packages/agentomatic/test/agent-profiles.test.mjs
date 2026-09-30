@@ -138,7 +138,7 @@ test("inventory separates package-owned, managed, user-owned, drift, and collisi
   }
 });
 
-test("model catalog and variants use cached opencode commands without refresh", async () => {
+test("model catalog and variants use the native V2 model snapshot API without refresh", async () => {
   const directory = temporary();
   const executable = join(directory, "opencode");
   const originalPath = process.env.PATH;
@@ -146,14 +146,11 @@ test("model catalog and variants use cached opencode commands without refresh", 
     await writeFile(
       executable,
       `#!/bin/sh
-if [ "$1" = "models" ] && [ "$3" = "--verbose" ]; then
-  if [ "$2" = "anthropic" ]; then
-    printf '%s\n' 'anthropic/claude' '{"id":"anthropic/claude"}'
-  else
-    printf '%s\n' 'openai/gpt-5' '{"variants":{"none":{},"low":{},"high":{}}}'
-  fi
+if [ "$1" = "api" ] && [ "$2" = "get" ]; then
+  case "$3" in /api/model\\?location*) ;; *) exit 1 ;; esac
+  printf '%s\n' '{"data":[{"providerID":"anthropic","id":"claude"},{"providerID":"openai","id":"gpt-5","variants":[{"id":"none"},{"id":"low"},{"id":"high"}]}]}'
 else
-  printf '%s\n' 'anthropic/claude' 'openai/gpt-5'
+  exit 1
 fi
 `,
     );
@@ -345,7 +342,7 @@ test("model and variant configuration survives package install", async () => {
     assert.equal(changed.result.requires_restart, true);
     assert.match(
       await readFile(join(context.root, "agents", "manager.md"), "utf8"),
-      /model: openai\/gpt-5\nvariant: high/,
+      /model: openai\/gpt-5#high/,
     );
 
     await apply("install", "project", context.project, context.home);
@@ -399,9 +396,9 @@ test("manager can delegate to review and review can complete an independent nest
     await confirmedInstall(context.project, context.home);
     const manager = await readFile(join(context.root, "agents", "manager.md"), "utf8");
     const reviewer = await readFile(join(context.root, "agents", "review.md"), "utf8");
-    assert.match(manager, /review: allow/);
+    assert.match(manager, /action: subagent, resource: "review", effect: allow/);
     assert.match(reviewer, /mode: all/);
-    assert.match(reviewer, /critic: allow/);
+    assert.match(reviewer, /action: subagent, resource: "critic", effect: allow/);
     const { RoutingGate } = await import("../dist/routing.js");
     const gate = new RoutingGate();
     const agents = ["review", "critic"].map((agent) => ({
@@ -465,8 +462,8 @@ test("additional critic atomically changes the exact manager and review pools", 
     );
     for (const name of ["manager", "review"]) {
       const content = await readFile(join(context.root, "agents", `${name}.md`), "utf8");
-      assert.match(content, /critic: allow/);
-      assert.match(content, /critic-security: allow/);
+      assert.match(content, /action: subagent, resource: "critic", effect: allow/);
+      assert.match(content, /action: subagent, resource: "critic-security", effect: allow/);
       assert.doesNotMatch(content, /critic-\*/);
     }
     const manifest = JSON.parse(

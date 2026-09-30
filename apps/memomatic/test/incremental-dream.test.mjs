@@ -19,6 +19,7 @@ import { runSessions } from "../dist/sessions.js";
 import { reindex } from "../dist/search.js";
 import { OpenCodeExecutor } from "../dist/executor.js";
 import { withRunLock } from "../dist/inbox.js";
+import { createSessionTables, insertMessage } from "./opencode-fixture.mjs";
 
 async function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "dream-incremental-"));
@@ -41,18 +42,11 @@ async function fixture(t) {
   context.settings.sessions.idleMs = 0;
   const path = join(root, "sessions.db");
   const db = new DatabaseSync(path);
-  db.exec(
-    "CREATE TABLE session(id TEXT,title TEXT,directory TEXT,time_created INTEGER,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT,time_created INTEGER); CREATE TABLE part(id TEXT,message_id TEXT,data TEXT,time_created INTEGER);",
-  );
-  db.prepare("INSERT INTO session VALUES (?,?,?,?,?)").run("s", "Session", "/project", 1, 1);
+  createSessionTables(db);
+  db.prepare("INSERT INTO session_v2 VALUES (?,?,?,?,?)").run("s", "Session", "/project", 1, 1);
+  let seq = 0;
   const message = (id, text, time = 1) => {
-    db.prepare("INSERT INTO message VALUES (?,?,?,?)").run(id, "s", '{"role":"user"}', time);
-    db.prepare("INSERT INTO part VALUES (?,?,?,?)").run(
-      `p-${id}`,
-      id,
-      JSON.stringify({ type: "text", text }),
-      time,
-    );
+    insertMessage(db, id, "s", "user", text, ++seq, time);
   };
   t.after(() => {
     db.close();
@@ -78,8 +72,8 @@ test("message checkpoints capture old-session continuations, edits and the final
   const continuation = planIngestion(path, context.store, { before: 100, maxChars: 256 });
   assert.equal(continuation.fragments.length, 1);
   assert.match(continuation.fragments[0].text, /Follow-up/);
-  db.prepare("UPDATE part SET data=? WHERE id='p-a'").run(
-    JSON.stringify({ type: "text", text: "Corrected initial decision" }),
+  db.prepare("UPDATE session_message SET data=?,time_updated=3 WHERE id='a'").run(
+    JSON.stringify({ text: "Corrected initial decision" }),
   );
   assert.match(
     planIngestion(path, context.store, { before: 100, maxChars: 256 })
@@ -87,7 +81,7 @@ test("message checkpoints capture old-session continuations, edits and the final
       .join("\n"),
     /Corrected/,
   );
-  db.exec("UPDATE session SET time_updated=1000");
+  db.exec("UPDATE session_v2 SET time_updated=1000");
   assert.equal(
     planIngestion(path, context.store, { before: 100, maxChars: 256 }).fragments.length,
     0,
@@ -96,21 +90,7 @@ test("message checkpoints capture old-session continuations, edits and the final
 
 test("unchanged modern session revisions skip reading message bodies", async (t) => {
   const { context, path, db } = await fixture(t);
-  db.exec(
-    "ALTER TABLE message ADD COLUMN time_updated INTEGER DEFAULT 1; ALTER TABLE part ADD COLUMN time_updated INTEGER DEFAULT 1;",
-  );
-  db.prepare("INSERT INTO message(id,session_id,data,time_created) VALUES (?,?,?,?)").run(
-    "a",
-    "s",
-    '{"role":"user"}',
-    1,
-  );
-  db.prepare("INSERT INTO part(id,message_id,data,time_created) VALUES (?,?,?,?)").run(
-    "p-a",
-    "a",
-    '{"type":"text","text":"Decision"}',
-    1,
-  );
+  insertMessage(db, "a", "s", "user", "Decision", 1);
   const first = planIngestion(path, context.store, { before: 1000, maxChars: 256 });
   for (const fragment of first.fragments) {
     for (const key of fragment.checkpointKeys) context.store.setMeta(key, fragment.id);
@@ -119,8 +99,8 @@ test("unchanged modern session revisions skip reading message bodies", async (t)
   const cached = planIngestion(path, context.store, { before: 1000, maxChars: 256 });
   assert.equal(cached.messages, 0);
   assert.equal(cached.cachedSessions, 1);
-  db.prepare("UPDATE part SET data=?,time_updated=2 WHERE id='p-a'").run(
-    '{"type":"text","text":"Changed decision"}',
+  db.prepare("UPDATE session_message SET data=?,time_updated=2 WHERE id='a'").run(
+    '{"text":"Changed decision"}',
   );
   assert.match(
     planIngestion(path, context.store, { before: 1000, maxChars: 256 }).fragments[0].text,
@@ -231,14 +211,17 @@ test("a live long-running lock cannot be stolen after the former 30-minute expir
   assert.equal(existsSync(context.paths.runLockFile), false);
 });
 
-test("model timeout aborts the session without stopping an externally owned server", async (t) => {
+test("V2 generation timeout interrupts only its session without stopping an externally owned server", async (t) => {
   let aborts = 0;
   const server = createServer(async (req, res) => {
     for await (const _chunk of req) {
     }
     res.setHeader("Content-Type", "application/json");
-    if (req.url === "/session") res.end('{"id":"s"}');
-    else if (req.url.endsWith("/abort")) {
+    if (req.url === "/api/session") res.end('{"data":{"id":"ses_test"}}');
+    else if (req.method === "PUT") {
+      res.writeHead(204);
+      res.end();
+    } else if (req.url.endsWith("/interrupt?resume=false")) {
       aborts++;
       res.end("true");
     }

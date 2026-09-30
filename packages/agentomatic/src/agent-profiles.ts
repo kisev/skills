@@ -396,28 +396,30 @@ function withSelection(
   filtered.splice(
     mode + 1,
     0,
-    `model: ${selection.model}`,
-    ...(selection.variant ? [`variant: ${selection.variant}`] : []),
+    `model: ${selection.model}${selection.variant ? `#${selection.variant}` : ""}`,
   );
   return filtered.join("\n");
 }
 
 function replaceTaskAllowlist(content: string, allowed: readonly string[]): string {
   const lines = content.split("\n");
-  const permission = lines.indexOf("permission:");
+  const permission = lines.indexOf("permissions:");
   if (permission < 0)
     throw new AgentProfileError("asset_error", "Canonical primary agent has no permission block");
-  const task = lines.findIndex((line, index) => index > permission && line === "  task:");
+  const task = lines.findIndex(
+    (line, index) => index > permission && line.startsWith("  - { action: subagent,"),
+  );
   if (task < 0)
     throw new AgentProfileError("asset_error", "Canonical primary agent has no task permission");
   let end = task + 1;
-  while (end < lines.length && (lines[end].startsWith("    ") || lines[end] === "")) end += 1;
+  while (end < lines.length && lines[end].startsWith("  - { action: subagent,")) end += 1;
   lines.splice(
     task,
     end - task,
-    "  task:",
-    '    "*": deny',
-    ...allowed.map((name) => `    ${name}: allow`),
+    '  - { action: subagent, resource: "*", effect: deny }',
+    ...allowed.map(
+      (name) => `  - { action: subagent, resource: ${JSON.stringify(name)}, effect: allow }`,
+    ),
   );
   return lines.join("\n");
 }
@@ -989,68 +991,65 @@ export async function applyAgentProfileChange(
   });
 }
 
+async function modelCatalog(): Promise<
+  Array<{ providerID: string; id: string; variants?: Array<{ id: string }> }>
+> {
+  const query = new URLSearchParams({ "location[directory]": process.cwd() });
+  const { stdout } = await execFileAsync("opencode", ["api", "get", `/api/model?${query}`], {
+    timeout: 10_000,
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  const response = JSON.parse(stdout) as { data?: unknown };
+  if (
+    !Array.isArray(response.data) ||
+    !response.data.every(
+      (entry) =>
+        entry &&
+        typeof entry.providerID === "string" &&
+        typeof entry.id === "string" &&
+        MODEL_PATTERN.test(`${entry.providerID}/${entry.id}`),
+    )
+  )
+    throw new Error("invalid V2 model inventory");
+  return response.data;
+}
+
 export async function availableModels(): Promise<string[]> {
   try {
-    const { stdout } = await execFileAsync("opencode", ["models"], {
-      timeout: 10_000,
-      encoding: "utf8",
-    });
     const models = [
-      ...new Set(
-        stdout
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter((line) => MODEL_PATTERN.test(line)),
-      ),
+      ...new Set((await modelCatalog()).map((entry) => `${entry.providerID}/${entry.id}`)),
     ].sort();
     if (!models.length) throw new Error("empty catalog");
     return models;
   } catch (error) {
     throw new AgentProfileError(
       "catalog_unavailable",
-      `Cached OpenCode model catalog is unavailable; provide an explicit provider/model: ${error instanceof Error ? error.message : String(error)}`,
+      `OpenCode V2 model snapshot is unavailable; provide an explicit provider/model: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }
 
 export async function availableModelVariants(model: string): Promise<string[]> {
   const selected = validateModel(model);
-  const provider = selected.split("/", 1)[0];
   try {
-    const { stdout } = await execFileAsync("opencode", ["models", provider, "--verbose"], {
-      timeout: 10_000,
-      encoding: "utf8",
-      maxBuffer: 10 * 1024 * 1024,
-    });
-    const lines = stdout.split(/\r?\n/);
-    for (let index = 0; index < lines.length; index += 1) {
-      if (lines[index].trim() !== selected) continue;
-      let document = "";
-      for (index += 1; index < lines.length; index += 1) {
-        document += `${lines[index]}\n`;
-        try {
-          const metadata = JSON.parse(document) as { variants?: unknown };
-          if (metadata.variants === undefined) return [];
-          if (
-            !metadata.variants ||
-            typeof metadata.variants !== "object" ||
-            Array.isArray(metadata.variants)
-          )
-            throw new Error("invalid variants metadata");
-          const variants = Object.keys(metadata.variants);
-          if (!variants.every((variant) => VARIANT_PATTERN.test(variant)))
-            throw new Error("unsafe variant");
-          return variants;
-        } catch (error) {
-          if (!(error instanceof SyntaxError)) throw error;
-        }
-      }
-    }
-    throw new Error("selected model is absent");
+    const metadata = (await modelCatalog()).find(
+      (entry) => `${entry.providerID}/${entry.id}` === selected,
+    );
+    if (!metadata) throw new Error("selected model is absent");
+    if (metadata.variants === undefined) return [];
+    if (
+      !Array.isArray(metadata.variants) ||
+      !metadata.variants.every(
+        (variant) => variant && typeof variant.id === "string" && VARIANT_PATTERN.test(variant.id),
+      )
+    )
+      throw new Error("invalid variants metadata");
+    return metadata.variants.map((variant) => variant.id);
   } catch (error) {
     throw new AgentProfileError(
       "catalog_unavailable",
-      `Cached OpenCode model variants are unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      `OpenCode V2 model variants are unavailable: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }

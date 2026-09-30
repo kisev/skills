@@ -51,19 +51,14 @@
     "zod": "4.1.8"
   },
   "devDependencies": {
-    "@opencode-ai/plugin": "1.18.32",
     "@opencode/plugin": "2.0.19",
     "@types/node": "22.15.30",
     "typescript": "7.0.2"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.18.0 <1.19.0",
     "@opencode/plugin": ">=2.0.0 <2.1.0"
   },
   "peerDependenciesMeta": {
-    "@opencode-ai/plugin": {
-      "optional": true
-    },
     "@opencode/plugin": {
       "optional": true
     }
