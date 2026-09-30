@@ -1,4 +1,5 @@
 import { JsoncError, type JsoncEdit } from "./jsonc.js";
+import { requirePackageVersion } from "./package-metadata.js";
 
 export type PermissionRule = { action: string; resource: string; effect: "allow" | "ask" | "deny" };
 const effects = new Set(["allow", "ask", "deny"]);
@@ -155,10 +156,20 @@ function plugins(value: unknown, legacy: boolean): unknown[] {
   });
 }
 
+const OUR_PACKAGE = /^@kisev\/(?:agentomatic|skills-opencode)(?:@|$)/;
+
+function ourEntry(entry: unknown): boolean {
+  if (typeof entry === "string") return OUR_PACKAGE.test(entry);
+  return object(entry) && typeof entry.package === "string" && OUR_PACKAGE.test(entry.package);
+}
+
 export function corePluginEdits(config: Record<string, unknown>): JsoncEdit[] {
   const edits: JsoncEdit[] = [
     { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/config.json" },
   ];
+  // V2 resolves a bare package name through the registry "latest" dist-tag, which
+  // can differ from the installed build; pin the exact running version instead.
+  const pinned = `@kisev/agentomatic@${requirePackageVersion()}`;
   const native = "plugins" in config ? plugins(config.plugins, false) : undefined;
   const legacy = "plugin" in config ? plugins(config.plugin, true) : undefined;
   if (native && legacy) {
@@ -169,14 +180,19 @@ export function corePluginEdits(config: Record<string, unknown>): JsoncEdit[] {
       );
     edits.push({ kind: "remove-key", path: ["plugin"] });
   } else if (legacy) edits.push({ kind: "rename-key", path: ["plugin"], to: "plugins" });
-  const entries = native ?? legacy ?? [];
-  if (
-    !entries.some(
-      (entry) =>
-        entry === "@kisev/agentomatic" || (object(entry) && entry.package === "@kisev/agentomatic"),
-    )
-  )
-    entries.push("@kisev/agentomatic");
+  const normalized: unknown[] = [];
+  let pinnedPresent = false;
+  for (const entry of native ?? legacy ?? []) {
+    if (!ourEntry(entry)) {
+      normalized.push(entry);
+      continue;
+    }
+    if (pinnedPresent) continue;
+    normalized.push(object(entry) ? { ...entry, package: pinned } : pinned);
+    pinnedPresent = true;
+  }
+  const entries = normalized;
+  if (!pinnedPresent) entries.push(pinned);
   edits.push({ kind: "set-value", path: ["plugins"], value: entries });
   return edits;
 }

@@ -41,6 +41,11 @@ function-only wrappers cannot load in V2. Preserve user-modified wrapper files;
 the installer reports conflicts instead of overwriting them.
 
 Config setup writes native `plugins` and `permissions` in `opencode.json(c)`.
+The core plugin is registered as an exact-version registry spec
+(`@kisev/agentomatic@<version>`): OpenCode V2 resolves bare package names
+through the npm `latest` dist-tag, which can select a different build than the
+installed one. Rerunning the core fragment repins a bare or stale registration
+in place while foreign plugin entries stay untouched.
 It converts only the sections needed by the selected fragments, not the entire
 configuration. Conflicting legacy/native sections are reported rather than merged
 by guesswork. Do not register the same package twice.

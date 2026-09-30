@@ -1571,7 +1571,7 @@ test("install core integration wires config and dependency in one run", async ()
     const opencode = JSON.parse(
       await readFile(join(home, ".config", "opencode", "opencode.jsonc"), "utf8"),
     );
-    assert.deepEqual(opencode.plugins, ["@kisev/agentomatic"]);
+    assert.deepEqual(opencode.plugins, [`@kisev/agentomatic@${PACKAGE_VERSION}`]);
     assert.ok(existsSync(join(home, ".config", "opencode", "commands", "agents-md.md")));
 
     const skipped = invoke([

@@ -80,9 +80,13 @@ files only after a confirmed preview, preserve user entries and comments, add
 only absent preset values except for the behavior-preserving native conversion
 of touched legacy sections under REQ-I-420, validate every merged document before and after writing, and
 roll the whole plan back on any failed postcondition. The `core-plugin`
-fragment shall replace a legacy `@kisev/skills-opencode` plugin entry in place
-with `@kisev/agentomatic` instead of appending a duplicate, leaving unrelated
-user plugins untouched.
+fragment shall register `@kisev/agentomatic` as an exact-version registry spec
+pinned to the running package version, because OpenCode V2 resolves a bare
+package name through the registry `latest` dist-tag, which can select an
+unrelated build. Any existing `@kisev/agentomatic` or legacy
+`@kisev/skills-opencode` entry — bare, stale-pinned, or with options — shall be
+replaced by that pinned spec in place instead of appending a duplicate, leaving
+unrelated user plugins untouched.
 
 #### Verification
 

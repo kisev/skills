@@ -210,7 +210,9 @@ function redactedConfig(value: unknown): {
       })
     : [];
   const knownPlugins = new Set<string>([packageName, ...CATALOG.plugins]);
-  const plugins = rawPlugins.filter((plugin) => knownPlugins.has(plugin));
+  const normalizePlugin = (plugin: string) =>
+    plugin === packageName || plugin.startsWith(`${packageName}@`) ? packageName : plugin;
+  const plugins = rawPlugins.map(normalizePlugin).filter((plugin) => knownPlugins.has(plugin));
   const enabled = plugins.filter(
     (plugin) =>
       plugin === packageName ||

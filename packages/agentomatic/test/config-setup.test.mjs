@@ -16,8 +16,10 @@ import {
 } from "../dist/config-setup.js";
 import { applyJsoncEdits, JsoncError, parseJsonc } from "../dist/jsonc.js";
 import { corePluginEdits, permissionEdits } from "../dist/opencode-config.js";
+import { requirePackageVersion } from "../dist/package-metadata.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
+const PINNED = `@kisev/agentomatic@${requirePackageVersion()}`;
 
 test("interrupted config recovery is read-only until its exact journal is confirmed", async () => {
   const directory = temporary();
@@ -109,11 +111,44 @@ test("core-plugin setup preserves V2 plugins and does not create a legacy array"
     });
     const source = readFileSync(file, "utf8");
     const config = parseJsonc(source);
-    assert.deepEqual(config.plugins, ["user-plugin", "@kisev/agentomatic"]);
+    assert.deepEqual(config.plugins, ["user-plugin", PINNED]);
     assert.equal(config.plugin, undefined);
     assert.match(source, /\/\/ V2 plugins/);
     const preview = await previewConfigSetup(selection, "global", directory, home);
     assert.ok(preview.operations.every((operation) => operation.operation === "unchanged"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("core-plugin setup repins a bare or stale registration instead of resolving latest", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const file = join(home, ".config/opencode/opencode.jsonc");
+  try {
+    await writeFile(
+      file,
+      JSON.stringify(
+        {
+          plugins: [
+            "@kisev/agentomatic",
+            "@kisev/agentomatic@0.0.1-dev.0.g000000000000",
+            "user-plugin",
+          ],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    const selection = { targets: ["opencode"], fragments: ["core-plugin"] };
+    const setup = await previewConfigSetup(selection, "global", directory, home);
+    await applyConfigSetup(selection, "global", directory, home, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: setup.receipt,
+    });
+    assert.deepEqual(parseJsonc(readFileSync(file, "utf8")).plugins, [PINNED, "user-plugin"]);
+    const again = await previewConfigSetup(selection, "global", directory, home);
+    assert.ok(again.operations.every((operation) => operation.operation === "unchanged"));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -216,7 +251,7 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const opencode = parseJsonc(
       readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8"),
     );
-    assert.deepEqual(opencode.plugins, ["@kisev/agentomatic"]);
+    assert.deepEqual(opencode.plugins, [PINNED]);
     assert.equal(opencode.permission, undefined);
     assertRule(opencode, "read", "~/.local/state/agent-skills/**", "allow");
     assertRule(opencode, "read", "~/.config/opencode/skills/**", "allow");
@@ -303,7 +338,7 @@ test("config setup preserves user entries, comments, and scalar permissions", as
     assert.match(raw, /\/\/ model choice stays/);
     const opencode = parseJsonc(raw);
     assert.equal(opencode.model, "openai/gpt-5.6-luna");
-    assert.deepEqual(opencode.plugins, ["user-plugin", "@kisev/agentomatic"]);
+    assert.deepEqual(opencode.plugins, ["user-plugin", PINNED]);
     assert.equal(opencode.plugin, undefined);
     assert.deepEqual(opencode.lsp.python.command, ["pyright-langserver", "--stdio"]);
     assert.equal(opencode.lsp.python.extensions, undefined);
@@ -604,7 +639,7 @@ test("legacy tools migrate once and plugin options are not duplicated or discard
     '{"plugin":[["@kisev/skills-opencode",{"enabled":false}],"user-plugin"],"model":"user/model"}';
   const config = applyJsoncEdits(plugins, corePluginEdits(parseJsonc(plugins)));
   assert.deepEqual(parseJsonc(config.text).plugins, [
-    { package: "@kisev/agentomatic", options: { enabled: false } },
+    { package: PINNED, options: { enabled: false } },
     "user-plugin",
   ]);
   assert.equal(parseJsonc(config.text).plugin, undefined);
@@ -688,7 +723,7 @@ test("a permission conflict leaves its whole section unchanged while unrelated f
     const config = parseJsonc(readFileSync(file, "utf8"));
     assert.deepEqual(config.permissions, original.permissions);
     assert.equal(config.model, original.model);
-    assert.deepEqual(config.plugins, ["@kisev/agentomatic"]);
+    assert.deepEqual(config.plugins, [PINNED]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

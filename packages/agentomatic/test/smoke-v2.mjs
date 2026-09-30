@@ -231,6 +231,29 @@ try {
   process.stdout.write(
     "Packed OpenCode V2 plugin loading, agent discovery, and permission evaluation smoke test passed\n",
   );
+  {
+    const exited = once(server, "exit");
+    server.kill("SIGTERM");
+    const timer = setTimeout(() => server.kill("SIGKILL"), 5000);
+    await exited;
+    clearTimeout(timer);
+  }
+  execFileSync(
+    join(project, "node_modules/.bin/agentomatic"),
+    ["config", "--targets", "opencode", "--fragments", "core-plugin", "--no-dependency", "--yes"],
+    { cwd: project, env, encoding: "utf8" },
+  );
+  const version = JSON.parse(
+    await readFile(join(project, "node_modules/@kisev/agentomatic/package.json"), "utf8"),
+  ).version;
+  const finalPlugins = JSON.parse(
+    await readFile(join(project, ".opencode/opencode.json"), "utf8"),
+  ).plugins;
+  assert.deepEqual(finalPlugins, [
+    pathToFileURL(join(project, "node_modules/@kisev/agentomatic/dist")).href,
+    `@kisev/agentomatic@${version}`,
+  ]);
+  process.stdout.write("Core plugin registration pins the exact package version\n");
 } finally {
   if (server && server.exitCode === null) {
     const exited = once(server, "exit");

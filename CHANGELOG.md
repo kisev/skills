@@ -14,7 +14,10 @@ All notable changes to this project are documented in this file. Entries follow
   adapters, and checks are removed. V1 users can retain the pre-V2 stable release.
   Config setup writes native `plugins`, ordered `permissions`, and global
   `cli.json`, migrating only touched sections and preserving user rules and
-  comments. Agent definitions and model discovery use V2 contracts. The inactive
+  comments. The core plugin is registered as an exact-version registry spec,
+  because V2 resolves bare package names through the npm `latest` dist-tag;
+  reruns repin bare or stale registrations. Agent definitions and model
+  discovery use V2 contracts. The inactive
   `lsp-preset` is removed; permission smoke checks run against real V2 evaluation.
 
 - Memomatic's OpenCode client targets V2 only: model calls spawn an isolated

@@ -109,7 +109,7 @@ test("doctor never serializes config secrets and classifies collisions as proble
     writeFileSync(
       join(item.project, "opencode.json"),
       JSON.stringify({
-        plugins: ["@kisev/agentomatic"],
+        plugins: ["@kisev/agentomatic@0.0.0-test.0.g000000000000"],
         token: "doctor-secret",
         apiKey: "another-secret",
         authorization: "Bearer hidden",
@@ -123,6 +123,9 @@ test("doctor never serializes config secrets and classifies collisions as proble
     assert.equal(serialized.includes("Bearer hidden"), false);
     assert.equal(report.mutations, false);
     assert.ok(report.checks.some((check) => check.status === "fail"));
+    const projection = report.checks.find((check) => check.id === "config.plugins");
+    assert.deepEqual(projection.evidence.local_enabled, ["@kisev/agentomatic"]);
+    assert.equal(projection.evidence.local_unknown, 0);
     assert.equal(report.status, "problems");
     const dependency = report.checks.find((check) => check.id === "config.plugin-dependency");
     assert.equal(dependency.status, "warn");
