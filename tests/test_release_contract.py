@@ -385,6 +385,9 @@ def _maintenance_release_environment(
     monkeypatch.setattr(check_release, "OPENCODE_LOCK", tmp_path / "package-lock.json")
     monkeypatch.setattr(check_release, "CHANGELOG", tmp_path / "CHANGELOG.md")
     monkeypatch.setattr(check_release, "DISTRIBUTION", distribution)
+    # The stable publication preflight exports RELEASE_REVISION; pin it to the
+    # fixture revision so validate() reaches the channel under test.
+    monkeypatch.setenv("RELEASE_REVISION", revision)
     return revision
 
 

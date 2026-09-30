@@ -1,6 +1,6 @@
 {
   "name": "@kisev/agentomatic",
-  "version": "11.0.0",
+  "version": "11.0.1",
   "description": "OpenCode integration and opt-in installer for portable Agent Skills.",
   "homepage": "https://github.com/kisev/skills#readme",
   "bugs": {
