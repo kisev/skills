@@ -10,6 +10,15 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- Stable releases resolve their publication channel from the tagged commit: a
+  tag on `main` publishes npm `latest` and the Pages root, while a tag on a
+  `release/vX.Y` maintenance branch publishes only the npm `vX.Y` dist-tag and
+  never redeploys Pages. The branch model is now a `dev` trunk with pull
+  requests into `main` (feature releases from `dev` or a release prep branch,
+  latest-line patches also from `fix/*`); maintenance branches are cut from the
+  previous feature line when the next feature release ships and carry the
+  current publication automation, because tag pushes run the workflow from the
+  tagged commit.
 - Memomatic splits OpenCode session analysis into the standalone `sessions`
   command; `dream` is now pure consolidation (inbox, usage-gated promotion,
   bounded rewrite, archiving) and never reads OpenCode history. Separate

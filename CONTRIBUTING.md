@@ -132,22 +132,36 @@ Pages distribution, `@kisev/agentomatic` version, tag, and GitHub Release
 must refer to one commit. Do not change a published version; publish a new patch
 release instead.
 
-Use `dev` as the integration branch. Direct commits and pull requests from
-feature or fix branches may target `dev`. Pull requests into `main` must use
-`dev` as their source and a merge commit. Prepare the maintainer-selected stable
-version and both changelogs on `dev`; merging does not itself publish a release.
+Use `dev` as the integration trunk. Commit to `dev` directly by default and
+open feature or fix pull requests into `dev` only when a branch helps. `main`
+changes only through pull requests with a merge commit and tracks the latest
+stable feature line. Prepare the maintainer-selected stable version and both
+changelogs on `dev`; when the release point is not `dev` head, cut a release
+prep branch at the selected commit and prepare there. Merging does not itself
+publish a release.
+
+A feature release `X.Y.0` ships through a pull request into `main` and is tagged
+on the resulting merge commit. A patch to the latest feature line `X.Y.z` ships
+the same way from `dev` or a `fix/*` branch. When the next feature release
+ships, cut `release/vX.Y` from the previous line's latest tag and bring the
+publication automation in that branch up to date: tag pushes run
+`.github/workflows/publish.yml` from the tagged commit, so a stale workflow
+would publish an old-line patch as `latest`. Patch an older line through a
+`fix/*` pull request into `release/vX.Y` and tag its merge commit.
 
 Invoke the project `project-release` skill to run the guarded release workflow.
-It requires separate confirmation before pushing `dev`, merging into `main`,
-creating the annotated `vX.Y.Z` tag, and pushing that tag. The tag must reference
-the resulting `main` merge commit.
+It requires separate confirmation before pushing the release branch, merging
+into `main`, creating the annotated `vX.Y.Z` tag, and pushing that tag. The tag
+must reference the resulting merge commit.
 
 The tag starts `.github/workflows/publish.yml`. It revalidates the published tag
-and revision, builds exact npm tarballs for every workspace publication member
-and a cross-channel digest manifest,
-publishes and verifies stable GitHub Pages and npm `latest`, and only then creates
-the GitHub Release. npm publishing uses trusted publishing through OIDC and
-verifies the registry tarball, imports, CLI, signatures, and provenance.
+and revision, resolves the publication channel from the tagged commit, builds
+exact npm tarballs for every workspace publication member and a cross-channel
+digest manifest, then publishes and verifies npm `latest` with the stable GitHub
+Pages root for a commit on `main`, or the npm `vX.Y` dist-tag without touching
+Pages for a commit on `release/vX.Y`, and only then creates the GitHub Release.
+npm publishing uses trusted publishing through OIDC and verifies the registry
+tarball, imports, CLI, signatures, and provenance.
 
 The manifest records `@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomatic`
 with their own versions and exact dependency pins. Every member must finish

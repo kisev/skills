@@ -190,6 +190,11 @@ tasks:
         --version "${RELEASE_TAG#v}" --revision "$RELEASE_REVISION"
         --attempts 24 --manifest .build/release/release.json
 
+  release:channel:
+    desc: Resolve the publication channel of the tagged release
+    cmds:
+      - mise exec -- uv run --locked python scripts/release_channel.py {{.CLI_ARGS}}
+
   release:github:
     desc: Create or verify the final GitHub Release
     cmds:

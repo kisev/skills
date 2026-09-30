@@ -102,6 +102,10 @@
         "S603",                                                             # Arguments are fixed release-verification commands.
         "S607",                                                             # Git and npm are required PATH-resolved tools.
       ]
+      "scripts/release_channel.py" = [
+        "S603",                                                             # Arguments are a fixed git ancestry vector.
+        "S607",                                                             # Git is a required PATH-resolved release tool.
+      ]
       "scripts/build_stage20_corpus.py" = ["RUF001"]                        # Confusable characters are intentional corpus cases.
       "scripts/build_skills.py" = ["S105"]                                  # The value is a public build placeholder, not a credential.
       "scripts/create_github_release.py" = ["S310"]                         # Requests use the fixed GitHub HTTPS API origin.

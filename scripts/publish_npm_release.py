@@ -23,6 +23,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts import release_channel  # noqa: E402
+
 RELEASE = ROOT / ".build" / "release"
 SLSA_PREDICATE = "https://slsa.dev/provenance/v1"
 PROPAGATION_SECONDS = 600
@@ -508,7 +513,17 @@ def publish() -> list[dict[str, Any]]:
     if not isinstance(revision, str) or not revision:
         raise PublicationError("release identity is invalid")
     schema = release.get("schema")
-    expected_tag = "dev" if schema == "@kisev/skills-dev/v2" else "latest"
+    if schema == "@kisev/skills-dev/v2":
+        expected_tag: str = "dev"
+    else:
+        requested = release.get("dist_tag")
+        if not isinstance(requested, str):
+            raise PublicationError("stable manifest is missing the npm dist_tag")
+        try:
+            release_channel.dist_tag(f"v{version}", requested)
+        except release_channel.ChannelError as error:
+            raise PublicationError(str(error)) from error
+        expected_tag = requested
     dist_tag = os.environ.get("NPM_DIST_TAG", expected_tag)
     if dist_tag != expected_tag:
         raise PublicationError(f"manifest requires npm dist-tag {expected_tag!r}, got {dist_tag!r}")

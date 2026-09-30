@@ -42,6 +42,10 @@ publication, build the exact tagged Pages distribution and the npm tarballs for
 `@kisev/safe-fs`, `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/agentomatic`, and bind all
 artifacts to one release manifest. Each package keeps its maintained version;
 development versions and exact dependency pins follow the manifest's member graph.
+The publication channel shall be resolved from the tagged commit and fail closed
+otherwise: a revision reachable from `origin/main` publishes npm `latest` and the
+Pages root, while a revision reachable only from its `origin/release/vX.Y`
+maintenance branch publishes the `vX.Y` npm dist-tag without redeploying Pages.
 CI shall verify every member's deployed npm artifact, deployed Pages bytes, npm
 integrity, signatures, provenance, imports, and CLI before creating the GitHub
 Release. The distribution version and source revision shall match the immutable
@@ -49,8 +53,9 @@ tag, and a rerun shall accept only identical previously published bytes.
 
 #### Verification
 
-Release contract tests reject version, tag, provenance, and digest mismatches.
-The tag workflow verifies both remote channels before GitHub Release creation.
+Release contract tests reject version, tag, provenance, digest, and channel
+mismatches. The tag workflow verifies the resolved remote channel before GitHub
+Release creation.
 
 Package-member tests verify dependency order, exact pins, and complete publication
 of all manifest members before declaring a release successful.
