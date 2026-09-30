@@ -78,8 +78,9 @@ after activation or asset changes, and follow the complete
 ## Documentation
 
 The [documentation index](docs/README.md) organizes tutorials, how-to guides,
-reference material, and explanations using Diataxis. Architecture, verification,
-migration, compatibility, and both installation lifecycles are linked there.
+reference material, and explanations using Diataxis. The published
+[documentation site](https://kisev.github.io/skills) shows the skill catalog,
+interaction examples, and install instructions (`apps/docs-site`).
 
 ## Development
 

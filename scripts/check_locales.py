@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import cast
 
@@ -197,6 +198,32 @@ def _public_documents(root: Path) -> set[str]:
     return public
 
 
+def _is_application_content(manifest: dict[str, object], relative: str) -> bool:
+    """Return whether a locale-suffixed path is declared application content.
+
+    Application content trees (site data, fixtures) are not paired documents:
+    their locale parity is enforced by their own build and contract tests, so
+    the manifest declares them with a justification instead of a pair record.
+    """
+    declared = manifest.get("application_content")
+    if declared is None:
+        return False
+    if not isinstance(declared, list) or not declared:
+        raise LocaleError("application_content must be a non-empty list")
+    for item in declared:
+        if not isinstance(item, dict):
+            raise LocaleError("application_content entries must be objects")
+        pattern = item.get("glob")
+        reason = item.get("reason")
+        if not isinstance(pattern, str) or not pattern.strip():
+            raise LocaleError("application_content requires a glob")
+        if not isinstance(reason, str) or not reason.strip():
+            raise LocaleError("application_content requires a non-empty reason")
+        if fnmatch(relative, pattern):
+            return True
+    return False
+
+
 def _links(root: Path, source: str, text: str) -> set[str]:
     links = set()
     for raw in LINK.findall(text):
@@ -251,6 +278,8 @@ def validate(root: Path = ROOT, built: Path | None = None) -> int:
             raise LocaleError(f"public documentation is neither translated nor neutral: {relative}")
     for path in root.rglob("*.md"):
         relative = path.relative_to(root).as_posix()
+        if _is_application_content(manifest, relative):
+            continue
         if "/en/" in relative or relative.endswith(".en.md"):
             raise LocaleError(f"obsolete English locale path: {relative}")
         if ("/ru/" in relative or relative.endswith(".ru.md")) and relative not in paths:
