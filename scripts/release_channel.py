@@ -101,9 +101,14 @@ def main(argv: list[str] | None = None) -> int:
         output_path = os.environ.get("GITHUB_OUTPUT")
         if not output_path:
             raise SystemExit("GITHUB_OUTPUT is required with --github-output")
+        output_names = {
+            "channel": "channel",
+            "dist_tag": "dist-tag",
+            "deploys_pages": "deploys-pages",
+        }
         with open(output_path, "a", encoding="utf-8") as handle:
             for key, value in result.items():
-                handle.write(f"{key}={value}\n")
+                handle.write(f"{output_names[key]}={value}\n")
     else:
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
     return 0

@@ -346,6 +346,31 @@ def test_release_channel_fails_closed_outside_release_refs(
         release_channel.resolve("v11.0.4", "a" * 40)
 
 
+@pytest.mark.parametrize(
+    ("on_main", "expected"),
+    [
+        (True, "channel=latest\ndist-tag=latest\ndeploys-pages=true\n"),
+        (False, "channel=maintenance\ndist-tag=v11.0\ndeploys-pages=false\n"),
+    ],
+)
+def test_release_channel_github_output_names_match_the_workflow(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    on_main: bool,
+    expected: str,
+) -> None:
+    output = tmp_path / "github-output"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("RELEASE_TAG", "v11.0.4")
+    monkeypatch.setenv("RELEASE_REVISION", "a" * 40)
+    expected_ref = "origin/main" if on_main else "origin/release/v11.0"
+    monkeypatch.setattr(
+        release_channel, "reachable_from", lambda _revision, ref: ref == expected_ref
+    )
+    assert release_channel.main(["--github-output"]) == 0
+    assert output.read_text(encoding="utf-8") == expected
+
+
 @pytest.mark.parametrize("tag", ["11.0.0", "v11.0", "v11.0.0-rc.1", "v011.0.0"])
 def test_release_channel_rejects_malformed_stable_tags(tag: str) -> None:
     with pytest.raises(release_channel.ChannelError, match=r"vX\.Y\.Z"):
@@ -385,6 +410,9 @@ def _maintenance_release_environment(
     monkeypatch.setattr(check_release, "OPENCODE_LOCK", tmp_path / "package-lock.json")
     monkeypatch.setattr(check_release, "CHANGELOG", tmp_path / "CHANGELOG.md")
     monkeypatch.setattr(check_release, "DISTRIBUTION", distribution)
+    # The stable publication preflight exports RELEASE_REVISION; pin it to the
+    # fixture revision so validate() reaches the channel under test.
+    monkeypatch.setenv("RELEASE_REVISION", revision)
     return revision
 
 
@@ -667,7 +695,6 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
         [
             {"name": "@kisev/safe-fs", "version": RELEASE_VERSION},
             {"name": "@kisev/memomatic", "version": RELEASE_VERSION},
-            {"name": "@kisev/reviewmatic", "version": RELEASE_VERSION},
             {"name": "@kisev/taskmatic", "version": RELEASE_VERSION},
             {"name": "@kisev/agentomatic", "version": RELEASE_VERSION},
         ]
@@ -675,7 +702,7 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
     for name in publish_npm_release.NPM_PUBLISH_ORDER:
         assert f"{name}@{RELEASE_VERSION}" in install
-    assert "@opencode-ai/plugin@1.18.32" in install
+    assert "@opencode-ai/plugin@1.18.29" in install
     assert ("npm", "audit", "signatures", "--json") in calls
 
 
@@ -1039,13 +1066,7 @@ def test_release_manifest_rejects_tampered_tarball(
 
     release = tmp_path / "release"
     release.mkdir()
-    for filename in (
-        "safe-fs.tgz",
-        "memomatic.tgz",
-        "reviewmatic.tgz",
-        "taskmatic.tgz",
-        "package.tgz",
-    ):
+    for filename in ("safe-fs.tgz", "memomatic.tgz", "taskmatic.tgz", "package.tgz"):
         (release / filename).write_bytes(content)
     (release / "release.json").write_text(
         json.dumps(
@@ -1054,7 +1075,6 @@ def test_release_manifest_rejects_tampered_tarball(
                 "npm": [
                     entry("@kisev/safe-fs", "safe-fs.tgz"),
                     entry("@kisev/memomatic", "memomatic.tgz"),
-                    entry("@kisev/reviewmatic", "reviewmatic.tgz"),
                     entry("@kisev/taskmatic", "taskmatic.tgz"),
                     entry("@kisev/agentomatic", "package.tgz"),
                 ],
