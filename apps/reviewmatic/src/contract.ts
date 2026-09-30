@@ -3503,7 +3503,7 @@ export function pipelineJob(
   ];
   const result: Record<string, unknown> = { project_id: projectId, pipeline_id: pipelineId };
   for (const key of fields) {
-    result[key] = item[key];
+    result[key] = item[key] ?? null;
   }
   return result;
 }

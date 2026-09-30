@@ -45,6 +45,7 @@ import {
   parseSemver,
   parseTarget,
   parseGlabTrace,
+  pipelineJob,
   redact,
   reviewLabels,
   reviewPublicationPreviewIsValid,
@@ -1127,6 +1128,47 @@ test("select exact pipeline picks the newest pipeline for the head", () => {
   assert.equal(selectExactPipeline({ items: "nope" }, "ccc"), null);
 });
 
+test("pipeline jobs normalize missing fields to serializable nulls", () => {
+  const job = pipelineJob({ id: 9, name: "generate build", status: "success" }, 42, 5);
+  assert.deepEqual(job, {
+    project_id: 42,
+    pipeline_id: 5,
+    id: 9,
+    name: "generate build",
+    stage: null,
+    status: "success",
+    allow_failure: null,
+    web_url: null,
+    created_at: null,
+    started_at: null,
+    finished_at: null,
+    duration: null,
+    queued_duration: null,
+    failure_reason: null,
+  });
+  assert.deepEqual(JSON.parse(canonical(job).toString("utf8")), job);
+});
+
+test("pipeline jobs preserve supplied values including false, zero, and empty strings", () => {
+  const item = {
+    id: 9,
+    name: "lint dockerfiles",
+    stage: "test",
+    status: "failed",
+    allow_failure: false,
+    web_url: "",
+    created_at: CREATED_AT,
+    started_at: null,
+    finished_at: undefined,
+    duration: 0,
+    queued_duration: 0,
+    failure_reason: "script_failure",
+  };
+  const job = pipelineJob(item, 42, 5);
+  assert.deepEqual(job, { ...item, project_id: 42, pipeline_id: 5, finished_at: null });
+  assert.deepEqual(JSON.parse(canonical(job).toString("utf8")), job);
+});
+
 test("template headings and chat labels follow the contract", () => {
   assert.deepEqual(templateHeadings("## A\nplain\n### B x\n#no\n#### C\n"), [
     "## A",
@@ -1421,8 +1463,11 @@ test("collect gathers evidence and finalize confirms freshness", async (t) => {
     ],
     ["projects/42/merge_requests/7/commits", [{ id: headSha }]],
     ["projects/42/merge_requests/7/pipelines", [{ id: 5, sha: headSha, status: "success" }]],
-    ["projects/42/pipelines/5/jobs", []],
-    ["projects/42/pipelines/5/bridges", []],
+    [
+      "projects/42/pipelines/5/jobs",
+      [{ id: 9, name: "generate build", status: "success", allow_failure: false, duration: 0 }],
+    ],
+    ["projects/42/pipelines/5/bridges", [{ id: 10, name: "child pipeline", status: "success" }]],
   ]);
   const glabPath = join(glabDir, "glab");
   const script = [
@@ -1459,6 +1504,12 @@ test("collect gathers evidence and finalize confirms freshness", async (t) => {
   const [, payload] = artifactPayload(bundle.preview_artifact_path, "evidence_snapshot");
   assert.equal(payload.profile, "code-review");
   assert.deepEqual(payload.target.project_id, 42);
+  const jobs = payload.pipelines.items[0].job_evidence.pipelines[0].jobs;
+  assert.equal(jobs.length, 2);
+  assert.equal(jobs[0].failure_reason, null);
+  assert.equal(jobs[0].allow_failure, false);
+  assert.equal(jobs[0].duration, 0);
+  assert.equal(jobs[1].failure_reason, null);
 
   const result = await finalize(root, "review-evidence.json");
   assert.equal(result.status, "ok");
