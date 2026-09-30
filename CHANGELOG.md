@@ -8,6 +8,16 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+## \[11.0.1] - 2026-09-30
+
+### Fixed
+
+- The stable publication preflight passes again when the workflow exports
+  `RELEASE_REVISION`: the published-channel contract tests pin it to their
+  fixture revision instead of inheriting the environment. The `v11.0.0` tag
+  failed its preflight on this defect before publishing any artifact, so
+  `11.0.1` is the effective stable release of the same changes.
+
 ## \[11.0.0] - 2026-09-30
 
 ### Added
@@ -106,7 +116,6 @@ All notable changes to this project are documented in this file. Entries follow
   model identity and are replaced atomically only after successful embedding;
   old indices require `memomatic index` once. Learned memory is context, not policy.
 
-
 - Publication bundle version 3 for `task-prepare`: task work items created with
   an observed work item type global ID, parent/child hierarchy inside one plan
   with a two-phase parent creation, items created directly in a closed state,
@@ -156,6 +165,7 @@ All notable changes to this project are documented in this file. Entries follow
   previous feature line when the next feature release ships and carry the
   current publication automation, because tag pushes run the workflow from the
   tagged commit.
+
 - Memomatic splits OpenCode session analysis into the standalone `sessions`
   command; `dream` is now pure consolidation (inbox, usage-gated promotion,
   bounded rewrite, archiving) and never reads OpenCode history. Separate
@@ -177,6 +187,7 @@ All notable changes to this project are documented in this file. Entries follow
 - The `[rtk: compressed method=...]` marker now reports `head+tail` when an
   RTK result is not shorter than the original output instead of claiming
   `rtk/<filter>`.
+
 - `task-prepare` no longer references a nonexistent `glab` skill; the duplicated
   paragraph in `release-review` was removed.
 
