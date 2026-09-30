@@ -18,6 +18,9 @@ English when that language is ambiguous.
   when the user requests a set or agrees to the proposed split. Keep one plan
   for the entire set, including cross-project tasks.
 
+This skill prepares human-facing work items. A compact read-only goal meant as
+an assignment for an LLM agent selects the `goal` skill instead of a task.
+
 Use the explicitly supplied conversation and its confirmed decisions as source
 material. Do not discard earlier answers when the final request says "prepare
 an issue". In GitLab mode, exact relevant project, issue, and MR links may supply
@@ -59,7 +62,9 @@ If none is supplied, run scoped single-item triage through the shared
 release-planning contract; do not copy or approximate its SemVer, release-line,
 or milestone logic. A request to prepare a new task is its planning intent, but
 the task is accepted only after semantic review returns `ready`. Translate only
-an observed selected milestone ID into publication metadata. When triage proposes
+an observed selected milestone ID into publication metadata; an accepted
+milestone status `none` decision, documented in the release plan rationale,
+publishes a version 3 item without a milestone. When triage proposes
 a new milestone, keep publication partial, point to its manual creation command,
 and recollect before generating the issue command.
 

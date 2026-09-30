@@ -47,6 +47,60 @@ def draft() -> dict[str, Any]:
     }
 
 
+def verified_checks() -> dict[str, dict[str, str]]:
+    return {name: {"status": "verified", "detail": f"Observed {name} evidence"} for name in CHECKS}
+
+
+def work_item(version_fields: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    item = {
+        "key": overrides.pop("key", "work-item"),
+        "title": overrides.pop("title", "Task title"),
+        "description": overrides.pop("description", "Result: one more capability."),
+        "target": overrides.pop(
+            "target",
+            {"kind": "project", "id": 42, "url": "https://gitlab.example.org/team/chart"},
+        ),
+        "type": overrides.pop("type", "task"),
+        "metadata": overrides.pop("metadata", {}),
+        "checks": overrides.pop("checks", verified_checks()),
+        "existing_iid": overrides.pop("existing_iid", None),
+        "parent": None,
+        "initial_state": "open",
+        "work_item_id": None,
+        "work_item_type_id": overrides.pop("work_item_type_id", "gid://gitlab/WorkItems::Type/5"),
+    }
+    item.update(version_fields)
+    item.update(overrides)
+    return item
+
+
+def v3_draft() -> dict[str, Any]:
+    return {
+        "version": 3,
+        "plan_key": "bedrock-plan",
+        "locale": "en",
+        "batch_agreement": "The user agreed to the parent issue with child tasks split.",
+        "items": [
+            work_item(
+                {"work_item_type_id": "gid://gitlab/WorkItems::Type/1"},
+                key="parent-issue",
+                title="Bedrock umbrella",
+                type="issue",
+                metadata={"labels": ["team::pipelines"], "label_ids": [11]},
+            ),
+            work_item(
+                {},
+                key="historical-task",
+                title="Historical stage",
+                parent="parent-issue",
+                initial_state="closed",
+                metadata={"labels": ["sprint::2026-w40-41"], "label_ids": [12]},
+            ),
+        ],
+        "links": [],
+    }
+
+
 def batch() -> dict[str, Any]:
     plan = draft()
     second = copy.deepcopy(plan["items"][0])
@@ -87,6 +141,11 @@ def support(files: dict[str, bytes], name: str) -> bytes:
     return matches[0]
 
 
+def graphql_request(files: dict[str, bytes], name: str) -> tuple[str, dict[str, Any]]:
+    request = json.loads(support(files, name))
+    return request["query"], request["variables"]
+
+
 def test_creation_command_preserves_literal_markdown_and_pins_target(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -109,17 +168,21 @@ def test_creation_command_preserves_literal_markdown_and_pins_target(
         "gitlab.example.org",
         "--method",
         "POST",
-        "projects/42/issues",
+        "../graphql",
     ]
-    assert args.count("--silent") == 1
+    assert "--silent" not in args
     payload_path = Path(args[-1])
-    payload = json.loads(payload_path.read_text())
-    assert payload["description"] == plan["items"][0]["description"]
-    assert payload["title"] == plan["items"][0]["title"]
-    assert payload["labels"] == "type::feature"
-    assert payload["assignee_ids"] == [7]
-    assert "checks" not in payload
-    assert support(files, "contract.md").decode() == payload["description"]
+    request = json.loads(payload_path.read_text())
+    query, variables = request["query"], request["variables"]
+    assert query.startswith("mutation CreateIssue(")
+    assert variables["input"]["title"] == plan["items"][0]["title"]
+    assert variables["input"]["description"] == plan["items"][0]["description"]
+    assert variables["input"]["projectPath"] == "team/chart"
+    assert variables["input"]["labels"] == ["type::feature"]
+    assert variables["input"]["assigneeIds"] == ["gid://gitlab/User/7"]
+    assert variables["input"]["milestoneId"] == "gid://gitlab/Milestone/9"
+    assert "checks" not in variables["input"]
+    assert support(files, "contract.md").decode() == plan["items"][0]["description"]
     # Execute only against a recording fake; shell parsing must not execute prose.
     fake = tmp_path / "glab"
     fake.write_text(f"#!{sys.executable}\nimport json, sys\nprint(json.dumps(sys.argv[1:]))\n")
@@ -155,9 +218,14 @@ def test_ready_issue_requires_milestone_and_existing_issue_gets_assignment(
     files, complete = render(validate(plan), tmp_path)
     assert complete
     (command,) = commands(files)
-    assert "--method PUT" in command
-    assert "projects/42/issues/17" in command
-    assert json.loads(support(files, "contract-milestone.json")) == {"milestone_id": 9}
+    assert "../graphql" in command
+    query, variables = graphql_request(files, "contract-milestone.json")
+    assert query.startswith("mutation UpdateIssue(")
+    assert variables["input"] == {
+        "projectPath": "team/chart",
+        "iid": "17",
+        "milestoneId": "gid://gitlab/Milestone/9",
+    }
 
 
 @pytest.mark.parametrize("name", sorted(CHECKS))
@@ -178,7 +246,7 @@ def test_group_url_cannot_be_used_as_project_issue_target(tmp_path: Path) -> Non
         "id": 12,
         "url": "https://gitlab.example.org/groups/team/charts",
     }
-    with pytest.raises(WorkflowError, match="issues require projects"):
+    with pytest.raises(WorkflowError, match="issues and tasks require projects"):
         validate(plan)
     plan["items"][0]["target"] = None
     files, complete = render(validate(plan), tmp_path)
@@ -192,7 +260,13 @@ def test_group_url_cannot_be_used_as_project_issue_target(tmp_path: Path) -> Non
     plan["items"][0]["metadata"] = {}
     files, complete = render(validate(plan), tmp_path)
     assert complete
-    assert "groups/12/epics" in commands(files)[0]
+    query, variables = graphql_request(files, "contract.json")
+    assert query.startswith("mutation CreateEpic(")
+    assert variables["input"] == {
+        "groupPath": "team/charts",
+        "title": plan["items"][0]["title"],
+        "description": plan["items"][0]["description"],
+    }
 
 
 def test_batch_requires_agreement_and_defers_unknown_iids(tmp_path: Path) -> None:
@@ -204,8 +278,8 @@ def test_batch_requires_agreement_and_defers_unknown_iids(tmp_path: Path) -> Non
     files, complete = render(validate(plan), tmp_path)
     assert not complete
     assert len(commands(files)) == 2
-    assert "projects/43/issues" in commands(files)[1]
-    assert not any("/links" in command for command in commands(files))
+    assert all("../graphql" in command for command in commands(files))
+    assert not any(path.endswith("/link-1.json") for path in files)
     assert "реальные IID" in files["task-publication.md"].decode()
 
 
@@ -214,34 +288,180 @@ def test_resume_uses_real_iids_without_recreating_issues(tmp_path: Path) -> None
     plan["items"][0]["existing_iid"] = 10
     plan["items"][1]["existing_iid"] = 20
     files, complete = render(validate(plan), tmp_path)
+    assert not complete
+    generated = commands(files)
+    assert len(generated) == 2
+    assert all(command.count("../graphql") == 1 for command in generated)
+    assert "work item ID" in files["task-publication.md"].decode()
+
+    plan["items"][0]["work_item_id"] = "gid://gitlab/WorkItem/1010"
+    plan["items"][1]["work_item_id"] = "gid://gitlab/WorkItem/2020"
+    files, complete = render(validate(plan), tmp_path)
     assert complete
     generated = commands(files)
     assert len(generated) == 3
-    assert all(command.count("--silent") == 1 for command in generated)
-    assert all("--method PUT" in command for command in generated[:2])
-    assert "projects/42/issues/10" in generated[0]
-    assert "projects/43/issues/20" in generated[1]
-    assert "projects/43/issues/20/links" in generated[2]
-    payload = json.loads(support(files, "link-1.json"))
-    assert payload == {
-        "target_project_id": 42,
-        "target_issue_iid": 10,
-        "link_type": "is_blocked_by",
+    for name in ("contract-milestone.json", "consumer-milestone.json"):
+        query, variables = graphql_request(files, name)
+        assert query.startswith("mutation UpdateIssue(")
+        assert variables["input"]["milestoneId"] == "gid://gitlab/Milestone/9"
+    query, variables = graphql_request(files, "link-1.json")
+    assert query.startswith("mutation WorkItemAddLinkedItems(")
+    assert variables["input"] == {
+        "id": "gid://gitlab/WorkItem/2020",
+        "workItemsIds": ["gid://gitlab/WorkItem/1010"],
+        "linkType": "BLOCKED_BY",
     }
     assert not any(path.endswith(("/consumer.json", "/contract.json")) for path in files)
     plan["items"][1]["target"]["url"] = "https://other.example.org/team/consumer"
     files, complete = render(validate(plan), tmp_path)
     assert not complete
     assert len(commands(files)) == 2
-    assert not any("/links" in command for command in commands(files))
+    assert not any("WorkItemAddLinkedItems" in command for command in commands(files))
 
 
-@pytest.mark.parametrize("key", ["task-publication", "link-1", "link-42"])
-def test_item_keys_cannot_overwrite_plan_or_link_payloads(key: str) -> None:
-    plan = draft()
-    plan["items"][0]["key"] = key
-    with pytest.raises(WorkflowError, match="reserved artifact"):
+def test_v3_creates_task_work_items_with_widgets_and_optional_milestone(
+    tmp_path: Path,
+) -> None:
+    plan = v3_draft()
+    plan["items"][0]["metadata"]["milestone_id"] = 4
+    plan["items"][0]["metadata"]["assignee_ids"] = [36019]
+    files, complete = render(validate(plan), tmp_path)
+    assert not complete
+    query, variables = graphql_request(files, "parent-issue.json")
+    assert query.startswith("mutation WorkItemCreate(")
+    assert variables["input"]["namespacePath"] == "team/chart"
+    assert variables["input"]["workItemTypeId"] == "gid://gitlab/WorkItems::Type/1"
+    assert variables["input"]["labelsWidget"] == {"labelIds": ["gid://gitlab/Label/11"]}
+    assert variables["input"]["assigneesWidget"] == {"assigneeIds": ["gid://gitlab/User/36019"]}
+    assert variables["input"]["milestoneWidget"] == {"milestoneId": "gid://gitlab/Milestone/4"}
+    text = files["task-publication.md"].decode()
+    assert "create the parent item first" in text
+
+
+def test_v3_child_creation_waits_for_the_parent_work_item_id(tmp_path: Path) -> None:
+    plan = v3_draft()
+    files, complete = render(validate(plan), tmp_path)
+    assert not complete
+    assert not any(path.endswith("/historical-task.json") for path in files)
+    assert len(commands(files)) == 1
+    assert "create the parent item first" in files["task-publication.md"].decode()
+
+    plan["items"][0]["existing_iid"] = 101
+    plan["items"][0]["work_item_id"] = "gid://gitlab/WorkItem/9001"
+    files, complete = render(validate(plan), tmp_path)
+    assert not complete
+    _, variables = graphql_request(files, "historical-task.json")
+    assert variables["input"]["hierarchyWidget"] == {"parentId": "gid://gitlab/WorkItem/9001"}
+    assert "close it" in files["task-publication.md"].decode()
+
+
+def test_v3_closed_item_renders_close_command_after_observation(tmp_path: Path) -> None:
+    plan = v3_draft()
+    plan["items"][0]["existing_iid"] = 101
+    plan["items"][0]["work_item_id"] = "gid://gitlab/WorkItem/9001"
+    plan["items"][1]["existing_iid"] = 102
+    plan["items"][1]["work_item_id"] = "gid://gitlab/WorkItem/9002"
+    files, complete = render(validate(plan), tmp_path)
+    assert complete
+    query, variables = graphql_request(files, "historical-task-close.json")
+    assert query.startswith("mutation WorkItemUpdate(")
+    assert variables["input"] == {"id": "gid://gitlab/WorkItem/9002", "stateEvent": "CLOSE"}
+
+
+def test_v3_task_milestone_assignment_needs_the_work_item_id(tmp_path: Path) -> None:
+    plan = v3_draft()
+    plan["items"][1]["initial_state"] = "open"
+    plan["items"][1]["existing_iid"] = 33
+    plan["items"][1]["metadata"]["milestone_id"] = 5
+    plan["items"][0]["existing_iid"] = 101
+    plan["items"][0]["work_item_id"] = "gid://gitlab/WorkItem/9001"
+    files, complete = render(validate(plan), tmp_path)
+    assert not complete
+    assert "work item ID" in files["task-publication.md"].decode()
+    plan["items"][1]["work_item_id"] = "gid://gitlab/WorkItem/9002"
+    files, complete = render(validate(plan), tmp_path)
+    assert complete
+    query, variables = graphql_request(files, "historical-task-milestone.json")
+    assert query.startswith("mutation WorkItemUpdate(")
+    assert variables["input"] == {
+        "id": "gid://gitlab/WorkItem/9002",
+        "milestoneWidget": {"milestoneId": "gid://gitlab/Milestone/5"},
+    }
+
+
+def test_v3_creation_requires_observed_type_id_and_safe_gids() -> None:
+    plan = v3_draft()
+    plan["items"][0]["work_item_type_id"] = None
+    with pytest.raises(WorkflowError, match="work_item_type_id"):
         validate(plan)
+    plan = v3_draft()
+    plan["items"][1]["work_item_id"] = "gid://gitlab/Issue/1"
+    with pytest.raises(WorkflowError, match="work_item_id"):
+        validate(plan)
+    plan = v3_draft()
+    plan["items"][1]["work_item_type_id"] = "WorkItems::Type/5"
+    with pytest.raises(WorkflowError, match="work_item_type_id"):
+        validate(plan)
+    plan = v3_draft()
+    plan["items"][1]["metadata"] = {"labels": ["a::b"]}
+    with pytest.raises(WorkflowError, match="labels and label_ids"):
+        validate(plan)
+    plan = v3_draft()
+    plan["items"][1]["initial_state"] = "merged"
+    with pytest.raises(WorkflowError, match="open or closed"):
+        validate(plan)
+
+
+def test_v3_parent_references_are_validated() -> None:
+    plan = v3_draft()
+    plan["items"][1]["parent"] = "historical-task"
+    with pytest.raises(WorkflowError, match="another item key"):
+        validate(plan)
+    plan = v3_draft()
+    plan["items"][0]["parent"] = "historical-task"
+    with pytest.raises(WorkflowError, match="only for task items"):
+        validate(plan)
+    plan = v3_draft()
+    plan["items"][0]["type"] = "task"
+    plan["items"][0]["parent"] = "historical-task"
+    plan["items"][1]["parent"] = "parent-issue"
+    with pytest.raises(WorkflowError, match="cycle"):
+        validate(plan)
+    plan = v3_draft()
+    plan["items"][1]["target"] = {
+        "kind": "project",
+        "id": 43,
+        "url": "https://other.example.org/team/consumer",
+    }
+    with pytest.raises(WorkflowError, match="one GitLab host"):
+        validate(plan)
+
+
+def test_v2_drafts_stay_compatible_and_reject_v3_features(tmp_path: Path) -> None:
+    plan = draft()
+    plan["items"][0]["metadata"]["label_ids"] = [5]
+    with pytest.raises(WorkflowError, match="version 3"):
+        validate(plan)
+    plan = draft()
+    plan["items"][0]["type"] = "task"
+    with pytest.raises(WorkflowError, match="type"):
+        validate(plan)
+    plan = draft()
+    plan["items"][0]["work_item_id"] = "gid://gitlab/WorkItem/9"
+    plan["items"][0]["existing_iid"] = 9
+    files, complete = render(validate(plan), tmp_path)
+    assert complete
+    assert len(commands(files)) == 1
+
+
+def test_item_keys_cannot_overwrite_plan_or_link_payloads(
+    tmp_path: Path,
+) -> None:
+    plan = draft()
+    for key in ["task-publication", "link-1", "link-42"]:
+        plan["items"][0]["key"] = key
+        with pytest.raises(WorkflowError, match="reserved artifact"):
+            validate(plan)
 
 
 def test_invalid_dependencies_and_metadata_are_rejected() -> None:
@@ -313,8 +533,11 @@ def test_stale_command_keeps_its_content_after_stable_plan_changes(
     assert payload_a_path != payload_b_path
     assert payload_a_path.is_file()
     assert json.loads(payload_a_path.read_text()) == payload_a
-    assert payload_a["description"] == plan_a["items"][0]["description"]
-    assert json.loads(payload_b_path.read_text())["description"] == "Replacement body"
+    assert payload_a["variables"]["input"]["description"] == plan_a["items"][0]["description"]
+    assert (
+        json.loads(payload_b_path.read_text())["variables"]["input"]["description"]
+        == "Replacement body"
+    )
     fake = tmp_path / "glab"
     fake.write_text(
         f"#!{sys.executable}\n"
@@ -356,7 +579,7 @@ def test_plan_replacement_failure_keeps_stable_plan_and_new_content(
         publication.write_bundle(root, new_files)
     assert (root / "task-publication.md").read_bytes() == old_plan
     new_payload = Path(mutation_args(commands(new_files)[0])[-1])
-    assert json.loads(new_payload.read_text())["description"] == "Replacement"
+    assert json.loads(new_payload.read_text())["variables"]["input"]["description"] == "Replacement"
 
 
 def test_held_slot_lock_prevents_replacement(tmp_path: Path) -> None:
@@ -384,6 +607,10 @@ def test_unsafe_plan_keys_are_rejected(plan_key: str) -> None:
 def test_version_one_publication_draft_is_rejected() -> None:
     plan = draft()
     plan["version"] = 1
+    with pytest.raises(WorkflowError, match="unsupported publication version"):
+        validate(plan)
+    plan = draft()
+    plan["version"] = 4
     with pytest.raises(WorkflowError, match="unsupported publication version"):
         validate(plan)
 
@@ -455,8 +682,9 @@ def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: 
         text=True,
         check=True,
     )
+    assert json.loads(capabilities.stdout)["publication_version"] == 3
     built_draft = draft()
-    if json.loads(capabilities.stdout).get("publication_version") != 2:
+    if json.loads(capabilities.stdout).get("publication_version") != 3:
         built_draft["version"] = 1
         del built_draft["plan_key"]
     path.write_text(json.dumps(built_draft))

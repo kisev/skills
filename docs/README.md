@@ -3,7 +3,7 @@
 [Русский](ru/README.md)
 
 Choose a section by what you need to accomplish. Portable Agent Skills and
-`skills-opencode` have separate installation and update lifecycles; the guides
+`agentomatic` have separate installation and update lifecycles; the guides
 make that boundary explicit.
 
 ## Tutorials
@@ -13,22 +13,40 @@ make that boundary explicit.
 
 ## How-to Guides
 
+- [Maintain documentation with changes](how-to/documentation-review.md) - select affected contracts, preserve detail, and reuse review evidence.
+
+- [Set up Memomatic](how-to/memomatic.md) - connect memory, save and find an entry, configure dream, and schedule sweeps.
+
+- [Use Taskmatic](how-to/taskmatic.md) - create the first card, view the board, and connect an agent.
+
 - [Manage portable skills](how-to/portable-skills.md) - install by scope or host,
   update, rebind an older source, clean up retired names, and troubleshoot.
-- [Install and manage skills-opencode](how-to/opencode-integration.md) - install
-  the package, select assets, activate the plugin, update, reconcile, diagnose,
-  configure agents, and uninstall safely.
+
+- [Install and manage agentomatic](how-to/opencode-integration.md) - install
+  the package, select assets, activate the plugin, configure user configs,
+  update, reconcile, diagnose, configure agents, and uninstall safely.
+
+- [Add or rename an npm workspace package](how-to/npm-package-lifecycle.md) -
+  rewire the publication graph, bootstrap a new package name on npm, and
+  deprecate a retired name.
+
 - [Contribute to the repository](../CONTRIBUTING.md) - change authored sources and
   run the required checks.
 
 ## Reference
 
+- [Command-line conventions](reference/cli.md) - help, configuration precedence, logs, progress and exit codes.
+
 - [Skill catalog](reference/skill-catalog.md) - active skills, requirements, team
   profiles, and external tool boundaries.
+
 - [Migration inventory](migration-inventory.md) - active and retired names,
   replacements, package surfaces, and ownership records.
+
 - [Verification](verification.md) - release contracts covered by tests and quality gates.
+
 - [Security policy](../SECURITY.md) - supported reporting process.
+
 - [Release history](../CHANGELOG.md) - published changes by version.
 
 ## Explanation

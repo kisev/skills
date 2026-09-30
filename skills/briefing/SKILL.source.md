@@ -1,7 +1,8 @@
 ---
 name: briefing
 description: >-
-  Summarize supplied notes, transcripts, or research accurately. Russian discovery terms: краткий итог.
+  Summarize supplied notes, transcripts, or research accurately without new
+  research; team retrospective analysis is team-retro's scope. Russian discovery terms: краткий итог.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -9,5 +10,7 @@ metadata:
 ---
 
 # briefing
+
+Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

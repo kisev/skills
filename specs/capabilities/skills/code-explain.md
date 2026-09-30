@@ -38,6 +38,11 @@ Claims stay bound to the selected revision and coverage boundary.
 
 The skill shall identify the exact code boundary and mark uncovered claims.
 
+#### Verification
+
+Range and WIP tests check complete chunk coverage and unchanged checkout bytes;
+an unavailable revision yields an explicit boundary instead of a fabricated map.
+
 ## Example
 
 `code-explain` explains a current diff and reports an unreadable untracked file.

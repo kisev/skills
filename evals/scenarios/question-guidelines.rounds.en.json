@@ -1,0 +1,128 @@
+{
+  "schema": "eval-scenario/v1",
+  "id": "question-guidelines.rounds.en",
+  "revision": 1,
+  "locale": "en",
+  "pair_id": "question-guidelines.rounds",
+  "kind": "golden",
+  "surface": "skill",
+  "host": "any",
+  "input": {
+    "prompt": "Review each proposed interaction against the bundled question guidelines in the named skill. Return one case_outcomes entry per case, choosing insufficient-context, defer-dependent, rebuild-followup, valid-round, or use-evidence. Evaluate the actual conversation and proposed next move; do not assume recommended answers. Perform no writes.",
+    "fixture": {
+      "selected": [
+        "skill:askme",
+        "skill:spec-manage",
+        "skill:goal",
+        "skill:task-triage",
+        "skill:team-people",
+        "skill:release-prepare"
+      ],
+      "cases": [
+        {
+          "id": "askme-context",
+          "skill": "askme",
+          "conversation": "A new import operation sometimes exceeds the request timeout. The agent has measured this, but has not shown the evidence to the user.",
+          "proposed": "Ask only: Queue (recommended) or synchronous? No explanation accompanies the question."
+        },
+        {
+          "id": "spec-option-effects",
+          "skill": "spec-manage",
+          "conversation": "A canonical API change requires choosing between a breaking replacement and a compatibility period. Existing clients cannot all upgrade at once. The user knows why the choice arose.",
+          "proposed": "Recommend the replacement as simpler, without describing client failures, migration effort, or the compatibility alternative's maintenance cost."
+        },
+        {
+          "id": "askme-prerequisite",
+          "skill": "askme",
+          "conversation": "Whether import processing needs a queue remains undecided. The agent recommends a queue.",
+          "proposed": "In one tool call ask whether to use a queue, which queue service to use, and how many queue retries to allow."
+        },
+        {
+          "id": "askme-nonrecommended",
+          "skill": "askme",
+          "conversation": "Agent: Choose queued or synchronous imports. User: Synchronous; cap the input size and reject larger files. The agent had prepared queue-provider questions.",
+          "proposed": "Ask which queue provider to use next without reassessing the user's answer."
+        },
+        {
+          "id": "spec-custom",
+          "skill": "spec-manage",
+          "conversation": "Agent: Store uploaded files locally or in object storage? User: Neither. Process a stream and retain no uploaded files. It is not yet known whether the existing processing API supports streaming.",
+          "proposed": "Interpret the answer as local storage and ask for the retention period, without investigating streaming support."
+        },
+        {
+          "id": "spec-independent",
+          "skill": "spec-manage",
+          "conversation": "Service scope and architecture are agreed. The missing decisions are the canonical prose language and the service's latency target. Neither decision affects the other's options, context, or recommendation. The agent supplies the reason and relevant tradeoffs for each.",
+          "proposed": "Ask those two independent questions together through the native tool."
+        },
+        {
+          "id": "goal-known-fact",
+          "skill": "goal",
+          "conversation": "The agent inspected the repository and confirmed its runtime version. No choice to change it is in scope.",
+          "proposed": "Ask the user to provide that runtime version before preparing the goal."
+        },
+        {
+          "id": "profile-missing-fields",
+          "skill": "team-people",
+          "conversation": "Profile inspection lists a missing team and missing report identities. The user supplied two possible teams with different reports, and the intended team is unresolved.",
+          "proposed": "Ask for the team and ask the user to select reports from the recommended team's list in the same round."
+        },
+        {
+          "id": "release-conditional-theme",
+          "skill": "release-prepare",
+          "conversation": "The user has not selected an illustration theme. Available options include a literary world and neutral abstract systems; literary is recommended.",
+          "proposed": "Ask for the theme and the book or series together, requiring both answers now."
+        },
+        {
+          "id": "triage-recommendation-dependency",
+          "skill": "task-triage",
+          "conversation": "The agent needs a priority decision for issue A and a release-placement decision for issue B. All placement options for B remain valid, but its recommended milestone changes with A's priority.",
+          "proposed": "Ask both at once, recommending B's milestone based on the recommended but unselected priority for A."
+        },
+        {
+          "id": "chat-context",
+          "skill": "spec-manage",
+          "conversation": "The host has no question tool. The agent explains why an API compatibility choice is needed, known client constraints, each option's effects and material risks, and why a transition period is recommended unless all clients can upgrade together.",
+          "proposed": "Ask that one choice in chat and accept a free-form answer without adding an Other option."
+        }
+      ]
+    }
+  },
+  "expected": {
+    "selected": [
+      "skill:askme",
+      "skill:spec-manage",
+      "skill:goal",
+      "skill:task-triage",
+      "skill:team-people",
+      "skill:release-prepare"
+    ],
+    "not_selected": [],
+    "structured_outcome": "question-guidelines-rounds",
+    "mutation_boundary": "no-writes",
+    "case_outcomes": [
+      { "id": "askme-context", "outcome": "insufficient-context" },
+      { "id": "spec-option-effects", "outcome": "insufficient-context" },
+      { "id": "askme-prerequisite", "outcome": "defer-dependent" },
+      { "id": "askme-nonrecommended", "outcome": "rebuild-followup" },
+      { "id": "spec-custom", "outcome": "rebuild-followup" },
+      { "id": "spec-independent", "outcome": "valid-round" },
+      { "id": "goal-known-fact", "outcome": "use-evidence" },
+      { "id": "profile-missing-fields", "outcome": "defer-dependent" },
+      { "id": "release-conditional-theme", "outcome": "defer-dependent" },
+      { "id": "triage-recommendation-dependency", "outcome": "defer-dependent" },
+      { "id": "chat-context", "outcome": "valid-round" }
+    ]
+  },
+  "invariants": [
+    { "id": "question-guidelines.shared", "path": "shared/references/question-guidelines.md" },
+    { "id": "question-guidelines.materialization", "path": "shared/manifest.json" },
+    {
+      "id": "question-guidelines.native-interview",
+      "path": "skills/spec-manage/references/interviewing.md"
+    }
+  ],
+  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
+  "budgets": { "timeout_seconds": 60, "max_tokens": 4000, "max_cost": 1 },
+  "digest": "1a56613bce8194b3e3137c816c120bdade21a89a65d00a69f6a369e8225d7a58"
+}

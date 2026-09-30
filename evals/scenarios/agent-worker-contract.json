@@ -18,7 +18,7 @@
   "invariants": [
     {
       "id": "worker-asset",
-      "path": "packages/opencode/assets/agents/worker.md",
+      "path": "packages/agentomatic/assets/agents/worker.md",
       "contains": "Worker"
     }
   ],
@@ -32,7 +32,7 @@
     "max_tokens": 1500,
     "max_cost": 1
   },
-  "digest": "1202da09a83bf9abb2eb833eceb872beea527e67b7d1869aebd9040d4e2cc7ab",
+  "digest": "fe26a11f84a58b6d71ef2770717af5c6c30b57d3bab2256af85e246368663d07",
   "locale": "neutral",
   "pair_id": null
 }

@@ -2,7 +2,7 @@
 
 [Русский](README.ru.md)
 
-Portable Agent Skills for Codex and OpenCode, plus `skills-opencode`, a
+Portable Agent Skills for Codex and OpenCode, plus `agentomatic`, a
 first-class OpenCode integration. The two components are independent: use either
 one on its own or install both for the complete OpenCode experience.
 
@@ -10,54 +10,69 @@ one on its own or install both for the complete OpenCode experience.
 
 | Component | What it provides | Lifecycle |
 | - | - | - |
-| Portable Agent Skills | 28 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
-| `@kisev/skills-opencode` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
+| Portable Agent Skills | 38 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
+| `@kisev/agentomatic` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
 Portable skills do not require the npm package. The package does not contain,
 install, update, inspect, or remove them. Their lifecycle is owned by the
 `skills` CLI.
 
-## Portable Skills
+## Install Everything
 
-Install the current stable portable distribution globally for Codex and
-OpenCode:
+The complete setup: portable skills, `agentomatic`, and the user-run
+applications [memomatic](docs/how-to/memomatic.md) (agent memory) and
+[taskmatic](docs/how-to/taskmatic.md) (local task board). Rerun the same
+commands to update. `install` and `config` print a plan and ask for
+confirmation in a terminal, or take the explicit selection flags with `--yes`
+outside one. Until a package's first stable release, its `latest` tag still
+points to a prerelease. Restart OpenCode and other running hosts, including
+MCP hosts and the taskmatic web service, afterwards.
+
+Everything on `latest`:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --global
+npx --yes @kisev/agentomatic@latest install --global
+npx --yes @kisev/agentomatic@latest config --global
+npm install --global @kisev/memomatic
+npm install --global @kisev/taskmatic
 ```
 
-The stable channel exposes current release metadata and digest-bound archives.
-To opt into the moving development channel instead, install from
-`https://kisev.github.io/skills/dev`; it updates after successful pushes to
-`dev` and does not change the stable installation source.
-Start with the [guided installation](docs/tutorials/getting-started.md), use the
+Everything on `dev` (moves after every successful push to `dev`):
+
+```shell
+npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+npx --yes @kisev/agentomatic@dev install --global
+npx --yes @kisev/agentomatic@dev config --global
+npm install --global @kisev/memomatic@dev
+npm install --global @kisev/taskmatic@dev
+```
+
+## Portable Skills
+
+The default selection covers every host that reads `.agents/skills`,
+including Codex and OpenCode, and the installer opens a picker with every
+skill preselected; pass `--skill <name>` to choose explicitly. Start with the
+[guided installation](docs/tutorials/getting-started.md), use the
 [portable skills how-to](docs/how-to/portable-skills.md) for project installs,
 updates, cleanup, and troubleshooting, or browse the
 [skill catalog](docs/reference/skill-catalog.md).
 
-## skills-opencode
+## agentomatic
 
-`@kisev/skills-opencode` extends OpenCode with:
+`@kisev/agentomatic` extends OpenCode with:
 
 - slash-command adapters for installed skills;
 - six fixed agent roles and profile management;
 - capability routing plus direct CLI installation, diagnostics, profiles, and reconciliation;
-- opt-in `rules-injector`, `rtk`, and `zed-bell` plugin wrappers.
+- optional plugin wrappers: `rules-injector` and `zed-bell`, plus the `rtk`
+  compression wrapper deployed by default and observable through `/rtk-stats`.
 
-Install the package persistently in the npm project that owns the integration,
-then preview its managed assets:
-
-```shell
-npm install --save-exact @kisev/skills-opencode
-npx --yes @kisev/skills-opencode@latest install --dry-run
-```
-
-Use `@kisev/skills-opencode@dev` in both commands to opt into the current
-development snapshot.
-
-This only starts the mandatory flow. Apply the exact confirmation command from
-the preview, add the package to the user-owned OpenCode `plugin` entry, and
-restart OpenCode. Follow the complete
+Global installs own the npm project at `~/.config/opencode` and create its
+`package.json` when needed; for project scope, run the installer from the
+project root without `--global`. The confirmed install also provisions the
+persistent npm dependency that keeps the plugin resolvable. Restart OpenCode
+after activation or asset changes, and follow the complete
 [OpenCode integration guide](docs/how-to/opencode-integration.md).
 
 ## Documentation

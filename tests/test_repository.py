@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -151,10 +153,10 @@ WORKFLOW_CONTRACTS = {
         "`spec-init`",
         "`spec-onboard`",
         "`spec-update`",
-        "`spec-audit`",
+        "`spec-review`",
         "absence of `specs/` alone never proves greenfield",
         "all 19 minimum required `readme.md`",
-        "this mode is completely read-only",
+        "this mode never edits the reviewed project",
     ),
     "stopit": (
         "stable workspace-scoped path",
@@ -182,6 +184,10 @@ WORKFLOW_CONTRACTS = {
         "exactly one existing directory",
         "<skill-improvement-complete>",
         "not commands, plugins, agents, or tools",
+        "strictly read-only",
+        "evidence, not decisions",
+        "never copy them into persisted files",
+        "must not block the static check cycle",
     ),
     "rtk": (
         "external cli and is not installed by this skill",
@@ -434,7 +440,7 @@ class PortableSkillValidationTests(unittest.TestCase):
         for entry in runtime_entries:
             source = ROOT / "shared" / entry["source"]
             destination = BUILT_SKILLS / entry["destination"]
-            with self.subTest(destination=destination):
+            with self.subTest(destination=str(destination)):
                 self.assertEqual(destination.read_bytes(), source.read_bytes())
 
     def test_portable_skills_have_no_forbidden_dependencies(self) -> None:
@@ -605,16 +611,54 @@ class PortableSkillValidationTests(unittest.TestCase):
         for name in PORTABLE_SKILLS:
             self.assertIn(name, result.stdout)
 
-    def test_pinned_cli_installs_each_skill_for_codex_and_opencode(self) -> None:
-        for name in PORTABLE_SKILLS:
-            for agent in ("codex", "opencode"):
-                with self.subTest(skill=name, agent=agent):
-                    self.assert_isolated_install(name, agent)
+    _shared_install_source: Path | None = None
 
-    def assert_isolated_install(self, name: str, agent: str) -> None:
+    @classmethod
+    def shared_install_source(cls) -> Path:
+        """One reusable checkout holding `.build/skills` and the mise config.
+
+        Every subtest still installs into a fresh HOME; the checkout is
+        read-only input, and `test_pinned_cli_installs...` proves it stays
+        byte-identical across all installs."""
+        if cls._shared_install_source is None:
+            root = Path(tempfile.mkdtemp())
+            checkout = root / "checkout"
+            checkout.mkdir()
+            shutil.copytree(
+                BUILT_SKILLS,
+                checkout / ".build/skills",
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+            )
+            for config in ("mise.toml", ".mise.toml"):
+                source = ROOT / config
+                if source.exists():
+                    shutil.copy2(source, checkout / config)
+            cls._shared_install_source = checkout
+            cls.addClassCleanup(shutil.rmtree, root, ignore_errors=True)
+        return cls._shared_install_source
+
+    @staticmethod
+    def install_source_digest(checkout: Path) -> str:
+        digest = hashlib.sha256()
+        for path in sorted(checkout.rglob("*")):
+            if path.is_file() and "__pycache__" not in path.parts:
+                digest.update(str(path.relative_to(checkout)).encode())
+                digest.update(path.read_bytes())
+        return digest.hexdigest()
+
+    def test_pinned_cli_installs_each_skill_for_codex_and_opencode(self) -> None:
+        checkout = self.shared_install_source()
+        before = self.install_source_digest(checkout)
+        try:
+            for name in PORTABLE_SKILLS:
+                for agent in ("codex", "opencode"):
+                    with self.subTest(skill=name, agent=agent):
+                        self.assert_isolated_install(name, agent, checkout)
+        finally:
+            self.assertEqual(self.install_source_digest(checkout), before)
+
+    def assert_isolated_install(self, name: str, agent: str, checkout: Path) -> None:
         home = Path(tempfile.mkdtemp())
-        checkout = home / "checkout"
-        shutil.copytree(ROOT, checkout)
         environment = {
             **os.environ,
             "HOME": str(home),
@@ -644,8 +688,6 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         installed = home / ".agents/skills" / name
         self.assertTrue((installed / "SKILL.md").is_file())
-        shutil.rmtree(checkout / "shared")
-        shutil.rmtree(checkout)
         source = BUILT_SKILLS / name
         for path in source.rglob("*"):
             if path.is_file() and "__pycache__" not in path.parts:
@@ -885,6 +927,188 @@ class PortableRunnerTests(unittest.TestCase):
             self.assertIn(
                 "frontmatter-unsupported-field",
                 {issue["rule"] for issue in json.loads(rejected.stdout)["issues"]},
+            )
+
+    def test_skill_improver_sessions_report_extracts_usage_evidence(self) -> None:
+        def tool_part(
+            tool: str,
+            state: dict[str, object],
+            call_id: str | None = None,
+        ) -> str:
+            payload: dict[str, object] = {"type": "tool", "tool": tool, "state": state}
+            if call_id is not None:
+                payload["callID"] = call_id
+            return json.dumps(payload)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            database = Path(temporary) / "fixture.db"
+            connection = sqlite3.connect(database)
+            connection.executescript(
+                """
+                CREATE TABLE session (
+                    id TEXT PRIMARY KEY, title TEXT, directory TEXT, time_created INTEGER);
+                CREATE TABLE message (
+                    id TEXT PRIMARY KEY, session_id TEXT, data TEXT);
+                CREATE TABLE part (
+                    id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+                    time_created INTEGER, data TEXT);
+                INSERT INTO session VALUES ('s1', 'First', '/tmp/demo', 100);
+                INSERT INTO session VALUES ('s2', 'Second', '/tmp/demo', 200);
+                INSERT INTO message VALUES ('m1', 's1', '{"role": "user"}');
+                INSERT INTO message VALUES ('m2', 's1', '{"role": "assistant"}');
+                INSERT INTO message VALUES ('m5', 's1', '{"role": "user"}');
+                INSERT INTO message VALUES ('m3', 's2', '{"role": "user"}');
+                INSERT INTO message VALUES ('m4', 's2', '{"role": "assistant"}');
+                INSERT INTO part VALUES ('p1', 'm1', 's1', 100,
+                    '{"type": "text", "text": "Fix the checker"}');
+                INSERT INTO part VALUES ('p5', 'm5', 's1', 600,
+                    '{"type": "text", "text": "не работает после правки"}');
+                """
+            )
+            tool_parts = (
+                (
+                    "p2",
+                    "m2",
+                    "s1",
+                    200,
+                    tool_part(
+                        "skill",
+                        {
+                            "status": "completed",
+                            "input": {"name": "demo"},
+                            "time": {"start": 200, "end": 350},
+                        },
+                        "call_1",
+                    ),
+                ),
+                (
+                    "p3",
+                    "m2",
+                    "s1",
+                    400,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git status --short"}}
+                    ),
+                ),
+                (
+                    "p4",
+                    "m2",
+                    "s1",
+                    500,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git diff --stat"}}
+                    ),
+                ),
+                (
+                    "p7",
+                    "m4",
+                    "s2",
+                    300,
+                    tool_part(
+                        "skill",
+                        {"status": "error", "input": {"name": "demo"}, "error": "boom"},
+                        "call_2",
+                    ),
+                ),
+                (
+                    "p8",
+                    "m4",
+                    "s2",
+                    320,
+                    tool_part(
+                        "skill", {"status": "completed", "input": {"name": "demo"}}, "call_3"
+                    ),
+                ),
+                (
+                    "p9",
+                    "m4",
+                    "s2",
+                    700,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git status --short"}}
+                    ),
+                ),
+                (
+                    "p10",
+                    "m4",
+                    "s2",
+                    800,
+                    tool_part(
+                        "bash", {"status": "completed", "input": {"command": "git diff --stat"}}
+                    ),
+                ),
+            )
+            connection.executemany("INSERT INTO part VALUES (?, ?, ?, ?, ?)", tool_parts)
+            connection.commit()
+            connection.close()
+            result = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--db",
+                str(database),
+                "--min-pattern-count",
+                "2",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["databases"][0]["host"], "custom")
+            self.assertEqual(payload["databases"][0]["sessions_scanned"], 2)
+            demo = payload["skills"]["demo"]
+            self.assertEqual(demo["invocations"], 3)
+            self.assertEqual(demo["sessions"], 2)
+            self.assertEqual(demo["error_count"], 1)
+            self.assertEqual(demo["errors"][0]["error"], "boom")
+            self.assertEqual(demo["retry_sessions"][0]["count"], 2)
+            self.assertEqual(demo["durations_ms"], {"samples": 1, "avg": 150, "max": 150})
+            self.assertEqual(len(demo["followups"]), 1)
+            self.assertEqual(demo["followups"][0]["text"], "не работает после правки")
+            self.assertEqual(demo["followups"][0]["gap_ms"], 400)
+            patterns = payload["patterns"]
+            self.assertEqual(
+                [
+                    (pattern["actions"], pattern["count"], pattern["sessions"])
+                    for pattern in patterns
+                ],
+                [(["bash:git status", "bash:git diff"], 2, 2)],
+            )
+            self.assertEqual(
+                [(candidate["kind"], candidate["count"]) for candidate in payload["candidates"]],
+                [("new-skill-candidate", 2)],
+            )
+            frequent = {action["action"]: action["count"] for action in payload["frequent_actions"]}
+            self.assertEqual(frequent["bash:git status"], 2)
+            filtered = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--db",
+                str(database),
+                "--skill",
+                "absent",
+            )
+            self.assertEqual(filtered.returncode, 0, filtered.stderr)
+            self.assertEqual(json.loads(filtered.stdout)["skills"], {})
+            missing = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--db",
+                str(Path(temporary) / "absent.db"),
+            )
+            self.assertEqual(missing.returncode, 2)
+            self.assertEqual(
+                json.loads(missing.stdout)["error"]["code"],
+                "sessions_error",
+            )
+            isolated = self.run_runner(
+                "skill-improve",
+                "sessions",
+                "--host",
+                "auto",
+                env={"XDG_DATA_HOME": temporary},
+            )
+            self.assertEqual(isolated.returncode, 2)
+            self.assertEqual(
+                json.loads(isolated.stdout)["error"]["code"],
+                "sessions_error",
             )
 
     def test_code_explain_current_range_diff_file_and_chunk_coverage(self) -> None:

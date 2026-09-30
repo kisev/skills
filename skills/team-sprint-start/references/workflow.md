@@ -1,7 +1,8 @@
 # Workflow
 
 This skill has the fixed `planning` entrypoint. Do not accept a public action or
-mode selector or combine actions. Resolve the default private profile, explicit
+mode selector or combine actions. Apply `humanize` to drafted sprint scope
+prose. Resolve the default private profile, explicit
 overrides, self-setup, and remembered updates through
 `references/team-profile-workflow.md`. Do not infer projects, participants,
 cadence, or delivery signals from unrelated repository activity.
@@ -21,4 +22,35 @@ confirmed prepare/save lifecycle because they modify user configuration.
 Workspace roadmap, presentation, or prompt files are written directly through
 `artifact-write` with bounded paths and atomic replacement. Do not modify the
 workspace context file. Reject symlink and traversal targets.
+
+Every planning artifact ends with a "Data sources" section in the artifact's
+language: one row per contributing source with the kind, the exact location
+(URL or path), the collected `[since, until)` window or point timestamp,
+completeness, and `collected_at`. Record contributing sources in the private
+evidence store under
+`${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/team/<profile>/evidence/` with `scripts/evidence_store.py evidence-record --profile
+PROFILE` (`--kind mattermost --location URL` for chats, `--kind file --location PATH` for protocols and planning documents); render the section
+from `evidence-show --profile PROFILE --since START --until END`. After
+`artifact-write`, snapshot the artifact with `artifact-record --profile
+PROFILE --target ARTIFACT_PATH --since START --until END --source KEY`.
 External publication is outside this skill.
+
+## Memory integration
+
+When personal memory is available, search it before evidence collection with
+the `memory_search` tool (or `memomatic search`) for prior durable knowledge
+about this team or profile. Treat results as personal context: never quote
+entries marked personal-only into team-facing artifacts.
+
+After the artifact is verified, offer one memory drop of the durable outcome
+(decisions, process changes, recurring findings) and run it after user
+confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source team-sprint-start \
+  --project PROJECT --text "Durable outcome in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged.

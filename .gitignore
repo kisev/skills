@@ -4,6 +4,8 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 .venv/
+node_modules/
+**/src/generated/
 *.tgz
 /RESEARCH*.md
 /TODO*.md

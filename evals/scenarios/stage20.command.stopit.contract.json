@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "777dabba7695829dc3df494ae7746211dff491c94189f046da7871a80c6c539f",
+  "digest": "3ff430ff8d956aae74bdf5e8371e5e961013671dbe441e8340e009a7a79a5a13",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.stopit.contract.source",
-      "path": "packages/opencode/src/registry.ts"
+      "path": "packages/agentomatic/src/registry.ts"
     }
   ],
   "kind": "deterministic",

@@ -28,7 +28,7 @@ consumes current scoped triage instead of duplicating SemVer policy.
 The authored repository is not a portable installation source and does not ship
 a portable-skills CLI. Portable skills are installed from the GitHub Pages
 distribution with the separately versioned `skills` CLI. The optional npm
-package `@kisev/skills-opencode` provides the `skills-opencode` CLI for OpenCode
+package `@kisev/agentomatic` provides the `agentomatic` CLI for OpenCode
 integration. It does not install, update, inspect, or remove portable skills;
 their lifecycle belongs to the separate `skills` CLI.
 
@@ -48,9 +48,9 @@ composes the stable root and `/dev` so either channel preserves the other.
 ## Host Integration
 
 Portable skills are host-neutral and every published archive is self-contained.
-`packages/opencode/` is an optional OpenCode adapter and contains no copied
+`packages/agentomatic/` is an optional OpenCode adapter and contains no copied
 skills. Before `npm pack`, skill commands, the LSP catalog, and authored agent
-and plugin assets are materialized under `packages/opencode/dist/assets/`.
+and plugin assets are materialized under `packages/agentomatic/dist/assets/`.
 
 The installer changes only the selected command, agent, and plugin assets after
 a preview and matching `confirmation_digest`. Ownership manifests detect

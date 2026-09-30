@@ -6,5 +6,5 @@ installation, observable lifecycle state, reproducible distribution, and
 evidence-backed compatibility. Stakeholders are skill users, OpenCode users,
 maintainers, host agents, and evaluators.
 
-The public target has inventory `28/28/6/3/1`; canonical requirements are in
+The public inventory is owned by REQ-F-001; canonical requirements are in
 `requirements/`, while repository sources, tests, schemas, and evals provide evidence.

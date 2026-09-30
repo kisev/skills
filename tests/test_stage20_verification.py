@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.check_documentation import validate as validate_documentation
 from scripts.eval_runner import (
     discover,
     validate_compatibility_inventory,
@@ -10,6 +11,10 @@ from scripts.eval_runner import (
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_documented_public_surfaces_match_authored_sources() -> None:
+    validate_documentation(ROOT)
 
 
 def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts() -> None:
@@ -20,8 +25,8 @@ def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts()
         for item in scenarios
         if item["surface"] == "skill" and item["id"].startswith("stage20.")
     ]
-    assert len(skill) == 112
-    assert len({item["input"]["prompt"] for item in skill}) == 112
+    assert len(skill) == 152
+    assert len({item["input"]["prompt"] for item in skill}) == 152
     for name in json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["skills"]:
         selected = [
             item for item in skill if f"skill:{name}" in item["expected"].get("selected", [])
@@ -42,7 +47,7 @@ def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts()
 def test_stage20_compatibility_inventory_is_explicit_and_hostless() -> None:
     validate_compatibility_inventory(ROOT)
     inventory = json.loads((ROOT / "evals/contracts/opencode-compatibility.json").read_text())
-    assert inventory["versions"] == ["1.18.29", "1.18.31"]
+    assert inventory["versions"] == ["1.18.29", "1.18.31", "1.18.32"]
     assert inventory["range"] == ">=1.18.29 <1.19.0"
     assert inventory["credentials"] is False
     assert inventory["network"] is False

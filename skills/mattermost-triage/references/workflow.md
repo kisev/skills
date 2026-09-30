@@ -96,7 +96,8 @@ with a plan. A candidate without a draft must contain a plan, including
 An attention draft is invalid when any cited post or its response target has
 incomplete source or thread provenance. Use `disputed` with `uncertain` closure,
 or `no_action` with `closed` closure, plus a rationale and plan instead of
-publishing from incomplete evidence.
+publishing from incomplete evidence. Apply `humanize` to every `draft_response`
+value.
 
 ## Publish Artifacts
 
@@ -118,6 +119,8 @@ Every draft has exactly one directly runnable command beside it. The command
 names one immutable action and requires `--confirm <action-digest>`. It is a
 manual publication boundary: present it, but never run it. There are no reaction,
 emoji, attachment, edit, delete, membership, or channel actions.
+Publication beyond this skill's own digest-bound action uses the `mattermost`
+skill's publication workflow; never prepare a second publication path here.
 Action `created_at` is deterministically derived from evidence `collected_at`;
 `expires_at` is exactly 24 hours later. Republishing identical analysis against
 identical evidence therefore reuses the same action digest.
@@ -138,3 +141,18 @@ Operational stdout is one JSON object; diagnostics go to stderr. Exit code `0`
 means complete success, `1` means partial collection, `2` means invalid input or
 state, and `3` means authentication is required. Use `--capabilities` for the
 machine-readable command contract and `--help` for CLI help.
+
+## Memory integration
+
+After the digest and manual response commands are prepared, offer one memory
+drop of the durable triage outcome (recurring themes, attention items that
+will matter later) and run it after user confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source mattermost-triage \
+  --text "Durable triage outcome in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged. Never include message bodies or attachments in the drop.

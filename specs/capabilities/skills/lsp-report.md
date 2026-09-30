@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: `skills-opencode doctor` is the single supported LSP reporting interface.
+- Reason: `agentomatic doctor` is the single supported LSP reporting interface.
 
 ## Purpose
 
@@ -41,7 +41,7 @@ The report never starts an LSP or installs dependencies.
 ### REQ-F-112 - Keep LSP reporting observational
 
 Status: withdrawn on 2026-09-16 because the portable skill was replaced by the
-direct `skills-opencode doctor` CLI.
+direct `agentomatic doctor` CLI.
 
 Former requirement: the skill shall report LSP state without starting servers or
 changing configuration.

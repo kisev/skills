@@ -25,16 +25,18 @@ ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
     "evals/schemas/result-v1.schema.json",
     "evals/schemas/scenario-v1.schema.json",
-    "packages/opencode/contracts/critic-report-v1.schema.json",
-    "packages/opencode/contracts/execution-card-v1.schema.json",
-    "packages/opencode/contracts/mapper-report-v1.schema.json",
-    "packages/opencode/contracts/review-report-v1.schema.json",
-    "packages/opencode/contracts/routing-receipt-v1.schema.json",
-    "packages/opencode/contracts/worker-report-v1.schema.json",
+    "packages/agentomatic/contracts/critic-report-v1.schema.json",
+    "packages/agentomatic/contracts/execution-card-v1.schema.json",
+    "packages/agentomatic/contracts/mapper-report-v1.schema.json",
+    "packages/agentomatic/contracts/review-report-v1.schema.json",
+    "packages/agentomatic/contracts/routing-receipt-v1.schema.json",
+    "packages/agentomatic/contracts/worker-report-v1.schema.json",
     "shared/references/portable_gitlab/artifact-contracts-v2.schema.json",
     "shared/references/post-success-marker.schema.json",
     "shared/references/team_runtime/team-context.schema.json",
+    "shared/references/people_runtime/people-context.schema.json",
     "shared/references/work-item-contract.schema.json",
+    "skills/taskmatic/references/snapshot.schema.json",
 }
 DIGEST = "a" * 64
 CREATED_AT = "2026-09-14T00:00:00Z"
@@ -749,7 +751,7 @@ def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
 def validate_eval_contract_instances() -> None:
     scenario_validator = validator("evals/schemas/scenario-v1.schema.json")
     scenarios = sorted((ROOT / "evals/scenarios").glob("*.json"))
-    assert len(scenarios) == 224
+    assert len(scenarios) == 277
     for path in scenarios:
         scenario_validator.validate(load(path.relative_to(ROOT)))
 
@@ -774,6 +776,20 @@ def validate_shared_contract_instances() -> None:
     )
     validator("shared/references/team_runtime/team-context.schema.json").validate(
         load("shared/references/team_runtime/team-context.example.json")
+    )
+    people_validator = validator("shared/references/people_runtime/people-context.schema.json")
+    people_validator.validate(load("shared/references/people_runtime/people-context.example.json"))
+    people_validator.validate(
+        {
+            "schema_version": 1,
+            "profile": "minimal-team",
+            "reports": [
+                {
+                    "name": "Minimal Report",
+                    "one_on_one": {"frequency": "monthly", "minutes": 45},
+                }
+            ],
+        }
     )
     validator("shared/references/work-item-contract.schema.json").validate(cast("Any", work_item()))
     artifact_validator = validator(
@@ -800,23 +816,55 @@ def validate_shared_contract_instances() -> None:
 
 
 def validate_opencode_contract_instances() -> None:
-    instances = load("packages/opencode/contracts/instances-v1.json")
+    instances = load("packages/agentomatic/contracts/instances-v1.json")
     schema_names = {path.rsplit("/", 1)[-1] for path in SCHEMA_PATHS if "/contracts/" in path}
     assert set(instances) == schema_names
     for name, instance in instances.items():
-        validator(f"packages/opencode/contracts/{name}").validate(instance)
+        validator(f"packages/agentomatic/contracts/{name}").validate(instance)
+
+
+def taskmatic_snapshot_instance() -> dict[str, Any]:
+    return cast("dict[str, Any]", load("skills/taskmatic/references/snapshot.example.json"))
+
+
+def validate_taskmatic_contract_instances() -> None:
+    taskmatic_validator = validator("skills/taskmatic/references/snapshot.schema.json")
+    instance = taskmatic_snapshot_instance()
+    taskmatic_validator.validate(instance)
+    assert {card["title"] for card in instance["cards"]} == {
+        "Review the snapshot contract",
+        "Child card",
+    }
+    for change in (
+        {"schema": "taskmatic/snapshot/v2"},
+        {"generated_at": "yesterday"},
+        {"cards": [{"id": "nothex"}]},
+    ):
+        invalid = copy.deepcopy(instance)
+        invalid.update(change)
+        with pytest.raises(ValidationError):
+            taskmatic_validator.validate(invalid)
+    bad_card = copy.deepcopy(instance)
+    bad_card["cards"][0]["status"] = "archived"
+    with pytest.raises(ValidationError):
+        taskmatic_validator.validate(bad_card)
+    bad_claim = copy.deepcopy(instance)
+    bad_claim["cards"][0]["claim_remaining_seconds"] = -1
+    with pytest.raises(ValidationError):
+        taskmatic_validator.validate(bad_claim)
 
 
 def test_every_committed_json_schema_has_a_concrete_contract() -> None:
     validate_eval_contract_instances()
     validate_shared_contract_instances()
     validate_opencode_contract_instances()
+    validate_taskmatic_contract_instances()
     validate_schema_runtime_rejections()
 
 
 def validate_schema_runtime_rejections() -> None:
-    opencode = load("packages/opencode/contracts/instances-v1.json")
-    routing_validator = validator("packages/opencode/contracts/routing-receipt-v1.schema.json")
+    opencode = load("packages/agentomatic/contracts/instances-v1.json")
+    routing_validator = validator("packages/agentomatic/contracts/routing-receipt-v1.schema.json")
     lowercase_date = copy.deepcopy(opencode["routing-receipt-v1.schema.json"])
     lowercase_date["expires_at"] = "2099-01-01t00:00:00z"
     routing_validator.validate(lowercase_date)

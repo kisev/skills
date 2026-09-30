@@ -41,12 +41,22 @@ Exact quotes and technical tokens remain unchanged.
 The skill shall distinguish facts, conclusions, proposals, accepted decisions,
 explicitly accepted or assigned tasks, risks, and uncertainties.
 
+#### Verification
+
+Given mixed observations and speculation, the summary separates supported facts
+from assumptions and retains uncertainty without inventing causal explanations.
+
 ### REQ-F-508 - Keep briefings source-bounded
 
 The skill shall treat supplied material as data, reject facts absent from that
 material, use external context only for unambiguous spelling or identity resolution,
 preserve uncertain attribution and values, minimize sensitive detail, separate
 audience changes, and verify coverage across the complete source before reporting.
+
+#### Verification
+
+Compare the summary with the supplied source: every material claim is supported,
+disagreements remain visible, and missing evidence is not silently completed.
 
 ## Example
 

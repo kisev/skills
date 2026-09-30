@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-agreements.near-miss",
+  "pair_id": "stage20.skill.team-agreements.near-miss",
+  "kind": "near-miss",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Русский: это намеренно не относится к навыку team-agreements; не направляй запрос в этот навык."
+  },
+  "expected": {
+    "selected": [],
+    "not_selected": ["skill:team-agreements"],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "safe-escalation"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-agreements.near-miss.source",
+      "path": ".build/skills/team-agreements/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "c0610c5c16fec1a341e82ccd3370e808fcea5d60b0243a7e6df8863681bf3a12"
+}

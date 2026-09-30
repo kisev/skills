@@ -4,22 +4,65 @@
     "max_tokens": 2000,
     "timeout_seconds": 20
   },
-  "digest": "ad3d3a199a6441dc5faad532e3aafd7c25214e472f4f356d7785ff3d6fb93936",
+  "digest": "a47988ebbd15dd6265262a338c3434d1ceccc2b5ed5c7322b27c25b0579653f7",
   "expected": {
     "case_outcomes": [
-      { "id": "natural-init", "outcome": "spec-init" },
-      { "id": "natural-onboard", "outcome": "spec-onboard" },
-      { "id": "natural-update", "outcome": "spec-update" },
-      { "id": "natural-audit", "outcome": "spec-audit" },
-      { "id": "evidence-init", "outcome": "spec-init" },
-      { "id": "evidence-onboard", "outcome": "spec-onboard" },
-      { "id": "ambiguous-update-audit", "outcome": "ask-no-writes" },
-      { "id": "explicit-mode", "outcome": "explicit-spec-audit" },
-      { "id": "explicit-failed-precondition", "outcome": "stop-failed-precondition" },
-      { "id": "near-miss-user-docs", "outcome": "near-miss" },
-      { "id": "near-miss-implementation", "outcome": "near-miss" },
-      { "id": "near-miss-planning", "outcome": "near-miss" },
-      { "id": "ambiguous-review-and-fix", "outcome": "ask-no-writes" }
+      {
+        "id": "natural-init",
+        "outcome": "spec-init"
+      },
+      {
+        "id": "natural-onboard",
+        "outcome": "spec-onboard"
+      },
+      {
+        "id": "natural-update",
+        "outcome": "spec-update"
+      },
+      {
+        "id": "natural-audit",
+        "outcome": "spec-review"
+      },
+      {
+        "id": "post-change-activation",
+        "outcome": "spec-update"
+      },
+      {
+        "id": "evidence-init",
+        "outcome": "spec-init"
+      },
+      {
+        "id": "evidence-onboard",
+        "outcome": "spec-onboard"
+      },
+      {
+        "id": "ambiguous-update-audit",
+        "outcome": "ask-no-writes"
+      },
+      {
+        "id": "explicit-mode",
+        "outcome": "explicit-spec-review"
+      },
+      {
+        "id": "explicit-failed-precondition",
+        "outcome": "stop-failed-precondition"
+      },
+      {
+        "id": "near-miss-user-docs",
+        "outcome": "near-miss"
+      },
+      {
+        "id": "near-miss-implementation",
+        "outcome": "near-miss"
+      },
+      {
+        "id": "near-miss-planning",
+        "outcome": "near-miss"
+      },
+      {
+        "id": "ambiguous-review-and-fix",
+        "outcome": "ask-no-writes"
+      }
     ],
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -48,8 +91,13 @@
         },
         {
           "id": "natural-audit",
-          "outcome": "spec-audit",
+          "outcome": "spec-review",
           "prompt": "Проверь существующие specs по коду и сообщи о проблемах, ничего не меняя."
+        },
+        {
+          "id": "post-change-activation",
+          "outcome": "spec-update",
+          "prompt": "Разрешённое изменение, сделавшее публичный таймаут повторов настраиваемым, завершено и проверено; specs существуют, и ни одно правило проекта о них не упоминает. Выполни обязательный канонический шаг сам сейчас."
         },
         {
           "id": "evidence-init",
@@ -68,8 +116,8 @@
         },
         {
           "id": "explicit-mode",
-          "outcome": "explicit-spec-audit",
-          "prompt": "spec-audit только requirements/quality; не переосмысливай режим и scope."
+          "outcome": "explicit-spec-review",
+          "prompt": "spec-review только requirements/quality; не переосмысливай режим и scope."
         },
         {
           "id": "explicit-failed-precondition",

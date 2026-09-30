@@ -3,13 +3,18 @@
 ## Purpose
 
 Infer whether to create greenfield specs, describe an existing project, change
-the canonical target state, or audit specifications read-only.
+the canonical target state, or review specifications without project edits.
 
 ## Triggers and Near-Misses
 
 Trigger for canonical project specification work expressed either naturally or
-with an explicit mode token. Near-misses include implementation, plans, roadmaps,
-and user-facing documentation even when they mention requirements or architecture.
+with an explicit mode token, including the canonical step of an authorized
+behavior change. After a completed authorized change that alters material
+behavior, compatibility, or a security boundary, the skill activates itself in
+`spec-update` mode when `specs/` exists; per-project instructions are not
+required for this trigger, and a missing tree stays user-initiated. Plans,
+roadmaps, code edits, and user-facing prose remain outside this skill's writing
+boundary.
 
 ## Inputs and Outputs
 
@@ -26,6 +31,13 @@ configuration, CI, and deployment before distinguishing initialization from
 onboarding, classify claims, write bounded specs, run formal validation, perform
 semantic review where required, and report checked and `not_checked` scopes.
 
+The adaptive interview follows the shared question contract in
+[REQ-I-001](../../requirements/interfaces/README.md#req-i-001---skill-interface).
+Mode, language, scope, and design choices include their context, effects, material
+risks, and recommendation rationale. Related questions may share a round only
+when their prerequisites are known and their answers cannot change one another;
+custom and non-recommended answers trigger reassessment before follow-ups.
+
 ## Dependencies
 
 Templates, repository evidence, requirements, architecture, ADR rules, and the
@@ -33,14 +45,15 @@ bundled Python 3.12+ standard-library-only structural validator.
 
 ## Remote/Local Effects
 
-Local reads and bounded atomic `specs/` writes; no remote effects.
+Local reads, bounded atomic `specs/` writes in writing modes, and private
+workspace-scoped review evidence under XDG state; no remote effects.
 The validator itself performs only bounded reads and invokes no Git, network, or
 external tools.
 
 ## Errors, Partial, Escalation
 
 When several modes remain plausible, one short question distinguishes their
-effects and no write occurs before the answer. Audit is always read-only.
+effects and no project write occurs before the answer. Review preserves project files.
 Unsafe, missing, non-regular, or non-UTF-8 validator inputs fail as input errors,
 not as validation findings. A mandatory failed or unchecked audit step, an
 unchecked or `UNKNOWN` in-scope boundary, or an unavailable required critic
@@ -66,22 +79,39 @@ validated files under `specs/`. It shall distinguish normative intent from
 evidence of current behavior according to the selected mode. It shall preserve
 explicit mode and scope, otherwise infer mode from intent and repository evidence,
 keep read-only intent read-only, and stop without writing when routing is
-ambiguous. An audit shall classify atomic claims and boundaries by the first
+ambiguous. It shall activate itself for the canonical step of a completed
+authorized behavior change without depending on project instruction files and
+shall never create a missing `specs/` tree from that trigger. An audit shall
+classify atomic claims and boundaries by the first
 matching `UNKNOWN`, `CONFLICT`, `SPEC_AHEAD`, `IMPLEMENTATION_AHEAD`, or `OK`
 rule; use one severity scale for confirmed defects; preserve separate formal,
 quality, drift, boundary, and critic results; and derive `partial`, `findings`,
 or `clean` by fixed precedence.
+
+#### Verification
+
+Mode-selection and drift scenarios distinguish intent from observed behavior,
+preserve explicit scope and language, and report contradictory sources without
+silently adopting either. Snapshot tests alone do not establish those judgments.
 
 ### REQ-F-506 - Validate formal specification invariants
 
 The skill shall run snapshot validation for complete canonical trees and shall
 run lifecycle validation only against an explicitly supplied complete baseline.
 It shall report unexecuted historical checks as `not_checked` and shall not use a
-successful formal result as a substitute for semantic `spec-audit`.
+successful formal result as a substitute for semantic `spec-review`.
+
+#### Verification
+
+`tests/test_spec_validate.py` exercises snapshot and lifecycle failures;
+`tests/test_documentation_review.py` exercises freshness and retained limitations.
+The shared review lifecycle implements [REQ-F-519](../../requirements/functional/README.md#req-f-519---maintain-change-linked-documentation-and-reusable-review-evidence).
 
 ## Example
 
 “Document this existing service as canonical specs” selects `spec-onboard` when
 implementation evidence exists and `specs/` does not. “Check the specs without
-changing files” selects `spec-audit`.
+changing project files” selects `spec-review`. After the agent completes an
+authorized fix that changes a public timeout, the skill performs the affected
+`spec-update` step itself.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

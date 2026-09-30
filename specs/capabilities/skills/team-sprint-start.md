@@ -40,6 +40,24 @@ The fixed action and state owner are explicit in every result.
 
 The skill shall start only the selected sprint action after validating its prerequisites.
 
+#### Verification
+
+Sprint planning uses the selected profile and period, produces a bounded scope,
+and does not close a sprint or silently execute another team action.
+
+### REQ-F-511 - Make planning artifacts provenance-bound
+
+Planning artifacts shall end with a data-sources section rendered from the
+private evidence store, listing each contributing source's kind, exact
+location, collected window or point timestamp, completeness, and collection
+time as specified by REQ-F-509, and each written artifact shall be snapshotted
+in the store with its period and contributing source keys.
+
+#### Verification
+
+The planning artifact identifies source keys and the fixed period; missing
+configured sources remain visible and the evidence snapshot can be reread.
+
 ## Example
 
 `team-sprint-start` reports missing context without creating replacement state.

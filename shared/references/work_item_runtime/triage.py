@@ -7,6 +7,7 @@ import argparse
 import errno
 import hashlib
 import importlib
+import importlib.util
 import json
 import os
 import re
@@ -322,6 +323,37 @@ def private_directory(path: Path) -> Path:
         return ensure_private_directory(path, xdg_state_home())
     except (OSError, ValueError) as error:
         raise WorkflowError("state directory must be a private real directory") from error
+
+
+def _drop_issue_memory(target: dict[str, Any], title: str, decision: str, reason: str) -> None:
+    """Queue a per-issue triage decision into the memomatic inbox; advisory only."""
+    try:
+        inbox_path = Path(__file__).with_name("memomatic_inbox.py")
+        if not inbox_path.exists():
+            inbox_path = next(
+                parent / "memomatic_inbox.py"
+                for parent in Path(__file__).resolve().parents
+                if (parent / "memomatic_inbox.py").is_file()
+            )
+        spec = importlib.util.spec_from_file_location("memomatic_inbox", inbox_path)
+        if spec is None or spec.loader is None:
+            return
+        inbox = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inbox)
+        hostname = str(target.get("hostname", "")).lower().replace(".", "-")
+        lines = inbox.entry_lines(
+            [
+                (
+                    f"triage {target.get('hostname')}/{target.get('project_id')}#{target.get('iid')}"
+                    f" \u00ab{title}\u00bb: {decision} \u2014 {reason}"
+                )
+            ],
+            source="task-triage",
+            key=f"triage-{hostname}-{target.get('project_id')}-{target.get('iid')}",
+        )
+        inbox.drop_memory(lines, "task-triage")
+    except Exception:
+        return
 
 
 def atomic_write(path: Path, content: bytes) -> None:
@@ -2812,6 +2844,12 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         report = reports / f"{target['hostname']}-{target['project_id']}-{target['iid']}.md"
         report_body = item_markdown(item, commands, locale, canonical_url).encode()
         atomic_write(report, versioned_markdown(report, report_body))
+        _drop_issue_memory(
+            target,
+            str(issue.get("title") or item["evidence"]["url"]),
+            str(item["release_plan"]["decision"]["status"]),
+            str(item["release_plan"]["decision"]["rationale"]),
+        )
         report_entries.append(
             {
                 "url": canonical_url,

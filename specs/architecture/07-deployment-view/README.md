@@ -1,8 +1,10 @@
 # Deployment View
 
 Validated release tags run the complete gate, deploy the stable well-known
-distribution at `https://kisev.github.io/skills`, and publish one preflighted
-`@kisev/skills-opencode` tarball under npm `latest`. A push to `dev` runs the
+distribution at `https://kisev.github.io/skills`, and publish preflighted
+`@kisev/safe-fs`, `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/agentomatic` tarballs in
+dependency order under npm `latest`. The release manifest binds each member's
+version, dependency pins, and digest. A push to `dev` runs the
 complete publication gate, then updates `https://kisev.github.io/skills/dev` and
 npm `dev` with a unique
 technical snapshot version. Every Pages artifact contains both channels so one
@@ -21,5 +23,8 @@ diagnostics. Crosscutting redaction and mutation rules provide
 release boundaries provide
 [REQ-Q-008](../../requirements/quality/README.md#req-q-008---verify-release-promotion).
 
-Ordinary CI materializes portable skills once, transfers that immutable build
-artifact to dependent jobs, and runs independent quality tasks in parallel.
+Ordinary CI materializes portable skills independently in each matrix job and
+runs independent quality tasks in parallel. Reproducibility checks compare the
+results; avoiding artifact transfer preserves executable file modes. Publication
+verifies all manifest members before completion as required by
+[REQ-F-004](../../requirements/functional/README.md#req-f-004---publish-one-verified-release).

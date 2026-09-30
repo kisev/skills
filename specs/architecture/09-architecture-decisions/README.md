@@ -15,3 +15,9 @@ items.
 - [ADR-0009: Share task release planning](0009-share-task-release-planning.md) - accepted
 - [ADR-0010: Separate review orchestration and guarded publication](0010-separate-review-and-publication.md) - accepted
 - [ADR-0011: Integrate on dev and isolate publication channels](0011-dev-integration-channel.md) - accepted
+- [ADR-0012: Compose memomatic learning memory](0012-compose-memomatic-learning-memory.md) - superseded by ADR-0015
+- [ADR-0013: Compose memomatic artifact inbox](0013-compose-memomatic-artifact-inbox.md) - superseded by ADR-0015
+- [ADR-0014: Change-linked documentation review](0014-change-linked-documentation-review.md) - accepted
+- [ADR-0015: Use explicit MCP memory](0015-use-explicit-mcp-memory.md) - accepted
+- [ADR-0016: Unify task runtime and explicit recall](0016-unify-task-runtime-and-explicit-recall.md) - accepted
+- [ADR-0017: Observable incremental CLI processing](0017-observable-incremental-cli-processing.md) - accepted

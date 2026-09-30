@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: LSP reporting remains available through `skills-opencode doctor`.
+- Reason: LSP reporting remains available through `agentomatic doctor`.
 
 ## Purpose
 

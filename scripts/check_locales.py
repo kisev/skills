@@ -227,6 +227,10 @@ def validate(root: Path = ROOT, built: Path | None = None) -> int:
         if not en_file.is_file() or not ru_file.is_file():
             raise LocaleError(f"missing documentation pair: {english}, {russian}")
         en_text, ru_text = en_file.read_text(encoding="utf-8"), ru_file.read_text(encoding="utf-8")
+        en_front = en_text.split("---", 2)[1] if en_text.startswith("---\n") else ""
+        ru_front = ru_text.split("---", 2)[1] if ru_text.startswith("---\n") else ""
+        if en_front != ru_front:
+            raise LocaleError(f"agent frontmatter differs: {english}, {russian}")
         if set(FENCE.findall(en_text)) != set(FENCE.findall(ru_text)):
             raise LocaleError(f"code fences differ: {english}, {russian}")
         if _tokens(en_text) != _tokens(ru_text):

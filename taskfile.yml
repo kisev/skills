@@ -141,9 +141,11 @@ tasks:
 
   typecheck:typescript:
     desc: Check types in typescript
-    deps: [package:install]
+    deps: [package:build]
     cmds:
-      - mise exec -- tsc --project packages/opencode/tsconfig.json --noEmit
+      - mise exec -- tsc --project apps/memomatic/tsconfig.json --noEmit
+      - mise exec -- tsc --project apps/taskmatic/tsconfig.json --noEmit
+      - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
 
   typecheck:python:
     desc: Check types in python
@@ -187,6 +189,11 @@ tasks:
         mise exec -- uv run --locked python scripts/verify_distribution_url.py "$PAGES_URL"
         --version "${RELEASE_TAG#v}" --revision "$RELEASE_REVISION"
         --attempts 24 --manifest .build/release/release.json
+
+  release:channel:
+    desc: Resolve the publication channel of the tagged release
+    cmds:
+      - mise exec -- uv run --locked python scripts/release_channel.py {{.CLI_ARGS}}
 
   release:github:
     desc: Create or verify the final GitHub Release
@@ -263,7 +270,7 @@ tasks:
   test:python:
     desc: Run Python tests against materialized skills
     cmds:
-      - SKILLS_BINARY="$(mise which skills)" mise exec -- uv run --locked pytest
+      - SKILLS_BINARY="$(mise which skills)" mise exec -- uv run --locked pytest -n auto --dist loadgroup
 
   generate:
     desc: Build all untracked distribution and package artifacts
@@ -274,6 +281,7 @@ tasks:
   generate:check:
     desc: Check the generated portable distribution without changing authored sources
     cmds:
+      - mise exec -- node scripts/materialize_cli_runtime.mjs --check
       - task: build:skills
       - task: distribution:check
 
@@ -313,6 +321,13 @@ tasks:
       - mise exec -- uv run --locked python scripts/check_locales.py
       - mise exec -- uv run --locked python scripts/check_locales.py --built .build/skills
 
+  docs:check:
+    desc: Validate documentation dependencies and canonical structure
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_documentation.py
+      - mise exec -- uv run --locked python shared/references/documentation_review.py check --root .
+      - mise exec -- uv run --locked python skills/spec-manage/scripts/spec_validate.py check --path specs
+
   eval:check:
     desc: Validate behavioral eval schemas and run the hostless deterministic suite
     cmds:
@@ -339,39 +354,50 @@ tasks:
       - mise exec -- gitleaks git --config .gitleaks.toml --redact --no-banner
       - mise exec -- gitleaks dir . --config .gitleaks.toml --redact --no-banner
 
-  check:
-    desc: Run the complete local and CI quality gate
+  check:core:
+    desc: Run the always-on core shared by every push gate
     cmds:
       - task: build:skills
       - task: version:check
       - task: lint
       - task: typecheck
-      - task: test:python
       - task: locale:check
+      - task: docs:check
       - task: distribution:check
       - task: skills:validate
       - task: eval:check
-      - task: package:check
       - task: security
+
+  check:
+    desc: Run the complete local and CI quality gate
+    cmds:
+      - task: check:core
+      - task: test:python
+      - task: package:check
 
   pre-push:
     desc: Run the single complete local gate before push
     deps: [check, dependency:audit]
 
   package:check:
-    desc: Verify the complete OpenCode package lifecycle and tarball
+    desc: Verify the complete npm package lifecycle and tarballs
     deps: [package:test]
-    dir: packages/opencode
+    dir: packages/agentomatic
     cmds:
       - mise exec -- npm run smoke
       - mise exec -- npm run pack:check
+      - mise exec -- npm --prefix ../../apps/taskmatic run pack:check
+      - mise exec -- npm test
+      - mise exec -- npm --prefix ../../apps/memomatic test
 
   package:test:
     internal: true
-    dir: packages/opencode
+    dir: packages/agentomatic
     deps: [package:build]
     cmds:
       - mise exec -- npm test
+      - mise exec -- npm --prefix ../../apps/memomatic test
+      - mise exec -- npm --prefix ../../apps/taskmatic test
 
   package:generate:
     internal: true
@@ -379,20 +405,24 @@ tasks:
 
   package:build:
     internal: true
-    dir: packages/opencode
+    dir: .
     deps: [package:install]
     cmds:
-      - mise exec -- npm run build
+      - mise exec -- npm run build --workspace @kisev/safe-fs
+      - mise exec -- node scripts/materialize_cli_runtime.mjs
+      - mise exec -- npm run build --workspace @kisev/memomatic
+      - mise exec -- npm run build --workspace @kisev/taskmatic
+      - mise exec -- npm run build --workspace @kisev/agentomatic
 
   package:install:
     internal: true
     run: once
-    dir: packages/opencode
+    dir: .
     cmds:
       - mise exec -- npm ci
 
   package:audit:
     internal: true
-    dir: packages/opencode
+    dir: .
     cmds:
       - mise exec -- npm audit --package-lock-only

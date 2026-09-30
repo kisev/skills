@@ -18,8 +18,8 @@
   "invariants": [
     {
       "id": "plugin-opt-in",
-      "path": "packages/opencode/src/installer.ts",
-      "contains": "plugins: [],"
+      "path": "packages/agentomatic/src/installer.ts",
+      "contains": "plugins: [\"rtk\"],"
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "d4fe9a1f99d7304587d2609527998d76078af41f7006711e66ff4bc3fcb16d9f",
+  "digest": "c263cb2d2579315a435a231ac7098eda35f869e85e3e13168c2a2bbc3c65ecbd",
   "locale": "ru",
   "pair_id": "plugin.rules-injector.disabled-mutation-boundary"
 }

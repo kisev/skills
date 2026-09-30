@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-incident.trigger.en",
+  "pair_id": "stage20.skill.team-incident.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-incident"]
+    },
+    "prompt": "English: select the team-incident skill for its exact contract scenario."
+  },
+  "expected": {
+    "selected": ["skill:team-incident"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-incident.trigger.source",
+      "path": ".build/skills/team-incident/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "444a4d61e26dda1631b3955efe297b7920582929176d538d7966f2265ee92f98"
+}

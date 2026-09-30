@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-1on1.near-miss",
+  "pair_id": "stage20.skill.team-1on1.near-miss",
+  "kind": "near-miss",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Русский: это намеренно не относится к навыку team-1on1; не направляй запрос в этот навык."
+  },
+  "expected": {
+    "selected": [],
+    "not_selected": ["skill:team-1on1"],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "safe-escalation"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-1on1.near-miss.source",
+      "path": ".build/skills/team-1on1/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "558221136fe8c6946315c79466234971f41f0228e52c0ac069ab5cbaf6ffdb26"
+}

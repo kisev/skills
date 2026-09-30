@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-people.near-miss.en",
+  "pair_id": "stage20.skill.team-people.near-miss",
+  "kind": "near-miss",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this intentionally does not belong to the team-people skill; do not route this request into it."
+  },
+  "expected": {
+    "selected": [],
+    "not_selected": ["skill:team-people"],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "safe-escalation"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-people.near-miss.source",
+      "path": ".build/skills/team-people/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "05a60d8572d686335d75520032cb92746a3d82f2da27db541213a6b86d216eb0"
+}

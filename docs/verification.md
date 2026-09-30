@@ -6,26 +6,27 @@
 
 The supported portable source is the GitHub Pages stable channel at
 `https://kisev.github.io/skills`; the optional package is
-`@kisev/skills-opencode`. Portable installation follows
-`npx --yes skills@latest`. The package requires Node.js 22+ and declares OpenCode
+`@kisev/agentomatic`. Portable installation follows
+`npx --yes skills@latest`. The package requires Node.js 22.13+ and declares OpenCode
 `>=1.18.29 <1.19.0`.
 
 ## Portable Installation
 
-The global contract for both supported hosts is:
+The global installation contract is:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --skill '*' --global --yes
 ```
 
-It produces one canonical copy in `~/.agents/skills`. Without `--global`, the
+It produces one canonical copy in `~/.agents/skills` for every host that reads
+`.agents/skills`, plus any other installed host. Without `--global`, the
 project copy is `.agents/skills`. Release metadata provides source provenance;
 the authored repository is not an installation source.
 
 The Pages URL is a moving stable-release channel. `update` verifies the current
 well-known digest, downloads changed archives, and offers to remove tracked names
 deleted upstream. Existing Git-based installations must repeat `add` with the
-Pages URL and the same scope and agents to rebind their source. Explicit cleanup
+Pages URL and the same scope to rebind their source. Explicit cleanup
 is limited to the retired names in the current [Migration Inventory](migration-inventory.md).
 
 ## OpenCode Integration
@@ -36,10 +37,15 @@ global integration persists in the npm project at `~/.config/opencode`.
 
 Scope-aware direct commands default to the current directory and accept one
 `--global` flag for global state; `--scope` is unsupported. The installer
-requires preview/confirmation. It writes only selected managed assets after confirmation and never creates or edits
-`opencode.json`; the core `plugin` entry remains user-owned. Update is an exact
-npm install followed by install preview, exact confirmation, and OpenCode
-restart.
+requires preview/confirmation. It writes only selected managed assets after
+confirmation and never creates or edits `opencode.json`. The separate `config`
+command is the confirmed path for user configuration: it merges selected
+fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
+`mimocode.json(c)` behind a preview/confirmation receipt, preserving existing
+entries, comments, and unrelated keys, adding only absent keys, and widening
+scalar permission maps while keeping the scalar as the `"*"` entry. Update is
+an exact npm install followed by install preview, exact confirmation, and
+OpenCode restart.
 
 Uninstall order is asset preview and confirmation, user-owned plugin-entry
 removal, `npm uninstall` in the owning project, then restart. Reconcile and
@@ -50,8 +56,9 @@ purge command is exposed.
 
 ## Current Surface
 
-The current inventory covers 27 portable skills, 27 command adapters, 6 fixed
-agents, 3 selectable plugin wrappers, 1 package tool, and the core plugin. The
+The current inventory covers 38 portable skills, 38 command adapters, the
+`rtk-stats` package command, 6 fixed agents, 3 selectable plugin wrappers,
+1 package tool, and the core plugin. The
 package tool `route` has no slash command.
 
 The catalog descriptions are checked against the current skill contracts:
@@ -94,7 +101,7 @@ audit outcomes. Offline results use `observation_mode: hostless-contract`; only
 trusted-live results use `observation_mode: trusted-live` and may satisfy case
 outcome assertions.
 
-Compatibility checks exercise OpenCode `1.18.29` and `1.18.31` inside
+Compatibility checks exercise OpenCode `1.18.29`, `1.18.31`, and `1.18.32` inside
 `>=1.18.29 <1.19.0` without credentials.
 
 ## Live Evaluation and Clean Checkout
@@ -121,5 +128,6 @@ before creating the GitHub Release.
 
 Development publication tests additionally check deterministic snapshot version
 derivation, `dev` source provenance, Pages root and `/dev` composition, and the
-required npm `dev` dist-tag. CI rejects pull requests into `main` from any branch
-other than `dev`; repository branch protection remains an external setting.
+required npm `dev` dist-tag. CI rejects pull requests into `main` from branches
+outside `dev`, `release/*`, and `fix/*` and rejects non-merge pushes to `main`;
+repository branch protection remains an external setting.

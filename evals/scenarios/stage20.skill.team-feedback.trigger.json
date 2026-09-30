@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-feedback.trigger",
+  "pair_id": "stage20.skill.team-feedback.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-feedback"]
+    },
+    "prompt": "Выбери навык team-feedback для его точного контрактного сценария."
+  },
+  "expected": {
+    "selected": ["skill:team-feedback"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-feedback.trigger.source",
+      "path": ".build/skills/team-feedback/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "be843e32e0020c851f3d7db22b13414b9bdc64d3fdf241e1b65755a62e990fb2"
+}

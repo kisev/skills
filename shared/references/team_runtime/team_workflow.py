@@ -109,6 +109,25 @@ PROFILE_TOP_LEVEL = frozenset(
     }
 )
 ACTION_KEYS = frozenset({"planning", "sprint-close", "retro", "roadmap", "slides-prompts"})
+PROFILE_KINDS = frozenset({"team", "people"})
+PROFILE_FILENAMES = {"team": "context.json", "people": "people.json"}
+PROFILE_JOURNALS = {
+    "team": ".profile-save.transaction.json",
+    "people": ".people-save.transaction.json",
+}
+PEOPLE_TOP_LEVEL = frozenset(
+    {
+        "$schema",
+        "schema_version",
+        "profile",
+        "manager",
+        "reports",
+        "stakeholders",
+        "extensions",
+    }
+)
+PEOPLE_ENTRY_TYPES = frozenset({"1on1", "agreement", "fact", "note", "feedback"})
+PEOPLE_TEXT_MAX = 4000
 
 
 class WorkflowError(ValueError):
@@ -208,13 +227,36 @@ def config_home() -> Path:
 
 
 def profile_root(*, create: bool = False) -> Path:
-    path = config_home() / "opencode" / "team-contexts"
+    path = config_home() / "agent-skills" / "team"
     if create:
         return private_directory(path)
     if not path.exists():
         return path
     try:
         return inspect_private_directory(path, config_home())
+    except (OSError, ValueError) as error:
+        raise WorkflowError("team profile directory is unsafe") from error
+
+
+def legacy_profile_root() -> Path:
+    return config_home() / "opencode" / "team-contexts"
+
+
+def valid_kind(value: str) -> str:
+    if value not in PROFILE_KINDS:
+        raise WorkflowError("profile kind must be team or people")
+    return value
+
+
+def profile_directory(name: str, *, create: bool = False) -> Path:
+    root = profile_root(create=create)
+    directory = root / valid_name(name)
+    if create:
+        return private_directory(directory)
+    if not directory.exists():
+        return directory
+    try:
+        return inspect_private_directory(directory, root)
     except (OSError, ValueError) as error:
         raise WorkflowError("team profile directory is unsafe") from error
 
@@ -1002,6 +1044,154 @@ def validate_profile(value: dict[str, Any], action: str) -> dict[str, Any]:
     return value
 
 
+def inspect_people_profile(value: dict[str, Any]) -> tuple[list[str], list[str]]:
+    if not isinstance(value, dict):
+        return [], ["profile"]
+    assert_safe_context(value)
+    missing: list[str] = []
+    invalid: list[str] = []
+
+    unknown = sorted(set(value) - PEOPLE_TOP_LEVEL)
+    if unknown:
+        invalid.append("profile unknown fields: " + ", ".join(unknown))
+    if value.get("schema_version") != 1 or isinstance(value.get("schema_version"), bool):
+        invalid.append("schema_version")
+    inspect_text(value.get("profile"), "profile", missing, invalid)
+
+    manager = value.get("manager")
+    if manager is not None:
+        manager_object, manager_missing, manager_invalid = inspect_object(
+            manager, "manager", allowed=frozenset({"name", "notes"})
+        )
+        missing.extend(manager_missing)
+        invalid.extend(manager_invalid)
+        if manager_object is not None:
+            if manager_object.get("name") is not None:
+                inspect_text(manager_object.get("name"), "manager.name", missing, invalid)
+            inspect_text_list(
+                manager_object.get("notes"), "manager.notes", missing, invalid, required=False
+            )
+
+    reports = value.get("reports")
+    if reports is None or reports == []:
+        missing.append("reports")
+    elif not isinstance(reports, list):
+        invalid.append("reports")
+    else:
+        names: list[str] = []
+        for index, report in enumerate(reports):
+            path = f"reports.{index}"
+            if not isinstance(report, dict):
+                invalid.append(path)
+                continue
+            report_object, report_missing, report_invalid = inspect_object(
+                report,
+                path,
+                allowed=frozenset(
+                    {
+                        "name",
+                        "handle",
+                        "role",
+                        "level",
+                        "since",
+                        "strengths",
+                        "growth_areas",
+                        "motivators",
+                        "caution",
+                        "notes",
+                        "one_on_one",
+                    }
+                ),
+                required=frozenset({"name"}),
+            )
+            missing.extend(report_missing)
+            invalid.extend(report_invalid)
+            if report_object is None:
+                continue
+            name = report_object.get("name")
+            inspect_text(name, f"{path}.name", missing, invalid)
+            if is_text(name):
+                names.append(cast("str", name).strip().lower())
+            for key in ("handle", "role", "level", "since"):
+                if report_object.get(key) is not None:
+                    inspect_text(report_object[key], f"{path}.{key}", missing, invalid)
+            for key in ("strengths", "growth_areas", "motivators", "caution", "notes"):
+                inspect_text_list(
+                    report_object.get(key), f"{path}.{key}", missing, invalid, required=False
+                )
+            one_on_one = report_object.get("one_on_one")
+            if one_on_one is not None:
+                one_object, one_missing, one_invalid = inspect_object(
+                    one_on_one,
+                    f"{path}.one_on_one",
+                    allowed=frozenset({"frequency", "minutes"}),
+                )
+                missing.extend(one_missing)
+                invalid.extend(one_invalid)
+                if one_object is not None:
+                    if one_object.get("frequency") is not None:
+                        inspect_text(
+                            one_object.get("frequency"),
+                            f"{path}.one_on_one.frequency",
+                            missing,
+                            invalid,
+                        )
+                    minutes = one_object.get("minutes")
+                    if minutes is not None and (
+                        isinstance(minutes, bool)
+                        or not isinstance(minutes, int)
+                        or not 5 <= minutes <= 240
+                    ):
+                        invalid.append(f"{path}.one_on_one.minutes")
+        if len(names) != len(set(names)):
+            invalid.append("reports duplicate names")
+
+    stakeholders = value.get("stakeholders")
+    if stakeholders is not None:
+        if not isinstance(stakeholders, list):
+            invalid.append("stakeholders")
+        else:
+            for index, stakeholder in enumerate(stakeholders):
+                path = f"stakeholders.{index}"
+                if not isinstance(stakeholder, dict):
+                    invalid.append(path)
+                    continue
+                stakeholder_object, stakeholder_missing, stakeholder_invalid = inspect_object(
+                    stakeholder,
+                    path,
+                    allowed=frozenset({"name", "role", "notes"}),
+                    required=frozenset({"name"}),
+                )
+                missing.extend(stakeholder_missing)
+                invalid.extend(stakeholder_invalid)
+                if stakeholder_object is None:
+                    continue
+                inspect_text(stakeholder_object.get("name"), f"{path}.name", missing, invalid)
+                if stakeholder_object.get("role") is not None:
+                    inspect_text(stakeholder_object.get("role"), f"{path}.role", missing, invalid)
+                inspect_text_list(
+                    stakeholder_object.get("notes"),
+                    f"{path}.notes",
+                    missing,
+                    invalid,
+                    required=False,
+                )
+
+    extensions = value.get("extensions")
+    if extensions is not None and not isinstance(extensions, dict):
+        invalid.append("extensions")
+    return missing, invalid
+
+
+def validate_people_profile(value: dict[str, Any]) -> dict[str, Any]:
+    missing, invalid = inspect_people_profile(value)
+    if invalid:
+        raise WorkflowError("people profile contains invalid fields: " + ", ".join(invalid[:30]))
+    if missing:
+        raise SetupRequired(missing)
+    return value
+
+
 def valid_name(value: str) -> str:
     if (
         not value
@@ -1012,16 +1202,26 @@ def valid_name(value: str) -> str:
     return value
 
 
-def profile_path(name: str, *, must_exist: bool = True) -> Path:
-    root = profile_root(create=False)
-    path = root / f"{valid_name(name)}.json"
+def profile_path(name: str, *, must_exist: bool = True, kind: str = "team") -> Path:
+    path = profile_directory(name) / PROFILE_FILENAMES[valid_kind(kind)]
     if must_exist:
         return private_regular(path, "team profile")
     return path
 
 
+def legacy_profile_path(name: str, *, must_exist: bool = True) -> Path:
+    path = legacy_profile_root() / f"{valid_name(name)}.json"
+    if must_exist:
+        return private_regular(path, "legacy team profile")
+    return path
+
+
 def settings_path() -> Path:
     return profile_root(create=False) / "settings.json"
+
+
+def legacy_settings_path() -> Path:
+    return legacy_profile_root() / "settings.json"
 
 
 def file_digest(path: Path, *, private: bool = False) -> str | None:
@@ -1036,36 +1236,48 @@ def file_digest(path: Path, *, private: bool = False) -> str | None:
 
 
 def default_profile_name() -> str:
-    root = profile_root(create=False)
-    if not root.exists():
-        raise SetupRequired(["profile.default"])
-    settings = root / "settings.json"
-    if not settings.exists():
-        fallback = root / "default.json"
-        if fallback.exists():
-            private_regular(fallback, "default team profile")
-            return "default"
-        raise SetupRequired(["profile.default"])
-    value, _ = read_private_json(settings, "team profile settings")
-    if set(value) != {"schema_version", "default_profile"}:
-        raise WorkflowError("team profile settings contain invalid fields")
-    if value.get("schema_version") != 1 or isinstance(value.get("schema_version"), bool):
-        raise WorkflowError("team profile settings schema_version must be 1")
-    name = value.get("default_profile")
-    if not isinstance(name, str):
-        raise WorkflowError("team profile settings default_profile is invalid")
-    return valid_name(name)
+    settings = settings_path()
+    legacy = legacy_settings_path()
+    source = None
+    if settings.exists():
+        source = settings
+    elif legacy.exists():
+        source = legacy
+    if source is not None:
+        value, _ = read_private_json(source, "team profile settings")
+        if set(value) != {"schema_version", "default_profile"}:
+            raise WorkflowError("team profile settings contain invalid fields")
+        if value.get("schema_version") != 1 or isinstance(value.get("schema_version"), bool):
+            raise WorkflowError("team profile settings schema_version must be 1")
+        name = value.get("default_profile")
+        if not isinstance(name, str):
+            raise WorkflowError("team profile settings default_profile is invalid")
+        return valid_name(name)
+    fallback = legacy_profile_root() / "default.json"
+    if fallback.exists():
+        private_regular(fallback, "default team profile")
+        return "default"
+    raise SetupRequired(["profile.default"])
 
 
-def read_profile(name: str) -> tuple[dict[str, Any], bytes, Path]:
-    path = profile_path(name, must_exist=False)
-    if not path.exists():
-        raise SetupRequired([f"profile.{name}"])
+def read_profile(name: str, *, kind: str = "team") -> tuple[dict[str, Any], bytes, Path, str]:
+    valid_kind(kind)
+    path = profile_path(name, must_exist=False, kind=kind)
+    location = "current"
+    if not path.exists() and kind == "team":
+        legacy = legacy_profile_path(name, must_exist=False)
+        if legacy.exists():
+            path = legacy
+            location = "legacy"
+    if location == "current" and not path.exists():
+        raise SetupRequired([f"profile.{kind}.{name}"])
     path = private_regular(path, "team profile")
     value, raw = read_private_json(path, "team profile")
     if value.get("profile") != name:
         raise WorkflowError("team profile name does not match its file name")
-    return validate_profile(value, FIXED_ACTION), raw, path
+    if kind == "people":
+        return validate_people_profile(value), raw, path, location
+    return validate_profile(value, FIXED_ACTION), raw, path, location
 
 
 def profile_change_payload(
@@ -1073,11 +1285,13 @@ def profile_change_payload(
     raw: bytes,
     *,
     set_default: bool,
+    kind: str = "team",
 ) -> dict[str, Any]:
-    target = profile_path(name, must_exist=False)
+    target = profile_path(name, must_exist=False, kind=valid_kind(kind))
     settings = settings_path()
     return {
         "kind": "profile",
+        "profile_kind": kind,
         "name": name,
         "action": FIXED_ACTION,
         "content_digest": hashlib.sha256(raw).hexdigest(),
@@ -1486,8 +1700,8 @@ def validate_transaction(
     )
 
 
-def recover_profile_transaction(root: Path) -> str | None:
-    journal = root / ".profile-save.transaction.json"
+def recover_profile_transaction(root: Path, *, kind: str = "team") -> str | None:
+    journal = root / PROFILE_JOURNALS[valid_kind(kind)]
     if not journal.exists():
         return None
     document = read_transaction_journal(journal)
@@ -1514,7 +1728,11 @@ def recover_profile_transaction(root: Path) -> str | None:
     if receipt.parent.exists():
         sync_directory(receipt.parent)
     report = state_root() / "reports" / f"{document['report_digest']}.json"
-    paths = (root / f"{journal_name}.json", root / "settings.json", report)
+    paths = (
+        profile_directory(journal_name, create=False) / PROFILE_FILENAMES[kind],
+        root / "settings.json",
+        report,
+    )
     previous = (
         previous_condition(previous_profile),
         previous_condition(previous_settings) if set_default else postconditions["settings"],
@@ -1604,16 +1822,18 @@ def apply_context(name: str, raw: bytes, plan_digest: str) -> tuple[Path, str]:
 
 
 def apply_profile(
-    name: str, raw: bytes, plan_digest: str, *, set_default: bool
+    name: str, raw: bytes, plan_digest: str, *, set_default: bool, kind: str = "team"
 ) -> tuple[Path, str]:
+    valid_kind(kind)
     require_profile_locking()
     root = profile_root(create=True)
+    directory = profile_directory(name, create=True)
     lock = acquire_profile_lock(root)
     try:
-        recover_profile_transaction(root)
-        payload = profile_change_payload(name, raw, set_default=set_default)
+        recover_profile_transaction(root, kind=kind)
+        payload = profile_change_payload(name, raw, set_default=set_default, kind=kind)
         receipt = validate_plan(plan_digest, payload)
-        profile = root / f"{name}.json"
+        profile = directory / PROFILE_FILENAMES[kind]
         settings = root / "settings.json"
         previous_profile = (
             private_regular(profile, "team profile").read_bytes() if profile.exists() else None
@@ -1650,7 +1870,7 @@ def apply_profile(
             "settings": expected_settings,
             "report": {"exists": True, "digest": report_digest},
         }
-        journal = root / ".profile-save.transaction.json"
+        journal = root / PROFILE_JOURNALS[kind]
         transaction_id = uuid4().hex
         previous_profile_backup: dict[str, str] | None = None
         previous_settings_backup: dict[str, str] | None = None
@@ -1716,7 +1936,7 @@ def apply_profile(
             cleanup_completed_backups(document)
         except (OSError, ValueError) as exc:
             try:
-                outcome = recover_profile_transaction(root)
+                outcome = recover_profile_transaction(root, kind=kind)
             except (OSError, ValueError) as rollback_error:
                 raise MutationIOError(
                     "profile mutation failed and recovery stopped"
@@ -1770,25 +1990,215 @@ def load_context(args: argparse.Namespace) -> tuple[dict[str, Any], bytes, str, 
     ]
     if len(supplied) > 1:
         raise WorkflowError("at most one explicit context source is allowed")
+    kind = valid_kind(getattr(args, "kind", "team") or "team")
     if not supplied:
         name = default_profile_name()
-        context, raw, path = read_profile(name)
-        return context, raw, f"profile:{name}", path
+        context, raw, path, location = read_profile(name, kind=kind)
+        suffix = "@legacy" if location == "legacy" else ""
+        return context, raw, f"profile:{name}{suffix}", path
     if args.profile:
         name = valid_name(args.profile)
-        context, raw, path = read_profile(name)
-        return context, raw, f"profile:{name}", path
+        context, raw, path, location = read_profile(name, kind=kind)
+        suffix = "@legacy" if location == "legacy" else ""
+        return context, raw, f"profile:{name}{suffix}", path
     if args.context_file or args.chat_input:
         path = Path(args.context_file or args.chat_input)
         value, raw = read_json(path, "context")
         resolved = path.resolve()
         if value.get("schema_version") == 1 and "profile" in value:
+            if kind == "people":
+                return validate_people_profile(value), raw, "explicit-people-profile", resolved
+            if "reports" in value and "projects" not in value:
+                return validate_people_profile(value), raw, "explicit-people-profile", resolved
             return validate_profile(value, FIXED_ACTION), raw, "explicit-profile", resolved
         return validate_context(value), raw, "explicit-context", resolved
     state = state_root(create=False)
     path = regular(state / "contexts" / f"{valid_name(args.context_name)}.json", "saved context")
     value, raw = read_json(path, "saved context")
     return validate_context(value), raw, f"saved-context:{args.context_name}", path
+
+
+def run_profile_command(args: argparse.Namespace) -> int | None:
+    """Dispatch the profile subcommands; return None for other commands."""
+    if args.command == "profile-inspect":
+        profile, _ = read_json(Path(args.input), "profile input")
+        if valid_kind(args.kind) == "people":
+            missing, invalid = inspect_people_profile(profile)
+            action = "people"
+        else:
+            missing, invalid = inspect_profile(profile, FIXED_ACTION)
+            action = FIXED_ACTION
+        emit(
+            {
+                "status": "invalid" if invalid else "setup-required" if missing else "ok",
+                "action": action,
+                "profile_kind": args.kind,
+                "profile": profile.get("profile"),
+                "missing": missing,
+                "invalid": invalid,
+                "external_mutations": False,
+            }
+        )
+        return 2 if invalid else 3 if missing else 0
+    if args.command == "profile-list":
+        root = profile_root(create=False)
+        profiles: list[dict[str, Any]] = []
+        if root.exists():
+            for path in sorted(root.iterdir()):
+                if path.name == "settings.json" or not path.is_dir() or path.is_symlink():
+                    continue
+                kinds = sorted(
+                    kind
+                    for kind, filename in PROFILE_FILENAMES.items()
+                    if (path / filename).exists()
+                )
+                if kinds:
+                    profiles.append({"name": path.name, "kinds": kinds, "location": "current"})
+        legacy_names: list[str] = []
+        legacy_root = legacy_profile_root()
+        if legacy_root.exists():
+            for path in sorted(legacy_root.iterdir()):
+                if path.name == "settings.json" or path.suffix != ".json":
+                    continue
+                private_regular(path, "legacy team profile")
+                legacy_names.append(path.stem)
+        try:
+            default = default_profile_name()
+        except SetupRequired:
+            default = None
+        emit(
+            {
+                "status": "ok",
+                "profiles": profiles,
+                "legacy_profiles": legacy_names,
+                "default_profile": default,
+                "external_mutations": False,
+            }
+        )
+        return 0
+    if args.command == "profile-prepare":
+        name = valid_name(args.name)
+        kind = valid_kind(args.kind)
+        profile, raw = read_json(Path(args.input), "profile input")
+        if kind == "people":
+            validate_people_profile(profile)
+        else:
+            validate_profile(profile, FIXED_ACTION)
+        if profile.get("profile") != name:
+            raise WorkflowError("team profile name does not match --name")
+        payload = profile_change_payload(name, raw, set_default=args.set_default, kind=kind)
+        target = profile_path(name, must_exist=False, kind=kind)
+        legacy_target = legacy_profile_path(name, must_exist=False) if kind == "team" else None
+        risks = []
+        if target.exists():
+            risks.append("existing profile will be replaced")
+        if legacy_target is not None and legacy_target.exists() and not target.exists():
+            risks.append("legacy profile stays in place; remove it manually after verifying")
+        plan_digest, path, expires_at = prepare_plan(payload)
+        emit(
+            {
+                "status": "prepared",
+                "summary": {
+                    "tldr": (
+                        "Saving a private people profile."
+                        if kind == "people"
+                        else "Saving a private team profile."
+                    ),
+                    "scope": [f"profile:{kind}:{name}"],
+                    "risks": risks,
+                    "checks": [
+                        "profile schema",
+                        "action completeness",
+                        "private path",
+                        "previous digest",
+                    ],
+                },
+                "artifact_path": str(path),
+                "digest": plan_digest,
+                "expires_at": expires_at,
+                "ttl_seconds": TTL_SECONDS,
+                "apply_command": (
+                    f"profile-save --name {name} --input {args.input} "
+                    f"--digest {plan_digest} --kind {kind}"
+                    + (" --set-default" if args.set_default else "")
+                ),
+            }
+        )
+        return 0
+    if args.command == "profile-save":
+        name = valid_name(args.name)
+        kind = valid_kind(args.kind)
+        profile, raw = read_json(Path(args.input), "profile input")
+        if kind == "people":
+            validate_people_profile(profile)
+        else:
+            validate_profile(profile, FIXED_ACTION)
+        if profile.get("profile") != name:
+            raise WorkflowError("team profile name does not match --name")
+        report_path, report_digest = apply_profile(
+            name, raw, args.digest, set_default=args.set_default, kind=kind
+        )
+        mark_save(f"profile-save:{kind}:{name}", args.digest, raw)
+        emit(
+            {
+                "status": "applied",
+                "summary": {
+                    "tldr": (
+                        "Private people profile saved."
+                        if kind == "people"
+                        else "Private team profile saved."
+                    ),
+                    "scope": [f"profile:{kind}:{name}"],
+                    "risks": [],
+                    "checks": [
+                        "digest",
+                        "expiry",
+                        "single_use",
+                        "private_path",
+                        "previous_digest",
+                    ],
+                },
+                "report_path": str(report_path),
+                "report_digest": report_digest,
+            }
+        )
+        return 0
+    if args.command == "profile-migrate":
+        name = valid_name(args.name)
+        legacy = legacy_profile_path(name)
+        current = profile_path(name, must_exist=False)
+        if current.exists():
+            raise WorkflowError("profile already exists in the current location")
+        profile, raw = read_json(legacy, "legacy profile input")
+        validate_profile(profile, FIXED_ACTION)
+        if profile.get("profile") != name:
+            raise WorkflowError("team profile name does not match --name")
+        payload = profile_change_payload(name, raw, set_default=args.set_default, kind="team")
+        plan_digest, path, expires_at = prepare_plan(payload)
+        emit(
+            {
+                "status": "prepared",
+                "summary": {
+                    "tldr": "Migrating a legacy team profile into the current location.",
+                    "scope": [f"profile:team:{name}"],
+                    "risks": ["legacy profile stays in place; remove it manually after verifying"],
+                    "checks": ["profile schema", "private path", "previous digest"],
+                },
+                "artifact_path": str(path),
+                "digest": plan_digest,
+                "expires_at": expires_at,
+                "ttl_seconds": TTL_SECONDS,
+                "apply_command": (
+                    f"profile-save --name {name} --input {legacy} "
+                    f"--digest {plan_digest} --kind team"
+                    + (" --set-default" if args.set_default else "")
+                ),
+                "legacy_path": str(legacy),
+                "current_path": str(current),
+            }
+        )
+        return 0
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -1800,6 +2210,7 @@ def main(argv: list[str] | None = None) -> int:
     check.add_argument("--context-name")
     check.add_argument("--chat-input")
     check.add_argument("--profile")
+    check.add_argument("--kind", choices=("team", "people"), default="team")
     inspect = subparsers.add_parser("context-inspect")
     inspect.add_argument("--input", required=True)
     subparsers.add_parser("context-list")
@@ -1814,16 +2225,22 @@ def main(argv: list[str] | None = None) -> int:
     save.add_argument("--digest", required=True)
     profile_inspect = subparsers.add_parser("profile-inspect")
     profile_inspect.add_argument("--input", required=True)
+    profile_inspect.add_argument("--kind", choices=("team", "people"), default="team")
     subparsers.add_parser("profile-list")
     profile_prepare = subparsers.add_parser("profile-prepare")
     profile_prepare.add_argument("--name", required=True)
     profile_prepare.add_argument("--input", required=True)
     profile_prepare.add_argument("--set-default", action="store_true")
+    profile_prepare.add_argument("--kind", choices=("team", "people"), default="team")
     profile_save = subparsers.add_parser("profile-save")
     profile_save.add_argument("--name", required=True)
     profile_save.add_argument("--input", required=True)
     profile_save.add_argument("--digest", required=True)
     profile_save.add_argument("--set-default", action="store_true")
+    profile_save.add_argument("--kind", choices=("team", "people"), default="team")
+    profile_migrate = subparsers.add_parser("profile-migrate")
+    profile_migrate.add_argument("--name", required=True)
+    profile_migrate.add_argument("--set-default", action="store_true")
     artifact_write = subparsers.add_parser("artifact-write")
     artifact_write.add_argument("--target", required=True)
     artifact_write.add_argument("--input", required=True)
@@ -1835,12 +2252,17 @@ def main(argv: list[str] | None = None) -> int:
         emit(
             {
                 "schema_version": 1,
-                "payload_version": "1.1.0",
+                "payload_version": "1.2.0",
                 "mutation": "local-write",
                 "dry_run": True,
                 "state_protocol": "confirmed-config-direct-workspace",
+                "profile_kinds": ["team", "people"],
                 "profile_schema": "references/team-context.schema.json",
-                "profile_location": "${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts",
+                "people_profile_schema": "references/people-context.schema.json",
+                "profile_location": (
+                    "${XDG_CONFIG_HOME:-~/.config}/agent-skills/team/<profile>/<kind>.json"
+                ),
+                "legacy_profile_location": "${XDG_CONFIG_HOME:-~/.config}/opencode/team-contexts",
                 "external_tools": {},
                 "destructive_flags": ["context-save", "profile-save"],
             }
@@ -1849,14 +2271,18 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "action-check":
             context, _, source, path = load_context(args)
+            kind = valid_kind(getattr(args, "kind", "team") or "team")
             emit(
                 {
                     "status": "ok",
                     "action": FIXED_ACTION,
+                    "profile_kind": kind,
                     "context_source": source,
                     "context_path": str(path),
+                    "context_location": "legacy" if source.endswith("@legacy") else "current",
                     "profile": context.get("profile"),
-                    "projects": len(context["projects"]),
+                    "projects": len(context["projects"]) if kind == "team" else None,
+                    "reports": len(context["reports"]) if kind == "people" else None,
                     "external_mutations": False,
                 }
             )
@@ -1942,106 +2368,9 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             return 0
-        if args.command == "profile-inspect":
-            profile, _ = read_json(Path(args.input), "profile input")
-            missing, invalid = inspect_profile(profile, FIXED_ACTION)
-            emit(
-                {
-                    "status": "invalid" if invalid else "setup-required" if missing else "ok",
-                    "action": FIXED_ACTION,
-                    "profile": profile.get("profile"),
-                    "missing": missing,
-                    "invalid": invalid,
-                    "external_mutations": False,
-                }
-            )
-            return 2 if invalid else 3 if missing else 0
-        if args.command == "profile-list":
-            root = profile_root(create=False)
-            profile_names: list[str] = []
-            if root.exists():
-                for path in sorted(root.iterdir()):
-                    if path.name == "settings.json" or path.suffix != ".json":
-                        continue
-                    private_regular(path, "team profile")
-                    profile_names.append(path.stem)
-            try:
-                default = default_profile_name()
-            except SetupRequired:
-                default = None
-            emit(
-                {
-                    "status": "ok",
-                    "profiles": profile_names,
-                    "default_profile": default,
-                    "external_mutations": False,
-                }
-            )
-            return 0
-        if args.command == "profile-prepare":
-            name = valid_name(args.name)
-            profile, raw = read_json(Path(args.input), "profile input")
-            validate_profile(profile, FIXED_ACTION)
-            if profile.get("profile") != name:
-                raise WorkflowError("team profile name does not match --name")
-            payload = profile_change_payload(name, raw, set_default=args.set_default)
-            target = profile_path(name, must_exist=False)
-            plan_digest, path, expires_at = prepare_plan(payload)
-            emit(
-                {
-                    "status": "prepared",
-                    "summary": {
-                        "tldr": "Saving a private team profile.",
-                        "scope": [f"profile:{name}"],
-                        "risks": ["existing profile will be replaced"] if target.exists() else [],
-                        "checks": [
-                            "profile schema",
-                            "action completeness",
-                            "private path",
-                            "previous digest",
-                        ],
-                    },
-                    "artifact_path": str(path),
-                    "digest": plan_digest,
-                    "expires_at": expires_at,
-                    "ttl_seconds": TTL_SECONDS,
-                    "apply_command": (
-                        f"profile-save --name {name} --input {args.input} "
-                        f"--digest {plan_digest}" + (" --set-default" if args.set_default else "")
-                    ),
-                }
-            )
-            return 0
-        if args.command == "profile-save":
-            name = valid_name(args.name)
-            profile, raw = read_json(Path(args.input), "profile input")
-            validate_profile(profile, FIXED_ACTION)
-            if profile.get("profile") != name:
-                raise WorkflowError("team profile name does not match --name")
-            report_path, report_digest = apply_profile(
-                name, raw, args.digest, set_default=args.set_default
-            )
-            mark_save(f"profile-save:{name}", args.digest, raw)
-            emit(
-                {
-                    "status": "applied",
-                    "summary": {
-                        "tldr": "Private team profile saved.",
-                        "scope": [f"profile:{name}"],
-                        "risks": [],
-                        "checks": [
-                            "digest",
-                            "expiry",
-                            "single_use",
-                            "private_path",
-                            "previous_digest",
-                        ],
-                    },
-                    "report_path": str(report_path),
-                    "report_digest": report_digest,
-                }
-            )
-            return 0
+        profile_result = run_profile_command(args)
+        if profile_result is not None:
+            return profile_result
         if args.command == "artifact-write":
             artifact_source = regular(Path(args.input), "artifact input")
             content = artifact_source.read_bytes()

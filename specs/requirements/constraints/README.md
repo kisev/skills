@@ -26,11 +26,12 @@ OpenCode package owns only its integration assets and archive.
 Retired or stale package assets shall not be destructively removed when
 content-addressed archival can preserve recovery and auditability.
 
-### REQ-C-005 - Bounded distribution change in this target
+### REQ-C-005 - Bounded distribution change in this target (withdrawn)
 
-The current target changes portable build, publication, and installation transport
-without expanding the `28/28/6/3/1` capability inventory or the declared OpenCode
-compatibility range.
+> Lifecycle: `withdrawn` | Changed: `2026-09-28` | Reason: Later accepted team and application capabilities expanded the public inventory beyond the former transport-only target.
+
+This constraint formerly limited a transport change to inventory `28/28/6/3/1`.
+The current inventory is owned by REQ-F-001; compatibility remains separately bounded.
 
 ### REQ-C-006 - Specification traceability gate (withdrawn)
 
@@ -57,3 +58,12 @@ historical maximum of its namespace without filling gaps or reusing identifiers.
 Withdrawn, deprecated, and superseded records shall remain in canonical `specs/`
 with enough context to identify the former requirement or decision, its status,
 the reason it changed, and its replacement when one exists.
+
+### REQ-C-009 - Recommendational skill relations
+
+Cross-skill relations shall be declared only in `shared/skill-relations.json`
+with the types `requires`, `uses`, and `recommends`. Relations are install
+recommendations: every published archive shall remain self-contained, no
+published archive shall import another archive's files at runtime, and the
+portable build shall materialize each skill's declared relations into its built
+`SKILL.md` as a "Related skills" section.

@@ -2,7 +2,7 @@
 
 This skill has the fixed `roadmap` entrypoint. It reviews or updates one roadmap
 artifact; it does not create work items, start implementation, prepare a retro,
-or publish externally.
+or publish externally. Apply `humanize` to drafted roadmap prose.
 
 Resolve the profile and handle setup or remembered updates through
 `references/team-profile-workflow.md`. Run
@@ -29,11 +29,17 @@ confidence, discrepancy, and destination. Use all included profile projects and
 only declared sources or user-provided evidence.
 
 When `actions.roadmap.use_gitlab_metrics` is true, use
-`scripts/gitlab_period_metrics.py` exactly as described by the retro workflow:
-one project argument per included GitLab project, strict half-open boundaries,
-full pagination, timestamp provenance, and explicit partial status. Query
-tracker, document, or presentation sources through their declared tools and
-current installed help; do not invent commands or statuses.
+`scripts/gitlab_period_metrics.py` exactly as described by the retro workflow,
+including `--resume-profile PROFILE`: one project argument per included GitLab
+project, strict half-open boundaries, full pagination, timestamp provenance,
+and explicit partial status. The private evidence store reuses complete
+collected windows and fetches only the missing delta; read the output `resume`
+block to distinguish reused from newly collected windows. Query tracker,
+document, or presentation sources through their declared tools and current
+installed help; do not invent commands or statuses. Record every contributing
+non-GitLab source in the same store with `scripts/evidence_store.py
+evidence-record --profile PROFILE` (`--kind mattermost --location URL` for
+chats, `--kind file --location PATH` for local documents).
 
 Evidence precedence is factual, not aspirational. A delivery signal may prove
 an outcome even when a tracker state is stale, but record the discrepancy. A
@@ -82,9 +88,15 @@ owned location.
 
 ## 5. Write and Verify
 
-For a review, report findings and stop without writing. For an update, write the
-complete candidate document directly through `artifact-write`, then report
-changed periods, unresolved conflicts, evidence gaps, and checks.
+For a review, report findings and stop without writing. For an update, write
+the complete candidate document directly through `artifact-write`. When the
+update changes period outcomes, append or refresh a "Data sources" section
+rendered from `scripts/evidence_store.py evidence-show --profile PROFILE --since START_INCLUSIVE --until END_EXCLUSIVE`: one row per contributing
+source with the kind, exact location, collected window or point timestamp,
+completeness, and `collected_at`, in the document's language. Snapshot the
+written document with `scripts/evidence_store.py artifact-record --profile
+PROFILE --target DOCUMENT --since START --until END --source SOURCE_KEY`,
+then report changed periods, unresolved conflicts, evidence gaps, and checks.
 
 Run every applicable command in `actions.roadmap.verification_commands`. Prefer
 direct linting of the target path when repository wrappers ignore untracked
@@ -97,3 +109,23 @@ artifact path, and verification results.
 
 Read `references/interaction-contract.md` for evidence and mutation rules
 and `references/language-policy.md` for user-facing prose.
+
+## Memory integration
+
+When personal memory is available, search it before evidence collection with
+the `memory_search` tool (or `memomatic search`) for prior durable knowledge
+about this team or profile. Treat results as personal context: never quote
+entries marked personal-only into team-facing artifacts.
+
+After the artifact is verified, offer one memory drop of the durable outcome
+(decisions, process changes, recurring findings) and run it after user
+confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source team-roadmap \
+  --project PROJECT --text "Durable outcome in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged.

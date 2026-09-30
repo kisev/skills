@@ -67,6 +67,12 @@ mechanism. Extra structural fields shall not be presented as proof of semantic
 reasoning quality. Completion shall mean satisfying the agreed result and checks,
 not proving the absence of every possible defect or reaching a fixed round limit.
 
+#### Verification
+
+Dependent-question cases ask the prerequisite first and rebuild follow-ups from
+the actual answer. Explicit invocation stops for manual continuation; internal
+clarification returns to its authorized caller without expanding scope.
+
 ## Example
 
 `askme` asks for the exact external boundary before selecting an API workflow.

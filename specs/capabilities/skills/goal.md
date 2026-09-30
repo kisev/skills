@@ -40,6 +40,11 @@ The skill shall produce non-empty structured Markdown of at most 4000 characters
 from an internally normalized `work-item/v1` and shall not execute, persist,
 resume, or automatically continue the goal.
 
+#### Verification
+
+Count the final Markdown characters and compare its scope and success conditions
+with the request; no repository or external object is created.
+
 ## Example
 
 `goal` turns a repository request into bounded Problem, Outcome, Acceptance criteria, Scope, and Stop conditions sections without creating state.

@@ -48,6 +48,34 @@ def test_askme_discovery_and_manual_continuation_contract() -> None:
     assert "confirmation of the proposed task permits it to continue" not in workflow
 
 
+def test_spec_and_docs_skills_own_post_change_triggers() -> None:
+    for name in ("spec-manage", "docs-prepare"):
+        entrypoint = (ROOT / "skills" / name / "SKILL.source.md").read_text(encoding="utf-8")
+        description = entrypoint.split("description:", 1)[1].split("license:", 1)[0]
+        assert "Activate yourself after" in description, name
+        assert "owned by the skill and needs no project instructions" in description, name
+
+    spec_workflow = (ROOT / "skills/spec-manage/references/workflow.md").read_text(encoding="utf-8")
+    docs_workflow = (ROOT / "skills/docs-prepare/references/workflow.md").read_text(
+        encoding="utf-8"
+    )
+    normalized = {
+        "spec-manage": " ".join(spec_workflow.split()),
+        "docs-prepare": " ".join(docs_workflow.split()),
+    }
+    for name, workflow in normalized.items():
+        assert "owns its post-change trigger itself" in workflow, name
+        assert "project instruction files are not required" in workflow, name
+        assert "within the same change authorization" in workflow, name
+    assert "never creates a missing `specs/` tree" in normalized["spec-manage"]
+    assert "stay user-initiated" in normalized["spec-manage"]
+    assert "never creates a documentation set where none exists" in normalized["docs-prepare"]
+
+    agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    assert "Update canonical `specs/` for material behavior" not in agents
+    assert "Before completing a behavior change" not in agents
+
+
 def test_briefing_retains_source_accuracy_and_privacy_contract() -> None:
     workflow = (ROOT / "skills/briefing/references/workflow.md").read_text(encoding="utf-8")
     for marker in (
@@ -71,19 +99,53 @@ def test_built_skill_files_match_canonical_sources() -> None:
         assert destination.read_bytes() == source.read_bytes(), destination
 
 
+def test_every_skill_loads_and_bundles_shared_question_guidelines() -> None:
+    reference = "references/question-guidelines.md"
+    canonical = ROOT / "shared" / reference
+    sources = sorted((ROOT / "skills").glob("*/SKILL.source.md"))
+    destinations = {
+        destination for source, destination in manifest_entries() if source == canonical
+    }
+    assert destinations == {Path(skill.parent.name) / reference for skill in sources}
+    for source in sources:
+        built = BUILT_SKILLS / source.parent.name
+        for entrypoint in (source, built / "SKILL.md"):
+            assert f"Before asking the user, apply `{reference}`." in entrypoint.read_text(), (
+                entrypoint
+            )
+        assert (built / reference).read_bytes() == canonical.read_bytes(), built
+
+
+def test_native_interviews_use_dependency_rounds_instead_of_related_batches() -> None:
+    interview = (BUILT_SKILLS / "spec-manage/references/interviewing.md").read_text()
+    triage = (BUILT_SKILLS / "task-triage/references/workflow.md").read_text()
+    assert "references/question-guidelines.md" in interview
+    assert "one to five" not in interview
+    assert "ask the prerequisite first and wait" in interview
+    assert "including non-recommended and custom choices" in interview
+    assert "rebuild dependent follow-ups" in " ".join(triage.split())
+
+
 def test_review_followups_preserve_the_decision_boundary() -> None:
     askme = (BUILT_SKILLS / "askme/references/workflow.md").read_text(encoding="utf-8")
+    askme_doctrine = (BUILT_SKILLS / "askme/references/necessity-doctrine.md").read_text(
+        encoding="utf-8"
+    )
     review = (BUILT_SKILLS / "code-review/references/workflow.md").read_text(encoding="utf-8")
+    review_doctrine = (BUILT_SKILLS / "code-review/references/necessity-doctrine.md").read_text(
+        encoding="utf-8"
+    )
     local = (BUILT_SKILLS / "code-review/references/local-review.md").read_text(encoding="utf-8")
     examples = (BUILT_SKILLS / "code-review/references/finding-examples.md").read_text(
         encoding="utf-8"
     )
-    assert "necessity check below" in askme
-    assert "before asking how to implement" in askme
+    assert askme_doctrine == review_doctrine
+    assert "necessity check in `references/necessity-doctrine.md`" in askme
     assert "a candidate, not an agreed requirement" in askme
+    assert "before asking how to implement" in askme_doctrine
     assert "Independent reviewers receive these decisions" in review
-    assert "fault injection alone" in review
-    assert "Do not automatically recommend another broad review" in review
+    assert "fault injection alone" in review_doctrine
+    assert "Do not automatically recommend another broad review" in review_doctrine
     assert "previous finalized local report and snapshot" in review
     assert "not an implementation regression" in local
     assert "cannot prove" in local
@@ -125,7 +187,7 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
             "Literal mode tokens remain supported but are optional",
             "Absence of `specs/` alone never proves greenfield",
             "spec-update",
-            "mode is completely read-only",
+            "mode never edits the reviewed project",
             "scripts/spec_validate.py",
             "lifecycle as `not_checked`",
         ),
@@ -133,10 +195,10 @@ def test_workflow_references_retain_non_abbreviated_safety_contracts() -> None:
         "docs-prepare": (
             "write it directly with atomic replacement",
             "Do not create a private preview artifact",
-            "never combine workflows",
+            "Separate steps may share one change authorization",
         ),
         "docs-review": (
-            "spec-manage` in `spec-audit` mode",
+            "spec-manage` in `spec-review` mode",
             "only confirmed findings",
             "never publish them",
         ),
@@ -204,7 +266,7 @@ def test_project_spec_language_authority_and_extension_contract() -> None:
     assert "`specs/capabilities/` section is valid" in normalized_contract
     assert "explicit project-language choice before preparing files" in workflow
     assert "Never select the canonical language from the current request" in workflow
-    assert "This mode is completely read-only" in workflow
+    assert "This mode never edits the reviewed project" in workflow
     assert "The conversational report may use a different language" in audit
     assert "Canonical language: PROJECT-LANGUAGE." in root_template
     assert "## Extension Index" in root_template
@@ -219,6 +281,11 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
             "outcome - purpose",
             "external contributors",
             "verification_command",
+            "--resume-profile PROFILE",
+            "agent-skills/team/<profile>/evidence/",
+            "`resume.incomplete` is empty",
+            '"Data sources" section',
+            "artifact-record",
         ),
         "team-roadmap": (
             "evidence matrix",
@@ -226,6 +293,21 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
             "Every unfinished goal needs one explicit destination",
             "create issues, epics, milestones",
             "verification_commands",
+            "--resume-profile PROFILE",
+            '"Data sources" section',
+            "artifact-record",
+        ),
+        "team-sprint-start": (
+            '"Data sources" section',
+            "evidence-record",
+            "artifact-record",
+            "agent-skills/team/<profile>/evidence/",
+        ),
+        "team-sprint-close": (
+            '"Data sources" section',
+            "evidence-record",
+            "artifact-record",
+            "--resume-profile PROFILE",
         ),
         "slides-prompts-prepare": (
             "Theme and technical content are complementary layers",
@@ -241,6 +323,23 @@ def test_team_workflows_retain_evidence_and_artifact_quality_contracts() -> None
         )
         for marker in markers:
             assert marker in workflow, (name, marker)
+
+
+def test_team_profile_workflow_documents_the_evidence_store() -> None:
+    workflow = (ROOT / "shared/references/team_runtime/team-profile-workflow.md").read_text(
+        encoding="utf-8"
+    )
+    for marker in (
+        "agent-skills/team-evidence/<profile>/",
+        "evidence-plan",
+        "evidence-record",
+        "evidence-show",
+        "evidence-materialize",
+        "artifact-record",
+        "--resume-profile PROFILE",
+        "Never store credentials",
+    ):
+        assert marker in workflow, marker
 
 
 def test_team_profile_contract_is_distributed_without_private_values() -> None:

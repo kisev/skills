@@ -35,7 +35,27 @@ def isolated_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     (sources / "foo" / "SKILL.source.md").write_text(
         "---\nname: foo\ndescription: Foo\n---\n", encoding="utf-8"
     )
+    (sources / "bar").mkdir(parents=True)
+    (sources / "bar" / "SKILL.source.md").write_text(
+        "---\nname: bar\ndescription: Bar\n---\n", encoding="utf-8"
+    )
     (shared / "references" / "canonical.md").write_text("canonical\n", encoding="utf-8")
+    (shared / "skill-relations.json").write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "relations": [
+                    {
+                        "from": "foo",
+                        "to": "bar",
+                        "type": "recommends",
+                        "reason": "fixture companion",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     manifest = shared / "manifest.json"
     manifest.write_text(
         json.dumps(

@@ -2,19 +2,25 @@
 
 ## Purpose
 
-Prepare one accurate user-facing Diataxis document from verified code evidence.
+Prepare accurate user-facing Diataxis documentation from verified evidence,
+including the bounded set affected by an authorized behavior change.
 
 ## Triggers and Near-Misses
 
-Trigger for README/tutorial/reference/how-to work; near-miss: canonical `specs/`.
+Trigger for README/tutorial/reference/how-to work, including self-activation
+after a completed authorized behavior change to update affected documents or
+record a concrete no-update reason without project instructions; near-miss:
+canonical `specs/`.
 
 ## Inputs and Outputs
 
-Input is one document path and scope. Output is a draft or updated document.
+Input is a document path or affected area. Output is an updated document set,
+including necessary mirrors and navigation.
 
 ## Workflow Stages
 
-Resolve audience, inspect sources, draft, write, check links, report.
+Resolve audience and language set, inspect sources, draft, annotate for agents,
+write, check links, report.
 
 ## Dependencies
 
@@ -37,7 +43,35 @@ Does not modify `specs/` or invent behavior.
 ### REQ-F-107 - Prepare factual documentation
 
 The skill shall keep user-facing documentation claims traceable to repository
-evidence and write only validated workspace documents.
+evidence and write only validated workspace documents. After a completed
+authorized behavior change it shall assess affected user-facing documents
+itself and update them or record a concrete no-update reason without relying
+on project instruction files, and shall never create a documentation set from
+that trigger alone.
+
+It follows [REQ-F-519](../../requirements/functional/README.md#req-f-519---maintain-change-linked-documentation-and-reusable-review-evidence)
+to preserve applicable details and assess affected contracts without changing
+an agreed guarantee implicitly.
+
+#### Verification
+
+Given a moved command and an existing guide with prerequisites and recovery,
+the update corrects the command and navigation while preserving those details.
+
+### REQ-F-517 - Keep documentation multilingual with agent annotations
+
+The skill shall resolve the documentation language set from an explicit user
+request, project rules, the agent's global rules, or English by default, and
+shall keep machine tokens byte-identical across language mirrors. Documents
+are human-first and shall carry agent guidance as frontmatter (`audience`,
+optional `agent` purpose and hints) plus explicit agent sections only where an
+expanded instruction is required; annotations shall stay identical across
+mirrors, and executable contracts shall stay out of user prose.
+
+#### Verification
+
+Locale checks compare machine tokens and metadata; semantic review verifies
+that mirrors describe the same supported behavior.
 
 ## Example
 

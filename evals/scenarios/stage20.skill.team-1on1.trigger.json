@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-1on1.trigger",
+  "pair_id": "stage20.skill.team-1on1.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-1on1"]
+    },
+    "prompt": "Выбери навык team-1on1 для его точного контрактного сценария."
+  },
+  "expected": {
+    "selected": ["skill:team-1on1"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-1on1.trigger.source",
+      "path": ".build/skills/team-1on1/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "ce326435dd1cb5b84bccaad9001834c8918f0d670ed3ee069e4ba74f5b2cd68e"
+}

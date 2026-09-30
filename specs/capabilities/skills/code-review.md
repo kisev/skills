@@ -48,9 +48,12 @@ and their exact body previews.
 
 ## Errors, Partial, Escalation
 
-Missing exact evidence, complete MR-bound exact-head job metadata, required
-failed-job trace excerpts with HTTP-confirmed range completeness, or a required
-critic is blocked, not silently ignored.
+Missing exact evidence, complete MR-bound exact-head job metadata, unfetchable
+required failed-job trace excerpts, or a required critic is blocked, not silently
+ignored. A trace whose response exceeds the byte limit or whose range request is
+ignored yields its bounded tail as truncated per-job trace evidence without
+failing pipeline collection; classification and the verdict still require trace
+support.
 Missing or stale context, critic, finalize, decision, content, plan, baseline, or
 Markdown bindings make the final report blocked; findings are never reported as
 a best-effort substitute. Failed/canceled jobs are classified from bounded,
@@ -59,7 +62,8 @@ names. Only clearly proven approval or equivalent manual process gates may avoid
 blocking `ready`; code, infrastructure, unknown, and incomplete failures remain
 blocking, while low findings are non-blocking.
 Job-trace collection shall stream response headers and content under one bounded
-deadline and hard byte limit, clean up and reap the process group within bounded
+deadline and hard byte limit, retain the last bounded tail when the response
+exceeds the limit, clean up and reap the process group within bounded
 waits on every exit, and fail with a controlled error when cleanup or the
 required POSIX capability is unavailable.
 Irrecoverable loss of the current evidence remains blocked without a synthesized
@@ -130,12 +134,20 @@ exact payload, body digest, user, MR identity and refs, conversation, labels, an
 a 24-hour expiry. The separately invoked helper shall serialize publication,
 revalidate before writing, persist an in-progress reservation, and require a fresh
 GitLab postcondition before recording success. Thread state shall depend on the
-successful explanation receipt. Known successful effects from the same evidence
-snapshot may satisfy freshness checks; unrelated conversation or label changes
-shall require regeneration. Successful action replay shall not write again.
+successful explanation receipt. Freshness checks shall be scoped to what the
+action itself changes: verified effects from the same evidence snapshot shall be
+credited, label updates shall compare observed labels with the planned snapshot
+and the intended set, thread replies and state changes shall revalidate only
+their target thread, and new notes, discussions, and issues shall require no
+conversation match. An intended effect already visible at the target shall
+complete as already applied without another write and record its receipt.
+Successful action replay shall not write again.
 Only a proven process-start failure shall clear a reservation without a remote
-postcondition. Ambiguous outcomes shall block further writes; explicit inspection
-may resolve them through bounded read-only GitLab observations. The helper shall
+postcondition. An ambiguous outcome shall suspend only its own action and the
+actions depending on its receipt; unrelated actions shall remain applicable.
+Effect matching shall compare note bodies and issue descriptions with trailing
+whitespace normalized as GitLab stores posted text. Explicit inspection
+may resolve an ambiguous outcome through bounded read-only GitLab observations. The helper shall
 retain a bounded redacted cause and exact recovery commands. It may retry an
 unobserved effect only after the user explicitly selects the retry mode or accepts
 its interactive duplicate-write warning; retry shall revalidate freshness and
@@ -214,6 +226,13 @@ behavior, not automatic expansion. Structural fields shall not be presented as
 proof of semantic judgment. Completion shall be based on agreed acceptance,
 closed required findings, affected regressions, and named limitations, without
 an automatic final broad audit, fixed round limit, or severity-only cutoff.
+
+#### Verification
+
+The `tests/test_review_*.py` suites check exact-head collection, cumulative
+local findings, invalidated baselines, publication freshness, reservations,
+receipts, and recovery. Scenario evidence checks role-aware prose, necessity,
+and architecture assessment; structural success alone does not prove judgment.
 
 ## Example
 

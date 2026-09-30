@@ -167,32 +167,39 @@ def validate(
         if required not in RANK or RANK[impact] < RANK[required]:
             planning_verdict = "blocked"
             findings.append("selected release impact is lower than the task impact")
-        if status not in {"selected", "create"} or candidate is None:
-            raise PlanningError("an accepted task requires a selected or proposed milestone")
-        if candidate["version"] != target:
-            planning_verdict = "blocked"
-            findings.append("milestone version does not match the target release")
-        if status == "selected":
-            if candidate["id"] is None or not catalog_match(candidate, milestone_catalog):
-                raise PlanningError("selected milestone is not bound to the observed catalog")
-            if candidate["state"] != "active":
-                planning_verdict = "blocked"
-                findings.append("selected milestone is not active")
+        if status == "none":
+            if candidate is not None:
+                raise PlanningError("milestone status none requires a null candidate")
         else:
-            if candidate["id"] is not None or candidate["state"] != "proposed":
-                raise PlanningError("a proposed milestone must have null ID and proposed state")
-            if any(
-                raw.get("project_id") == candidate["project_id"]
-                and raw.get("title") == candidate["title"]
-                and raw.get("state") == "active"
-                for raw in milestone_catalog
-            ):
-                raise PlanningError("proposed milestone already exists in the observed catalog")
-            if planning_verdict != "blocked":
-                planning_verdict = "needs_clarification"
-                findings.append(
-                    "proposed milestone must be created and recollected before assignment"
+            if status not in {"selected", "create"} or candidate is None:
+                raise PlanningError(
+                    "an accepted task requires a selected or proposed milestone, "
+                    "or status none with a rationale documenting the decision not to use milestones"
                 )
+            if candidate["version"] != target:
+                planning_verdict = "blocked"
+                findings.append("milestone version does not match the target release")
+            if status == "selected":
+                if candidate["id"] is None or not catalog_match(candidate, milestone_catalog):
+                    raise PlanningError("selected milestone is not bound to the observed catalog")
+                if candidate["state"] != "active":
+                    planning_verdict = "blocked"
+                    findings.append("selected milestone is not active")
+            else:
+                if candidate["id"] is not None or candidate["state"] != "proposed":
+                    raise PlanningError("a proposed milestone must have null ID and proposed state")
+                if any(
+                    raw.get("project_id") == candidate["project_id"]
+                    and raw.get("title") == candidate["title"]
+                    and raw.get("state") == "active"
+                    for raw in milestone_catalog
+                ):
+                    raise PlanningError("proposed milestone already exists in the observed catalog")
+                if planning_verdict != "blocked":
+                    planning_verdict = "needs_clarification"
+                    findings.append(
+                        "proposed milestone must be created and recollected before assignment"
+                    )
     else:
         expected = "remove" if current_milestone_id is not None else "none"
         if status != expected or candidate is not None:

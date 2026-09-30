@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-report.trigger.en",
+  "pair_id": "stage20.skill.team-report.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-report"]
+    },
+    "prompt": "English: select the team-report skill for its exact contract scenario."
+  },
+  "expected": {
+    "selected": ["skill:team-report"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-report.trigger.source",
+      "path": ".build/skills/team-report/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "fbb4890b36109af4710750cecb9dc87815a449187b8990de4a7fd38104190d66"
+}

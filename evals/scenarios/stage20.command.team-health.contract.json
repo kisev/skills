@@ -1,0 +1,39 @@
+{
+  "id": "stage20.command.team-health.contract",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "command",
+  "locale": "neutral",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["command:team-health"]
+    },
+    "prompt": "Verify command team-health contract."
+  },
+  "expected": {
+    "selected": ["command:team-health"],
+    "not_selected": [],
+    "mutation_boundary": "adapter-only",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-health.contract.source",
+      "path": "packages/agentomatic/src/registry.ts"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "159245ec81f488d02bb994e1d84cf10b5e6fdbc9cc8d05570f53bf358bad17cf"
+}

@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-onboarding.near-miss.en",
+  "pair_id": "stage20.skill.team-onboarding.near-miss",
+  "kind": "near-miss",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this intentionally does not belong to the team-onboarding skill; do not route this request into it."
+  },
+  "expected": {
+    "selected": [],
+    "not_selected": ["skill:team-onboarding"],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "safe-escalation"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-onboarding.near-miss.source",
+      "path": ".build/skills/team-onboarding/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "d33f7637018d5d5372f6af4afd1124ab90390cfd20260e158a8c0d17b957c6da"
+}

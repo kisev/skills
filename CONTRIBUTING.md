@@ -8,7 +8,7 @@ Each directory under `skills/` is an authored definition, not an installation
 artifact. The build must turn every definition into a portable, self-contained
 skill without depending on a checkout, user home, particular provider,
 credentials, or one team's configuration. OpenCode-specific agents, commands,
-and plugins belong only in `packages/opencode/`.
+and plugins belong only in `packages/agentomatic/`.
 
 Agree on a material behavior, compatibility, or security-boundary change before
 implementing it. A new runner needs an observable contract: JSON on `stdout`,
@@ -51,15 +51,16 @@ The main public tasks divide the checks as follows:
 | `eval:check` | Validate evaluation data and run the hostless offline suite. |
 | `dependency:audit` | Audit the locked Python and npm dependency graphs. |
 | `security` | Scan Git history and the working tree for secrets with gitleaks. |
+| `check:core` | Run the always-on core shared by every push gate. |
 | `check` | Run the complete local and CI quality gate. |
-| `pre-push` | Run the complete local push gate used by Lefthook. |
+| `pre-push` | Run the complete unscoped local gate for manual and release use. |
 
 `task format` may change tracked files, while `task generate` writes only
 ignored artifacts. Portable authored entrypoints are named `SKILL.source.md`;
 `scripts/build_skills.py` writes `SKILL.md` and injects files declared by
 `shared/manifest.json` only under `.build/skills`. OpenCode commands and the
-copied LSP catalog are generated only into `packages/opencode/dist/assets/`
-before packing; their sources are `packages/opencode/src/registry.ts` and
+copied LSP catalog are generated only into `packages/agentomatic/dist/assets/`
+before packing; their sources are `packages/agentomatic/src/registry.ts` and
 `shared/references/`.
 
 `package:check` installs locked npm dependencies, builds the package once, runs
@@ -114,34 +115,57 @@ lefthook install
 staged files with pinned Mise tools. Deleted paths are excluded; builds, tests,
 generation, and release checks do not run.
 
-`pre-push` invokes `task pre-push`, which runs `task check` and
-`task dependency:audit` concurrently. The full gate runs the package lifecycle
-once, without separate package type checking, testing, or generation before
-`package:check`. Hooks do not apply fixes or run `git add`.
+`pre-push` scopes its jobs to the push delta: the delta resolves against the
+branch upstream and falls back to every tracked file when there is none, so
+first pushes run the complete gate. The always-on jobs run `task check:core`
+and `task dependency:audit`; `task test:python` and `task package:check` run
+only when the delta touches their stack inputs. CI reruns the complete gate on
+every push, so scoping never reduces verification, and `task pre-push` remains
+the unscoped gate for manual diagnosis and releases. Hooks do not apply fixes
+or run `git add`.
 
 ## Releases
 
 Portable skills carry no version. Release identity belongs to the GitHub Pages
 distribution metadata and each content-addressed archive digest. The GitHub
-Pages distribution, `@kisev/skills-opencode` version, tag, and GitHub Release
+Pages distribution, `@kisev/agentomatic` version, tag, and GitHub Release
 must refer to one commit. Do not change a published version; publish a new patch
 release instead.
 
-Use `dev` as the integration branch. Direct commits and pull requests from
-feature or fix branches may target `dev`. Pull requests into `main` must use
-`dev` as their source and a merge commit. Prepare the maintainer-selected stable
-version and both changelogs on `dev`; merging does not itself publish a release.
+Use `dev` as the integration trunk. Commit to `dev` directly by default and
+open feature or fix pull requests into `dev` only when a branch helps. `main`
+changes only through pull requests with a merge commit and tracks the latest
+stable feature line. Prepare the maintainer-selected stable version and both
+changelogs on `dev`; when the release point is not `dev` head, cut a release
+prep branch at the selected commit and prepare there. Merging does not itself
+publish a release.
+
+A feature release `X.Y.0` ships through a pull request into `main` and is tagged
+on the resulting merge commit. A patch to the latest feature line `X.Y.z` ships
+the same way from `dev` or a `fix/*` branch. When the next feature release
+ships, cut `release/vX.Y` from the previous line's latest tag and bring the
+publication automation in that branch up to date: tag pushes run
+`.github/workflows/publish.yml` from the tagged commit, so a stale workflow
+would publish an old-line patch as `latest`. Patch an older line through a
+`fix/*` pull request into `release/vX.Y` and tag its merge commit.
 
 Invoke the project `project-release` skill to run the guarded release workflow.
-It requires separate confirmation before pushing `dev`, merging into `main`,
-creating the annotated `vX.Y.Z` tag, and pushing that tag. The tag must reference
-the resulting `main` merge commit.
+It requires separate confirmation before pushing the release branch, merging
+into `main`, creating the annotated `vX.Y.Z` tag, and pushing that tag. The tag
+must reference the resulting merge commit.
 
 The tag starts `.github/workflows/publish.yml`. It revalidates the published tag
-and revision, builds one exact npm tarball and cross-channel digest manifest,
-publishes and verifies stable GitHub Pages and npm `latest`, and only then creates
-the GitHub Release. npm publishing uses trusted publishing through OIDC and
-verifies the registry tarball, imports, CLI, signatures, and provenance.
+and revision, resolves the publication channel from the tagged commit, builds
+exact npm tarballs for every workspace publication member and a cross-channel
+digest manifest, then publishes and verifies npm `latest` with the stable GitHub
+Pages root for a commit on `main`, or the npm `vX.Y` dist-tag without touching
+Pages for a commit on `release/vX.Y`, and only then creates the GitHub Release.
+npm publishing uses trusted publishing through OIDC and verifies the registry
+tarball, imports, CLI, signatures, and provenance.
+
+The manifest records `@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomatic`
+with their own versions and exact dependency pins. Every member must finish
+publication and verification before the workflow declares success.
 
 For every push to `dev`, the same workflow runs the complete gate, then replaces
 only the Pages `/dev` channel and publishes a unique npm prerelease under dist-tag

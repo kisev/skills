@@ -70,6 +70,12 @@ Locale selection follows explicit user request, applicable agent instructions,
 session prose, then English. Locale is bound across stages. Runtime labels are
 EN/RU; exact commands, identifiers and required template markers are preserved.
 
+#### Verification
+
+Preparation tests bind templates, title, description, and manual commands to the
+selected repository and target; stale source or template evidence blocks reuse
+and no publication runs during preparation.
+
 ## Example
 
 `mr-prepare` refuses a broad project request before API collection.

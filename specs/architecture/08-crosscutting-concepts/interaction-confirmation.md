@@ -1,5 +1,15 @@
 # Interaction and Confirmation
 
+All portable skill entrypoints reference `references/question-guidelines.md`,
+materialized from `shared/references/question-guidelines.md` through
+`shared/manifest.json`. This implements the shared question behavior owned by
+[REQ-I-001](../../requirements/interfaces/README.md#req-i-001---skill-interface)
+without requiring an `askme` invocation or another installed archive. Native
+interviews, chat questions, profile setup, and confirmations use the same context
+and dependency rules. Each round contains only the current independent decisions;
+the agent analyzes actual answers and rechecks affected evidence before building
+follow-ups. Topic similarity and a recommended answer do not establish independence.
+
 Ordinary bounded project-file edits use `resolve -> prepare -> apply -> report`.
 Read-only work ends at `prepare -> present -> report`. External publication, user
 configuration, destructive cleanup, history changes, releases, and package

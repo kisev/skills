@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "97ee274f8ad5bc164598823613d8788c7d15005031d2000154348951b0ecffcc",
+  "digest": "b21cd6a5ff3e9a8a318d19ed2b2201d7fbe319c63f430dbe4965135740683fd0",
   "expected": {
     "mutation_boundary": "enabled-option-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.plugin.rules-injector.contract.source",
-      "path": "packages/opencode/src/plugins/rules-injector.ts"
+      "path": "packages/agentomatic/src/plugins/rules-injector.ts"
     }
   ],
   "kind": "deterministic",

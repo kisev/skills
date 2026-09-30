@@ -23,7 +23,7 @@ private XDG state.
 Resolve the bounded collection, collect GET-only GitLab evidence, reuse current
 per-issue analysis when its issue and related-MR fingerprint is unchanged,
 normalize each issue to `work-item/v1`, invoke the task-review quality contract,
-assess the collection, ask one consolidated user-question round only for authority,
+assess the collection, ask dependency-bounded user-question rounds only for authority,
 private context, or a bounded reversible technical choice, persist immutable
 evidence and analysis, atomically
 replace stable Markdown views, present, and report.
@@ -46,7 +46,10 @@ Target failures are isolated per issue. Incomplete pagination, unavailable issue
 or MR evidence, stale bindings, and unanswered user questions make analysis
 partial and remain explicit. Non-ready planning and prepared information requests
 instead make follow-up pending, with counts and affected issues. Independent
-analysis continues before one consolidated question round. Missing task facts
+analysis continues before the current independent question round. Dependent
+follow-ups are rebuilt only after actual answers under
+[REQ-I-001](../../requirements/interfaces/README.md#req-i-001---skill-interface).
+Missing task facts
 that the user cannot supply become role-authored GitLab question proposals rather
 than silent blockers.
 
@@ -59,7 +62,9 @@ Each assessment also contains one primary agent recommendation with its rational
 assumptions, confidence, alternatives, and reconsideration evidence.
 Only semantically ready current work may be accepted. Every accepted item binds
 the nearest compatible open milestone on its own project or component release
-line; `none` and `not_applicable` impact require at least a patch release.
+line unless observed evidence shows the team decided not to use milestones, in
+which case the accepted item records milestone status `none` with that
+rationale; `none` and `not_applicable` impact require at least a patch release.
 Deferred work has no milestone, while rejected, duplicate, and obsolete work is
 removed from an active release milestone. The collection reports at most five
 first tasks plus dependency and parallel-execution groups. Every execution-plan
@@ -177,6 +182,12 @@ numbers followed by a word character shall remain plain, and conflicting
 `references.full` and `web_url` identities shall remain unresolved. Partial or stale evidence shall remain
 explicit and shall not be reported as complete. The workflow shall never execute
 generated commands or mutate GitLab.
+
+#### Verification
+
+Triage tests cover collection completeness, retained item decisions, scoped
+release planning, stale evidence, and ambiguous mutation outcomes. Final plans
+account for each selected issue and never publish automatically.
 
 ## Example
 

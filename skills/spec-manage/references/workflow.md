@@ -2,15 +2,28 @@
 
 Maintain `specs/` as the shared source of truth for people and agents. Documents describe the agreed system state after merge and retain a compact lifecycle record for stable requirements and decisions; Git keeps the full edit history.
 
+## Activation
+
+This skill owns its post-change trigger itself; project instruction files are
+not required to obtain it. After completing an authorized change that alters
+material behavior, compatibility, or a security boundary, perform the affected
+canonical step yourself in `spec-update` mode when `specs/` exists, within the
+same change authorization. The trigger never creates a missing `specs/` tree:
+`spec-init` and `spec-onboard` stay user-initiated. An explicit user request
+for any mode always takes precedence over this automatic trigger.
+
 ## Mode selection
 
 Literal mode tokens remain supported but are optional. If the user explicitly
-provides `spec-init`, `spec-onboard`, `spec-update`, or `spec-audit`, preserve that
+provides `spec-init`, `spec-onboard`, `spec-update`, or `spec-review`, preserve that
 mode and any explicit scope without reinterpretation, then enforce that mode's
 safety preconditions. Otherwise select from intent and repository evidence:
 
-- `spec-audit`: inspect, review, check, or compare canonical specs without changing them. A clearly read-only request always stays read-only.
-- `spec-update`: change the agreed canonical target state in an existing `specs/` tree. Mentioning requirements or architecture is insufficient; the user must intend to change canonical specs.
+Only the four listed explicit `spec-*` modes are supported. Reject other explicit
+mode tokens instead of treating a removed name as a natural-language alias.
+
+- `spec-review`: inspect, review, check, or compare canonical specs without changing them. A clearly read-only request never authorizes project edits; private review state follows `references/documentation-review.md`.
+- `spec-update`: change the agreed canonical target state in an existing `specs/` tree, including the specification step of an authorized behavior change. Mere mention of architecture is insufficient; do not invent a new product decision.
 - `spec-init`: create canonical specs for a genuinely greenfield project with no `specs/` and no meaningful implementation evidence.
 - `spec-onboard`: describe an existing project that has no `specs/`, using repository evidence and confirmed intent.
 
@@ -21,9 +34,10 @@ several modes remain plausible after inspecting available facts, ask one short
 question that names the alternatives and their different effects, then stop
 without writing until the user answers.
 
-Requests to implement behavior, prepare a plan or roadmap, or write user
-documentation are near-misses even when they mention requirements or
-architecture. Do not proceed to implementation after a specification workflow.
+Implementation workflows may call this skill for their affected canonical step,
+then resume their existing authorization. This skill itself edits only `specs/`.
+Plans, roadmaps, and user documentation are not canonical specification work.
+Apply `references/documentation-review.md` to impact selection and review reuse.
 
 Read only the required resources under this skill's own root:
 
@@ -47,8 +61,8 @@ placeholders, or operational prompts into the final specification.
 - The authority of user decisions, explicit contracts, canonical specs, and repository behavior is mode-specific as defined in `references/canonical-contract.md`; never resolve a conflict by implicit source priority.
 - Additional files are allowed only at indexed, non-duplicating canonical semantic boundaries from the guidance. Create an ADR only for an architecturally significant decision.
 - Stable `REQ-*` and `ADR-*` namespaces are append-only. New numbers are greater than every number previously assigned in the namespace; never fill a gap, renumber an entry, reuse an ID, or delete its compact lifecycle record.
-- Do not create roadmap, archive, proposal, delta, tasks, plan, research, analysis, mapping, or other durable process artifacts.
-- Run the bundled read-only validator for mechanically provable invariants. A successful formal result does not establish semantic quality, declared-language compliance of prose, or repository correspondence and never replaces `spec-audit`.
+- Do not put roadmap, archive, proposal, delta, tasks, plan, research, analysis, mapping, or other process artifacts in the canonical tree. Private review evidence follows the shared review contract outside the checkout.
+- Run the bundled read-only validator for mechanically provable invariants. A successful formal result does not establish semantic quality, declared-language compliance of prose, or repository correspondence and never replaces `spec-review`.
 
 ## Formal validation
 
@@ -68,7 +82,7 @@ python3 -I -S -B scripts/spec_validate.py lifecycle \
 
 Do not substitute Git history or an inferred baseline. If no complete explicit baseline is available, report lifecycle as `not_checked`; never claim append-only lifecycle compliance from `check` alone. An input or execution error is not a validation finding and blocks a successful completion report.
 
-In a full `spec-audit`, run snapshot validation before semantic review, mark it
+In a full `spec-review`, run snapshot validation before semantic review, mark it
 mandatory, and include its result as formal evidence. In a focused audit, run it
 only when the complete tree is available; otherwise report snapshot validation
 as `not_checked` and state whether it is required by the focused scope.
@@ -99,7 +113,7 @@ When selecting a durable design in writing modes, develop at least two materiall
 
 ### `spec-onboard`
 
-1. Verify that `specs/` is absent and inspect source code, tests, schemas, configuration, CLI/API, CI, and deployment evidence. Existing meaningful implementation evidence distinguishes onboarding from initialization. If `specs/` exists, ask whether the user wants read-only `spec-audit` or target-state-changing `spec-update` unless intent already makes that distinction explicit.
+1. Verify that `specs/` is absent and inspect source code, tests, schemas, configuration, CLI/API, CI, and deployment evidence. Existing meaningful implementation evidence distinguishes onboarding from initialization. If `specs/` exists, ask whether the user wants read-only `spec-review` or target-state-changing `spec-update` unless intent already makes that distinction explicit.
 2. Investigate repository evidence according to `references/onboarding.md` before asking questions.
 3. Obtain the user's explicit project-language choice before preparing files and record it in `specs/README.md`.
 4. Classify individual claims as `KNOWN`, `AMBIGUOUS`, `UNKNOWN`, or `CONFLICT`. Explicit contract sources and confirmed decisions are normative; code and tests prove only current behavior.
@@ -112,9 +126,9 @@ When selecting a durable design in writing modes, develop at least two materiall
 3. Agree on an unambiguous target state. A new material requirement receives a number above the historical maximum for its namespace. Retain withdrawn and superseded entries as compact lifecycle records according to `references/requirements.md` and `references/adr.md`.
 4. Preserve an explicit complete baseline, modify only `specs/`, including ADRs within `specs/architecture/09-architecture-decisions/`, then run snapshot validation for the candidate and lifecycle validation against that baseline before reporting the resulting changes.
 
-### `spec-audit`
+### `spec-review`
 
-This mode is completely read-only. Without an argument, formally validate and
+This mode never edits the reviewed project. Without an argument, formally validate and
 inspect all `specs/`; with a path, `REQ-*`, `ADR-*`, or area, inspect the
 specified object and related evidence and report formal validation as
 `not_checked` when the complete tree is unavailable. Check the declared
@@ -125,5 +139,25 @@ aggregate precedence, and fixed conversational report order. A full audit
 requires one independent critic over the same bounded evidence snapshot; a
 focused audit requires one only when the user explicitly requests it. Critic
 unavailability makes a required audit partial but does not discard confirmed
-findings. Do not create reports, ADRs, temporary artifacts, or audit state, and
-do not offer to apply fixes automatically.
+findings. Retain private review evidence only through the shared review runner;
+do not create project reports, ADRs, or apply fixes automatically.
+
+## Memory integration
+
+Before `spec-review` or `spec-onboard`, search personal memory (`memory_search`
+tool or `memomatic search`) for prior decisions about this project; entries
+marked personal-only inform the analysis but must never be quoted into
+shared `specs/` documents.
+
+After `spec-update` lands an architecture decision record, offer one memory
+drop of the decision and run it after user confirmation:
+
+```shell
+python3 scripts/memomatic_inbox.py drop --source spec-manage \
+  --project PROJECT --key spec-PROJECT-ADR-ID \
+  --text "Decision: what was accepted and why, in one sentence."
+```
+
+The drop is queued for the next `memomatic process` pass; when the memomatic
+inbox is absent the command reports `skipped` and the workflow continues
+unchanged.

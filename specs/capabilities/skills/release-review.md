@@ -38,6 +38,11 @@ Release verdict is separate from publication authority.
 
 The skill shall require fresh complete evidence before declaring release readiness.
 
+#### Verification
+
+A release with a failed required check, unresolved compatibility change, or
+missing recovery evidence cannot receive an unqualified ready verdict.
+
 ## Example
 
 `release-review` marks a release blocked when a required pipeline is stale.

@@ -80,6 +80,12 @@ lists shall be deduplicated and interactively approved. Work-item candidates sha
 remain bounded; every close, comment, or no-action decision shall retain rationale
 and uncertainty without asking interactive work-item questions.
 
+#### Verification
+
+Tag-to-head inventory tests reject incomplete evidence and stale bindings;
+review of the prepared runbook checks that notes, SemVer rationale, announcement,
+and manual commands all describe the same release without publishing it.
+
 ## Example
 
 `release-prepare` reports the exact base and head SHA before drafting.

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://kisev.github.io/skills/schemas/people-context.schema.json",
+  "schema_version": 1,
+  "profile": "example-team",
+  "manager": {
+    "name": "Example Manager",
+    "notes": ["Prefers written agreements over verbal ones"]
+  },
+  "reports": [
+    {
+      "name": "Example Senior",
+      "handle": "example.senior",
+      "role": "release engineer",
+      "level": "senior",
+      "since": "2025-06-01",
+      "strengths": ["release automation", "review discipline"],
+      "growth_areas": ["delegating release duty"],
+      "motivators": ["ownership of the release process"],
+      "caution": ["avoid public comparisons with peers"],
+      "notes": ["wants scope growth before the next review cycle"],
+      "one_on_one": { "frequency": "biweekly", "minutes": 30 }
+    }
+  ],
+  "stakeholders": [
+    {
+      "name": "Example Director",
+      "role": "manager of the manager",
+      "notes": ["asks for quarterly summaries in writing"]
+    }
+  ],
+  "extensions": {}
+}

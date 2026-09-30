@@ -40,6 +40,11 @@ including uncommitted changes, remains the source of truth when available.
 
 The skill shall create or audit agent instructions only for the resolved repository scope.
 
+#### Verification
+
+Given inherited and nested instructions, generated guidance preserves their scope,
+uses confirmed repository commands, and does not duplicate parent rules.
+
 ## Example
 
 `agents-md` audits the nearest applicable instruction files before editing.

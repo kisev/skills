@@ -2,12 +2,14 @@
 
 [Русский](../ru/tutorials/getting-started.md)
 
-This tutorial installs the current stable portable skill distribution for Codex
-and OpenCode. It creates one canonical global copy that both hosts can use.
+This tutorial installs the current stable portable skill distribution for every
+host that reads `.agents/skills`, such as Codex and OpenCode. It creates one
+canonical global copy shared by all of them.
 
 ## Before You Start
 
-You need Codex, OpenCode, or both, plus an environment where `npx` is available.
+You need at least one host that reads `.agents/skills`, such as Codex or
+OpenCode, plus an environment where `npx` is available.
 The command follows the stable installer channel and reads the supported GitHub Pages
 distribution rather than the authored repository.
 
@@ -16,23 +18,26 @@ distribution rather than the authored repository.
 Run:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --global
 ```
 
-This installs the current stable distribution into `~/.agents/skills`. `--copy`
-keeps one canonical copy for both selected hosts. Release metadata and archive
-digests identify the installed distribution.
+The installer opens a skill picker with every skill preselected; deselect what
+you do not need. Inside an agent session the command runs non-interactively and
+installs everything, so pass `--skill <name>` there to stay selective. Skills
+land in `~/.agents/skills` for every host that reads it, plus any other
+installed host. Release metadata and archive digests identify the installed
+distribution.
 
-If you use only one host, keep only its `--agent` option:
+To install for one host only, restrict the selection with `--agent`:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --agent codex --global
 ```
 
 or:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --global
 ```
 
 ## 2. Verify the Installation
@@ -43,12 +48,12 @@ List the installed global skills:
 npx --yes skills@latest list --global
 ```
 
-Restart the selected host if it was running during installation. The installed
+Restart your host if it was running during installation. The installed
 skills should then be available from `~/.agents/skills`.
 
-## 3. Decide Whether You Need skills-opencode
+## 3. Decide Whether You Need agentomatic
 
-Portable skills already work in OpenCode. Install `@kisev/skills-opencode` only
+Portable skills already work in OpenCode. Install `@kisev/agentomatic` only
 if you also want OpenCode-specific commands, fixed agents, routing tools,
 diagnostics, or optional plugin wrappers. The package has a separate lifecycle
 and does not install portable skills.

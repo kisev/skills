@@ -1,194 +1,73 @@
 {
   "version": 1,
+  "npmRuntime": {
+    "source": "references/cli_runtime.ts",
+    "destinations": [
+      "apps/memomatic/src/generated/cli.ts",
+      "apps/taskmatic/src/generated/cli.ts",
+      "packages/agentomatic/src/generated/cli.ts"
+    ]
+  },
   "files": [
     {
-      "source": "references/mutation_process.py",
-      "destination": "code-review/scripts/portable_runtime/mutation_process.py"
+      "source": "references/documentation-review.md",
+      "destination": "docs-review/references/documentation-review.md"
     },
     {
-      "source": "references/mutation_process.py",
-      "destination": "task-triage/scripts/portable_runtime/mutation_process.py"
+      "source": "references/documentation-review.md",
+      "destination": "docs-prepare/references/documentation-review.md"
     },
     {
-      "source": "references/portable_gitlab/local_review.py",
-      "destination": "code-review/scripts/portable_runtime/local_review.py"
+      "source": "references/documentation-review.md",
+      "destination": "spec-manage/references/documentation-review.md"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "code-review/scripts/portable_runtime/state_artifacts.py"
+      "source": "references/documentation-review.md",
+      "destination": "code-review/references/documentation-review.md"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "mr-prepare/scripts/portable_runtime/state_artifacts.py"
+      "source": "references/documentation_review.py",
+      "destination": "docs-review/scripts/documentation_review.py"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "release-prepare/scripts/portable_runtime/state_artifacts.py"
+      "source": "references/documentation_review.py",
+      "destination": "docs-prepare/scripts/documentation_review.py"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "release-review/scripts/portable_runtime/state_artifacts.py"
-    },
-    {
-      "source": "references/state_artifacts.py",
-      "destination": "task-prepare/scripts/portable_runtime/state_artifacts.py"
+      "source": "references/documentation_review.py",
+      "destination": "spec-manage/scripts/documentation_review.py"
     },
     {
       "source": "references/state_artifacts.py",
-      "destination": "task-triage/scripts/portable_runtime/state_artifacts.py"
+      "destination": "docs-review/scripts/state_artifacts.py"
     },
     {
       "source": "references/state_artifacts.py",
-      "destination": "stopit/scripts/state_artifacts.py"
+      "destination": "docs-prepare/scripts/state_artifacts.py"
     },
     {
       "source": "references/state_artifacts.py",
-      "destination": "mattermost/scripts/state_artifacts.py"
+      "destination": "spec-manage/scripts/state_artifacts.py"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "mattermost-triage/scripts/state_artifacts.py"
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-people/references/team-profile-workflow.md"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "team-sprint-start/scripts/state_artifacts.py"
+      "source": "references/gitlab-workflow.md",
+      "destination": "code-review/references/gitlab-workflow.md"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "team-sprint-close/scripts/state_artifacts.py"
+      "source": "references/gitlab-workflow.md",
+      "destination": "mr-prepare/references/gitlab-workflow.md"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "team-retro/scripts/state_artifacts.py"
+      "source": "references/gitlab-workflow.md",
+      "destination": "release-prepare/references/gitlab-workflow.md"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "team-roadmap/scripts/state_artifacts.py"
-    },
-    {
-      "source": "references/state_artifacts.py",
-      "destination": "slides-prompts-prepare/scripts/state_artifacts.py"
-    },
-    {
-      "source": "references/portable_gitlab/review_semver.py",
-      "destination": "code-review/scripts/portable_runtime/review_semver.py"
-    },
-    {
-      "source": "references/portable_gitlab/review_semver.py",
-      "destination": "mr-prepare/scripts/portable_runtime/review_semver.py"
-    },
-    {
-      "source": "references/portable_gitlab/review_semver.py",
-      "destination": "release-prepare/scripts/portable_runtime/review_semver.py"
-    },
-    {
-      "source": "references/portable_gitlab/review_semver.py",
-      "destination": "release-review/scripts/portable_runtime/review_semver.py"
-    },
-    {
-      "source": "references/work_item_runtime/publication.py",
-      "destination": "task-prepare/scripts/portable_runtime/publication.py"
-    },
-    {
-      "source": "references/work_item_runtime/release_planning.py",
-      "destination": "task-prepare/scripts/portable_runtime/release_planning.py"
-    },
-    {
-      "source": "references/work_item_runtime/release_planning.py",
-      "destination": "task-review/scripts/portable_runtime/release_planning.py"
-    },
-    {
-      "source": "references/work_item_runtime/release_planning.py",
-      "destination": "task-triage/scripts/portable_runtime/release_planning.py"
-    },
-    {
-      "source": "references/work_item_runtime/release_plan.py",
-      "destination": "task-prepare/scripts/release_plan.py"
-    },
-    {
-      "source": "references/work_item_runtime/release_plan.py",
-      "destination": "task-review/scripts/release_plan.py"
-    },
-    {
-      "source": "references/work_item_runtime/release_plan.py",
-      "destination": "task-triage/scripts/release_plan.py"
-    },
-    {
-      "source": "references/portable_gitlab/label_assessment.py",
-      "destination": "mr-prepare/scripts/portable_runtime/label_assessment.py"
-    },
-    {
-      "source": "references/portable_gitlab/label_assessment.py",
-      "destination": "code-review/scripts/portable_runtime/label_assessment.py"
-    },
-    {
-      "source": "references/portable_gitlab/mr_publication.py",
-      "destination": "mr-prepare/scripts/portable_runtime/mr_publication.py"
-    },
-    {
-      "source": "references/work-item-contract.md",
-      "destination": "askme/references/work-item-contract.md"
-    },
-    {
-      "source": "references/work-item-contract.md",
-      "destination": "goal/references/work-item-contract.md"
-    },
-    {
-      "source": "references/work-item-contract.md",
-      "destination": "task-prepare/references/work-item-contract.md"
-    },
-    {
-      "source": "references/work-item-contract.md",
-      "destination": "task-review/references/work-item-contract.md"
-    },
-    {
-      "source": "references/work-item-contract.md",
-      "destination": "task-triage/references/work-item-contract.md"
-    },
-    {
-      "source": "references/work_item_runtime/release-planning-contract.md",
-      "destination": "task-prepare/references/release-planning-contract.md"
-    },
-    {
-      "source": "references/work_item_runtime/release-planning-contract.md",
-      "destination": "task-review/references/release-planning-contract.md"
-    },
-    {
-      "source": "references/work_item_runtime/release-planning-contract.md",
-      "destination": "task-triage/references/release-planning-contract.md"
-    },
-    {
-      "source": "references/work-item-contract.schema.json",
-      "destination": "askme/references/work-item-contract.schema.json"
-    },
-    {
-      "source": "references/work-item-contract.schema.json",
-      "destination": "goal/references/work-item-contract.schema.json"
-    },
-    {
-      "source": "references/work-item-contract.schema.json",
-      "destination": "task-prepare/references/work-item-contract.schema.json"
-    },
-    {
-      "source": "references/work-item-contract.schema.json",
-      "destination": "task-review/references/work-item-contract.schema.json"
-    },
-    { "source": "references/work_item.py", "destination": "askme/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "goal/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "task-prepare/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "task-review/scripts/work_item.py" },
-    { "source": "references/work_item.py", "destination": "task-triage/scripts/work_item.py" },
-    {
-      "source": "references/question-guidelines.md",
-      "destination": "askme/references/question-guidelines.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "spec-manage/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "docs-prepare/references/interaction-contract.md"
+      "source": "references/gitlab-workflow.md",
+      "destination": "release-review/references/gitlab-workflow.md"
     },
     {
       "source": "references/goal_authorization.py",
@@ -200,11 +79,67 @@
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "team-sprint-start/references/interaction-contract.md"
+      "destination": "code-review/references/interaction-contract.md"
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "team-sprint-close/references/interaction-contract.md"
+      "destination": "docs-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "mr-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "release-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "release-review/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "slides-prompts-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "spec-manage/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-1on1/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-agreements/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-feedback/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-health/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-incident/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-onboarding/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-people/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-performance/references/interaction-contract.md"
+    },
+    {
+      "source": "references/interaction-contract.md",
+      "destination": "team-report/references/interaction-contract.md"
     },
     {
       "source": "references/interaction-contract.md",
@@ -216,275 +151,15 @@
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "slides-prompts-prepare/references/interaction-contract.md"
-    },
-    {
-      "source": "references/team_runtime/team_workflow.py",
-      "destination": "team-sprint-start/scripts/team_workflow.py"
-    },
-    {
-      "source": "references/team_runtime/team_workflow.py",
-      "destination": "team-sprint-close/scripts/team_workflow.py"
-    },
-    {
-      "source": "references/team_runtime/team_workflow.py",
-      "destination": "team-retro/scripts/team_workflow.py"
-    },
-    {
-      "source": "references/team_runtime/team_workflow.py",
-      "destination": "team-roadmap/scripts/team_workflow.py"
-    },
-    {
-      "source": "references/team_runtime/team_workflow.py",
-      "destination": "slides-prompts-prepare/scripts/team_workflow.py"
-    },
-    {
-      "source": "references/team_runtime/team-profile-workflow.md",
-      "destination": "team-sprint-start/references/team-profile-workflow.md"
-    },
-    {
-      "source": "references/team_runtime/team-profile-workflow.md",
-      "destination": "team-sprint-close/references/team-profile-workflow.md"
-    },
-    {
-      "source": "references/team_runtime/team-profile-workflow.md",
-      "destination": "team-retro/references/team-profile-workflow.md"
-    },
-    {
-      "source": "references/team_runtime/team-profile-workflow.md",
-      "destination": "team-roadmap/references/team-profile-workflow.md"
-    },
-    {
-      "source": "references/team_runtime/team-profile-workflow.md",
-      "destination": "slides-prompts-prepare/references/team-profile-workflow.md"
-    },
-    {
-      "source": "references/team_runtime/team-context.schema.json",
-      "destination": "team-sprint-start/references/team-context.schema.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.schema.json",
-      "destination": "team-sprint-close/references/team-context.schema.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.schema.json",
-      "destination": "team-retro/references/team-context.schema.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.schema.json",
-      "destination": "team-roadmap/references/team-context.schema.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.schema.json",
-      "destination": "slides-prompts-prepare/references/team-context.schema.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.example.json",
-      "destination": "team-sprint-start/references/team-context.example.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.example.json",
-      "destination": "team-sprint-close/references/team-context.example.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.example.json",
-      "destination": "team-retro/references/team-context.example.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.example.json",
-      "destination": "team-roadmap/references/team-context.example.json"
-    },
-    {
-      "source": "references/team_runtime/team-context.example.json",
-      "destination": "slides-prompts-prepare/references/team-context.example.json"
-    },
-    {
-      "source": "references/team_runtime/gitlab_period_metrics.py",
-      "destination": "team-retro/scripts/gitlab_period_metrics.py"
-    },
-    {
-      "source": "references/team_runtime/gitlab_period_metrics.py",
-      "destination": "team-roadmap/scripts/gitlab_period_metrics.py"
-    },
-    {
-      "source": "references/work_item_runtime/__init__.py",
-      "destination": "task-triage/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/work_item_runtime/triage.py",
-      "destination": "task-triage/scripts/portable_runtime/triage.py"
-    },
-    {
-      "source": "references/work_item_runtime/__init__.py",
-      "destination": "task-review/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/work_item_runtime/contract.py",
-      "destination": "task-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/work_item_runtime/__init__.py",
-      "destination": "task-prepare/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/work_item_runtime/contract.py",
-      "destination": "task-prepare/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
-      "destination": "mr-prepare/references/gitlab-workflow.md"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
-      "destination": "code-review/references/gitlab-workflow.md"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
-      "destination": "release-prepare/references/gitlab-workflow.md"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
-      "destination": "release-review/references/gitlab-workflow.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "code-review/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "release-prepare/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "release-review/references/portable-gitlab-contracts-v2.md"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
-      "destination": "ast-grep/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "ast-grep/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "ast-grep/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
-      "destination": "rtk/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "rtk/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "rtk/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
-      "destination": "skill-improve/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "skill-improve/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "skill-improve/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/python_runtime/__init__.py",
-      "destination": "code-explain/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/python_runtime/capabilities.py",
-      "destination": "code-explain/scripts/portable_runtime/capabilities.py"
-    },
-    {
-      "source": "references/python_runtime/contract.py",
-      "destination": "code-explain/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
-      "destination": "mr-prepare/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "mr-prepare/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
-      "destination": "code-review/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "code-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
-      "destination": "release-prepare/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "release-prepare/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
-      "destination": "release-review/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "release-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "code-review/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "release-prepare/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "release-review/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/work_item_runtime/interaction-contract.md",
-      "destination": "task-triage/references/interaction-contract.md"
-    },
-    {
-      "source": "references/work_item_runtime/interaction-contract.md",
-      "destination": "task-review/references/interaction-contract.md"
-    },
-    {
-      "source": "references/work_item_runtime/interaction-contract.md",
-      "destination": "task-prepare/references/interaction-contract.md"
+      "destination": "team-sprint-close/references/interaction-contract.md"
     },
     {
       "source": "references/interaction-contract.md",
-      "destination": "mr-prepare/references/interaction-contract.md"
+      "destination": "team-sprint-start/references/interaction-contract.md"
     },
     {
-      "source": "references/interaction-contract.md",
-      "destination": "code-review/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "release-prepare/references/interaction-contract.md"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "release-review/references/interaction-contract.md"
+      "source": "references/label-semantics.md",
+      "destination": "release-prepare/references/label-semantics.md"
     },
     {
       "source": "references/language-policy.md",
@@ -497,6 +172,14 @@
     {
       "source": "references/language-policy.md",
       "destination": "ast-grep/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "briefing/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "code-explain/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -524,19 +207,15 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "mattermost/references/language-policy.md"
-    },
-    {
-      "source": "references/language-policy.md",
       "destination": "mattermost-triage/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
-      "destination": "mr-prepare/references/language-policy.md"
+      "destination": "mattermost/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
-      "destination": "spec-manage/references/language-policy.md"
+      "destination": "mr-prepare/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -556,11 +235,15 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "stopit/references/language-policy.md"
+      "destination": "slides-prompts-prepare/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
-      "destination": "briefing/references/language-policy.md"
+      "destination": "spec-manage/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "stopit/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -576,15 +259,39 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "code-explain/references/language-policy.md"
+      "destination": "team-1on1/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
-      "destination": "team-sprint-start/references/language-policy.md"
+      "destination": "team-agreements/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
-      "destination": "team-sprint-close/references/language-policy.md"
+      "destination": "team-feedback/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-health/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-incident/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-onboarding/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-people/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-performance/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "team-report/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -596,11 +303,995 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "slides-prompts-prepare/references/language-policy.md"
+      "destination": "team-sprint-close/references/language-policy.md"
     },
     {
-      "source": "references/label-semantics.md",
-      "destination": "release-prepare/references/label-semantics.md"
+      "source": "references/language-policy.md",
+      "destination": "team-sprint-start/references/language-policy.md"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "docs-prepare/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "docs-review/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "mattermost-triage/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "spec-manage/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "stopit/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "task-prepare/scripts/portable_runtime/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "task-triage/scripts/portable_runtime/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-1on1/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-agreements/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-feedback/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-health/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-incident/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-onboarding/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-people/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-performance/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-report/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-retro/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-roadmap/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-sprint-close/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/memomatic_inbox.py",
+      "destination": "team-sprint-start/scripts/memomatic_inbox.py"
+    },
+    {
+      "source": "references/mutation_process.py",
+      "destination": "code-review/scripts/portable_runtime/mutation_process.py"
+    },
+    {
+      "source": "references/mutation_process.py",
+      "destination": "task-triage/scripts/portable_runtime/mutation_process.py"
+    },
+    {
+      "source": "references/necessity-doctrine.md",
+      "destination": "askme/references/necessity-doctrine.md"
+    },
+    {
+      "source": "references/necessity-doctrine.md",
+      "destination": "code-review/references/necessity-doctrine.md"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-1on1/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-agreements/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-feedback/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-health/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-incident/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-onboarding/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-people/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-performance/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-report/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-1on1/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-agreements/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-feedback/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-health/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-incident/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-onboarding/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-people/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-performance/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-report/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-1on1/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-agreements/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-feedback/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-health/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-incident/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-onboarding/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-people/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-performance/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people-workflow.md",
+      "destination": "team-report/references/people-workflow.md"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-1on1/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-agreements/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-feedback/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-health/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-incident/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-onboarding/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-people/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-performance/scripts/people_journal.py"
+    },
+    {
+      "source": "references/people_runtime/people_journal.py",
+      "destination": "team-report/scripts/people_journal.py"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "code-review/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "mr-prepare/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "release-prepare/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/__init__.py",
+      "destination": "release-review/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "code-review/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "release-prepare/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "release-review/references/portable-gitlab-contracts-v2.schema.json"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "code-review/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "mr-prepare/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "release-prepare/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/portable_gitlab/contract.py",
+      "destination": "release-review/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "code-review/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "mr-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "release-prepare/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/contracts-v2.md",
+      "destination": "release-review/references/portable-gitlab-contracts-v2.md"
+    },
+    {
+      "source": "references/portable_gitlab/label_assessment.py",
+      "destination": "code-review/scripts/portable_runtime/label_assessment.py"
+    },
+    {
+      "source": "references/portable_gitlab/label_assessment.py",
+      "destination": "mr-prepare/scripts/portable_runtime/label_assessment.py"
+    },
+    {
+      "source": "references/portable_gitlab/local_review.py",
+      "destination": "code-review/scripts/portable_runtime/local_review.py"
+    },
+    {
+      "source": "references/portable_gitlab/mr_publication.py",
+      "destination": "mr-prepare/scripts/portable_runtime/mr_publication.py"
+    },
+    {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "code-review/scripts/portable_runtime/review_semver.py"
+    },
+    {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "mr-prepare/scripts/portable_runtime/review_semver.py"
+    },
+    {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "release-prepare/scripts/portable_runtime/review_semver.py"
+    },
+    {
+      "source": "references/portable_gitlab/review_semver.py",
+      "destination": "release-review/scripts/portable_runtime/review_semver.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "ast-grep/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "code-explain/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "rtk/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/__init__.py",
+      "destination": "skill-improve/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "ast-grep/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "code-explain/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "rtk/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/capabilities.py",
+      "destination": "skill-improve/scripts/portable_runtime/capabilities.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "ast-grep/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "code-explain/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "rtk/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/python_runtime/contract.py",
+      "destination": "skill-improve/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "askme/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "agents-md/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "ast-grep/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "briefing/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "code-explain/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "code-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "commit-msg/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "docs-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "docs-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "goal/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "humanize/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "mattermost/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "mattermost-triage/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "mr-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "release-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "release-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "rtk/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "skill-improve/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "slides-prompts-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "spec-manage/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "stopit/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "task-prepare/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "task-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "task-triage/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "taskmatic/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-1on1/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-agreements/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-feedback/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-health/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-incident/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-onboarding/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-people/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-performance/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-report/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-retro/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-roadmap/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-sprint-close/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "team-sprint-start/references/question-guidelines.md"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "code-review/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "mattermost-triage/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "mattermost/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "mr-prepare/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "release-prepare/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "release-review/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "slides-prompts-prepare/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "stopit/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "task-prepare/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "task-triage/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-1on1/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-agreements/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-feedback/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-health/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-incident/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-onboarding/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-people/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-performance/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-report/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-retro/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-roadmap/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-sprint-close/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "team-sprint-start/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-health/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-performance/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-report/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-retro/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-roadmap/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-sprint-close/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/evidence_store.py",
+      "destination": "team-sprint-start/scripts/evidence_store.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-health/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-performance/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-report/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-retro/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/team_runtime/gitlab_period_metrics.py",
+      "destination": "team-roadmap/scripts/gitlab_period_metrics.py"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "slides-prompts-prepare/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-health/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-incident/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-onboarding/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-performance/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-report/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-retro/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-roadmap/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-sprint-close/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-sprint-start/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "slides-prompts-prepare/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-health/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-incident/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-onboarding/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-performance/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-report/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-retro/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-roadmap/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-sprint-close/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-sprint-start/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "slides-prompts-prepare/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-health/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-incident/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-onboarding/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-performance/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-report/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-retro/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-roadmap/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-sprint-close/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team-profile-workflow.md",
+      "destination": "team-sprint-start/references/team-profile-workflow.md"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "slides-prompts-prepare/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-1on1/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-agreements/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-feedback/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-health/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-incident/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-onboarding/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-people/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-performance/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-report/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-retro/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-roadmap/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-sprint-close/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/team_runtime/team_workflow.py",
+      "destination": "team-sprint-start/scripts/team_workflow.py"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "askme/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "goal/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "task-prepare/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "task-review/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.md",
+      "destination": "task-triage/references/work-item-contract.md"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "askme/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "goal/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "task-prepare/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work-item-contract.schema.json",
+      "destination": "task-review/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "askme/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "goal/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-prepare/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-review/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item.py",
+      "destination": "task-triage/scripts/work_item.py"
+    },
+    {
+      "source": "references/work_item_runtime/__init__.py",
+      "destination": "task-prepare/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/work_item_runtime/__init__.py",
+      "destination": "task-review/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/work_item_runtime/__init__.py",
+      "destination": "task-triage/scripts/portable_runtime/__init__.py"
+    },
+    {
+      "source": "references/work_item_runtime/contract.py",
+      "destination": "task-prepare/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/work_item_runtime/contract.py",
+      "destination": "task-review/scripts/portable_runtime/contract.py"
+    },
+    {
+      "source": "references/work_item_runtime/interaction-contract.md",
+      "destination": "task-prepare/references/interaction-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/interaction-contract.md",
+      "destination": "task-review/references/interaction-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/interaction-contract.md",
+      "destination": "task-triage/references/interaction-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/publication.py",
+      "destination": "task-prepare/scripts/portable_runtime/publication.py"
+    },
+    {
+      "source": "references/work_item_runtime/release-planning-contract.md",
+      "destination": "task-prepare/references/release-planning-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/release-planning-contract.md",
+      "destination": "task-review/references/release-planning-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/release-planning-contract.md",
+      "destination": "task-triage/references/release-planning-contract.md"
+    },
+    {
+      "source": "references/work_item_runtime/release_plan.py",
+      "destination": "task-prepare/scripts/release_plan.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_plan.py",
+      "destination": "task-review/scripts/release_plan.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_plan.py",
+      "destination": "task-triage/scripts/release_plan.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_planning.py",
+      "destination": "task-prepare/scripts/portable_runtime/release_planning.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_planning.py",
+      "destination": "task-review/scripts/portable_runtime/release_planning.py"
+    },
+    {
+      "source": "references/work_item_runtime/release_planning.py",
+      "destination": "task-triage/scripts/portable_runtime/release_planning.py"
+    },
+    {
+      "source": "references/work_item_runtime/triage.py",
+      "destination": "task-triage/scripts/portable_runtime/triage.py"
     }
   ]
 }

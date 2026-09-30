@@ -24,13 +24,13 @@ def test_language_authority_and_extension_contract_has_one_structural_owner() ->
     authority = section(contract, "Normative authority by mode")
     extensions = section(contract, "Minimum structure and extensions")
     assert {
-        f"`{mode}`" for mode in ("spec-init", "spec-onboard", "spec-update", "spec-audit")
+        f"`{mode}`" for mode in ("spec-init", "spec-onboard", "spec-update", "spec-review")
     } <= set(re.findall(r"`spec-[a-z]+`", language))
     assert re.findall(r"^- `(spec-[a-z]+)`:", authority, re.MULTILINE) == [
         "spec-init",
         "spec-onboard",
         "spec-update",
-        "spec-audit",
+        "spec-review",
     ]
     assert "`specs/capabilities/`" in extensions
     assert "roadmap, task, plan, proposal" in extensions

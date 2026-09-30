@@ -2,6 +2,8 @@
 
 Read `references/work-item-contract.md` and formulate a goal that can be copied to another system. This skill is strictly read-only: do not create or modify files, XDG state, the repository, session, receipts, or external systems. OpenChamber Goal Mode as an external means of executing a goal is not part of this skill.
 
+The goal is an assignment for an LLM agent. A human-facing work item, a local task plan, or GitLab publication selects the `task-prepare` skill instead.
+
 ## Research
 
 First investigate available facts: the user's request, open files, repository state, available checks, and explicitly named constraints. Do not present an assumption as a fact; place unknowns in `unresolved_questions` or a blocker. Ask through native Question only questions whose answers change the problem, outcome, scope, acceptance criteria, dependency, safety, or stop condition. If facts are sufficient, ask no questions.

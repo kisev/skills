@@ -13,17 +13,19 @@ import urllib.request
 from functools import partial
 from pathlib import Path
 from subprocess import run
-from typing import TYPE_CHECKING
+
+import pytest
 
 from scripts import build_distribution
 
-if TYPE_CHECKING:
-    import pytest
+# This module rebuilds the shared `.build/packages/skills` tree; keep it on one
+# xdist worker together with the release-contract tests that read that state.
+pytestmark = pytest.mark.xdist_group("distribution-state")
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".build" / "packages" / "skills"
 PACKAGE_METADATA = json.loads(
-    (ROOT / "packages" / "opencode" / "package.json").read_text(encoding="utf-8")
+    (ROOT / "packages" / "agentomatic" / "package.json").read_text(encoding="utf-8")
 )
 RELEASE_VERSION = PACKAGE_METADATA["version"]
 SKILLS_INSTALLER_VERSION = PACKAGE_METADATA["skillsInstallerVersion"]

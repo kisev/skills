@@ -50,6 +50,12 @@ return exactly one `ready`, `needs_clarification`, or `blocked` verdict with
 machine and semantic findings kept distinct, without publication or external
 mutation.
 
+#### Verification
+
+Review cases identify missing observable acceptance and incompatible release
+scope while preserving accepted limitations; optional hardening is not promoted
+to a blocker without an agreed requirement and reachable consequence.
+
 ## Example
 
 `task-review` marks a local work-item file `needs_clarification` when acceptance evidence is missing.

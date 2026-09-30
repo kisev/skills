@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "bbe09836576a0757d8d1297325588d6b767e2010cb74c118987d5c647d15a425",
+  "digest": "991c80facaa6cb788fe1cd9931f94501f1cc6c0ba01bc68c3fbf0b6a7cfc65ca",
   "expected": {
     "mutation_boundary": "enabled-option-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.plugin.zed-bell.contract.source",
-      "path": "packages/opencode/src/plugins/zed-bell.ts"
+      "path": "packages/agentomatic/src/plugins/zed-bell.ts"
     }
   ],
   "kind": "deterministic",

@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "032823a440c7f5a87a0746b94967331cce69f37fabdb9b7447353a7a7e809ba0",
+  "digest": "e555e337ea8c141db794f44bfdc41fbc3e88e74fa7f4905b1ea2e478f2c71375",
   "expected": {
     "mutation_boundary": "phase-and-confirmation-bound",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.package-tool.route.contract.source",
-      "path": "packages/opencode/src/index.ts"
+      "path": "packages/agentomatic/src/index.ts"
     }
   ],
   "kind": "deterministic",

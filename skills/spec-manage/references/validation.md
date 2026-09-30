@@ -86,4 +86,4 @@ The runner does not assess semantic duplication, requirement quality or
 atomicity, architectural significance, extension-boundary correctness,
 repository drift, process content by meaning or keyword, or whether prose uses
 the declared language. A successful result is necessary formal evidence, not a
-replacement for `spec-audit`.
+replacement for `spec-review`.

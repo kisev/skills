@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-feedback.trigger.en",
+  "pair_id": "stage20.skill.team-feedback.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-feedback"]
+    },
+    "prompt": "English: select the team-feedback skill for its exact contract scenario."
+  },
+  "expected": {
+    "selected": ["skill:team-feedback"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-feedback.trigger.source",
+      "path": ".build/skills/team-feedback/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "10e505c73485c93ecd47adc8d95a2d50dca2c9e3e0de60d90899446f763914b9"
+}

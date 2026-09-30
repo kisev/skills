@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import tempfile
@@ -186,6 +187,33 @@ def atomic_write(path: Path, content: bytes) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
+def _drop_prepare_memory(item: dict[str, Any]) -> None:
+    """Queue a prepared-task outcome into the memomatic inbox; advisory only."""
+    try:
+        inbox_path = Path(__file__).with_name("memomatic_inbox.py")
+        if not inbox_path.exists():
+            inbox_path = next(
+                parent / "memomatic_inbox.py"
+                for parent in Path(__file__).resolve().parents
+                if (parent / "memomatic_inbox.py").is_file()
+            )
+        spec = importlib.util.spec_from_file_location("memomatic_inbox", inbox_path)
+        if spec is None or spec.loader is None:
+            return
+        inbox = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inbox)
+        outcome = item.get("outcome")
+        if not isinstance(outcome, str) or not outcome.strip():
+            return
+        lines = inbox.entry_lines(
+            [f"prepared task outcome: {outcome}"],
+            source="task-prepare",
+        )
+        inbox.drop_memory(lines, "task-prepare")
+    except Exception:
+        return
+
+
 def run(profile: str, argv: list[str] | None = None) -> int:
     cli = parser()
     try:
@@ -208,6 +236,8 @@ def run(profile: str, argv: list[str] | None = None) -> int:
             raise WorkflowError(f"fixed command is {expected}")
         item, source = load_item(args)
         payload = result(profile, item, source)
+        if profile == "task-prepare":
+            _drop_prepare_memory(item)
         if args.output:
             path = output_path(args.output)
             result_digest = digest(payload)

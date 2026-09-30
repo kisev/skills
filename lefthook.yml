@@ -47,6 +47,7 @@ pre-commit:
 
           - name: json
             glob: "**/*.{json,jsonc,json5}"
+            exclude: "**/package-lock.json"
             run: mise exec -- oxfmt --check {files}
 
           - name: shell
@@ -103,7 +104,58 @@ commit-msg:
       run: mise exec -- commitlint --edit {1}
 
 pre-push:
+  files: git diff --name-only @{upstream} HEAD 2>/dev/null || git ls-files
   jobs:
-    - name: complete-gate
-      run: task pre-push
-      fail_text: "The single complete local push gate failed"
+    - name: core
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task check:core
+      fail_text: "The local push gate failed"
+
+    - name: python-tests
+      glob:
+        - "**/*.py"
+        - "**/*.schema.json"
+        - "skills/**"
+        - "shared/**"
+        - "scripts/**"
+        - "tests/**"
+        - "pyproject.toml"
+        - "uv.lock"
+        - "taskfile.yml"
+        - "mise.toml"
+        - "lefthook.yml"
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task test:python
+      fail_text: "The local push gate failed"
+
+    - name: npm-packages
+      glob:
+        - "packages/**"
+        - "apps/**"
+        - "shared/**"
+        - "scripts/**"
+        - "package.json"
+        - "package-lock.json"
+        - "taskfile.yml"
+        - "mise.toml"
+        - "lefthook.yml"
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task package:check
+      fail_text: "The local push gate failed"
+
+    - name: dependency-audit
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task dependency:audit
+      fail_text: "The local push gate failed"

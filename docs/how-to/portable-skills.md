@@ -3,7 +3,7 @@
 [Русский](../ru/how-to/portable-skills.md)
 
 Use this guide to install, update, rebind, clean up, or troubleshoot portable
-skills. These operations are independent of `@kisev/skills-opencode`.
+skills. These operations are independent of `@kisev/agentomatic`.
 
 ## Choose a Scope and Host
 
@@ -11,27 +11,33 @@ skills. These operations are independent of `@kisev/skills-opencode`.
 | - | - | - |
 | Global scope | Add `--global` | `~/.agents/skills` |
 | Project scope | Omit `--global` | `.agents/skills` |
-| Codex only | `--agent codex` | Selected scope |
-| OpenCode only | `--agent opencode` | Selected scope |
-| Both hosts | `--agent opencode --agent codex --copy` | One canonical copy in the selected scope |
+| Every `.agents` host (default) | Omit `--agent` | One canonical copy in the selected scope |
+| One host only | `--agent <name>` | Selected scope |
+
+Omitting `--agent` lets the installer select every host that reads
+`.agents/skills`, plus any other installed host.
 
 ## Install
 
-Install all skills globally for both hosts:
+Install skills globally:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills --global
 ```
 
-Install all skills in the current project:
+Install skills in the current project:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills --agent opencode --agent codex --skill '*' --copy --yes
+npx --yes skills@latest add https://kisev.github.io/skills
 ```
 
-To install one skill, replace `'*'` with its exact name from the
-[skill catalog](../reference/skill-catalog.md). List the published catalog without
-writing:
+The command opens a skill picker with every skill preselected; deselect what you
+do not need. Inside an agent session it runs non-interactively and installs
+everything, so pass `--skill <name>` to stay selective; exact names come from
+the [skill catalog](../reference/skill-catalog.md). The default keeps one
+canonical copy and links hosts with private skill directories to it; add
+`--copy` only when your setup cannot follow symlinks. List the published
+catalog without writing:
 
 ```shell
 npx --yes skills@latest add https://kisev.github.io/skills --list
@@ -49,7 +55,7 @@ repository-local maintainer workflow.
 Replace the stable source with the explicit `/dev` source:
 
 ```shell
-npx --yes skills@latest add https://kisev.github.io/skills/dev --agent opencode --agent codex --skill '*' --copy --global --yes
+npx --yes skills@latest add https://kisev.github.io/skills/dev --global
 ```
 
 The moving dev channel updates after successful pushes to `dev`. Its technical
@@ -67,7 +73,7 @@ npx --yes skills@latest update --global --yes
 
 Omit `--global` for project scope. An installation created from a Git repository
 or tag remains bound to that source. Repeat the matching `add` command with the
-Pages URL, the same scope, and the same agents to rebind it.
+Pages URL and the same scope to rebind it.
 
 `update` refreshes tracked skills, detects names deleted upstream, and offers to
 remove their local copies. OpenCode package assets have a separate update
@@ -77,20 +83,15 @@ lifecycle described in the [OpenCode integration guide](opencode-integration.md#
 
 The current [migration inventory](../migration-inventory.md) defines eleven
 retired names. Normally, accept their removal when `skills update` reports them.
-To remove them explicitly from a global installation shared by OpenCode and
-Codex, run:
+To remove them explicitly from a global installation, run:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --agent opencode --agent codex --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --global --yes
 ```
 
-For Codex only, use:
+To remove from one host only, add its `--agent <name>` option.
 
-```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --agent codex --global --yes
-```
-
-Use the same agents and scope as the installation. Omit `--global` for project
+Use the same scope as the installation. Omit `--global` for project
 scope. Avoid `remove --all` unless every portable skill in that scope should be
 removed.
 
@@ -113,6 +114,9 @@ renames a skill, repeat `add` for additions and remove retired names explicitly.
 
 - Portable skills are self-contained and do not depend on the repository or the
   OpenCode npm package after installation.
+- Cross-skill relations are install recommendations: the build materializes each
+  skill's declared companions into its `SKILL.md` "Related skills" section, and
+  every archive still works on its own.
 - The supported distribution is `https://kisev.github.io/skills`; source
   provenance is recorded in its release metadata and linked from
   `https://github.com/kisev/skills/releases/latest`.

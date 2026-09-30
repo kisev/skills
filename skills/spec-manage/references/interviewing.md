@@ -1,13 +1,15 @@
 # Adaptive interview
 
 The interview closes semantic gaps rather than reproducing a fixed questionnaire.
+Apply `references/question-guidelines.md` throughout this native interview,
+including mode, canonical language, scope, and design decisions.
 
 ## Process
 
 1. Collect known facts and decisions.
 2. Identify assumptions, gaps, and contradictions.
-3. Ask one to five of the most important related questions through the host's native interactive mechanism; if unavailable, ask in chat.
-4. Analyze answers and repeat until the target state is unambiguous.
+3. Ask the smallest useful round of independent questions with known prerequisites through the host's native interactive mechanism; if unavailable, ask in chat. Related topics are not necessarily independent. If a plausible answer could change another question's necessity, wording, options, or recommendation, ask the prerequisite first and wait. Explain why each choice arose, its practical effects and material risks, and the basis of any recommendation before asking.
+4. Analyze actual answers, including non-recommended and custom choices. Recheck changed assumptions against evidence and remove or rewrite invalidated follow-ups before forming the next round. Repeat until the target state is unambiguous; never silently select the recommended branch.
 5. Before writing, perform a readiness check in context; do not create a checklist or other repository artifact.
 
 Do not ask what follows reliably from evidence or previous answers. Focus especially on edge cases, failure behavior, compatibility, unsupported behavior, invariants, security boundaries, and lifecycle/state transitions.

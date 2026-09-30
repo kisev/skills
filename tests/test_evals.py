@@ -514,6 +514,8 @@ def test_list_selectors_and_capability_detection_are_machine_readable() -> None:
         {"id": "golden.core-contracts", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item.en", "kind": "golden", "surface": "skill"},
         {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"},
+        {"id": "question-guidelines.rounds.en", "kind": "golden", "surface": "skill"},
+        {"id": "question-guidelines.rounds.ru", "kind": "golden", "surface": "skill"},
         {"id": "spec-manage.audit-behavior.en", "kind": "golden", "surface": "skill"},
         {"id": "spec-manage.audit-behavior.ru", "kind": "golden", "surface": "skill"},
         {
@@ -592,8 +594,16 @@ def test_live_redacts_evidence_and_rejects_sandbox_escape() -> None:
         assert payload(escaped)["results"][0]["error"]["classification"] == "sandbox_escape"
 
 
-def test_case_outcomes_require_trusted_live_observation() -> None:
-    offline = run_eval("--offline", "--scenario", "spec-manage.mode-selection.en")
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "spec-manage.mode-selection.en",
+        "question-guidelines.rounds.en",
+        "question-guidelines.rounds.ru",
+    ],
+)
+def test_case_outcomes_require_trusted_live_observation(scenario: str) -> None:
+    offline = run_eval("--offline", "--scenario", scenario)
 
     assert offline.returncode == 0
     result = payload(offline)["results"][0]

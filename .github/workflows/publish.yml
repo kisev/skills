@@ -27,21 +27,30 @@ jobs:
     outputs:
       npm-artifact: ${{ steps.artifact-names.outputs.npm }}
       pages-artifact: ${{ steps.artifact-names.outputs.pages }}
+      dist-tag: ${{ steps.channel.outputs.dist-tag }}
+      deploys-pages: ${{ steps.channel.outputs.deploys-pages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
+      - name: Resolve the release channel from the tagged commit
+        id: channel
+        run: task release:channel -- --github-output
       - name: Bind artifact names to the producing attempt
         id: artifact-names
         run: |
           echo "npm=npm-release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "pages=github-pages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Run full preflight and build exact artifacts
+        env:
+          RELEASE_DIST_TAG: ${{ steps.channel.outputs.dist-tag }}
         run: task release:prepare
       - name: Compose stable and current dev Pages channels
+        if: steps.channel.outputs.deploys-pages == 'true'
         run: task pages:compose:stable
       - name: Upload exact Pages artifact
+        if: steps.channel.outputs.deploys-pages == 'true'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5
         with:
           name: ${{ steps.artifact-names.outputs.pages }}
@@ -60,6 +69,7 @@ jobs:
   stable-pages:
     name: Publish and verify stable Pages
     needs: stable-preflight
+    if: needs.stable-preflight.outputs.deploys-pages == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -101,7 +111,7 @@ jobs:
     env:
       NPM_CONFIG_PROVENANCE: "true"
       NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
-      NPM_DIST_TAG: latest
+      NPM_DIST_TAG: ${{ needs.stable-preflight.outputs.dist-tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
@@ -122,6 +132,9 @@ jobs:
     needs:
       - stable-pages
       - stable-npm
+    if: >-
+      !cancelled() && needs.stable-npm.result == 'success' &&
+      (needs.stable-pages.result == 'success' || needs.stable-pages.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

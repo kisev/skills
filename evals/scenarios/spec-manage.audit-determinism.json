@@ -8,7 +8,7 @@
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Apply the deterministic spec-audit classification and aggregate contract to every case without writing files.",
+    "prompt": "Apply the deterministic spec-review classification and aggregate contract to every case without writing files.",
     "fixture": {
       "selected": ["skill:spec-manage"],
       "cases": [
@@ -84,5 +84,5 @@
     "max_tokens": 2000,
     "max_cost": 1
   },
-  "digest": "db12c1c3773e28fc141f3ae9f1da6eb60cff062736dbc2cd9515742371608cac"
+  "digest": "7351ca5b11b9e0d836e9251455b355704dfc6f923dcfd1afb011d0b7d4717ff2"
 }

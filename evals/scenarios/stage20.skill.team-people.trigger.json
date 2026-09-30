@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-people.trigger",
+  "pair_id": "stage20.skill.team-people.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-people"]
+    },
+    "prompt": "Выбери навык team-people для его точного контрактного сценария."
+  },
+  "expected": {
+    "selected": ["skill:team-people"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-people.trigger.source",
+      "path": ".build/skills/team-people/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "cb94a74d2b5dc90ec0793cb22bfb338fd2347c8a61db15d2622d3d80965b78af"
+}

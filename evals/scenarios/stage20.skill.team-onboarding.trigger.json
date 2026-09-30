@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-onboarding.trigger",
+  "pair_id": "stage20.skill.team-onboarding.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "ru",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-onboarding"]
+    },
+    "prompt": "Выбери навык team-onboarding для его точного контрактного сценария."
+  },
+  "expected": {
+    "selected": ["skill:team-onboarding"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-onboarding.trigger.source",
+      "path": ".build/skills/team-onboarding/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "7b40c1c74fa89ef9b3b7b278eabf1784ff6e3e6be765f8c9f3a0b1f4527c2ded"
+}

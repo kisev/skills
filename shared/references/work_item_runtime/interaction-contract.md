@@ -1,5 +1,8 @@
 # Shared Interaction Contract
 
+Apply `references/question-guidelines.md` whenever asking the user, including
+direct questions outside `askme`. Rebuild dependent follow-ups after actual answers.
+
 Use `resolve -> prepare -> present -> report` for chat output and `resolve ->
 prepare -> apply -> report` for bounded project-file output. Ask a **Question**
 only before `prepare`. Write an explicitly requested workspace-relative output

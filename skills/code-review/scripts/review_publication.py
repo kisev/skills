@@ -37,7 +37,7 @@ else:
     )
 
 SCHEMA = "code-review/publication/v1"
-POSTCONDITION_DELAYS = (0.0, 0.5, 1.5)
+POSTCONDITION_DELAYS = (0.0, 0.5, 1.5, 4.0, 8.0)
 RETRY_WARNING = "retry may duplicate a delayed GitLab write"
 
 
@@ -348,12 +348,21 @@ def observe(guard: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def desired_labels(payload: dict[str, Any]) -> list[str]:
+    return sorted(label for label in payload["labels"].split(",") if label)
+
+
+def normalized_text(value: Any) -> str:
+    """Compare against GitLab-stored text, which strips trailing whitespace."""
+    return value.rstrip() if isinstance(value, str) else ""
+
+
 def postcondition(
     guard: dict[str, Any], observed: dict[str, Any], before: dict[str, Any]
 ) -> dict[str, Any] | None:
     payload = guard["payload"]
     if "labels" in payload:
-        desired = sorted(payload["labels"].split(",")) if payload["labels"] else []
+        desired = desired_labels(payload)
         return {"labels": desired} if sorted(observed["mr"].get("labels", [])) == desired else None
     if "resolved" in payload:
         discussion = guard["endpoint"].rsplit("/", 1)[1]
@@ -376,7 +385,7 @@ def postcondition(
             and issue.get("project_id") == guard["project_id"]
             and issue.get("author", {}).get("id") == guard["user"]["id"]
             and issue.get("title") == payload["title"]
-            and issue.get("description") == payload["description"]
+            and normalized_text(issue.get("description")) == normalized_text(payload["description"])
         ]
         return (
             {"issue_id": matches[0]["id"], "issue_iid": matches[0]["iid"]}
@@ -387,7 +396,7 @@ def postcondition(
     for note_id, note in observed["notes"].items():
         if (
             note_id in before["notes"]
-            or note["body"] != payload["body"]
+            or normalized_text(note["body"]) != normalized_text(payload["body"])
             or note["author"] != guard["user"]["id"]
         ):
             continue
@@ -447,11 +456,11 @@ def recovery_result(
     }
 
 
-def revalidate(
-    guard: dict[str, Any], observed: dict[str, Any], receipts: list[dict[str, Any]]
-) -> None:
-    expected_notes = dict(guard["notes"])
-    labels = guard["labels"]
+def expected_state(
+    guard: dict[str, Any], receipts: list[dict[str, Any]]
+) -> tuple[dict[str, Any], list[str]]:
+    expected_notes: dict[str, Any] = dict(guard["notes"])
+    labels: list[str] = guard["labels"]
     for receipt in receipts:
         effect = receipt["effect"]
         if "note_id" in effect:
@@ -465,10 +474,43 @@ def revalidate(
             }
         if "labels" in effect:
             labels = effect["labels"]
-    if expected_notes != observed["notes"] or sorted(labels) != sorted(
-        observed["mr"].get("labels", [])
-    ):
-        raise portable.WorkflowError("review conversation or labels changed; regenerate the plan")
+    return expected_notes, labels
+
+
+def target_discussion_id(guard: dict[str, Any]) -> str | None:
+    match = re.fullmatch(r".*/discussions/([A-Za-z0-9_-]+)(?:/notes)?", guard["endpoint"])
+    return match.group(1) if match else None
+
+
+def satisfied_effect(
+    guard: dict[str, Any], observed: dict[str, Any], expected_notes: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Return the effect when GitLab already shows the intended state without a write."""
+    return postcondition(guard, observed, {"notes": expected_notes})
+
+
+def revalidate(
+    guard: dict[str, Any], observed: dict[str, Any], receipts: list[dict[str, Any]]
+) -> None:
+    """Reject only drift that touches what this action itself changes."""
+    expected_notes, labels = expected_state(guard, receipts)
+    payload = guard["payload"]
+    if "labels" in payload:
+        current = sorted(observed["mr"].get("labels", []))
+        if current != labels and current != desired_labels(payload):
+            raise portable.WorkflowError("labels changed outside the plan; regenerate the plan")
+        return
+    discussion = target_discussion_id(guard)
+    if discussion is None:
+        return
+    expected = {
+        key: note for key, note in expected_notes.items() if note["discussion"] == discussion
+    }
+    observed_thread = {
+        key: note for key, note in observed["notes"].items() if note["discussion"] == discussion
+    }
+    if expected != observed_thread:
+        raise portable.WorkflowError("target thread changed; regenerate the plan")
 
 
 def finalized_action(root: Path, guard: dict[str, Any], digest: str) -> None:
@@ -492,6 +534,34 @@ def finalized_action(root: Path, guard: dict[str, Any], digest: str) -> None:
         raise portable.WorkflowError(
             "action does not belong to the current plan; regenerate legacy plans"
         )
+
+
+def load_ledger(ledger_path: Path) -> dict[str, Any]:
+    if not ledger_path.exists():
+        return {"receipts": [], "pendings": []}
+    ledger = portable.read_json(ledger_path, "publication ledger")
+    if not isinstance(ledger, dict):
+        raise portable.WorkflowError("invalid publication ledger")
+    if set(ledger) == {"receipts", "pending"}:
+        legacy = ledger["pending"]
+        ledger = {
+            "receipts": ledger["receipts"],
+            "pendings": [legacy] if isinstance(legacy, dict) else [],
+        }
+    if (
+        set(ledger) != {"receipts", "pendings"}
+        or not isinstance(ledger["receipts"], list)
+        or not isinstance(ledger["pendings"], list)
+    ):
+        raise portable.WorkflowError("invalid publication ledger")
+    for pending in ledger["pendings"]:
+        if not isinstance(pending, dict) or not portable.is_digest(pending.get("digest")):
+            raise portable.WorkflowError("invalid publication ledger")
+    return ledger
+
+
+def drop_pending(ledger: dict[str, Any], digest: str) -> None:
+    ledger["pendings"] = [pending for pending in ledger["pendings"] if pending["digest"] != digest]
 
 
 def inspect_reservation(
@@ -542,22 +612,18 @@ def begin_action(
     ledger: dict[str, Any],
     ledger_path: Path,
     receipts: list[dict[str, Any]],
-) -> tuple[dict[str, Any] | None, str | None, dict[str, Any] | None]:
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str | None, dict[str, Any] | None]:
     if pending is not None:
-        pending_digest = pending.get("digest")
-        if not portable.is_digest(pending_digest):
-            raise portable.WorkflowError("invalid pending publication action")
-        pending_digest = cast("str", pending_digest)
-        pending_path = root / "artifacts" / "publication_actions" / f"{pending_digest}.json"
-        _, pending_guard = load_action(pending_path, pending_digest)
+        pending_path = root / "artifacts" / "publication_actions" / f"{pending['digest']}.json"
+        _, pending_guard = load_action(pending_path, pending["digest"])
         result = recovery_result(
             pending_path,
-            pending_digest,
+            pending["digest"],
             pending_guard,
             pending.get("error", "unresolved publication blocks writes; inspect it first"),
             external_mutations=False,
         )
-        return None, None, result
+        return None, None, None, result
     finalized_action(root, guard, digest)
     if time.time() > guard["expires_at"]:
         raise portable.WorkflowError("publication action expired; regenerate the plan")
@@ -569,14 +635,18 @@ def begin_action(
     related = [
         receipt for receipt in receipts if receipt["evidence_digest"] == guard["evidence_digest"]
     ]
+    expected_notes, _ = expected_state(guard, related)
+    effect = satisfied_effect(guard, observed, expected_notes)
+    if effect is not None:
+        return effect, None, None, None
     revalidate(guard, observed, related)
     executable = shutil.which("glab")
     if executable is None:
         raise portable.WorkflowError("glab is unavailable")
     pending = {"digest": digest, "before": observed}
-    ledger["pending"] = pending
+    ledger["pendings"].append(pending)
     portable.write_json(ledger_path, ledger)
-    return pending, executable, None
+    return None, pending, executable, None
 
 
 def attempt_mutation(
@@ -633,7 +703,7 @@ def attempt_mutation(
             raise MutationOutcomeUnknown(diagnostic)
     except MutationNotAttempted as exc:
         if not retry:
-            ledger["pending"] = None
+            drop_pending(ledger, digest)
             portable.write_json(ledger_path, ledger)
             raise
         pending["error"] = portable.redact(str(exc))
@@ -666,13 +736,7 @@ def execute(
     root, guard = load_action(path, digest)
     with publication_lock(root) as directory:
         ledger_path = directory / "ledger.json"
-        ledger = (
-            portable.read_json(ledger_path, "publication ledger")
-            if ledger_path.exists()
-            else {"receipts": [], "pending": None}
-        )
-        if set(ledger) != {"receipts", "pending"} or not isinstance(ledger["receipts"], list):
-            raise portable.WorkflowError("invalid publication ledger")
+        ledger = load_ledger(ledger_path)
         receipts = ledger["receipts"]
         if any(receipt["digest"] == digest for receipt in receipts):
             return {
@@ -680,7 +744,7 @@ def execute(
                 "mutation_outcome": "applied",
                 "external_mutations": False,
             }
-        pending = ledger["pending"]
+        pending = next((entry for entry in ledger["pendings"] if entry["digest"] == digest), None)
         effect: dict[str, Any] | None = None
         external_mutations = False
         executable: str | None = None
@@ -702,11 +766,12 @@ def execute(
             if result is not None:
                 return result
         else:
-            pending, executable, result = begin_action(
+            effect, pending, executable, result = begin_action(
                 root, digest, guard, pending, ledger, ledger_path, receipts
             )
             if result is not None:
                 return result
+        externally_satisfied = effect is not None and pending is None
         if effect is None:
             if pending is None:
                 raise portable.WorkflowError("publication reservation is unavailable")
@@ -725,7 +790,7 @@ def execute(
         receipts.append(
             {"digest": digest, "evidence_digest": guard["evidence_digest"], "effect": effect}
         )
-        ledger["pending"] = None
+        drop_pending(ledger, digest)
         try:
             portable.write_json(ledger_path, ledger)
         except OSError:
@@ -737,7 +802,7 @@ def execute(
                 external_mutations=external_mutations,
             )
         return {
-            "status": "applied",
+            "status": "already_applied" if externally_satisfied else "applied",
             "mutation_outcome": "applied",
             "external_mutations": external_mutations,
         }

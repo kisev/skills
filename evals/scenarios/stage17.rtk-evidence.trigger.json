@@ -9,18 +9,34 @@
   "host": "any",
   "input": {
     "prompt": "Сожми шумный вывод RTK с loss marker.",
-    "fixture": { "selected": ["skill:rtk"] }
+    "fixture": {
+      "selected": ["skill:rtk"]
+    }
   },
-  "expected": { "selected": ["skill:rtk"] },
+  "expected": {
+    "selected": ["skill:rtk"]
+  },
   "invariants": [
     {
       "id": "incomplete",
       "path": "skills/rtk/references/workflow.md",
       "contains": "evidence_complete=false"
     },
-    { "id": "sizes", "path": "packages/opencode/src/plugins/rtk.ts", "contains": "sizes=" }
+    {
+      "id": "sizes",
+      "path": "packages/agentomatic/src/plugins/rtk.ts",
+      "contains": "sizes="
+    }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "68ce7f53e0c898f03dd8d2f5e55e67a27ce1b540a4ed6f140946588464a431c9"
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "budgets": {
+    "timeout_seconds": 20,
+    "max_tokens": 3000,
+    "max_cost": 1
+  },
+  "digest": "317a18c2904fb7aee73fbde30c56b7e3442f8ff80333d185ccc14cb545db12ae"
 }

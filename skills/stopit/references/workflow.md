@@ -66,3 +66,12 @@ body-only snapshot; the current file ends with paths to earlier snapshots.
   the read, history snapshot, and replacement so concurrent writes do not lose
   versions; different canonical workspaces use different IDs.
 - There are no Git or external-system changes.
+
+## Memory integration
+
+When restoring a handoff, optionally search personal memory (`memory_search`
+tool or `memomatic search`) for durable facts about this workspace; the
+handoff itself carries the transient context. Writing a handoff mirrors a
+short distillate into the memomatic inbox automatically (`source: stopit`,
+superseded per workspace, auto-cleaned through a `source=stopit` rule); when
+memomatic is absent the mirror is skipped silently.

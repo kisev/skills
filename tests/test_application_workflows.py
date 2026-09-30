@@ -2069,6 +2069,10 @@ print(json.dumps(value))
 
         self.assertEqual(module.parse_glab_trace(response("bytes 4-7/8", b"tail")), ("tail", False))
         self.assertEqual(module.parse_glab_trace(response("bytes 0-3/4", b"full")), ("full", True))
+        self.assertEqual(
+            module.parse_glab_trace(b"HTTP/1.1 200 OK\r\n\r\nwhole", tail_dropped=True),
+            ("whole", False),
+        )
 
         def paginated(_hostname: str, endpoint: str, **_kwargs: object) -> dict[str, object]:
             items: list[object] = (
@@ -2083,9 +2087,11 @@ print(json.dumps(value))
             patch.object(module, "glab_text", return_value=("tail", False)),
         ):
             evidence = module.collect_pipeline_jobs("gitlab.example", 19, {"id": 41})
-        self.assertFalse(evidence["complete"])
-        self.assertFalse(evidence["pipelines"][0]["jobs"][0]["trace"]["complete"])
-        self.assertIn("CI job trace completeness could not be confirmed", evidence["errors"])
+        self.assertTrue(evidence["complete"])
+        self.assertFalse(evidence["truncated"])
+        trace = evidence["pipelines"][0]["jobs"][0]["trace"]
+        self.assertFalse(trace["complete"])
+        self.assertTrue(trace["truncated"])
 
     @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
     def test_gitlab_trace_streaming_preserves_other_separator_in_body(self) -> None:
@@ -2094,11 +2100,12 @@ print(json.dumps(value))
         )
         response = b"HTTP/1.1 200 OK\nContent-Type: text/plain\n\nfirst\r\n\r\nsecond"
 
-        stdout, _stderr = module.streamed_glab_trace(
+        stdout, _stderr, tail_dropped = module.streamed_glab_trace(
             [sys.executable, "-c", f"import os; os.write(1, {response!r})"]
         )
 
         self.assertEqual(module.parse_glab_trace(stdout), ("first\r\n\r\nsecond", True))
+        self.assertFalse(tail_dropped)
 
     @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
     def test_gitlab_trace_streaming_accepts_exact_header_body_and_crlf_limits(self) -> None:
@@ -2116,9 +2123,10 @@ print(json.dumps(value))
             f"+ b'\\r\\n\\r\\n' + b'y' * {module.MAX_TRACE_BYTES})"
         )
 
-        stdout, _stderr = module.streamed_glab_trace([sys.executable, "-c", command])
+        stdout, _stderr, tail_dropped = module.streamed_glab_trace([sys.executable, "-c", command])
 
         self.assertEqual(module.split_glab_trace_response(stdout), (headers, body))
+        self.assertFalse(tail_dropped)
 
     @unittest.skipUnless(os.name == "posix", "POSIX process group test")
     def test_stop_process_group_kills_descendant_after_leader_exits(self) -> None:
@@ -2220,13 +2228,15 @@ print(json.dumps(value))
             executable.write_text(
                 "#!/usr/bin/env python3\n"
                 "import sys\n"
-                "sys.stdout.buffer.write(b'HTTP/1.1 200 OK\\r\\n\\r\\n' + b'x' * 65537)\n",
+                "sys.stdout.buffer.write(b'HTTP/1.1 200 OK\\r\\n\\r\\nhead\\n' + b'x' * 65537)\n",
                 encoding="utf-8",
             )
             executable.chmod(0o755)
             with patch.object(module.shutil, "which", return_value=str(executable)):
-                with self.assertRaisesRegex(module.WorkflowError, "size limit"):
-                    module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+                text, complete = module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+            self.assertFalse(complete)
+            self.assertEqual(len(text.encode()), module.MAX_TRACE_BYTES)
+            self.assertFalse(text.startswith("head"))
 
             pid_path = directory / "pid"
             executable.write_text(
@@ -4499,7 +4509,9 @@ class MattermostAndTeamTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         from scripts import build_skills
 
-        assert build_skills.build(BUILT_SKILLS, False) == 0
+        # Verify materialization instead of rebuilding: a destructive rebuild
+        # races parallel pytest workers reading the shared `.build/skills`.
+        assert build_skills.build(BUILT_SKILLS, True) == 0
 
     def mattermost_module(self, name: str) -> ModuleType:
         return load_module(
@@ -4916,7 +4928,7 @@ class MattermostAndTeamTests(unittest.TestCase):
         class Opener:
             def open(self, request: Request, *, timeout: int) -> Response:
                 seen.append(request)
-                case.assertEqual(timeout, 30)
+                case.assertEqual(timeout, module.DEFAULT_HTTP_TIMEOUT_SECONDS)
                 return Response()
 
         with patch.object(module.urllib.request, "build_opener", return_value=Opener()):
@@ -4928,6 +4940,84 @@ class MattermostAndTeamTests(unittest.TestCase):
         self.assertEqual(seen[0].get_method(), "GET")
         self.assertEqual(seen[0].full_url, "https://chat.example/api/v4/users/me")
         self.assertIsNone(module.NoRedirect().redirect_request())
+
+    def test_team_evidence_store_resumes_built_collector_through_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state = Path(temporary) / "state"
+            state.mkdir(mode=0o700)
+            binroot = Path(temporary) / "bin"
+            binroot.mkdir()
+            fake_glab = binroot / "glab"
+            fake_glab.write_text(
+                "#!/bin/sh\n"
+                'case "$2" in *merge_requests*) echo "[{\\"id\\":1,\\"iid\\":1,'
+                '\\"title\\":\\"MR 1\\",\\"merged_at\\":\\"2026-09-02T00:00:00Z\\",'
+                '\\"author\\":{\\"username\\":\\"a\\"},\\"web_url\\":\\"u\\"}]";; *) echo "[]";; esac\n',
+                encoding="utf-8",
+            )
+            fake_glab.chmod(0o755)
+            environment = {
+                "XDG_STATE_HOME": str(state),
+                "PATH": f"{binroot}:{os.environ.get('PATH', '')}",
+            }
+            output = Path(temporary) / "metrics.json"
+            common = (
+                "--hostname",
+                "gitlab.example.test",
+                "--since",
+                "2026-09-01T00:00:00Z",
+                "--until",
+                "2026-09-25T00:00:00Z",
+                "--project",
+                "101=Example",
+                "--resume-profile",
+                "pipelines",
+                "--output",
+                str(output),
+            )
+            first = self.run_script(
+                "team-retro", "gitlab_period_metrics.py", *common, env=environment
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+            document = json.loads(output.read_text(encoding="utf-8"))
+            self.assertTrue(document["complete"])
+            self.assertEqual(document["resume"]["profile"], "pipelines")
+            self.assertEqual(
+                document["resume"]["projects"]["101"]["collected"],
+                [{"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}],
+            )
+
+            output.unlink()
+            fake_glab.write_text("#!/bin/sh\necho '[]'\n", encoding="utf-8")
+            second = self.run_script(
+                "team-retro", "gitlab_period_metrics.py", *common, env=environment
+            )
+            self.assertEqual(second.returncode, 0, second.stderr)
+            reused = json.loads(output.read_text(encoding="utf-8"))
+            self.assertTrue(reused["complete"])
+            self.assertEqual(
+                reused["resume"]["projects"]["101"]["reused"],
+                [{"since": "2026-09-01T00:00:00Z", "until": "2026-09-25T00:00:00Z"}],
+            )
+            self.assertEqual(reused["resume"]["projects"]["101"]["collected"], [])
+            self.assertEqual(len(reused["projects"][0]["sources"]["merge_requests"]["items"]), 1)
+
+            shown = self.run_script(
+                "team-retro",
+                "evidence_store.py",
+                "evidence-show",
+                "--profile",
+                "pipelines",
+                "--since",
+                "2026-09-01T00:00:00Z",
+                "--until",
+                "2026-09-25T00:00:00Z",
+                env=environment,
+            )
+            self.assertEqual(shown.returncode, 0, shown.stderr)
+            provenance = json.loads(shown.stdout)
+            self.assertEqual(provenance["sources"][0]["window_coverage"], "complete")
+            self.assertEqual(provenance["sources"][0]["location"], "gitlab.example.test")
 
     def test_mattermost_auth_and_cache_confirmation_are_one_use_and_redact_secret(self) -> None:
         module = self.mattermost_module("confirm")
@@ -5327,9 +5417,9 @@ class MattermostAndTeamTests(unittest.TestCase):
             applied = self.save_team_profile("team-retro", candidate, "platform-team", environment)
             self.assertEqual(applied.returncode, 0, applied.stderr)
 
-            profile_root = root / "config/opencode/team-contexts"
-            saved = profile_root / "platform-team.json"
-            settings = profile_root / "settings.json"
+            profile_root = root / "config/agent-skills/team/platform-team"
+            saved = profile_root / "context.json"
+            settings = profile_root.parent / "settings.json"
             self.assertEqual(stat_mode(profile_root), 0o700)
             self.assertEqual(stat_mode(saved), 0o600)
             self.assertEqual(stat_mode(settings), 0o600)
@@ -5505,7 +5595,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             )
             self.assertEqual(prepared.returncode, 0, prepared.stderr)
             digest = json.loads(prepared.stdout)["digest"]
-            saved = root / "config/opencode/team-contexts/platform-team.json"
+            saved = root / "config/agent-skills/team/platform-team/context.json"
             saved.write_text(saved.read_text(encoding="utf-8") + "\n", encoding="utf-8")
             saved.chmod(0o600)
             stale = self.run_script(
@@ -5568,8 +5658,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             result = json.loads(output.getvalue())
             assert status == 2
             assert result["error"]["code"] == "io_error"
-            assert not (root / "config/opencode/team-contexts/platform-team.json").exists()
-            assert not (root / "config/opencode/team-contexts/settings.json").exists()
+            assert not (root / "config/agent-skills/team/platform-team/context.json").exists()
+            assert not (root / "config/agent-skills/team/settings.json").exists()
             assert not (
                 root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
             ).exists()
@@ -5618,8 +5708,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             result = json.loads(output.getvalue())
             assert status == 2
             assert result["error"]["code"] == "io_error"
-            assert not (root / "config/opencode/team-contexts/platform-team.json").exists()
-            assert not (root / "config/opencode/team-contexts/settings.json").exists()
+            assert not (root / "config/agent-skills/team/platform-team/context.json").exists()
+            assert not (root / "config/agent-skills/team/settings.json").exists()
             assert not (
                 root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
             ).exists()
@@ -5643,8 +5733,8 @@ class MattermostAndTeamTests(unittest.TestCase):
                 with patch.dict(os.environ, environment):
                     payload = module.profile_change_payload("platform-team", raw, set_default=True)
                     plan_digest, _, _ = module.prepare_plan(payload)
-                    transaction_root = root / "config/opencode/team-contexts"
-                    profile = transaction_root / "platform-team.json"
+                    transaction_root = root / "config/agent-skills/team"
+                    profile = transaction_root / "platform-team/context.json"
                     settings = transaction_root / "settings.json"
                     original_write_once = module.write_once
 
@@ -5705,7 +5795,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             with patch.dict(os.environ, environment):
                 payload = module.profile_change_payload("platform-team", raw, set_default=True)
                 plan_digest, _, _ = module.prepare_plan(payload)
-                profile = root / "config/opencode/team-contexts/platform-team.json"
+                profile = root / "config/agent-skills/team/platform-team/context.json"
                 original_create_receipt = module.create_receipt
 
                 def create_and_tamper(receipt: Path, digest: str) -> None:
@@ -5723,7 +5813,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 (root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json").exists()
             )
             self.assertTrue(
-                (root / "config/opencode/team-contexts/.profile-save.transaction.json").exists()
+                (root / "config/agent-skills/team/.profile-save.transaction.json").exists()
             )
 
     def test_team_profile_recovers_interrupted_transaction_before_retry(self) -> None:
@@ -5746,7 +5836,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                journal = root / "config/opencode/team-contexts/.profile-save.transaction.json"
+                journal = root / "config/agent-skills/team/.profile-save.transaction.json"
                 self.assertTrue(journal.is_file())
                 report_path, _ = module.apply_profile(
                     "platform-team", raw, plan_digest, set_default=True
@@ -5773,7 +5863,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             previous = b"{" + b" " * (module.MAX_BYTES - 2) + b"}"
             with patch.dict(os.environ, environment):
                 transaction_root = module.profile_root(create=True)
-                profile = transaction_root / "platform-team.json"
+                profile = transaction_root / "platform-team/context.json"
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 profile.write_bytes(previous)
                 profile.chmod(0o600)
                 payload = module.profile_change_payload("platform-team", raw, set_default=False)
@@ -5815,7 +5906,8 @@ class MattermostAndTeamTests(unittest.TestCase):
             previous = b"{" + b" " * (module.MAX_BYTES - 2) + b"}"
             with patch.dict(os.environ, environment):
                 transaction_root = module.profile_root(create=True)
-                profile = transaction_root / "platform-team.json"
+                profile = transaction_root / "platform-team/context.json"
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 profile.write_bytes(previous)
                 profile.chmod(0o600)
                 payload = module.profile_change_payload("platform-team", raw, set_default=False)
@@ -5865,11 +5957,13 @@ class MattermostAndTeamTests(unittest.TestCase):
                 with patch.object(module, "sync_directory", side_effect=observe_sync):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-            profile_root = (root / "config/opencode/team-contexts").resolve()
+            profile_root = (root / "config/agent-skills/team").resolve()
+            profile_dir = (root / "config/agent-skills/team/platform-team").resolve()
             report_root = (root / "state/agent-skills/team-workflow/reports").resolve()
             receipt_root = (root / "state/agent-skills/team-workflow/receipts").resolve()
             receipt_index = synced.index(receipt_root)
-            self.assertGreaterEqual(synced[:receipt_index].count(profile_root), 3)
+            self.assertGreaterEqual(synced[:receipt_index].count(profile_root), 2)
+            self.assertIn(profile_dir, synced[:receipt_index])
             self.assertIn(report_root, synced[:receipt_index])
             self.assertEqual(synced[-1], profile_root)
 
@@ -6058,7 +6152,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 journal = transaction_root / ".profile-save.transaction.json"
                 receipt_root = root / "state/agent-skills/team-workflow/receipts"
                 original_sync = module.sync_directory
@@ -6091,10 +6185,11 @@ class MattermostAndTeamTests(unittest.TestCase):
             }
             with patch.dict(os.environ, environment):
                 transaction_root = module.profile_root(create=True)
-                profile = transaction_root / "platform-team.json"
+                profile = transaction_root / "platform-team/context.json"
                 settings = transaction_root / "settings.json"
                 previous_profile = b'{"previous":"profile"}'
                 previous_settings = b'{"previous":"settings"}'
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 module.atomic(profile, previous_profile)
                 module.atomic(settings, previous_settings)
                 payload = module.profile_change_payload("platform-team", raw, set_default=True)
@@ -6143,7 +6238,7 @@ class MattermostAndTeamTests(unittest.TestCase):
             with patch.dict(os.environ, environment):
                 payload = module.profile_change_payload("platform-team", raw, set_default=True)
                 plan_digest, _, _ = module.prepare_plan(payload)
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 journal = transaction_root / ".profile-save.transaction.json"
                 receipt_root = root / "state/agent-skills/team-workflow/receipts"
                 receipt = receipt_root / f"{plan_digest}.json"
@@ -6172,7 +6267,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 module.recover_profile_transaction(transaction_root)
 
             self.assertFalse(journal.exists())
-            self.assertTrue((transaction_root / "platform-team.json").is_file())
+            self.assertTrue((transaction_root / "platform-team/context.json").is_file())
             self.assertTrue((transaction_root / "settings.json").is_file())
             self.assertTrue(receipt.is_file())
 
@@ -6197,7 +6292,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 receipt_root = root / "state/agent-skills/team-workflow/receipts"
                 receipt = receipt_root / f"{plan_digest}.json"
                 receipt.write_text("{", encoding="utf-8")
@@ -6237,7 +6332,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
+                transaction_root = root / "config/agent-skills/team"
                 receipt = root / f"state/agent-skills/team-workflow/receipts/{plan_digest}.json"
                 receipt_value = json.loads(receipt.read_text(encoding="utf-8"))
                 self.assertTrue(module.valid_receipt(receipt_value, plan_digest))
@@ -6253,7 +6348,7 @@ class MattermostAndTeamTests(unittest.TestCase):
                 module.recover_profile_transaction(transaction_root)
 
             self.assertFalse(receipt.exists())
-            self.assertFalse((transaction_root / "platform-team.json").exists())
+            self.assertFalse((transaction_root / "platform-team/context.json").exists())
             self.assertFalse((transaction_root / "settings.json").exists())
             self.assertFalse((transaction_root / ".profile-save.transaction.json").exists())
 
@@ -6278,8 +6373,9 @@ class MattermostAndTeamTests(unittest.TestCase):
                 ):
                     module.apply_profile("platform-team", raw, plan_digest, set_default=True)
 
-                transaction_root = root / "config/opencode/team-contexts"
-                profile = transaction_root / "platform-team.json"
+                transaction_root = root / "config/agent-skills/team"
+                profile = transaction_root / "platform-team/context.json"
+                profile.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                 profile.write_bytes(raw + b"\n")
                 profile.chmod(0o600)
                 with self.assertRaisesRegex(module.MutationIOError, "neither prior nor intended"):

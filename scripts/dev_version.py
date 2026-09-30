@@ -9,7 +9,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-PACKAGE = ROOT / "packages" / "opencode" / "package.json"
+PACKAGE = ROOT / "packages" / "agentomatic" / "package.json"
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
 REVISION = re.compile(r"^[0-9a-f]{40}$")
 

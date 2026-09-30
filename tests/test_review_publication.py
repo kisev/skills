@@ -68,21 +68,37 @@ def action(
     publication: tuple[ModuleType, Path, dict[str, Any], dict[str, Any]],
     *,
     operation: str = "reply",
+    proposed: list[str] | None = None,
     dependencies: dict[str, str] | None = None,
 ) -> tuple[Path, str]:
     module, root, evidence, context = publication
     deps = dependencies if dependencies is not None else {}
     base = "projects/10/merge_requests/2/discussions/thread"
-    if operation == "reply":
-        directory = module.portable.private_directory(root / "artifacts/review_plan/bodies")
-        body = directory / "reply.md"
-        body.write_text("Verified result.\n")
-        argv = ["glab", "api", "--method", "POST", base + "/notes", "-F", f"body=@{body}"]
+    value: dict[str, Any] = {}
+    if operation == "labels":
+        action_id = "labels:update"
+        argv = ["glab", "mr", "update"]
+        value = {"proposed": proposed if proposed is not None else ["type::bug"]}
     else:
-        argv = ["glab", "api", "--method", "PUT", base, "-F", "resolved=true"]
-    command = module.make_command(
-        root, evidence, context, f"thread:one:r1:{operation}", argv, {}, deps
-    )
+        action_id = f"thread:one:r1:{operation}"
+        directory = module.portable.private_directory(root / "artifacts/review_plan/bodies")
+        body = directory / f"{operation}.md"
+        body.write_text("Verified result.\n" if operation != "note" else "General summary.\n")
+        if operation == "reply":
+            argv = ["glab", "api", "--method", "POST", base + "/notes", "-F", f"body=@{body}"]
+        elif operation == "note":
+            argv = [
+                "glab",
+                "api",
+                "--method",
+                "POST",
+                "projects/10/merge_requests/2/notes",
+                "-F",
+                f"body=@{body}",
+            ]
+        else:
+            argv = ["glab", "api", "--method", "PUT", base, "-F", "resolved=true"]
+    command = module.make_command(root, evidence, context, action_id, argv, value, deps)
     tokens = shlex.split(command)
     return Path(tokens[tokens.index("--action") + 1]), tokens[-1]
 
@@ -105,15 +121,24 @@ def runtime(
         calls.append(argv)
         value = json.loads(payload)
         if "body" in value:
-            observed["notes"]["2"] = {
-                "discussion": "thread",
-                "body": value["body"],
+            note_id = str(max(int(key) for key in observed["notes"]) + 1)
+            endpoint = argv[argv.index("--method") + 2]
+            discussion = (
+                endpoint.split("/discussions/", 1)[1].split("/")[0]
+                if "/discussions/" in endpoint
+                else f"general-{note_id}"
+            )
+            observed["notes"][note_id] = {
+                "discussion": discussion,
+                "body": value["body"].rstrip("\n"),
                 "author": 7,
                 "resolved": None,
                 "position": None,
             }
         elif "resolved" in value:
             observed["notes"]["1"]["resolved"] = value["resolved"]
+        elif "labels" in value:
+            observed["mr"]["labels"] = [label for label in value["labels"].split(",") if label]
         return subprocess.CompletedProcess(argv, 0, b"{}", b"")
 
     monkeypatch.setattr(module, "run_mutation_process", mutate)
@@ -148,6 +173,180 @@ def test_later_reply_blocks_closure(publication: Any, monkeypatch: pytest.Monkey
     observed["notes"]["3"] = {**observed["notes"]["2"], "author": 8, "body": "Not fixed"}
     with pytest.raises(module.portable.WorkflowError, match="changed"):
         module.execute(close, close_digest)
+    assert len(calls) == 1
+
+
+def test_label_drift_does_not_block_note_actions(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    deps: dict[str, str] = {}
+    reply, digest = action(publication, dependencies=deps)
+    note, note_digest = action(publication, operation="note")
+    observed, calls = runtime(publication, monkeypatch)
+    observed["mr"]["labels"] = ["semver::patch", "type::bug"]
+    assert module.execute(reply, digest)["status"] == "applied"
+    assert module.execute(note, note_digest)["status"] == "applied"
+    assert len(calls) == 2
+
+
+def test_unrelated_thread_activity_does_not_block_actions(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    deps: dict[str, str] = {}
+    reply, digest = action(publication, dependencies=deps)
+    close, close_digest = action(publication, operation="resolve", dependencies=deps)
+    observed, calls = runtime(publication, monkeypatch)
+    observed["notes"]["7"] = {
+        "discussion": "other",
+        "body": "Unrelated comment",
+        "author": 8,
+        "resolved": False,
+        "position": None,
+    }
+    assert module.execute(reply, digest)["status"] == "applied"
+    assert module.execute(close, close_digest)["status"] == "applied"
+    assert len(calls) == 2
+
+
+def test_manually_applied_labels_complete_without_write(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    path, digest = action(publication, operation="labels")
+    observed, calls = runtime(publication, monkeypatch)
+    observed["mr"]["labels"] = ["type::bug"]
+    result = module.execute(path, digest)
+    assert result["status"] == "already_applied"
+    assert result["mutation_outcome"] == "applied" and result["external_mutations"] is False
+    assert module.execute(path, digest)["status"] == "already_applied"
+    assert not calls
+
+
+def test_foreign_label_change_blocks_label_update(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    path, digest = action(publication, operation="labels")
+    observed, calls = runtime(publication, monkeypatch)
+    observed["mr"]["labels"] = ["semver::patch"]
+    with pytest.raises(module.portable.WorkflowError, match="labels changed outside the plan"):
+        module.execute(path, digest)
+    assert not calls
+
+
+def test_manually_posted_reply_completes_and_unblocks_state_change(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    deps: dict[str, str] = {}
+    reply, digest = action(publication, dependencies=deps)
+    close, close_digest = action(publication, operation="resolve", dependencies=deps)
+    observed, calls = runtime(publication, monkeypatch)
+    observed["notes"]["9"] = {
+        "discussion": "thread",
+        "body": "Verified result.\n",
+        "author": 7,
+        "resolved": None,
+        "position": None,
+    }
+    result = module.execute(reply, digest)
+    assert result["status"] == "already_applied" and result["external_mutations"] is False
+    assert module.execute(close, close_digest)["status"] == "applied"
+    assert len(calls) == 1
+
+
+def test_manually_resolved_thread_completes_without_write(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    deps: dict[str, str] = {}
+    reply, digest = action(publication, dependencies=deps)
+    close, close_digest = action(publication, operation="resolve", dependencies=deps)
+    observed, calls = runtime(publication, monkeypatch)
+    module.execute(reply, digest)
+    observed["notes"]["1"]["resolved"] = True
+    result = module.execute(close, close_digest)
+    assert result["status"] == "already_applied" and result["external_mutations"] is False
+    assert len(calls) == 1
+
+
+def test_postcondition_matches_gitlab_normalized_body(publication: Any) -> None:
+    module, _, evidence, context = publication
+    reply, digest = action(publication)
+    _, guard = module.load_action(reply, digest)
+    snapshot = module.notes_snapshot(context["discussions"])
+    note = {
+        "discussion": "thread",
+        "body": guard["payload"]["body"].rstrip("\n"),
+        "author": guard["user"]["id"],
+        "resolved": None,
+        "position": None,
+    }
+    observed = {"mr": copy.deepcopy(evidence["object"]), "notes": {**snapshot, "5": note}}
+    effect = module.postcondition(guard, observed, {"notes": snapshot})
+    assert effect == {"note_id": "5", "note": note}
+
+
+def test_pending_unknown_suspends_only_its_own_action(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, _, _, _ = publication
+    deps: dict[str, str] = {}
+    reply, digest = action(publication, dependencies=deps)
+    close, close_digest = action(publication, operation="resolve", dependencies=deps)
+    labels, labels_digest = action(publication, operation="labels")
+    observed, calls = runtime(publication, monkeypatch)
+    original = module.run_mutation_process
+
+    def hide_effect(argv: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
+        result = original(argv, payload)
+        observed["notes"].pop(max(observed["notes"], key=int))
+        return cast("subprocess.CompletedProcess[bytes]", result)
+
+    monkeypatch.setattr(module, "run_mutation_process", hide_effect)
+    blocked = module.execute(reply, digest)
+    assert blocked["status"] == "blocked" and blocked["mutation_outcome"] == "unknown"
+    monkeypatch.setattr(module, "run_mutation_process", original)
+    assert module.execute(labels, labels_digest)["status"] == "applied"
+    with pytest.raises(module.portable.WorkflowError, match="explanation"):
+        module.execute(close, close_digest)
+    replay = module.execute(reply, digest)
+    assert replay["status"] == "blocked" and "inspect --action" in replay["inspect_command"]
+    assert len(calls) == 2
+
+
+def test_legacy_pending_ledger_is_migrated(
+    publication: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module, root, _, _ = publication
+    reply, digest = action(publication)
+    observed, calls = runtime(publication, monkeypatch)
+    original = module.run_mutation_process
+
+    def hide_effect(argv: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
+        result = original(argv, payload)
+        observed["notes"].pop(max(observed["notes"], key=int))
+        return cast("subprocess.CompletedProcess[bytes]", result)
+
+    monkeypatch.setattr(module, "run_mutation_process", hide_effect)
+    module.execute(reply, digest)
+    observed["notes"]["2"] = {
+        "discussion": "thread",
+        "body": "Verified result.",
+        "author": 7,
+        "resolved": None,
+        "position": None,
+    }
+    ledger_path = root / "code-review-publication" / "ledger.json"
+    ledger = json.loads(ledger_path.read_text())
+    ledger_path.write_text(
+        json.dumps({"receipts": ledger["receipts"], "pending": ledger["pendings"][0]})
+    )
+    monkeypatch.setattr(module, "run_mutation_process", original)
+    inspected = module.execute(reply, digest, inspect=True)
+    assert inspected["status"] == "applied"
     assert len(calls) == 1
 
 

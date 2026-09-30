@@ -1,0 +1,39 @@
+{
+  "id": "stage20.skill.team-agreements.trigger.en",
+  "pair_id": "stage20.skill.team-agreements.trigger",
+  "kind": "trigger",
+  "surface": "skill",
+  "locale": "en",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["skill:team-agreements"]
+    },
+    "prompt": "English: select the team-agreements skill for its exact contract scenario."
+  },
+  "expected": {
+    "selected": ["skill:team-agreements"],
+    "not_selected": [],
+    "mutation_boundary": "no-writes",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.team-agreements.trigger.source",
+      "path": ".build/skills/team-agreements/SKILL.md"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "d9077ecf0bba282dccab339a7f5c2426a0452557e1fd1ab2cc2461ada8bccb3b"
+}

@@ -7,21 +7,23 @@
 Текущий источник переносимых навыков - стабильный канал GitHub Pages:
 `https://kisev.github.io/skills`. Его метаданные указывают выпуск и ревизию
 исходников, а `https://github.com/kisev/skills/releases/latest` открывает текущий
-GitHub Release. Необязательный пакет интеграции - `@kisev/skills-opencode`.
+GitHub Release. Необязательный пакет интеграции - `@kisev/agentomatic`.
 
 ## Активные переносимые навыки
 
-Активны ровно 27 переносимых навыков:
+Активны ровно 38 переносимых навыков:
 
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`, `mr-prepare`,
-`release-prepare`, `release-review`, `rtk`,
+`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
+`mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
 `skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
-`task-prepare`, `task-review`, `task-triage`, `team-retro`, `team-roadmap`,
-`team-sprint-close` и `team-sprint-start`.
+`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
+`team-agreements`, `team-feedback`, `team-health`, `team-incident`,
+`team-onboarding`, `team-people`, `team-performance`, `team-report`,
+`team-retro`, `team-roadmap`, `team-sprint-close` и `team-sprint-start`.
 
 Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
-те же 27 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+те же 38 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
 добавляются только в `.build/skills` и проверяются побайтово.
 
 ## Сведения об очистке переносимых навыков
@@ -50,7 +52,7 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Текущий состав интеграции OpenCode
 
-Текущий состав пакета содержит 28 команд: по одной для каждого активного навыка.
+Текущий состав пакета содержит 38 команд: по одной для каждого активного навыка.
 Инструмент пакета `route` доступен без слеш-команды.
 
 Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,
@@ -71,7 +73,7 @@ GitHub Release. Необязательный пакет интеграции - `
 ## Машиночитаемые источники
 
 Точные имена, замены, прежние контрольные суммы и метаданные источников находятся
-в `packages/opencode/assets/migration-inventory.json`. Активный состав пакета
-описан в `packages/opencode/src/catalog.ts`, метаданные выпуска переносимых
+в `packages/agentomatic/assets/migration-inventory.json`. Активный состав пакета
+описан в `packages/agentomatic/src/catalog.ts`, метаданные выпуска переносимых
 навыков - в `packages/skills/package.json`, а объявления общих файлов только для
 сборки - в `shared/manifest.json`.

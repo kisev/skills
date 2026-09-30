@@ -66,7 +66,10 @@ Autonomously classify every item as `accepted`, `deferred`, `rejected`,
 `duplicate`, or `obsolete`. Accept only a current, non-duplicate task whose
 semantic quality verdict is `ready` and whose SemVer is known. Every accepted
 task, not only the first five, requires the nearest compatible open milestone on
-its project or independently versioned component release line. Patch tasks fit
+its project or independently versioned component release line, unless observed
+evidence shows the team decided not to use milestones, for example a
+sprint-label workflow: then use milestone status `none` with a rationale naming
+that decision. Patch tasks fit
 patch, minor, or major releases; minor tasks fit minor or major; major tasks fit
 major. Treat `none` and `not_applicable` as patch planning impact. Dates do not
 affect compatibility. Use documented project milestone naming conventions.
@@ -96,7 +99,9 @@ priority, an already-made decision, private context, or a bounded technical choi
 between two or three concrete, understood, reversible alternatives when the answer
 immediately changes planning. Turn open-ended technical uncertainty into the
 agent's recommendation or a research step instead of delegating analysis to the
-user. Collect the minimum independent questions into one interaction round.
+user. Apply `references/question-guidelines.md` and collect only the current
+independent questions into one interaction round. After actual answers, rebuild
+dependent follow-ups and ask another round only if a material decision remains.
 Represent priority questions as `authority` and questions about an already-made
 decision as `private_context`; do not add separate kinds for these cases.
 

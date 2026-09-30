@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kisev.github.io/skills/taskmatic/snapshot.schema.json",
+  "title": "taskmatic snapshot",
+  "description": "Read-only board state emitted by taskmatic for viewers and agents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "generated_at", "boards", "cards"],
+  "properties": {
+    "schema": { "const": "taskmatic/snapshot/v1" },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "boards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slug", "title", "created_at"],
+        "properties": {
+          "slug": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,38}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+          }
+        }
+      }
+    },
+    "cards": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "board",
+          "title",
+          "notes",
+          "status",
+          "priority",
+          "labels",
+          "assignee",
+          "parent",
+          "children",
+          "linked",
+          "claimed_by",
+          "claim_expires_at",
+          "claim_state",
+          "claim_remaining_seconds",
+          "created_at",
+          "updated_at",
+          "activity"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[0-9a-f]{8}$" },
+          "board": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,38}$" },
+          "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "notes": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["todo", "doing", "review", "blocked", "done"]
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["low", "normal", "high", "urgent"]
+          },
+          "labels": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1, "maxLength": 40 }
+          },
+          "assignee": { "type": ["string", "null"], "maxLength": 60 },
+          "parent": { "type": ["string", "null"], "pattern": "^[0-9a-f]{8}$" },
+          "children": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[0-9a-f]{8}$" }
+          },
+          "linked": { "type": ["string", "null"], "maxLength": 500 },
+          "claimed_by": { "type": ["string", "null"], "maxLength": 60 },
+          "claim_expires_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+          },
+          "claim_state": { "type": ["string", "null"], "enum": ["held", "expired", null] },
+          "claim_remaining_seconds": { "type": ["integer", "null"], "minimum": 0 },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+          },
+          "activity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["at", "kind", "actor", "detail"],
+              "properties": {
+                "at": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["created", "linked", "status", "claim", "release", "edited", "note"]
+                },
+                "actor": { "type": "string", "minLength": 1, "maxLength": 60 },
+                "detail": { "type": "string", "maxLength": 8000 }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

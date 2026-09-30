@@ -1,0 +1,39 @@
+{
+  "id": "stage20.command.team-1on1.contract",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "command",
+  "locale": "neutral",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["command:team-1on1"]
+    },
+    "prompt": "Verify command team-1on1 contract."
+  },
+  "expected": {
+    "selected": ["command:team-1on1"],
+    "not_selected": [],
+    "mutation_boundary": "adapter-only",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-1on1.contract.source",
+      "path": "packages/agentomatic/src/registry.ts"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "7fb6ca2d230797dc989681426592f0717e112790573853075869f00ba5d0dc2e"
+}

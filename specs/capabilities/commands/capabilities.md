@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: Package inventory remains available through `skills-opencode capabilities`.
+- Reason: Package inventory remains available through `agentomatic capabilities`.
 
 ## Purpose
 

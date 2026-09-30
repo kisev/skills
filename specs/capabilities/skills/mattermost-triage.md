@@ -9,7 +9,8 @@ changing Mattermost.
 ## Triggers and Near-Misses
 
 Trigger for reviewing DM/GM attention, mentions, or follow-up over a bounded
-period. Near-misses are broad workspace or channel search, team-wide reporting,
+period. Band, a Mattermost fork, is in scope through its own exact origins.
+Near-misses are broad workspace or channel search, team-wide reporting,
 and automatic replies, reactions, edits, or other mutations.
 
 ## Inputs and Outputs

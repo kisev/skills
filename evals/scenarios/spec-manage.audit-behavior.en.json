@@ -8,7 +8,7 @@
   "surface": "skill",
   "host": "any",
   "input": {
-    "prompt": "Apply the spec-audit drift, critic, severity, and aggregate rules to every case. Return the exact structured outcome and do not write files.",
+    "prompt": "Apply the spec-review drift, critic, severity, and aggregate rules to every case. Return the exact structured outcome and do not write files.",
     "fixture": {
       "selected": ["skill:spec-manage"],
       "cases": [
@@ -119,5 +119,5 @@
   "invariants": [{ "id": "audit-contract", "path": "skills/spec-manage/references/auditing.md" }],
   "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
   "budgets": { "timeout_seconds": 30, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "615ca2a2101b65f259ed5264bd2bea1e6951434c48ee17c636bffce182af7a19"
+  "digest": "5238e47c1efe0c29fdb0eeb8d463f3bcf700647e1aab7acdecb71d18311113f8"
 }

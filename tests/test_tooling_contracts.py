@@ -1,23 +1,89 @@
 from __future__ import annotations
 
+import json
+import os
 import re
+import subprocess
+import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_hooks_keep_precommit_fast_and_prepush_complete() -> None:
+def test_hooks_keep_precommit_fast_and_prepush_scoped() -> None:
     hooks = (ROOT / "lefthook.yml").read_text(encoding="utf-8")
-    assert "--diff-filter=ACMR" in hooks
-    assert "--staged" in hooks
-    assert "run: task pre-push" in hooks
+    pre_commit = hooks.split("pre-push:", 1)[0]
+    pre_push = hooks.split("pre-push:", 1)[1]
+    assert "--diff-filter=ACMR" in pre_commit
+    assert "--staged" in pre_commit
     assert "commitlint --edit {1}" in hooks
     assert "--fix" not in hooks
     assert "git add" not in hooks
-    assert "mise exec -- editorconfig-checker" in hooks
+    assert "mise exec -- editorconfig-checker" in pre_commit
     assert "mise exec -- ec" not in hooks
-    for slow_check in ("pytest", "mypy", "build:skills", "version:check", "package:check"):
-        assert slow_check not in hooks
+    for slow_check in (
+        "pytest",
+        "mypy",
+        "build:skills",
+        "version:check",
+        "test:python",
+        "package:check",
+        "check:core",
+    ):
+        assert slow_check not in pre_commit
+    # The hook stays scoped: the delta resolves against the branch upstream and
+    # falls back to every tracked file, so first pushes run the complete gate.
+    assert "git diff --name-only @{upstream} HEAD 2>/dev/null || git ls-files" in pre_push
+    for job in (
+        "task check:core",
+        "task test:python",
+        "task package:check",
+        "task dependency:audit",
+    ):
+        assert job in pre_push
+    assert "task pre-push" not in hooks
+
+
+def test_prepush_git_environment_does_not_escape_into_fixture_repositories(tmp_path: Path) -> None:
+    hooks = (ROOT / "lefthook.yml").read_text(encoding="utf-8")
+    pre_push = hooks.split("pre-push:\n", 1)[1]
+    commands = [
+        textwrap.dedent(block.split("      fail_text:", 1)[0])
+        for block in pre_push.split("run: |\n")[1:]
+    ]
+    assert commands
+    local_variables = subprocess.check_output(
+        ["git", "rev-parse", "--local-env-vars"], cwd=ROOT, text=True
+    ).splitlines()
+    environment = {key: value for key, value in os.environ.items() if key not in local_variables}
+    repositories = [tmp_path / "hook", tmp_path / "fixture"]
+    for repository in repositories:
+        subprocess.run(["git", "init", "-q", str(repository)], env=environment, check=True)
+    binary = tmp_path / "task"
+    binary.write_text(
+        '#!/bin/sh\ngit -C "$VERIFY_REPO" rev-parse --absolute-git-dir\n',
+        encoding="utf-8",
+    )
+    binary.chmod(0o700)
+    environment.update(
+        {
+            "PATH": f"{tmp_path}{os.pathsep}{environment.get('PATH', '')}",
+            "VERIFY_REPO": str(repositories[1]),
+            "GIT_DIR": str(repositories[0] / ".git"),
+            "GIT_WORK_TREE": str(repositories[0]),
+            "GIT_INDEX_FILE": str(repositories[0] / ".git" / "index"),
+        }
+    )
+    for command in commands:
+        result = subprocess.run(
+            ["sh", "-eu", "-c", command],
+            cwd=repositories[0],
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.stdout.strip() == str(repositories[1] / ".git")
 
 
 def test_workflows_delegate_quality_checks_to_task() -> None:
@@ -41,14 +107,16 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     ):
         assert f"task: {task}" in ci
     assert "ci:" not in ci
-    assert "name: built-skills" in ci
-    assert "path: .build/skills" in ci
-    assert "actions/upload-artifact@" in ci
-    assert "actions/download-artifact@" in ci
+    # CI artifacts do not preserve file modes, so every built-quality job
+    # materializes `.build/skills` itself; byte-identical rebuilds are enforced
+    # by distribution:check.
+    assert "actions/upload-artifact@" not in ci
+    assert "actions/download-artifact@" not in ci
     quality_job = ci[ci.index("  quality:") : ci.index("  built-quality:")]
     built_quality_job = ci[ci.index("  built-quality:") : ci.index("  check:")]
     assert "task: eval:check" not in quality_job
     assert "task: eval:check" in built_quality_job
+    assert "task build:skills" in built_quality_job
     for task in ("release:prepare", "release:pages:verify", "release:npm", "release:github"):
         assert task in publish
     assert "fetch-depth: 0" in publish
@@ -76,8 +144,16 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
         assert duplicated not in publish
 
 
-def test_no_root_npm_workspace_or_runtime_python_dependencies() -> None:
-    assert not (ROOT / "package.json").exists()
+def test_root_npm_workspace_is_private_exact_and_python_stays_detached() -> None:
+    root = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    assert set(root) == {"private", "workspaces"}
+    assert root["private"] is True
+    assert root["workspaces"] == [
+        "apps/memomatic",
+        "apps/taskmatic",
+        "packages/agentomatic",
+        "packages/safe-fs",
+    ]
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "dependencies = []" in pyproject
     assert "skills-ref==0.1.1" in pyproject
@@ -109,5 +185,44 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     assert "deps: [check, dependency:audit]" in taskfile
     assert "  release:preflight:" in taskfile
     assert "task release:check -- --published" in taskfile
+    build_cmd = "mise exec -- npm run build --workspace @kisev/"
+    assert (
+        "  typecheck:typescript:\n    desc: Check types in typescript\n"
+        "    deps: [package:build]" in taskfile
+    ), "typecheck must build workspace packages so clean checkouts resolve types"
+    safe_fs_pos = taskfile.index(f"{build_cmd}safe-fs")
+    assert "mise exec -- npm --prefix ../../apps/taskmatic test" in taskfile
+    assert "mise exec -- npm --prefix ../../apps/taskmatic run pack:check" in taskfile
+    for consumer in ("memomatic", "taskmatic", "agentomatic"):
+        assert taskfile.index(f"{build_cmd}{consumer}") > safe_fs_pos, (
+            f"{consumer} must build after safe-fs"
+        )
+
+
+def test_every_workspace_package_is_wired_into_the_publication_graph() -> None:
+    root = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+    surfaces = {
+        "taskfile.yml": (ROOT / "taskfile.yml").read_text(encoding="utf-8"),
+        "scripts/build_dev_artifacts.py": (ROOT / "scripts/build_dev_artifacts.py").read_text(
+            encoding="utf-8"
+        ),
+        "scripts/build_release_artifacts.py": (
+            ROOT / "scripts/build_release_artifacts.py"
+        ).read_text(encoding="utf-8"),
+        "scripts/publish_npm_release.py": (ROOT / "scripts/publish_npm_release.py").read_text(
+            encoding="utf-8"
+        ),
+        "packages/agentomatic/test/smoke.mjs": (
+            ROOT / "packages/agentomatic/test/smoke.mjs"
+        ).read_text(encoding="utf-8"),
+    }
+    for workspace in root["workspaces"]:
+        name = json.loads((ROOT / workspace / "package.json").read_text(encoding="utf-8"))["name"]
+        for surface, content in surfaces.items():
+            assert name in content, (
+                f"{name} from {workspace} is missing from {surface}; every workspace"
+                " package must be wired into the complete publication graph, see"
+                " docs/how-to/npm-package-lifecycle.md"
+            )
     distribution = (ROOT / "scripts/build_distribution.py").read_text(encoding="utf-8")
     assert "build_skills(BUILT_SKILLS" not in distribution

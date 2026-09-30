@@ -11,6 +11,7 @@
     "mypy==2.3.1",
     "pip-audit==2.10.1",
     "pytest==9.0.3",
+    "pytest-xdist>=3.8.0",
     "ruff==0.16.6",
     "skills-ref==0.1.1",
     "types-jsonschema==4.26.0.20260518",
@@ -100,6 +101,10 @@
       "scripts/check_release.py" = [
         "S603",                                                             # Arguments are fixed release-verification commands.
         "S607",                                                             # Git and npm are required PATH-resolved tools.
+      ]
+      "scripts/release_channel.py" = [
+        "S603",                                                             # Arguments are a fixed git ancestry vector.
+        "S607",                                                             # Git is a required PATH-resolved release tool.
       ]
       "scripts/build_stage20_corpus.py" = ["RUF001"]                        # Confusable characters are intentional corpus cases.
       "scripts/build_skills.py" = ["S105"]                                  # The value is a public build placeholder, not a credential.

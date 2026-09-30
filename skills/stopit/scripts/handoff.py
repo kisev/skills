@@ -291,6 +291,33 @@ def parser() -> Parser:
     return result
 
 
+def _drop_memory_distillate(workspace: Path, content: bytes) -> None:
+    """Queue a transient memory distillate of the handoff; never fail the write."""
+    try:
+        inbox_path = Path(__file__).with_name("memomatic_inbox.py")
+        if not inbox_path.exists():
+            inbox_path = next(
+                parent / "memomatic_inbox.py"
+                for parent in Path(__file__).resolve().parents
+                if (parent / "memomatic_inbox.py").is_file()
+            )
+        spec = importlib.util.spec_from_file_location("memomatic_inbox", inbox_path)
+        if spec is None or spec.loader is None:
+            return
+        inbox = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inbox)
+        summary = " ".join(content.decode("utf-8", "replace").split())[:400]
+        workspace_key = hashlib.sha256(os.fsencode(workspace)).hexdigest()[:12]
+        lines = inbox.entry_lines(
+            [f"stopit handoff for {{workspace}}: {summary}"],
+            source="stopit",
+            key=f"stopit-{workspace_key}",
+        )
+        inbox.drop_memory(lines, "stopit")
+    except Exception:
+        return
+
+
 def main() -> int:
     try:
         arguments = parser().parse_args()
@@ -301,7 +328,9 @@ def main() -> int:
         else:
             if Path(arguments.expected_path) != path:
                 raise HandoffError("handoff destination changed after confirmation")
-            atomic_write(path, state_parts, read_handoff())
+            content = read_handoff()
+            atomic_write(path, state_parts, content)
+            _drop_memory_distillate(workspace, content)
     except HandoffError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

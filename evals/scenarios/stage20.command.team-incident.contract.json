@@ -1,0 +1,39 @@
+{
+  "id": "stage20.command.team-incident.contract",
+  "pair_id": null,
+  "kind": "deterministic",
+  "surface": "command",
+  "locale": "neutral",
+  "revision": 1,
+  "host": "any",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "input": {
+    "fixture": {
+      "selected": ["command:team-incident"]
+    },
+    "prompt": "Verify command team-incident contract."
+  },
+  "expected": {
+    "selected": ["command:team-incident"],
+    "not_selected": [],
+    "mutation_boundary": "adapter-only",
+    "structured_outcome": "contract-passed"
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.team-incident.contract.source",
+      "path": "packages/agentomatic/src/registry.ts"
+    }
+  ],
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "digest": "87aee75a56040bae7ea1c64ac600b3dbf499f6044b90bf022579ae06409c924b"
+}

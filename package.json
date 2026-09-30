@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "workspaces": [
+    "apps/memomatic",
+    "apps/taskmatic",
+    "packages/agentomatic",
+    "packages/safe-fs"
+  ]
+}

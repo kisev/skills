@@ -1,12 +1,14 @@
-# Specification audit
+# Specification review
 
-Audit is completely read-only. Independently check canonical-document quality,
+Review never edits the reviewed project. Independently check canonical-document quality,
 compliance with the language declared in `specs/README.md`, and correspondence
 to source code, tests, schemas, configuration, CLI/API, CI, and deployment.
 `specs/` states the claimed contract and repository evidence shows implementation
 behavior; do not resolve a conflict by silently preferring either. Do not fix
-anything or create report files, temporary audit artifacts, or external
-publications.
+anything in the project or publish findings. Private evidence follows
+`references/documentation-review.md`, including full, incremental, and unchanged
+modes. A repeated invocation reuses decisions and checks affected dependencies;
+it does not silently become a fresh full review.
 The conversational report may use a different language from the canonical tree.
 
 Treat the bundled validator's result as formal structural evidence only. Its

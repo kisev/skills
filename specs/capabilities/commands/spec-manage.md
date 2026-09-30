@@ -37,7 +37,7 @@ Conflicts or ambiguous mode selection produce one short question and no writes.
 
 The command does not infer canonical language from the request. It preserves
 explicit mode and scope; otherwise the skill selects `spec-init`, `spec-onboard`,
-`spec-update`, or read-only `spec-audit` under its evidence and ambiguity rules.
+`spec-update`, or `spec-review` under its evidence and ambiguity rules.
 
 ## Requirement
 
@@ -49,6 +49,6 @@ preserve explicit mode, scope, and language boundaries.
 ## Example
 
 `/spec-manage Document this existing service` selects `spec-onboard` after finding
-implementation evidence and no `specs/`; `/spec-manage spec-audit requirements`
+implementation evidence and no `specs/`; `/spec-manage spec-review requirements`
 passes the explicit read-only mode and scope unchanged.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

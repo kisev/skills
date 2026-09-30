@@ -15,8 +15,10 @@ version, target release impact, rationale, and confidence.
 `milestone.status` is `selected`, `create`, `none`, `remove`, or `unknown`.
 Selected milestones require an exact active catalog ID. Proposed milestones bind
 the project, title, and normalized version but have a null ID until they are
-created and recollected. Non-accepted work has no milestone; an existing
-assignment requires `remove`.
+created and recollected. An accepted task may also use `none` with a null
+candidate when its rationale documents the team's decision not to use
+milestones, such as a sprint-label workflow. Non-accepted work has no
+milestone; an existing assignment requires `remove`.
 
 The planning verdict is `ready`, `needs_clarification`, or `blocked`. A proposed
 milestone needs clarification. A closed or SemVer-incompatible milestone blocks.

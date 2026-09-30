@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "3110741b34ebcd1e9258bdd4252e49f2e9eb5ff40ac8d5f0fc9c1238577777cc",
+  "digest": "a99ee34a0dff3d6fe4c3edd2dddd1081faa8a98dece5833cc07a13d78d8777ef",
   "expected": {
     "mutation_boundary": "enabled-option-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.plugin.rtk.contract.source",
-      "path": "packages/opencode/src/plugins/rtk.ts"
+      "path": "packages/agentomatic/src/plugins/rtk.ts"
     }
   ],
   "kind": "deterministic",

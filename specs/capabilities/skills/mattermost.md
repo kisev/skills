@@ -9,12 +9,18 @@ prepare a manual plan for publishing messages to exact Mattermost targets.
 
 Trigger for Mattermost reading and message sending. A send request produces a
 manual publication plan; the skill never invokes its generated apply or inspect
-commands. Near-misses are broad search and edit, delete, reaction, channel, or
-member mutations.
+commands. Band, a Mattermost fork, triggers the same skill through its own exact
+origins and routes; Band origins do not serve the reactions API, so Band reads
+run with `--no-reactions` without per-post failures. Near-misses are broad
+search and edit, delete, reaction, channel, or member mutations.
 
 ## Inputs and Outputs
 
-Read input is one exact URL and bounded period or scope. Publication preparation
+Read input is one exact URL and bounded period or scope. The default read result
+remains full JSON; a transcript view exposes bounded chronological windows with
+the same coverage status and unmodified message text. Validated direct chats
+identify the authenticated account and its peer by ID without guessing authors
+from the order of the channel name. Publication preparation
 accepts JSON stdin with `messages[{target,message,files}]`: exact HTTPS targets on
 one origin and zero to five absolute regular source files per message, each at
 most 100 MiB. Output is redacted read evidence or a stable private XDG manual
@@ -47,9 +53,12 @@ late edits or deletes remain stale until an explicit `--refresh`.
 ## Errors, Partial, Escalation
 
 Auth, pagination, or repeated-page failures produce partial or blocked status.
-Publication progress is durable. An ambiguous upload blocks retry and may leave
-an unattached server file; an ambiguous post requires manual inspect and is never
-replayed by the agent.
+A GET request that exceeds its configured timeout is reported as a retryable
+`network_timeout` error scoped to the affected target; `read-many` continues
+reading the remaining URLs and the timed-out URL is re-runnable from the
+coverage cache. Publication progress is durable. An ambiguous upload blocks
+retry and may leave an unattached server file; an ambiguous post requires
+manual inspect and is never replayed by the agent.
 
 ## Unique Constraints
 
@@ -78,6 +87,52 @@ The skill shall perform bounded GET reads, preserve safe evidence on partial
 failure, and prepare digest-bound manual message publications without invoking
 their apply or inspect commands. Only the separate helper may perform bounded
 POST requests for one confirmed message action.
+
+#### Verification
+
+Exact-link reader tests verify bounded message collection and redacted failures;
+preparing a response never sends a message or executes a publication command.
+
+### REQ-F-513 - Bound network reads with a configurable per-request timeout
+
+The skill shall bound every GET request by a configurable timeout of at most
+600 seconds, defaulting to 60, report exceeded timeouts as retryable
+`network_timeout` errors scoped to one target, and continue a multi-target
+read past a timed-out target so the remaining targets are still read and the
+timed-out target can be resumed from the coverage cache.
+
+#### Verification
+
+Timeout tests inject stalled requests and invalid limits and verify a controlled
+failure within the configured bound without leaking credentials.
+
+### REQ-F-540 - Read long conversations in bounded transcript windows
+
+For one exact read target and period, the skill shall offer chronological
+transcript windows without truncating message bodies or replacing the default
+full JSON result. Each window shall retain the original read status, completeness,
+errors, warnings, and coverage counts, and distinguish displayed posts from total
+retrieved posts. Channel and chat windows shall expose a fixed end bound for
+subsequent reads; windows are not a durable snapshot if posts are edited during
+paging. Timestamps shall identify their UTC timezone explicitly.
+
+#### Verification
+
+Reader tests recover every post of a long conversation exactly once across
+windows, preserve a partial result as partial, and leave the default output
+unchanged.
+
+### REQ-F-541 - Attribute direct-chat messages from verified identities
+
+For a validated direct chat, the skill shall identify the authenticated user and
+the peer by exact IDs derived from that direct channel. A peer username shall be
+shown only when validated through the explicit `@username` URL; unknown authors
+shall remain unverified rather than being inferred from ID prefixes.
+
+#### Verification
+
+Direct-chat tests verify both sides, unknown authors, and malformed channel
+names without broad participant enumeration or extra-origin requests.
 
 ## Example
 

@@ -10,14 +10,20 @@ import re
 import selectors
 import signal
 import subprocess
+import sys
 import time
 from contextlib import suppress
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from scripts import release_channel  # noqa: E402
+
 PORTABLE_PACKAGE = ROOT / "packages" / "skills" / "package.json"
-OPENCODE_PACKAGE = ROOT / "packages" / "opencode" / "package.json"
-OPENCODE_LOCK = ROOT / "packages" / "opencode" / "package-lock.json"
+OPENCODE_PACKAGE = ROOT / "packages" / "agentomatic" / "package.json"
+OPENCODE_LOCK = ROOT / "package-lock.json"
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
 CHANGELOG = ROOT / "CHANGELOG.md"
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
@@ -205,8 +211,9 @@ def validate(
     versions = {
         "portable": portable,
         "opencode": opencode,
-        "opencode_lock_document": lock.get("version"),
-        "opencode_lock": lock_root[""].get("version"),
+        "opencode_lock_member": lock_root.get("packages/agentomatic", {}).get("version")
+        if isinstance(lock_root.get("packages/agentomatic"), dict)
+        else None,
     }
     if not all(isinstance(value, str) for value in versions.values()):
         raise ReleaseError("release versions must be strings")
@@ -254,23 +261,25 @@ def validate(
             raise ReleaseError("release tag must be annotated")
         if git("rev-parse", f"refs/tags/{tag}^{{commit}}") != revision:
             raise ReleaseError("release tag does not reference HEAD")
-        stable_tags = [
-            value.removeprefix("v")
-            for value in git("tag", "--list", "v*").splitlines()
-            if SEMVER.fullmatch(value.removeprefix("v"))
-        ]
-        if stable_tags and tuple(map(int, version.split("."))) != max(
-            tuple(map(int, value.split("."))) for value in stable_tags
-        ):
-            raise ReleaseError("release tag is older than the latest stable tag")
-        result = run_git(
-            ("merge-base", "--is-ancestor", revision, "origin/main"),
-            LOCAL_GIT_TIMEOUT_SECONDS,
-        )
-        if result.returncode:
-            raise ReleaseError("release commit is not reachable from origin/main")
+        try:
+            channel = release_channel.resolve(tag, revision)
+        except release_channel.ChannelError as error:
+            raise ReleaseError(str(error)) from error
+        if channel["channel"] == "latest":
+            stable_tags = [
+                value.removeprefix("v")
+                for value in git("tag", "--list", "v*").splitlines()
+                if SEMVER.fullmatch(value.removeprefix("v"))
+            ]
+            if stable_tags and tuple(map(int, version.split("."))) != max(
+                tuple(map(int, value.split("."))) for value in stable_tags
+            ):
+                raise ReleaseError("release tag is older than the latest stable tag")
 
-    return {"version": version, "revision": revision}
+    result = {"version": version, "revision": revision}
+    if published and tag is not None:
+        result.update({"channel": channel["channel"], "dist_tag": channel["dist_tag"]})
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -279,7 +288,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--published",
         action="store_true",
-        help="require the annotated tag and release commit to exist on origin/main",
+        help="require the annotated tag and a commit reachable from origin/main "
+        "or its origin/release/vX.Y maintenance line",
     )
     parser.add_argument(
         "--require-clean",

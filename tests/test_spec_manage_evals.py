@@ -32,6 +32,7 @@ def test_mode_selection_behavioral_corpus_is_bilingual_and_complete() -> None:
         "natural-onboard",
         "natural-update",
         "natural-audit",
+        "post-change-activation",
         "evidence-init",
         "evidence-onboard",
         "ambiguous-update-audit",
