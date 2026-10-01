@@ -34,7 +34,7 @@ conclusions are withheld to avoid anchoring.
 
 For a remote MR, derive role only from `MR.author.username` and `GET /user`: equal means `author`, otherwise `reviewer`. If either identity is unavailable, stop rather than guess. A reviewer reports findings and proposed fixes without promising to edit another person's MR. An author receives concrete local fixes and must not be presented as an independent reviewer of their own MR.
 
-Verify collection completeness, exact refs, complete changed files, commits, discussions, notes, and local object availability. Confirm the recorded merge base and compare local changed paths with GitLab. Keep raw refs in private JSON; do not print them in chat or `review-publication.md`. A mismatch or incomplete page makes the review blocked or partial.
+Verify collection completeness, exact refs, complete changed files, commits, discussions, notes, and local object availability. Confirm the recorded merge base and compare local changed paths with GitLab. Keep raw refs out of chat and prose in `runbook.md`; executable GitLab position arguments retain exact refs. A mismatch or incomplete page makes the review blocked or partial.
 
 Inspect exact committed content without changing the checkout: use `git diff <base> <head> --`, `git show <head>:<path>`, and `git grep <pattern> <head> --`. Trace direct consumers, callers, configuration precedence, alternate paths, retries, rollback, and failure handling beyond changed lines. Inspect the complete job inventory for the selected exact-head pipeline and recursively collected child/downstream pipelines. Use job metadata to identify which tests, linters, formatters, and other checks actually ran. Read every collected failed/canceled trace excerpt and account for it in `ci_job_assessments`; do not infer a process gate from the job name alone. Checks that require executing the exact tree remain unverified unless the existing checkout already equals the reviewed head.
 
@@ -43,7 +43,7 @@ Reconstruct intent from the MR title, description, source branch, commits, discu
 On every invocation, read every non-system discussion and every reply, whether the thread is open or resolved and whether the code or conversation changed. Do not treat `resolved=true`, `Fixed`, approvals, green CI, or no conflicts as proof. For each thread record its permalink, current state, assessment, rationale, explicit `fix_mode` (`suggestion`, `patch`, or `not_required`), optional unified `patch`, and exactly one outcome: `no_publication`, `local_fix`, `reply`, `resolve`, or `reopen`. An open thread cannot use `no_publication`: reply, resolve, or, for an author, an explicit local fix. A resolved thread uses `no_publication` when its existing explanation or an applied GitLab suggestion already establishes the fix and a new reply adds no information. Prepare a concise reply only when it adds an independent confirmation or correction; if the problem remains, include the fix and `reopen`. Never say that a resolved thread is being closed. A publishable response must continue the complete conversation naturally, react to its latest relevant point, avoid repeating the thread, and be written from the authenticated user's factual role. Apply the `humanize` skill before drafting it and do not use `;` outside code, commands, or exact quotations. When addressing another participant, use the selected language's ordinary informal second-person singular without inserting a pronoun where none is natural. The review workflow never invokes a publication action.
 When a fixing commit is attributable from canonical evidence, name it naturally and link to its immutable GitLab revision without displaying a SHA. If no safe attribution exists, confirm the current code result without guessing a commit.
 
-Every contract-6 thread decision must bind `last_note_id`,
+Every contract-7 thread decision must bind `last_note_id`,
 `last_note_body_sha256`, and `thread_sha256` for the complete discussion,
 including system notes. A stale or edited conversation invalidates the decision
 before plan creation. `accepted` requires a valid `suggestion` or `patch` and
@@ -53,7 +53,7 @@ keeps a thread open (`reopen` when currently resolved); `fixed`,
 `fixing_commit=null` when attribution is unavailable, otherwise its `{title,url}`
 object contains an immutable GitLab commit URL.
 
-If context selects `unchanged`, preserve that explicit mode, omit the critic, and still complete a fresh discussion audit, decision, content draft, and contract-6 publication plan; never reuse the previous plan as the result of a new invocation. If it selects `incremental`, review the delta-triggered scope, revalidate every previous finding and recommended issue, and require an independent critic receipt with a different run/session identity and the incremental-delta digest. Otherwise choose `fast`, `normal`, or `deep`; `fast` is only for a small confirmed low-risk change, while `normal` and `deep` require an independent critic. The primary reviewer must accept or reject every critic finding and unresolved thread with a reason. Reject a critic finding as a duplicate when it describes an already accepted primary finding; never accept the same structured finding under multiple IDs.
+If context selects `unchanged`, preserve that explicit mode, omit the critic, and still complete a fresh discussion audit, decision, content draft, and contract-7 publication plan; never reuse the previous plan as the result of a new review invocation. Targeted plan repairs follow `references/repair.md`, not a new invocation. If it selects `incremental`, review the delta-triggered scope, revalidate every previous finding and recommended issue, and require an independent critic receipt with a different run/session identity and the incremental-delta digest. Otherwise choose `fast`, `normal`, or `deep`; `fast` is only for a small confirmed low-risk change, while `normal` and `deep` require an independent critic. The primary reviewer must accept or reject every critic finding and unresolved thread with a reason. Reject a critic finding as a duplicate when it describes an already accepted primary finding; never accept the same structured finding under multiple IDs.
 
 An incremental critic receipt contains `target_finding_ids`. Include every
 previous finding assessed as `changed` or `unverified`, plus any disputed
@@ -70,13 +70,17 @@ MR contribution separately from the accumulated next-release impact in required
 `semver_assessment`. When the release basis cannot be established, report the
 reason and use explicit target-branch fallback, with no next-release estimate.
 
-A publication on a current new diff line prefers exactly one GitLab `suggestion`
-block. Use a `suggestion:-N+M` fence opener for a bounded contiguous multi-line replacement;
-the range must stay inside the exact reviewed file. General, deleted-line,
-outdated, non-contiguous, and otherwise unanchorable fixes use `fix_mode=patch`
-with one textual unified Git patch per finding or actionable thread. A published
-patch is wrapped in one copy-ready `sh` block using `git apply <<'PATCH'`, so
-pasting and running the complete block applies it. The runner
+GitLab suggestions are the default. First find an applicable current position,
+including visible context lines; do not choose a general comment merely to justify
+a patch. Use a `suggestion:-N+M` fence opener for a bounded contiguous replacement.
+For separate positions supply `suggestions` records with `path`, `line`, and `body`,
+and `split_rationale` explaining why partial application is safe. Each part has one
+suggestion block, while the parent `body`/`proposed_response` contains prose only.
+All parts belong to one finding; validate individual and combined results.
+Use `fix_mode=patch` only with a concrete `patch_reason` for a technical limitation
+or unsafe division. Put the unified diff exclusively in `patch`; `body` and
+`proposed_response` must not contain a diff or `git apply` heredoc. The runner adds
+one copy-ready block and chooses fences safe for embedded Markdown. The runner
 checks each patch against the exact reviewed head in a temporary index, rejects
 binary, symlink, rename, traversal, and oversized patches, and never changes the
 checkout. Omit `index` lines so blob identifiers do not enter user-facing output.
@@ -93,7 +97,7 @@ out-of-scope follow-ups in `recommended_issues`. Preserve their stable IDs and
 the existing incremental completion rules.
 
 Finalization writes body files and content-addressed `.patch` files, then atomically
-replaces `<artifact-root>/review-publication.md` and the review baseline. After
+replaces `<artifact-root>/runbook.md` and the review baseline. After
 `finish-review`, print its `chat` field verbatim as the compact review summary and
 append exactly one fenced code block with the manual launch command
 `reviewmatic plan --artifact-root <artifact-root>`. The user copies and runs it
@@ -101,8 +105,9 @@ themselves; never execute it, and never publish, retry, or apply anything during
 review. The interactive plan walkthrough, thread replies with editable drafts,
 label and issue publication, and local patch application through a dedicated git
 worktree belong to that manual `reviewmatic plan` session; read
-`references/publication.md` for the guard, freshness, receipt, and recovery
-contract behind its actions. State that nothing was executed.
+`references/publication.md` for the direct manual command and error contract.
+State that nothing was executed. For local repair or changed evidence read
+`references/repair.md`; preserve existing analysis rather than restarting it.
 
 Bind every local patch command to the canonical review checkout and exact reviewed
 head. Show the read-only `git apply --check` command first. The marked `git apply`

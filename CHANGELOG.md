@@ -52,7 +52,8 @@ All notable changes to this project are documented in this file. Entries follow
 - New workspace app `@kisev/reviewmatic` (`apps/reviewmatic`): the TypeScript
   runtime of the code-review chain with byte-compatible artifacts and digests.
   It ports evidence collection, the review state machine, immutable plans, and
-  guarded publication (receipts, postconditions, inspect/retry) and adds
+  direct manual publication (`runbook.md` with copy-ready `glab` commands; no
+  receipts, reservations, locks, expiry, polling, or automatic retries) and adds
   `reviewmatic plan`, an interactive terminal walkthrough of a finished plan:
   thread remarks with editable `$EDITOR` reply drafts and explicit send,
   send-and-resolve, or skip choices, label updates, recommended issues, and

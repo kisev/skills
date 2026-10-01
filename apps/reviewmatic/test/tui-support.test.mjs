@@ -6,7 +6,6 @@ import { execFileSync } from "node:child_process";
 import { test, after } from "node:test";
 import {
   planItems,
-  commandTarget,
   itemText,
   safeLink,
   terminalLink,
@@ -163,15 +162,6 @@ test("terminal links reject unsafe schemes and controls and long lines are scrol
   const line = "Long source line ".repeat(100);
   assert.equal(visualLines(line, 30).join(""), line);
   assert.ok(visualLines(line, 30).every((row) => row.length <= 30));
-});
-
-test("command target extracts action path and confirm digest", () => {
-  const target = commandTarget(
-    "reviewmatic publication apply --action /x/y.json --confirm " + "c".repeat(64),
-  );
-  assert.equal(target.path, "/x/y.json");
-  assert.equal(target.digest, "c".repeat(64));
-  assert.throws(() => commandTarget("reviewmatic publication apply"), /invalid/);
 });
 
 test("suggestion to patch replaces the anchored line and applies cleanly", () => {

@@ -99,19 +99,18 @@ test("capabilities emit the contract and publication payloads", () => {
   const publication = run(["publication", "--capabilities"]);
   assert.equal(publication.status, 0);
   const payload = JSON.parse(publication.stdout);
-  assert.equal(payload.schema, "code-review/publication/v1");
-  assert.equal(payload.platform, "posix");
-  assert.deepEqual(payload.operations, ["apply", "inspect", "retry"]);
+  assert.equal(payload.publication, "manual glab commands");
+  assert.deepEqual(payload.operations, []);
   assert.equal(payload.external_mutations, false);
 });
 
 test("publication and marker-run surface mirror their Python entrypoints", () => {
   const missing = run(["publication"]);
   assert.equal(missing.status, 2);
-  assert.equal(JSON.parse(missing.stdout).error, "mode, --action and --confirm are required");
+  assert.match(JSON.parse(missing.stdout).error, /historical only/);
   const invalid = run(["publication", "bogus"]);
   assert.equal(invalid.status, 2);
-  assert.match(JSON.parse(invalid.stdout).error, /invalid choice: 'bogus'/);
+  assert.match(JSON.parse(invalid.stdout).error, /historical only/);
   const marker = run(["marker-run", "--skill", "code-review"]);
   assert.equal(marker.status, 2);
   assert.equal(

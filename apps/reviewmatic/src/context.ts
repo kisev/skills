@@ -53,7 +53,8 @@ import {
   writeJson,
 } from "./contract.js";
 import { labelCatalog, validateLabelAssessments } from "./label-assessment.js";
-import { makeCommand } from "./publication.js";
+import { makeCommand, shellQuote } from "./publication.js";
+import { suggestionParts, suggestionsPatch } from "./fixes.js";
 import {
   collect as semverCollect,
   reportLines as semverReportLines,
@@ -66,7 +67,7 @@ import { VERSION } from "./version.js";
 type Json = Record<string, unknown>;
 
 export const INCREMENTAL_CONTRACT_VERSION = 1;
-export const REVIEW_CONTRACT_VERSION = 6;
+export const REVIEW_CONTRACT_VERSION = 7;
 export const BASELINE_NAME = "review-baseline.json";
 export const PROGRESS_NAME = "review-current.json";
 export const REVIEW_EVIDENCE_NAME = "review-evidence.json";
@@ -767,13 +768,16 @@ export async function baselinePointer(root: string): Promise<[Json, Json] | null
   }
   if (
     plan.complete !== true ||
-    ![1, 2, 3, 4, 5, REVIEW_CONTRACT_VERSION].includes(plan.review_contract_version as number) ||
+    ![1, 2, 3, 4, 5, 6, REVIEW_CONTRACT_VERSION].includes(plan.review_contract_version as number) ||
     !jsonEqual(plan.target, pointer.target)
   ) {
     throw new WorkflowError("code-review baseline is incomplete or incompatible");
   }
   const markdownPath = String(pointer.markdown_path ?? "");
-  if (markdownPath !== `${root}/review-publication.md` || !isDigest(pointer.markdown_digest)) {
+  if (
+    ![`${root}/review-publication.md`, `${root}/runbook.md`].includes(markdownPath) ||
+    !isDigest(pointer.markdown_digest)
+  ) {
     throw new WorkflowError("code-review baseline Markdown identity is invalid");
   }
   const source = regularFile(markdownPath, "code-review baseline Markdown");
@@ -1605,6 +1609,12 @@ function markdownCell(value: unknown): string {
   return pyStr(value).replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
 
+export function codeFence(value: string, language = ""): string {
+  const runs = value.match(/`+/g) ?? [];
+  const fence = "`".repeat(Math.max(3, ...runs.map((run) => run.length + 1)));
+  return `${fence}${language}\n${value.trimEnd()}\n${fence}`;
+}
+
 export function metadataAssessment(evidence: Json, assessment: unknown): Json {
   const objectValue = evidence.object;
   if (!isDict(objectValue)) {
@@ -1930,7 +1940,12 @@ function splitAsciiWhitespace(value: string): string[] {
   return value.split(/[ \t\n\r\f\v]+/).filter((item) => item.length > 0);
 }
 
-function validateGitPatch(repoRoot: string, headSha: string, patch: string): string[] {
+export function validateGitPatch(
+  repoRoot: string,
+  headSha: string,
+  patch: string,
+  result?: { tree?: string },
+): string[] {
   const paths = patchPaths(patch);
   for (const path of paths) {
     const treeEntry = String(gitRead(repoRoot, ["ls-tree", headSha, "--", path])).trim();
@@ -1978,6 +1993,16 @@ function validateGitPatch(repoRoot: string, headSha: string, patch: string): str
       throw new WorkflowError("Git patch effective paths cannot be inspected");
     }
     inspectedStdout = inspected.stdout as Buffer;
+    if (result !== undefined) {
+      const tree = spawnSync("git", ["-C", repoRoot, "write-tree"], {
+        env: environment,
+        encoding: "utf8",
+        timeout: 45_000,
+      });
+      if (tree.status !== 0 || tree.error)
+        throw new WorkflowError("Cannot compare complete fix result");
+      result.tree = tree.stdout.trim();
+    }
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
@@ -2031,7 +2056,7 @@ function changedDiffLines(
   headSha: string,
   path: string,
 ): [Set<number>, Set<number>] {
-  const diff = String(gitRead(repoRoot, ["diff", "--unified=0", baseSha, headSha, "--", path]));
+  const diff = String(gitRead(repoRoot, ["diff", "--unified=3", baseSha, headSha, "--", path]));
   const oldLines = new Set<number>();
   const newLines = new Set<number>();
   const pattern = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm;
@@ -2107,13 +2132,41 @@ function validateFixingCommit(value: unknown): void {
   }
 }
 
-function validateThreadFix(item: Json, source: Json, repoRoot: string, headSha: string): void {
+function validateThreadFix(
+  item: Json,
+  source: Json,
+  repoRoot: string,
+  headSha: string,
+  baseSha: string,
+): void {
   const fixMode = item.fix_mode;
   if (!["suggestion", "patch", "not_required"].includes(fixMode as string)) {
     throw new WorkflowError("thread fix mode is invalid");
   }
   const response = item.proposed_response ?? null;
   const suggestionCount = typeof response === "string" ? suggestionBlocks(response).length : 0;
+  if (item.suggestions !== undefined) {
+    if (
+      fixMode !== "suggestion" ||
+      item.outcome === "no_publication" ||
+      item.outcome === "local_fix" ||
+      suggestionCount !== 0 ||
+      item.patch !== null
+    )
+      throw new WorkflowError(
+        "Related thread suggestions require a published prose response and no patch",
+      );
+    const parts = suggestionParts(item);
+    for (const part of parts) {
+      validateSuggestion(part.body, { repoRoot, headSha, path: part.path, line: part.line });
+      const [, lines] = changedDiffLines(repoRoot, baseSha, headSha, part.path);
+      if (!lines.has(part.line))
+        throw new WorkflowError("Thread suggestion position is outside the exact visible diff");
+      validateGitPatch(repoRoot, headSha, suggestionsPatch(repoRoot, headSha, [part]));
+    }
+    validateGitPatch(repoRoot, headSha, suggestionsPatch(repoRoot, headSha, parts));
+    return;
+  }
   const position = source.root_position ?? null;
   const currentNewLine = Boolean(
     isDict(position) &&
@@ -2148,6 +2201,12 @@ function validateThreadFix(item: Json, source: Json, repoRoot: string, headSha: 
     throw new WorkflowError("thread patch fix is invalid");
   }
   if (fixMode === "patch") {
+    if (!nonemptyString(item.patch_reason))
+      throw new WorkflowError("Thread patch fallback requires a concrete patch_reason");
+    if (/^diff --git |git\s+apply\s*(?:<<|--)/m.test(String(response)))
+      throw new WorkflowError(
+        "Thread patch response must be prose only; the runner owns the patch block",
+      );
     validateGitPatch(repoRoot, headSha, item.patch as string);
   }
   if (fixMode === "not_required" && ((item.patch ?? null) !== null || suggestionCount !== 0)) {
@@ -2179,7 +2238,10 @@ export function validateFindingPublications(value: unknown, findingIds: Set<stri
   const seen = new Set<string>();
   for (const entry of value) {
     const item = entry as Json;
-    if (!isDict(item) || !setsEqual(keySet(item), keys)) {
+    if (!isDict(item)) throw new WorkflowError("finding publication is invalid");
+    const baseKeys = keySet(item);
+    for (const key of ["suggestions", "split_rationale", "patch_reason"]) baseKeys.delete(key);
+    if (!isDict(item) || !setsEqual(baseKeys, keys)) {
       throw new WorkflowError("finding publication is invalid");
     }
     const findingId = item.finding_id;
@@ -2200,19 +2262,27 @@ export function validateFindingPublications(value: unknown, findingIds: Set<stri
     const fixMode = item.fix_mode as string;
     const patch = item.patch ?? null;
     const suggestionCount = suggestionBlocks(item.body as string).length;
+    const grouped = item.suggestions !== undefined;
+    if (grouped) {
+      suggestionParts(item);
+      if (fixMode !== "suggestion" || suggestionCount !== 0)
+        throw new WorkflowError("Grouped suggestion body must be prose; parts own their blocks");
+    }
     if (fixMode === "patch") {
       if (!nonemptyString(patch) || suggestionCount !== 0) {
         throw new WorkflowError("patch fix requires a patch and forbids suggestion");
       }
       patchPaths(patch as string);
-    } else if (patch !== null || suggestionCount !== 1) {
+      if (/^diff --git |git\s+apply\s*(?:<<|--)/m.test(String(item.body)))
+        throw new WorkflowError("Patch body must be prose only; put the unified diff in patch");
+    } else if (patch !== null || (!grouped && suggestionCount !== 1)) {
       throw new WorkflowError("suggestion fix requires one suggestion and no patch");
     }
     if (publicationType === "general" || publicationType === "local_fix") {
       if (path !== null || line !== null || oldLine !== null) {
         throw new WorkflowError("non-line finding fix cannot have a line");
       }
-      if (fixMode !== "patch") {
+      if (fixMode !== "patch" && !grouped) {
         throw new WorkflowError("general and local finding fixes require a Git patch");
       }
     } else if (
@@ -2223,7 +2293,7 @@ export function validateFindingPublications(value: unknown, findingIds: Set<stri
       throw new WorkflowError("line finding publication position is invalid");
     } else if (oldLine !== null && fixMode !== "patch") {
       throw new WorkflowError("deleted-line finding fixes require a Git patch");
-    } else if (fixMode === "suggestion") {
+    } else if (fixMode === "suggestion" && !grouped) {
       validateSuggestion(item.body as string);
     }
     seen.add(findingId as string);
@@ -2470,7 +2540,6 @@ function findingRevisions(
   incremental: Json,
   assessments: Json[],
   currentIds: Set<string>,
-  markers: Record<string, Json>,
 ): Record<string, number> {
   const previous = previousRevisions(incremental);
   const assessmentById = new Map<string, Json>(
@@ -2478,10 +2547,7 @@ function findingRevisions(
   );
   const revisions: Record<string, number> = {};
   for (const findingId of currentIds) {
-    const priorRevision = Math.max(
-      previous[findingId] ?? 0,
-      findingId in markers ? (markers[findingId].revision as number) : 0,
-    );
+    const priorRevision = previous[findingId] ?? 0;
     if (priorRevision === 0) {
       revisions[findingId] = 1;
       continue;
@@ -2512,16 +2578,12 @@ async function structuredPublicationPreview(
   }
   const bodyFiles: Json[] = [];
   const actions: Json[] = [];
-  const markers: Record<string, Json> = {};
   const incremental = context.incremental as Json;
   const previous = previousRevisions(incremental);
   const previousAllowed = new Set(Object.keys(previous));
   const assessmentById = new Map<string, Json>(assessments.map((item) => [String(item.id), item]));
   const findingIds = new Set<string>(findings.map((item) => String(item.id)));
-  const revisions = findingRevisions(incremental, assessments, findingIds, markers);
-  const discussionById = new Map<string, Json>(
-    ((context.discussions as Json[]) ?? []).map((item) => [String(item.id), item]),
-  );
+  const revisions = findingRevisions(incremental, assessments, findingIds);
   const discussionByRoot = new Map<string, Json>(
     ((context.discussions as Json[]) ?? [])
       .filter((item) => item.root_system === false)
@@ -2541,7 +2603,7 @@ async function structuredPublicationPreview(
     stdinSha256: string | null = null,
   ): Promise<string> =>
     dryRun
-      ? `reviewmatic publication apply --action ${root}/preview-action.json --confirm ${"0".repeat(64)}`
+      ? argv.map(shellQuote).join(" ")
       : makeCommand(
           root,
           evidence,
@@ -2570,7 +2632,7 @@ async function structuredPublicationPreview(
 
   const bodyWithFix = (body: string, fix: Json): string => {
     if (fix.fix_mode !== "patch") return body;
-    return `${body.replace(/\s+$/, "")}\n\n\`\`\`sh\n${renderPublicationPatchCommand(fix)}\n\`\`\``;
+    return `${body.replace(/\s+$/, "")}\n\n${codeFence(renderPublicationPatchCommand(fix), "sh")}`;
   };
 
   const enrichedThreads = threadDecisions.map((item) => enrichFix("thread", String(item.id), item));
@@ -2787,42 +2849,24 @@ async function structuredPublicationPreview(
       throw new WorkflowError("every actionable finding requires a concrete fix");
     }
     enrichedFindings.push({ ...publicationSpec, revision: revision });
-    const marker = previousAllowed.has(findingId) ? (markers[findingId] ?? null) : null;
-    if (marker !== null && marker.kind !== "finding") {
-      throw new WorkflowError("finding publication marker kind is invalid");
-    }
     const assessment = assessmentById.get(findingId) ?? null;
-    if (marker !== null) {
-      if (assessment === null) {
-        throw new WorkflowError("published baseline finding lacks an assessment");
+    if (previousAllowed.has(findingId) && assessment?.publication_action === "no_publication")
+      continue;
+    if (context.role === "author") continue;
+    if (publicationSpec.suggestions !== undefined) {
+      const parts = suggestionParts(publicationSpec);
+      for (const [index, part] of parts.entries()) {
+        await addBodyAction(
+          `${findingId}@suggestion-${index + 1}`,
+          revision,
+          "finding",
+          "create_line",
+          `${publicationSpec.body}\n\n${part.body}`,
+          { mutation: { path: part.path, line: part.line, old_line: null } },
+        );
       }
-      const operation = assessment.publication_action as string;
-      if (operation === "no_publication") continue;
-      const nextRevision = Math.max(revision, (marker.revision as number) + 1);
-      const discussion =
-        (marker.discussion_id ?? null) !== null
-          ? (discussionById.get(String(marker.discussion_id)) ?? null)
-          : null;
-      if (["resolve", "reopen"].includes(operation) && discussion === null) {
-        throw new WorkflowError("a standalone finding cannot change thread state");
-      }
-      await addBodyAction(
-        findingId,
-        nextRevision,
-        "finding",
-        operation,
-        bodyWithFix(assessment.publication_body as string, publicationSpec),
-        {
-          mutation: {
-            desired_resolved:
-              operation === "resolve" ? true : operation === "reopen" ? false : null,
-          },
-          thread: discussion !== null ? threadExpectation(discussion) : null,
-        },
-      );
       continue;
     }
-    if (context.role === "author") continue;
     const operation = publicationSpec.type === "general" ? "create_general" : "create_line";
     await addBodyAction(
       findingId,
@@ -2847,14 +2891,19 @@ async function structuredPublicationPreview(
     ]),
   );
   const enrichedIssues: Json[] = [];
+  for (const assessment of assessments) {
+    if (assessment.kind === "issue" && assessment.publication_action === "update_issue") {
+      throw new WorkflowError(
+        "a published recommended issue cannot be updated; record no_publication and explain the outcome in the assessment rationale",
+      );
+    }
+  }
   for (const issueValue of recommendedIssues) {
     const issueId = String(issueValue.id);
     const prior = previousIssueById.get(issueId) ?? null;
     const assessment = assessmentById.get(issueId) ?? null;
-    const marker = previousAllowed.has(issueId) ? (markers[issueId] ?? null) : null;
     const previousRevision = Math.max(
       prior !== null ? (prior.revision as number) : 0,
-      marker !== null ? (marker.revision as number) : 0,
       previous[issueId] ?? 0,
     );
     const revision =
@@ -2862,59 +2911,10 @@ async function structuredPublicationPreview(
         ? 1
         : previousRevision + (assessment !== null && assessment.status === "changed" ? 1 : 0);
     enrichedIssues.push({ ...issueValue, revision: revision });
-    if (marker !== null && marker.kind !== "issue") {
-      throw new WorkflowError("recommended issue marker kind is invalid");
-    }
-    let operation: string;
-    if (marker !== null) {
-      if (assessment === null) continue;
-      const pendingUpdate = (previous[issueId] ?? 0) > (marker.revision as number);
-      if (assessment.publication_action === "no_publication" && !pendingUpdate) continue;
-      if (assessment.publication_action !== "update_issue" && !pendingUpdate) {
-        throw new WorkflowError("published recommended issue requires update_issue");
-      }
-      operation = "update_issue";
-    } else {
-      if (assessment !== null && assessment.publication_action === "update_issue") {
-        throw new WorkflowError("an unpublished recommended issue cannot be updated");
-      }
-      operation = "create_issue";
-    }
-    await addBodyAction(issueId, revision, "issue", operation, issueValue.body as string, {
+    if (assessment !== null && assessment.publication_action === "no_publication") continue;
+    await addBodyAction(issueId, revision, "issue", "create_issue", issueValue.body as string, {
       mutation: { title: issueValue.title },
     });
-  }
-
-  for (const assessment of assessments) {
-    const assessmentId = String(assessment.id);
-    if (assessment.kind !== "finding" || findingIds.has(assessmentId)) continue;
-    const marker = markers[assessmentId] ?? null;
-    const operation = assessment.publication_action as string;
-    if (marker === null || operation === "no_publication") continue;
-    if (marker.kind !== "finding") {
-      throw new WorkflowError("previous finding marker kind is invalid");
-    }
-    const discussion =
-      (marker.discussion_id ?? null) !== null
-        ? (discussionById.get(String(marker.discussion_id)) ?? null)
-        : null;
-    if (["resolve", "reopen"].includes(operation) && discussion === null) {
-      throw new WorkflowError("a standalone finding cannot change thread state");
-    }
-    const revision = Math.max(previous[assessmentId] ?? 0, marker.revision as number) + 1;
-    await addBodyAction(
-      assessmentId,
-      revision,
-      "finding",
-      operation,
-      assessment.publication_body as string,
-      {
-        mutation: {
-          desired_resolved: operation === "resolve" ? true : operation === "reopen" ? false : null,
-        },
-        thread: discussion !== null ? threadExpectation(discussion) : null,
-      },
-    );
   }
 
   for (const decision of enrichedThreads) {
@@ -2922,11 +2922,7 @@ async function structuredPublicationPreview(
     if (operation === "no_publication" || operation === "local_fix") continue;
     const rootNoteId = String(decision.id);
     const publicationId = `thread-${rootNoteId}`;
-    const marker = markers[publicationId] ?? null;
-    if (marker !== null && marker.kind !== "thread") {
-      throw new WorkflowError("thread publication marker kind is invalid");
-    }
-    const revision = (marker !== null ? (marker.revision as number) : 0) + 1;
+    const revision = 1;
     const discussion = discussionByRoot.get(rootNoteId) ?? null;
     if (["resolve", "reopen"].includes(operation) && discussion === null) {
       throw new WorkflowError("a plain note cannot change thread state");
@@ -2944,6 +2940,21 @@ async function structuredPublicationPreview(
         thread: discussion !== null ? threadExpectation(discussion) : null,
       },
     );
+  }
+
+  for (const decision of enrichedThreads) {
+    if (decision.suggestions === undefined) continue;
+    const parts = suggestionParts(decision);
+    for (const [index, part] of parts.entries()) {
+      await addBodyAction(
+        `thread-${decision.id}@suggestion-${index + 1}`,
+        1,
+        "thread",
+        "create_line",
+        `${decision.proposed_response}\n\n${part.body}`,
+        { mutation: { path: part.path, line: part.line, old_line: null } },
+      );
+    }
   }
 
   if ((labelReview.add as string[]).length > 0 || (labelReview.remove as string[]).length > 0) {
@@ -3006,7 +3017,10 @@ export async function reviewMarkdown(
   const publicationActions = publication.actions as Json[];
   const actionsByPublication = new Map<string, Json[]>();
   for (const item of publicationActions) {
-    const publicationId = item.publication_id;
+    const publicationId =
+      typeof item.publication_id === "string"
+        ? item.publication_id.split("@suggestion-")[0]
+        : item.publication_id;
     if (publicationId !== null && publicationId !== undefined) {
       const existing = actionsByPublication.get(String(publicationId)) ?? [];
       existing.push(item);
@@ -3058,12 +3072,52 @@ export async function reviewMarkdown(
   if (previous.length === 0) {
     lines.push(presentation.no_items as string, "");
   } else {
-    const headers = presentation.previous_table_headers as string[];
+    const ru = content.locale === "ru";
+    const headers = ru ? ["Находка", "Результат", "Действие"] : ["Finding", "Result", "Action"];
     lines.push(`| ${headers.join(" | ")} |`, `|${headers.map(() => "---").join("|")}|`);
     for (const item of previous) {
+      const record = (content.findings as Json[]).find((finding) => finding.id === item.id);
+      const prior = ((context.incremental as Json)?.previous_findings as Json[] | undefined)?.find(
+        (finding) => finding.id === item.id,
+      );
+      const statuses: Record<string, string> = ru
+        ? {
+            active: "Актуально",
+            changed: "Уточнено",
+            fixed: "Исправлено",
+            withdrawn: "Снято",
+            unverified: "Не проверено",
+          }
+        : {
+            active: "Active",
+            changed: "Updated",
+            fixed: "Fixed",
+            withdrawn: "Withdrawn",
+            unverified: "Unverified",
+          };
+      const name = String(record?.summary ?? prior?.summary ?? item.current_status);
+      const actions: Record<string, string> = ru
+        ? {
+            no_publication: "Нет",
+            reply: "Ответ",
+            resolve: "Закрыть",
+            reopen: "Открыть",
+            update_issue: "Обновить задачу",
+          }
+        : {
+            no_publication: "None",
+            reply: "Reply",
+            resolve: "Resolve",
+            reopen: "Reopen",
+            update_issue: "Update issue",
+          };
       lines.push(
-        `| ${["id", "previous_status", "current_status", "rationale", "action"]
-          .map((key) => markdownCell(item[key]))
+        `| ${[
+          name.length > 80 ? `${name.slice(0, 77)}...` : name,
+          statuses[String(item.status)],
+          actions[String(item.publication_action)],
+        ]
+          .map((value) => markdownCell(value))
           .join(" | ")} |`,
       );
     }
@@ -3105,12 +3159,6 @@ export async function reviewMarkdown(
   const addPublicationAction = (publicationId: string): void => {
     for (const action of actionsByPublication.get(publicationId) ?? []) addAction(action);
   };
-
-  for (const item of previous) {
-    if (item.publication_action !== "no_publication") {
-      addPublicationAction(String(item.id));
-    }
-  }
 
   const threadDecisions = content.thread_decisions as Json[];
 
@@ -3178,7 +3226,9 @@ export async function reviewMarkdown(
   }
 
   lines.push(`## ${presentation.new_findings_heading}`, "");
-  const reviewerFindings = context.role === "reviewer" ? findings : [];
+  const previousIds = new Set(previous.map((item) => String(item.id)));
+  const reviewerFindings =
+    context.role === "reviewer" ? findings.filter((item) => !previousIds.has(String(item.id))) : [];
   if (reviewerFindings.length === 0) {
     lines.push(presentation.no_items as string, "");
   }
@@ -3205,6 +3255,28 @@ export async function reviewMarkdown(
     );
     if (findingPublications.has(finding.id as string)) {
       addPublicationAction(String(finding.id));
+    }
+  }
+
+  const existingFindings =
+    context.role === "reviewer" ? findings.filter((item) => previousIds.has(String(item.id))) : [];
+  if (existingFindings.length > 0) {
+    lines.push(
+      `## ${content.locale === "ru" ? "Действия по прежним находкам" : "Previous finding actions"}`,
+      "",
+    );
+    for (const finding of existingFindings) {
+      lines.push(`### ${finding.summary}`, "", finding.minimum_fix as string, "");
+      addPublicationAction(String(finding.id));
+    }
+  }
+  for (const item of previous) {
+    if (
+      !existingFindings.some((finding) => finding.id === item.id) &&
+      item.publication_action !== "no_publication"
+    ) {
+      lines.push(`### ${item.current_status}`, "", item.rationale as string, "");
+      addPublicationAction(String(item.id));
     }
   }
 
@@ -3261,6 +3333,17 @@ export async function reviewMarkdown(
     ...(content.checks as string[]).map((value) => `- ${value}`),
     "",
   );
+  const source = content.review_source as Json | undefined;
+  const ci =
+    source?.ci_snapshot !== undefined
+      ? artifactPayload(String(source.ci_snapshot), "evidence_snapshot")[1]
+      : evidence;
+  const pipeline = selectExactPipeline(ci.pipelines as Json, ci.head_sha as string);
+  if (pipeline !== null)
+    lines.push(
+      `${content.locale === "ru" ? "CI использованного снимка" : "CI in the assessed snapshot"}: ${pipeline.status}.`,
+      "",
+    );
   for (const action of publicationActions) {
     if (shownActions.has(action.id as string)) continue;
     if (action.kind !== "labels") {
@@ -3268,7 +3351,8 @@ export async function reviewMarkdown(
       addAction(action);
     }
   }
-  return `${lines.join("\n")}\n`;
+  const noItems = String(presentation.no_items).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return `${lines.join("\n")}\n`.replace(new RegExp(`^## [^\\n]+\\n\\n${noItems}\\n\\n`, "gm"), "");
 }
 
 export async function publishReviewState(
@@ -3281,7 +3365,7 @@ export async function publishReviewState(
   expectedProgress: Json,
   bindings: Json = {},
 ): Promise<[string, string]> {
-  const markdownPath = `${root}/review-publication.md`;
+  const markdownPath = `${root}/runbook.md`;
   const baselinePath = `${root}/${BASELINE_NAME}`;
   const currentProgressPath = progressPath(root);
   const markdownDigest = sha256Text(markdown);
@@ -3395,6 +3479,7 @@ export function rejectVisibleRawRefs(
     }
   }
   for (const line of markdown.split("\n")) {
+    if (line.startsWith("glab api ") && line.includes("position[")) continue;
     const visible = line.replace(/\]\(https?:\/\/[^)]*\)/g, "](...)").toLowerCase();
     for (const value of refs) {
       const normalized = value.toLowerCase();
@@ -3545,6 +3630,8 @@ export async function scaffoldReview(
     freshnessChecked: boolean;
     progress?: Json;
     bindings?: Json;
+    source?: Json;
+    baselineStateDigest?: string;
   },
 ): Promise<Json> {
   const [evidencePath, evidence, root, evidenceDigest] = await evidenceContext(evidenceValue);
@@ -3700,7 +3787,6 @@ export async function scaffoldReview(
   const previousLedgerById = new Map<string, Json>(
     ((incremental.previous_finding_ledger as Json[]) ?? []).map((item) => [String(item.id), item]),
   );
-  const observedMarkers: Record<string, Json> = {};
   const previousFindingIds = new Set(previousFindings.map((item) => String(item.id)));
   const previousIssueIds = new Set(previousIssues.map((item) => String(item.id)));
   const currentFindingIds = new Set<string>(
@@ -3712,19 +3798,6 @@ export async function scaffoldReview(
   for (const itemId of previousIssueIds) kindByld[itemId] = "issue";
   for (const [itemId, kind] of Object.entries(kindByld)) {
     const assessmentItem = assessmentById.get(itemId) as Json;
-    const observedMarker = observedMarkers[itemId] ?? null;
-    if (
-      kind === "finding" &&
-      observedMarker !== null &&
-      ((previousLedgerById.get(itemId) as Json).revision as number) >
-        (observedMarker.revision as number) &&
-      ["active", "changed", "unverified"].includes(assessmentItem.status as string) &&
-      assessmentItem.publication_action === "no_publication"
-    ) {
-      throw new WorkflowError(
-        "a prepared but unpublished finding revision still requires publication",
-      );
-    }
     if (
       ["fixed", "withdrawn"].includes((previousLedgerById.get(itemId) as Json).status as string) &&
       assessmentItem.status === "active"
@@ -3783,14 +3856,21 @@ export async function scaffoldReview(
       }
     }
     if (item.fix_mode === "patch") {
+      if (!nonemptyString(item.patch_reason))
+        throw new WorkflowError(
+          "Patch fallback requires a concrete patch_reason; prefer suggestions",
+        );
       validateGitPatch(repoRoot, headSha, item.patch as string);
     } else {
-      validateSuggestion(item.body as string, {
-        repoRoot: repoRoot,
-        headSha: headSha,
-        path: item.path as string,
-        line: item.line as number,
-      });
+      const parts = suggestionParts(item);
+      for (const part of parts) {
+        validateSuggestion(part.body, { repoRoot, headSha, path: part.path, line: part.line });
+        const [, lines] = changedDiffLines(repoRoot, baseSha, headSha, part.path);
+        if (!lines.has(part.line))
+          throw new WorkflowError("Suggestion position is outside the exact visible diff");
+        validateGitPatch(repoRoot, headSha, suggestionsPatch(repoRoot, headSha, [part]));
+      }
+      validateGitPatch(repoRoot, headSha, suggestionsPatch(repoRoot, headSha, parts));
     }
   }
   const currentPublicationById = new Map<string, Json>(
@@ -3884,7 +3964,11 @@ export async function scaffoldReview(
     validateFixingCommit(item.fixing_commit ?? null);
     if (
       !setsEqual(
-        keySet(item),
+        new Set(
+          [...keySet(item)].filter(
+            (key) => !["suggestions", "split_rationale", "patch_reason"].includes(key),
+          ),
+        ),
         new Set([
           "id",
           "url",
@@ -3907,7 +3991,7 @@ export async function scaffoldReview(
     ) {
       throw new WorkflowError("thread decision does not bind the complete discussion");
     }
-    validateThreadFix(item, source, repoRoot, headSha);
+    validateThreadFix(item, source, repoRoot, headSha, baseSha);
     const assessmentValue = item.assessment as string;
     const outcome = item.outcome as string;
     if (assessmentValue === "accepted") {
@@ -3989,6 +4073,7 @@ export async function scaffoldReview(
     previous_finding_assessments: previousAssessments,
     recommended_issues: enrichedIssues,
     thread_decisions: enrichedThreads,
+    ...(draft?.source ? { review_source: draft.source } : {}),
   };
   const markdown = await reviewMarkdown(
     evidence,
@@ -4016,6 +4101,7 @@ export async function scaffoldReview(
   );
   const payload: Json = {
     profile: "code-review",
+    ...(draft?.source ? { review_source: draft.source } : {}),
     review_contract_version: REVIEW_CONTRACT_VERSION,
     external_mutations: false,
     evidence_digest: evidenceDigest,
@@ -4059,7 +4145,9 @@ export async function scaffoldReview(
     path,
     planDigest,
     context.target as Json,
-    ((incremental.incremental_baseline as Json).state_digest as string | null) ?? null,
+    draft?.baselineStateDigest ??
+      ((incremental.incremental_baseline as Json).state_digest as string | null) ??
+      null,
     draft?.progress ?? {
       stage: "content_missing",
       evidence_path: evidencePath,
@@ -4309,7 +4397,7 @@ async function reviewStatusInternal(artifactRootValue: string): Promise<Json> {
     context_path: progress.context_path ?? null,
     mode: progress.mode ?? null,
     locale: locale,
-    publication_plan_path: actualStage === "plan_ready" ? `${root}/review-publication.md` : null,
+    publication_plan_path: actualStage === "plan_ready" ? `${root}/runbook.md` : null,
     plan_digest: plan !== null ? (progress.plan_digest ?? null) : null,
     next_action: nextActionForStage(nextStage, root, progress),
     external_mutations: false,
@@ -4926,7 +5014,14 @@ async function reportReviewInternal(artifactRootValue: string): Promise<Json> {
   const current = await collect(evidence.target as Json, "code-review", { persist: false });
   if (
     current.retrieval_complete !== true ||
-    !jsonEqual(fingerprint(current), fingerprint(evidence))
+    !jsonEqual(
+      fingerprint(current),
+      fingerprint(
+        isDict(plan.review_source) && plan.review_source.ci_snapshot !== undefined
+          ? artifactPayload(String(plan.review_source.ci_snapshot), "evidence_snapshot")[1]
+          : evidence,
+      ),
+    )
   ) {
     return {
       status: "blocked",

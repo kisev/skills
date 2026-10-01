@@ -3,13 +3,16 @@ import { PassThrough } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
 import test from "node:test";
 import React from "react";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { reviewFixture } from "./helpers/review-fixture.mjs";
 import { render } from "ink";
 import { ReviewApp } from "../dist/tui/app.js";
 import { stringsFor } from "../dist/tui/strings.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 40));
 
-function terminal(t, { readonly = true } = {}) {
+function terminal(t, { readonly = true, command = "invalid-action" } = {}) {
   const previous = { rows: process.stdout.rows, columns: process.stdout.columns };
   process.stdout.rows = 18;
   process.stdout.columns = 50;
@@ -56,7 +59,7 @@ function terminal(t, { readonly = true } = {}) {
             id: `reply-${index}`,
             operation: "reply",
             publication_id: `thread-${index}`,
-            command: "invalid-action",
+            command,
             kind: "thread",
             path: null,
             line: null,
@@ -65,7 +68,11 @@ function terminal(t, { readonly = true } = {}) {
   }));
   const initial = {
     bundle: {
-      plan: { verdict: "ready", target: { url: "https://gitlab.example/g/p/-/merge_requests/7" } },
+      plan: {
+        review_contract_version: 7,
+        verdict: "ready",
+        target: { url: "https://gitlab.example/g/p/-/merge_requests/7" },
+      },
     },
     items,
     view: "overview",
@@ -157,4 +164,28 @@ test("opening or pressing Enter does not publish; sending requires explicit conf
   await terminalState.key("e");
   assert.equal(terminalState.requests.at(-1).kind, "edit");
   assert.equal(terminalState.requests.at(-1).target.body, "Draft reply");
+});
+
+test("slow sends leave navigation, reading, and cancellation available", async (t) => {
+  const fixture = reviewFixture(t);
+  writeFileSync(
+    join(fixture.tmp, "bin", "glab"),
+    "#!/usr/bin/env node\nsetTimeout(() => process.exit(0), 20000);\n",
+  );
+  const ui = terminal(t, { readonly: false, command: "glab api example" });
+  await tick();
+  await ui.key("\r");
+  await ui.key("s");
+  await ui.key("y");
+  assert.equal(ui.state().busy, true);
+  await ui.key("\x1b[C");
+  assert.equal(ui.state().index, 1);
+  await ui.key("t");
+  assert.match(ui.screen(), /reply draft/);
+  await ui.key("z");
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  assert.equal(ui.state().busy, false);
+  assert.match(ui.state().messages.join(" "), /cancelled/);
+  await ui.key("v");
+  assert.match(ui.screen(), /cancelled/);
 });

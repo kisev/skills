@@ -2,275 +2,182 @@
 
 ## Purpose
 
-Review a local WIP or exact GitLab change for defects and contract regressions.
+Review local WIP or one exact GitLab MR for concrete defects and contract regressions.
 
 ## Triggers and Near-Misses
 
-Trigger for review; near-miss: preparing a merge request description.
+Trigger for review; near-miss: preparing an MR description or publishing a release.
+Release verdicts belong to `release-review` unless both reviews are requested.
 
 ## Inputs and Outputs
 
-Input is one exact GitLab MR URL or the current local WIP. Remote output is a
-compact role-aware assessment and a stable manual publication plan containing
-ranked findings, thread actions, previous-finding dispositions, recommended
-issues, exhaustive project-label applicability, a compact label delta, metadata
-assessment, SemVer rationale, validated per-item suggestions or unified patches,
-and guarded one-action publication commands that consume generated body files.
-Published patches are copy-ready `git apply` heredocs, while explanation and
-thread-state commands remain separate.
-The human publication plan identifies the skill and review-contract versions,
-keeps label delta beside compact MR metadata, and omits internal action IDs,
-operations, positions, body paths, and digests.
-The executable runtime is the external `reviewmatic` application; the portable
-archive ships only authored prompt material and materialized references.
+Input is one exact MR URL or current local WIP. The external `reviewmatic` runtime
+produces immutable evidence and decisions, a compact role-aware assessment, and
+`runbook.md`. The portable archive contains authored instructions and materialized
+references, not an embedded executable. Reviewer findings remain out of chat.
+The runbook contains findings, compact previous-finding dispositions, metadata,
+label delta, SemVer, validated fixes, body previews, and direct manual commands.
+Detailed history and exhaustive label decisions remain in private JSON.
 
 ## Workflow Stages
 
-Resolve boundary, collect evidence and context, select full or target-specific
-incremental scope, inspect exact-commit snapshots and affected consumers, and
-complete one editable draft. The host runs independent subagents; the runtime
-validates their receipts and semantic draft locally, then refreshes complete
-evidence and context once and atomically finalizes a contract-6 plan. Resume
-returns the same draft without remote collection. Existing low-level commands
-and v2 artifacts remain supported. Publication is a separate user-invoked step.
+Collect evidence/context, inspect exact-commit snapshots and affected consumers,
+run independent critics when required, complete one draft, validate locally, and
+finalize atomically. Resume retains the draft. Refresh retains candidates and
+decisions while exposing changed analysis scope. Targeted repair creates a new
+version without rerunning unrelated review. Publication is a separate user action.
 
 ## Dependencies
 
-Git, tests, `glab`, and GitLab evidence. Manual publication requires user-owned
-`glab` authentication.
+Git, relevant tests, authenticated `glab`, exact GitLab evidence, and host-native
+independent subagents. Optional specialist profiles are not prerequisites.
 
 ## Remote/Local Effects
 
-Review preparation performs local reads, writes private immutable artifacts,
-bodies, and validated patches, maintains one atomic pointer to the latest
-finalized GitLab review, and reads external state for the exact target. It never
-invokes publication or edits reviewed files. The plan instead gives the user
-one-action guarded commands for discussion, issue, thread-state, or label changes
-and their exact body previews.
+Preparation writes private artifacts but never edits the reviewed checkout or
+publishes. Users can copy commands from `runbook.md` or launch `reviewmatic plan`.
+The TUI executes the same `glab` operations without a shell. Local application uses
+a separate worktree with separate commit and push confirmations.
 
 ## Errors, Partial, Escalation
 
-Missing exact evidence, complete MR-bound exact-head job metadata, unfetchable
-required failed-job trace excerpts, or a required critic is blocked, not silently
-ignored. A trace whose response exceeds the byte limit or whose range request is
-ignored yields its bounded tail as truncated per-job trace evidence without
-failing pipeline collection; classification and the verdict still require trace
-support.
-Missing or stale context, critic, finalize, decision, content, plan, baseline, or
-Markdown bindings make the final report blocked; findings are never reported as
-a best-effort substitute. Failed/canceled jobs are classified from bounded,
-redacted trace evidence across child/downstream pipelines rather than from job
-names. Only clearly proven approval or equivalent manual process gates may avoid
-blocking `ready`; code, infrastructure, unknown, and incomplete failures remain
-blocking, while low findings are non-blocking.
-Job-trace collection shall stream response headers and content under one bounded
-deadline and hard byte limit, retain the last bounded tail when the response
-exceeds the limit, clean up and reap the process group within bounded
-waits on every exit, and fail with a controlled error when cleanup or the
-required POSIX capability is unavailable.
-Irrecoverable loss of the current evidence remains blocked without a synthesized
-next action because the target can no longer be trusted.
-Changed comparison boundaries, rewritten history, incompatible state, or
-incomplete baseline evidence select a full review instead of partial reuse.
-Incremental publication assessment reads actual GitLab discussions, notes, and
-issues authored by the current `glab` user and compares their meaning to the
-review content. It does not use local receipts, markers, idempotency records, or
-postconditions.
+Missing or incomplete evidence, unavailable required traces or critics, and
+invalid bindings block review completion. Failed/canceled jobs require exact-head
+trace-supported classification, including child/downstream pipelines. Only proven
+manual process gates can be non-blocking. Trace collection bounds bytes, retains
+an explicit truncated tail, and cleans up its process group under deadlines.
+Schema diagnostics identify invalid fields; an invalid SemVer object is not
+evidence that the publication baseline is absent. Insufficient targeted checks
+stop repair, preserving the prior plan and unfinished draft.
 
 ## Unique Constraints
 
-Reviewer findings stay out of the compact chat response. Exact refs remain in
-private JSON rather than user-facing reports, and artifact paths are plain
-absolute paths.
-Local WIP uses a separate finalized report and snapshot baseline; its repeated
-review defaults to fix verification and delta-triggered analysis of affected
-consumers. GitLab publication artifacts are not created for local WIP.
-Every GitLab body is authored from the authenticated user's factual role and
-uses natural informal second person when addressing another participant. An
-applicable current-line fix contains exactly one single-line or bounded
-multi-line GitLab `suggestion`; other actionable findings, thread corrections,
-and author local fixes use one validated unified patch per item. Threads without
-a code correction explicitly use `not_required`. Every catalog label receives one
-private applicability decision; only the compact delta and unresolved/relevant
-reasons appear in Markdown.
+Role derives from authenticated user and MR author, never inference. Publication
+prose continues the complete conversation naturally in the chosen language.
+Private artifacts have bounded paths and permissions. Exact refs remain out of
+chat and prose, but executable GitLab position arguments retain exact revisions.
+Ordinary local edits need no user confirmation; external mutations remain manual.
 
 ## Requirement
 
 ### REQ-F-105 - Review exact changes
 
-The remote agent workflow shall use `start-review`, `check-review`, and
-`finish-review` over one generated editable draft. The runtime shall derive
-bindings, accepted findings, rejected candidates, and verdicts without asking
-the agent to transfer duplicate decision/content data. Local validation shall
-report field-specific errors without changing progress or freezing a decision;
-repairs shall reuse the same draft. Finalization shall revalidate complete
-evidence and context, bind the validated draft, and atomically replace the plan,
-Markdown, and baseline. Stale or invalid inputs shall preserve the previous
-final plan. Exact-commit inspection snapshots shall make absent, binary,
-non-regular, or over-budget source files explicit instead of claiming complete
-inspection. Timing output shall distinguish runtime work from host model time.
-Independent review shall prefer available specialist profiles selected by count
-and name; their absence shall fall back to ordinary independent native subagents
-of the current agent, never require profile installation. Every selected critic
-shall supply a distinct real run/session identity and a complete receipt. An
-aggregate shall retain every contributor, finding, and scope binding. Required
-independence shall not be waived when the host truly lacks native delegation.
-The interactive plan shall display complete conversations, source positions,
-assessments, rationales, and safe GitLab links even for `no_publication` items.
-Lists and detail text shall scroll within the terminal. Opening a detail shall
-not send a reply. Read-only items shall have no publication actions; sending only
-a reply shall not resolve/reopen its thread. Mutation choices shall require
-confirmation, and edited bodies shall retain valid code fixes and update the
-plan, Markdown, and baseline together before publication.
+The workflow shall accept one exact MR URL or current local WIP and reject inferred
+or multi-target remote input before collection. Remote collection shall retain
+complete paginated discussions, notes, labels, commits, changes, exact Git objects,
+release/tag catalogs, target revision, and exact-head CI evidence. Missing, binary,
+non-regular, and over-budget inspection inputs shall be explicit.
 
-The skill shall distinguish one exact GitLab MR URL from local WIP, keep review
-preparation non-mutating, and use a compatible finalized GitLab baseline to
-review changed code, conversations, and label catalogs incrementally while
-revalidating every previously accepted finding. It shall produce a compact
-multilingual role-aware assessment and an action-oriented
-`review-publication.md` with natural authenticated-user prose, applicable
-`suggestion` fixes, exhaustive private
-project/inherited-label applicability with SemVer-linked compact delta, thread
-reply/resolve/reopen previews, reviewer findings, non-blocking recommended
-issues, and metadata/SemVer assessments. Contract-6 plans shall distinguish the
-MR's own SemVer contribution (which selects its compatibility label) from the
-accumulated next-release impact after including the MR. The reviewer shall
-establish publication policy and the last published release of the affected
-line from project documentation, publishing configuration, and release evidence,
-never from branch names or globally newest tags alone. The runner shall collect
-paginated release/tag catalogs and the current target commit, bind the chosen
-release name/commit to a complete catalog and available related Git objects,
-and refresh this evidence before final output. Changed release evidence or target
-revision shall force full review rather than reuse an unchanged assessment.
-When policy, publication, or comparison cannot be established reliably, the
-review shall continue with an explicit reason and target-branch fallback; the
-release estimate shall be null, and the MR's target-relative assessment shall
-select its label. Reports shall show the mode, named comparison basis, policy,
-and separate rationales, keeping exact commits in private JSON. Existing plans
-remain readable but cannot serve as contract-6 incremental baselines.
-Every actionable finding, thread
-correction, and author local fix shall contain either one exact-position
-single-line or bounded multi-line suggestion or one content-addressed textual
-unified patch validated against the exact reviewed head without changing the
-checkout; a thread without a code correction shall explicitly use
-`not_required`, and every open thread shall use an explicit reply, closure, or
-author local-fix outcome rather than `no_publication`. It shall prepare direct
-manual one-action publication-helper commands and local `git apply` commands with
-explicit body files. Each remote action shall bind the current finalized plan,
-exact payload, body digest, user, MR identity and refs, conversation, labels, and
-a 24-hour expiry. The separately invoked helper shall serialize publication,
-revalidate before writing, persist an in-progress reservation, and require a fresh
-GitLab postcondition before recording success. Thread state shall depend on the
-successful explanation receipt. Freshness checks shall be scoped to what the
-action itself changes: verified effects from the same evidence snapshot shall be
-credited, label updates shall compare observed labels with the planned snapshot
-and the intended set, thread replies and state changes shall revalidate only
-their target thread, and new notes, discussions, and issues shall require no
-conversation match. An intended effect already visible at the target shall
-complete as already applied without another write and record its receipt.
-Successful action replay shall not write again.
-Only a proven process-start failure shall clear a reservation without a remote
-postcondition. An ambiguous outcome shall suspend only its own action and the
-actions depending on its receipt; unrelated actions shall remain applicable.
-Effect matching shall compare note bodies and issue descriptions with trailing
-whitespace normalized as GitLab stores posted text. Explicit inspection
-may resolve an ambiguous outcome through bounded read-only GitLab observations. The helper shall
-retain a bounded redacted cause and exact recovery commands. It may retry an
-unobserved effect only after the user explicitly selects the retry mode or accepts
-its interactive duplicate-write warning; retry shall revalidate freshness and
-shall never be automatic.
-Old direct-command plans shall remain readable history and require regeneration
-for guarded publication. Local patches retain advisory markers and exact-head
-checks; markers shall not count as publication evidence. Preparation shall never
-invoke publication or patch commands. Every invocation shall read every
-open and resolved non-system discussion and all replies, including an unchanged
-incremental scope. A thread closed by any user shall receive a concise reply only
-when it adds information after checking the full conversation and current code.
-Published Git patches shall use one
-copy-ready quoted `git apply` heredoc. A thread-state command shall follow as a
-separate action after its explanatory reply, and no state change shall be
-prepared without one. Contract-5 plans shall bind every thread decision to the
-full discussion chronology, including system notes; reject stale chronology;
-retain explicit `unchanged` mode; require a validated `suggestion` or patch and
-an open/reopened thread for an accepted problem; and require resolution for an
-open thread found fixed, false-positive, duplicate, or not related. Its optional
-`fixing_commit` shall contain only a natural title and immutable GitLab revision
-URL when canonical evidence proves attribution. For remote
-review, the runner shall own a resumable fail-closed state machine from prepared
-evidence through a recorded independent critic when the selected mode requires
-one, fresh finalize report, bound decision, contract-6 plan, baseline, Markdown,
-and final chat rendering. It shall generate model-ready critic, decision, and content
-templates with exact artifact, label, thread, latest-note, pipeline, complete job
-inventory, and bounded failed/canceled trace bindings;
-reject out-of-order, incomplete, stale, or structurally duplicate accepted findings and plans; keep reviewer finding details
-out of chat; treat low findings as non-blocking; recursively collect bounded
-child/downstream CI evidence; require trace-supported classification for every
-failed/canceled job; permit `ready` only for complete CI evidence whose failures
-are all proven manual process gates; and otherwise render blocking CI without
-another blocking finding as owner decision required.
-For a resolved thread with a sufficient existing explanation or applied GitLab
-suggestion, it shall prepare no duplicate reply; a new reply is permitted only
-when it adds a confirmed correction or independent information. Publication
-prose shall apply `humanize`, avoid semicolons outside exact code, commands, and
-quotations, and never claim to close a thread that is already resolved.
-The plan shall display its producer release version without a maintained version
-literal or runtime checkout dependency. Metadata shall be compact, label changes
-and their command shall appear once beside it, and actions shall have
-human-readable captions.
-Local fixes shall retain copy-ready patch previews. Semantically equivalent
-labels shall prefer namespaced labels based on their names and descriptions,
-replacing existing plain equivalents without hardcoded alias matching.
+`start-review`, `check-review`, and `finish-review` shall operate on one editable
+draft. Local validation shall not recollect GitLab or freeze decisions. Runtime
+timings shall distinguish collection, validation, and finalization from model
+time. Successful finalization shall atomically replace the plan, runbook, and
+baseline; failure shall preserve the previous result. New contract-7 guided plans
+shall retain their exact review source for repairs. Older contracts shall remain
+historically readable but shall not be repaired, migrated, or have guarded actions
+executed by the new runtime.
 
-For local WIP, `prepare-local --incremental auto` shall select `full`,
-`incremental`, or `unchanged` using a compatible finalized `local_review_report`.
-Compatibility requires complete evidence and unchanged checkout, HEAD, base, and
-comparison ref. A changed boundary, missing or invalid baseline, or explicit
-`--incremental off` shall select full review with a reason. An independent or
-repeated review request alone shall not discard the baseline. Legacy snapshots
-remain finalizable but do not establish a review baseline.
-`finalize-local --report` shall bind the report to a fresh immutable snapshot,
-validate cumulative finding IDs and dispositions, and atomically replace a
-private pointer only after successful validation. Failed or stale finalization
-shall preserve the previous baseline. A finalized report may be not ready.
+Normal, deep, and changed incremental review shall require real independent
+receipts. Available selected specialists are preferred; absent profiles fall back
+to ordinary native subagents. Every selected contributor and finding shall be
+retained with real run/session identities. Primary and critic candidates require
+explicit dispositions; duplicate accepted findings are invalid. Fast review
+without a critic requires justified low risk. Unchanged review audits discussions
+without a critic. Required independence is not waived for unavailable delegation.
 
-The local report shall retain the agreed goal, acceptance criteria, constraints,
-accepted risks, deferred work, decision evidence, checks, and findings. Each
-finding shall distinguish severity from blocking status and record the violated
-requirement, reachable scenario, evidence, consequence, change origin, minimum
-remedy, and rationale. Closed or non-blocking dispositions shall not become
-blocking without an explicit explanation and changed facts or user decision.
-New requirements and pre-existing debt shall not block without explicit scope
-approval. Required unrun checks shall block completion, and failed required
-checks or open blocking findings shall prevent readiness regardless of severity.
-Unchanged evidence shall not trigger another broad audit automatically.
+Incremental analysis shall follow changed code, conversations, metadata, and CI,
+including affected unchanged consumers. Previous accepted findings and recommended
+issues retain stable IDs and explicit current dispositions; rejected candidates
+are reconsidered only when dependencies change. Changed comparison boundaries,
+rewritten history, incompatible or incomplete state select a full review.
+`refresh-review` shall preserve findings and dispositions rather than start an
+empty draft. Original critic receipts remain historical, never rebound to new
+digests. CI-only refresh shall retain code analysis and receipts, attach an
+immutable supplemental snapshot, and request only updated CI assessments and
+affected prose. The verdict and report shall reflect the used CI snapshot.
 
-For either target, the reviewer shall assess necessity and proportionality before
-promoting candidates, preserve agreed limitations, give independent reviewers
-the task decisions, and separate optional hardening from required corrections.
-Reproduction alone shall not establish practical reachability or priority.
-Repeated edge-case patches shall prompt consideration of a simpler supported
-behavior, not automatic expansion. Structural fields shall not be presented as
-proof of semantic judgment. Completion shall be based on agreed acceptance,
-closed required findings, affected regressions, and named limitations, without
-an automatic final broad audit, fixed round limit, or severity-only cutoff.
+Every invocation shall read complete open/resolved conversations. Resolution,
+approval, green CI, and a short "Fixed" are not proof. Thread decisions bind full
+chronology, including system notes. Accepted problems require a validated fix and
+open/reopened state; fixed, false-positive, duplicate, or unrelated open threads
+prepare closure. Neutral/questions do not change state. Resolved threads with a
+sufficient explanation or applied suggestion prepare no redundant reply.
+Fixing-commit attribution requires an immutable link supported by evidence.
+
+The reviewer shall establish necessity, reachability, consequence, change origin,
+and proportionate minimum remedy. Severity does not alone determine scope or
+local completion. Non-low remote findings block readiness; low findings do not.
+Accepted risks and deferred requirements are not reopened without changed facts
+or an explicit decision. Completion checks agreed requirements and affected
+regressions, not all hypothetical defects or an automatic final broad audit.
+
+Suggestions shall be the default. One finding may own multiple positioned
+`suggestions` records, with `split_rationale` for safe partial application. Each
+part and the combined result shall be checked against the exact head; overlapping
+ranges are invalid. Visible context positions are supported. Partial application
+shall not be claimed as a complete correction. Patch fallback requires a concrete
+`patch_reason` for technical impossibility or unsafe division. Input body prose
+shall exclude the diff and apply command; the renderer adds one portable quoted
+heredoc with fences safe for embedded Markdown. Temporary-index patch validation
+rejects binary, symlink, submodule, rename, traversal, and oversized inputs without
+editing the checkout. Author local fixes remain patches.
+
+`repair-review` shall support only new guided plans. Presentation repair includes
+unchanged-meaning wording, layout, command/position correction, and equivalent fix
+representation; equivalence includes the complete resulting tree and file modes.
+The agent compares meaning and records rationale/checks, not a purported machine
+proof of semantics. A different fix of a confirmed problem requires targeted
+consumer/failure-path checks, not automatically a new critic. Changed findings,
+assessments, requirements, or verdict require a new targeted independent critic.
+Uncertain meaning requires decision repair. Missing checks stop repair without
+automatically broadening review. Publication history does not gate local repair.
+
+The runbook shall omit empty sections and duplicated findings, patches, and
+commands. Previous findings receive one compact row with a short name, localized
+result, and next action; detail and commands stay together, not under unrelated
+sections. Metadata and label delta stay compact; exhaustive applicability,
+unresolved labels, and removal reasons stay private. SemVer distinguishes MR
+contribution from accumulated release impact, selects compatibility labels from
+the MR contribution, establishes policy from project evidence, and reports a
+reasoned target fallback without a fabricated release estimate. Equivalent labels
+prefer namespaced catalog entries without hardcoded alias names.
+
+Manual publication shall have no persistent locks, reservations, receipts, TTL,
+automatic freshness reads, polling, or automatic retries. One send performs one
+operation and exposes its exit code and bounded redacted diagnostics. Replies and
+state changes are independently runnable; the TUI also offers their explicitly
+chosen sequence. The user verifies GitLab in a browser and chooses repetition.
+Timeouts and cancellation may leave accepted remote requests and repetitions may
+duplicate them; this risk is visible but does not create a persisted block.
+
+Opening/reading/navigating the TUI shall require no network. During sends, reading,
+navigation, exit, and cancellation remain available. The UI shows readable text,
+separate reply/context views, concrete errors rather than truncated JSON, and
+explicit action choices. Opening a detail never publishes. Human body edits save
+the plan/runbook without sending and preserve validated code. TUI statuses describe
+local command execution, never remotely verified publication.
+
+Local WIP uses its own immutable snapshots and cumulative report, not GitLab
+publication state. `prepare-local --incremental auto` selects full/incremental/
+unchanged from compatible complete checkout/HEAD/base/ref evidence. Legacy or
+changed boundaries select full review. `finalize-local --report` checks freshness
+and continuity before replacing its private pointer. Reports retain goal,
+acceptance, constraints, decisions, risks, deferred work, checks, and severity
+separate from blocking status. Required unrun/failed checks block completion.
 
 #### Verification
 
-Guided workflow tests complete a review from one draft, count remote collection
-cycles, repair schema and presentation errors without freezing progress, reject
-stale discussions and non-independent/incomplete critic sets, and retain
-contributor receipts. TUI tests render bounded lists and real plan structures,
-read discussions without drafts, preserve reply-only action selection, and
-require confirmation before publication. Legacy workflow tests remain active.
-
-The `apps/reviewmatic/test/` suites check exact-head collection, cumulative
-local findings, invalidated baselines, publication freshness, reservations,
-receipts, and recovery. Scenario evidence checks role-aware prose, necessity,
-and architecture assessment; structural success alone does not prove judgment.
+Runtime and fixture tests cover local validation, real critic identity contracts,
+atomic rollback, cumulative findings, targeted repair, refresh without lost
+findings, original receipt preservation, CI-only refresh, grouped suggestions,
+Markdown fences, field diagnostics, direct writes without GETs or publication
+state, errors, repetition, cancellation, responsive TUI navigation, and a real
+PTY smoke test. Tests use synthetic GitLab responses, never live publication.
+Structural tests do not prove the model's semantic judgment.
 
 ## Example
 
-`code-review` maps a `major` SemVer assessment to the unique available
-`semver::major`-equivalent label and prepares one manual label command; it
-rejects an incomplete catalog before plan creation.
+An MR contribution assessed as patch selects its unique catalog compatibility
+label and prepares a direct manual label command. A wording correction later
+updates `runbook.md` without launching another code review.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, mkdirSync } from "
 import { dirname, basename, join } from "node:path";
 import { WorkflowError, digest } from "./contract.js";
 import { xdgStateHome } from "./state-artifacts.js";
+import { suggestionsPatch } from "./fixes.js";
 
 export type WorktreeRecord = {
   path: string;
@@ -264,6 +265,11 @@ export function suggestionToPatch(options: {
   oldLine: number | null;
   suggestion: string;
 }): string {
+  if (options.suggestion.includes("```suggestion")) {
+    return suggestionsPatch(mainCheckoutRoot(options.repoRoot), options.headSha, [
+      { path: options.newPath, line: options.newLine!, body: options.suggestion },
+    ]);
+  }
   const side = options.newLine !== null ? "new" : "old";
   const path = side === "new" ? options.newPath : options.oldPath;
   const line = side === "new" ? options.newLine : options.oldLine;

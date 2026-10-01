@@ -27,7 +27,6 @@ import {
   writeJson,
 } from "../dist/contract.js";
 import {
-  PROGRESS_NAME,
   BASELINE_NAME,
   advanceProgress,
   beginReview,
@@ -372,7 +371,7 @@ test("publish review state writes and rolls back atomically", async (t) => {
     null,
     { stage: "content_missing" },
   );
-  assert.equal(basename(path), "review-publication.md");
+  assert.equal(basename(path), "runbook.md");
   assert.equal(digest, sha256("final review\n"));
   const written = readJson(join(root, BASELINE_NAME), "baseline");
   assert.equal(written.contract_version, 1);
@@ -687,6 +686,8 @@ test("review state machine happy path with fake glab", async (t) => {
         old_line: null,
         body: "You need to reserve an idempotency key before the external call.",
         fix_mode: "patch",
+        patch_reason:
+          "The complete correction must be applied together; partial application is unsafe.",
         patch:
           "diff --git a/review.txt b/review.txt\n" +
           "--- a/review.txt\n" +
@@ -776,25 +777,21 @@ test("review state machine happy path with fake glab", async (t) => {
   const plan = await scaffoldReview(evidencePath, contextPath, decisionPath, contentPath);
   assert.equal(plan.status, "ok");
   assert.equal(plan.stage, "plan_ready");
-  assert.equal(basename(plan.markdown_path), "review-publication.md");
+  assert.equal(basename(plan.markdown_path), "runbook.md");
   assert.ok(existsSync(plan.markdown_path));
   const markdown = readFileSync(plan.markdown_path, "utf8");
   for (const section of [
     "# Code review publication plan",
     "## MR metadata",
     "## Project labels",
-    "## Previous findings",
     "## Open threads",
-    "## Closed threads",
-    "## Local fixes",
     "## New findings",
     "## Recommended issues",
-    "## Reviewed without publication",
     "## Architecture assessment",
     "## SemVer impact",
     "## Checks",
     "git apply <<'PATCH_",
-    `code-review: ${VERSION} · contract: 6`,
+    `code-review: ${VERSION} · contract: 7`,
     "Retry can repeat the external operation",
     "https://gitlab.example/group/project/-/merge_requests/7#note_42",
   ]) {
@@ -811,15 +808,11 @@ test("review state machine happy path with fake glab", async (t) => {
   assert.ok(patchBody.includes("git apply <<'PATCH_"));
   assert.ok(!patchBody.includes("marker-run"));
   assert.equal(plan.publication_commands.length, 5);
-  assert.ok(
-    plan.publication_commands.every((command) =>
-      command.startsWith("reviewmatic publication apply --action "),
-    ),
-  );
-  assert.ok(plan.publication_commands.every((command) => command.includes(" --confirm ")));
+  assert.ok(plan.publication_commands.every((command) => command.startsWith("glab ")));
+  assert.ok(plan.publication_commands.every((command) => !command.includes(" --confirm ")));
   const planDocument = readJson(plan.artifact_path, "review plan");
   const payload = planDocument.payload;
-  assert.equal(payload.review_contract_version, 6);
+  assert.equal(payload.review_contract_version, 7);
   assert.equal(payload.label_review.semver.selected, "semver::patch");
   assert.ok(reviewPublicationPreviewIsValid(payload.publication_preview));
   const threadActions = payload.publication_preview.actions.filter(
@@ -830,23 +823,9 @@ test("review state machine happy path with fake glab", async (t) => {
     ["reply", "resolve"],
   );
   const labelAction = payload.publication_preview.actions.find((item) => item.kind === "labels");
-  const guardedAction = (command) => {
-    const tokens = command.split(" ");
-    const actionPath = tokens[tokens.indexOf("--action") + 1];
-    const confirm = tokens[tokens.indexOf("--confirm") + 1];
-    assert.equal(basename(actionPath), `${confirm}.json`);
-    return JSON.parse(readFileSync(actionPath, "utf8"));
-  };
-  const labelGuard = guardedAction(labelAction.command);
-  assert.equal(labelGuard.method, "PUT");
-  assert.ok(labelGuard.payload.labels.includes("semver::patch"));
-  const replyGuard = guardedAction(threadActions[0].command);
-  assert.equal(replyGuard.method, "POST");
-  assert.ok(replyGuard.endpoint.endsWith("/notes"));
-  const closeGuard = guardedAction(threadActions[1].command);
-  assert.equal(closeGuard.method, "PUT");
-  assert.deepEqual(closeGuard.payload, { resolved: true });
-  assert.ok(closeGuard.dependency);
+  assert.match(labelAction.command, /--label semver::patch/);
+  assert.match(threadActions[0].command, /--method POST .*\/notes/);
+  assert.match(threadActions[1].command, /--method PUT .*resolved=true/);
   assert.equal(loadProgress(root).stage, "plan_ready");
 
   const status2 = await reviewStatus(root);
@@ -883,4 +862,145 @@ test("review state machine happy path with fake glab", async (t) => {
   assert.equal(context2Payload.incremental.previous_recommended_issues.length, 1);
   assert.equal(context2Payload.incremental.previous_recommended_issues[0].id, "issue-1");
   assert.match(context2.next_action.command, /^reviewmatic finalize /);
+
+  const receipt2 = { ...receipt, evidence_digest: bundle2.preview_digest };
+  const [receiptPath2, receiptDigest2] = await writeArtifact(root, "critic_receipt", receipt2);
+  const progressRun2 = loadProgress(root);
+  await advanceProgress(root, "finalize_missing", {
+    expectedStages: new Set(["context_ready"]),
+    expected: {
+      evidence_path: progressRun2.evidence_path,
+      evidence_digest: progressRun2.evidence_digest,
+      context_path: progressRun2.context_path,
+      context_digest: progressRun2.context_digest,
+    },
+    critic_receipt_path: receiptPath2,
+    critic_receipt_digest: receiptDigest2,
+    finalize_report_path: null,
+    finalize_report_digest: null,
+    decision_path: null,
+    decision_digest: null,
+    plan_path: null,
+    plan_digest: null,
+  });
+  const finalizeResult2 = finalizePayload(
+    await finalize(root, "review-evidence.json"),
+    bundle2.preview_artifact_path,
+    bundle2,
+    "evidence_snapshot",
+  );
+  const [finalizePath2, finalizeDigest2] = await writeArtifact(
+    root,
+    "finalize_report",
+    finalizeResult2,
+  );
+  const progressRun2b = loadProgress(root);
+  await advanceProgress(root, "decision_missing", {
+    expectedStages: new Set(["context_ready", "finalize_missing"]),
+    expected: {
+      evidence_path: progressRun2b.evidence_path,
+      evidence_digest: progressRun2b.evidence_digest,
+      context_path: progressRun2b.context_path,
+      context_digest: progressRun2b.context_digest,
+    },
+    finalize_report_path: finalizePath2,
+    finalize_report_digest: finalizeDigest2,
+    decision_path: null,
+    decision_digest: null,
+    plan_path: null,
+    plan_digest: null,
+  });
+  const decision2 = {
+    ...decisionPayload,
+    mode: "unchanged",
+    evidence_digest: bundle2.preview_digest,
+    context_digest: context2.digest,
+    finalize_digest: finalizeDigest2,
+    critic_receipt_digest: receiptDigest2,
+  };
+  const [decisionPath2, decisionDigest2] = await writeArtifact(root, "review_decision", decision2);
+  const progressRun2c = loadProgress(root);
+  await advanceProgress(root, "content_missing", {
+    expectedStages: new Set(["context_ready", "finalize_missing", "decision_missing"]),
+    expected: {
+      evidence_path: progressRun2c.evidence_path,
+      evidence_digest: progressRun2c.evidence_digest,
+      context_path: progressRun2c.context_path,
+      context_digest: progressRun2c.context_digest,
+    },
+    decision_path: decisionPath2,
+    decision_digest: decisionDigest2,
+    plan_path: null,
+    plan_digest: null,
+  });
+  const contentTemplate2 = await templateReview(root, "content");
+  const templateContent2 = readJson(contentTemplate2.template_path, "content template");
+
+  const incrementalContent = structuredClone(reviewContent);
+  incrementalContent.thread_decisions[0].thread_sha256 =
+    templateContent2.thread_decisions[0].thread_sha256;
+  incrementalContent.previous_finding_assessments = [
+    {
+      id: "primary-1",
+      kind: "finding",
+      status: "active",
+      previous_status: "Active",
+      current_status: "Active",
+      rationale: "The unchanged diff still contains the retry defect.",
+      action: "Monitor the existing discussion.",
+      publication_action: "no_publication",
+      publication_body: null,
+      critic_required: false,
+    },
+    {
+      id: "issue-1",
+      kind: "issue",
+      status: "active",
+      previous_status: "Active",
+      current_status: "Active",
+      rationale: "The recommended issue is already published.",
+      action: "No further publication is required.",
+      publication_action: "no_publication",
+      publication_body: null,
+      critic_required: false,
+    },
+  ];
+  const incrementalPath = join(tmp, "review-content-incremental.json");
+  writeFileSync(incrementalPath, JSON.stringify(incrementalContent));
+  const plan2 = await scaffoldReview(
+    bundle2.preview_artifact_path,
+    context2.artifact_path,
+    decisionPath2,
+    incrementalPath,
+  );
+  assert.equal(plan2.status, "ok");
+  const actions2 = readJson(plan2.artifact_path, "review plan").payload.publication_preview.actions;
+  assert.ok(
+    actions2.every(
+      (item) => item.publication_id !== "issue-1" && item.publication_id !== "primary-1",
+    ),
+    "a published issue and a no_publication finding must not be re-created",
+  );
+  assert.ok(actions2.some((item) => item.kind === "thread" && item.operation === "resolve"));
+
+  const updatedIssue = structuredClone(incrementalContent);
+  updatedIssue.previous_finding_assessments[1].publication_action = "update_issue";
+  updatedIssue.previous_finding_assessments[1].publication_body =
+    "Add the observed terminal metric to the published issue.";
+  const updatedIssuePath = join(tmp, "review-content-update-issue.json");
+  await assert.rejects(
+    scaffoldReview(
+      bundle2.preview_artifact_path,
+      context2.artifact_path,
+      decisionPath2,
+      updatedIssuePath,
+      {
+        decision: decision2,
+        content: updatedIssue,
+        dryRun: true,
+        freshnessChecked: true,
+      },
+    ),
+    workflowError(/cannot be updated/),
+  );
 });

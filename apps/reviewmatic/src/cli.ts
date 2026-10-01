@@ -14,8 +14,6 @@ import {
   WorkflowError,
 } from "./contract.js";
 import { finalizeLocal, localBundle, prepareFollowup, recordReview } from "./local-review.js";
-import { MutationNotAttempted, MutationOutcomeUnknown } from "./mutation-process.js";
-import { execute, interactiveRecovery, SCHEMA } from "./publication.js";
 import { markerRun, StateArtifactError } from "./state-artifacts.js";
 import { VERSION } from "./version.js";
 import { dispatch, prepared, type WorkflowArguments } from "./workflow.js";
@@ -23,7 +21,14 @@ import { discoverArtifactRoot, loadPlan, planItems } from "./tui/support.js";
 import { runTui } from "./tui/app.js";
 import { stringsFor } from "./tui/strings.js";
 import { registrySummary } from "./worktree.js";
-import { startReview, resumeReview, checkReview, finishReview } from "./draft.js";
+import {
+  startReview,
+  resumeReview,
+  checkReview,
+  finishReview,
+  repairReview,
+  refreshReview,
+} from "./draft.js";
 import {
   program,
   common,
@@ -55,6 +60,24 @@ interface CommandSpec {
 }
 
 const definitions: CommandSpec[] = [
+  {
+    signature: "repair-review",
+    description: "Open an existing new plan for targeted local repair",
+    options: [
+      { name: "artifact-root", description: "artifact root", required: true },
+      {
+        name: "kind",
+        description: "repair scope",
+        choices: ["presentation", "fix", "decision"],
+        default: "presentation",
+      },
+    ],
+  },
+  {
+    signature: "refresh-review",
+    description: "Refresh changed evidence while retaining draft findings and decisions",
+    options: [{ name: "draft", description: "existing review draft", required: true }],
+  },
   {
     signature: "start-review",
     description: "Collect evidence and context once and create one editable review draft",
@@ -264,7 +287,7 @@ const definitions: CommandSpec[] = [
   },
   {
     signature: "publication [mode]",
-    description: "Apply, inspect, or retry a publication action",
+    description: "Historical guarded actions are no longer executable",
     options: [
       { name: "action", description: "publication action path" },
       { name: "confirm", description: "action SHA-256 digest" },
@@ -462,43 +485,15 @@ function runAssessMode(fields: Fields): void {
 }
 
 async function runPublication(args: string[], fields: Fields): Promise<void> {
-  try {
-    const mode = args[0];
-    if (mode !== undefined && !["apply", "inspect", "retry"].includes(mode)) {
-      throw new WorkflowError(
-        `argument mode: invalid choice: '${mode}' (choose from 'apply', 'inspect', 'retry')`,
-      );
-    }
-    const action = fields.action;
-    const confirm = fields.confirm;
-    if (mode === undefined || action === undefined || confirm === undefined) {
-      throw new WorkflowError("mode, --action and --confirm are required");
-    }
-    let result = await execute(String(action), String(confirm), {
-      inspect: mode === "inspect",
-      retry: mode === "retry",
-    });
-    if (mode === "apply" || mode === "inspect") {
-      result = await interactiveRecovery(String(action), String(confirm), result, {
-        inspected: mode === "inspect",
-      });
-    }
-    emit(result);
-    process.exitCode = result.status !== "blocked" ? 0 : 1;
-  } catch (caught) {
-    if (
-      !(
-        caught instanceof WorkflowError ||
-        caught instanceof MutationNotAttempted ||
-        caught instanceof MutationOutcomeUnknown ||
-        caught instanceof Error
-      )
-    ) {
-      throw caught;
-    }
-    emit({ status: "blocked", error: redact(caught.message), external_mutations: false });
-    process.exitCode = 2;
-  }
+  void args;
+  void fields;
+  emit({
+    status: "blocked",
+    error:
+      "Legacy guarded actions are historical only; prepare a new runbook with direct glab commands",
+    external_mutations: false,
+  });
+  process.exitCode = 2;
 }
 
 async function runPlan(fields: Fields): Promise<void> {
@@ -529,10 +524,8 @@ async function runPlan(fields: Fields): Promise<void> {
 async function runCommand(command: string, args: string[], fields: Fields): Promise<void> {
   if (command === "publication" && process.argv.slice(3).includes("--capabilities")) {
     emit({
-      schema: SCHEMA,
-      operations: ["apply", "inspect", "retry"],
-      platform: "posix",
-      confirmation: "one action SHA-256",
+      operations: [],
+      publication: "manual glab commands",
       external_mutations: false,
     });
     return;
@@ -571,6 +564,15 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
     return;
   }
   try {
+    if (command === "repair-review" || command === "refresh-review") {
+      const result =
+        command === "repair-review"
+          ? await repairReview(String(fields.artifactRoot), String(fields.kind))
+          : await refreshReview(String(fields.draft));
+      emit(result);
+      process.exitCode = ["ok", "needs_reassessment"].includes(String(result.status)) ? 0 : 2;
+      return;
+    }
     if (["start-review", "resume-review", "check-review", "finish-review"].includes(command)) {
       const result =
         command === "start-review"

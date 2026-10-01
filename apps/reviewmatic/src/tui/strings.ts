@@ -68,7 +68,7 @@ const en: Strings = {
   error: "error",
   keysOverview: "↑/↓ select · enter open · q quit",
   keysDetail:
-    "↑/↓ scroll · ←/→ item · o browser · e edit · s send only · S send+state · a local fix · x skip · esc back",
+    "↑/↓ scroll · ←/→ item · t reply/context · v result · o browser · e edit · s send · r state · S both · a fix · z cancel · q quit",
   keysWorktree: "c edit message · C commit · p push · esc back",
   replyDraft: "reply draft",
   remark: "remark",
@@ -128,7 +128,7 @@ const ru: Strings = {
   error: "ошибка",
   keysOverview: "↑/↓ выбор · enter открыть · q выход",
   keysDetail:
-    "↑/↓ прокрутка · ←/→ пункт · o браузер · e правка · s только ответ · S ответ+статус · a локальный фикс · x пропустить · esc назад",
+    "↑/↓ текст · ←/→ пункт · t ответ/контекст · v результат · o браузер · e правка · s ответ · r статус · S оба · a фикс · z отмена · q выход",
   keysWorktree: "c правка сообщения · C коммит · p пуш · esc назад",
   replyDraft: "черновик ответа",
   remark: "замечание",

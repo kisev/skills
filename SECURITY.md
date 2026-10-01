@@ -22,9 +22,10 @@ system data. Use revoked or synthetic values.
 - External, user-configuration, destructive, history, release, and package lifecycle flows require a preview and confirmation; the OpenCode installer
   requires interactive consent or an explicit `--yes`; config apply binds its
   in-process preview to source bytes and a one-use expiring receipt.
-- Code review prepares guarded manual publication-helper commands. The separate
-  helper records reservations, verified receipts, and recovery state; uncertain
-  remote outcomes block retries until inspected. GitLab remains the remote authority.
+- Code review preparation never publishes: it produces a private `runbook.md`
+  with direct copy-ready `glab` commands and an interactive plan viewer. The user
+  runs each command and checks GitLab afterwards; no reservations, receipts,
+  locks, or expiry block a repeated send. GitLab remains the remote authority.
 - A confirmed install with core selected merges the plugin into `opencode.json`
   and may provision npm dependencies. It has no npm lifecycle hooks and preserves
   unrelated user entries and modified assets.

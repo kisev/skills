@@ -29,8 +29,8 @@ public skill names, never on a portable installation tree. These boundaries prov
 Code-review is a thin archive: authored prompt material plus materialized
 references, with no Python runner. Its executable runtime is the external
 `@kisev/reviewmatic` npm application (bin `reviewmatic`), which owns stage
-orchestration, review context, plan assembly, and separate guarded publication
-writes. The shared GitLab contract supplies evidence, artifact validation, and
+orchestration, review context, plan assembly, targeted repair, and a separate manual
+TUI executor for the same direct commands as `runbook.md`. The shared GitLab contract supplies evidence, artifact validation, and
 transport primitives for the other GitLab skills; it does not import review
 implementation modules. `mutation_process.py` supplies bounded process
 execution to task triage. These

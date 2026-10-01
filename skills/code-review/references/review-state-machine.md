@@ -31,7 +31,8 @@ installed runtime's source to discover input fields.
    previous-finding assessments, recommended issues, and every thread decision.
    Metadata input is the flat five-field assessment, not an `observed` wrapper.
    Publication input has exactly `finding_id`, `type`, `path`, `line`, `old_line`,
-   `body`, `fix_mode`, and `patch`. The runner derives findings, rejected
+   `body`, `fix_mode`, and `patch`, optionally `suggestions`, `split_rationale`,
+   and `patch_reason`. `patch_reason` is mandatory for patch fallback. The runner derives findings, rejected
    candidates, revisions, body/patch paths, digests, and verdicts. Do not add
    those derived fields or copy data between decision/content artifacts.
 4. Run the returned `reviewmatic check-review --draft DRAFT_PATH` action. It
@@ -48,8 +49,12 @@ installed runtime's source to discover input fields.
 
 Use `reviewmatic resume-review --artifact-root ROOT` after interruption. It
 returns the same editable draft without recollection. If finalization reports
-stale evidence, start a fresh review against the changed MR; the old final plan
-and draft are preserved. Collection, validation, and finalization timings are
+stale evidence, refresh the existing draft against the changed MR; the old final plan
+and draft are preserved. Use `refresh-review --draft DRAFT` to retain findings
+and decisions while reassessing only changed evidence. CI-only drift returns
+`refresh_required` for updating CI in the same draft without a new critic.
+Finalized new plans use `repair-review`; see `references/repair.md`.
+Collection, validation, and finalization timings are
 separate from model and subagent time; do not blame review analysis time on the
 runtime or hide validation-repair loops inside it.
 

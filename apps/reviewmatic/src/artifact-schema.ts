@@ -716,6 +716,21 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
       },
       additionalProperties: false,
     },
+    suggestion_parts: {
+      type: "array",
+      minItems: 1,
+      maxItems: 50,
+      items: {
+        type: "object",
+        required: ["path", "line", "body"],
+        additionalProperties: false,
+        properties: {
+          path: { type: "string", minLength: 1 },
+          line: { type: "integer", minimum: 1 },
+          body: { type: "string", minLength: 1 },
+        },
+      },
+    },
     thread_decision: {
       type: "object",
       anyOf: [
@@ -819,6 +834,9 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
         suggestion_applicable: {
           type: "boolean",
         },
+        suggestions: { $ref: "#/$defs/suggestion_parts" },
+        split_rationale: { type: "string", minLength: 1 },
+        patch_reason: { type: "string", minLength: 1 },
         fix_mode: {
           enum: ["suggestion", "patch", "not_required"],
         },
@@ -1611,6 +1629,9 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
         },
       ],
       properties: {
+        suggestions: { $ref: "#/$defs/suggestion_parts" },
+        split_rationale: { type: "string", minLength: 1 },
+        patch_reason: { type: "string", minLength: 1 },
         finding_id: {
           type: "string",
           minLength: 1,
@@ -3850,8 +3871,9 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
                 profile: {
                   const: "code-review",
                 },
+                review_source: { type: "object" },
                 review_contract_version: {
-                  enum: [1, 2, 3, 4, 5, 6],
+                  enum: [1, 2, 3, 4, 5, 6, 7],
                 },
                 external_mutations: {
                   const: false,
@@ -3996,7 +4018,7 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
                     required: ["review_contract_version"],
                     properties: {
                       review_contract_version: {
-                        enum: [3, 4, 5, 6],
+                        enum: [3, 4, 5, 6, 7],
                       },
                     },
                   },
@@ -4029,7 +4051,7 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
                     required: ["review_contract_version"],
                     properties: {
                       review_contract_version: {
-                        enum: [4, 5, 6],
+                        enum: [4, 5, 6, 7],
                       },
                     },
                   },
@@ -4054,7 +4076,7 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
                     required: ["review_contract_version"],
                     properties: {
                       review_contract_version: {
-                        enum: [5, 6],
+                        enum: [5, 6, 7],
                       },
                     },
                   },
@@ -4073,7 +4095,7 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
                     required: ["review_contract_version"],
                     properties: {
                       review_contract_version: {
-                        const: 6,
+                        enum: [6, 7],
                       },
                     },
                   },

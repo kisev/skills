@@ -57,23 +57,26 @@ result = provider.submit(operation)
 ```
 ````
 
-For a general, deleted, outdated, non-contiguous, or otherwise unanchorable fix,
-set `fix_mode=patch` and provide one applicable textual unified patch:
+For separate safe positions, use related `suggestions` records with `path`, `line`,
+and a natural `body` containing one block each. Supply `split_rationale`; do not
+turn one problem into several findings. Prefer this to a patch.
+
+Only when suggestions cannot express the fix or division is unsafe, set
+`fix_mode=patch`, explain `patch_reason`, and put this diff in the separate `patch`
+field. The input `body` contains prose only. This is not an input body example:
 
 ```sh
-git apply <<'PATCH'
 diff --git a/src/payment.py b/src/payment.py
 --- a/src/payment.py
 +++ b/src/payment.py
 @@ -18 +18,2 @@
 +operation = reserve_operation(request.id)
  result = provider.submit(request)
-PATCH
 ```
 
 The runner checks the patch against the exact reviewed head without changing the
 checkout and writes it as an immutable `.patch` file. Do not combine unrelated
-findings in one patch. Multiple suggestion blocks, suggestion on a deleted line,
+findings in one patch. Multiple blocks within one positioned part, suggestion on a deleted line,
 binary or symlink patches, and rewritten fix content after confirmation are
 invalid. Omit `index` lines so private revision identifiers do not enter the
 publication plan.

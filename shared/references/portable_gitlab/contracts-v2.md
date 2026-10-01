@@ -154,3 +154,23 @@ They cannot be migrated, overwritten, or used as new v2 artifacts.
 Earlier v2 review contexts, publication previews, and review plans remain
 schema-readable for their original finalized workflow, but they have no
 `review_contract_version` and can never become an incremental baseline.
+
+Contract 7 supersedes the code-review publication behavior described above.
+Its stable result is `runbook.md`; direct `glab` commands and the TUI are equally
+supported manual interfaces. No remote-operation ledger, reservation, persistent
+lock, expiry, polling, or automatic freshness read is used for publication.
+The user verifies GitLab effects and chooses repetition. Old guarded actions are
+historical only, never automatically migrated or executed.
+
+One finding can own bounded `suggestions` records (`path`, `line`, `body`), with
+`split_rationale` for safe partial application. Individual and combined results
+are checked. A patch requires `patch_reason`; input prose excludes the diff and
+apply command, which the renderer adds exactly once using safe Markdown fences.
+New guided plans retain `review_source` for targeted `repair-review`; presentation
+changes preserve complete fix results, code-fix changes require targeted checks,
+and changed decisions require a new independent critic. The runtime cannot prove
+that prose preserved its meaning. Incomplete checks stop repair without replacing
+the current result. `refresh-review` preserves candidates and decisions, never
+rebinds existing receipts. CI-only refresh retains the original analysis evidence
+and receipts and records an immutable supplemental `ci_snapshot` in the source.
+Review quality checks remain separate from manual publication.

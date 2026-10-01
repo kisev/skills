@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import { render, useInput, useApp, Box, Text } from "ink";
 import {
   type PlanBundle,
@@ -12,8 +12,11 @@ import {
   displayText,
   terminalLink,
   openLink,
+  amendBody,
+  readableMarkdown,
 } from "./support.js";
 import { stringsFor, type Strings } from "./strings.js";
+import { suggestionParts, suggestionsPatch } from "../fixes.js";
 import {
   prepareApplication,
   commitApplication,
@@ -76,7 +79,19 @@ const Viewport: React.FC<{ text: string; offset: number; height: number; width: 
     <Box flexDirection="column">
       {visible.map((line, position) => (
         <Box key={position}>
-          <Text>{line.length === 0 ? " " : line}</Text>
+          <Text
+            color={
+              line.startsWith("+")
+                ? "green"
+                : line.startsWith("-")
+                  ? "red"
+                  : line.startsWith("@@")
+                    ? "cyan"
+                    : undefined
+            }
+          >
+            {line.length === 0 ? " " : line}
+          </Text>
         </Box>
       ))}
     </Box>
@@ -115,6 +130,8 @@ export function ReviewApp(props: {
   const { exit } = useApp();
   const [bundle, setBundle] = useState(props.initial.bundle);
   const [items] = useState(props.initial.items);
+  const [pane, setPane] = useState<"conversation" | "reply" | "result">("conversation");
+  const controller = useRef<AbortController | null>(null);
   const [view, setView] = useState<"overview" | "detail">(props.initial.view);
   const [index, setIndex] = useState(props.initial.index);
   const [offset, setOffset] = useState(props.initial.offset);
@@ -125,9 +142,7 @@ export function ReviewApp(props: {
     null,
   );
   const [worktree, setWorktree] = useState<WorktreeState | null>(props.initial.worktree);
-  const [editedBodies, setEditedBodies] = useState<Record<string, string>>(
-    props.initial.editedBodies,
-  );
+  const [editedBodies] = useState<Record<string, string>>(props.initial.editedBodies);
   const [terminalHeight, setTerminalHeight] = useState(process.stdout.rows ?? 24);
   const [terminalWidth, setTerminalWidth] = useState(process.stdout.columns ?? 80);
   useEffect(() => {
@@ -145,10 +160,21 @@ export function ReviewApp(props: {
   const item = items[index] ?? null;
   const body = item !== null ? (editedBodies[item.key] ?? item.body ?? strings.nothing) : "";
   const fix =
-    item !== null && ["patch", "suggestion"].includes(String(item.detail.fix_mode))
+    item !== null &&
+    (bundle.plan.review_contract_version === undefined ||
+      bundle.plan.review_contract_version === 7) &&
+    ["patch", "suggestion"].includes(String(item.detail.fix_mode))
       ? item.detail
       : null;
-  const detailText = item !== null ? itemText(item, strings, editedBodies[item.key]) : "";
+  const detailText = readableMarkdown(
+    item !== null
+      ? pane === "result"
+        ? messages.join("\n\n")
+        : pane === "reply"
+          ? `${strings.replyDraft}\n\n${body}`
+          : itemText(item, strings, editedBodies[item.key])
+      : "",
+  );
   const lines = visualLines(detailText, detailWidth).length;
   const clampedOffset = Math.min(offset, Math.max(0, lines - detailHeight));
   useEffect(() => {
@@ -169,6 +195,7 @@ export function ReviewApp(props: {
   const perform = useCallback(
     async (operation: () => Promise<void>): Promise<void> => {
       setBusy(true);
+      controller.current = new AbortController();
       setMessages([]);
       try {
         await operation();
@@ -178,28 +205,30 @@ export function ReviewApp(props: {
         setMessages([message]);
       }
       setBusy(false);
+      controller.current = null;
     },
     [item],
   );
 
   const doSend = useCallback(
-    (resolveToo: boolean): void => {
+    (resolveToo: boolean, stateOnly = false): void => {
       if (item === null || busy) return;
       const target = item;
       void perform(async () => {
-        const actions = resolveToo
-          ? target.actions
-          : target.actions.filter(
-              (action) => action.operation !== "resolve" && action.operation !== "reopen",
-            );
+        const actions = stateOnly
+          ? target.actions.filter((action) => ["resolve", "reopen"].includes(action.operation))
+          : resolveToo
+            ? target.actions
+            : target.actions.filter(
+                (action) => action.operation !== "resolve" && action.operation !== "reopen",
+              );
         const { bundle: nextBundle, results } = await sendItem(
           bundle,
           { ...target, actions },
           editedBodies[target.key] ?? null,
+          controller.current?.signal,
         );
-        const failed = results.some(
-          (result) => (result as { status?: string }).status === "blocked",
-        );
+        const failed = results.some((result) => result.status !== "sent");
         setBundle(nextBundle);
         setStatuses((current) => ({
           ...current,
@@ -209,7 +238,12 @@ export function ReviewApp(props: {
               ? "replied"
               : "applied",
         }));
-        setMessages(results.map((result) => JSON.stringify(result)));
+        setMessages(
+          results.map(
+            (result) =>
+              `${result.status === "sent" ? strings.applied : strings.error} (exit ${result.code})\n${String(result.error || result.output || "")}`,
+          ),
+        );
       });
     },
     [bundle, busy, editedBodies, item, perform],
@@ -229,20 +263,22 @@ export function ReviewApp(props: {
         throw new Error(strings.noFix);
       }
       const patch =
-        fixRecord.fix_mode === "patch" && typeof fixRecord.patch === "string"
-          ? fixRecord.patch
-          : suggestionToPatch({
-              repoRoot: repository.repoRoot,
-              headSha: repository.headSha,
-              newPath: target.path ?? "",
-              oldPath: target.path ?? "",
-              newLine: target.line,
-              oldLine: null,
-              suggestion:
-                typeof fixRecord.suggestion === "string" && fixRecord.suggestion !== ""
-                  ? fixRecord.suggestion
-                  : body,
-            });
+        item.detail.suggestions !== undefined
+          ? suggestionsPatch(repository.repoRoot, repository.headSha, suggestionParts(item.detail))
+          : fixRecord.fix_mode === "patch" && typeof fixRecord.patch === "string"
+            ? fixRecord.patch
+            : suggestionToPatch({
+                repoRoot: repository.repoRoot,
+                headSha: repository.headSha,
+                newPath: target.path ?? "",
+                oldPath: target.path ?? "",
+                newLine: target.line,
+                oldLine: null,
+                suggestion:
+                  typeof fixRecord.suggestion === "string" && fixRecord.suggestion !== ""
+                    ? fixRecord.suggestion
+                    : body,
+              });
       const mrUrl = String((bundle.plan.target as { url?: string }).url ?? "");
       const application = await prepareApplication({
         repoRoot: repository.repoRoot,
@@ -288,7 +324,17 @@ export function ReviewApp(props: {
   }, [busy, perform, strings.worktreePush, worktree]);
 
   useInput((input, key) => {
-    if (busy) return;
+    if (input === "z" && busy) {
+      controller.current?.abort();
+      return;
+    }
+    if (input === "q") {
+      controller.current?.abort();
+      exit();
+      controller.current?.abort();
+      request({ kind: "quit" });
+      return;
+    }
     if (confirmation !== null) {
       if (key.escape || input === "n") setConfirmation(null);
       else if (input === "y") {
@@ -369,7 +415,7 @@ export function ReviewApp(props: {
     }
     if (item === null) return;
     if (input === "o" && item.url !== null) {
-      void perform(() => openLink(item.url!));
+      void openLink(item.url).catch((error: Error) => setMessages([error.message]));
       return;
     }
     if (key.leftArrow || key.rightArrow || input === "[" || input === "]") {
@@ -400,6 +446,24 @@ export function ReviewApp(props: {
       setOffset(Math.min(Math.max(0, lines - detailHeight), clampedOffset + 1));
       return;
     }
+    if (input === "t") {
+      setPane((current) => (current === "conversation" ? "reply" : "conversation"));
+      setOffset(0);
+      return;
+    }
+    if (input === "v") {
+      setPane("result");
+      setOffset(0);
+      return;
+    }
+    if (busy) return;
+    if (
+      input === "r" &&
+      item.actions.some((action) => ["resolve", "reopen"].includes(action.operation))
+    ) {
+      setConfirmation({ label: String(item.detail.outcome), operation: () => doSend(false, true) });
+      return;
+    }
     if (
       input === "s" &&
       item.actions.some((action) => action.operation !== "resolve" && action.operation !== "reopen")
@@ -422,12 +486,7 @@ export function ReviewApp(props: {
       setView("overview");
       return;
     }
-    if (
-      input === "e" &&
-      item.body !== null &&
-      item.actions.length > 0 &&
-      !["applied", "replied"].includes(statuses[item.key])
-    ) {
+    if (input === "e" && item.body !== null && item.actions.length > 0 && !busy) {
       request({ kind: "edit", target: { kind: "body", key: item.key, body } });
       return;
     }
@@ -551,8 +610,8 @@ export function ReviewApp(props: {
         </Text>
       ) : null}
       {messages.slice(-2).map((message, position) => (
-        <Text key={position} color="green" wrap="truncate-end">
-          {displayText(message)}
+        <Text key={position} color={Object.values(statuses).includes("error") ? "red" : "green"}>
+          {displayText(message).split("\n")[0]} · {strings.resultSend}: v
         </Text>
       ))}
     </Box>
@@ -608,13 +667,26 @@ export async function runTui(initialBundle: PlanBundle): Promise<number> {
     );
     if (outcome.kind === "quit") return 0;
     if (outcome.target.kind === "body") {
+      const target = outcome.target;
       const edited = editInEditor(outcome.target.body);
       if (edited !== null) {
-        state = {
-          ...state,
-          editedBodies: { ...state.editedBodies, [outcome.target.key]: edited },
-          messages: [strings.edited],
-        };
+        const item = state.items.find((item) => item.key === target.key);
+        try {
+          const bundle = await amendBody(state.bundle, item!.publicationId!, edited);
+          state = {
+            ...state,
+            bundle,
+            items: planItems(bundle),
+            editedBodies: {},
+            messages: [strings.edited],
+          };
+        } catch (error) {
+          state = {
+            ...state,
+            editedBodies: { ...state.editedBodies, [outcome.target.key]: edited },
+            messages: [error instanceof Error ? error.message : String(error)],
+          };
+        }
       } else {
         state = { ...state, messages: [strings.unchanged] };
       }

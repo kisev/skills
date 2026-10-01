@@ -65,8 +65,9 @@ optionally through selected specialist profiles. Local draft validation shares
 the plan validators without writing publication artifacts. Finalization refreshes
 complete evidence/context once and atomically publishes the plan state, avoiding
 an immutable decision before content validation. Legacy v2 artifacts and
-low-level commands remain readable. Its `reviewmatic publication`
-commands implement the one-action lifecycle owned by
-[the code-review requirement](../../capabilities/skills/code-review.md). The
-skill archive itself never starts that lifecycle. Manual local patches remain a
-separate operation.
+low-level commands remain readable. Finalization renders `runbook.md` with
+direct copy-ready `glab` commands and the interactive `reviewmatic plan` viewer
+owns the same operations behind explicit user actions; neither the runner nor
+the skill archive ever publishes, and local patches remain a separate manual
+operation. The manual publication contract is owned by
+[the code-review requirement](../../capabilities/skills/code-review.md).

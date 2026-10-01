@@ -17,7 +17,7 @@ The runner-rendered chat and publication-plan rules below apply to GitLab MRs.
 Keep the chat result compact. `finish-review` and, for an existing finalized
 plan, `report-review` own the labels and layout; print their `chat` field
 verbatim rather than composing the result manually. A missing,
-incomplete, or stale contract-6 plan produces only a localized blocked report
+incomplete, or stale contract-7 plan produces only a localized blocked report
 with the failed stage and safe next action.
 When the current evidence artifact itself is unavailable, no trusted recovery
 command can be derived; the blocked report uses `next_action=null` and asks for
@@ -40,7 +40,7 @@ Incremental review completed. <!-- only for an incremental review -->
 - **MR metadata:** <ready / changes needed / context needed>
 - **Verdict:** <ready to merge / changes required / owner decision required>
 - **Review checkout:** `<absolute path>`
-- **Publication plan:** `<absolute path>/review-publication.md`
+- **Publication plan:** `<absolute path>/runbook.md`
 ```
 
 If the release basis cannot be established, replace the basis and next-release
@@ -54,7 +54,7 @@ use a `file://` link for a local artifact.
 
 For another author's MR, do not expose finding titles, severities, locations,
 evidence, thread contents, proposed responses, fixes, commands, or detailed
-check tables in chat. Put them in `review-publication.md`.
+check tables in chat. Put them in `runbook.md`.
 
 For the user's own MR, append a concise list of local fixes after the assessment.
 Each actionable local fix has one validated Git patch in the private publication
@@ -74,7 +74,7 @@ fresh discussion audit without a critic.
 
 ## Publication plan
 
-The stable `review-publication.md` is a compact human review document. Its header
+The stable `runbook.md` is a compact human review document. Its header
 shows `code-review: <skill version> · contract: <version>`, then contains:
 
 1. Target, role, verdict, and the manual-only warning.
@@ -82,16 +82,18 @@ shows `code-review: <skill version> · contract: <version>`, then contains:
 3. A project-label section beside metadata with only add/remove delta and its
    command. Keep current labels, unresolved labels, and exhaustive assessment in
    private JSON.
-4. A compact previous-finding table with ID, previous status, current status,
-   rationale, and action.
+4. A previous-finding table with a short finding name, localized result, and
+   short next action. One row per finding; no long rationale or internal ID.
 5. Open-thread actions.
 6. Closed-thread actions.
 7. Read-only local fixes for author mode.
-8. New reviewer findings and their line or general discussion actions.
+8. New reviewer findings and their actions; previous findings are not shown as new.
+   Each previous finding's detail and action stay together in their own section.
 9. Non-blocking recommended issues for confirmed out-of-scope problems.
 10. Threads reviewed without publication.
 11. Architecture, SemVer, and checks.
-12. No separate manual-publication section: each command stays beside its item.
+12. No empty sections or separate manual-publication section: each command stays
+    beside its item. Keep exhaustive history and evidence in private JSON.
 
 For every actionable item, show its natural conclusion, publication preview,
 suggestion or patch when applicable, and directly runnable command. Do not show
@@ -102,10 +104,10 @@ publication preview. Those bindings and validation results remain in private JSO
 The model supplies semantic assessment prose, natural role-authored publication
 bodies, template selections, and exhaustive label-applicability rationales. The
 runner owns standard localized presentation labels, observed label descriptions,
-paths, exact GitLab identity, body files, guarded commands, and chat rendering.
+paths, exact GitLab identity, body files, direct commands, and chat rendering.
 Do not hand-edit generated commands or final chat.
 
-The plan presents one guarded helper command per remote action, beside its exact
+The plan presents one direct `glab` command per remote action, beside its exact
 body preview. Follow `references/publication.md` for execution and recovery.
 For incremental review, compare current GitLab discussions, notes, and issues
 with the finding's meaning. Historical receipts or advisory markers do not replace
@@ -118,10 +120,12 @@ commands, or exact quotations. It
 starts with the answer, correction, or concrete fix, speaks as the authenticated
 user, and continues the complete existing conversation naturally instead of
 restating it. A fix
-on an applicable current new-line position contains exactly one single-line or
-bounded multi-line `suggestion`; general, deleted, outdated, non-contiguous, and
-otherwise unanchorable fixes contain the exact validated unified patch inside one
-copy-ready `sh` block using `git apply <<'PATCH'`. A body intended for GitLab must
+on an applicable current position uses a single-line or bounded multi-line
+`suggestion`. One finding may own multiple safely separable positioned suggestions.
+Patches require a specific fallback reason, not merely a general comment position.
+The runner wraps a separate validated unified patch in one copy-ready `sh` block
+using `git apply <<'PATCH'`; the model never embeds it in the input body.
+Outer Markdown fences must accommodate fences inside the patch. A body intended for GitLab must
 not contain a local checkout path, interpreter path, runtime helper, or local
 marker command. The same patch is available as
 an immutable local `.patch` artifact for manual use. A thread-state command is

@@ -83,16 +83,17 @@ It performs the primary review and calls independent critics when the selected
 skill requires them. Fixing project sources requires an explicit request and a
 separate fixing phase. Portable `code-review` also works without this agent layer.
 
-1. Request a code review and read the resulting `review-publication.md`.
+1. Request a code review and read the resulting `runbook.md`.
 2. Inspect each proposed action and its exact body before running its command.
-3. Publication runs through the manual `reviewmatic plan` walkthrough, which
-   executes one guarded `reviewmatic publication apply` action at a time. A
-   thread closure requires the successful receipt for its preceding explanation.
-4. If the result is `unknown`, follow the helper's interactive recovery or run its
-   exact `inspect` command. If bounded reads still do not find the effect, only the
-   explicit `retry` command can repeat the write, with a duplicate-write warning.
-5. Regenerate stale or expired plans. Old direct-command plans do not acquire
-   these guarantees retroactively, and advisory markers are not publication receipts.
+3. Copy a direct `glab` command or launch `reviewmatic plan` for the same actions
+   interactively. Replies and thread state are separate choices. Reading and
+   navigation remain available during sends; `z` cancels waiting, `q` exits.
+4. Read the command result/error and check GitLab in your browser. You decide
+   whether to repeat; a timeout may have left an accepted request and a repeat
+   may duplicate it. No publication ledger, lock, or automatic retry blocks you.
+5. New plans support `repair-review` for targeted corrections and `refresh-review`
+   for changed evidence without losing findings. Old guarded plans remain readable
+   history, without migration or execution of their old actions.
 
 Explicit `/askme` requests end with manual continuation. Internal clarification
 returns to the already-authorized workflow without expanding its scope.

@@ -338,6 +338,21 @@
       },
       "additionalProperties": false
     },
+    "suggestion_parts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "required": ["path", "line", "body"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "line": { "type": "integer", "minimum": 1 },
+          "body": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
     "thread_decision": {
       "type": "object",
       "anyOf": [
@@ -419,6 +434,9 @@
         },
         "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "suggestion_applicable": { "type": "boolean" },
+        "suggestions": { "$ref": "#/$defs/suggestion_parts" },
+        "split_rationale": { "type": "string", "minLength": 1 },
+        "patch_reason": { "type": "string", "minLength": 1 },
         "fix_mode": { "enum": ["suggestion", "patch", "not_required"] },
         "patch": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
         "fixing_commit": {
@@ -812,6 +830,9 @@
         }
       ],
       "properties": {
+        "suggestions": { "$ref": "#/$defs/suggestion_parts" },
+        "split_rationale": { "type": "string", "minLength": 1 },
+        "patch_reason": { "type": "string", "minLength": 1 },
         "finding_id": { "type": "string", "minLength": 1 },
         "revision": { "type": "integer", "minimum": 1 },
         "type": { "enum": ["general", "line", "local_fix"] },
@@ -2015,7 +2036,8 @@
               "additionalProperties": false,
               "properties": {
                 "profile": { "const": "code-review" },
-                "review_contract_version": { "enum": [1, 2, 3, 4, 5, 6] },
+                "review_source": { "type": "object" },
+                "review_contract_version": { "enum": [1, 2, 3, 4, 5, 6, 7] },
                 "external_mutations": { "const": false },
                 "evidence_digest": { "$ref": "#/$defs/digest" },
                 "context_digest": { "$ref": "#/$defs/digest" },
@@ -2083,7 +2105,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "enum": [3, 4, 5, 6] } }
+                    "properties": { "review_contract_version": { "enum": [3, 4, 5, 6, 7] } }
                   },
                   "then": {
                     "properties": {
@@ -2110,7 +2132,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "enum": [4, 5, 6] } }
+                    "properties": { "review_contract_version": { "enum": [4, 5, 6, 7] } }
                   },
                   "then": { "required": ["chat_assessment", "locale"] },
                   "else": {
@@ -2122,7 +2144,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "enum": [5, 6] } }
+                    "properties": { "review_contract_version": { "enum": [5, 6, 7] } }
                   },
                   "then": {
                     "properties": {
@@ -2133,7 +2155,7 @@
                 {
                   "if": {
                     "required": ["review_contract_version"],
-                    "properties": { "review_contract_version": { "const": 6 } }
+                    "properties": { "review_contract_version": { "enum": [6, 7] } }
                   },
                   "then": { "required": ["semver_assessment", "label_review"] },
                   "else": { "not": { "required": ["semver_assessment"] } }

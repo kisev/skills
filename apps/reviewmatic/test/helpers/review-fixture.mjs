@@ -20,11 +20,22 @@ const clean = endpoint.split("?")[0];
 const config = JSON.parse(readFileSync(process.env.FAKE_GLAB_CONFIG, "utf8"));
 if (config.requests) appendFileSync(config.requests, JSON.stringify({ method, endpoint: clean }) + "\\n");
 if (method !== "GET") {
-  const payload = JSON.parse(readFileSync(0, "utf8"));
+  if (config.mutationError) { process.stderr.write(config.mutationError); process.exit(1); }
+  const payload = {};
+  for (let i = 0; i < rest.length; i += 1) {
+    if (rest[i] !== "-F" && rest[i] !== "-f") continue;
+    const assignment = rest[++i]; const split = assignment.indexOf("=");
+    const key = assignment.slice(0, split), raw = assignment.slice(split + 1);
+    payload[key] = raw.startsWith("@") ? readFileSync(raw.slice(1), "utf8") : key === "resolved" ? raw === "true" : raw;
+  }
   if (method === "POST" && clean === "projects/19/merge_requests/7/discussions/discussion-42/notes") {
     config.publishedNotes ??= [];
     config.publishedNotes.push({ id: 43 + config.publishedNotes.length, system: false, author: { id: 23, username: "reviewer" }, body: payload.body.trimEnd(), resolved: null, position: null });
   } else if (method === "PUT" && clean === "projects/19/merge_requests/7/discussions/discussion-42") config.resolved = payload.resolved;
+  else if (method === "POST" && clean === "projects/19/merge_requests/7/discussions") {
+    config.publishedNotes ??= [];
+    config.publishedNotes.push({ id: 100 + config.publishedNotes.length, body: payload.body });
+  }
   else if (method === "PUT" && clean === "projects/19/merge_requests/7") config.labels = payload.labels.split(",").filter(Boolean);
   else { process.stderr.write("unexpected mutation " + method + " " + clean); process.exit(1); }
   writeFileSync(process.env.FAKE_GLAB_CONFIG, JSON.stringify(config));
@@ -57,7 +68,7 @@ else if (clean === "projects/19/merge_requests/7/changes") value = {
   diff_refs: { base_sha: config.baseSha, start_sha: config.startSha, head_sha: config.headSha },
 };
 else if (clean === "projects/19/merge_requests/7/commits") value = [{ id: config.headSha }];
-else if (clean === "projects/19/merge_requests/7/pipelines") value = [{ id: 1, sha: config.headSha, status: "success" }];
+else if (clean === "projects/19/merge_requests/7/pipelines") value = [{ id: 1, sha: config.headSha, status: config.pipelineStatus ?? "success" }];
 else if (clean === "projects/19/pipelines/1/jobs" || clean === "projects/19/pipelines/1/bridges" || clean === "projects/19/merge_requests/7/notes") value = [];
 else if (clean === "projects/19/merge_requests/7/discussions") value = [discussion];
 if (value === null) { process.stderr.write("unexpected GET " + clean + "\\n"); process.exit(1); }

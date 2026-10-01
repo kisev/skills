@@ -17,8 +17,9 @@ import {
   writeArtifact,
   writeCompanion,
   privateDirectory,
+  redact,
 } from "../contract.js";
-import { makeCommand, execute, loadAction } from "../publication.js";
+import { commandArgv, sendCommand, shellJoin } from "../publication.js";
 import { xdgStateHome } from "../state-artifacts.js";
 import {
   BASELINE_NAME,
@@ -26,10 +27,14 @@ import {
   publishReviewState,
   rejectVisibleRawRefs,
   renderPublicationPatchCommand,
+  codeFence,
+  REVIEW_CONTRACT_VERSION,
+  validateGitPatch,
   reviewMarkdown,
   validateSuggestion,
 } from "../context.js";
 import { createHash } from "node:crypto";
+import { suggestionsPatch } from "../fixes.js";
 import { stringsFor, type Strings } from "./strings.js";
 
 export type Json = Record<string, unknown>;
@@ -156,9 +161,22 @@ export function discoverArtifactRoot(): string | null {
 }
 
 export function loadPlan(root: string): PlanBundle {
-  const progress = readJson(join(root, "review-current.json"), "code-review progress");
+  let progress = readJson(join(root, "review-current.json"), "code-review progress");
   if (progress.stage !== "plan_ready") {
-    throw new WorkflowError(`the review is not finalized; current stage is ${progress.stage}`);
+    const baselinePath = join(root, BASELINE_NAME);
+    if (!existsSync(baselinePath))
+      throw new WorkflowError(`the review is not finalized; current stage is ${progress.stage}`);
+    const baseline = readJson(baselinePath, "last finalized review");
+    const [, prior] = artifactPayload(String(baseline.plan_path), "review_plan");
+    progress = {
+      ...progress,
+      stage: "plan_ready",
+      plan_path: baseline.plan_path,
+      plan_digest: baseline.plan_digest,
+      evidence_path: `${root}/artifacts/evidence_snapshot/${prior.evidence_digest}.json`,
+      context_path: `${root}/artifacts/review_context/${prior.context_digest}.json`,
+      decision_path: `${root}/artifacts/review_decision/${prior.decision_digest}.json`,
+    };
   }
   const planPath = String(progress.plan_path);
   const planDigest = String(progress.plan_digest);
@@ -265,6 +283,27 @@ export function planItems(bundle: PlanBundle): PlanItem[] {
     });
   }
   const labels = (plan.label_review as Json) ?? null;
+  for (const action of actions.filter((action) =>
+    action.publication_id?.includes("@suggestion-"),
+  )) {
+    const publicationId = action.publication_id!;
+    const ownerId = publicationId.split("@suggestion-")[0];
+    const owner = items.find((item) => item.publicationId === ownerId);
+    const body = bodyByPublication.get(publicationId)?.content ?? null;
+    items.push({
+      key: publicationId,
+      kind: "line",
+      title: `${owner?.title ?? ownerId} (${publicationId.split("@suggestion-")[1]})`,
+      path: action.path,
+      line: action.line,
+      publicationId,
+      body,
+      actions: [action],
+      detail: { fix_mode: "suggestion", body, path: action.path, line: action.line, patch: null },
+      url: owner?.url ?? null,
+      conversation: [],
+    });
+  }
   if (
     labels !== null &&
     (((labels.add ?? []) as unknown[]).length > 0 ||
@@ -285,6 +324,11 @@ export function planItems(bundle: PlanBundle): PlanItem[] {
       conversation: [],
     });
   }
+  if (
+    plan.review_contract_version !== undefined &&
+    plan.review_contract_version !== REVIEW_CONTRACT_VERSION
+  )
+    return items.map((item) => ({ ...item, actions: [] }));
   return items;
 }
 
@@ -293,6 +337,30 @@ export function displayText(value: string): string {
     .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
     .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
     .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+}
+
+export function readableMarkdown(value: string): string {
+  let fence = 0;
+  return value
+    .split("\n")
+    .map((line) => {
+      const boundary = /^(`{3,})([^`]*)$/.exec(line);
+      if (boundary && (fence === 0 || boundary[1].length >= fence)) {
+        if (fence > 0) {
+          fence = 0;
+          return "";
+        }
+        fence = boundary[1].length;
+        return boundary[2].trim() === "" ? "" : `[${boundary[2].trim()}]`;
+      }
+      if (fence > 0) return line;
+      return line
+        .replace(/^#{1,6}\s+/, "")
+        .replace(/\*\*([^*]+)\*\*/g, "$1")
+        .replace(/`([^`]+)`/g, "$1")
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, "$1 ($2)");
+    })
+    .join("\n");
 }
 
 export function safeLink(value: string | null): string | null {
@@ -412,16 +480,6 @@ export function visualLines(text: string, width: number): string[] {
   return result;
 }
 
-export function commandTarget(command: string): { path: string; digest: string } {
-  const tokens = shlexSplit(command);
-  const actionIndex = tokens.indexOf("--action");
-  const confirmIndex = tokens.indexOf("--confirm");
-  if (actionIndex < 0 || confirmIndex < 0) {
-    throw new WorkflowError("publication command is invalid");
-  }
-  return { path: tokens[actionIndex + 1], digest: tokens[confirmIndex + 1] };
-}
-
 async function planArtifacts(bundle: PlanBundle): Promise<{ evidence: Json; context: Json }> {
   const evidencePath = String(bundle.progress.evidence_path);
   const contextPath = String(bundle.progress.context_path);
@@ -435,41 +493,9 @@ async function argvForAction(options: {
   bodyPath: string;
   evidence: Json;
 }): Promise<string[]> {
-  const target = commandTarget(options.action.command);
-  const [, guard] = await loadAction(target.path, target.digest);
-  const payload = guard.payload as Json;
-  if (options.action.operation === "create_line") {
-    const position = payload.position as Json;
-    const side = "new_line" in position ? "new" : "old";
-    return [
-      "glab",
-      "mr",
-      "note",
-      "create",
-      String(guard.mr_iid),
-      "--repo",
-      String((options.evidence.object as Json).web_url).split("/-/merge_requests/")[0],
-      "--file",
-      String(position[`${side}_path`]),
-      side === "new" ? "--line" : "--old-line",
-      String(position[`${side}_line`]),
-    ];
-  }
-  const argv = [
-    "glab",
-    "api",
-    "--hostname",
-    String(guard.host),
-    "--method",
-    String(guard.method),
-    String(guard.endpoint),
-    "--silent",
-  ];
-  for (const [key, value] of Object.entries(payload)) {
-    if (key === "body" || key === "description") argv.push("-F", `${key}=@${options.bodyPath}`);
-    else argv.push(key === "resolved" ? "-F" : "-f", `${key}=${value}`);
-  }
-  return argv;
+  return commandArgv(options.action.command).map((token) =>
+    /^(body|description)=@/.test(token) ? `${token.split("=")[0]}=@${options.bodyPath}` : token,
+  );
 }
 
 export async function amendBody(
@@ -477,6 +503,8 @@ export async function amendBody(
   publicationId: string,
   body: string,
 ): Promise<PlanBundle> {
+  if (bundle.plan.review_contract_version !== REVIEW_CONTRACT_VERSION)
+    throw new WorkflowError("Only new plans support repair; historical plans are read-only");
   const { evidence, context } = await planArtifacts(bundle);
   const normalized = `${body.replace(/\s+$/, "")}\n`;
   const item = planItems(bundle).find((candidate) => candidate.publicationId === publicationId);
@@ -489,6 +517,28 @@ export async function amendBody(
       path: item.path!,
       line: item.line!,
     });
+    if (item.body !== null) {
+      const repo = String((context.exact_git as Json).repo_root),
+        head = String(evidence.head_sha);
+      const oldTree: { tree?: string } = {},
+        newTree: { tree?: string } = {};
+      validateGitPatch(
+        repo,
+        head,
+        suggestionsPatch(repo, head, [{ path: item.path!, line: item.line!, body: item.body }]),
+        oldTree,
+      );
+      validateGitPatch(
+        repo,
+        head,
+        suggestionsPatch(repo, head, [{ path: item.path!, line: item.line!, body: normalized }]),
+        newTree,
+      );
+      if (oldTree.tree !== newTree.tree)
+        throw new WorkflowError(
+          "Changed suggestion code requires targeted fix repair, not body editing",
+        );
+    }
   }
   if (
     item.detail.fix_mode === "patch" &&
@@ -500,7 +550,7 @@ export async function amendBody(
     );
   let semanticBody = normalized;
   if (item.detail.fix_mode === "patch") {
-    const suffix = `\n\n\`\`\`sh\n${renderPublicationPatchCommand(item.detail)}\n\`\`\`\n`;
+    const suffix = `\n\n${codeFence(renderPublicationPatchCommand(item.detail), "sh")}\n`;
     if (!normalized.endsWith(suffix))
       throw new WorkflowError("Body editing must preserve the validated patch command");
     semanticBody = normalized.slice(0, -suffix.length).trimEnd();
@@ -510,35 +560,16 @@ export async function amendBody(
   );
   const identityDigest = sha256Text(publicationId).slice(0, 12);
   const contentDigest = sha256Text(normalized).slice(0, 12);
-  const [bodyPath, bodyDigest] = writeCompanion(
+  const [bodyPath] = writeCompanion(
     join(bodyDirectory, `${identityDigest}-${contentDigest}.md`),
     normalized,
   );
   const preview = bundle.plan.publication_preview as Json;
   const actions = structuredClone((preview.actions as PlanAction[]) ?? []);
-  const dependencies: Record<string, string> = {};
   const group = actions.filter((action) => action.publication_id === publicationId);
   for (const action of group) {
     const argv = await argvForAction({ evidence, action, bodyPath });
-    const value: Json =
-      action.operation === "create_issue"
-        ? {
-            body_sha256: bodyDigest,
-            title: argv[argv.indexOf("-f") + 1]?.replace("title=", "") ?? "",
-          }
-        : action.operation === "resolve" || action.operation === "reopen"
-          ? { resolved: action.operation === "resolve" ? "true" : "false" }
-          : { body_sha256: bodyDigest };
-    action.command = await makeCommand(
-      bundle.root,
-      evidence,
-      context,
-      action.id,
-      argv,
-      value,
-      dependencies,
-      action.operation === "create_line" ? bodyDigest : null,
-    );
+    action.command = shellJoin(argv);
   }
   const bodyFiles = ((preview.body_files as PlanBody[]) ?? []).map((record) =>
     record.publication_id === publicationId
@@ -558,7 +589,28 @@ export async function amendBody(
     ...bundle.plan,
     publication_preview: { ...preview, actions, body_files: bodyFiles },
   };
-  if (item.kind === "thread")
+  const [ownerId, partNumber] = publicationId.split("@suggestion-");
+  const updatePart = (record: Json, thread: boolean): Json => {
+    if ((thread ? `thread-${record.id}` : String(record.finding_id)) !== ownerId) return record;
+    const prefix = `${String(thread ? record.proposed_response : record.body)}\n\n`;
+    const partBody = normalized.startsWith(prefix)
+      ? normalized.slice(prefix.length).trimEnd()
+      : normalized.trimEnd();
+    return {
+      ...record,
+      suggestions: (record.suggestions as Json[]).map((part, index) =>
+        index + 1 === Number(partNumber) ? { ...part, body: partBody } : part,
+      ),
+    };
+  };
+  if (partNumber !== undefined) {
+    nextPlan.thread_decisions = (bundle.plan.thread_decisions as Json[]).map((record) =>
+      updatePart(record, true),
+    );
+    nextPlan.finding_publications = (bundle.plan.finding_publications as Json[]).map((record) =>
+      updatePart(record, false),
+    );
+  } else if (item.kind === "thread")
     nextPlan.thread_decisions = ((bundle.plan.thread_decisions ?? []) as Json[]).map((record) =>
       `thread-${record.id}` === publicationId
         ? { ...record, proposed_response: semanticBody }
@@ -583,6 +635,29 @@ export async function amendBody(
     nextPlan.publication_preview as Json,
   );
   const [, decision] = artifactPayload(String(bundle.progress.decision_path), "review_decision");
+  if (bundle.plan.review_source !== undefined) {
+    const source = structuredClone(bundle.plan.review_source) as Json;
+    const sourceContent = source.content as Json;
+    const key =
+      partNumber !== undefined
+        ? ownerId.startsWith("thread-")
+          ? "thread_decisions"
+          : "finding_publications"
+        : item.kind === "thread"
+          ? "thread_decisions"
+          : item.kind === "issue"
+            ? "recommended_issues"
+            : "finding_publications";
+    sourceContent[key] = (sourceContent[key] as Json[]).map((record) => {
+      if (partNumber !== undefined) return updatePart(record, key === "thread_decisions");
+      const id =
+        key === "thread_decisions" ? `thread-${record.id}` : String(record.finding_id ?? record.id);
+      return id === publicationId
+        ? { ...record, [key === "thread_decisions" ? "proposed_response" : "body"]: semanticBody }
+        : record;
+    });
+    nextPlan.review_source = source;
+  }
   const markdown = await reviewMarkdown(
     evidence,
     context,
@@ -607,15 +682,27 @@ export async function amendBody(
   return loadPlan(bundle.root);
 }
 
-export async function sendAction(bundle: PlanBundle, action: PlanAction): Promise<Json> {
-  const target = commandTarget(action.command);
-  return (await execute(target.path, target.digest)) as Json;
+export async function sendAction(
+  bundle: PlanBundle,
+  action: PlanAction,
+  signal?: AbortSignal,
+): Promise<Json> {
+  if (bundle.plan.review_contract_version !== REVIEW_CONTRACT_VERSION)
+    throw new WorkflowError("Historical plans are read-only; prepare a new runbook");
+  const result = await sendCommand(action.command, signal);
+  return {
+    status: result.code === 0 ? "sent" : "error",
+    code: result.code,
+    output: redact(result.stdout.toString("utf8")).slice(0, 4000),
+    error: redact(result.stderr.toString("utf8")).slice(0, 4000),
+  };
 }
 
 export async function sendItem(
   bundle: PlanBundle,
   item: PlanItem,
   editedBody: string | null,
+  signal?: AbortSignal,
 ): Promise<{ bundle: PlanBundle; results: Json[] }> {
   let current = bundle;
   if (editedBody !== null && item.publicationId !== null) {
@@ -634,9 +721,9 @@ export async function sendItem(
   const results: Json[] = [];
   if (ordered.length === 0) throw new WorkflowError("This item has no selected publication action");
   for (const action of ordered) {
-    const result = await sendAction(current, action);
+    const result = await sendAction(current, action, signal);
     results.push(result);
-    if (result.status === "blocked") break;
+    if (result.status !== "sent") break;
   }
   return { bundle: current, results };
 }

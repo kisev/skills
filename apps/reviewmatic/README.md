@@ -4,7 +4,7 @@
 
 `@kisev/reviewmatic` is the executable runtime of the `code-review` skill: the
 complete review chain (GitLab evidence collection, the review state machine,
-immutable plans, guarded publication) plus an interactive terminal walkthrough
+immutable plans, manual publication) plus an interactive terminal walkthrough
 of a finished review plan.
 
 ## Install
@@ -58,8 +58,10 @@ label rationales, and thread outcomes.
 GitLab or freezing decisions. Edit the same draft and check again. `resume-review --artifact-root <root>` recovers that draft after interruption without remote
 collection. `finish-review` validates it, rechecks complete evidence and context
 once, and atomically updates the final plan, Markdown, and baseline. Stale inputs
-leave the draft and previous final plan intact; run `start-review` again when the
-MR changed. Collection, validation, and finalization timings are returned
+leave the draft and previous final plan intact; use `refresh-review --draft <draft-path>`
+to retain findings and reassess changed scope. CI-only drift returns
+`refresh_required` with an immutable CI snapshot; update CI assessments and prose
+in the same draft without another code review. Collection, validation, and finalization timings are returned
 separately from host model/subagent time. Existing v2 artifacts and the low-level
 `prepare`/`context`/`template-review` commands remain supported; do not mix the two
 workflows in one review.
@@ -69,6 +71,9 @@ Local work-in-progress reviews use `prepare-local` and `finalize-local`;
 compact JSON result and never mutates GitLab or the checkout.
 
 ## Interactive plan walkthrough
+
+`runbook.md` is an equally supported interface: read the body preview and copy its
+direct `glab` command. The TUI executes the same operations without a shell.
 
 After a review the agent prints a short summary plus one command:
 
@@ -83,22 +88,42 @@ Page Up/Down for longer lists and conversations, and left/right to move between
 items. Links are clickable in terminals supporting OSC 8; `o` opens the selected
 discussion in a browser. Enter opens an item and never publishes it.
 
-Press `s` to send only the reply or `S` to send it with the planned resolve/reopen
-action, then confirm with `y`. Escape cancels confirmation or returns to the list.
+Press `s` to send only the reply, `r` for only the planned resolve/reopen, or `S`
+for both, then confirm with `y`. Escape cancels confirmation or returns to the list.
 Read-only items offer no send/edit action. Press `e` to edit
 the draft in `$EDITOR`; the plan is amended to the edited body before anything
-is sent, with the Markdown and baseline updated together. Editing a patch body
+is sent, with `runbook.md` and baseline updated together. Saving never sends.
+Use `t` for reply/context views. Reading/navigation remain available during a send;
+`z` cancels local waiting and `q` exits. Editing a patch body
 must preserve its validated patch and command. New threads, recommended issues,
 and label updates use the same
 walkthrough. Suggestions and git patches additionally offer local application:
 reviewmatic creates a dedicated git worktree at the exact reviewed head, shows
 the diff, and then asks for commit and push as two separate confirmations.
 
-Every send goes through the guarded publication contract
-(`reviewmatic publication apply/inspect/retry`): actions bind the GitLab user,
-MR refs, conversation, and body digests; receipts make retries idempotent; an
-uncertain outcome blocks only its own action and offers read-only inspection
-before an explicit retry.
+One send performs one command and shows its exit code/output/error. There are no
+publication locks, receipts, reservations, expiry, polling, automatic checks, or
+automatic retries. You check GitLab in the browser and decide whether to repeat.
+A timeout or cancellation does not undo an accepted request; repeating may create
+a duplicate. An error or restart does not block the next manual attempt.
+
+## Repair a new finalized plan
+
+```bash
+reviewmatic repair-review --artifact-root <root> --kind presentation
+reviewmatic check-review --draft <draft-path>
+reviewmatic finish-review --draft <draft-path>
+```
+
+Record `repair.rationale` and `repair.checks`. `presentation` preserves meaning and
+the complete fix result, including modes. `fix` permits a different correction of
+a confirmed problem after targeted consumer/tests checks, without a new critic.
+`decision` changes conclusions and requires a new independent targeted receipt.
+Uncertain meaning needs decision repair; insufficient checks stop without replacing
+the current plan or automatically broadening review. Repair never publishes.
+Suggestions are the default; related parts use `suggestions` (`path`, `line`,
+`body`) and `split_rationale`. Patch fallback requires `patch_reason`, with the diff
+in `patch` and prose only in `body`.
 
 ## Worktree registry
 
@@ -109,7 +134,9 @@ push state per worktree.
 
 ## Compatibility contract
 
-Existing v2 plans and single-critic receipts remain readable. Multi-critic
+Existing v2 plans and single-critic receipts remain readable history. Only new
+contract-7 guided plans support repair; old guarded actions are not executable and
+are not migrated automatically. Live legacy state is not deleted. Multi-critic
 receipts add optional `contributors` and require the updated runtime; the shared
 schema and TS copy are checked together. Canonical JSON and digests are validated
 against the Python reference in tests.

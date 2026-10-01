@@ -92,3 +92,10 @@ may reuse the same action only when bounded evidence proves no mutation and fres
 revalidation confirms the postcondition is absent. An uncertain result never
 authorizes fallback content or replay. Do not change user-owned configuration
 without Confirmation. Stop after `report`.
+
+For code-review manual publication, the user invokes direct `glab` commands or
+explicit TUI actions. This is not the guarded helper lifecycle: no publication
+receipts, reservations, locks, expiry, polling, or automatic replay decisions are
+required. Preparation remains read-only remotely. The user checks GitLab and may
+repeat after an error, accepting possible duplicates after uncertain outcomes.
+Other helpers retain their own confirmation and recovery boundaries.

@@ -453,7 +453,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         '"full review" alone is not an opt-out',
         "previous_finding_assessments",
         "recommended_issues",
-        "review-publication.md",
+        "runbook.md",
         "complete absolute filesystem paths",
         "label_assessments",
         "references/publication.md",
@@ -480,7 +480,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
     for marker in (
         "For another author's MR, do not expose finding titles",
         "use a `file://` link",
-        "one guarded helper command per remote action",
+        "one direct `glab` command per remote action",
         "selected response language",
         "authenticated user's",
         "factual role",
@@ -521,7 +521,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
     )
     for marker in (
         "reviewmatic plan",
-        "reviewmatic publication apply --action <path> --confirm <sha256>",
+        "no receipt dependency",
     ):
         assert marker in publication
     assert "Local WIP always receives" not in incremental

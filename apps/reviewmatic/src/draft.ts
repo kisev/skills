@@ -45,7 +45,11 @@ import {
   validateContextBinding,
   validateFindingPublications,
   validateReviewVerdict,
+  REVIEW_CONTRACT_VERSION,
+  BASELINE_NAME,
+  validateGitPatch,
 } from "./context.js";
+import { suggestionParts, suggestionsPatch } from "./fixes.js";
 import { validateLabelAssessments } from "./label-assessment.js";
 import { validate as validateSemver } from "./review-semver.js";
 
@@ -88,7 +92,14 @@ function inputSchema(name: string, keys: string[]): Json {
     type: "object",
     required: keys,
     additionalProperties: false,
-    properties: Object.fromEntries(keys.map((key) => [key, properties[key]])),
+    properties: {
+      ...Object.fromEntries(keys.map((key) => [key, properties[key]])),
+      ...Object.fromEntries(
+        ["suggestions", "split_rationale", "patch_reason"]
+          .filter((key) => properties[key] !== undefined)
+          .map((key) => [key, properties[key]]),
+      ),
+    },
   };
 }
 const criticSchema = (
@@ -184,6 +195,18 @@ export const DRAFT_SCHEMA: Json = {
     "content",
   ],
   properties: {
+    ci_snapshot: text,
+    repair: {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "base_plan_digest", "rationale", "checks"],
+      properties: {
+        kind: { enum: ["presentation", "fix", "decision"] },
+        base_plan_digest: ref("digest"),
+        rationale: text,
+        checks: { type: "array", minItems: 1, items: text },
+      },
+    },
     schema: { const: "code-review/draft/v1" },
     evidence_path: text,
     context_path: text,
@@ -243,12 +266,29 @@ export function schemaIssues(
     );
   for (const branch of (schema.allOf ?? []) as Json[])
     errors.push(...schemaIssues(branch, value, path, root));
+  if (isDict(schema.if)) {
+    const branch = schemaValid(schema.if, value, root) ? schema.then : schema.else;
+    if (isDict(branch)) errors.push(...schemaIssues(branch, value, path, root));
+  }
   for (const keyword of ["anyOf", "oneOf"]) {
     const branches = schema[keyword];
     if (Array.isArray(branches) && !branches.some((branch) => schemaValid(branch, value, root))) {
       const alternatives = branches.map((branch) => schemaIssues(branch, value, path, root));
-      alternatives.sort((a, b) => a.length - b.length);
-      errors.push(...alternatives[0]);
+      const compatible = branches.filter(
+        (branch) =>
+          isDict(branch) &&
+          (branch.type === undefined ||
+            (branch.type === "object" && isDict(value)) ||
+            (branch.type === "array" && Array.isArray(value)) ||
+            branch.type === typeof value ||
+            (branch.type === "null" && value === null)),
+      );
+      const candidates =
+        compatible.length > 0
+          ? compatible.map((branch) => schemaIssues(branch, value, path, root))
+          : alternatives;
+      candidates.sort((a, b) => a.length - b.length);
+      errors.push(...candidates[0]);
     }
   }
   if (errors.length === 0)
@@ -533,7 +573,7 @@ function mergedCritics(draft: Json, context: Json, mode: string): Json | null {
   if (
     receipts.length !== count ||
     (["normal", "deep", "incremental"].includes(mode) && count < 1) ||
-    (mode === "unchanged" && count !== 0)
+    (mode === "unchanged" && count !== 0 && (draft.repair as Json | undefined)?.kind !== "decision")
   )
     throw new WorkflowError(
       "$.critics must contain exactly critic_count independent receipts; specialist agents are optional, ordinary subagents are supported",
@@ -578,6 +618,7 @@ function compileDraft(
   finalizeDigest = ZERO,
   criticDigest: string | null = ZERO,
 ): { decision: Json; content: Json; receipt: Json | null } {
+  evidence = ciEvidence(draft, evidence);
   const receipt = mergedCritics(draft, context, mode);
   const primary = draft.findings as Json[];
   const critics = (receipt?.findings ?? []) as Json[];
@@ -694,7 +735,11 @@ export async function checkReview(path: string): Promise<Json> {
       validateLabelAssessments(evidence, content.label_assessments, String(content.semver_impact)),
     );
     check("$.critics", () => mergedCritics(draft, context, String(progress.mode)));
-    check("$.ci_job_assessments", () => ciBlocksReady(evidence, draft.ci_job_assessments));
+    check("$.ci_job_assessments", () =>
+      ciBlocksReady(ciEvidence(draft, evidence), draft.ci_job_assessments),
+    );
+    if (draft.repair !== undefined)
+      check("$.repair", () => validateRepair(draft, root, progress, evidence));
     if (errors.length === 0) {
       let compiled: ReturnType<typeof compileDraft> | null = null;
       try {
@@ -729,7 +774,7 @@ export async function checkReview(path: string): Promise<Json> {
             );
             check("$.content.chat_assessment", () =>
               rejectVisibleRawRefs(
-                reviewChat(result.payload as Json, context, join(root, "review-publication.md")),
+                reviewChat(result.payload as Json, context, join(root, "runbook.md")),
                 evidence,
                 context,
               ),
@@ -766,25 +811,56 @@ export async function finishReview(path: string): Promise<Json> {
   const inputDigest = digest(draft);
   if (inputDigest !== checked.draft_digest)
     throw new WorkflowError("Draft changed after validation; repeat finish-review");
-  if (progress.stage === "plan_ready")
+  if (progress.stage === "plan_ready" && draft.repair === undefined)
     throw new WorkflowError(
       "This review is already finalized; inspect its plan or start a fresh review",
     );
   const current = await collect(evidence.target as Json, "code-review", { persist: false });
   const freshContext = await refreshContext(context, String(draft.evidence_path));
+  const comparedContext = { ...context };
+  if (draft.repair !== undefined) delete comparedContext.incremental;
   if (
     current.retrieval_complete !== true ||
     context.complete !== true ||
     freshContext.complete !== true ||
-    digest(fingerprint(current)) !== digest(fingerprint(evidence)) ||
-    !contextsMatch(context, freshContext)
-  )
+    digest(fingerprint(current)) !== digest(fingerprint(ciEvidence(draft, evidence))) ||
+    !contextsMatch(comparedContext, freshContext)
+  ) {
+    if (
+      current.retrieval_complete === true &&
+      digest(analysisFingerprint(current)) === digest(analysisFingerprint(evidence)) &&
+      contextsMatch(comparedContext, freshContext)
+    ) {
+      const [snapshot] = await writeArtifact(root, "evidence_snapshot", current);
+      draft.ci_snapshot = snapshot;
+      const previous = draft.ci_job_assessments as Json[];
+      draft.ci_job_assessments = ciJobAssessmentTemplate(current).map(
+        (item) =>
+          previous.find(
+            (old) =>
+              old.job_id === item.job_id &&
+              old.pipeline_id === item.pipeline_id &&
+              old.trace_evidence === item.trace_evidence,
+          ) ?? item,
+      );
+      writeJson(path, draft);
+      return {
+        status: "refresh_required",
+        reason:
+          "Only CI changed. The analysis and original critic receipts were preserved. Update CI assessments and any CI prose in this draft, then finish-review.",
+        draft_path: path,
+        next_action: runnerAction("check-review", ["--draft", path]),
+        external_mutations: false,
+      };
+    }
     return {
       status: "stale",
       reason:
-        "GitLab evidence or context changed. Start a new review; the previous plan and editable draft were preserved.",
+        "Review data changed. Refresh the existing draft and reassess the affected scope; the previous plan is preserved.",
+      next_action: runnerAction("refresh-review", ["--draft", path]),
       external_mutations: false,
     };
+  }
   if (inputDigest !== digest(readJson(path, "review draft")))
     throw new WorkflowError("Draft changed during finalization; repeat finish-review");
   const initial = compileDraft(draft, context, evidence, String(progress.mode));
@@ -825,6 +901,11 @@ export async function finishReview(path: string): Promise<Json> {
       dryRun: false,
       freshnessChecked: true,
       progress,
+      source: draft,
+      baselineStateDigest:
+        draft.repair !== undefined
+          ? digest(readJson(join(root, BASELINE_NAME), "review baseline"))
+          : undefined,
       bindings: {
         critic_receipt_path: criticPath,
         critic_receipt_digest: criticDigest,
@@ -846,6 +927,238 @@ export async function finishReview(path: string): Promise<Json> {
       validation_ms: (checked.timings as Json).validation_ms,
       finalization_ms: Math.round(performance.now() - started),
     },
+    external_mutations: false,
+  };
+}
+
+export function analysisFingerprint(evidence: Json): Json {
+  const value = fingerprint(evidence);
+  delete value.pipelines;
+  if (isDict(value.object)) {
+    value.object = { ...value.object };
+    for (const key of ["updated_at", "head_pipeline"]) delete (value.object as Json)[key];
+  }
+  return value;
+}
+
+function ciEvidence(draft: Json, evidence: Json): Json {
+  if (draft.ci_snapshot === undefined) return evidence;
+  const [document, snapshot] = artifactPayload(String(draft.ci_snapshot), "evidence_snapshot");
+  if (
+    String(draft.ci_snapshot) !==
+    `${evidence.artifact_root}/artifacts/evidence_snapshot/${digest(document)}.json`
+  )
+    throw new WorkflowError("CI snapshot must be an immutable artifact of this review target");
+  if (
+    snapshot.retrieval_complete !== true ||
+    digest(analysisFingerprint(snapshot)) !== digest(analysisFingerprint(evidence))
+  )
+    throw new WorkflowError("CI snapshot changed analysis inputs or is incomplete");
+  return snapshot;
+}
+
+export async function repairReview(rootValue: string, kind: string): Promise<Json> {
+  const root = await artifactRoot(rootValue);
+  const progress = loadProgress(root);
+  if (progress?.stage !== "plan_ready") throw new WorkflowError("Repair requires a finalized plan");
+  const [, plan] = artifactPayload(String(progress.plan_path), "review_plan");
+  if (plan.review_contract_version !== REVIEW_CONTRACT_VERSION || !isDict(plan.review_source))
+    throw new WorkflowError("Only new guided plans support repair; historical plans are read-only");
+  if (!["presentation", "fix", "decision"].includes(kind))
+    throw new WorkflowError("Invalid repair kind");
+  const draft = structuredClone(plan.review_source as Json);
+  draft.repair = { kind, base_plan_digest: progress.plan_digest, rationale: "", checks: [] };
+  const path = join(root, "review-drafts", `repair-${progress.plan_digest}-${kind}.json`);
+  if (!existsSync(path)) writeJson(path, draft);
+  return {
+    status: "ok",
+    draft_path: path,
+    kind,
+    instructions:
+      "Compare old and new meaning, record rationale and targeted checks. Decision changes require a new independent critic in critics with explicit dispositions. Stop if evidence is insufficient. Preparation never publishes.",
+    next_action: runnerAction("check-review", ["--draft", path]),
+    external_mutations: false,
+  };
+}
+
+function validateRepair(draft: Json, root: string, progress: Json, evidence: Json): void {
+  const repair = draft.repair as Json;
+  if (progress.stage !== "plan_ready" || progress.plan_digest !== repair.base_plan_digest)
+    throw new WorkflowError("Repair is superseded; reopen the current plan");
+  const [, plan] = artifactPayload(String(progress.plan_path), "review_plan");
+  if (plan.review_contract_version !== REVIEW_CONTRACT_VERSION)
+    throw new WorkflowError("Historical plans cannot be repaired");
+  const original = plan.review_source as Json;
+  const beforeContent = original.content as Json,
+    afterContent = draft.content as Json;
+  if (repair.kind === "decision") {
+    const oldSessions = new Set((original.critics as Json[]).map((item) => item.session_id));
+    for (const critic of draft.critics as Json[]) {
+      const prior = (original.critics as Json[]).find(
+        (item) => item.session_id === critic.session_id,
+      );
+      if (prior && digest(prior) !== digest(critic))
+        throw new WorkflowError("Original critic receipts cannot be edited or rebound");
+    }
+    if (!(draft.critics as Json[]).some((item) => !oldSessions.has(item.session_id)))
+      throw new WorkflowError("Decision repair requires a new independent targeted critic receipt");
+    return;
+  }
+  if (
+    digest((draft.findings as Json[]).map(({ id, severity }) => ({ id, severity }))) !==
+    digest((original.findings as Json[]).map(({ id, severity }) => ({ id, severity })))
+  )
+    throw new WorkflowError(
+      "Changing findings or severity requires decision repair; prose still requires semantic comparison",
+    );
+  for (const key of ["critics", "dispositions", "owner_decision_reasons"])
+    if (digest(draft[key]) !== digest(original[key]))
+      throw new WorkflowError(`Changing ${key} requires decision repair`);
+  if (
+    draft.ci_snapshot === original.ci_snapshot &&
+    digest(draft.ci_job_assessments) !== digest(original.ci_job_assessments)
+  )
+    throw new WorkflowError(
+      "Changing CI assessments without refreshed evidence requires decision repair",
+    );
+  for (const key of [
+    "semver_impact",
+    "semver_assessment",
+    "label_assessments",
+    "mr_metadata_assessment",
+    "previous_finding_assessments",
+    "recommended_issues",
+    "rejected_candidate_assessments",
+  ])
+    if (digest(afterContent[key]) !== digest(beforeContent[key]))
+      throw new WorkflowError(`Changing ${key} requires decision repair`);
+  const oldThreads = beforeContent.thread_decisions as Json[],
+    newThreads = afterContent.thread_decisions as Json[];
+  if (oldThreads.length !== newThreads.length)
+    throw new WorkflowError("Changing threads requires decision repair");
+  for (const thread of newThreads) {
+    const prior = oldThreads.find((item) => item.id === thread.id);
+    if (!prior || ["assessment", "outcome", "state"].some((key) => prior[key] !== thread[key]))
+      throw new WorkflowError("Changing thread conclusions requires decision repair");
+  }
+  if (repair.kind !== "presentation") return;
+  const [, context] = artifactPayload(String(progress.context_path), "review_context");
+  const repo = String((context.exact_git as Json).repo_root);
+  const bindings = expectedThreadBindings(context);
+  const tree = (fix: Json): string => {
+    if (fix.fix_mode === "not_required") return String(evidence.head_sha);
+    const result: { tree?: string } = {};
+    const patch =
+      fix.fix_mode === "patch"
+        ? String(fix.patch)
+        : suggestionsPatch(repo, String(evidence.head_sha), suggestionParts(fix));
+    validateGitPatch(repo, String(evidence.head_sha), patch, result);
+    return result.tree!;
+  };
+  for (const key of ["finding_publications", "thread_decisions"]) {
+    const previous = beforeContent[key] as Json[],
+      next = afterContent[key] as Json[];
+    if (previous.length !== next.length)
+      throw new WorkflowError("Changing fix ownership requires decision repair");
+    for (const fix of next) {
+      const prior = previous.find(
+        (item) => (item.finding_id ?? item.id) === (fix.finding_id ?? fix.id),
+      );
+      if (!prior) throw new WorkflowError("Changing fix ownership requires decision repair");
+      const normalize = (record: Json): Json => {
+        if (
+          key !== "thread_decisions" ||
+          record.fix_mode !== "suggestion" ||
+          record.suggestions !== undefined
+        )
+          return record;
+        const position = bindings[String(record.id)].root_position as Json;
+        return {
+          ...record,
+          body: record.proposed_response,
+          path: position.new_path,
+          line: position.new_line,
+        };
+      };
+      if (key === "thread_decisions" && digest(prior) === digest(fix)) continue;
+      if (tree(normalize(prior)) !== tree(normalize(fix)))
+        throw new WorkflowError("Fix results differ; use targeted fix repair");
+    }
+  }
+}
+
+export async function refreshReview(path: string): Promise<Json> {
+  const { draft, progress, context: previousContext } = await selectedDraft(path);
+  const old = structuredClone(draft);
+  const [, evidence] = artifactPayload(String(draft.evidence_path), "evidence_snapshot");
+  const result = await startReview({
+    url: String((evidence.target as Json).url),
+    repoRoot: String(progress.repo_root),
+    reviewMode: ["fast", "normal", "deep"].includes(String(progress.mode))
+      ? String(progress.mode)
+      : "normal",
+    locale: String(progress.locale),
+  });
+  if (result.status !== "ok") return result;
+  const next = readJson(String(result.draft_path), "refreshed draft");
+  const generated = next.content as Json;
+  const content = structuredClone(old.content as Json);
+  const expected = generated.thread_decisions as Json[];
+  content.thread_decisions = expected.map((binding) => {
+    const prior = (content.thread_decisions as Json[]).find((item) => item.id === binding.id);
+    return prior
+      ? {
+          ...prior,
+          ...Object.fromEntries(
+            ["url", "state", "last_note_id", "last_note_body_sha256", "thread_sha256"].map(
+              (key) => [key, binding[key]],
+            ),
+          ),
+        }
+      : binding;
+  });
+  content.label_assessments = (generated.label_assessments as Json[]).map(
+    (binding) =>
+      (content.label_assessments as Json[]).find((item) => item.name === binding.name) ?? binding,
+  );
+  content.previous_finding_assessments = generated.previous_finding_assessments;
+  next.content = content;
+  next.findings = [
+    ...(old.findings as Json[]),
+    ...(old.critics as Json[]).flatMap((item) => item.findings as Json[]),
+  ];
+  next.dispositions = old.dispositions;
+  next.run_id = old.run_id;
+  next.session_id = old.session_id;
+  next.owner_decision_reasons = old.owner_decision_reasons;
+  next.low_risk = old.low_risk;
+  writeJson(String(result.draft_path), next);
+  const [, currentEvidence] = artifactPayload(String(next.evidence_path), "evidence_snapshot");
+  const [, currentContext] = artifactPayload(String(next.context_path), "review_context");
+  const before = fingerprint(evidence),
+    after = fingerprint(currentEvidence);
+  const refreshScope = {
+    changed_evidence_fields: Object.keys(before).filter(
+      (key) => digest(before[key] ?? null) !== digest(after[key] ?? null),
+    ),
+    changed_context_fields: Object.keys(previousContext).filter(
+      (key) =>
+        !["prepared_at", "evidence_digest", "incremental"].includes(key) &&
+        digest(previousContext[key] ?? null) !== digest(currentContext[key] ?? null),
+    ),
+  };
+  return {
+    ...result,
+    status: "needs_reassessment",
+    previous_draft_path: path,
+    refresh_scope: refreshScope,
+    critic_task: {
+      ...(result.critic_task as Json),
+      refresh_scope: refreshScope,
+      instructions: `${(result.critic_task as Json).instructions} This is a targeted refresh, not a new zero-context audit. Assess the listed changed evidence/context and affected consumers; unchanged code need not be re-reviewed. The primary retains prior findings and dispositions.`,
+    },
+    reason:
+      "Findings and decisions were retained. Reassess the returned delta and affected consumers. Original critic receipts remain in the previous draft, never rebound to new evidence.",
     external_mutations: false,
   };
 }

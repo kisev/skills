@@ -124,12 +124,19 @@ test("one draft completes remote review, validates locally, and retains real thr
   };
   const sent = await sendItem(edited, replyOnly, null);
   assert.equal(sent.results.length, 1);
-  assert.equal(sent.results[0].status, "applied", JSON.stringify(sent.results));
+  assert.equal(sent.results[0].status, "sent", JSON.stringify(sent.results));
   const afterReply = readJson(fixture.configPath);
   assert.notEqual(afterReply.resolved, true);
   assert.equal(afterReply.publishedNotes.length, 1);
-  const resolved = await sendItem(edited, selectedThread, null);
-  assert.equal(resolved.results.at(-1).status, "applied", JSON.stringify(resolved.results));
+  const resolved = await sendItem(
+    edited,
+    {
+      ...selectedThread,
+      actions: selectedThread.actions.filter((item) => item.operation === "resolve"),
+    },
+    null,
+  );
+  assert.equal(resolved.results.at(-1).status, "sent", JSON.stringify(resolved.results));
   assert.equal(readJson(fixture.configPath).resolved, true);
   assert.equal(readJson(fixture.configPath).publishedNotes.length, 1);
 });
@@ -149,7 +156,7 @@ test("public guided CLI completes the same contract without low-level staging co
   writeJson(result.draft_path, completeDraft(readJson(result.draft_path), result));
   assert.equal(run("check-review", "--draft", result.draft_path).status, "ok");
   const finished = run("finish-review", "--draft", result.draft_path);
-  assert.match(finished.chat, /review-publication\.md/);
+  assert.match(finished.chat, /runbook\.md/);
   assert.ok(!finished.chat.includes("undefined"));
 });
 
@@ -301,7 +308,7 @@ test("chosen critic count, independent identities, and stale discussions remain 
   const progress = readFileSync(join(result.artifact_root, "review-current.json"));
   assert.equal((await finishReview(result.draft_path)).status, "stale");
   assert.deepEqual(readFileSync(join(result.artifact_root, "review-current.json")), progress);
-  assert.equal(existsSync(join(result.artifact_root, "review-publication.md")), false);
+  assert.equal(existsSync(join(result.artifact_root, "runbook.md")), false);
   writeFileSync(fixture.configPath, JSON.stringify(fixture.config));
   const final = await finishReview(result.draft_path);
   assert.equal(final.status, "ok");

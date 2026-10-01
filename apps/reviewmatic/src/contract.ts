@@ -834,6 +834,7 @@ export function threadDecisionsAreValid(value: unknown): boolean {
     const item = entry;
     if (!isDict(item)) return false;
     const keys = keySet(item);
+    for (const key of ["suggestions", "split_rationale", "patch_reason"]) keys.delete(key);
     if (!allowed.some((candidate) => setsEqual(keys, candidate))) return false;
     if (!nonemptyString(item.id) || !nonemptyString(item.url) || !nonemptyString(item.rationale)) {
       return false;
@@ -922,6 +923,7 @@ export function findingPublicationsAreValid(value: unknown, requireFixes = false
     const item = entry;
     if (!isDict(item)) return false;
     const keys = keySet(item);
+    for (const key of ["suggestions", "split_rationale", "patch_reason"]) keys.delete(key);
     if (!allowed.some((candidate) => setsEqual(keys, candidate))) return false;
     if (!nonemptyString(item.finding_id)) return false;
     if (!isPlainInt(item.revision)) return false;
@@ -2772,6 +2774,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
     const finalRequired = new Set([...structuredRequired, "chat_assessment", "locale"]);
     const releaseRequired = new Set([...finalRequired, "semver_assessment"]);
     const actualKeys = keySet(payload);
+    actualKeys.delete("review_source");
     if (
       !setsEqual(actualKeys, minimalRequired) &&
       !setsEqual(actualKeys, legacyRequired) &&
@@ -2796,7 +2799,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
     const releasePlan = setsEqual(actualKeys, releaseRequired);
     const minimalPlan = setsEqual(actualKeys, minimalRequired);
     if (
-      releasePlan !== (payload.review_contract_version === 6) ||
+      releasePlan !== [6, 7].includes(payload.review_contract_version as number) ||
       (releasePlan &&
         (!assessmentIsValid(payload.semver_assessment) ||
           !codeReviewLabelReviewIsValid(payload.label_review) ||
@@ -2819,8 +2822,8 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
     const invalid =
       payload.profile !== "code-review" ||
       (!legacyPlan &&
-        (structuredPlan ? ![2, 3, 4, 5, 6].includes(version as number) : version !== 1)) ||
-      finalPlan !== [4, 5, 6].includes(version as number) ||
+        (structuredPlan ? ![2, 3, 4, 5, 6, 7].includes(version as number) : version !== 1)) ||
+      finalPlan !== [4, 5, 6, 7].includes(version as number) ||
       payload.external_mutations !== false ||
       !["evidence_digest", "context_digest", "decision_digest"].every((key) =>
         isDigest(payload[key]),
@@ -2851,7 +2854,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
             !(payload.thread_decisions as unknown[]).every(
               (item) => isDict(item) && "suggestion_applicable" in item,
             )) ||
-          ([3, 4, 5, 6].includes(version as number) &&
+          ([3, 4, 5, 6, 7].includes(version as number) &&
             (!findingPublicationsAreValid(payload.finding_publications, true) ||
               !(payload.thread_decisions as unknown[]).every(
                 (item) =>

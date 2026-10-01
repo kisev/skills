@@ -22,6 +22,7 @@ export interface MutationProcessResult {
 }
 
 export interface MutationProcessOptions {
+  signal?: AbortSignal;
   timeoutMs?: number;
   outputLimit?: number;
   graceMs?: number;
@@ -89,6 +90,7 @@ export async function runMutationProcess(
   const timeoutMs = options.timeoutMs ?? 60_000;
   const outputLimit = options.outputLimit ?? 1024 * 1024;
   const graceMs = options.graceMs ?? 500;
+  if (options.signal?.aborted) throw new MutationNotAttempted("Command cancelled before sending");
   if (process.platform === "win32") {
     throw new MutationNotAttempted("GitLab mutation requires POSIX process groups");
   }
@@ -106,6 +108,7 @@ export async function runMutationProcess(
     throw new MutationOutcomeUnknown("GitLab mutation pipes are unavailable");
   }
   const deadline = performance.now() + timeoutMs;
+  let cancel = (): void => {};
   const outcome = new Promise<MutationProcessResult>((resolve, reject) => {
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
@@ -137,6 +140,10 @@ export async function runMutationProcess(
       () => settle(new MutationOutcomeUnknown("GitLab mutation timed out; inspect the target")),
       Math.max(0, deadline - performance.now()),
     );
+    cancel = () =>
+      settle(new MutationOutcomeUnknown("Local waiting cancelled; check GitLab before repeating"));
+    options.signal?.addEventListener("abort", cancel, { once: true });
+    if (options.signal?.aborted) cancel();
     stdout.on("data", (chunk: Buffer) => {
       stdoutChunks.push(chunk);
       stdoutSize += chunk.length;
@@ -199,6 +206,7 @@ export async function runMutationProcess(
   try {
     return await outcome;
   } finally {
+    options.signal?.removeEventListener("abort", cancel);
     await terminate(child, graceMs);
   }
 }
