@@ -66,7 +66,10 @@ All notable changes to this project are documented in this file. Entries follow
 ### Fixed
 
 - The skills-state permissions preset now also allows reads and external-directory
-  access under `~/.agents/skills/**`, the canonical portable-skills tree. The
+  access under `~/.agents/skills/**`, the canonical portable-skills tree, and
+  external-directory enumeration of the exact roots `~/.agents`,
+  `~/.agents/skills`, `~/.config/opencode/skills`, and
+  `~/.local/state/agent-skills`, so directory scans do not prompt. The
   preset previously covered only legacy skills state paths, so every skill
   reference read outside a project directory prompted for access in OpenCode V2.
 

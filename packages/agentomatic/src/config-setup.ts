@@ -275,6 +275,14 @@ function fragmentEdits(
           { action: "external_directory", resource, effect: "allow" },
         ]),
         { action: "edit", resource: XDG_STATE_GLOB, effect: "allow" },
+        // Directory enumeration (glob/list) targets the roots themselves, which
+        // the tree globs above do not match; allow those exact directories.
+        ...statePaths.map((resource): PermissionRule => ({
+          action: "external_directory",
+          resource: resource.replace(/\/\*\*$/, ""),
+          effect: "allow",
+        })),
+        { action: "external_directory", resource: "~/.agents", effect: "allow" },
       ]);
     const edits: JsoncEdit[] = [];
     if (!mapAllowsAll(permission.read))

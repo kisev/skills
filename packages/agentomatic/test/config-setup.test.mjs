@@ -261,6 +261,10 @@ test("config setup applies all fragments globally and stays idempotent", async (
     assertRule(opencode, "edit", "*.ssh/**", "deny");
     assertRule(opencode, "external_directory", "~/.local/state/agent-skills/**", "allow");
     assertRule(opencode, "external_directory", "~/.agents/skills/**", "allow");
+    assertRule(opencode, "external_directory", "~/.agents", "allow");
+    assertRule(opencode, "external_directory", "~/.agents/skills", "allow");
+    assertRule(opencode, "external_directory", "~/.config/opencode/skills", "allow");
+    assertRule(opencode, "external_directory", "~/.local/state/agent-skills", "allow");
     assert.equal(opencode.lsp, undefined);
 
     const cli = parseJsonc(readFileSync(join(root, ".config", "opencode", "cli.json"), "utf8"));

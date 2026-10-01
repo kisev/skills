@@ -204,7 +204,7 @@ npx agentomatic config --dry-run
 | Фрагмент | Цели | Эффект |
 | - | - | - |
 | `core-plugin` | opencode | Добавляет `$schema` и регистрирует `@kisev/agentomatic` в `plugins` |
-| `skills-state-permissions` | opencode, kilo, mimo | Разрешает чтение, правки и доступ к внешнему каталогу для штатного состояния навыков в `~/.local/state/agent-skills/**`; OpenCode также разрешает чтение и доступ к внешнему каталогу в каноническом дереве переносимых навыков `~/.agents/skills/**` и в устаревшем `~/.config/opencode/skills/**`. OpenCode использует упорядоченные `permissions`, Kilo/MiMo сохраняют карты `permission` |
+| `skills-state-permissions` | opencode, kilo, mimo | Разрешает чтение, правки и доступ к внешнему каталогу для штатного состояния навыков в `~/.local/state/agent-skills/**`; OpenCode также разрешает чтение и доступ к внешнему каталогу в каноническом дереве переносимых навыков `~/.agents/skills/**` и в устаревшем `~/.config/opencode/skills/**`, а также перечисление самих этих корней и каталога `~/.agents` (действие `external_directory`), чтобы сканы каталогов (glob/list) не запрашивали доступ. OpenCode использует упорядоченные `permissions`, Kilo/MiMo сохраняют карты `permission` |
 | `secrets-guard` | opencode, kilo, mimo | Запрещает чтение и изменение распространённых файлов секретов (`.env*`, ключи, учётные данные) |
 | `kilo-display` | kilo | Разворачивает блоки reasoning, терминала, правок и инструментов |
 | `tui-schema` | opencode, kilo, mimo | OpenCode пишет глобальный `cli.json` со схемой V2, `theme.name: ayu` и нативными ID биндов. Kilo/MiMo сохраняют свои TUI-форматы, `theme: ayu`, stacked diffs и прежние ID биндов |
