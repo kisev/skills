@@ -231,6 +231,41 @@ its mode, while module import and read-only commands remain portable.
 write, fsync, report, and recovery failures and check preserved bytes, exact
 receipts, rollback, legacy journals, and rejection of unsafe backup or lock paths.
 
+### REQ-F-548 - Verify GitLab workflows against a persistent local CE server
+
+The opt-in `apps/gitlab-test/` harness shall provision its own accounts,
+credentials, repositories, Git history and fixtures without manual registration.
+It shall verify `code-review`/reviewmatic, `mr-prepare`, `task-prepare`,
+`task-triage`, `release-prepare` and `release-review` against the pinned CE server
+and real glab, including pagination, author/reviewer roles, inline positions,
+single/grouped suggestions and partial application, manual publication commands
+and TUI, refresh/repair and CI-only drift, supported issue relationships,
+tags/releases and readiness. Real shell jobs shall provide exact-commit evidence,
+successful and failing traces and a child pipeline. Browser checks shall retain
+screenshots and verify rendered placement, application and thread state.
+
+Named volumes and an untouched free project shall survive ordinary runs and
+down. Checkout ownership shall be checked before resource adoption or mutation.
+Reset shall preview the exact selected scope, require its matching confirmation,
+retain reports and reject foreign resources or unsafe local paths. A separate
+disposable reset test shall verify isolation from the primary stand.
+
+Every run shall retain versions, durations, resource measurements and per-scenario
+observations. Missing mandatory coverage, failures and timeouts shall return
+nonzero, never a skipped success. Fault-injected observations shall be distinct
+from actual server behavior. Optional live shall use existing host adapters,
+explicit provider/model/credentials and bounded execution with complete budget
+telemetry; it shall verify artifacts and the manual publication boundary.
+Neither a running stand nor a live provider shall be required by ordinary checks.
+
+#### Verification
+
+`tests/test_gitlab_stand.py` verifies offline safety boundaries. `task gitlab:test`
+and its repeat verify server and browser postconditions; `task gitlab:test-reset`
+verifies the disposable lifecycle. `task gitlab:live` provides separately reported
+real-agent evidence when explicitly configured. Baseline API coverage alone does
+not establish the complete workflow contract.
+
 ### REQ-F-547 - Automate a persistent local Mattermost test environment
 
 The repository shall provide an opt-in local Mattermost environment with automatic,

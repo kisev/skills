@@ -9,6 +9,7 @@ import os
 import socket
 import ssl
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,8 @@ class Browser:
         self.env = {k: v for k, v in os.environ.items() if not k.startswith("AGENT_BROWSER_")}
         self.session = "mm-test-" + stand.manifest["owner"]
         config = stand.state / "browser-config.json"
+        if config.is_symlink():
+            raise RuntimeError("Browser configuration must not be a symlink")
         config.write_text("{}\n")
         self.base = ["agent-browser", "--config", str(config), "--session", self.session]
 
@@ -33,7 +36,9 @@ class Browser:
             check=False,
         )
         if result.returncode:
-            raise RuntimeError(f"Browser {args[:2]} failed: " + result.stderr[-1000:])
+            raise RuntimeError(
+                f"Browser {args[:2]} failed: " + (result.stderr or result.stdout)[-1000:]
+            )
         return result.stdout
 
     def evaluate(self, script: str) -> Any:
@@ -42,11 +47,13 @@ class Browser:
             raise RuntimeError("Browser evaluation failed")
         return output["data"]["result"]
 
-    def start(self) -> None:
+    def open_verified(self, health_path: str = "/system/ping") -> None:
         self.call("close")
+        # The CLI can acknowledge close before its daemon removes the socket.
+        time.sleep(0.5)
         # Verify hostname and chain first; Chromium trusts only this test CA's
         # public key in this ephemeral session, without certutil or host trust edits.
-        self.stand.request("GET", "/system/ping")
+        self.stand.request("GET", health_path)
         with (
             socket.create_connection(("localhost", self.stand.port), timeout=10) as connection,
             self.stand.context.wrap_socket(connection, server_hostname="localhost") as secure,
@@ -73,6 +80,9 @@ class Browser:
             "open",
             self.stand.origin,
         )
+
+    def start(self) -> None:
+        self.open_verified()
         user = self.stand.manifest["users"]["reader"]
         cookies = self.stand.state / "browser-cookies.json"
         cookies.write_text(

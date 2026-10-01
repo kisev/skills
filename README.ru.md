@@ -86,6 +86,9 @@ npx --yes skills@latest list --global
 
 ## Разработка
 
+Опциональные проверки с настоящим сервером: [GitLab](apps/gitlab-test/README.ru.md)
+и [Mattermost](apps/mattermost-test/README.ru.md). `task check` их не требует.
+
 ```shell
 mise install
 task install

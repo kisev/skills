@@ -56,6 +56,18 @@ def write_json(path: Path, value: object) -> None:
     temporary.replace(path)
 
 
+def write_ca_bundle(ca: Path, destination: Path) -> None:
+    if ca.is_symlink() or destination.is_symlink():
+        raise RuntimeError("Test certificate paths must not be symlinks")
+    defaults = ssl.get_default_verify_paths()
+    roots = [Path(defaults.cafile)] if defaults.cafile else []
+    if defaults.capath:
+        roots.extend(sorted(Path(defaults.capath).glob("*.0")))
+    destination.write_bytes(
+        b"\n".join(path.read_bytes() for path in roots) + b"\n" + ca.read_bytes()
+    )
+
+
 def command(
     args: list[str],
     *,
@@ -75,7 +87,7 @@ def command(
     )
     if result.returncode:
         raise RuntimeError(
-            f"{Path(args[0]).name} failed (exit {result.returncode}): {result.stderr[-1000:]}"
+            f"{Path(args[0]).name} failed (exit {result.returncode}): {(result.stderr or result.stdout)[-3000:]}"
         )
     return result
 
@@ -155,13 +167,7 @@ class Stand:
                     raise
                 time.sleep(1)
         self.context = ssl.create_default_context(cafile=str(self.ca))
-        defaults = ssl.get_default_verify_paths()
-        roots = [Path(defaults.cafile)] if defaults.cafile else []
-        if defaults.capath:
-            roots.extend(sorted(Path(defaults.capath).glob("*.0")))
-        self.ca_bundle.write_bytes(
-            b"\n".join(path.read_bytes() for path in roots) + b"\n" + self.ca.read_bytes()
-        )
+        write_ca_bundle(self.ca, self.ca_bundle)
         self.request("GET", "/system/ping")
 
     def local(self, method: str, path: str, data: object = None, *, missing: bool = False) -> Any:

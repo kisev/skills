@@ -32,8 +32,21 @@ The stack is opt-in, outside
 portable archives and the ordinary offline quality gate; its patch image can be
 overridden and does not establish compatibility with an untested production patch.
 
+The opt-in `apps/gitlab-test/compose.yml` deployment supports the
+[GitLab workflow verification contract](../../requirements/functional/README.md#req-f-548---verify-gitlab-workflows-against-a-persistent-local-ce-server).
+It pins CE `18.11.11-ce.0`, Runner `v18.11.0` and repository glab `1.120.0`.
+Caddy exposes a separate local CA over loopback HTTPS; GitLab and the shell
+Runner use an internal network. Runner has neither privileged mode nor a host
+Docker socket. The host driver provisions identities through container-local
+Rails, then verifies actual API, CLI, pipeline and browser state. Isolated
+Git/glab/XDG credentials and evidence live under ignored `.build/gitlab-test/`.
+The driver reuses Mattermost's atomic private-state utilities, verified browser
+driver and existing live host/budget adapters. Server and runner named volumes
+are distinct from retained local reports. The ordinary offline gate checks the
+harness contracts without starting this deployment.
+
 Network exposure is limited to release publication, capabilities whose contracts
-declare an external API, and the opt-in loopback test stack described above;
+declare an external API, and the opt-in loopback test stacks described above;
 ordinary tests and offline evals have none.
 Secrets remain in the invoking environment or host-managed credential boundary
 and are not placed in Git, generated distributions, archives, reports, or

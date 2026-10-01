@@ -7,6 +7,53 @@ vars:
   COMPOSE: docker-compose
 
 tasks:
+  gitlab:config:
+    desc: Validate the checkout-bound optional GitLab CE stack
+    cmds:
+      - mise exec -- python apps/gitlab-test/scripts/stand.py config --compose '{{.COMPOSE}}'
+
+  gitlab:init:
+    desc: Start persistent GitLab and reconcile isolated owned fixtures
+    cmds:
+      - mise exec -- python apps/gitlab-test/scripts/stand.py init --compose '{{.COMPOSE}}'
+
+  gitlab:up:
+    desc: Start the local GitLab CE and shell Runner containers
+    cmds:
+      - mise exec -- python apps/gitlab-test/scripts/stand.py up --compose '{{.COMPOSE}}'
+
+  gitlab:test:
+    desc: Run real local GitLab API, shell CI and browser checks
+    cmds:
+      - task: build:skills
+      - mise exec -- python apps/gitlab-test/scripts/stand.py test --compose '{{.COMPOSE}}'
+
+  gitlab:live:
+    desc: Run explicitly configured optional GitLab agent evaluation
+    cmds:
+      - task: build:skills
+      - mise exec -- python apps/gitlab-test/scripts/stand.py live --compose '{{.COMPOSE}}'
+
+  gitlab:logs:
+    desc: Show logs only after checking stand ownership
+    cmds:
+      - mise exec -- python apps/gitlab-test/scripts/stand.py logs --compose '{{.COMPOSE}}'
+
+  gitlab:down:
+    desc: Stop the owned GitLab stand without deleting volumes
+    cmds:
+      - mise exec -- python apps/gitlab-test/scripts/stand.py down --compose '{{.COMPOSE}}'
+
+  gitlab:reset:
+    desc: Preview exact reset scope or apply matching GL_RESET_CONFIRM digest
+    cmds:
+      - mise exec -- python apps/gitlab-test/scripts/stand.py reset --compose '{{.COMPOSE}}'
+
+  gitlab:test-reset:
+    desc: Verify reset on a separate disposable GitLab stand
+    cmds:
+      - mise exec -- python apps/gitlab-test/scripts/stand.py reset-test --compose '{{.COMPOSE}}'
+
   mattermost:init:
     desc: Initialize or reconcile the persistent local Mattermost fixtures
     cmds:

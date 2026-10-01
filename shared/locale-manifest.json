@@ -74,6 +74,10 @@
       "ru": "apps/mattermost-test/README.ru.md"
     },
     {
+      "en": "apps/gitlab-test/README.md",
+      "ru": "apps/gitlab-test/README.ru.md"
+    },
+    {
       "en": "apps/reviewmatic/README.md",
       "ru": "apps/reviewmatic/README.ru.md"
     },
