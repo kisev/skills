@@ -601,7 +601,7 @@ export async function runTui(initialBundle: PlanBundle): Promise<number> {
               instance.unmount();
             }}
           />,
-          { exitOnCtrlC: true },
+          { exitOnCtrlC: true, interactive: true },
         );
         void instance.waitUntilExit().then(() => resolve({ kind: "quit" }));
       },

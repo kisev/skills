@@ -7,7 +7,7 @@ import { readJson, writeJson } from "../dist/contract.js";
 import { reviewFixture, completeDraft } from "./helpers/review-fixture.mjs";
 
 test(
-  "real CLI in a POSIX PTY opens a discussion, exposes its link, and exits without publication",
+  "real CLI under CI prints without a TTY and supports interactive PTY review without publication",
   { skip: process.platform === "win32" },
   async (t) => {
     const fixture = reviewFixture(t, { resolved: true });
@@ -15,6 +15,16 @@ test(
     writeJson(started.draft_path, completeDraft(readJson(started.draft_path), started));
     assert.equal((await finishReview(started.draft_path)).status, "ok");
     const requests = fixture.requestCount();
+    const cli = new URL("../dist/cli.js", import.meta.url).pathname;
+    const env = { ...process.env, CI: "true" };
+    const printed = spawnSync(
+      process.execPath,
+      [cli, "plan", "--artifact-root", started.artifact_root],
+      { encoding: "utf8", env, timeout: 5000 },
+    );
+    assert.equal(printed.status, 0, printed.stdout + printed.stderr);
+    assert.match(printed.stdout, /reviewmatic/);
+    assert.match(printed.stdout, /Retry needs an idempotency key/);
     const script = `
 import os, pty, fcntl, termios, struct, subprocess, select, time, sys
 master, slave = pty.openpty()
@@ -55,14 +65,8 @@ finally:
 `;
     const result = spawnSync(
       "python3",
-      [
-        "-c",
-        script,
-        process.execPath,
-        new URL("../dist/cli.js", import.meta.url).pathname,
-        started.artifact_root,
-      ],
-      { encoding: "utf8", timeout: 25000 },
+      ["-c", script, process.execPath, cli, started.artifact_root],
+      { encoding: "utf8", env, timeout: 25000 },
     );
     assert.equal(result.status, 0, result.stdout + result.stderr);
     assert.match(result.stdout, /PTY: discussion content/);

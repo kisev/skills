@@ -92,6 +92,7 @@ function terminal(t, { readonly = true } = {}) {
       stderr: new PassThrough(),
       patchConsole: false,
       exitOnCtrlC: false,
+      interactive: true,
       maxFps: 100,
     },
   );
