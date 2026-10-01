@@ -125,6 +125,17 @@ Suggestions are the default; related parts use `suggestions` (`path`, `line`,
 `body`) and `split_rationale`. Patch fallback requires `patch_reason`, with the diff
 in `patch` and prose only in `body`.
 
+After updating the runtime, this presentation-repair sequence also regenerates
+commands in existing contract-7 guided plans. Compare the old and new body previews,
+positions, findings, and receipts, and record those checks before finishing. No
+network collection or new full review is required. Old commands in saved plans
+do not change just by upgrading. Inline commands now send `position` as nested
+JSON, compatible with `glab` 1.120.0, instead of unsupported bracket fields.
+
+Each grouped suggestion with prose is a complete comment, published without the
+shared introduction. Include every necessary caveat in that part. Bare suggestion
+blocks still inherit shared prose. The runbook renders exact duplicate checks once.
+
 ## Worktree registry
 
 Created worktrees are recorded in

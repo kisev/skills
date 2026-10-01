@@ -81,7 +81,7 @@ export async function makeCommand(
     ...refs,
     new_path: changes[0].new_path,
     old_path: changes[0].old_path,
-    [`${side}_line`]: argv[argv.indexOf(side === "new" ? "--line" : "--old-line") + 1],
+    [`${side}_line`]: Number(argv[argv.indexOf(side === "new" ? "--line" : "--old-line") + 1]),
   };
   if (side === "new") {
     const wanted = Number(position.new_line);
@@ -124,7 +124,8 @@ export async function makeCommand(
     "--silent",
     "-F",
     `body=@${directory}/${name}`,
-    ...Object.entries(position).flatMap(([key, value]) => ["-f", `position[${key}]=${value}`]),
+    "-F",
+    `position=${JSON.stringify(position)}`,
   ]);
 }
 

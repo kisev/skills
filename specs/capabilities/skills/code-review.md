@@ -175,6 +175,19 @@ state, errors, repetition, cancellation, responsive TUI navigation, and a real
 PTY smoke test. Tests use synthetic GitLab responses, never live publication.
 Structural tests do not prove the model's semantic judgment.
 
+Transport tests use real `glab` 1.120.0 with isolated configuration and a local
+HTTP server. Positioned commands send one nested JSON `position` object with
+numeric line fields; bracket field names are unsupported. These tests prove CLI
+serialization, not acceptance by a remote GitLab instance. Missing `glab` fails
+the required test rather than silently skipping it.
+
+Exact duplicate check strings render once without discarding distinct evidence.
+Grouped suggestion parts with explanatory prose are complete publication bodies;
+bare blocks inherit shared prose for compatibility. The agent preserves necessary
+caveats in each complete part. Presentation repair regenerates contract-7 commands
+locally while preserving findings and original critic receipts. User-facing launch
+commands remain `reviewmatic plan`, without a `mise exec` wrapper.
+
 ## Example
 
 An MR contribution assessed as patch selects its unique catalog compatibility

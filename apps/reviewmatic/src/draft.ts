@@ -815,10 +815,15 @@ export async function finishReview(path: string): Promise<Json> {
     throw new WorkflowError(
       "This review is already finalized; inspect its plan or start a fresh review",
     );
-  const current = await collect(evidence.target as Json, "code-review", { persist: false });
-  const freshContext = await refreshContext(context, String(draft.evidence_path));
+  const localPresentation = isDict(draft.repair) && draft.repair.kind === "presentation";
+  const current = localPresentation
+    ? ciEvidence(draft, evidence)
+    : await collect(evidence.target as Json, "code-review", { persist: false });
+  const freshContext = localPresentation
+    ? context
+    : await refreshContext(context, String(draft.evidence_path));
   const comparedContext = { ...context };
-  if (draft.repair !== undefined) delete comparedContext.incremental;
+  if (draft.repair !== undefined && !localPresentation) delete comparedContext.incremental;
   if (
     current.retrieval_complete !== true ||
     context.complete !== true ||

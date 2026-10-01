@@ -54,7 +54,7 @@ import {
 } from "./contract.js";
 import { labelCatalog, validateLabelAssessments } from "./label-assessment.js";
 import { makeCommand, shellQuote } from "./publication.js";
-import { suggestionParts, suggestionsPatch } from "./fixes.js";
+import { suggestionBody, suggestionParts, suggestionsPatch } from "./fixes.js";
 import {
   collect as semverCollect,
   reportLines as semverReportLines,
@@ -2861,7 +2861,7 @@ async function structuredPublicationPreview(
           revision,
           "finding",
           "create_line",
-          `${publicationSpec.body}\n\n${part.body}`,
+          suggestionBody(String(publicationSpec.body), part),
           { mutation: { path: part.path, line: part.line, old_line: null } },
         );
       }
@@ -2951,7 +2951,7 @@ async function structuredPublicationPreview(
         1,
         "thread",
         "create_line",
-        `${decision.proposed_response}\n\n${part.body}`,
+        suggestionBody(String(decision.proposed_response), part),
         { mutation: { path: part.path, line: part.line, old_line: null } },
       );
     }
@@ -3330,7 +3330,7 @@ export async function reviewMarkdown(
     "",
     `## ${presentation.checks_heading}`,
     "",
-    ...(content.checks as string[]).map((value) => `- ${value}`),
+    ...[...new Set(content.checks as string[])].map((value) => `- ${value}`),
     "",
   );
   const source = content.review_source as Json | undefined;
@@ -3479,7 +3479,11 @@ export function rejectVisibleRawRefs(
     }
   }
   for (const line of markdown.split("\n")) {
-    if (line.startsWith("glab api ") && line.includes("position[")) continue;
+    if (
+      line.startsWith("glab api ") &&
+      (line.includes("position[") || line.includes("-F 'position={"))
+    )
+      continue;
     const visible = line.replace(/\]\(https?:\/\/[^)]*\)/g, "](...)").toLowerCase();
     for (const value of refs) {
       const normalized = value.toLowerCase();

@@ -14,7 +14,8 @@ import {
 import { artifactPayload, artifactSchema, readJson, writeJson } from "../dist/contract.js";
 import { reportReview } from "../dist/context.js";
 import { codeFence, validateGitPatch } from "../dist/context.js";
-import { suggestionsPatch } from "../dist/fixes.js";
+import { suggestionBody, suggestionsPatch } from "../dist/fixes.js";
+import { commandArgv } from "../dist/publication.js";
 import { loadPlan, planItems } from "../dist/tui/support.js";
 import { reviewFixture, completeDraft } from "./helpers/review-fixture.mjs";
 
@@ -131,6 +132,17 @@ test("related suggestions keep one finding, separate anchored actions, and rejec
   assert.equal(plan.findings.length, 1);
   const actions = plan.publication_preview.actions.filter((item) => item.kind === "finding");
   assert.equal(actions.length, 2);
+  const positions = actions.map((action) =>
+    JSON.parse(
+      commandArgv(action.command)
+        .find((arg) => arg.startsWith("position="))
+        .slice(9),
+    ),
+  );
+  assert.equal(positions[0].new_line, 1);
+  assert.equal(positions[0].old_line, 1);
+  assert.equal(positions[1].new_line, 2);
+  assert.equal(positions[1].old_line, undefined);
   assert.ok(actions.every((item) => item.command.startsWith("glab api")));
   assert.equal(
     planItems(loadPlan(result.artifact_root)).filter((item) => item.key.includes("@suggestion-"))
@@ -144,6 +156,50 @@ test("related suggestions keep one finding, separate anchored actions, and rejec
   draft.content.finding_publications[0].suggestions[1].line = 1;
   writeJson(repair.draft_path, draft);
   assert.match(JSON.stringify((await checkReview(repair.draft_path)).errors), /overlap/);
+});
+
+test("complete suggestion bodies do not repeat a shared introduction; bare blocks retain it", () => {
+  const part = {
+    path: "review.txt",
+    line: 2,
+    body: "Correct this output.\n\n```suggestion\ncorrect output\n```",
+  };
+  assert.equal(suggestionBody("General explanation.", part), part.body);
+  const bare = { ...part, body: "```suggestion\ncorrect output\n```" };
+  assert.equal(
+    suggestionBody("General explanation.", bare),
+    `General explanation.\n\n${bare.body}`,
+  );
+});
+
+test("presentation repair regenerates commands locally and renders only exact check duplicates once", async (t) => {
+  const { fixture, result } = await ready(t);
+  const before = loadPlan(result.artifact_root);
+  const repair = await repairReview(result.artifact_root, "presentation");
+  const draft = readJson(repair.draft_path);
+  draft.repair.rationale = "Regenerate transport commands without changing findings or fixes.";
+  draft.repair.checks = ["Compared source, findings, positions and critic receipts."];
+  draft.content.checks = [
+    "Targeted check passed.",
+    "Targeted check passed.",
+    "Targeted check was not run.",
+  ];
+  writeJson(repair.draft_path, draft);
+  const requests = fixture.requestCount();
+  const finished = await finishReview(repair.draft_path);
+  assert.equal(finished.status, "ok", JSON.stringify(finished));
+  assert.equal(fixture.requestCount(), requests);
+  const after = loadPlan(result.artifact_root);
+  assert.deepEqual(after.plan.findings, before.plan.findings);
+  assert.deepEqual(after.plan.review_source.critics, before.plan.review_source.critics);
+  assert.deepEqual(after.plan.finding_publications, before.plan.finding_publications);
+  assert.equal(after.plan.markdown.split("- Targeted check passed.").length - 1, 1);
+  assert.ok(after.plan.markdown.includes("- Targeted check was not run."));
+  assert.match(
+    after.plan.publication_preview.actions.find((a) => a.kind === "finding").command,
+    /-F 'position=\{/,
+  );
+  assert.ok(!finished.plan_command.includes("mise exec"));
 });
 
 test("presentation repair preserves the critic and equates patch and suggestion without a new review", async (t) => {

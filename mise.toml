@@ -32,6 +32,7 @@ min_version = "2026.9.11"
   ]
   "github:agent-sh/agnix" = "0.54.0"
   "github:editorconfig-checker/editorconfig-checker" = "4.0.2"
+  "glab" = "1.120.0"
   "npm:@commitlint/cli" = "21.2.3"
   "npm:@opencode/cli" = { version = "2.0.19", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
   "npm:markdownlint-cli2" = "0.23.3"

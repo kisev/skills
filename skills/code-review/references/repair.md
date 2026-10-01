@@ -24,6 +24,12 @@ unavailable, stop and report the exact limitation; preserve the current plan and
 unfinished draft. Never automatically expand to a broad review or invent checks.
 Run `check-review`, repair the same draft, then `finish-review`.
 
+After a runtime update, use presentation repair to regenerate broken commands in
+an existing contract-7 guided plan. Keep findings, fixes, positions, and critic
+receipts unchanged; record the actual comparison in `repair.checks`. Check the
+new body previews as well as commands, especially grouped suggestions. This path
+is local and needs no new full review. Do not edit immutable action artifacts.
+
 For changed MR facts use `refresh-review --draft DRAFT`, not a new empty review.
 The runner retains findings and dispositions and updates current thread bindings.
 Reassess the reported delta and affected consumers. Old critic receipts remain in

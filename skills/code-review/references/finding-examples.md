@@ -84,6 +84,15 @@ publication plan.
 For `resolve` or `reopen`, publish the explanatory reply first and show the state
 change as a separate command. Never close or reopen a thread without that reply.
 
+## Grouped suggestion bodies
+
+For grouped suggestions, write each part's `body` as a complete short comment
+with its own explanation and one suggestion block. It is published verbatim,
+without automatically prepending the finding's general introduction. Bare
+suggestion blocks retain the shared explanation for compatibility. Preserve
+all necessary caveats in each affected part; do not repeat the general summary
+when the part already explains its correction.
+
 ## Recommended issue
 
 Use a recommended issue only for a confirmed real problem that the MR neither

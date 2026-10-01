@@ -3,6 +3,15 @@ import { gitRead, isDict, nonemptyString, WorkflowError } from "./contract.js";
 type Json = Record<string, unknown>;
 export type SuggestionPart = { path: string; line: number; body: string };
 
+// A part with its own explanation is a complete publication body. Bare legacy
+// blocks retain the shared explanation so old guided drafts remain readable.
+export function suggestionBody(shared: string, part: SuggestionPart): string {
+  const prose = part.body
+    .replace(/^```suggestion(?::-\d+\+\d+)?\n[\s\S]*?\n```[ \t]*(?:\n|$)/gm, "")
+    .trim();
+  return prose ? part.body : `${shared}\n\n${part.body}`;
+}
+
 export function suggestionParts(fix: Json): SuggestionPart[] {
   if (fix.suggestions !== undefined) {
     if (

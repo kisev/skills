@@ -592,10 +592,7 @@ export async function amendBody(
   const [ownerId, partNumber] = publicationId.split("@suggestion-");
   const updatePart = (record: Json, thread: boolean): Json => {
     if ((thread ? `thread-${record.id}` : String(record.finding_id)) !== ownerId) return record;
-    const prefix = `${String(thread ? record.proposed_response : record.body)}\n\n`;
-    const partBody = normalized.startsWith(prefix)
-      ? normalized.slice(prefix.length).trimEnd()
-      : normalized.trimEnd();
+    const partBody = normalized.trimEnd();
     return {
       ...record,
       suggestions: (record.suggestions as Json[]).map((part, index) =>
