@@ -1,6 +1,15 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+  mkdtempSync,
+  rmSync,
+} from "node:fs";
 import { join } from "node:path";
-import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { spawnSync, spawn } from "node:child_process";
 import {
   WorkflowError,
   artifactPayload,
@@ -9,10 +18,19 @@ import {
   writeCompanion,
   privateDirectory,
 } from "../contract.js";
-import { makeCommand, execute } from "../publication.js";
+import { makeCommand, execute, loadAction } from "../publication.js";
 import { xdgStateHome } from "../state-artifacts.js";
-import { advanceProgress } from "../context.js";
+import {
+  BASELINE_NAME,
+  buildFindingLedger,
+  publishReviewState,
+  rejectVisibleRawRefs,
+  renderPublicationPatchCommand,
+  reviewMarkdown,
+  validateSuggestion,
+} from "../context.js";
 import { createHash } from "node:crypto";
+import { stringsFor, type Strings } from "./strings.js";
 
 export type Json = Record<string, unknown>;
 
@@ -40,6 +58,7 @@ export type PlanBundle = {
   planDigest: string;
   plan: Json;
   progress: Json;
+  context?: Json;
 };
 
 export type ItemKind = "thread" | "line" | "general" | "issue" | "labels";
@@ -54,6 +73,8 @@ export type PlanItem = {
   body: string | null;
   actions: PlanAction[];
   detail: Json;
+  url: string | null;
+  conversation: Json[];
 };
 
 function sha256Text(value: string): string {
@@ -112,7 +133,7 @@ export function findReviewRoots(base: string): string[] {
 }
 
 export function discoverArtifactRoot(): string | null {
-  const base = join(xdgStateHome().toString(), "agent-skills", "code-review");
+  const base = join(xdgStateHome().toString(), "agent-skills", "gitlab");
   const candidates = findReviewRoots(base)
     .map((root) => {
       try {
@@ -146,7 +167,8 @@ export function loadPlan(root: string): PlanBundle {
     throw new WorkflowError("review plan digest changed");
   }
   const [, plan] = artifactPayload(planPath, "review_plan") as [Json, Json];
-  return { root, planPath, planDigest, plan, progress };
+  const [, context] = artifactPayload(String(progress.context_path), "review_context");
+  return { root, planPath, planDigest, plan, progress, context };
 }
 
 export function planItems(bundle: PlanBundle): PlanItem[] {
@@ -164,23 +186,39 @@ export function planItems(bundle: PlanBundle): PlanItem[] {
     actionsByPublication.set(action.publication_id, list);
   }
   const items: PlanItem[] = [];
+  const discussions = (bundle.context?.discussions ?? []) as Json[];
+  const findings = new Map(
+    ((plan.findings ?? []) as Json[]).map((item) => [String(item.id), item]),
+  );
   for (const decision of (plan.thread_decisions as Json[]) ?? []) {
     const publicationId = `thread-${decision.id}`;
     const bodyRecord = bodyByPublication.get(publicationId);
-    const position = (decision.expectation as Json) ?? {};
+    const source = discussions.find((item) => String(item.root_note_id) === String(decision.id));
+    const position = (source?.root_position ?? decision.expectation ?? {}) as Json;
+    const conversation = (source?.notes ??
+      ((bundle.context?.notes ?? []) as Json[]).filter(
+        (note) => String(note.id) === String(decision.id),
+      )) as Json[];
+    const first = conversation.find((note) => note.system !== true);
+    const path = (position.new_path ?? position.old_path ?? position.path ?? null) as string | null;
+    const line = (position.new_line ?? position.old_line ?? position.line ?? null) as number | null;
     items.push({
       key: publicationId,
       kind: "thread",
       title:
         typeof decision.summary === "string" && decision.summary !== ""
           ? decision.summary
-          : `${position.path ?? "discussion"}${position.line ? `:${position.line}` : ""}`,
-      path: (position.path as string) ?? null,
-      line: (position.line as number) ?? null,
+          : displayText(
+              String(first?.body ?? decision.rationale ?? `discussion ${decision.id}`),
+            ).split("\n")[0],
+      path,
+      line,
       publicationId,
       body: bodyRecord?.content ?? null,
       actions: actionsByPublication.get(publicationId) ?? [],
       detail: decision,
+      url: typeof decision.url === "string" ? decision.url : null,
+      conversation,
     });
   }
   for (const publication of (plan.finding_publications as Json[]) ?? []) {
@@ -190,20 +228,23 @@ export function planItems(bundle: PlanBundle): PlanItem[] {
     const position = own.find((action) => action.path !== null) ?? null;
     const isLine =
       own.some((action) => action.operation === "create_line") ||
-      (publication.position as Json) !== undefined;
+      (publication.position !== null && typeof publication.position === "object");
     items.push({
       key: publicationId,
       kind: isLine ? "line" : "general",
       title:
         typeof publication.title === "string" && publication.title !== ""
           ? publication.title
-          : String(publication.finding_id ?? publicationId),
+          : String(findings.get(publicationId)?.summary ?? publication.finding_id ?? publicationId),
       path: position?.path ?? ((publication.position as Json)?.new_path as string) ?? null,
       line: position?.line ?? ((publication.position as Json)?.new_line as number) ?? null,
       publicationId,
-      body: bodyRecord?.content ?? null,
+      body: bodyRecord?.content ?? (typeof publication.body === "string" ? publication.body : null),
       actions: own,
       detail: publication,
+      url:
+        typeof (plan.target as Json)?.url === "string" ? String((plan.target as Json).url) : null,
+      conversation: [],
     });
   }
   for (const issue of (plan.recommended_issues as Json[]) ?? []) {
@@ -219,24 +260,156 @@ export function planItems(bundle: PlanBundle): PlanItem[] {
       body: bodyRecord?.content ?? null,
       actions: actionsByPublication.get(publicationId) ?? [],
       detail: issue,
+      url: null,
+      conversation: [],
     });
   }
   const labels = (plan.label_review as Json) ?? null;
-  if (labels !== null) {
+  if (
+    labels !== null &&
+    (((labels.add ?? []) as unknown[]).length > 0 ||
+      ((labels.remove ?? []) as unknown[]).length > 0)
+  ) {
     const addAction = actions.find((action) => action.kind === "labels") ?? null;
     items.push({
       key: "labels:update",
       kind: "labels",
-      title: "labels",
+      title: stringsFor(String(plan.locale ?? "en")).labels,
       path: null,
       line: null,
       publicationId: null,
       body: null,
       actions: addAction !== null ? [addAction] : [],
       detail: labels,
+      url: null,
+      conversation: [],
     });
   }
   return items;
+}
+
+export function displayText(value: string): string {
+  return value
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+}
+
+export function safeLink(value: string | null): string | null {
+  if (value === null || /[\x00-\x20\x7f]/.test(value)) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === ""
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function terminalLink(
+  value: string | null,
+  enabled = process.stdout.isTTY === true && process.env.TERM !== "dumb",
+  label?: string,
+): string {
+  const url = safeLink(value);
+  if (url === null) return "";
+  return enabled ? `\x1b]8;;${url}\x07${displayText(label ?? url)}\x1b]8;;\x07` : url;
+}
+
+export function browserCommand(value: string, platform: string = process.platform): string[] {
+  const url = safeLink(value);
+  if (url === null) throw new WorkflowError("Discussion link must be a safe HTTPS URL");
+  return platform === "darwin"
+    ? ["open", url]
+    : platform === "win32"
+      ? ["rundll32", "url.dll,FileProtocolHandler", url]
+      : ["xdg-open", url];
+}
+
+export async function openLink(value: string): Promise<void> {
+  const [executable, ...args] = browserCommand(value);
+  const child = spawn(executable, args, { stdio: "ignore" });
+  await new Promise<void>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("spawn", resolve);
+  });
+  child.unref();
+}
+
+export function itemText(
+  item: PlanItem,
+  strings: Strings = stringsFor("en"),
+  editedBody?: string,
+): string {
+  const lines: string[] = [];
+  if (item.kind === "thread") {
+    lines.push(
+      `${strings.discussion} · ${String(item.detail.state ?? "")} · ${String(item.detail.outcome ?? "")}`,
+      "",
+    );
+    for (const note of item.conversation) {
+      const author = (note.author ?? {}) as Json;
+      lines.push(
+        `@${String(author.username ?? note.author_username ?? "?")} ${String(note.created_at ?? "")}${note.system === true ? ` [${strings.systemNote}]` : ""}`,
+        String(note.body ?? ""),
+        "",
+      );
+    }
+    lines.push(
+      `${strings.assessment}: ${String(item.detail.assessment ?? "")}`,
+      String(item.detail.rationale ?? ""),
+      "",
+    );
+  }
+  if (item.kind === "labels") {
+    lines.push(
+      `${strings.labelsAdd}: ${((item.detail.add ?? []) as string[]).join(", ") || "-"}`,
+      `${strings.labelsRemove}: ${((item.detail.remove ?? []) as string[]).join(", ") || "-"}`,
+    );
+  } else {
+    lines.push(`${strings.replyDraft}:`, editedBody ?? item.body ?? strings.noPublication);
+    if (
+      item.detail.fix_mode === "patch" &&
+      typeof item.detail.patch === "string" &&
+      !(item.body ?? "").includes(item.detail.patch)
+    )
+      lines.push("", `${strings.patch}:`, item.detail.patch);
+  }
+  return displayText(lines.join("\n"));
+}
+
+export function selectedActions(refreshed: PlanAction[], selected: PlanAction[]): PlanAction[] {
+  const ids = new Set(selected.map((action) => action.id));
+  return refreshed.filter((action) => ids.has(action.id));
+}
+
+export function visualLines(text: string, width: number): string[] {
+  const result: string[] = [];
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  for (const line of displayText(text).replace(/\n$/, "").split("\n")) {
+    let row = "",
+      length = 0;
+    for (const { segment } of segmenter.segment(line)) {
+      const size =
+        /\p{Extended_Pictographic}|[\u1100-\u115f\u2e80-\ua4cf\uac00-\ud7a3\uf900-\ufaff\uff01-\uff60]/u.test(
+          segment,
+        )
+          ? 2
+          : segment === "\t"
+            ? 4
+            : 1;
+      if (length + size > Math.max(2, width) && row !== "") {
+        result.push(row);
+        row = "";
+        length = 0;
+      }
+      row += segment === "\t" ? "    " : segment;
+      length += size;
+    }
+    result.push(row);
+  }
+  return result;
 }
 
 export function commandTarget(command: string): { path: string; digest: string } {
@@ -257,113 +430,46 @@ async function planArtifacts(bundle: PlanBundle): Promise<{ evidence: Json; cont
   return { evidence, context };
 }
 
-function argvForAction(options: {
-  evidence: Json;
+async function argvForAction(options: {
   action: PlanAction;
   bodyPath: string;
-  title?: string;
-}): string[] {
-  const project = options.evidence.project as Json;
-  const target = options.evidence.target as Json;
-  const object = options.evidence.object as Json;
-  const hostname = String(project.hostname);
-  const endpoint = `projects/${project.id}/merge_requests/${target.iid}`;
-  const repositoryUrl = String(object.web_url).split("/-/merge_requests/")[0];
-  switch (options.action.operation) {
-    case "create_line": {
-      const lineOption = options.action.line !== null ? "--line" : "--old-line";
-      return [
-        "glab",
-        "mr",
-        "note",
-        "create",
-        String(target.iid),
-        "--repo",
-        repositoryUrl,
-        "--file",
-        String(options.action.path),
-        lineOption,
-        String(options.action.line ?? 1),
-      ];
-    }
-    case "create_general":
-      return [
-        "glab",
-        "api",
-        "--hostname",
-        hostname,
-        "--method",
-        "POST",
-        `${endpoint}/discussions`,
-        "--silent",
-        "-F",
-        `body=@${options.bodyPath}`,
-      ];
-    case "create_issue":
-      return [
-        "glab",
-        "api",
-        "--hostname",
-        hostname,
-        "--method",
-        "POST",
-        `projects/${project.id}/issues`,
-        "-f",
-        `title=${options.title ?? ""}`,
-        "--silent",
-        "-F",
-        `description=@${options.bodyPath}`,
-      ];
-    case "resolve":
-    case "reopen": {
-      const match = /discussions\/([A-Za-z0-9_-]+)/.exec(options.action.command);
-      const discussionId = match !== null ? match[1] : null;
-      if (discussionId === null) {
-        throw new WorkflowError("thread state action requires a discussion");
-      }
-      return [
-        "glab",
-        "api",
-        "--hostname",
-        hostname,
-        "--method",
-        "PUT",
-        `${endpoint}/discussions/${discussionId}`,
-        "--silent",
-        "-F",
-        `resolved=${options.action.operation === "resolve" ? "true" : "false"}`,
-      ];
-    }
-    default: {
-      const match = /discussions\/([A-Za-z0-9_-]+)\/notes/.exec(options.action.command);
-      if (match !== null) {
-        return [
-          "glab",
-          "api",
-          "--hostname",
-          hostname,
-          "--method",
-          "POST",
-          `${endpoint}/discussions/${match[1]}/notes`,
-          "--silent",
-          "-F",
-          `body=@${options.bodyPath}`,
-        ];
-      }
-      return [
-        "glab",
-        "api",
-        "--hostname",
-        hostname,
-        "--method",
-        "POST",
-        `${endpoint}/notes`,
-        "--silent",
-        "-F",
-        `body=@${options.bodyPath}`,
-      ];
-    }
+  evidence: Json;
+}): Promise<string[]> {
+  const target = commandTarget(options.action.command);
+  const [, guard] = await loadAction(target.path, target.digest);
+  const payload = guard.payload as Json;
+  if (options.action.operation === "create_line") {
+    const position = payload.position as Json;
+    const side = "new_line" in position ? "new" : "old";
+    return [
+      "glab",
+      "mr",
+      "note",
+      "create",
+      String(guard.mr_iid),
+      "--repo",
+      String((options.evidence.object as Json).web_url).split("/-/merge_requests/")[0],
+      "--file",
+      String(position[`${side}_path`]),
+      side === "new" ? "--line" : "--old-line",
+      String(position[`${side}_line`]),
+    ];
   }
+  const argv = [
+    "glab",
+    "api",
+    "--hostname",
+    String(guard.host),
+    "--method",
+    String(guard.method),
+    String(guard.endpoint),
+    "--silent",
+  ];
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === "body" || key === "description") argv.push("-F", `${key}=@${options.bodyPath}`);
+    else argv.push(key === "resolved" ? "-F" : "-f", `${key}=${value}`);
+  }
+  return argv;
 }
 
 export async function amendBody(
@@ -373,6 +479,32 @@ export async function amendBody(
 ): Promise<PlanBundle> {
   const { evidence, context } = await planArtifacts(bundle);
   const normalized = `${body.replace(/\s+$/, "")}\n`;
+  const item = planItems(bundle).find((candidate) => candidate.publicationId === publicationId);
+  if (item === undefined || item.actions.length === 0)
+    throw new WorkflowError("This item has no editable publication body");
+  if (item.detail.fix_mode === "suggestion") {
+    validateSuggestion(normalized, {
+      repoRoot: String((context.exact_git as Json).repo_root),
+      headSha: String(evidence.head_sha),
+      path: item.path!,
+      line: item.line!,
+    });
+  }
+  if (
+    item.detail.fix_mode === "patch" &&
+    typeof item.detail.patch === "string" &&
+    !normalized.includes(item.detail.patch.trim())
+  )
+    throw new WorkflowError(
+      "Body editing must preserve the validated patch; prepare a new review draft to change the code fix",
+    );
+  let semanticBody = normalized;
+  if (item.detail.fix_mode === "patch") {
+    const suffix = `\n\n\`\`\`sh\n${renderPublicationPatchCommand(item.detail)}\n\`\`\`\n`;
+    if (!normalized.endsWith(suffix))
+      throw new WorkflowError("Body editing must preserve the validated patch command");
+    semanticBody = normalized.slice(0, -suffix.length).trimEnd();
+  }
   const bodyDirectory = await privateDirectory(
     join(bundle.root, "artifacts", "review_plan", "bodies"),
   );
@@ -383,16 +515,11 @@ export async function amendBody(
     normalized,
   );
   const preview = bundle.plan.publication_preview as Json;
-  const actions = [...((preview.actions as PlanAction[]) ?? [])];
+  const actions = structuredClone((preview.actions as PlanAction[]) ?? []);
   const dependencies: Record<string, string> = {};
   const group = actions.filter((action) => action.publication_id === publicationId);
-  const issueTitle = String(
-    ((bundle.plan.recommended_issues as Json[]) ?? []).find(
-      (issue) => String(issue.id) === publicationId,
-    )?.title ?? "",
-  );
   for (const action of group) {
-    const argv = argvForAction({ evidence, action, bodyPath, title: issueTitle });
+    const argv = await argvForAction({ evidence, action, bodyPath });
     const value: Json =
       action.operation === "create_issue"
         ? {
@@ -427,17 +554,56 @@ export async function amendBody(
       content: normalized,
     });
   }
-  const nextPlan = {
+  const nextPlan: Json = {
     ...bundle.plan,
     publication_preview: { ...preview, actions, body_files: bodyFiles },
   };
+  if (item.kind === "thread")
+    nextPlan.thread_decisions = ((bundle.plan.thread_decisions ?? []) as Json[]).map((record) =>
+      `thread-${record.id}` === publicationId
+        ? { ...record, proposed_response: semanticBody }
+        : record,
+    );
+  else if (item.kind === "issue")
+    nextPlan.recommended_issues = ((bundle.plan.recommended_issues ?? []) as Json[]).map(
+      (record) =>
+        String(record.id) === publicationId ? { ...record, body: semanticBody } : record,
+    );
+  else
+    nextPlan.finding_publications = ((bundle.plan.finding_publications ?? []) as Json[]).map(
+      (record) =>
+        String(record.finding_id) === publicationId ? { ...record, body: semanticBody } : record,
+    );
+  nextPlan.finding_ledger = buildFindingLedger(
+    nextPlan.incremental as Json,
+    nextPlan.previous_finding_assessments as Json[],
+    nextPlan.findings as Json[],
+    nextPlan.finding_publications as Json[],
+    nextPlan.recommended_issues as Json[],
+    nextPlan.publication_preview as Json,
+  );
+  const [, decision] = artifactPayload(String(bundle.progress.decision_path), "review_decision");
+  const markdown = await reviewMarkdown(
+    evidence,
+    context,
+    decision,
+    nextPlan,
+    nextPlan.mr_metadata_assessment as Json,
+    nextPlan.publication_preview as Json,
+  );
+  rejectVisibleRawRefs(markdown, evidence, context);
+  nextPlan.markdown = markdown;
   const [planPath, planDigest] = await writeArtifact(bundle.root, "review_plan", nextPlan);
-  await advanceProgress(bundle.root, "plan_ready", {
-    expectedStages: new Set(["plan_ready"]),
-    expected: { plan_path: bundle.planPath, plan_digest: bundle.planDigest },
-    plan_path: planPath,
-    plan_digest: planDigest,
-  });
+  const baselineDigest = sha256Text(readFileSync(join(bundle.root, BASELINE_NAME), "utf8"));
+  await publishReviewState(
+    bundle.root,
+    markdown,
+    planPath,
+    planDigest,
+    context.target as Json,
+    baselineDigest,
+    { stage: "plan_ready", plan_path: bundle.planPath, plan_digest: bundle.planDigest },
+  );
   return loadPlan(bundle.root);
 }
 
@@ -460,31 +626,39 @@ export async function sendItem(
       ? item.actions
       : (planItems(current).find((candidate) => candidate.key === item.key)?.actions ??
         item.actions);
-  const ordered = [...refreshed].sort((left, right) => {
+  const ordered = selectedActions(refreshed, item.actions).sort((left, right) => {
     const order = (action: PlanAction): number =>
       action.operation === "resolve" || action.operation === "reopen" ? 1 : 0;
     return order(left) - order(right);
   });
   const results: Json[] = [];
+  if (ordered.length === 0) throw new WorkflowError("This item has no selected publication action");
   for (const action of ordered) {
-    results.push(await sendAction(current, action));
+    const result = await sendAction(current, action);
+    results.push(result);
+    if (result.status === "blocked") break;
   }
   return { bundle: current, results };
 }
 
 export function editInEditor(body: string): string | null {
   const editor = process.env.EDITOR ?? process.env.VISUAL ?? "vi";
-  const path = join(
-    process.env.TMPDIR ?? "/tmp",
-    `reviewmatic-body-${process.pid}-${Date.now()}.md`,
-  );
-  writeFileSync(path, body, { mode: 0o600 });
-  const result = spawnSync(editor, [path], { stdio: "inherit", timeout: 600000 });
-  if (result.error || result.status !== 0) {
-    return null;
+  const args = shlexSplit(editor);
+  if (args.length === 0) throw new WorkflowError("EDITOR must name an executable");
+  const directory = mkdtempSync(join(tmpdir(), "reviewmatic-editor-"));
+  const path = join(directory, "body.md");
+  try {
+    writeFileSync(path, body, { mode: 0o600 });
+    const result = spawnSync(args[0], [...args.slice(1), path], {
+      stdio: "inherit",
+      timeout: 600000,
+    });
+    if (result.error || result.status !== 0) return null;
+    const edited = readFileSync(path, "utf8");
+    return edited === body ? null : edited;
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
-  const edited = readFileSync(path, "utf8");
-  return edited === body ? null : edited;
 }
 
 export async function planRepository(

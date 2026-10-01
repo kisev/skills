@@ -15,14 +15,29 @@ generated package assets; execute the public inventory tests.
 
 ### REQ-F-002 - Route work through bounded orchestration
 
-When an OpenCode task is dispatched, the package shall resolve an eligible host
+When a package-managed OpenCode task is dispatched, the package shall resolve an eligible host
 agent and require a one-use receipt bound to task, requirements, card, revision,
-and expiry before execution.
+and expiry before execution. Ordinary native subagents outside package-managed
+profiles shall remain usable without installed specialist agents or package
+report envelopes. A pending routed receipt shall still bind its next dispatch;
+ordinary subagents shall not bypass a routed operation.
+Independent routed review without an execution card shall accept the generic
+review report or the versioned code-review critic receipt transport; the skill
+runtime owns its complete evidence validation. Parallel routed calls shall have
+separate native call identities, and failed calls shall release their own
+active binding without cancelling unrelated calls. Receipt expiry shall gate
+launch, not invalidate an already admitted independent review solely because
+model execution took longer.
+The native context hook shall expose the actual current session identity to
+primary and child agents for skill receipts, without granting task or
+publication authorization or requiring optional agent profiles.
 
 #### Verification
 
 Routing tests reject stale and replayed receipts and validate independent nested
 manager-to-review-to-critic sessions with the installed profile permissions.
+Plugin tests also exercise native current/general-purpose subagents with no
+specialist profiles and preserve enforcement for managed worker/critic calls.
 
 ### REQ-F-003 - Preserve useful partial results
 

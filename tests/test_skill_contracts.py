@@ -457,13 +457,14 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "complete absolute filesystem paths",
         "label_assessments",
         "references/publication.md",
-        "reviewmatic prepare",
-        "reviewmatic finalize --artifact-root",
+        "reviewmatic start-review",
+        "check-review --draft",
+        "finish-review",
         "reviewmatic plan --artifact-root",
         "never include local",
         "fix_mode=patch",
         "temporary index",
-        "runner-owned stages",
+        "one-draft workflow",
         "print its `chat` field verbatim",
         "On every invocation, read every non-system discussion and every reply",
         "resolved thread uses `no_publication`",
@@ -485,7 +486,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "factual role",
         "informal second-person",
         "Keep current labels, unresolved labels, and exhaustive assessment in",
-        "report-review` owns the labels and layout",
+        "`finish-review` and, for an existing finalized",
         "continues the complete existing conversation naturally",
         "thread-state command is",
     ):
@@ -493,17 +494,21 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
     state_machine = (ROOT / "skills/code-review/references/review-state-machine.md").read_text(
         encoding="utf-8"
     )
+    normalized_machine = " ".join(state_machine.split())
     for marker in (
-        "critic_missing",
-        "finalize_missing",
-        "decision_missing",
-        "content_missing",
-        "plan_ready",
-        "subagent text is not a critic receipt",
-        "print its `chat` value verbatim",
-        "An accepted `low` finding is",
+        "start-review",
+        "check-review",
+        "finish-review",
+        "resume-review",
+        "without GitLab reads, publication artifacts, or progress changes",
+        "Set `critic_count` to the selected count",
+        "Absence of `critic` is not a blocker",
+        "ordinary independent native subagent of the current agent",
+        "never replace the agent's semantic assessment",
+        "Every accepted non-low finding blocks `ready`",
+        "Existing v2 artifacts and low-level",
     ):
-        assert marker in state_machine
+        assert marker in normalized_machine
     for marker in (
         "local-review.md",
         "delta-triggered scope",

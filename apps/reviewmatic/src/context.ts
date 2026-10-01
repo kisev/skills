@@ -313,7 +313,7 @@ function renderPatchCheck(context: Json, fix: Json): string {
   return `${command} <<'${delimiter}'\n${patch.replace(/\s+$/, "")}\n${delimiter}`;
 }
 
-function renderPublicationPatchCommand(fix: Json): string {
+export function renderPublicationPatchCommand(fix: Json): string {
   const patch = fix.patch as string;
   const patchDigest = sha256Text(patch);
   const delimiter = `PATCH_${patchDigest.slice(0, 16).toUpperCase()}`;
@@ -1605,7 +1605,7 @@ function markdownCell(value: unknown): string {
   return pyStr(value).replace(/\|/g, "\\|").replace(/\n/g, " ");
 }
 
-function metadataAssessment(evidence: Json, assessment: unknown): Json {
+export function metadataAssessment(evidence: Json, assessment: unknown): Json {
   const objectValue = evidence.object;
   if (!isDict(objectValue)) {
     throw new WorkflowError("MR metadata is unavailable");
@@ -1706,7 +1706,7 @@ function validatePresentation(value: unknown, incrementalMode: string): Json {
   return value;
 }
 
-function validateChatAssessment(value: unknown): Json {
+export function validateChatAssessment(value: unknown): Json {
   if (!isDict(value) || !setsEqual(keySet(value), new Set(["necessity", "relevance", "change"]))) {
     throw new WorkflowError("review chat assessment is invalid");
   }
@@ -1737,7 +1737,7 @@ function suggestionBlocks(body: string): RegExpMatchArray[] {
   return matches;
 }
 
-function validateSuggestion(
+export function validateSuggestion(
   body: string,
   options: {
     repoRoot?: string | null;
@@ -2046,7 +2046,7 @@ function changedDiffLines(
   return [oldLines, newLines];
 }
 
-function expectedThreadBindings(context: Json): Record<string, Json> {
+export function expectedThreadBindings(context: Json): Record<string, Json> {
   const discussions = (context.discussions as Json[]) ?? [];
   const expected: Record<string, Json> = {};
   for (const item of discussions) {
@@ -2502,9 +2502,14 @@ async function structuredPublicationPreview(
   threadDecisions: Json[],
   recommendedIssues: Json[],
   labelReview: Json,
+  dryRun = false,
 ): Promise<[Json, Json[], Json[], Json[]]> {
-  const bodyDirectory = await privateDirectory(`${root}/artifacts/review_plan/bodies`);
-  const patchDirectory = await privateDirectory(`${root}/artifacts/review_plan/patches`);
+  const bodyDirectory = `${root}/artifacts/review_plan/bodies`;
+  const patchDirectory = `${root}/artifacts/review_plan/patches`;
+  if (!dryRun) {
+    await privateDirectory(bodyDirectory);
+    await privateDirectory(patchDirectory);
+  }
   const bodyFiles: Json[] = [];
   const actions: Json[] = [];
   const markers: Record<string, Json> = {};
@@ -2535,16 +2540,18 @@ async function structuredPublicationPreview(
     value: Json,
     stdinSha256: string | null = null,
   ): Promise<string> =>
-    makeCommand(
-      root,
-      evidence,
-      context,
-      actionId,
-      argv,
-      value,
-      publicationDependencies,
-      stdinSha256,
-    );
+    dryRun
+      ? `reviewmatic publication apply --action ${root}/preview-action.json --confirm ${"0".repeat(64)}`
+      : makeCommand(
+          root,
+          evidence,
+          context,
+          actionId,
+          argv,
+          value,
+          publicationDependencies,
+          stdinSha256,
+        );
 
   const enrichFix = (ownerKind: string, ownerId: string, item: Json): Json => {
     const patch = item.patch ?? null;
@@ -2554,10 +2561,10 @@ async function structuredPublicationPreview(
     }
     const identity = sha256Text(`${ownerKind}:${ownerId}`).slice(0, 12);
     const patchDigest = sha256Text(patch);
-    const [patchPath, actualDigest] = writeCompanion(
-      `${patchDirectory}/${identity}-${patchDigest}.patch`,
-      patch,
-    );
+    const destination = `${patchDirectory}/${identity}-${patchDigest}.patch`;
+    const [patchPath, actualDigest] = dryRun
+      ? [destination, patchDigest]
+      : writeCompanion(destination, patch);
     return { ...item, patch_path: patchPath, patch_sha256: actualDigest };
   };
 
@@ -2601,10 +2608,10 @@ async function structuredPublicationPreview(
     const body = `${rawBody.replace(/\s+$/, "")}\n`;
     const identityDigest = sha256Text(publicationId).slice(0, 12);
     const contentDigestValue = sha256Text(body).slice(0, 12);
-    const [bodyPath, bodyDigest] = writeCompanion(
-      `${bodyDirectory}/${identityDigest}-${contentDigestValue}.md`,
-      body,
-    );
+    const destination = `${bodyDirectory}/${identityDigest}-${contentDigestValue}.md`;
+    const [bodyPath, bodyDigest] = dryRun
+      ? [destination, sha256Text(body)]
+      : writeCompanion(destination, body);
     bodyFiles.push({
       publication_id: publicationId,
       revision: revision,
@@ -2976,7 +2983,7 @@ async function structuredPublicationPreview(
   return [result, enrichedFindings, enrichedIssues, enrichedThreads];
 }
 
-async function reviewMarkdown(
+export async function reviewMarkdown(
   evidence: Json,
   context: Json,
   decision: Json,
@@ -3272,6 +3279,7 @@ export async function publishReviewState(
   target: Json,
   expectedIncrementalBaselineStateDigest: string | null,
   expectedProgress: Json,
+  bindings: Json = {},
 ): Promise<[string, string]> {
   const markdownPath = `${root}/review-publication.md`;
   const baselinePath = `${root}/${BASELINE_NAME}`;
@@ -3302,6 +3310,7 @@ export async function publishReviewState(
     }
     const nextProgress: Json = {
       ...currentProgress,
+      ...bindings,
       stage: "plan_ready",
       plan_path: planPath,
       plan_digest: planDigest,
@@ -3407,7 +3416,7 @@ export function rejectVisibleRawRefs(
   }
 }
 
-function buildFindingLedger(
+export function buildFindingLedger(
   incremental: Json,
   assessments: Json[],
   findings: Json[],
@@ -3529,14 +3538,20 @@ export async function scaffoldReview(
   contextValue: string,
   decisionValue: string,
   contentValue: string,
+  draft?: {
+    decision: Json;
+    content: Json;
+    dryRun: boolean;
+    freshnessChecked: boolean;
+    progress?: Json;
+    bindings?: Json;
+  },
 ): Promise<Json> {
   const [evidencePath, evidence, root, evidenceDigest] = await evidenceContext(evidenceValue);
   const [, context, contextDigest] = await validateContextBinding(contextValue, evidencePath);
-  const [, decision, decisionDigest] = contentAddressedArtifact(
-    decisionValue,
-    root,
-    "review_decision",
-  );
+  const [, decision, decisionDigest] = draft?.dryRun
+    ? [decisionValue, draft.decision, "0".repeat(64)]
+    : contentAddressedArtifact(decisionValue, root, "review_decision");
   if (decision.evidence_digest !== evidenceDigest || decision.context_digest !== contextDigest) {
     throw new WorkflowError("review decision does not bind evidence and context");
   }
@@ -3544,19 +3559,21 @@ export async function scaffoldReview(
   if (!isDict(target)) {
     throw new WorkflowError("review evidence target is unavailable");
   }
-  const currentEvidence = await collect(target, "code-review", { persist: false });
-  const currentContext = await refreshContext(context, evidencePath);
-  if (
-    currentEvidence.retrieval_complete !== true ||
-    !jsonEqual(fingerprint(evidence), fingerprint(currentEvidence)) ||
-    context.complete !== true ||
-    currentContext.complete !== true ||
-    !contextsMatch(context, currentContext)
-  ) {
-    throw new WorkflowError("review evidence or context is stale before plan creation");
+  if (!draft?.freshnessChecked) {
+    const currentEvidence = await collect(target, "code-review", { persist: false });
+    const currentContext = await refreshContext(context, evidencePath);
+    if (
+      currentEvidence.retrieval_complete !== true ||
+      !jsonEqual(fingerprint(evidence), fingerprint(currentEvidence)) ||
+      context.complete !== true ||
+      currentContext.complete !== true ||
+      !contextsMatch(context, currentContext)
+    ) {
+      throw new WorkflowError("review evidence or context is stale before plan creation");
+    }
   }
   const content = exactKeys(
-    readJson(contentValue, "review plan content"),
+    draft?.content ?? readJson(contentValue, "review plan content"),
     new Set([
       "locale",
       "chat_assessment",
@@ -3962,6 +3979,7 @@ export async function scaffoldReview(
       threadDecisions,
       recommendedIssues,
       labelReview,
+      draft?.dryRun ?? false,
     );
   const renderContent: Json = {
     ...content,
@@ -4033,6 +4051,7 @@ export async function scaffoldReview(
     thread_decisions: enrichedThreads,
     markdown: markdown,
   };
+  if (draft?.dryRun) return { status: "ok", payload, external_mutations: false };
   const [path, planDigest] = await writeArtifact(root, "review_plan", payload);
   const [markdownPath, markdownDigest] = await publishReviewState(
     root,
@@ -4041,7 +4060,7 @@ export async function scaffoldReview(
     planDigest,
     context.target as Json,
     ((incremental.incremental_baseline as Json).state_digest as string | null) ?? null,
-    {
+    draft?.progress ?? {
       stage: "content_missing",
       evidence_path: evidencePath,
       evidence_digest: evidenceDigest,
@@ -4050,6 +4069,7 @@ export async function scaffoldReview(
       decision_path: resolvePath(decisionValue),
       decision_digest: decisionDigest,
     },
+    draft?.bindings,
   );
   return {
     status: payload.complete === true ? "ok" : "incomplete",
@@ -4100,6 +4120,13 @@ export function progressArtifact(
 }
 
 function nextActionForStage(stage: string, root: string, progress: Json): Json | null {
+  if (
+    stage !== "plan_ready" &&
+    typeof progress.context_digest === "string" &&
+    pathExists(`${root}/review-drafts/review-${progress.context_digest}.json`)
+  ) {
+    return runnerAction("resume-review", ["--artifact-root", root]);
+  }
   if (stage === "prepared") {
     const repoRoot = (progress.repo_root ?? null) as string | null;
     let mode = (progress.mode || "normal") as string;
@@ -4354,7 +4381,12 @@ async function writeReviewDraft(
   return resolvePath(path);
 }
 
-function contentTemplate(evidence: Json, context: Json, decision: Json, locale: string): Json {
+export function contentTemplate(
+  evidence: Json,
+  context: Json,
+  decision: Json,
+  locale: string,
+): Json {
   const incremental = context.incremental as Json;
   const accepted = (decision.accepted_findings ?? []) as Json[];
   const primaryById = new Map<string, Json>();
@@ -4497,7 +4529,7 @@ function ciProblemJobs(evidence: Json): [Json[], boolean, string] {
   return [problems, complete, status];
 }
 
-function ciJobAssessmentTemplate(evidence: Json): Json[] {
+export function ciJobAssessmentTemplate(evidence: Json): Json[] {
   const [problems] = ciProblemJobs(evidence);
   const result: Json[] = [];
   for (const job of problems) {
@@ -4519,7 +4551,7 @@ function ciJobAssessmentTemplate(evidence: Json): Json[] {
   return result;
 }
 
-function ciBlocksReady(evidence: Json, assessments: unknown): boolean {
+export function ciBlocksReady(evidence: Json, assessments: unknown): boolean {
   const [problems, complete, pipelineStatus] = ciProblemJobs(evidence);
   if (!Array.isArray(assessments)) {
     throw new WorkflowError("CI job assessments are invalid");
@@ -4823,11 +4855,11 @@ function blockedChat(locale: string, stage: string, reason: string, action: unkn
   return lines.join("\n");
 }
 
-function reviewChat(plan: Json, context: Json, planPath: string): string {
+export function reviewChat(plan: Json, context: Json, planPath: string): string {
   const assessment = validateChatAssessment(plan.chat_assessment);
   const presentation = plan.presentation as Json;
   const locale = plan.locale as string;
-  const metadata = (plan.mr_metadata_assessment as Json).assessment as Json;
+  const metadata = ((plan.mr_metadata_assessment as Json).assessment as Json).overall as Json;
   const labels = codeReviewChatLabels(locale);
   const exactGit = context.exact_git as Json;
   const necessity = assessment.necessity as Json;

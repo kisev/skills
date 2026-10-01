@@ -363,6 +363,20 @@ Fixed roles keep their names, prompts, and permissions; only model and variant
 change. Additional critics use `critic-<safe-suffix>`. Every mutation uses the
 same preview and confirmation contract.
 
+Specialist profiles are optional for skill-driven independent reviews.
+`code-review` asks which available critics and how many to use; if none are
+installed, the current agent launches ordinary independent native subagents.
+The core plugin applies routing receipts and structured-report checks to
+package-managed profiles and explicitly routed calls, not ordinary native
+subagents. No standalone `opencode run` workaround or agent installation is
+required for that fallback.
+Routed independent critics may return `review_report` or a code-review receipt;
+the caller retains real native invocation identities in reviewmatic's draft.
+Parallel critic calls keep separate bindings. Receipts expire before launch;
+an already admitted review does not expire merely because the model took longer.
+The core plugin supplies actual current session identity to primary and child
+agents for receipts; this metadata does not authorize mutations or publication.
+
 Rendered agent files use `permissions` and `provider/model#variant`. The CLI
 retains separate `--model` and `--variant` flags and saved profile selections.
 Interactive model selection reads the V2 `/api/model` snapshot through

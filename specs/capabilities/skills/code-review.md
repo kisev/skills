@@ -26,13 +26,13 @@ archive ships only authored prompt material and materialized references.
 
 ## Workflow Stages
 
-Resolve boundary, select full or target-specific incremental scope, inspect code and
-contracts, revalidate previous findings, inspect every available project and
-inherited-group label, record the critic when required, finalize evidence and the
-decision, scaffold a contract-6 plan, and render chat from that plan. The runner
-exposes the current stage and exact next action so interrupted reviews can resume
-without guessing. Publication remains a separate user-invoked step governed by
-the requirement below.
+Resolve boundary, collect evidence and context, select full or target-specific
+incremental scope, inspect exact-commit snapshots and affected consumers, and
+complete one editable draft. The host runs independent subagents; the runtime
+validates their receipts and semantic draft locally, then refreshes complete
+evidence and context once and atomically finalizes a contract-6 plan. Resume
+returns the same draft without remote collection. Existing low-level commands
+and v2 artifacts remain supported. Publication is a separate user-invoked step.
 
 ## Dependencies
 
@@ -97,6 +97,31 @@ reasons appear in Markdown.
 ## Requirement
 
 ### REQ-F-105 - Review exact changes
+
+The remote agent workflow shall use `start-review`, `check-review`, and
+`finish-review` over one generated editable draft. The runtime shall derive
+bindings, accepted findings, rejected candidates, and verdicts without asking
+the agent to transfer duplicate decision/content data. Local validation shall
+report field-specific errors without changing progress or freezing a decision;
+repairs shall reuse the same draft. Finalization shall revalidate complete
+evidence and context, bind the validated draft, and atomically replace the plan,
+Markdown, and baseline. Stale or invalid inputs shall preserve the previous
+final plan. Exact-commit inspection snapshots shall make absent, binary,
+non-regular, or over-budget source files explicit instead of claiming complete
+inspection. Timing output shall distinguish runtime work from host model time.
+Independent review shall prefer available specialist profiles selected by count
+and name; their absence shall fall back to ordinary independent native subagents
+of the current agent, never require profile installation. Every selected critic
+shall supply a distinct real run/session identity and a complete receipt. An
+aggregate shall retain every contributor, finding, and scope binding. Required
+independence shall not be waived when the host truly lacks native delegation.
+The interactive plan shall display complete conversations, source positions,
+assessments, rationales, and safe GitLab links even for `no_publication` items.
+Lists and detail text shall scroll within the terminal. Opening a detail shall
+not send a reply. Read-only items shall have no publication actions; sending only
+a reply shall not resolve/reopen its thread. Mutation choices shall require
+confirmation, and edited bodies shall retain valid code fixes and update the
+plan, Markdown, and baseline together before publication.
 
 The skill shall distinguish one exact GitLab MR URL from local WIP, keep review
 preparation non-mutating, and use a compatible finalized GitLab baseline to
@@ -230,6 +255,13 @@ closed required findings, affected regressions, and named limitations, without
 an automatic final broad audit, fixed round limit, or severity-only cutoff.
 
 #### Verification
+
+Guided workflow tests complete a review from one draft, count remote collection
+cycles, repair schema and presentation errors without freezing progress, reject
+stale discussions and non-independent/incomplete critic sets, and retain
+contributor receipts. TUI tests render bounded lists and real plan structures,
+read discussions without drafts, preserve reply-only action selection, and
+require confirmation before publication. Legacy workflow tests remain active.
 
 The `apps/reviewmatic/test/` suites check exact-head collection, cumulative
 local findings, invalidated baselines, publication freshness, reservations,

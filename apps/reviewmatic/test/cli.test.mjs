@@ -26,6 +26,9 @@ test("version, help, and bogus subcommands exit cleanly", () => {
     [],
     ["--help"],
     ["prepare", "--help"],
+    ["start-review", "--help"],
+    ["check-review", "--help"],
+    ["finish-review", "--help"],
     ["finalize-review", "--help"],
     ["publication", "--help"],
   ]) {
@@ -35,6 +38,10 @@ test("version, help, and bogus subcommands exit cleanly", () => {
   }
   const rootHelp = run(["--help"]).stdout;
   for (const command of [
+    "start-review",
+    "resume-review",
+    "check-review",
+    "finish-review",
     "prepare",
     "context",
     "scaffold-review",

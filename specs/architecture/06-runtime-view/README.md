@@ -29,6 +29,9 @@ runtime provides [REQ-F-507](../../capabilities/skills/mattermost-triage.md#req-
 
 Routing resolves host inventory, creates a receipt, consumes it once for a
 matching native subagent call, validates the structured result, and expires the receipt.
+This adapter owns package-managed profiles and explicitly routed calls; ordinary
+native subagents of the current agent remain outside its report/receipt protocol
+as specified by [REQ-F-002](../../requirements/functional/README.md#req-f-002---route-work-through-bounded-orchestration).
 Installation and reconciliation validate ownership and digests before
 publishing or archiving package assets. Reconcile ignores portable skill trees
 and installer lock files; their update and removal lifecycle belongs to the
@@ -56,8 +59,13 @@ remain possible, it asks one bounded question and performs no write; read-only
 intent cannot enter a writing lifecycle.
 
 Code-review preparation runs in the external `reviewmatic` application, which
-coordinates collection, independent review, finalization, and plan creation
-against the shared GitLab artifact contracts. Its `reviewmatic publication`
+collects exact evidence/context and exposes one editable draft plus exact-commit
+inspection snapshots. Host-native subagents provide independent receipts,
+optionally through selected specialist profiles. Local draft validation shares
+the plan validators without writing publication artifacts. Finalization refreshes
+complete evidence/context once and atomically publishes the plan state, avoiding
+an immutable decision before content validation. Legacy v2 artifacts and
+low-level commands remain readable. Its `reviewmatic publication`
 commands implement the one-action lifecycle owned by
 [the code-review requirement](../../capabilities/skills/code-review.md). The
 skill archive itself never starts that lifecycle. Manual local patches remain a

@@ -300,6 +300,29 @@ def validate_shared_contract_instances() -> None:
         artifact_validator.validate(instance)
         validate_v2_artifact(instance, instance["kind"])
 
+    # Code-review execution is owned by reviewmatic, not the retired Python profile.
+    critics: list[dict[str, Any]] = [
+        {
+            "schema": "portable-gitlab/critic-receipt/v2",
+            "evidence_digest": "a" * 64,
+            "run_id": f"critic-run-{index}",
+            "session_id": f"critic-session-{index}",
+            "findings": [],
+            "external_mutations": False,
+        }
+        for index in range(2)
+    ]
+    for receipt in [*critics, {**critics[0], "contributors": critics}]:
+        artifact_validator.validate(
+            {
+                "schema": "portable-gitlab/critic_receipt/v2",
+                "schema_version": 2,
+                "kind": "critic_receipt",
+                "created_at": "2026-10-01T00:00:00Z",
+                "payload": receipt,
+            }
+        )
+
 
 def validate_opencode_contract_instances() -> None:
     instances = load("packages/agentomatic/contracts/instances-v1.json")

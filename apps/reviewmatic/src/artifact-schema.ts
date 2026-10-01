@@ -4181,6 +4181,35 @@ export const ARTIFACT_SCHEMA: Record<string, unknown> = {
               ],
               additionalProperties: false,
               properties: {
+                contributors: {
+                  type: "array",
+                  minItems: 2,
+                  items: {
+                    type: "object",
+                    required: [
+                      "schema",
+                      "evidence_digest",
+                      "run_id",
+                      "session_id",
+                      "findings",
+                      "external_mutations",
+                    ],
+                    additionalProperties: false,
+                    properties: {
+                      schema: { const: "portable-gitlab/critic-receipt/v2" },
+                      evidence_digest: { $ref: "#/$defs/digest" },
+                      run_id: { type: "string", minLength: 1 },
+                      session_id: { type: "string", minLength: 1 },
+                      findings: { type: "array", items: { $ref: "#/$defs/finding" } },
+                      external_mutations: { const: false },
+                      scope_digest: { $ref: "#/$defs/digest" },
+                      target_finding_ids: {
+                        type: "array",
+                        items: { type: "string", minLength: 1 },
+                      },
+                    },
+                  },
+                },
                 schema: {
                   const: "portable-gitlab/critic-receipt/v2",
                 },

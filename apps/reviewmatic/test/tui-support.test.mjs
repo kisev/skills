@@ -4,7 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 import { test, after } from "node:test";
-import { planItems, commandTarget } from "../dist/tui/support.js";
+import {
+  planItems,
+  commandTarget,
+  itemText,
+  safeLink,
+  terminalLink,
+  visualLines,
+  displayText,
+} from "../dist/tui/support.js";
 import { suggestionToPatch, prepareApplication, commitApplication } from "../dist/worktree.js";
 
 const stateHome = mkdtempSync(join(tmpdir(), "reviewmatic-state-"));
@@ -25,6 +33,29 @@ function minimalPlan(root) {
     planPath: join(root, "plan.json"),
     planDigest: "0".repeat(64),
     progress: {},
+    context: {
+      discussions: [
+        {
+          id: "abc",
+          root_note_id: 101,
+          root_position: { new_path: "src/a.ts", new_line: 3 },
+          notes: [
+            {
+              id: 101,
+              system: false,
+              author: { username: "reviewer" },
+              body: "Please fix the retry.",
+            },
+            {
+              id: 102,
+              system: false,
+              author: { username: "author" },
+              body: "Fixed in the current code.",
+            },
+          ],
+        },
+      ],
+    },
     plan: {
       verdict: "commented",
       locale: "ru",
@@ -35,7 +66,9 @@ function minimalPlan(root) {
           assessment: "accepted",
           outcome: "reply",
           proposed_response: "fixed",
-          expectation: { discussion_id: "abc", path: "src/a.ts", line: 3 },
+          url: "https://gitlab.example/group/project/-/merge_requests/7#note_101",
+          state: "open",
+          rationale: "The reviewed implementation addresses the remark.",
         },
       ],
       finding_publications: [
@@ -108,6 +141,9 @@ test("plan items classify threads, findings, issues, and labels", () => {
   assert.equal(thread.line, 3);
   assert.equal(thread.body, "fixed\n");
   assert.equal(thread.actions.length, 1);
+  assert.match(thread.url, /#note_101$/);
+  assert.match(itemText(thread), /Please fix the retry/);
+  assert.match(itemText(thread), /Fixed in the current code/);
   const finding = items.find((item) => item.key === "finding-2");
   assert.equal(finding.kind, "line");
   const issue = items.find((item) => item.key === "issue-3");
@@ -115,6 +151,18 @@ test("plan items classify threads, findings, issues, and labels", () => {
   const labels = items.find((item) => item.key === "labels:update");
   assert.equal(labels.kind, "labels");
   assert.deepEqual(labels.detail.add, ["review::approved"]);
+});
+
+test("terminal links reject unsafe schemes and controls and long lines are scrollable without loss", () => {
+  assert.equal(safeLink("javascript:alert(1)"), null);
+  assert.equal(safeLink("https://example.test/\x1b]8;;evil"), null);
+  assert.equal(safeLink("https://user:password@example.test/"), null);
+  assert.equal(terminalLink("https://example.test/#note_1", false), "https://example.test/#note_1");
+  assert.match(terminalLink("https://example.test/#note_1", true), /\x1b\]8;;https:/);
+  assert.equal(displayText("hello\x1b]52;c;payload\x07world"), "helloworld");
+  const line = "Long source line ".repeat(100);
+  assert.equal(visualLines(line, 30).join(""), line);
+  assert.ok(visualLines(line, 30).every((row) => row.length <= 30));
 });
 
 test("command target extracts action path and confirm digest", () => {

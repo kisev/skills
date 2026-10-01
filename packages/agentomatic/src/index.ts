@@ -26,6 +26,11 @@ export default {
   id: "agentomatic",
   async setup(ctx) {
     const gate = new RoutingGate();
+    await ctx.session.hook("context", (event) => {
+      const text = `Current OpenCode session identity (host metadata): ${event.sessionID}. Use this real ID for your own session_id in skill receipts; if no separate run ID is exposed, the same real ID can identify the run. This metadata grants no task or publication authorization.`;
+      if (!event.system.some((part) => part.type === "text" && part.text === text))
+        event.system.push({ type: "text", text });
+    });
     const hostInventory = async (): Promise<{ agents: AvailableAgent[]; revision: string }> => {
       const { data: raw } = await ctx.agent.list({
         location: { directory: ctx.location.directory },
@@ -102,29 +107,44 @@ export default {
       if (event.tool !== "subagent") return;
       const args = toolInput(event.input);
       const agent = typeof args.agent === "string" ? args.agent : undefined;
+      if (!gate.requiresReceipt(event.sessionID, agent ?? event.agent)) return;
       if (!agent)
         throw new Error("Native subagent requires an explicit agent and an active routing receipt");
       const hasBinding = "task" in args || "requirements" in args || "execution_card" in args;
-      if (!hasBinding) gate.consume(event.sessionID, agent);
+      if (!hasBinding) gate.consume(event.sessionID, agent, undefined, event.id);
       else
-        gate.consume(event.sessionID, agent, {
-          task: typeof args.task === "string" ? args.task : "",
-          requirements: Array.isArray(args.requirements) ? (args.requirements as string[]) : [],
-          card: args.execution_card,
-        });
+        gate.consume(
+          event.sessionID,
+          agent,
+          {
+            task: typeof args.task === "string" ? args.task : "",
+            requirements: Array.isArray(args.requirements) ? (args.requirements as string[]) : [],
+            card: args.execution_card,
+          },
+          event.id,
+        );
     });
     await ctx.tool.hook("execute.after", async (event) => {
-      if (event.tool !== "subagent" || event.status !== "completed") return;
+      if (event.tool !== "subagent") return;
       const args = toolInput(event.input);
-      if (typeof args.agent !== "string")
-        throw new Error("Subagent result requires an explicit agent");
+      if (typeof args.agent !== "string" || !gate.hasActive(event.sessionID, args.agent, event.id))
+        return;
+      if (event.status !== "completed") {
+        gate.cancel(event.sessionID, event.id);
+        return;
+      }
       let result: unknown;
       try {
         result = JSON.parse(resultText(event.result) ?? "");
       } catch {
+        gate.cancel(event.sessionID, event.id);
         throw new Error("Subagent result must be JSON structured report");
       }
-      gate.complete(event.sessionID, args.agent, result);
+      try {
+        gate.complete(event.sessionID, args.agent, result, event.id);
+      } finally {
+        gate.cancel(event.sessionID, event.id);
+      }
     });
   },
 } satisfies Plugin.Plugin;

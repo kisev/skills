@@ -23,6 +23,7 @@ import { discoverArtifactRoot, loadPlan, planItems } from "./tui/support.js";
 import { runTui } from "./tui/app.js";
 import { stringsFor } from "./tui/strings.js";
 import { registrySummary } from "./worktree.js";
+import { startReview, resumeReview, checkReview, finishReview } from "./draft.js";
 import {
   program,
   common,
@@ -54,6 +55,42 @@ interface CommandSpec {
 }
 
 const definitions: CommandSpec[] = [
+  {
+    signature: "start-review",
+    description: "Collect evidence and context once and create one editable review draft",
+    options: [
+      { name: "url", description: "exact HTTPS GitLab merge request URL", required: true },
+      { name: "repo-root", description: "local checkout root", required: true },
+      {
+        name: "review-mode",
+        description: "review depth",
+        default: "normal",
+        choices: ["fast", "normal", "deep"],
+      },
+      { name: "locale", description: "response language", default: "en", choices: ["en", "ru"] },
+      {
+        name: "incremental",
+        description: "incremental baseline policy",
+        default: "auto",
+        choices: ["auto", "off"],
+      },
+    ],
+  },
+  {
+    signature: "resume-review",
+    description: "Recover the selected editable draft without recollecting GitLab",
+    options: [{ name: "artifact-root", description: "artifact root", required: true }],
+  },
+  {
+    signature: "check-review",
+    description: "Validate the entire draft locally without committing review state",
+    options: [{ name: "draft", description: "generated editable review draft", required: true }],
+  },
+  {
+    signature: "finish-review",
+    description: "Revalidate freshness once and finalize the complete review atomically",
+    options: [{ name: "draft", description: "generated editable review draft", required: true }],
+  },
   {
     signature: "prepare",
     description: "Collect GET-only GitLab evidence and initialize review progress",
@@ -470,7 +507,7 @@ async function runPlan(fields: Fields): Promise<void> {
     throw new WorkflowError("no finalized review plan was found; run a review first");
   }
   const bundle = loadPlan(root);
-  if (fields.print === true || process.stdout.isTTY !== true) {
+  if (fields.print === true || process.stdout.isTTY !== true || process.stdin.isTTY !== true) {
     const strings = stringsFor(bundle.plan.locale as string | undefined);
     const items = planItems(bundle);
     const lines = [
@@ -534,6 +571,25 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
     return;
   }
   try {
+    if (["start-review", "resume-review", "check-review", "finish-review"].includes(command)) {
+      const result =
+        command === "start-review"
+          ? await startReview({
+              url: String(fields.url),
+              repoRoot: String(fields.repoRoot),
+              reviewMode: fields.reviewMode as string,
+              locale: fields.locale as string,
+              incremental: fields.incremental as string,
+            })
+          : command === "resume-review"
+            ? await resumeReview(String(fields.artifactRoot))
+            : command === "check-review"
+              ? await checkReview(String(fields.draft))
+              : await finishReview(String(fields.draft));
+      emit(result);
+      process.exitCode = result.status === "ok" ? 0 : 2;
+      return;
+    }
     const code = await dispatch(workflowArguments(command, fields));
     if (code !== null) {
       process.exitCode = code;

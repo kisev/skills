@@ -1,109 +1,105 @@
-# Review state machine
+# Guided remote review
 
-The runner owns the remote-review lifecycle. Treat every command result as a
-state transition, follow its `next_action` exactly, and use `status` or its
-`next` alias to recover after an interruption. Do not guess arguments after a
-failed command.
+The agent owns analysis. `reviewmatic` owns collection, bindings, draft
+validation, freshness, verdict derivation, and atomic finalization. Use the
+guided commands below; do not reconstruct low-level transitions or inspect the
+installed runtime's source to discover input fields.
 
-## Stages
+## One editable draft
 
-| Stage | Meaning | Safe transition |
-| - | - | - |
-| `prepared` | Current content-addressed evidence exists. | Collect context. |
-| `context_ready` | Role, threads, exact Git context, mode, and locale are bound. | Follow the returned transition. |
-| `critic_missing` | The selected mode requires an independent recorded critic. | Generate, complete, and record the critic template. |
-| `finalize_missing` | Context and required critic evidence are present. | Revalidate current evidence with `finalize`. |
-| `decision_missing` | A fresh finalize report exists. | Generate and complete the decision template, then run `finalize-review`. |
-| `content_missing` | The immutable review decision exists. | Generate and complete the content template, then run `scaffold-review`. |
-| `plan_ready` | A current plan, Markdown, and review baseline agree. | Run `report-review`. |
-| `stale` | A stable plan or progress binding does not match current evidence. | Follow `resume_stage` and `next_action`; never report the old plan. |
+1. Run `reviewmatic start-review --url MR_URL --repo-root CHECKOUT --review-mode MODE --locale LOCALE --incremental INCREMENTAL`.
+   Modes are `fast|normal|deep`, locales `en|ru`, incremental policies `auto|off`.
+   Inspect its evidence, context, and `inspection_path`. The inspection index
+   contains the complete diff and exact base/head source snapshots, not working
+   tree files. Missing, binary, non-regular, or over-budget source snapshots are
+   explicit; inspect those objects separately and trace affected consumers.
+   Do not duplicate MR collection with `glab mr view`.
+2. Select independent critics as described below. Review the exact code and all
+   discussions; fill the returned `draft_path`. Put primary candidates in
+   `findings`, actual independent receipts in `critics`, and one explicit
+   `dispositions` entry per primary/critic candidate. Each disposition includes
+   `id`, `decision=accept|reject`, `reason`, and `dependencies` with `paths`,
+   `thread_ids`, `metadata_fields`, and `ci`. Accepted candidates may use empty
+   dependency lists; rejected candidates retain concrete scope dependencies.
+   Preserve receipt identities and use distinct finding ID prefixes across
+   critics. Set primary `run_id`/`session_id` to the actual current identities.
+   Complete every generated `ci_job_assessments` entry from its bounded trace.
+   `trace_evidence` must be an exact non-empty substring of that job's collected
+   redacted trace, not a paraphrase. Preserve its project/pipeline/job IDs.
+3. Complete `content`: semantic chat/architecture/metadata/SemVer assessments,
+   every catalog label, checks as strings, concrete `finding_publications`,
+   previous-finding assessments, recommended issues, and every thread decision.
+   Metadata input is the flat five-field assessment, not an `observed` wrapper.
+   Publication input has exactly `finding_id`, `type`, `path`, `line`, `old_line`,
+   `body`, `fix_mode`, and `patch`. The runner derives findings, rejected
+   candidates, revisions, body/patch paths, digests, and verdicts. Do not add
+   those derived fields or copy data between decision/content artifacts.
+4. Run the returned `reviewmatic check-review --draft DRAFT_PATH` action. It
+   validates locally without GitLab reads, publication artifacts, or progress
+   changes. Fix the reported field paths in the same draft, then repeat the
+   check. A presentation or patch error does not freeze the decision or require
+   restarting the review. Raw commit IDs stay in private evidence, not prose
+   that will be rendered into the plan; use immutable GitLab links when needed.
+5. Run the returned `reviewmatic finish-review --draft DRAFT_PATH`. It validates
+   again, refreshes complete evidence and context once, and atomically publishes
+   the local immutable plan, Markdown, and baseline. Print its `chat` verbatim
+   and one fenced manual `plan_command`. Never run that interactive command or
+   any publication/patch command during the review.
 
-An incomplete lifecycle is not a best-effort review. `report-review` returns
-`status=blocked`, the failed stage, its reason, and a safe transition without
-finding details or a review verdict.
-If the current evidence artifact itself is missing or corrupt, the runner no
-longer has a trusted target from which to synthesize a restart command. It
-returns blocked with `next_action=null`; the user must supply the exact MR URL
-again.
+Use `reviewmatic resume-review --artifact-root ROOT` after interruption. It
+returns the same editable draft without recollection. If finalization reports
+stale evidence, start a fresh review against the changed MR; the old final plan
+and draft are preserved. Collection, validation, and finalization timings are
+separate from model and subagent time; do not blame review analysis time on the
+runtime or hide validation-repair loops inside it.
 
-## Remote sequence
+## Independent critics
 
-1. Run `reviewmatic prepare --url MR_URL --repo-root CHECKOUT --review-mode MODE --locale LOCALE --incremental INCREMENTAL`, where the last
-   three values use `fast|normal|deep`, `en|ru`, and `auto|off` respectively.
-   The response creates the current progress pointer and returns a fully bound
-   context action. If an old caller omits the checkout,
-   `next_action.required_inputs` marks that one value for substitution before
-   execution.
-2. Run the returned `context` action. The runner stores the selected full,
-   incremental, or unchanged scope. An unchanged scope skips the critic but
-   continues through fresh finalize, decision, content, and plan stages. Do not
-   run a parallel `glab mr view` or fetch
-   the same MR data separately; the canonical evidence and context are the only
-   remote-review input.
-3. Inspect code from the exact local refs. Keep complete diffs and verbose tool
-   output in bounded local artifacts or tool results; bring only relevant
-   excerpts and summaries into the main reasoning context.
-4. When `critic_missing`, run the returned `template-review --kind critic`
-   action. Give the template to an independent run/session, fill its complete
-   findings and identities, then run the returned `record-artifact` action. Raw
-   subagent text is not a critic receipt.
-5. When `finalize_missing`, run the exact returned `finalize --artifact-root`
-   action. `finalize` deliberately does not accept `--evidence`.
-6. When `decision_missing`, run `template-review --kind decision`, complete the
-   generated private draft, and run its exact `finalize-review` action. The
-   template prebinds evidence, context, finalize, critic findings, open thread
-   IDs as `thread:ROOT_NOTE_ID`, the exact-head pipeline state, and every
-   failed/canceled job from recursively collected child/downstream pipelines.
-   Classify each job from its bounded trace excerpt. Add every primary finding
-   and its disposition before finalization. If a critic finding
-   duplicates an accepted primary finding, reject the critic candidate with that
-   reason; accepted findings must remain structurally distinct.
-7. When `content_missing`, run `template-review --kind content`. The generated
-   draft prebinds accepted findings, every exact catalog label, every non-system
-   thread and latest-note digest, previous findings, rejected candidates, and all
-   `.gitlab/issue_templates` collected from the exact MR head. Each recommended
-   issue must select and fill its nearest matching template; when only one exists,
-   it must use that template.
-   Complete every empty assessment, body, fix, rationale, and check, then run
-   the returned `scaffold-review` action. The runner owns standard presentation
-   labels; content supplies only `locale` and semantic `chat_assessment` prose.
-   Every open thread requires an explicit reply, resolve, or author local-fix
-   outcome. A resolved thread needs a reply only when it adds new information.
-   Select `no_publication` explicitly after checking its explanation or applied
-   suggestion against current code. Read the complete thread
-   before writing a concise response. A state change is a separate command after
-   its explanatory reply.
-8. Run the returned `report-review` action and print its `chat` value verbatim.
-   Do not manually reconstruct, expand, or shorten the report. A later request
-   to report the existing review runs `status` and `report-review`; a new skill
-   invocation starts a fresh discussion audit even when the MR is unchanged.
+Normal, deep, and incremental review require independent receipts. Unchanged
+mode skips critics but still audits every discussion. Fast mode without a critic
+requires explicit `low_risk=true` justified by the inspected change.
 
-Private draft files are editable inputs, not finalized evidence. Empty template
-fields intentionally fail validation. The runner accepts a critic only after
-`record-artifact`, accepts a decision only after `finalize-review`, and accepts a
-chat report only from a fresh `review-publication.md` and baseline pair.
+Use the host's available agent inventory, not assumed agent names. When critics
+are required or explicitly requested for fast mode and suitable
+specialist profiles are installed, ask once how many critics and which profiles
+to use unless the user already chose. Prefer those selected profiles, including
+additional `critic-*` profiles on different providers/models. Follow the host's
+normal routing/receipt mechanism for routed specialist calls; preview and
+dispatch must describe the same task. Set `critic_count` to the selected count,
+run independent critics in parallel when the host supports it, and retain every
+receipt. The runner aggregates them without discarding contributor identities.
+Launch selected independent runs as soon as their evidence is ready, alongside
+primary inspection when the host supports native background work; join their
+results before validation, without supplying primary conclusions.
 
-## Verdict policy
+If no specialist profiles are installed, launch an ordinary independent native
+subagent of the current agent; one critic is the default and no profile-selection
+question is needed. Absence of `critic` is not a blocker. Supply the exact
+evidence/context/inspection paths, accepted scope and user decisions, but no
+primary findings. Request complete detailed findings in the host/profile's
+required report envelope; `review_report` is valid for routed specialists.
+Populate the returned `critic_receipt_template` from those findings and real
+native invocation run/session metadata, or use a returned receipt when its
+identities are real. If the host exposes no separate run ID, reuse the real
+session ID as `run_id`; do not introduce invented labels. The OpenCode core
+plugin exposes current session identity to primary and child agents without
+requiring optional profiles. Never ask a child to guess its identity. Do not switch to another provider,
+invent a profile, fabricate a receipt, or run `opencode run` to evade a failed
+delegation policy. If the host truly cannot launch any independent subagent,
+report that capability failure before an extended review rather than silently
+weakening its depth. A failed specialist is not replaced or omitted without
+reconciling the user's selected critic count.
 
-- Every accepted `critical`, `high`, or `medium` finding is blocking, produces
-  `not_ready`, and renders as `changes required`. An accepted `low` finding is
-  always non-blocking.
-- Exact-head CI evidence includes bounded job metadata and bounded, redacted
-  trace excerpts for failed/canceled jobs across recursively collected
-  child/downstream pipelines. Missing, truncated, active, canceled, unsupported,
-  or unclassified CI evidence uses `blocked` when no finding already requires
-  `not_ready`.
-- A failed job may be classified as `process_gate` only when its trace clearly
-  proves an unmet approval or equivalent manual policy gate unrelated to code
-  quality. Job names alone are insufficient. Only a complete pipeline whose
-  failed/canceled jobs are all proven process gates may still use `ready`.
-- Confirmed code failures should become findings. Infrastructure failures and
-  unknown causes remain blocking rather than being silently treated as code
-  defects or process gates.
-- Other owner decisions require a non-empty reason and use `blocked`.
-- With no blocking finding, blocking CI evidence, or owner-decision reason, use
-  `ready`.
+## Compatibility and verdict
 
-The runner validates this policy before creating the review decision. Metadata
-and thread assessments remain explicit in the plan but cannot silently turn a
-low finding into a blocking one.
+Existing v2 artifacts and low-level `prepare`, `context`, `template-review`,
+`record-artifact`, `finalize`, `finalize-review`, `scaffold-review`, `status`, and
+`report-review` remain supported for old callers. Do not mix them with a guided
+draft. Internal progress stages remain available for inspection.
+
+Every accepted non-low finding blocks `ready`. Failed/canceled CI jobs require
+trace-supported classification across child/downstream pipelines; only proven
+manual process gates can be non-blocking. Missing, active, stale, incomplete,
+unknown, or unclassified CI evidence stays blocking. Previous findings and every
+critic candidate require explicit dispositions. Generated verdicts never replace
+the agent's semantic assessment or authorize publication.

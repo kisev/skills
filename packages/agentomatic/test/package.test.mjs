@@ -1058,6 +1058,15 @@ test("native subagent result hook rejects prose and accepts one versioned worker
     }),
     /JSON structured report/,
   );
+  const replacement = JSON.parse(
+    await callRoute({ ...route, action: "preview" }, { sessionID: "hook" }),
+  );
+  await callRoute({ ...route, decision: replacement }, { sessionID: "hook" });
+  await hooks["execute.before"]({
+    tool: "subagent",
+    sessionID: "hook",
+    input: { agent: "worker" },
+  });
   await hooks["execute.after"]({
     tool: "subagent",
     sessionID: "hook",
@@ -1078,6 +1087,52 @@ test("native subagent result hook rejects prose and accepts one versioned worker
       }),
     },
   });
+});
+
+test("native worker calls retain the routed card without repeating custom card input fields", async () => {
+  const { hooks, route } = await setupCore(hostAgents());
+  const input = {
+    category: "implementation",
+    task: "Implement one card-bound change",
+    requirements: [],
+    execution_card: executionCard(),
+  };
+  for (const [name, change, error] of [
+    ["wrong-card", { card_id: "other-card" }, /execution card/],
+    ["outside-scope", { changed_files: ["src/other.ts"] }, /outside execution card/],
+    ["valid", {}, null],
+  ]) {
+    const decision = JSON.parse(await route({ ...input, action: "preview" }, { sessionID: name }));
+    await route({ ...input, action: "dispatch", decision }, { sessionID: name });
+    const event = {
+      tool: "subagent",
+      sessionID: name,
+      id: `call-${name}`,
+      input: { agent: "worker" },
+    };
+    await hooks["execute.before"](event);
+    const completed = {
+      ...event,
+      status: "completed",
+      result: {
+        content: JSON.stringify({
+          worker_report: {
+            schema_version: 1,
+            status: "COMPLETED",
+            card_id: "hook-card",
+            revision: 1,
+            changed_files: ["src/example.ts"],
+            checks: [{ command: "check", status: "passed" }],
+            writes_performed: true,
+            risks: [],
+            ...change,
+          },
+        }),
+      },
+    };
+    if (error) await assert.rejects(hooks["execute.after"](completed), error);
+    else await hooks["execute.after"](completed);
+  }
 });
 
 test("execution card validation and lifecycle reject malformed and replay transitions", () => {

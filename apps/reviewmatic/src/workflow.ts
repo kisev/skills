@@ -272,7 +272,7 @@ export async function decide(args: WorkflowArguments): Promise<Json> {
     );
     const scope =
       args.mode === "incremental"
-        ? ((receipt.incremental as Json).incremental_delta_digest as string)
+        ? ((selectedContext.incremental as Json).incremental_delta_digest as string)
         : null;
     validateCritic(receipt, evidenceDigest, scope);
     if (!detailedFindingsAreValid(receipt.findings)) {

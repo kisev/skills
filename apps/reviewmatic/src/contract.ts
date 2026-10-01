@@ -213,7 +213,7 @@ const STRING_ESCAPES: Record<string, string> = {
   "\r": "\\r",
 };
 
-function isDict(value: unknown): value is Record<string, unknown> {
+export function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
@@ -629,13 +629,7 @@ export async function writeArtifact(
   payload: Record<string, unknown>,
 ): Promise<[string, string]> {
   if (!ARTIFACT_KINDS.has(kind)) throw new WorkflowError("unknown artifact kind");
-  const envelope: Record<string, unknown> = {
-    schema: `portable-gitlab/${kind}/v2`,
-    schema_version: ARTIFACT_VERSION,
-    kind: kind,
-    created_at: new Date().toISOString(),
-    payload: payload,
-  };
+  const envelope = artifactEnvelope(kind, payload);
   validateV2Artifact(envelope, kind);
   const content = canonical(envelope);
   const contentDigestValue = contentDigest(content);
@@ -660,6 +654,19 @@ export async function writeArtifact(
     closeSync(descriptor);
   }
   return [path, contentDigestValue];
+}
+
+export function artifactEnvelope(
+  kind: string,
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    schema: `portable-gitlab/${kind}/v2`,
+    schema_version: ARTIFACT_VERSION,
+    kind: kind,
+    created_at: new Date().toISOString(),
+    payload: payload,
+  };
 }
 
 export function writeCompanion(path: string, content: string): [string, string] {
@@ -2873,6 +2880,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
       "external_mutations",
     ]);
     const payloadKeys = keySet(payload);
+    if (kind === "critic_receipt") payloadKeys.delete("contributors");
     if (
       !setsEqual(payloadKeys, requiredReport) &&
       !setsEqual(payloadKeys, new Set([...requiredReport, "scope_digest"])) &&
@@ -2895,6 +2903,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
     ) {
       throw new WorkflowError(`${kind} payload is schema-invalid`);
     }
+    if (kind === "critic_receipt") validateCritic(payload, String(payload.evidence_digest));
   } else if (kind === "review_decision") {
     const required = new Set([
       "schema",
@@ -4159,7 +4168,7 @@ export function validateCritic(
     "findings",
     "external_mutations",
   ]);
-  const allowed = new Set([...required, "scope_digest", "target_finding_ids"]);
+  const allowed = new Set([...required, "scope_digest", "target_finding_ids", "contributors"]);
   const keys = keySet(receipt);
   const targetFindingIds = receipt.target_finding_ids;
   if (
@@ -4182,6 +4191,35 @@ export function validateCritic(
   if (!["run_id", "session_id"].every((key) => typeof receipt[key] === "string" && receipt[key])) {
     throw new WorkflowError("critic receipt lacks independent run identity");
   }
+  if ("contributors" in receipt) {
+    const contributors = receipt.contributors;
+    if (
+      !Array.isArray(contributors) ||
+      contributors.length < 2 ||
+      contributors.some((item) => !isDict(item) || "contributors" in item)
+    ) {
+      throw new WorkflowError("critic contributors must be distinct individual receipts");
+    }
+    for (const item of contributors as Record<string, unknown>[])
+      validateCritic(item, evidenceDigest, scopeDigest);
+    if (
+      new Set(contributors.map((item) => item.run_id)).size !== contributors.length ||
+      new Set(contributors.map((item) => item.session_id)).size !== contributors.length ||
+      receipt.run_id !== contributors[0].run_id ||
+      receipt.session_id !== contributors[0].session_id ||
+      contributors.some((item) => (item.scope_digest ?? null) !== (receipt.scope_digest ?? null)) ||
+      !setsEqual(
+        new Set((receipt.target_finding_ids ?? []) as string[]),
+        new Set(contributors.flatMap((item) => (item.target_finding_ids ?? []) as string[])),
+      ) ||
+      !equalJson(
+        receipt.findings,
+        contributors.flatMap((item) => item.findings),
+      )
+    ) {
+      throw new WorkflowError("critic aggregate does not preserve independent contributors");
+    }
+  }
 }
 
 export function validateDecision(
@@ -4192,6 +4230,14 @@ export function validateDecision(
   contextDigest: string | null = null,
   criticReceiptDigest: string | null = null,
 ): void {
+  if (
+    receipt !== null &&
+    [receipt, ...((receipt.contributors ?? []) as Record<string, unknown>[])].some(
+      (critic) => critic.run_id === report.run_id || critic.session_id === report.session_id,
+    )
+  ) {
+    throw new WorkflowError("critic receipt is not independent of the primary review");
+  }
   if (
     report.schema !== "portable-gitlab/review-decision/v2" ||
     report.evidence_digest !== evidenceDigest ||

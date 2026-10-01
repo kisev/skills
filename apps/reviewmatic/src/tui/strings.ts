@@ -5,6 +5,7 @@ export type Strings = {
   items: string;
   pending: string;
   applied: string;
+  replied: string;
   skipped: string;
   error: string;
   keysOverview: string;
@@ -46,20 +47,29 @@ export type Strings = {
   cancelled: string;
   edited: string;
   unchanged: string;
+  discussion: string;
+  assessment: string;
+  systemNote: string;
+  noPublication: string;
+  readOnly: string;
+  readOnlyShort: string;
+  scroll: string;
 };
 
 const en: Strings = {
   title: "reviewmatic",
   target: "target",
   verdict: "verdict",
-  items: "plan items",
+  items: "publication items",
   pending: "pending",
   applied: "sent",
+  replied: "reply sent; state unchanged",
   skipped: "skipped",
   error: "error",
   keysOverview: "↑/↓ select · enter open · q quit",
-  keysDetail: "e edit · s send · S send+resolve · a apply locally · x skip · esc back",
-  keysWorktree: "enter apply · v diff · c commit · p push · esc back",
+  keysDetail:
+    "↑/↓ scroll · ←/→ item · o browser · e edit · s send only · S send+state · a local fix · x skip · esc back",
+  keysWorktree: "c edit message · C commit · p push · esc back",
   replyDraft: "reply draft",
   remark: "remark",
   suggestion: "suggestion",
@@ -96,21 +106,30 @@ const en: Strings = {
   cancelled: "cancelled",
   edited: "body edited",
   unchanged: "unchanged",
+  discussion: "discussion",
+  assessment: "assessment",
+  systemNote: "system",
+  noPublication:
+    "No publication is proposed. The reviewed discussion and rationale are shown above.",
+  readOnly: "read-only · ↑/↓ scroll · ←/→ item · o browser · esc back",
+  readOnlyShort: "no actions",
+  scroll: "lines",
 };
 
 const ru: Strings = {
   title: "reviewmatic",
   target: "цель",
   verdict: "вердикт",
-  items: "пункты плана",
+  items: "пункты публикации",
   pending: "ожидает",
   applied: "отправлено",
+  replied: "ответ отправлен; статус не изменён",
   skipped: "пропущено",
   error: "ошибка",
   keysOverview: "↑/↓ выбор · enter открыть · q выход",
   keysDetail:
-    "e правка · s отправить · S отправить и закрыть · a применить локально · x пропустить · esc назад",
-  keysWorktree: "enter применить · v diff · c коммит · p пуш · esc назад",
+    "↑/↓ прокрутка · ←/→ пункт · o браузер · e правка · s только ответ · S ответ+статус · a локальный фикс · x пропустить · esc назад",
+  keysWorktree: "c правка сообщения · C коммит · p пуш · esc назад",
   replyDraft: "черновик ответа",
   remark: "замечание",
   suggestion: "саджест",
@@ -147,6 +166,13 @@ const ru: Strings = {
   cancelled: "отменено",
   edited: "тело отредактировано",
   unchanged: "без изменений",
+  discussion: "дискуссия",
+  assessment: "оценка",
+  systemNote: "системное",
+  noPublication: "Публикация не предлагается. Выше показаны проверенная дискуссия и обоснование.",
+  readOnly: "только чтение · ↑/↓ прокрутка · ←/→ пункт · o браузер · esc назад",
+  readOnlyShort: "без действий",
+  scroll: "строки",
 };
 
 export function stringsFor(locale: string | null | undefined): Strings {

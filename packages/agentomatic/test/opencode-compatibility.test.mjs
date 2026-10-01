@@ -58,6 +58,88 @@ test("V2 route uses host IDs, applies schema defaults, and enforces one-use rece
   );
 });
 
+test("native ordinary subagents work without optional specialist profiles or routing reports", async () => {
+  const { context, hooks } = host("/project", {}, [
+    { id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }] },
+  ]);
+  await core.setup(context);
+  const identity = { sessionID: "ses_primary", system: [] };
+  await hooks.context(identity);
+  await hooks.context(identity);
+  assert.equal(identity.system.length, 1);
+  assert.match(identity.system[0].text, /ses_primary/);
+  const child = { sessionID: "ses_child", system: [] };
+  await hooks.context(child);
+  assert.match(child.system[0].text, /ses_child/);
+  for (const input of [{ agent: "build" }, { agent: "general" }, { agent: "explore" }, {}]) {
+    await hooks["execute.before"]({ tool: "subagent", sessionID: "plain", input });
+    await hooks["execute.after"]({
+      tool: "subagent",
+      sessionID: "plain",
+      input,
+      status: "completed",
+      result: { content: "ordinary subagent text" },
+    });
+  }
+  await assert.rejects(
+    hooks["execute.before"]({ tool: "subagent", sessionID: "plain", input: { agent: "worker" } }),
+    /routing receipt/,
+  );
+  await assert.rejects(
+    hooks["execute.before"]({
+      tool: "subagent",
+      sessionID: "plain",
+      input: { agent: "critic-custom" },
+    }),
+    /routing receipt/,
+  );
+});
+
+test("parallel routed critics retain separate calls and accept code-review receipt envelopes", async () => {
+  const agents = ["review", "critic"].map((id) => ({
+    id,
+    permissions: [{ action: "*", resource: "*", effect: "allow" }],
+  }));
+  const { context, hooks, tools } = host("/project", {}, agents);
+  await core.setup(context);
+  const route = tools.get("route");
+  for (const task of ["Independent check A", "Independent check B"]) {
+    const input = route.input.parse({ action: "preview", category: "review", task });
+    const decision = JSON.parse((await route.execute(input, { sessionID: "parent" })).content);
+    await route.execute({ ...input, action: "dispatch", decision }, { sessionID: "parent" });
+  }
+  const first = { tool: "subagent", sessionID: "parent", id: "call-a", input: { agent: "review" } };
+  const second = { ...first, id: "call-b" };
+  await hooks["execute.before"](first);
+  await hooks["execute.before"](second);
+  const receipt = {
+    schema: "portable-gitlab/critic-receipt/v2",
+    evidence_digest: "a".repeat(64),
+    run_id: "run",
+    session_id: "child",
+    findings: [],
+    external_mutations: false,
+  };
+  await hooks["execute.after"]({
+    ...second,
+    status: "completed",
+    result: { content: JSON.stringify({ ...receipt, run_id: "run-b", session_id: "child-b" }) },
+  });
+  const clock = Date.now;
+  try {
+    const now = clock();
+    Date.now = () => now + 20 * 60 * 1000;
+    await hooks["execute.after"]({
+      ...first,
+      status: "completed",
+      result: { content: JSON.stringify(receipt) },
+    });
+  } finally {
+    Date.now = clock;
+  }
+  await assert.rejects(hooks["execute.before"]({ ...first, id: "replay" }), /routing receipt/);
+});
+
 test("V2 RTK compresses text and preserves files, output, metadata, and failures", async () => {
   const { context, hooks } = host("/project", { statsPath: null, run: async () => "compressed" });
   await rtk.setup(context);
