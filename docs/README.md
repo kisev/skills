@@ -19,6 +19,9 @@ make that boundary explicit.
 
 - [Use Taskmatic](how-to/taskmatic.md) - create the first card, view the board, and connect an agent.
 
+- [Run local Mattermost](../apps/mattermost-test/README.md) - initialize the persistent
+  test environment and run automated reader, publication, triage and browser checks.
+
 - [Manage portable skills](how-to/portable-skills.md) - install by scope or host,
   update, rebind an older source, clean up retired names, and troubleshoot.
 

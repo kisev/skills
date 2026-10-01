@@ -916,6 +916,24 @@ class MattermostTests(unittest.TestCase):
                 with self.assertRaises(MODULE.AuthorizationRequired):
                     MODULE.read_token("https://chat.example.com")
 
+    def test_null_reactions_are_a_complete_empty_list(self):
+        post_id = "p" * 26
+        client = FakeClient({f"/posts/{post_id}/reactions": None})
+        posts, complete, errors = MODULE.read_reactions(client, [{"id": post_id}])
+        self.assertTrue(complete)
+        self.assertEqual([], errors)
+        self.assertEqual([], posts[0]["reactions"])
+
+    def test_members_cli_does_not_access_read_only_cache_flags(self):
+        with (
+            mock.patch.object(MODULE, "collect_members", return_value={"status": "ok"}) as collect,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(
+                0, MODULE.main(["members", "https://chat.example.com/team/channels/dev"])
+            )
+        collect.assert_called_once()
+
     def test_auth_validates_browser_token_before_save(self):
         events = []
         client = FakeClient({"/users/me": {"id": USER_ID}})

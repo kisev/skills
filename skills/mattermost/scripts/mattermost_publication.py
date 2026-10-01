@@ -109,8 +109,19 @@ def load_action(path_value: str, confirmation: str) -> tuple[dict[str, Any], Pat
         "created_at",
         "expires_at",
     }
-    if set(action) != required or action.get("schema_version") != 1:
+    if action.get("schema_version") == 2:
+        required.update({"card", "attachment"})
+    if set(action) != required or action.get("schema_version") not in (1, 2):
         raise PublicationError("action schema is invalid")
+    if "card" in action:
+        try:
+            rendered = mm.publication_card(action["card"])
+        except mm.MattermostError as exc:
+            raise PublicationError(str(exc)) from exc
+        if rendered != action["attachment"]:
+            raise PublicationError("card renderer changed; prepare a new publication plan")
+        if action["root_id"] or action["files"]:
+            raise PublicationError("card actions must be standalone thread roots without files")
     try:
         root = mm.publication_state_root(action["origin"], action["user_id"], create=False)
     except (KeyError, TypeError, mm.MattermostError) as exc:
@@ -159,7 +170,9 @@ def validate_sources(action: dict[str, Any]) -> tuple[str, list[dict[str, object
         if metadata != expected:
             raise PublicationError("publication source file changed after preparation")
         observed.append(metadata)
-    if not body and not observed:
+    if "card" in action and body:
+        raise PublicationError("card action must have an empty message body")
+    if not body and not observed and "card" not in action:
         raise PublicationError("empty publication has no files")
     return body, observed
 
@@ -327,13 +340,33 @@ def ledger_state(root: Path, digest: str) -> tuple[Path, dict[str, Any], dict[st
 
 
 def expected_post(action: dict[str, Any], body: str, file_ids: list[str]) -> dict[str, object]:
+    props: dict[str, object] = {"agent_skill_publication_id": action["publication_id"]}
+    if "card" in action:
+        props["attachments"] = [action["attachment"]]
     return {
         "channel_id": action["channel_id"],
         "message": body,
         "root_id": action["root_id"],
         "file_ids": file_ids,
-        "props": {"agent_skill_publication_id": action["publication_id"]},
+        "props": props,
     }
+
+
+def attachments_match(actual: object, expected: object) -> bool:
+    """Allow server-added empty defaults, never changed or extra visible content."""
+    if isinstance(expected, list):
+        return (
+            isinstance(actual, list)
+            and len(actual) == len(expected)
+            and all(attachments_match(a, e) for a, e in zip(actual, expected, strict=True))
+        )
+    if isinstance(expected, dict):
+        return (
+            isinstance(actual, dict)
+            and all(attachments_match(actual.get(k), v) for k, v in expected.items())
+            and all(v in (None, "", False, [], {}) for k, v in actual.items() if k not in expected)
+        )
+    return type(actual) is type(expected) and actual == expected
 
 
 def post_matches(value: object, expected: dict[str, object]) -> bool:
@@ -350,6 +383,7 @@ def post_matches(value: object, expected: dict[str, object]) -> bool:
         and isinstance(expected_props, dict)
         and props.get("agent_skill_publication_id")
         == expected_props.get("agent_skill_publication_id")
+        and attachments_match(props.get("attachments", []), expected_props.get("attachments", []))
     )
 
 

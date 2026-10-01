@@ -1,0 +1,9 @@
+{
+	auto_https disable_redirects
+	skip_install_trust
+}
+
+https://localhost {
+	tls internal
+	reverse_proxy mattermost:8065
+}

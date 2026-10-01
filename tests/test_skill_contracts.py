@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 import subprocess
 from pathlib import Path
@@ -419,6 +420,37 @@ def test_all_english_canonical_skill_material_is_cyrillic_free() -> None:
             lines = text.splitlines()
             del lines[placeholder_assignment.lineno - 1 : placeholder_assignment.end_lineno]
             text = "\n".join(lines)
+        # Card publication explicitly supports English and Russian at runtime.
+        # Permit localized string data, but keep comments and other source prose
+        # under the English-only contract. Do not exempt entire source files.
+        if relative in {
+            "skills/mattermost/scripts/mattermost.py",
+            "skills/mattermost/scripts/mattermost_cards.py",
+            "skills/mattermost/tests/test_mattermost_publication.py",
+        }:
+            tree = ast.parse(text)
+            prose = {
+                id(node.value)
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+            }
+            localized = {
+                segment
+                for node in ast.walk(tree)
+                if isinstance(node, (ast.Constant, ast.JoinedStr))
+                and id(node) not in prose
+                and (segment := ast.get_source_segment(text, node))
+                and cyrillic.search(segment)
+            }
+            for segment in sorted(localized, key=len, reverse=True):
+                text = text.replace(segment, repr("localized card text"))
+        if relative == "skills/mattermost/references/cards.md":
+            # Only valid Russian JSON examples may contain translated prose.
+            def localized_example(match: re.Match[str]) -> str:
+                example = json.loads(match.group(1))
+                return "" if example.get("locale") == "ru" else match.group(0)
+
+            text = re.sub(r"```json\n(.*?)\n```", localized_example, text, flags=re.S)
         assert not cyrillic.search(text), path
 
 

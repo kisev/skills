@@ -18,6 +18,10 @@ By default, collection selects the 20 freshest direct or group channels by
 `last_post_at`. Change this with `--limit`; add exact same-origin Mattermost URLs
 with repeated `--target`. Extra targets may identify a channel, direct chat,
 group chat, or post permalink. They never broaden into search.
+Channel pagination uses `before` cursors and filters creation timestamps locally;
+Mattermost's `since` endpoint does not honor ordinary page pagination. Repeated
+cursors stop collection as partial evidence. A JSON `null` reaction list means
+no reactions, not an unavailable endpoint.
 
 The runner lists the authenticated user's teams, reads each canonical
 `/users/{id}/teams/{team_id}/channels` endpoint independently, and deduplicates

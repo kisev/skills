@@ -230,3 +230,29 @@ its mode, while module import and read-only commands remain portable.
 `tests/test_team_workflow.py` and the profile transaction regression tests inject
 write, fsync, report, and recovery failures and check preserved bytes, exact
 receipts, rollback, legacy journals, and rejection of unsafe backup or lock paths.
+
+### REQ-F-547 - Automate a persistent local Mattermost test environment
+
+The repository shall provide an opt-in local Mattermost environment with automatic,
+idempotent fixture and credential initialization. Normal runs shall preserve
+server data, local skill state, and the separate free zone for manual experiments.
+Automated tests may execute publication helpers only against owned local fixtures;
+ordinary skill publication remains manual.
+
+The deterministic level shall check the Mattermost reader, publication and triage
+runtimes through real APIs, CLI and browser assertions, supplemented by controlled
+fault tests. A separate live level shall reuse the repository's host adapters,
+require explicit model and budgets, and verify real skill artifacts. Missing
+usage or cost evidence shall not count as a successful live budget check.
+
+An explicit digest-confirmed reset shall bind the selected project's resources,
+remove its server and local state including the free zone, retain reports, and
+initialize again. Normal test failures shall never trigger a reset. Reports shall
+distinguish observed results from unverified scenarios and preserve failure evidence.
+
+#### Verification
+
+Run the deterministic suite twice with stable fixture identities and unchanged
+free-zone content. Exercise reset on a separately owned disposable project and
+verify that the primary project and reports survive. Live tests require actual
+configured host/model execution; no hostless result substitutes for them.

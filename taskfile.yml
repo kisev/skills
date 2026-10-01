@@ -3,7 +3,63 @@ version: "3"
 
 set: [pipefail, errexit, nounset]
 
+vars:
+  COMPOSE: docker-compose
+
 tasks:
+  mattermost:init:
+    desc: Initialize or reconcile the persistent local Mattermost fixtures
+    cmds:
+      - mise exec -- python apps/mattermost-test/scripts/stand.py init --compose '{{.COMPOSE}}'
+
+  mattermost:test:
+    desc: Run Mattermost contracts and real API/browser tests without manual setup
+    cmds:
+      - task: build:skills
+      - mise exec -- python apps/mattermost-test/scripts/stand.py test --compose '{{.COMPOSE}}'
+
+  mattermost:live:
+    desc: Run the local stand checks plus explicitly configured real-agent evaluation
+    cmds:
+      - task: build:skills
+      - mise exec -- python apps/mattermost-test/scripts/stand.py live --compose '{{.COMPOSE}}'
+
+  mattermost:reset:
+    desc: Preview full test-state reset or apply with the matching MM_RESET_CONFIRM digest
+    cmds:
+      - mise exec -- python apps/mattermost-test/scripts/stand.py reset --compose '{{.COMPOSE}}'
+
+  mattermost:test-reset:
+    desc: Verify reset isolation and reinitialization on a separate disposable project
+    cmds:
+      - mise exec -- python apps/mattermost-test/scripts/stand.py reset-test --compose '{{.COMPOSE}}'
+
+  mattermost:config:
+    desc: Validate the optional local Mattermost test stack
+    cmds:
+      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml config --quiet'
+
+  mattermost:up:
+    desc: Start local Mattermost, PostgreSQL and HTTPS proxy for manual card tests
+    cmds:
+      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml up -d --wait --wait-timeout 240'
+
+  mattermost:down:
+    desc: Stop the local Mattermost test stack while retaining test data
+    cmds:
+      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml down'
+
+  mattermost:logs:
+    desc: Show recent local Mattermost test stack logs
+    cmds:
+      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml logs --tail=100'
+
+  mattermost:ca:
+    desc: Export the local test CA certificate without installing system trust
+    cmds:
+      - mkdir -p .build/mattermost-test
+      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml cp proxy:/data/caddy/pki/authorities/local/root.crt .build/mattermost-test/root.crt'
+
   default:
     desc: Show all tasks
     cmds:
@@ -358,7 +414,7 @@ tasks:
     desc: Scan the repository for committed secrets
     cmds:
       - mise exec -- gitleaks git --config .gitleaks.toml --redact --no-banner
-      - mise exec -- gitleaks dir . --config .gitleaks.toml --redact --no-banner
+      - mise exec -- uv run --locked python scripts/check_worktree_secrets.py
 
   check:core:
     desc: Run the always-on core shared by every push gate

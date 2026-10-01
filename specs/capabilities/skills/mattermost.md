@@ -24,7 +24,8 @@ from the order of the channel name. Publication preparation
 accepts JSON stdin with `messages[{target,message,files}]`: exact HTTPS targets on
 one origin and zero to five absolute regular source files per message, each at
 most 100 MiB. Output is redacted read evidence or a stable private XDG manual
-publication plan.
+publication plan. An explicitly selected `card` extends a publication item for
+one standalone Issue/MR thread root; see REQ-F-546 below.
 
 ## Workflow Stages
 
@@ -133,6 +134,41 @@ shall remain unverified rather than being inferred from ID prefixes.
 
 Direct-chat tests verify both sides, unknown authors, and malformed channel
 names without broad participant enumeration or extra-origin requests.
+
+### REQ-F-546 - Prepare opt-in bilingual discussion cards
+
+When explicitly selected by a user or an applicable project/process instruction,
+the skill shall prepare a standard Issue, standard MR, or custom Issue/MR card
+as one new discussion root using legacy Mattermost attachments. A link alone
+shall not enable the mode. Card preparation shall preserve ordinary message/file
+publication compatibility and the manual-only publication boundary of REQ-F-113.
+
+Standard cards shall expose a linked title, evidence-based summary, state,
+author, assignee, milestone, and labels; MR cards also expose pipeline status and
+approval counts. Unknown data and confirmed absence shall remain distinct.
+An agent may select important labels and explicitly count the omitted labels.
+Custom cards shall permit ordered bounded fields without arbitrary post props.
+English and Russian captions, absence markers, omitted counts, and validation
+diagnostics shall be supported while source names remain unchanged.
+
+Over-budget cards shall fail preparation with actionable diagnostics, never
+silent truncation or automatic fallback to ordinary messages. The portable
+card guide and validator own the concrete input and authoring budget. Layout
+estimates shall not be presented as proof of visibility on an untested client.
+
+Card actions use schema version 2; ordinary version-1 actions remain supported.
+The confirmation digest covers card inputs and the frozen rendered attachment;
+renderer drift requires a new plan. Recovery compares the full
+rendered attachment, allowing only empty server-added defaults, and never treats
+a matching publication ID with different content as successful publication.
+
+#### Verification
+
+Card and publication tests exercise both templates and locales, custom fields,
+budgets, invalid types, ordinary-message compatibility, tampered card actions,
+and recovery from an ambiguous POST. Visual acceptance requires actual target
+client evidence in channel and narrow thread views; mocked APIs do not establish
+absence of the Show More control.
 
 ## Example
 

@@ -12,6 +12,27 @@ section: `requires` marks a shared credential or workflow, `uses` marks a
 composed contract, and `recommends` marks a natural companion. Relations are
 install recommendations only; every archive works on its own.
 
+## Mattermost discussion cards
+
+Ask explicitly for an Issue/MR card to open a discussion thread, or select this
+mode in the project's `AGENTS.md`. Ordinary messages containing GitLab links
+keep their existing format. The skill prepares a manual publication command;
+you run it yourself with the existing origin-bound Mattermost credentials.
+
+Standard Issue and MR templates include metadata and a short summary. Custom
+cards let an agent choose fields and their order. Both English and Russian are
+supported; names from GitLab stay unchanged. Important labels can be shown with
+an explicit omitted count. Oversized cards are rejected with an explanation,
+so the agent can shorten them before preparing a new command.
+
+See the portable [card guide](../../skills/mattermost/references/cards.md) for the
+input contract, examples, and limits, and the
+[publication workflow](../../skills/mattermost/references/workflow.md#publication)
+for authentication and recovery. Cards use legacy attachments without requiring
+a GitLab plugin. Compactness limits are estimates; verify rendering in your
+Mattermost client, especially a narrow thread panel. Automatic posting and cron
+are not included.
+
 ## Active Skills
 
 | Skill | Purpose |
@@ -26,7 +47,7 @@ install recommendations only; every archive works on its own.
 | `docs-review` | Review user documentation for accuracy and usability. |
 | `goal` | Produce a read-only structured Markdown goal of at most 4000 characters. |
 | `humanize` | Edit technical prose into direct, natural language. |
-| `mattermost` | Read and analyze a bounded Mattermost post, thread, channel, or chat. |
+| `mattermost` | Read bounded Mattermost conversations and prepare manual publications, including opt-in Issue/MR cards. |
 | `mattermost-triage` | Find Mattermost conversations that need attention and prepare durable manual response plans. |
 | `mr-prepare` | Prepare metadata and a local publication plan for a GitLab MR. |
 | `release-prepare` | Prepare a release MR, inventory, announcement, and publication plan. |

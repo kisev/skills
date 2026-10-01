@@ -511,5 +511,33 @@ class MattermostTriageTests(unittest.TestCase):
             TRIAGE.normalized_origin("http://chat.example.com")
 
 
+class RealServerShapeTests(unittest.TestCase):
+    def test_null_reactions_are_empty(self):
+        client = mock.Mock()
+        client.get.return_value = None
+        value = {"id": ROOT_ID}
+        TRIAGE.add_reactions(client, value)
+        self.assertEqual([], value["reactions"])
+
+    def test_channel_window_uses_before_not_since_pagination(self):
+        client = mock.Mock()
+        client.get.side_effect = [
+            page(post(ROOT_ID, "new", 200), post(REPLY_ID, "middle", 100)),
+            page(post(PUBLISHED_ID, "old", 50)),
+        ]
+        with mock.patch.object(TRIAGE, "PAGE_SIZE", 2):
+            result = TRIAGE.channel_window(client, CHANNEL_ID, 50, 200)
+        self.assertEqual([PUBLISHED_ID, REPLY_ID], [item["id"] for item in result])
+        self.assertNotIn("since=", client.get.call_args_list[0].args[0])
+        self.assertIn("before=" + REPLY_ID, client.get.call_args_list[1].args[0])
+
+    def test_channel_window_repeated_cursor_stops(self):
+        client = mock.Mock()
+        client.get.return_value = page(post(ROOT_ID, "new", 200))
+        with mock.patch.object(TRIAGE, "PAGE_SIZE", 1):
+            with self.assertRaisesRegex(TRIAGE.TriageError, "repeated a cursor"):
+                TRIAGE.channel_window(client, CHANNEL_ID, 0, 300)
+
+
 if __name__ == "__main__":
     unittest.main()

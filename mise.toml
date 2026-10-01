@@ -35,6 +35,7 @@ min_version = "2026.9.11"
   "glab" = "1.120.0"
   "npm:@commitlint/cli" = "21.2.3"
   "npm:@opencode/cli" = { version = "2.0.19", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
+  "npm:agent-browser" = "0.38.1"
   "npm:markdownlint-cli2" = "0.23.3"
   "npm:oxfmt" = "0.70.0"
   "npm:oxlint" = "1.85.0"
