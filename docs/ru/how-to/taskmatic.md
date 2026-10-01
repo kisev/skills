@@ -14,8 +14,21 @@ review: {"components": ["taskmatic"], "sources": ["skills/taskmatic/references/*
 dev-канал или выберите стабильную версию, когда появится стабильный релиз:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/taskmatic@dev version
+
+# Install
 npm install --global @kisev/taskmatic@dev
+
+# Installed package and active CLI
+npm list --global @kisev/taskmatic --depth=0
 taskmatic --version
+```
+
+Тег может сдвинуться между просмотром и установкой. Последние команды проверяют
+установленный пакет и CLI из PATH. Затем создайте базу:
+
+```shell
 taskmatic add "Check the first board" --board main
 taskmatic list --board main
 ```

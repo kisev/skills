@@ -15,11 +15,22 @@ distribution rather than the authored repository.
 
 ## 1. Install the Skills
 
-Run:
+Preview the installer version, then install:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --global
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
+
+The npm tag can move between preview and installation. npx does not install a
+global CLI; `skills list` checks local skills, not the installer version or the
+Pages release version.
 
 The installer opens a skill picker with every skill preselected; deselect what
 you do not need. Inside an agent session the command runs non-interactively and

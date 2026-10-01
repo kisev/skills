@@ -10,8 +10,20 @@
 ## Установка
 
 ```bash
+# Registry version
+npm view --prefer-online @kisev/reviewmatic@latest version
+
+# Install
 npm install --global @kisev/reviewmatic
+
+# Installed package and active CLI
+npm list --global @kisev/reviewmatic --depth=0
+reviewmatic --version
 ```
+
+Тег может сдвинуться между просмотром и установкой; последние команды показывают
+установленный пакет и CLI из PATH. Для `@dev` измените и команду просмотра,
+и команду установки.
 
 Нужны Node.js 22.13+ и аутентифицированный для вашего GitLab CLI `glab`.
 Для dev-дистрибутива скилла установите `@kisev/reviewmatic@dev`, а не стабильный

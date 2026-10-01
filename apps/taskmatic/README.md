@@ -6,7 +6,21 @@ Local-first tasks for people and agents: one TypeScript/Node.js application for
 CLI, MCP, Markdown exports and a live read-only web board. Requires Node.js 22.13+.
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/taskmatic@dev version
+
+# Install
 npm install --global @kisev/taskmatic@dev
+
+# Installed package and active CLI
+npm list --global @kisev/taskmatic --depth=0
+taskmatic --version
+```
+
+The tag can move between preview and installation. The last commands show the
+installed package and the CLI resolved from PATH. Then create and use a board:
+
+```shell
 taskmatic add "Check the first board"
 taskmatic list
 taskmatic mcp

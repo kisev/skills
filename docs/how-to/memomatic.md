@@ -12,12 +12,34 @@ review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/
 Use Node.js 22.13+ and npm. For a CLI available outside an npm project:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install
 npm install --global @kisev/memomatic
+
+# Installed package and active CLI
+npm list --global @kisev/memomatic --depth=0
 memomatic --version
 ```
 
-For a project-local installation use `npm install @kisev/memomatic` and invoke
-the CLI as `npx memomatic`. The systemd example below expects a global binary.
+Tags can move between preview and installation. `npm list` checks the package;
+`--version` checks the CLI resolved from PATH. For a project-local installation:
+
+```shell
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install in this npm project
+npm install @kisev/memomatic
+
+# Installed dependency and local CLI (no npx download)
+npm list @kisev/memomatic --depth=0
+./node_modules/.bin/memomatic --version
+```
+
+Invoke the project CLI as `npx memomatic`. The systemd example below expects a
+global binary. npx itself does not install a global CLI.
 
 Connect `memomatic mcp-serve` as a local stdio MCP server in each host. OpenCode,
 Kilo, and MiMo use this fragment in their respective JSON configuration:
@@ -49,8 +71,18 @@ its initial registry tag can still point to a prerelease. Use explicit `@dev`
 for development installations:
 
 ```shell
+# Registry versions
+npm view --prefer-online @kisev/memomatic@dev version
+npm view --prefer-online @kisev/agentomatic@dev version
+
+# Install and confirm the OpenCode setup
 npm install --global @kisev/memomatic@dev
 npx --yes @kisev/agentomatic@dev install --global
+
+# Installed packages and active memory CLI
+npm list --global @kisev/memomatic --depth=0
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
+memomatic --version
 ```
 
 Updating agentomatic alone does not update the memomatic CLI or MCP server.

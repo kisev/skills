@@ -31,6 +31,10 @@ export const ui = {
       lead: "The installer opens a picker with every skill preselected; pass `--skill <name>` to stay selective. Rerun the same command to update.",
       latest: "Everything on latest",
       dev: "Everything on dev",
+      verificationNote:
+        "npm view previews a registry version; tags can move before installation. npx does not install a global CLI. skills@latest is the installer version, not the Pages release; skills list checks the skills actually installed.",
+      ownershipNote:
+        "After confirming the OpenCode setup, npm list checks agentomatic in its owning npm project, not npm's global CLI prefix. Restart OpenCode after installation or updates.",
     },
     components: {
       title: "Project components",
@@ -108,6 +112,10 @@ export const ui = {
       lead: "Установщик открывает picker со всеми скиллами; флаг `--skill <name>` выбирает точечно. Повторный запуск обновляет установку.",
       latest: "Всё из канала latest",
       dev: "Всё из канала dev",
+      verificationNote:
+        "npm view показывает версию в реестре; теги могут сдвинуться до установки. npx не устанавливает CLI глобально. skills@latest - версия установщика, а не выпуска Pages; skills list проверяет реально установленные навыки.",
+      ownershipNote:
+        "После подтверждения настройки OpenCode команда npm list проверяет agentomatic во владеющем npm-проекте, а не среди глобальных CLI npm. Перезапустите OpenCode после установки или обновления.",
     },
     components: {
       title: "Компоненты проекта",

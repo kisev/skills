@@ -12,12 +12,34 @@ review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/
 Нужны Node.js 22.13+ и npm. Для CLI, доступного за пределами npm-проекта:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install
 npm install --global @kisev/memomatic
+
+# Installed package and active CLI
+npm list --global @kisev/memomatic --depth=0
 memomatic --version
 ```
 
-Для локальной установки используйте `npm install @kisev/memomatic` и вызывайте
-CLI через `npx memomatic`. Пример systemd ниже рассчитан на глобальный бинарник.
+Теги могут сдвинуться между просмотром и установкой. `npm list` проверяет пакет,
+`--version` - CLI из PATH. Для установки в проект:
+
+```shell
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install in this npm project
+npm install @kisev/memomatic
+
+# Installed dependency and local CLI (no npx download)
+npm list @kisev/memomatic --depth=0
+./node_modules/.bin/memomatic --version
+```
+
+Вызывайте CLI проекта через `npx memomatic`. Пример systemd ниже рассчитан на
+глобальный бинарник. Сам npx не устанавливает CLI глобально.
 
 Подключите `memomatic mcp-serve` как локальный MCP-сервер stdio в каждом хосте.
 В JSON-конфигурации OpenCode, Kilo и MiMo используется такой фрагмент:
@@ -50,8 +72,18 @@ memomatic и не зависит от него.
 явно указывайте `@dev`:
 
 ```shell
+# Registry versions
+npm view --prefer-online @kisev/memomatic@dev version
+npm view --prefer-online @kisev/agentomatic@dev version
+
+# Install and confirm the OpenCode setup
 npm install --global @kisev/memomatic@dev
 npx --yes @kisev/agentomatic@dev install --global
+
+# Installed packages and active memory CLI
+npm list --global @kisev/memomatic --depth=0
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
+memomatic --version
 ```
 
 Обновление agentomatic не обновляет CLI и MCP-сервер memomatic.

@@ -2,8 +2,7 @@
 
 [English](README.md)
 
-Переносимые навыки для агентов Codex и OpenCode, а также `agentomatic` -
-полноценная интеграция с OpenCode; компоненты независимы и используются по отдельности.
+Переносимые навыки для Codex и OpenCode и независимая интеграция `agentomatic` для OpenCode. Используйте любой компонент отдельно или оба вместе.
 
 ## Компоненты проекта
 
@@ -12,75 +11,78 @@
 | Portable Agent Skills | 38 автономных сценариев для разработки, документации, выпуска и командной работы | Стабильный CLI `skills@latest` устанавливает их в `~/.agents/skills` или `.agents/skills` |
 | `@kisev/agentomatic` | Команды OpenCode, агенты с фиксированными ролями, средства маршрутизации, диагностика и необязательные обёртки плагинов | Устанавливается как зависимость npm; управляемые файлы находятся в `~/.config/opencode` или `.opencode` |
 
-Переносимые навыки не требуют npm-пакета. Пакет не содержит, не устанавливает и
-не обновляет, не проверяет и не удаляет их. Их жизненным циклом управляет CLI
-`skills`.
+CLI `skills` управляет переносимыми навыками; npm-интеграция не содержит, не устанавливает, не обновляет, не проверяет и не удаляет их.
 
 ## Установка всего
 
-Полная настройка: переносимые навыки, `agentomatic` и приложения
-[memomatic](docs/ru/how-to/memomatic.md) (память агента) и
-[taskmatic](docs/ru/how-to/taskmatic.md) (доска задач); обновление — те же
-команды. `install`/`config` подтверждаются в терминале или флагом `--yes`;
-до стабильного релиза `latest` — пререлиз; перезапустите OpenCode и MCP-хосты.
+Установите переносимые навыки, `agentomatic`, [memomatic](docs/ru/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.ru.md) и [taskmatic](docs/ru/how-to/taskmatic.md); обновление - те же команды.
+`install` и `config` требуют подтверждения в терминале или явного выбора компонентов с `--yes`. До первого стабильного релиза пакета `latest` может быть пререлизом.
+После обновления перезапустите OpenCode, остальные работающие MCP-хосты и веб-сервис taskmatic.
 
 Всё на канале `latest`:
 
 ```shell
+# Registry versions
+npm view --prefer-online skills@latest version
+npm view --prefer-online @kisev/agentomatic@latest version
+npm view --prefer-online @kisev/memomatic@latest version
+npm view --prefer-online @kisev/reviewmatic@latest version
+npm view --prefer-online @kisev/taskmatic@latest version
+
+# Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills --global
 npx --yes @kisev/agentomatic@latest install --global
 npx --yes @kisev/agentomatic@latest config --global
 npm install --global @kisev/memomatic
 npm install --global @kisev/reviewmatic
 npm install --global @kisev/taskmatic
+
+# Local installation and active CLIs
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
+npm list --global @kisev/memomatic @kisev/reviewmatic @kisev/taskmatic --depth=0
+memomatic --version
+reviewmatic --version
+taskmatic --version
+npx --yes skills@latest list --global
 ```
 
 Всё на канале `dev` (движется после каждого успешного push в `dev`):
 
 ```shell
+# Registry versions
+npm view --prefer-online skills@latest version
+npm view --prefer-online @kisev/agentomatic@dev version
+npm view --prefer-online @kisev/memomatic@dev version
+npm view --prefer-online @kisev/reviewmatic@dev version
+npm view --prefer-online @kisev/taskmatic@dev version
+
+# Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
 npx --yes @kisev/agentomatic@dev install --global
 npx --yes @kisev/agentomatic@dev config --global
 npm install --global @kisev/memomatic@dev
 npm install --global @kisev/reviewmatic@dev
 npm install --global @kisev/taskmatic@dev
+
+# Local installation and active CLIs
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
+npm list --global @kisev/memomatic @kisev/reviewmatic @kisev/taskmatic --depth=0
+memomatic --version
+reviewmatic --version
+taskmatic --version
+npx --yes skills@latest list --global
 ```
 
-## Переносимые навыки
+Теги могут сдвинуться между просмотром и установкой. `npm list` проверяет
+установленные пакеты, `--version` - CLI из PATH. npx не устанавливает CLI
+глобально; `skills list` показывает локальные навыки, а не версию npm-установщика.
 
-По умолчанию навыки ставятся для всех сред, читающих `.agents/skills`,
-включая Codex и OpenCode; установщик открывает список с предвыбранными
-позициями, снимите лишнее или передайте `--skill <name>`. Начните с
-[пошаговой установки](docs/ru/tutorials/getting-started.md), используйте
-[инструкцию по переносимым навыкам](docs/ru/how-to/portable-skills.md) для
-установки в проект, обновления и очистки или откройте
-[каталог навыков](docs/ru/reference/skill-catalog.md).
+## Руководства
 
-## agentomatic
-
-`@kisev/agentomatic` добавляет в OpenCode:
-
-- адаптеры слеш-команд для установленных навыков;
-- шесть агентов с фиксированными ролями и управление профилями;
-- маршрутизацию по возможностям и прямой CLI для установки, диагностики,
-  профилей и сверки;
-- необязательные обёртки плагинов `rules-injector` и `zed-bell`, а также
-  обёртка сжатия `rtk`, включённая по умолчанию и наблюдаемая через
-  `/rtk-stats`.
-
-Глобальная установка владеет npm-проектом в `~/.config/opencode` и при
-необходимости создаёт там `package.json`; для области проекта запустите
-установщик из корня проекта без `--global`. Подтверждённая установка также
-прописывает постоянную npm-зависимость, через которую резолвится плагин.
-Перезапустите OpenCode после активации и следуйте полной
-[инструкции по интеграции OpenCode](docs/ru/how-to/opencode-integration.md).
-
-## Документация
-
-[Индекс документации](docs/ru/README.md) организует учебные материалы,
-практические инструкции, справочник и поясняющие материалы по Diataxis.
-[Сайт документации](https://kisev.github.io/skills) показывает каталог скиллов,
-примеры взаимодействия и инструкции установки (`apps/docs-site`).
+- [Переносимые навыки](docs/ru/how-to/portable-skills.md): установка в проект, обновление, очистка и диагностика. По умолчанию выбраны все среды `.agents/skills` и все навыки в списке; `--skill <name>` ограничивает выбор. См. [учебное руководство](docs/ru/tutorials/getting-started.md) и [каталог](docs/ru/reference/skill-catalog.md).
+- [Интеграция OpenCode](docs/ru/how-to/opencode-integration.md): адаптеры команд, шесть ролей агентов, маршрутизация, диагностика, профили, сверка, необязательные `rules-injector`/`zed-bell` и стандартный `rtk` с `/rtk-stats`.
+  Подтверждённая глобальная установка прописывает зависимость в `~/.config/opencode`, создавая `package.json` при необходимости; для области проекта запускайте из его корня без `--global`. Перезапустите OpenCode после активации или изменения компонентов.
+- [Индекс документации](docs/ru/README.md): учебные материалы, практические инструкции, справочник и пояснения по Diataxis. [Сайт](https://kisev.github.io/skills) добавляет примеры работы скиллов и инструкции установки (`apps/docs-site`).
 
 ## Разработка
 
@@ -90,10 +92,4 @@ task install
 task check
 ```
 
-Дополнительные сведения:
-
-- [CONTRIBUTING.ru.md](CONTRIBUTING.ru.md) - правила работы с исходным кодом и
-  проверки для отдельных изменений.
-- [SECURITY.ru.md](SECURITY.ru.md) - порядок сообщения об уязвимостях.
-- [CHANGELOG.ru.md](CHANGELOG.ru.md) - история выпусков.
-- [LICENSE](LICENSE) - условия лицензии.
+[Разработка](CONTRIBUTING.ru.md) · [Безопасность](SECURITY.ru.md) · [История выпусков](CHANGELOG.ru.md) · [Лицензия](LICENSE).

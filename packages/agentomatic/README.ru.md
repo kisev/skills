@@ -73,10 +73,21 @@ Agentomatic не зависит от memomatic. См. [настройку MCP и
 области); подтверждённая установка также пропишет постоянную npm-зависимость:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install
+
+# Installed dependency in the owning npm project
+npm list @kisev/agentomatic --depth=0
 ```
 
-Укажите `@kisev/agentomatic@dev`, чтобы запустить dev-снимок.
+Для dev-снимка укажите `@kisev/agentomatic@dev` и в просмотре, и в командах npx.
+Теги могут сдвинуться между просмотром и установкой. npx не устанавливает CLI
+глобально, а dry run не прописывает зависимость. После подтверждённой глобальной
+установки проверьте `npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0`.
 
 Подтверждённая установка закрепляет исполняемую версию в ближайшем npm-проекте;
 глобальная установка владеет `~/.config/opencode` и при необходимости создаёт
@@ -84,8 +95,8 @@ npx --yes @kisev/agentomatic@latest install --dry-run
 `npm install --save-exact @kisev/agentomatic`, затем запустить
 `npx agentomatic install --dry-run` из этого проекта, чтобы версия исполнения
 совпадала с установленным пакетом.
-Примените изменение, повторив команду установки без `--dry-run` и подтвердив
-напечатанную сводку плана, а вне терминала добавьте `--yes`.
+Подтвердите напечатанную сводку плана на шаге установки; вне терминала передайте
+явный выбор компонентов вместе с `--yes`.
 Если выбрана основная интеграция, та же подтверждённая установка добавляет
 `plugins` в пользовательскую конфигурацию OpenCode с сохранением существующих
 записей. Отдельная команда `config` применяет дополнительные фрагменты

@@ -10,8 +10,20 @@ extraction pass, and a nightly `dream` consolidation sweep.
 ## Install
 
 ```bash
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install
 npm install --global @kisev/memomatic
+
+# Installed package and active CLI
+npm list --global @kisev/memomatic --depth=0
+memomatic --version
 ```
+
+Tags can move between preview and installation; the last commands show the
+installed package and the CLI resolved from PATH. Use `@dev` in both the view
+and install commands for the development channel.
 
 The corpus lives under `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`,
 daily notes, `DREAMS.md`); rules live in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.

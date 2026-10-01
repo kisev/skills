@@ -57,6 +57,11 @@ model credentials; dependency provisioning can require registry access.
 
 ## Install
 
+`npm view` previews the registry version; `latest` and `dev` can move before
+installation. npx runs a CLI without installing it globally. After confirming
+an install, use `npm list` in the owning npm project to check the persistent
+dependency; a dry run alone does not install it.
+
 ### Project Scope
 
 Run the installer from the project root; the confirmed install also provisions
@@ -64,7 +69,15 @@ the persistent npm dependency in the nearest npm project:
 
 ```shell
 cd /path/to/project
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install
+
+# Installed dependency in the owning npm project
+npm list @kisev/agentomatic --depth=0
 ```
 
 The package lands in project `node_modules` and confirmed assets go under
@@ -76,7 +89,15 @@ reports a manual dependency follow-up instead of creating files.
 Run the installer from any directory:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --global --dry-run
+npx --yes @kisev/agentomatic@latest install --global
+
+# Installed dependency, not npm's global CLI prefix
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
 ```
 
 The confirmed install owns the npm project at `~/.config/opencode`: it creates
@@ -95,7 +116,15 @@ provisioning step entirely.
 Address the `dev` dist-tag explicitly to pin its prerelease:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@dev version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@dev install --global --dry-run
+npx --yes @kisev/agentomatic@dev install --global
+
+# Installed dependency
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
 ```
 
 Each successful push to `dev` publishes a unique prerelease and moves only the

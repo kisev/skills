@@ -10,8 +10,20 @@ of a finished review plan.
 ## Install
 
 ```bash
+# Registry version
+npm view --prefer-online @kisev/reviewmatic@latest version
+
+# Install
 npm install --global @kisev/reviewmatic
+
+# Installed package and active CLI
+npm list --global @kisev/reviewmatic --depth=0
+reviewmatic --version
 ```
+
+Tags can move between preview and installation; the last commands show the
+installed package and the CLI resolved from PATH. For `@dev`, change both the
+view and install commands.
 
 Requires Node.js 22.13+ and the `glab` CLI authenticated for your GitLab host.
 When using the dev skill distribution, install `@kisev/reviewmatic@dev` rather

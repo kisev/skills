@@ -20,16 +20,34 @@
 
 ## Установка
 
+Посмотрите версию npm-установщика, запустите его, затем выведите реально
+установленные навыки. `skills@latest` - версия CLI, а не дистрибутива Pages.
+Тег может сдвинуться между командами; npx не устанавливает CLI глобально.
+
 Установите навыки глобально:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --global
+
+# Installed skills, not the npm installer
+npx --yes skills@latest list --global
 ```
 
 Установите навыки в текущем проекте:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills
+
+# Installed skills in this project
+npx --yes skills@latest list
 ```
 
 Команда открывает список навыков с предвыбранными всеми позициями; снимите
@@ -58,7 +76,14 @@ URL GitHub Pages - поддерживаемый обновляемый кана�
 Замените стабильный источник на явный источник `/dev`:
 
 ```shell
+# Registry version of the installer (still latest)
+npm view --prefer-online skills@latest version
+
+# Install the dev skill distribution
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
 
 Обновляемый dev-канал публикуется после успешных push в `dev`. Его техническая

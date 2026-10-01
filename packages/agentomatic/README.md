@@ -71,19 +71,30 @@ Run the installer from the repository root (add `--global` for the global
 scope); the confirmed install also provisions the persistent npm dependency:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install
+
+# Installed dependency in the owning npm project
+npm list @kisev/agentomatic --depth=0
 ```
 
-Use `@kisev/agentomatic@dev` to run the development snapshot instead.
+Use `@kisev/agentomatic@dev` in both view and npx commands for the development
+snapshot. Tags can move between preview and installation. npx does not install
+a global CLI, and a dry run does not provision the dependency. For a confirmed
+global install, check `npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0`.
 
 The confirmed install pins the executing version into the nearest npm project;
 global installs own `~/.config/opencode` and create its `package.json` when
 needed. Offline setups can provision the dependency by hand first:
 `npm install --save-exact @kisev/agentomatic`, then run
 `npx agentomatic install --dry-run` from that project so the executing version
-matches the installed package. Apply by rerunning the install command without
-`--dry-run` and confirming the printed plan summary, or by adding `--yes`
-outside a terminal. When core integration is selected, the same confirmed install
+matches the installed package. Confirm the printed plan summary in the install
+step, or pass explicit selections with `--yes` outside a terminal.
+When core integration is selected, the same confirmed install
 merges the `plugins` entry into user-owned OpenCode configuration while preserving
 existing entries. The separate `config` command can apply additional fragments
 or retry a failed configuration step:

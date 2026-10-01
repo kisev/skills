@@ -19,16 +19,34 @@ Omitting `--agent` lets the installer select every host that reads
 
 ## Install
 
+Preview the npm installer version, run it, then list the skills actually
+installed. `skills@latest` is the CLI version, not the Pages distribution
+version. The tag can move between commands; npx does not install a global CLI.
+
 Install skills globally:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --global
+
+# Installed skills, not the npm installer
+npx --yes skills@latest list --global
 ```
 
 Install skills in the current project:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills
+
+# Installed skills in this project
+npx --yes skills@latest list
 ```
 
 The command opens a skill picker with every skill preselected; deselect what you
@@ -55,7 +73,14 @@ repository-local maintainer workflow.
 Replace the stable source with the explicit `/dev` source:
 
 ```shell
+# Registry version of the installer (still latest)
+npm view --prefer-online skills@latest version
+
+# Install the dev skill distribution
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
 
 The moving dev channel updates after successful pushes to `dev`. Its technical

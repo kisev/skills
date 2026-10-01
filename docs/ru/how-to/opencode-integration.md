@@ -59,6 +59,11 @@ dist-tag `latest` в npm и может загрузить другую сбор�
 
 ## Установка
 
+`npm view` показывает версию в реестре; `latest` и `dev` могут сдвинуться до
+установки. npx запускает CLI, не устанавливая его глобально. После подтверждения
+установки проверьте постоянную зависимость через `npm list` во владеющем
+npm-проекте; один dry run ничего не устанавливает.
+
 ### Область проекта
 
 Запустите установщик из корня проекта; подтверждённая установка также пропишет
@@ -66,7 +71,15 @@ dist-tag `latest` в npm и может загрузить другую сбор�
 
 ```shell
 cd /path/to/project
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install
+
+# Installed dependency in the owning npm project
+npm list @kisev/agentomatic --depth=0
 ```
 
 Пакет попадает в `node_modules` проекта, а подтверждённые компоненты
@@ -78,7 +91,15 @@ npx --yes @kisev/agentomatic@latest install --dry-run
 Запустите установщик из любого каталога:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --global --dry-run
+npx --yes @kisev/agentomatic@latest install --global
+
+# Installed dependency, not npm's global CLI prefix
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
 ```
 
 Подтверждённая установка владеет npm-проектом в `~/.config/opencode`: при
@@ -98,7 +119,15 @@ npx --yes @kisev/agentomatic@latest install --global --dry-run
 Укажите dist-tag `dev` явно, чтобы закрепить его prerelease-версию:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@dev version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@dev install --global --dry-run
+npx --yes @kisev/agentomatic@dev install --global
+
+# Installed dependency
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
 ```
 
 Каждый успешный push в `dev` публикует уникальную prerelease-версию и перемещает

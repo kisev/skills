@@ -15,8 +15,18 @@ OpenCode `>=2.0.0 <2.1.0`.
 Глобальная установка выполняется командой:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --skill '*' --global --yes
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
+
+Тег npm может сдвинуться между командами. npx не устанавливает CLI глобально;
+команда списка проверяет локальные навыки, а не версию npm или выпуска Pages.
 
 Команда создаёт один основной экземпляр в `~/.agents/skills` для всех сред,
 читающих `.agents/skills`, и других обнаруженных установленных сред. Без

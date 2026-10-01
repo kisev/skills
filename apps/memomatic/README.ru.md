@@ -10,8 +10,20 @@
 ## Установка
 
 ```bash
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install
 npm install --global @kisev/memomatic
+
+# Installed package and active CLI
+npm list --global @kisev/memomatic --depth=0
+memomatic --version
 ```
+
+Тег может сдвинуться между просмотром и установкой; последние команды показывают
+установленный пакет и CLI из PATH. Для dev-канала укажите `@dev` и в просмотре,
+и в установке.
 
 Корпус живёт в `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`, ежедневные
 записи, `DREAMS.md`); правила — в `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.

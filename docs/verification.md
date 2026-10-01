@@ -15,8 +15,18 @@ The supported portable source is the GitHub Pages stable channel at
 The global installation contract is:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --skill '*' --global --yes
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
+
+The npm tag can move between commands. npx does not install a global CLI;
+the list command inspects local skills, not the npm or Pages release version.
 
 It produces one canonical copy in `~/.agents/skills` for every host that reads
 `.agents/skills`, plus any other installed host. Without `--global`, the
