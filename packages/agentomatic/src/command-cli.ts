@@ -459,12 +459,16 @@ async function modelSelection(
       : undefined;
     return { action: "model-set", name, model, variant: variant ?? null };
   } catch (error) {
-    if (error instanceof LifecycleError && error.code === "catalog_unavailable")
-      fail(
-        "catalog_unavailable",
-        "Model catalog unavailable. Use configure agent <name> --model provider/model [--variant value], or agent add-critic <name> --model provider/model.",
-      );
-    throw error;
+    if (!(error instanceof LifecycleError && error.code === "catalog_unavailable")) throw error;
+    process.stderr.write(
+      "Model catalog unavailable; enter an explicit model instead of a catalog pick.\n",
+    );
+    const model = validateModel(value(await promptText("Model (provider/model)")));
+    const answer = await promptText(
+      current?.variant ? "Variant (empty keeps current)" : "Variant (optional)",
+    );
+    const variant = (answer ? validateVariant(answer) : current?.variant) ?? null;
+    return { action: "model-set", name, model, variant };
   }
 }
 
@@ -1044,11 +1048,15 @@ async function run(args: string[]): Promise<void> {
     process.stdout.write(help(topic));
     return;
   }
-  if (!commands[topic])
+  if (!commands[topic]) {
+    const match = [...new Set(Object.keys(commands).map((key) => key.split(" ", 1)[0]))].find(
+      (root) => root.startsWith(topic) || topic.startsWith(root),
+    );
     fail(
       "invalid_input",
-      `Unknown command: ${topic}. Use install, configure, status, doctor, uninstall, agent, maintenance, or catalog.`,
+      `Unknown command: ${topic}.${match ? ` Did you mean '${match}'?` : ""} Use install, configure, status, doctor, uninstall, agent, maintenance, or catalog.`,
     );
+  }
   const options = parse(topic, args);
   if (topic === "configure") {
     requireApply(options);

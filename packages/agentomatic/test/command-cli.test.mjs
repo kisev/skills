@@ -256,6 +256,14 @@ test("removed commands have no aliases and every new command has focused help", 
     assert.equal(result.status, 2, args.join(" "));
     assert.equal(JSON.parse(result.stdout).error.code, "invalid_input");
   }
+  assert.match(
+    JSON.parse(run(["config", "--dry-run"]).stdout).error.message,
+    /Did you mean 'configure'\?/,
+  );
+  assert.doesNotMatch(
+    JSON.parse(run(["nonsense", "--dry-run"]).stdout).error.message,
+    /Did you mean/,
+  );
   for (const args of [
     ["status"],
     ["configure", "critics"],
@@ -425,6 +433,34 @@ test("TTY install stages a critic model from the catalog and applies it with one
   assert.match(
     await readFile(join(context.root, "agents/critic.md"), "utf8"),
     /model: openai\/example#high/,
+  );
+});
+
+test("TTY install falls back to an explicit model entry when the catalog is unavailable", async (t) => {
+  const context = await sandbox(t);
+  const bin = join(context.base, "bin");
+  await mkdir(bin);
+  await writeFile(join(bin, "opencode"), "#!/bin/sh\nexit 1\n");
+  await chmod(join(bin, "opencode"), 0o755);
+  context.env.PATH = `${bin}:${context.env.PATH}`;
+  const result = await wizard(context, [
+    ["Skill command adapters", "a\r"],
+    ["Fixed agents", "a\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B \r"],
+    ["Optional plugins", "\x1b[B \r"],
+    ["Configure application presets", "n\r"],
+    ["Configure agent models", "y\r"],
+    ["changes are staged", "\x1b[A\x1b[A\x1b[A\r"],
+    ["Agent", "\r"],
+    ["Agent: critic", "\r"],
+    ["Model (provider/model)", "openai/example\r"],
+    ["Variant (optional)", "\r"],
+    ["Agent models and critics", "\r"],
+    ["Apply the displayed changes", "y\r"],
+  ]);
+  assert.equal(result.status, 0, result.output);
+  assert.match(
+    await readFile(join(context.root, "agents/critic.md"), "utf8"),
+    /^model: openai\/example$/m,
   );
 });
 

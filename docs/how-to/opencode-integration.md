@@ -444,8 +444,9 @@ Rendered agent files use `permissions` and `provider/model#variant`. The CLI
 retains separate `--model` and `--variant` flags and saved profile selections.
 Interactive model selection reads the V2 `/api/model` snapshot through
 `opencode api`; it does not call an LLM or force a catalog refresh. OpenCode may
-start its managed service. If the snapshot is unavailable, pass an exact model
-and variant explicitly.
+start its managed service. If the snapshot is unavailable, the wizard asks for
+an exact provider/model and an optional variant as text input instead of
+aborting; non-interactive runs pass `--model` and `--variant` explicitly.
 
 ## Uninstall
 

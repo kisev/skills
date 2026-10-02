@@ -16,7 +16,7 @@ The `skills` CLI owns portable skills; the npm integration does not contain, ins
 ## Install Everything
 
 Install portable skills, `agentomatic`, [memomatic](docs/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.md), and [taskmatic](docs/how-to/taskmatic.md); rerun the commands to update.
-`install` and `config` require terminal confirmation or explicit selections with `--yes`. Before a package's first stable release, `latest` can be a prerelease.
+`install` and `configure` require terminal confirmation or explicit selections with `--yes`. Before a package's first stable release, `latest` can be a prerelease.
 Restart OpenCode, other running MCP hosts, and the taskmatic web service after updates.
 
 Everything on `latest`:
@@ -32,7 +32,7 @@ npm view --prefer-online @kisev/taskmatic@latest version
 # Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills --global
 npx --yes @kisev/agentomatic@latest install --global
-npx --yes @kisev/agentomatic@latest config --global
+npx --yes @kisev/agentomatic@latest configure integration --global
 npm install --global @kisev/memomatic
 npm install --global @kisev/reviewmatic
 npm install --global @kisev/taskmatic
@@ -59,7 +59,7 @@ npm view --prefer-online @kisev/taskmatic@dev version
 # Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
 npx --yes @kisev/agentomatic@dev install --global
-npx --yes @kisev/agentomatic@dev config --global
+npx --yes @kisev/agentomatic@dev configure integration --global
 npm install --global @kisev/memomatic@dev
 npm install --global @kisev/reviewmatic@dev
 npm install --global @kisev/taskmatic@dev
