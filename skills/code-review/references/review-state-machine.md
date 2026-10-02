@@ -14,6 +14,8 @@ installed runtime's source to discover input fields.
    tree files. Missing, binary, non-regular, or over-budget source snapshots are
    explicit; inspect those objects separately and trace affected consumers.
    Do not duplicate MR collection with `glab mr view`.
+   Read `draft_schema_path`, `input_contract` and `input_examples` immediately;
+   they describe editable input separately from final artifact envelopes.
 2. Select independent critics as described below. Review the exact code and all
    discussions; fill the returned `draft_path`. Put primary candidates in
    `findings`, actual independent receipts in `critics`, and one explicit
@@ -23,6 +25,10 @@ installed runtime's source to discover input fields.
    dependency lists; rejected candidates retain concrete scope dependencies.
    Preserve receipt identities and use distinct finding ID prefixes across
    critics. Set primary `run_id`/`session_id` to the actual current identities.
+   Optional `severity_override` records `original_severity`, effective `severity`
+   and a concrete reason without editing the receipt. `duplicate_of` names an
+   accepted canonical finding. `existing_thread` fix records bind `thread_id`
+   without requiring duplicate publication or dropping the defect from readiness.
    Complete every generated `ci_job_assessments` entry from its bounded trace.
    `trace_evidence` must be an exact non-empty substring of that job's collected
    redacted trace, not a paraphrase. Preserve its project/pipeline/job IDs.
@@ -35,12 +41,17 @@ installed runtime's source to discover input fields.
    and `patch_reason`. `patch_reason` is mandatory for patch fallback. The runner derives findings, rejected
    candidates, revisions, body/patch paths, digests, and verdicts. Do not add
    those derived fields or copy data between decision/content artifacts.
+   Grouped thread suggestions may carry an optional prose-only `routing_response`
+   for the short original-thread reply when the fix needs a new position. It does
+   not replace the shared explanation in `proposed_response` or suggestion parts.
 4. Run the returned `reviewmatic check-review --draft DRAFT_PATH` action. It
    validates locally without GitLab reads, publication artifacts, or progress
    changes. Fix the reported field paths in the same draft, then repeat the
    check. A presentation or patch error does not freeze the decision or require
    restarting the review. Raw commit IDs stay in private evidence, not prose
    that will be rendered into the plan; use immutable GitLab links when needed.
+   The validator reports independent schema and fix errors together, including
+   receipt prose and suggestion ranges. Do not bisect prose to find an error.
 5. Run the returned `reviewmatic finish-review --draft DRAFT_PATH`. It validates
    again, refreshes complete evidence and context once, and atomically publishes
    the local immutable plan, Markdown, and baseline. Print its `chat` verbatim

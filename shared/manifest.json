@@ -1,5 +1,11 @@
 {
   "version": 1,
+  "npmSchemas": [
+    {
+      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+      "destination": "apps/reviewmatic/src/generated/artifact-schema.ts"
+    }
+  ],
   "npmRuntime": {
     "source": "references/cli_runtime.ts",
     "destinations": [

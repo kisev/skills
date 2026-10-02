@@ -834,7 +834,15 @@ export function threadDecisionsAreValid(value: unknown): boolean {
     const item = entry;
     if (!isDict(item)) return false;
     const keys = keySet(item);
-    for (const key of ["suggestions", "split_rationale", "patch_reason"]) keys.delete(key);
+    for (const key of [
+      "suggestions",
+      "split_rationale",
+      "patch_reason",
+      "severity",
+      "user_confirmation",
+      "routing_response",
+    ])
+      keys.delete(key);
     if (!allowed.some((candidate) => setsEqual(keys, candidate))) return false;
     if (!nonemptyString(item.id) || !nonemptyString(item.url) || !nonemptyString(item.rationale)) {
       return false;
@@ -923,11 +931,24 @@ export function findingPublicationsAreValid(value: unknown, requireFixes = false
     const item = entry;
     if (!isDict(item)) return false;
     const keys = keySet(item);
-    for (const key of ["suggestions", "split_rationale", "patch_reason"]) keys.delete(key);
+    for (const key of ["suggestions", "split_rationale", "patch_reason", "thread_id"])
+      keys.delete(key);
     if (!allowed.some((candidate) => setsEqual(keys, candidate))) return false;
     if (!nonemptyString(item.finding_id)) return false;
     if (!isPlainInt(item.revision)) return false;
     if ((item.revision as number) < 1) return false;
+    if (item.type === "existing_thread")
+      return (
+        nonemptyString(item.thread_id) &&
+        nonemptyString(item.body) &&
+        item.fix_mode === "not_required" &&
+        item.patch === null &&
+        item.patch_path === null &&
+        item.patch_sha256 === null &&
+        item.path === null &&
+        item.line === null &&
+        item.old_line === null
+      );
     if (!["general", "line", "local_fix"].includes(item.type as string)) return false;
     if (!nonemptyString(item.body)) return false;
     if (setsEqual(keys, legacy)) return true;
@@ -2930,6 +2951,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
       "accepted_findings",
       "critic_target_finding_ids",
       "blocking_finding_ids",
+      "blocking_thread_ids",
       "owner_decision_reasons",
       "ci_job_assessments",
     ]);
@@ -3001,7 +3023,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
         const item = entry;
         return (
           isDict(item) &&
-          setsEqual(keySet(item), new Set(["id", "decision", "reason"])) &&
+          schemaValid({ $ref: "#/$defs/response" }, item, artifactSchema()) &&
           nonemptyString(item.id) &&
           ["accept", "reject"].includes(item.decision as string) &&
           nonemptyString(item.reason)
@@ -4323,6 +4345,29 @@ export function validateDecision(
   const acceptedFindings = findingSubjects.filter(
     (item) => (responseById.get(item.id) as Record<string, unknown>).decision === "accept",
   );
+  for (const finding of findingSubjects) {
+    const response = responseById.get(finding.id)!;
+    if (response.severity_override !== undefined) {
+      const override = response.severity_override;
+      if (
+        !isDict(override) ||
+        override.original_severity !== finding.severity ||
+        !["critical", "high", "medium", "low"].includes(String(override.severity)) ||
+        !nonemptyString(override.reason) ||
+        response.decision !== "accept"
+      )
+        throw new WorkflowError(
+          "severity_override must preserve the original severity and explain the accepted finding's reassessment",
+        );
+    }
+    if (
+      response.duplicate_of !== undefined &&
+      (response.decision !== "reject" ||
+        responseById.get(response.duplicate_of)?.decision !== "accept" ||
+        response.duplicate_of === finding.id)
+    )
+      throw new WorkflowError("duplicate_of must refer to an accepted canonical finding");
+  }
   if (duplicateDetailedFindingIds(acceptedFindings).length > 0) {
     throw new WorkflowError("review decision accepts structurally duplicate findings");
   }

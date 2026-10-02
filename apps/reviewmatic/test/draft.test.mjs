@@ -248,7 +248,7 @@ test("publication errors are repairable in the same draft before any decision is
   writeJson(result.draft_path, draft);
   const invalidChat = await checkReview(result.draft_path);
   assert.equal(invalidChat.status, "invalid");
-  assert.ok(invalidChat.errors.some((item) => item.path === "$.content.chat_assessment"));
+  assert.ok(invalidChat.errors.some((item) => item.path === "$.content.chat_assessment.change"));
   draft.content.chat_assessment.change = "The correction preserves the agreed behavior.";
   writeJson(result.draft_path, draft);
   const completed = await finishReview(result.draft_path);

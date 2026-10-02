@@ -32,6 +32,7 @@ if (method !== "GET") {
     config.publishedNotes ??= [];
     config.publishedNotes.push({ id: 43 + config.publishedNotes.length, system: false, author: { id: 23, username: "reviewer" }, body: payload.body.trimEnd(), resolved: null, position: null });
   } else if (method === "PUT" && clean === "projects/19/merge_requests/7/discussions/discussion-42") config.resolved = payload.resolved;
+  else if (method === "PUT" && clean === "projects/19/merge_requests/7/discussions/returned-discussion") config.createdResolved = payload.resolved;
   else if (method === "POST" && clean === "projects/19/merge_requests/7/discussions") {
     config.publishedNotes ??= [];
     config.publishedNotes.push({ id: 100 + config.publishedNotes.length, body: payload.body });
@@ -39,13 +40,13 @@ if (method !== "GET") {
   else if (method === "PUT" && clean === "projects/19/merge_requests/7") config.labels = payload.labels.split(",").filter(Boolean);
   else { process.stderr.write("unexpected mutation " + method + " " + clean); process.exit(1); }
   writeFileSync(process.env.FAKE_GLAB_CONFIG, JSON.stringify(config));
-  process.stdout.write("{}"); process.exit(0);
+  process.stdout.write(JSON.stringify(clean.endsWith("/discussions") ? { id: "returned-discussion", notes: [{ id: 100, resolvable: config.returnedResolvable === true, resolved: false }] } : {})); process.exit(0);
 }
 const discussion = {
   id: "discussion-42", individual_note: false,
-  notes: [{ id: 42, system: false, resolvable: true, resolved: config.resolved === true,
-    author: { username: "other-reviewer" }, body: config.noteBody ?? "Retry needs an idempotency key",
-    position: { head_sha: config.headSha, new_path: config.changedPath, new_line: 2 } }, ...(config.publishedNotes ?? [])],
+  notes: [{ id: 42, system: false, resolvable: config.plain !== true, resolved: config.resolved === true,
+    resolved_by: config.resolvedBy, author: { username: config.rootAuthor ?? "other-reviewer" }, body: config.noteBody ?? "Retry needs an idempotency key",
+    position: config.plain === true ? null : { head_sha: config.positionHead ?? config.headSha, new_path: config.changedPath, new_line: 2 } }, ...(config.replies ?? []), ...(config.publishedNotes ?? [])],
 };
 let value = null;
 if (clean === "user") value = { id: 23, username: "reviewer" };
@@ -60,7 +61,7 @@ else if (clean.startsWith("projects/19/labels")) value = [
 else if (clean === "projects/19/merge_requests/7") value = {
   iid: 7, title: "Current merge request title", description: "Current description",
   source_branch: "dev", target_branch: "main", web_url: "https://gitlab.example/group/project/-/merge_requests/7",
-  author: { username: "author" }, state: "opened", labels: config.labels ?? [], updated_at: "fresh",
+  author: { username: config.mrAuthor ?? "author" }, state: "opened", labels: config.labels ?? [], updated_at: "fresh",
   pipeline: config.mrPipeline,
   latest_build_started_at: config.latestBuildStartedAt,
   latest_build_finished_at: config.latestBuildFinishedAt,
@@ -172,7 +173,12 @@ export function completeDraft(draft, result) {
   for (const thread of content.thread_decisions) {
     thread.assessment = "fixed";
     thread.rationale = "The exact reviewed code already addresses the remark.";
-    thread.outcome = thread.state === "resolved" ? "no_publication" : "resolve";
+    thread.outcome =
+      thread.state === "resolved"
+        ? "no_publication"
+        : thread.state === "plain"
+          ? "reply"
+          : "resolve";
     thread.proposed_response =
       thread.state === "resolved" ? null : "The exact reviewed code now handles this path.";
   }

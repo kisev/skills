@@ -18,6 +18,8 @@ references, not an embedded executable. Reviewer findings remain out of chat.
 The runbook contains findings, compact previous-finding dispositions, metadata,
 label delta, SemVer, validated fixes, body previews, and direct manual commands.
 Detailed history and exhaustive label decisions remain in private JSON.
+The input package separately supplies the exact draft schema and valid field
+examples; final artifact schemas are not draft input documentation.
 
 ## Workflow Stages
 
@@ -84,6 +86,18 @@ retained with real run/session identities. Primary and critic candidates require
 explicit dispositions; duplicate accepted findings are invalid. Fast review
 without a critic requires justified low risk. Unchanged review audits discussions
 without a critic. Required independence is not waived for unavailable delegation.
+Critics start as soon as the exact evidence package is ready, in native background
+mode alongside primary analysis when supported. They reuse exact snapshots and
+JSON findings, not manual transcriptions or duplicate collection. Resume verifies
+and reuses snapshot files. Collection, primary analysis, critic waiting, fix checks
+and freshness remain separate stages, without a numerical SLA or reduced depth.
+Primary severity reassessment is structured with original/effective severity and
+a reason, preserving the receipt. Duplicate dispositions refer to an accepted
+canonical finding. Existing-thread linkage suppresses duplicate publication only,
+never the defect's contribution to readiness.
+Common scaffolding enforces this invariant for guided and low-level callers,
+including legacy decisions that omit optional thread-blocker metadata. A
+contradictory verdict is rejected before plan/body creation.
 
 Incremental analysis shall follow changed code, conversations, metadata, and CI,
 including affected unchanged consumers. Previous accepted findings and recommended
@@ -106,6 +120,10 @@ open/reopened state; fixed, false-positive, duplicate, or unrelated open threads
 prepare closure. Neutral/questions do not change state. Resolved threads with a
 sufficient explanation or applied suggestion prepare no redundant reply.
 Fixing-commit attribution requires an immutable link supported by evidence.
+When the authenticated user originated the problem and proposed its fix, another
+participant's resolution does not replace that user's verification reply. Later
+user confirmation binds real note IDs; no new circumstances means no repeated
+confirmation. Every no-publication outcome retains a visible reason.
 
 The reviewer shall establish necessity, reachability, consequence, change origin,
 and proportionate minimum remedy. Severity does not alone determine scope or
@@ -124,6 +142,14 @@ shall exclude the diff and apply command; the renderer adds one portable quoted
 heredoc with fences safe for embedded Markdown. Temporary-index patch validation
 rejects binary, symlink, submodule, rename, traversal, and oversized inputs without
 editing the checkout. Author local fixes remain patches.
+Suitable positions retain suggestions in the original thread. Other positioned
+threads link back and leave only a short routing reply in the original. Every
+patch, including a thread reply, shows its concrete fallback reason immediately
+before the patch. A provably equivalent safe bounded suggestion cannot be replaced
+with a patch. Validation reports independent addressed errors in one pass,
+including suggestion bounds and raw SHA in receipt prose.
+Patch fallback is checked by common scaffolding, not only by the guided validator;
+author local fixes retain their validated-patch exception.
 
 `repair-review` shall support only new guided plans. Presentation repair includes
 unchanged-meaning wording, layout, command/position correction, and equivalent fix
@@ -134,6 +160,14 @@ consumer/failure-path checks, not automatically a new critic. Changed findings,
 assessments, requirements, or verdict require a new targeted independent critic.
 Uncertain meaning requires decision repair. Missing checks stop repair without
 automatically broadening review. Publication history does not gate local repair.
+
+The runbook starts with a derived verdict and reason, technical/process blockers,
+architecture and SemVer. Findings show severity and merge impact, other discussions
+show check results. Its summary derives from the same effective findings and verdict.
+Follow-ups are concise non-blocking proposals with problem/proof, solution,
+importance, postponement risk, out-of-MR justification and any existing task. Issue
+templates and creation commands belong to a separate `task-prepare` invocation;
+mandatory MR fixes cannot be moved to follow-ups.
 
 The runbook shall omit empty sections and duplicated findings, patches, and
 commands. Previous findings receive one compact row with a short name, localized
@@ -146,10 +180,12 @@ reasoned target fallback without a fabricated release estimate. Equivalent label
 prefer namespaced catalog entries without hardcoded alias names.
 
 Manual publication shall have no persistent locks, reservations, receipts, TTL,
-automatic freshness reads, polling, or automatic retries. One send performs one
-operation and exposes its exit code and bounded redacted diagnostics. Replies and
-state changes are independently runnable; the TUI also offers their explicitly
-chosen sequence. The user verifies GitLab in a browser and chooses repetition.
+automatic freshness reads, polling, or automatic retries. A send exposes its exit
+code and bounded redacted diagnostics. Reply and resolve/reopen share one annotated
+shell block; state changes require a successful reply. A plain-comment POST uses
+the actual returned discussion ID and resolvability, closing completed assessments
+only, never unanswered questions or defects. Backend state-only sends require a
+successful reply in the same manual session. The user verifies GitLab and chooses repetition.
 Timeouts and cancellation may leave accepted remote requests and repetitions may
 duplicate them; this risk is visible but does not create a persisted block.
 
@@ -163,6 +199,10 @@ separate reply/context views, concrete errors rather than truncated JSON, and
 explicit action choices. Opening a detail never publishes. Human body edits save
 the plan/runbook without sending and preserve validated code. TUI statuses describe
 local command execution, never remotely verified publication.
+Validation during editing follows the concrete publication: routing-only prose is
+editable without a suggestion block, while positioned suggestions retain exact-head
+tree equivalence checks. `routing_response` preserves edited routing prose through
+presentation repair without replacing shared explanations or suggestion code.
 
 Local WIP uses its own immutable snapshots and cumulative report, not GitLab
 publication state. `prepare-local --incremental auto` selects full/incremental/

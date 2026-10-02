@@ -433,7 +433,19 @@
           "enum": ["no_publication", "local_fix", "reply", "resolve", "reopen"]
         },
         "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "routing_response": { "type": "string", "minLength": 1 },
         "suggestion_applicable": { "type": "boolean" },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "user_confirmation": {
+          "type": "object",
+          "required": ["status", "evidence_note_ids"],
+          "additionalProperties": false,
+          "properties": {
+            "status": { "enum": ["required", "confirmed", "not_applicable"] },
+            "evidence_note_ids": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+            "new_circumstances": { "type": "string", "minLength": 1 }
+          }
+        },
         "suggestions": { "$ref": "#/$defs/suggestion_parts" },
         "split_rationale": { "type": "string", "minLength": 1 },
         "patch_reason": { "type": "string", "minLength": 1 },
@@ -830,17 +842,18 @@
         }
       ],
       "properties": {
+        "thread_id": { "type": "string", "minLength": 1 },
         "suggestions": { "$ref": "#/$defs/suggestion_parts" },
         "split_rationale": { "type": "string", "minLength": 1 },
         "patch_reason": { "type": "string", "minLength": 1 },
         "finding_id": { "type": "string", "minLength": 1 },
         "revision": { "type": "integer", "minimum": 1 },
-        "type": { "enum": ["general", "line", "local_fix"] },
+        "type": { "enum": ["general", "line", "local_fix", "existing_thread"] },
         "path": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
         "line": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
         "old_line": { "anyOf": [{ "type": "integer", "minimum": 1 }, { "type": "null" }] },
         "body": { "type": "string", "minLength": 1 },
-        "fix_mode": { "enum": ["suggestion", "patch"] },
+        "fix_mode": { "enum": ["suggestion", "patch", "not_required"] },
         "patch": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
         "patch_path": {
           "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
@@ -939,6 +952,7 @@
     },
     "recommended_issue": {
       "type": "object",
+      "anyOf": [{ "required": ["body"] }, { "required": ["importance", "existing_task"] }],
       "required": [
         "id",
         "revision",
@@ -947,8 +961,7 @@
         "risk",
         "evidence",
         "reason_out_of_scope",
-        "minimum_fix",
-        "body"
+        "minimum_fix"
       ],
       "properties": {
         "id": { "type": "string", "minLength": 1 },
@@ -963,6 +976,8 @@
         },
         "reason_out_of_scope": { "type": "string", "minLength": 1 },
         "minimum_fix": { "type": "string", "minLength": 1 },
+        "importance": { "type": "string", "minLength": 1 },
+        "existing_task": { "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }] },
         "body": { "type": "string", "minLength": 1 },
         "template_path": {
           "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
@@ -1138,7 +1153,18 @@
       "properties": {
         "id": { "type": "string", "minLength": 1 },
         "decision": { "enum": ["accept", "reject"] },
-        "reason": { "type": "string", "minLength": 1 }
+        "reason": { "type": "string", "minLength": 1 },
+        "duplicate_of": { "type": "string", "minLength": 1 },
+        "severity_override": {
+          "type": "object",
+          "required": ["original_severity", "severity", "reason"],
+          "additionalProperties": false,
+          "properties": {
+            "original_severity": { "enum": ["critical", "high", "medium", "low"] },
+            "severity": { "enum": ["critical", "high", "medium", "low"] },
+            "reason": { "type": "string", "minLength": 1 }
+          }
+        }
       },
       "additionalProperties": false
     },
@@ -2305,6 +2331,11 @@
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
                 "low_risk": { "type": "boolean" },
                 "blocking_findings": { "type": "boolean" },
+                "blocking_thread_ids": {
+                  "type": "array",
+                  "uniqueItems": true,
+                  "items": { "type": "string", "minLength": 1 }
+                },
                 "blocking_finding_ids": {
                   "type": "array",
                   "items": { "type": "string", "minLength": 1 }

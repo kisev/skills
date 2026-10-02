@@ -11,13 +11,17 @@ are explicit user choices; review agents never invoke them.
 The runbook keeps the exact body preview beside its command. Generated body files
 are private and immutable; a repair writes a new body and updates the runbook.
 Commands name the exact GitLab host, project, MR, and position. Raw refs may appear
-in executable position arguments, not in prose or chat. Each reply and
-`resolve`/`reopen` command is independently runnable. The user may send both from
-the TUI or choose only one. There is no receipt dependency.
+in executable position arguments, not in prose or chat. A reply and planned
+`resolve`/`reopen` appear in one `shell` block with a `#` explanation before each
+command and `&&` between them. State changes follow a successful reply only.
+For an ordinary comment, the POST returns a discussion: inspect its actual ID and
+resolvability and resolve it only for a completed assessment. Unresolved problems
+and questions stay open. The direct block uses `jq`; the backend parses JSON.
 
 ## Failure and repetition
 
-One send performs one `glab` operation. Show its exit code, output, and bounded
+One send performs the selected operation and any explicitly planned state change
+after successful publication. Show its exit code, output, and bounded
 redacted error. Exit zero means the command completed, not independently verified
 publication. The user checks GitLab in the browser and decides whether to repeat.
 There are no publication reservations, persistent locks, expiry, automatic
@@ -34,7 +38,7 @@ by the new runtime; prepare a new plan for direct commands.
 
 Opening a plan, reading, scrolling, and navigating require no network. These
 remain available during a send; local cancellation and exit remain available too.
-Use `t` to switch reply/context, `e` to edit, `s` for a reply, `r` for thread state,
+Use `t` to switch reply/context, `e` to edit, `s` for a reply, `r` for thread state after a successful reply in this manual session,
 `S` for both, `z` to cancel waiting, and `q` to exit. Body editing saves a new local
 plan without sending. Code changes use the targeted repair workflow, not prose
 editing. See `references/repair.md`.

@@ -54,6 +54,32 @@ each. The runner derives accepted findings, rejected candidates, verdicts, and
 artifact bindings; the agent supplies the semantic assessments, concrete fixes,
 label rationales, and thread outcomes.
 
+The input package includes `draft_schema_path`, `input_contract`, and valid field
+examples in `input_examples`, separately from final artifact envelopes. Start the
+critic as soon as these exact snapshots are ready, in background alongside primary
+analysis when supported. Resume verifies and reuses snapshots without rebuilding
+them. No numerical response-time SLA is implied.
+
+`dispositions[].severity_override` records original and effective severity plus a
+reason without changing the critic receipt. `duplicate_of` points to the accepted
+canonical finding. A finding publication of `type=existing_thread` binds
+`thread_id`; its accepted thread owns the validated fix, so the defect remains in
+the verdict without another publication. A user's own proposed suggestion/patch
+still needs their verification reply when somebody else resolved the thread.
+Later confirmation is bound by `user_confirmation.evidence_note_ids`.
+
+The runbook starts with the derived verdict and reason, blockers, architecture and
+SemVer. It shows merge impact for defects and check results for other discussions.
+Suggestions stay in the original thread when its position is suitable; otherwise
+a new positioned thread links back and the original receives a short routing reply.
+Each patch is preceded by `patch_reason`; an available safe bounded suggestion
+cannot be replaced with a patch.
+
+`recommended_issues` are concise non-blocking proposals, not issue bodies or
+creation commands: problem, proof, solution, importance, postponement risk, why
+outside this MR, and an existing task if known. Full preparation belongs to
+`task-prepare`; mandatory MR fixes cannot be deferred there.
+
 `check-review` is local: it returns field paths and errors without recollecting
 GitLab or freezing decisions. Edit the same draft and check again. `resume-review --artifact-root <root>` recovers that draft after interruption without remote
 collection. `finish-review` validates it, rechecks complete evidence and context
@@ -97,20 +123,27 @@ Page Up/Down for longer lists and conversations, and left/right to move between
 items. Links are clickable in terminals supporting OSC 8; `o` opens the selected
 discussion in a browser. Enter opens an item and never publishes it.
 
-Press `s` to send only the reply, `r` for only the planned resolve/reopen, or `S`
+Press `s` to send the reply, `r` for planned resolve/reopen after a successful reply in this manual session, or `S`
 for both, then confirm with `y`. Escape cancels confirmation or returns to the list.
 Read-only items offer no send/edit action. Press `e` to edit
 the draft in `$EDITOR`; the plan is amended to the edited body before anything
 is sent, with `runbook.md` and baseline updated together. Saving never sends.
 Use `t` for reply/context views. Reading/navigation remain available during a send;
 `z` cancels local waiting and `q` exits. Editing a patch body
-must preserve its validated patch and command. New threads, recommended issues,
+must preserve its validated patch, reason and command. New threads, follow-up proposals,
 and label updates use the same
 walkthrough. Suggestions and git patches additionally offer local application:
 reviewmatic creates a dedicated git worktree at the exact reviewed head, shows
 the diff, and then asks for commit and push as two separate confirmations.
 
-One send performs one command and shows its exit code/output/error. There are no
+Reply and state change share one annotated `shell` block, guarded by `&&`. Plain
+comments use the real discussion ID and resolvability returned by POST: completed
+discussions can be resolved, unanswered questions and defects cannot. Direct
+plain-comment blocks require `jq`. If the reply succeeded but state update failed,
+inspect GitLab and do not repeat the reply blindly.
+
+One send shows its exit code/output/error and changes state only after the reply
+succeeds. There are no
 publication locks, receipts, reservations, expiry, polling, automatic checks, or
 automatic retries. You check GitLab in the browser and decide whether to repeat.
 A timeout or cancellation does not undo an accepted request; repeating may create
@@ -144,6 +177,12 @@ JSON, compatible with `glab` 1.120.0, instead of unsupported bracket fields.
 Each grouped suggestion with prose is a complete comment, published without the
 shared introduction. Include every necessary caveat in that part. Bare suggestion
 blocks still inherit shared prose. The runbook renders exact duplicate checks once.
+Thread readiness and patch-fallback checks apply equally to guided drafts and
+low-level scaffolding, even when an older decision omits `blocking_thread_ids`.
+A routing-only reply is editable prose, not a suggestion publication. Its optional
+`routing_response` preserves the edit through presentation repair without changing
+the shared explanation or positioned suggestion code. Editing suggestion code
+still requires targeted fix repair.
 
 ## Worktree registry
 

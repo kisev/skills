@@ -203,7 +203,7 @@ test("presentation repair regenerates commands locally and renders only exact ch
   assert.ok(!finished.plan_command.includes("mise exec"));
 });
 
-test("presentation repair preserves the critic and equates patch and suggestion without a new review", async (t) => {
+test("presentation repair does not replace an available safe suggestion with a patch", async (t) => {
   const { fixture, result, finished } = await ready(t);
   const before = loadPlan(result.artifact_root);
   const repair = await repairReview(result.artifact_root, "presentation");
@@ -220,8 +220,17 @@ test("presentation repair preserves the critic and equates patch and suggestion 
   });
   writeJson(repair.draft_path, draft);
   const reads = fixture.requestCount();
-  assert.equal((await checkReview(repair.draft_path)).status, "ok");
+  assert.match(
+    JSON.stringify((await checkReview(repair.draft_path)).errors),
+    /safe bounded suggestion/,
+  );
   assert.equal(fixture.requestCount(), reads);
+  Object.assign(
+    draft.content.finding_publications[0],
+    before.plan.review_source.content.finding_publications[0],
+  );
+  delete draft.content.finding_publications[0].patch_reason;
+  writeJson(repair.draft_path, draft);
   const repaired = await finishReview(repair.draft_path);
   assert.equal(repaired.status, "ok", JSON.stringify(repaired));
   const after = loadPlan(result.artifact_root);
@@ -231,7 +240,7 @@ test("presentation repair preserves the critic and equates patch and suggestion 
   assert.equal((await reportReview(result.artifact_root)).status, "ok");
   assert.equal(
     (readFileSync(repaired.markdown_path, "utf8").match(/git apply <<'PATCH_/g) ?? []).length,
-    1,
+    0,
   );
 });
 

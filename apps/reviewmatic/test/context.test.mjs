@@ -686,15 +686,13 @@ test("review state machine happy path with fake glab", async (t) => {
         old_line: null,
         body: "You need to reserve an idempotency key before the external call.",
         fix_mode: "patch",
-        patch_reason:
-          "The complete correction must be applied together; partial application is unsafe.",
+        patch_reason: "A new policy file has no existing suggestion anchor.",
         patch:
-          "diff --git a/review.txt b/review.txt\n" +
-          "--- a/review.txt\n" +
-          "+++ b/review.txt\n" +
-          "@@ -1,2 +1,3 @@\n" +
-          " base\n" +
-          " reviewed change\n" +
+          "diff --git a/retry-policy.txt b/retry-policy.txt\n" +
+          "new file mode 100644\n" +
+          "--- /dev/null\n" +
+          "+++ b/retry-policy.txt\n" +
+          "@@ -0,0 +1 @@\n" +
           "+reserve idempotency key\n",
       },
     ],
@@ -787,8 +785,8 @@ test("review state machine happy path with fake glab", async (t) => {
     "## Open threads",
     "## New findings",
     "## Recommended issues",
-    "## Architecture assessment",
-    "## SemVer impact",
+    "**Architecture assessment:**",
+    "MR contribution",
     "## Checks",
     "git apply <<'PATCH_",
     `code-review: ${VERSION} · contract: 7`,
@@ -800,14 +798,14 @@ test("review state machine happy path with fake glab", async (t) => {
   assert.ok(!markdown.includes(baseSha));
   assert.ok(!markdown.includes(headSha));
   assert.ok(!markdown.includes("marker-run"));
-  assert.equal(plan.publication_body_paths.length, 3);
+  assert.equal(plan.publication_body_paths.length, 2);
   const bodies = plan.publication_body_paths.map((path) => readFileSync(path, "utf8"));
   assert.ok(bodies.every((body) => !body.includes("<!-- code-review:id=")));
   const patchBody = bodies.find((body) => body.includes("diff --git"));
   assert.ok(patchBody.includes("```sh\n"));
   assert.ok(patchBody.includes("git apply <<'PATCH_"));
   assert.ok(!patchBody.includes("marker-run"));
-  assert.equal(plan.publication_commands.length, 5);
+  assert.equal(plan.publication_commands.length, 4);
   assert.ok(plan.publication_commands.every((command) => command.startsWith("glab ")));
   assert.ok(plan.publication_commands.every((command) => !command.includes(" --confirm ")));
   const planDocument = readJson(plan.artifact_path, "review plan");

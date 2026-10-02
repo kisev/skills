@@ -32,6 +32,15 @@ conclusions are withheld to avoid anchoring.
 
 ## Remote MR stages
 
+Read the returned `draft_schema_path`, `input_contract`, and `input_examples`
+before filling the draft. They describe editable input, not final v2 artifacts.
+Launch the selected independent critic immediately when this evidence package is
+ready, in native background mode when supported, alongside primary inspection.
+Pass exact snapshot paths and preserve returned JSON findings without manual
+transcription. Do not recollect evidence or rediscover its shape. Join before
+validation. Report collection, analysis, critic waiting, fix checks, and freshness
+separately; do not promise a numerical SLA or reduce review depth.
+
 For a remote MR, derive role only from `MR.author.username` and `GET /user`: equal means `author`, otherwise `reviewer`. If either identity is unavailable, stop rather than guess. A reviewer reports findings and proposed fixes without promising to edit another person's MR. An author receives concrete local fixes and must not be presented as an independent reviewer of their own MR.
 
 Verify collection completeness, exact refs, complete changed files, commits, discussions, notes, and local object availability. Confirm the recorded merge base and compare local changed paths with GitLab. Keep raw refs out of chat and prose in `runbook.md`; executable GitLab position arguments retain exact refs. A mismatch or incomplete page makes the review blocked or partial.
@@ -53,6 +62,15 @@ keeps a thread open (`reopen` when currently resolved); `fixed`,
 `fixing_commit=null` when attribution is unavailable, otherwise its `{title,url}`
 object contains an immutable GitLab commit URL.
 
+Resolution by somebody else does not replace the user's confirmation. When the
+authenticated user opened the problem thread and proposed a suggestion or patch,
+prepare their concise verification reply after checking the exact head, even if
+another participant closed it. `user_confirmation.status=confirmed` binds later
+confirmation by that user through `evidence_note_ids`; already confirmed results
+use `no_publication` unless there are new facts. Give every `no_publication` a
+concrete rationale. Plain notifications may be omitted from prose, not from the
+complete discussion audit.
+
 If context selects `unchanged`, preserve that explicit mode, omit the critic, and still complete a fresh discussion audit, decision, content draft, and contract-7 publication plan; never reuse the previous plan as the result of a new review invocation. Targeted plan repairs follow `references/repair.md`, not a new invocation. If it selects `incremental`, review the delta-triggered scope, revalidate every previous finding and recommended issue, and require an independent critic receipt with a different run/session identity and the incremental-delta digest. Otherwise choose `fast`, `normal`, or `deep`; `fast` is only for a small confirmed low-risk change, while `normal` and `deep` require an independent critic. The primary reviewer must accept or reject every critic finding and unresolved thread with a reason. Reject a critic finding as a duplicate when it describes an already accepted primary finding; never accept the same structured finding under multiple IDs.
 
 An incremental critic receipt contains `target_finding_ids`. Include every
@@ -62,7 +80,7 @@ primary or critic candidate with source, complete finding, rejection reason, and
 its path/thread/metadata/CI dependencies. Reconsider it only when those
 dependencies intersect `incremental_delta`.
 
-Every finding must contain a stable `id`, `severity`, `summary`, `risk`, concrete `evidence`, `consequence`, `relation_to_change`, and `minimum_fix`. Order internal findings by severity. Provide exactly one finding fix record with `fix_mode=suggestion` or `fix_mode=patch`. A reviewer also supplies one natural publication body and a general or exact line position; an author uses `type=local_fix`, a unified patch, and no publication command. Classify confirmed problems outside the MR scope as non-blocking recommended issues with stable IDs and complete issue bodies. Do not raise severity for style, size, or missing tests without a concrete consequence. Always state the architecture assessment, a concrete SemVer impact, and a non-empty rationale. Use `not_applicable` only with an explanation of why the project exposes no versioned contract; do not finalize a remote review with `unknown`.
+Every finding must contain a stable `id`, `severity`, `summary`, `risk`, concrete `evidence`, `consequence`, `relation_to_change`, and `minimum_fix`. Order findings by effective severity. Preserve original critic receipts. A disposition may carry `severity_override` with `original_severity`, `severity`, and the primary reviewer's concrete `reason`. Reject duplicates with `duplicate_of` naming the accepted canonical finding, never by dropping the defect. Provide one validated fix or an `existing_thread` publication record with `thread_id`, `fix_mode=not_required`, and null patch/positions; the accepted thread owns the validated fix and no duplicate publication is prepared. Existing-thread links never exempt a non-low defect from the verdict. An author uses `type=local_fix`, a unified patch, and no publication command. Do not raise severity for style, size, or missing tests without a concrete consequence. Always state architecture and reasoned SemVer, never finalize a remote review with `unknown`.
 
 Before selecting compatibility labels, follow `references/semver.md`. Determine
 the actual publication policy and last release on the relevant line. Record the
@@ -77,6 +95,13 @@ For separate positions supply `suggestions` records with `path`, `line`, and `bo
 and `split_rationale` explaining why partial application is safe. Each part has one
 suggestion block, while the parent `body`/`proposed_response` contains prose only.
 All parts belong to one finding; validate individual and combined results.
+For thread-owned suggestions, use the original thread when its current position
+matches a part. Otherwise publish a positioned thread referring to the original
+permalink and leave only a short routing reply in the original, without repeating
+the explanation. Preserve caveats in every part; parts must be safe separately and
+together. Show the concrete `patch_reason` immediately before every patch,
+including thread replies. Never substitute a patch for an available safe bounded
+suggestion. Check all fixes on the exact head.
 Use `fix_mode=patch` only with a concrete `patch_reason` for a technical limitation
 or unsafe division. Put the unified diff exclusively in `patch`; `body` and
 `proposed_response` must not contain a diff or `git apply` heredoc. The runner adds
@@ -90,7 +115,7 @@ that requires no code correction; findings and `local_fix` outcomes cannot use i
 
 Use the one-draft workflow in `references/review-state-machine.md`. Put complete independent receipts in `critics` and preserve the selected `critic_count`; the runner validates and records them at finalization. It owns artifact digests, decision/content transitions, accepted findings, rejected candidates, and verdict derivation. Changed MR facts, user identity, discussions, notes, local Git context, or incomplete evidence block finalization. Do not use standalone CLI sessions or read the runtime source to work around errors.
 
-Complete the generated `content` section without adding derived artifact fields. The draft includes `.gitlab/issue_templates` from the exact MR head. Each recommended issue must select and fill its nearest template; when only one exists, it must use it. `label_assessments` covers every exact catalog name once; assess semantic equivalence from each label's name and description, prefer a namespaced label to a plain equivalent, and replace a current plain equivalent with the chosen namespaced label. The runner owns descriptions, current membership, exhaustive ledger, SemVer invariant, add/remove delta, standard presentation labels, and compact chat layout. `mr_metadata_assessment` is a flat five-field assessment giving `ok`, `needs_change`, or `unverified`, rationale, and an optional recommendation for title, description, labels, workflow state, and overall formatting. Observed values come from evidence, not model input. Run `check-review --draft <draft-path>`, repair reported fields in that same draft, then follow the returned `finish-review` action.
+Complete generated `content` without derived artifact fields. `recommended_issues` contains concise proposals only: `id`, `title`, `problem`, `evidence`, `minimum_fix`, `importance`, `risk` of postponement, `reason_out_of_scope`, and `existing_task` or null. Do not fill issue templates or prepare creation commands here. Full preparation is a separate `task-prepare` invocation; mandatory MR fixes stay in findings. Preserve the legacy `issue_templates` binding without using it. `label_assessments` covers every exact catalog name once and prefers namespaced semantic equivalents. The runner owns observed metadata, exhaustive label ledger, SemVer invariant, delta, presentation and compact chat. Metadata input is a flat five-field assessment with status, rationale and optional recommendation. Run `reviewmatic check-review --draft <draft-path>`, repair its addressed fields in the same draft, then follow the returned `finish-review --draft <draft-path>` action.
 
 Revalidate historical items in `previous_finding_assessments`, and put confirmed
 out-of-scope follow-ups in `recommended_issues`. Preserve their stable IDs and

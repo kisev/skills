@@ -164,8 +164,8 @@ schema-readable for their original finalized workflow, but they have no
 `review_contract_version` and can never become an incremental baseline.
 
 Contract 7 supersedes the code-review publication behavior described above.
-Its stable result is `runbook.md`; direct `glab` commands and the TUI are equally
-supported manual interfaces. No remote-operation ledger, reservation, persistent
+Its stable result is `runbook.md`; direct `glab` commands are supported and the TUI
+remains experimental. No remote-operation ledger, reservation, persistent
 lock, expiry, polling, or automatic freshness read is used for publication.
 The user verifies GitLab effects and chooses repetition. Old guarded actions are
 historical only, never automatically migrated or executed.
@@ -182,3 +182,28 @@ the current result. `refresh-review` preserves candidates and decisions, never
 rebinds existing receipts. CI-only refresh retains the original analysis evidence
 and receipts and records an immutable supplemental `ci_snapshot` in the source.
 Review quality checks remain separate from manual publication.
+
+The guided input package supplies its exact draft schema and valid field examples
+separately from final v2 envelopes. Primary `severity_override` dispositions record
+original/effective severity and a reason while preserving original critic receipts.
+`duplicate_of` refers to the accepted canonical defect. `existing_thread` finding
+publications bind `thread_id` and delegate the fix to its accepted thread, without
+dropping a defect from readiness or publishing it twice. Summary and verdict derive
+from the same effective findings; the runbook starts with their reason, blockers,
+architecture and SemVer.
+
+User-proposed fixes require the user's own confirmation even after another person
+resolved the thread. `user_confirmation.evidence_note_ids` binds later confirmation;
+another reply needs `new_circumstances`. Suitable suggestion parts stay in the
+original positioned thread, other parts link back. Patch reasons appear before
+every patch, and a provably equivalent safe bounded suggestion prohibits fallback.
+Replies and state changes share an annotated shell block guarded by successful POST.
+Plain comments use the real returned discussion ID and resolvability; only completed
+assessments may close the created discussion. Follow-ups are concise proposals,
+not issue templates or creation commands. Full preparation belongs to `task-prepare`.
+Legacy issue bodies remain readable but new runbooks do not publish them.
+Common scaffolding enforces readiness and patch fallback for both guided and
+low-level callers. Omitted legacy thread-blocker metadata is derived from validated
+thread decisions; it cannot exempt a contradictory verdict. Optional
+`routing_response` holds edited routing-only prose without changing the shared
+`proposed_response` or suggestion parts and survives presentation repair.

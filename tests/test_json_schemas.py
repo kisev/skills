@@ -51,6 +51,88 @@ def validator(path: str) -> Validator:
     return validator_type(schema, format_checker=FormatChecker())
 
 
+@pytest.mark.parametrize(
+    ("definition", "instance"),
+    [
+        (
+            "thread_decision",
+            {
+                "id": "42",
+                "url": "https://gitlab.example/group/project/-/merge_requests/7#note_42",
+                "state": "open",
+                "assessment": "accepted",
+                "severity": "medium",
+                "rationale": "The retry still duplicates writes.",
+                "outcome": "reply",
+                "proposed_response": "Reuse the request key.",
+                "routing_response": "The correction is proposed in a positioned thread.",
+                "fix_mode": "suggestion",
+                "patch": None,
+                "fixing_commit": None,
+                "last_note_id": 42,
+                "last_note_body_sha256": DIGEST,
+                "thread_sha256": DIGEST,
+                "suggestions": [
+                    {"path": "review.txt", "line": 2, "body": "```suggestion\nkeyed retry\n```"}
+                ],
+            },
+        ),
+        (
+            "response",
+            {
+                "id": "critic-retry",
+                "decision": "accept",
+                "reason": "Confirmed on the exact head.",
+                "severity_override": {
+                    "original_severity": "high",
+                    "severity": "medium",
+                    "reason": "Only opt-in retry callers are affected.",
+                },
+            },
+        ),
+        (
+            "finding_publication",
+            {
+                "finding_id": "critic-retry",
+                "revision": 1,
+                "type": "existing_thread",
+                "thread_id": "42",
+                "path": None,
+                "line": None,
+                "old_line": None,
+                "body": "The existing discussion owns the validated fix.",
+                "fix_mode": "not_required",
+                "patch": None,
+                "patch_path": None,
+                "patch_sha256": None,
+            },
+        ),
+        (
+            "recommended_issue",
+            {
+                "id": "policy-doc",
+                "revision": 1,
+                "title": "Document the existing retry policy",
+                "problem": "The policy is not discoverable.",
+                "evidence": ["The guide omits the existing option."],
+                "minimum_fix": "Document the option.",
+                "importance": "Non-blocking operational improvement.",
+                "risk": "Operators may select an unsuitable policy.",
+                "reason_out_of_scope": "This MR does not alter the option.",
+                "existing_task": None,
+            },
+        ),
+    ],
+)
+def test_review_extensions_have_concrete_valid_instances(
+    definition: str, instance: dict[str, Any]
+) -> None:
+    schema = load("shared/references/portable_gitlab/artifact-contracts-v2.schema.json")
+    schema.pop("oneOf")
+    schema["$ref"] = f"#/$defs/{definition}"
+    validator_for(schema)(schema).validate(instance)
+
+
 def envelope(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": f"portable-gitlab/{kind}/v2",

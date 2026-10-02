@@ -47,12 +47,16 @@ export function suggestionRange(body: string): {
     ...body.matchAll(/^```suggestion(?::-([0-9]+)\+([0-9]+))?\n([\s\S]*?)\n```[ \t]*(?:\n|$)/gm),
   ];
   if (matches.length !== 1)
-    throw new WorkflowError("Each suggestion part requires exactly one suggestion block");
+    throw new WorkflowError(
+      "Each suggestion part requires exactly one block: ```suggestion or ```suggestion:-N+M, newline, replacement, newline, ```",
+    );
   const match = matches[0];
   const before = Number(match[1] ?? 0),
     after = Number(match[2] ?? 0);
   if (before > 100 || after > 100)
-    throw new WorkflowError("Suggestion range exceeds the supported limit");
+    throw new WorkflowError(
+      `Suggestion range -${before}+${after} exceeds the supported limit; expected N and M in 0..100 in suggestion:-N+M`,
+    );
   return { before, after, replacement: match[3] === "" ? [] : match[3].split("\n") };
 }
 
@@ -83,7 +87,9 @@ export function suggestionsPatch(
     for (const edit of edits) {
       const start = edit.line - edit.before;
       if (start < 1 || edit.line + edit.after > original.length || start <= end)
-        throw new WorkflowError("Related suggestion ranges overlap or escape the reviewed file");
+        throw new WorkflowError(
+          `Related suggestion ranges overlap or escape the reviewed file: ${path}:${start}..${edit.line + edit.after}; expected a non-overlapping range within 1..${original.length} on the exact head (anchor line ${edit.line}, suggestion:-${edit.before}+${edit.after})`,
+        );
       end = edit.line + edit.after;
     }
     const updated = [...original];

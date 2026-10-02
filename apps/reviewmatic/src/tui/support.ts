@@ -38,6 +38,7 @@ import { suggestionsPatch } from "../fixes.js";
 import { stringsFor, type Strings } from "./strings.js";
 
 export type Json = Record<string, unknown>;
+const successfulReplies = new Set<string>();
 
 export type PlanAction = {
   id: string;
@@ -510,7 +511,16 @@ export async function amendBody(
   const item = planItems(bundle).find((candidate) => candidate.publicationId === publicationId);
   if (item === undefined || item.actions.length === 0)
     throw new WorkflowError("This item has no editable publication body");
-  if (item.detail.fix_mode === "suggestion") {
+  const routingReply =
+    item.kind === "thread" &&
+    Array.isArray(item.detail.suggestions) &&
+    item.body !== null &&
+    !/^```suggestion/m.test(item.body);
+  if (routingReply && /^```suggestion|^diff --git |git\s+apply\s*(?:<<|--)/m.test(normalized))
+    throw new WorkflowError(
+      "A routing-only reply must remain prose; use targeted fix repair to change suggestions or patches",
+    );
+  if (item.detail.fix_mode === "suggestion" && !routingReply) {
     validateSuggestion(normalized, {
       repoRoot: String((context.exact_git as Json).repo_root),
       headSha: String(evidence.head_sha),
@@ -550,7 +560,7 @@ export async function amendBody(
     );
   let semanticBody = normalized;
   if (item.detail.fix_mode === "patch") {
-    const suffix = `\n\n${codeFence(renderPublicationPatchCommand(item.detail), "sh")}\n`;
+    const suffix = `\n\n${item.detail.patch_reason}\n\n${codeFence(renderPublicationPatchCommand(item.detail), "sh")}\n`;
     if (!normalized.endsWith(suffix))
       throw new WorkflowError("Body editing must preserve the validated patch command");
     semanticBody = normalized.slice(0, -suffix.length).trimEnd();
@@ -600,6 +610,23 @@ export async function amendBody(
       ),
     };
   };
+  const updateThread = (record: Json): Json => {
+    if (`thread-${record.id}` !== publicationId) return record;
+    if (routingReply) return { ...record, routing_response: semanticBody };
+    if (
+      Array.isArray(record.suggestions) &&
+      record.suggestions.some((part: Json) => part.path === item.path && part.line === item.line)
+    )
+      return {
+        ...record,
+        suggestions: (record.suggestions as Json[]).map((part) =>
+          part.path === item.path && part.line === item.line
+            ? { ...part, body: semanticBody }
+            : part,
+        ),
+      };
+    return { ...record, proposed_response: semanticBody };
+  };
   if (partNumber !== undefined) {
     nextPlan.thread_decisions = (bundle.plan.thread_decisions as Json[]).map((record) =>
       updatePart(record, true),
@@ -609,9 +636,7 @@ export async function amendBody(
     );
   } else if (item.kind === "thread")
     nextPlan.thread_decisions = ((bundle.plan.thread_decisions ?? []) as Json[]).map((record) =>
-      `thread-${record.id}` === publicationId
-        ? { ...record, proposed_response: semanticBody }
-        : record,
+      updateThread(record),
     );
   else if (item.kind === "issue")
     nextPlan.recommended_issues = ((bundle.plan.recommended_issues ?? []) as Json[]).map(
@@ -647,11 +672,9 @@ export async function amendBody(
             : "finding_publications";
     sourceContent[key] = (sourceContent[key] as Json[]).map((record) => {
       if (partNumber !== undefined) return updatePart(record, key === "thread_decisions");
-      const id =
-        key === "thread_decisions" ? `thread-${record.id}` : String(record.finding_id ?? record.id);
-      return id === publicationId
-        ? { ...record, [key === "thread_decisions" ? "proposed_response" : "body"]: semanticBody }
-        : record;
+      if (key === "thread_decisions") return updateThread(record);
+      const id = String(record.finding_id ?? record.id);
+      return id === publicationId ? { ...record, body: semanticBody } : record;
     });
     nextPlan.review_source = source;
   }
@@ -686,7 +709,66 @@ export async function sendAction(
 ): Promise<Json> {
   if (bundle.plan.review_contract_version !== REVIEW_CONTRACT_VERSION)
     throw new WorkflowError("Historical plans are read-only; prepare a new runbook");
+  const replyKey = `${bundle.planDigest}:${action.publication_id}`;
+  if (["resolve", "reopen"].includes(action.operation) && !successfulReplies.has(replyKey))
+    throw new WorkflowError(
+      "Send the planned reply successfully before changing discussion state in this manual session",
+    );
   const result = await sendCommand(action.command, signal);
+  if (result.code === 0 && action.operation === "reply") successfulReplies.add(replyKey);
+  if (result.code === 0 && action.operation === "reply") {
+    const thread = ((bundle.plan.thread_decisions ?? []) as Json[]).find(
+      (thread) => action.publication_id === `thread-${thread.id}`,
+    );
+    if (
+      thread?.state === "plain" &&
+      ["fixed", "false_positive", "duplicate", "not_related"].includes(String(thread.assessment))
+    ) {
+      let returned: Json;
+      try {
+        returned = JSON.parse(result.stdout.toString("utf8"));
+      } catch {
+        throw new WorkflowError(
+          "Reply succeeded but its discussion identity is unavailable; inspect GitLab before any state change or retry",
+        );
+      }
+      if (
+        Array.isArray(returned.notes) &&
+        (returned.notes as Json[]).some((note) => note.resolvable === true)
+      ) {
+        if (typeof returned.id !== "string" || !/^[A-Za-z0-9_-]+$/.test(returned.id))
+          throw new WorkflowError(
+            "Reply succeeded but returned an invalid discussion ID; no state change was made",
+          );
+        const argv = commandArgv(action.command);
+        const endpointIndex = argv.findIndex((value) =>
+          /^projects\/\d+\/merge_requests\/\d+\/discussions$/.test(value),
+        );
+        const resolved = await sendCommand(
+          shellJoin([
+            "glab",
+            "api",
+            "--hostname",
+            argv[argv.indexOf("--hostname") + 1],
+            "--method",
+            "PUT",
+            `${argv[endpointIndex]}/${returned.id}`,
+            "--silent",
+            "-F",
+            "resolved=true",
+          ]),
+          signal,
+        );
+        if (resolved.code !== 0)
+          return {
+            status: "error",
+            code: resolved.code,
+            output: "Reply sent; discussion state update failed. Do not repeat the reply.",
+            error: redact(resolved.stderr.toString("utf8")),
+          };
+      }
+    }
+  }
   return {
     status: result.code === 0 ? "sent" : "error",
     code: result.code,

@@ -520,7 +520,9 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "Keep current labels, unresolved labels, and exhaustive assessment in",
         "`finish-review` and, for an existing finalized",
         "continues the complete existing conversation naturally",
-        "thread-state command is",
+        "resolve/reopen share one `shell` block",
+        "Show every concrete",
+        "including thread replies",
     ):
         assert marker in output
     state_machine = (ROOT / "skills/code-review/references/review-state-machine.md").read_text(
@@ -553,7 +555,9 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
     )
     for marker in (
         "reviewmatic plan",
-        "no receipt dependency",
+        "State changes follow a successful reply only",
+        "actual ID",
+        "direct block uses",
     ):
         assert marker in publication
     assert "Local WIP always receives" not in incremental

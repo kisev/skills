@@ -77,7 +77,9 @@ fresh discussion audit without a critic.
 The stable `runbook.md` is a compact human review document. Its header
 shows `code-review: <skill version> · contract: <version>`, then contains:
 
-1. Target, role, verdict, and the manual-only warning.
+1. Target, role, concise verdict with its reason, technical and process blockers,
+   architecture, SemVer, and the manual-only warning. The summary is derived from
+   the same effective findings and verdict, not an independently edited verdict.
 2. Compact MR metadata without a repeated labels recommendation.
 3. A project-label section beside metadata with only add/remove delta and its
    command. Keep current labels, unresolved labels, and exhaustive assessment in
@@ -89,9 +91,11 @@ shows `code-review: <skill version> · contract: <version>`, then contains:
 7. Read-only local fixes for author mode.
 8. New reviewer findings and their actions; previous findings are not shown as new.
    Each previous finding's detail and action stay together in their own section.
-9. Non-blocking recommended issues for confirmed out-of-scope problems.
+9. Concise non-blocking follow-up proposals: problem and proof, solution,
+   importance, postponement risk, why outside the MR, existing task if known.
+   No issue templates or issue creation commands; full preparation is separate.
 10. Threads reviewed without publication.
-11. Architecture, SemVer, and checks.
+11. Checks; architecture and SemVer already appear at the beginning.
 12. No empty sections or separate manual-publication section: each command stays
     beside its item. Keep exhaustive history and evidence in private JSON.
 
@@ -102,7 +106,7 @@ second rendered copy or local preflight of a patch already present in the exact
 publication preview. Those bindings and validation results remain in private JSON.
 
 The model supplies semantic assessment prose, natural role-authored publication
-bodies, template selections, and exhaustive label-applicability rationales. The
+bodies, concise follow-up proposals, and exhaustive label-applicability rationales. The
 runner owns standard localized presentation labels, observed label descriptions,
 paths, exact GitLab identity, body files, direct commands, and chat rendering.
 Do not hand-edit generated commands or final chat.
@@ -128,5 +132,10 @@ using `git apply <<'PATCH'`; the model never embeds it in the input body.
 Outer Markdown fences must accommodate fences inside the patch. A body intended for GitLab must
 not contain a local checkout path, interpreter path, runtime helper, or local
 marker command. The same patch is available as
-an immutable local `.patch` artifact for manual use. A thread-state command is
-shown separately after the command that publishes its explanation.
+an immutable local `.patch` artifact for manual use. Show every concrete
+`patch_reason` before its patch, including thread replies. Findings and accepted thread defects show severity
+and merge impact; other discussions show the check result. Every `no_publication`
+shows its reason. A reply and its resolve/reopen share one `shell` block, with `#`
+before each command and `&&` so state changes only after successful publication.
+For plain comments, use the actual returned discussion ID and resolvability:
+close completed discussions only, never questions or unresolved defects.

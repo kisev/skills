@@ -2119,6 +2119,77 @@ export function expectedThreadBindings(context: Json): Record<string, Json> {
   return expected;
 }
 
+export function validatePatchFallback(fix: Json, context: Json, evidence: Json): void {
+  if (fix.fix_mode !== "patch" || fix.type === "local_fix" || fix.outcome === "local_fix") return;
+  if (!nonemptyString(fix.patch_reason))
+    throw new WorkflowError(
+      "Expected a concrete patch_reason explaining technical impossibility or unsafe division",
+    );
+  const repo = String((context.exact_git as Json).repo_root);
+  const head = String(evidence.head_sha);
+  const result: { tree?: string } = {};
+  validateGitPatch(repo, head, String(fix.patch), result);
+  const paths = patchPaths(String(fix.patch));
+  const hunks = [
+    ...String(fix.patch).matchAll(
+      /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@[^\n]*\n([\s\S]*?)(?=^@@ |^diff --git |$(?![\s\S]))/gm,
+    ),
+  ];
+  if (paths.length !== 1 || hunks.length !== 1) return;
+  const hunk = hunks[0];
+  const count = Number(hunk[2] ?? 1),
+    start = Number(hunk[1]);
+  if (count > 201) return;
+  const [, visible] = changedDiffLines(repo, String(evidence.base_sha), head, paths[0]);
+  let replacement = hunk[5]
+    .split("\n")
+    .filter((row) => row.startsWith(" ") || row.startsWith("+"))
+    .map((row) => row.slice(1))
+    .join("\n");
+  let line: number | undefined,
+    before = 0,
+    after = 0;
+  if (count === 0) {
+    line = Math.max(1, start);
+    if (!visible.has(line)) return;
+    let source: string;
+    try {
+      source = String(gitRead(repo, ["show", `${head}:${paths[0]}`])).split("\n")[line - 1];
+    } catch (error) {
+      if (error instanceof WorkflowError) return;
+      throw error;
+    }
+    replacement = start === 0 ? `${replacement}\n${source}` : `${source}\n${replacement}`;
+  } else {
+    line = [...visible].find(
+      (value) =>
+        value >= start &&
+        value < start + count &&
+        value - start <= 100 &&
+        start + count - value - 1 <= 100,
+    );
+    if (line === undefined) return;
+    before = line - start;
+    after = start + count - line - 1;
+  }
+  const suggestion = {
+    path: paths[0],
+    line,
+    body: `\`\`\`suggestion:-${before}+${after}\n${replacement}\n\`\`\``,
+  };
+  const suggested: { tree?: string } = {};
+  try {
+    validateGitPatch(repo, head, suggestionsPatch(repo, head, [suggestion]), suggested);
+  } catch (error) {
+    if (error instanceof WorkflowError) return;
+    throw error;
+  }
+  if (suggested.tree === result.tree)
+    throw new WorkflowError(
+      "A safe bounded suggestion is available on the exact visible head; use fix_mode=suggestion instead of patch",
+    );
+}
+
 function validateFixingCommit(value: unknown): void {
   if (value === null || value === undefined) return;
   if (
@@ -2132,7 +2203,7 @@ function validateFixingCommit(value: unknown): void {
   }
 }
 
-function validateThreadFix(
+export function validateThreadFix(
   item: Json,
   source: Json,
   repoRoot: string,
@@ -2140,6 +2211,13 @@ function validateThreadFix(
   baseSha: string,
 ): void {
   const fixMode = item.fix_mode;
+  if (
+    item.routing_response !== undefined &&
+    (!Array.isArray(item.suggestions) ||
+      !nonemptyString(item.routing_response) ||
+      /^```suggestion|^diff --git |git\s+apply\s*(?:<<|--)/m.test(String(item.routing_response)))
+  )
+    throw new WorkflowError("routing_response requires grouped suggestions and prose only");
   if (!["suggestion", "patch", "not_required"].includes(fixMode as string)) {
     throw new WorkflowError("thread fix mode is invalid");
   }
@@ -2193,6 +2271,17 @@ function validateThreadFix(
       path: exactPosition.new_path as string,
       line: exactPosition.new_line as number,
     });
+    validateGitPatch(
+      repoRoot,
+      headSha,
+      suggestionsPatch(repoRoot, headSha, [
+        {
+          path: String(exactPosition.new_path),
+          line: Number(exactPosition.new_line),
+          body: String(response),
+        },
+      ]),
+    );
   }
   if (
     fixMode === "patch" &&
@@ -2240,7 +2329,8 @@ export function validateFindingPublications(value: unknown, findingIds: Set<stri
     const item = entry as Json;
     if (!isDict(item)) throw new WorkflowError("finding publication is invalid");
     const baseKeys = keySet(item);
-    for (const key of ["suggestions", "split_rationale", "patch_reason"]) baseKeys.delete(key);
+    for (const key of ["suggestions", "split_rationale", "patch_reason", "thread_id"])
+      baseKeys.delete(key);
     if (!isDict(item) || !setsEqual(baseKeys, keys)) {
       throw new WorkflowError("finding publication is invalid");
     }
@@ -2249,6 +2339,31 @@ export function validateFindingPublications(value: unknown, findingIds: Set<stri
     const path = item.path ?? null;
     const line = item.line ?? null;
     const oldLine = item.old_line ?? null;
+    if (publicationType !== "existing_thread" && item.thread_id !== undefined)
+      throw new WorkflowError(
+        "thread_id is valid only with type=existing_thread; other finding fixes must omit it",
+      );
+    if (publicationType === "existing_thread") {
+      if (
+        !nonemptyString(findingId) ||
+        !findingIds.has(String(findingId)) ||
+        seen.has(String(findingId)) ||
+        !nonemptyString(item.thread_id) ||
+        !nonemptyString(item.body) ||
+        item.fix_mode !== "not_required" ||
+        item.patch !== null ||
+        path !== null ||
+        line !== null ||
+        oldLine !== null ||
+        item.suggestions !== undefined
+      )
+        throw new WorkflowError(
+          "existing_thread requires thread_id, prose body, not_required, and null patch/positions; the thread owns the fix",
+        );
+      seen.add(String(findingId));
+      result.push(item);
+      continue;
+    }
     if (
       !nonemptyString(findingId) ||
       !findingIds.has(findingId as string) ||
@@ -2369,7 +2484,7 @@ function validatePreviousAssessments(
   return Object.values(actual);
 }
 
-function validateRecommendedIssues(value: unknown, issueTemplates: Json[]): Json[] {
+function validateRecommendedIssues(value: unknown, _issueTemplates: Json[]): Json[] {
   const keys = new Set([
     "id",
     "title",
@@ -2378,8 +2493,8 @@ function validateRecommendedIssues(value: unknown, issueTemplates: Json[]): Json
     "evidence",
     "reason_out_of_scope",
     "minimum_fix",
-    "body",
-    "template_path",
+    "importance",
+    "existing_task",
   ]);
   if (!Array.isArray(value)) {
     throw new WorkflowError("recommended issues must be an array");
@@ -2388,40 +2503,38 @@ function validateRecommendedIssues(value: unknown, issueTemplates: Json[]): Json
   const seen = new Set<string>();
   for (const entry of value) {
     const item = entry as Json;
-    if (!isDict(item) || !setsEqual(keySet(item), keys)) {
+    const legacyKeys = new Set(
+      [...keys]
+        .filter((key) => !["importance", "existing_task"].includes(key))
+        .concat(["body", "template_path"]),
+    );
+    if (!isDict(item) || (!setsEqual(keySet(item), keys) && !setsEqual(keySet(item), legacyKeys))) {
       throw new WorkflowError("recommended issue is invalid");
     }
     const itemId = item.id;
     if (
       !nonemptyString(itemId) ||
       seen.has(itemId as string) ||
-      !["title", "problem", "risk", "reason_out_of_scope", "minimum_fix", "body"].every((key) =>
-        nonemptyString(item[key]),
-      ) ||
+      ![
+        "title",
+        "problem",
+        "risk",
+        "reason_out_of_scope",
+        "minimum_fix",
+        "importance" in item ? "importance" : "body",
+      ].every((key) => nonemptyString(item[key])) ||
       !Array.isArray(item.evidence) ||
       (item.evidence as unknown[]).length === 0 ||
       !(item.evidence as unknown[]).every((subItem) => nonemptyString(subItem))
     ) {
       throw new WorkflowError("recommended issue content is invalid");
     }
-    const templatePath = item.template_path ?? null;
-    const templates = new Map<string, Json>(
-      issueTemplates.map((template) => [String(template.path), template]),
-    );
-    if (templates.size > 0 && !templates.has(templatePath as string)) {
-      throw new WorkflowError("recommended issue must select a project issue template");
-    }
-    if (templates.size === 0 && templatePath !== null) {
-      throw new WorkflowError("recommended issue template is unavailable");
-    }
     if (
-      templatePath !== null &&
-      !((templates.get(templatePath as string) as Json).headings as string[]).every((heading) =>
-        (item.body as string).includes(heading),
-      )
-    ) {
-      throw new WorkflowError("recommended issue does not fill its selected template");
-    }
+      item.existing_task !== undefined &&
+      item.existing_task !== null &&
+      !nonemptyString(item.existing_task)
+    )
+      throw new WorkflowError("recommended issue existing_task must be a task reference or null");
     seen.add(itemId as string);
     result.push(item);
   }
@@ -2569,6 +2682,7 @@ async function structuredPublicationPreview(
   recommendedIssues: Json[],
   labelReview: Json,
   dryRun = false,
+  locale = "en",
 ): Promise<[Json, Json[], Json[], Json[]]> {
   const bodyDirectory = `${root}/artifacts/review_plan/bodies`;
   const patchDirectory = `${root}/artifacts/review_plan/patches`;
@@ -2632,7 +2746,7 @@ async function structuredPublicationPreview(
 
   const bodyWithFix = (body: string, fix: Json): string => {
     if (fix.fix_mode !== "patch") return body;
-    return `${body.replace(/\s+$/, "")}\n\n${codeFence(renderPublicationPatchCommand(fix), "sh")}`;
+    return `${body.replace(/\s+$/, "")}\n\n${fix.patch_reason}\n\n${codeFence(renderPublicationPatchCommand(fix), "sh")}`;
   };
 
   const enrichedThreads = threadDecisions.map((item) => enrichFix("thread", String(item.id), item));
@@ -2647,7 +2761,7 @@ async function structuredPublicationPreview(
     const latest = meaningful[meaningful.length - 1] as Json;
     const position = source.root_position ?? null;
     return {
-      discussion_id: source.id,
+      discussion_id: source.root_resolvable === true ? source.id : null,
       root_note_id: source.root_note_id,
       resolvable: source.root_resolvable === true,
       resolved: source.root_resolved === true,
@@ -2756,8 +2870,7 @@ async function structuredPublicationPreview(
             hostname,
             "--method",
             "POST",
-            `${endpoint}/notes`,
-            "--silent",
+            `${endpoint}/discussions`,
             "-F",
             `body=@${bodyPath}`,
           ],
@@ -2852,7 +2965,7 @@ async function structuredPublicationPreview(
     const assessment = assessmentById.get(findingId) ?? null;
     if (previousAllowed.has(findingId) && assessment?.publication_action === "no_publication")
       continue;
-    if (context.role === "author") continue;
+    if (context.role === "author" || publicationSpec.type === "existing_thread") continue;
     if (publicationSpec.suggestions !== undefined) {
       const parts = suggestionParts(publicationSpec);
       for (const [index, part] of parts.entries()) {
@@ -2911,10 +3024,7 @@ async function structuredPublicationPreview(
         ? 1
         : previousRevision + (assessment !== null && assessment.status === "changed" ? 1 : 0);
     enrichedIssues.push({ ...issueValue, revision: revision });
-    if (assessment !== null && assessment.publication_action === "no_publication") continue;
-    await addBodyAction(issueId, revision, "issue", "create_issue", issueValue.body as string, {
-      mutation: { title: issueValue.title },
-    });
+    // Follow-ups are proposals only. Full task preparation is a separate skill.
   }
 
   for (const decision of enrichedThreads) {
@@ -2927,12 +3037,32 @@ async function structuredPublicationPreview(
     if (["resolve", "reopen"].includes(operation) && discussion === null) {
       throw new WorkflowError("a plain note cannot change thread state");
     }
+    let response = decision.proposed_response as string;
+    if (decision.suggestions !== undefined) {
+      const position = discussion?.root_position as Json | undefined;
+      const parts = suggestionParts(decision);
+      const matching = parts.find(
+        (part) =>
+          position !== undefined &&
+          position.head_sha === evidence.head_sha &&
+          part.path === position.new_path &&
+          part.line === position.new_line,
+      );
+      response = matching
+        ? suggestionBody(response, matching)
+        : String(
+            decision.routing_response ??
+              (locale === "ru"
+                ? "Исправление предложено отдельным positioned thread на актуальных строках."
+                : "The fix is proposed in a separate positioned thread on the current lines."),
+          );
+    }
     await addBodyAction(
       publicationId,
       revision,
       "thread",
       operation,
-      bodyWithFix(decision.proposed_response as string, decision),
+      bodyWithFix(response, decision),
       {
         mutation: {
           desired_resolved: operation === "resolve" ? true : operation === "reopen" ? false : null,
@@ -2945,13 +3075,21 @@ async function structuredPublicationPreview(
   for (const decision of enrichedThreads) {
     if (decision.suggestions === undefined) continue;
     const parts = suggestionParts(decision);
+    const position = discussionByRoot.get(String(decision.id))?.root_position as Json | undefined;
     for (const [index, part] of parts.entries()) {
+      if (
+        position !== undefined &&
+        position.head_sha === evidence.head_sha &&
+        part.path === position.new_path &&
+        part.line === position.new_line
+      )
+        continue;
       await addBodyAction(
         `thread-${decision.id}@suggestion-${index + 1}`,
         1,
         "thread",
         "create_line",
-        suggestionBody(String(decision.proposed_response), part),
+        `${suggestionBody(String(decision.proposed_response), part)}\n\n${locale === "ru" ? "Исходный thread" : "Original thread"}: [${decision.id}](${decision.url})`,
         { mutation: { path: part.path, line: part.line, old_line: null } },
       );
     }
@@ -3015,6 +3153,9 @@ export async function reviewMarkdown(
     bodies.set(item.publication_id as string, item);
   }
   const publicationActions = publication.actions as Json[];
+  const blockingThreads = new Set(
+    blockingThreadIds(content.thread_decisions as Json[], content.finding_publications as Json[]),
+  );
   const actionsByPublication = new Map<string, Json[]>();
   for (const item of publicationActions) {
     const publicationId =
@@ -3040,6 +3181,29 @@ export async function reviewMarkdown(
     `- ${presentation.publication_warning}`,
     "",
     content.summary as string,
+    "",
+    `**${content.locale === "ru" ? "Влияние на слияние" : "Merge impact"}:** ${(content.findings as Json[]).filter((finding) => finding.severity !== "low").length} ${content.locale === "ru" ? "блокирующих находок" : "blocking findings"}.`,
+    `**${content.locale === "ru" ? "Технические блокеры" : "Technical blockers"}:**`,
+    ...(content.findings as Json[])
+      .filter((finding) => finding.severity !== "low")
+      .map(
+        (finding) =>
+          `- ${finding.summary}: ${(presentation.severity_labels as Json)[String(finding.severity)]}`,
+      ),
+    ...(content.thread_decisions as Json[])
+      .filter((thread) => blockingThreads.has(String(thread.id)))
+      .map((thread) => `- [${thread.id}](${thread.url}): ${thread.rationale}`),
+    ...((decision.ci_job_assessments ?? []) as Json[])
+      .filter((job) => job.classification !== "process_gate")
+      .map((job) => `- CI: ${job.rationale}`),
+    `**${content.locale === "ru" ? "Процессные ограничения и решения владельца" : "Process gates and owner decisions"}:**`,
+    ...((decision.owner_decision_reasons ?? []) as string[]).map((reason) => `- ${reason}`),
+    ...((decision.ci_job_assessments ?? []) as Json[])
+      .filter((job) => job.classification === "process_gate")
+      .map((job) => `- CI: ${job.rationale}`),
+    "",
+    `**${presentation.architecture_heading}:** ${content.architecture_assessment}`,
+    ...semverReportLines(content, content.locale as string),
     "",
     `## ${presentation.metadata_heading}`,
     "",
@@ -3122,12 +3286,17 @@ export async function reviewMarkdown(
       );
     }
     lines.push("");
+    for (const item of previous.filter((item) => item.publication_action === "no_publication"))
+      lines.push(`- ${item.current_status}: ${item.rationale}`);
+    if (previous.some((item) => item.publication_action === "no_publication")) lines.push("");
   }
 
   const addFix = async (fix: Json): Promise<void> => {
     if (fix.fix_mode === "suggestion") return;
     if (fix.fix_mode !== "patch") return;
     lines.push(
+      String(fix.patch_reason),
+      "",
       "```sh",
       renderPatchCheck(context, fix),
       "```",
@@ -3152,7 +3321,28 @@ export async function reviewMarkdown(
         ? (action.operation as string)
         : "reply"
     ];
-    lines.push(label, "", "```shell", action.command as string, "```");
+    const stateAction = (actionsByPublication.get(String(publicationId)) ?? []).find(
+      (candidate) =>
+        ["resolve", "reopen"].includes(String(candidate.operation)) &&
+        !shownActions.has(String(candidate.id)),
+    );
+    const thread = (content.thread_decisions as Json[]).find(
+      (thread) => `thread-${thread.id}` === publicationId,
+    );
+    let command = `# ${label}\n${action.command}`;
+    if (stateAction && !["resolve", "reopen"].includes(String(action.operation))) {
+      shownActions.add(String(stateAction.id));
+      command += ` &&\n# ${reviewActionLabels(String(content.locale))[String(stateAction.operation)]}\n${stateAction.command}`;
+    } else if (
+      thread &&
+      thread.state === "plain" &&
+      ["fixed", "false_positive", "duplicate", "not_related"].includes(String(thread.assessment))
+    ) {
+      const project = evidence.project as Json;
+      const endpoint = `projects/${project.id}/merge_requests/${(evidence.target as Json).iid}/discussions`;
+      command = `# ${label}\nresponse=$(${action.command}) &&\n# ${content.locale === "ru" ? "Проверить разрешимость нового discussion" : "Check the returned discussion's resolvability"}\nif printf '%s' "$response" | jq -e '.notes | any(.resolvable == true)' >/dev/null; then\n  # ${content.locale === "ru" ? "Получить реальный discussion ID" : "Read the actual discussion ID"}\n  discussion_id=$(printf '%s' "$response" | jq -er '.id | select(type == "string" and test("^[A-Za-z0-9_-]+$"))') &&\n  # ${content.locale === "ru" ? "Закрыть только завершённое обсуждение после ответа" : "Resolve only a completed discussion after its reply"}\n  glab api --hostname ${shellQuote(String(project.hostname))} --method PUT "${endpoint}/$discussion_id" --silent -F resolved=true\nfi`;
+    }
+    lines.push(label, "", "```shell", command, "```");
     lines.push("");
   };
 
@@ -3161,6 +3351,41 @@ export async function reviewMarkdown(
   };
 
   const threadDecisions = content.thread_decisions as Json[];
+  const impact = (severity: unknown): string =>
+    severity === "low"
+      ? content.locale === "ru"
+        ? "Не блокирует слияние"
+        : "Does not block merge"
+      : content.locale === "ru"
+        ? "Блокирует слияние"
+        : "Blocks merge";
+  const assessments: Record<string, string> =
+    content.locale === "ru"
+      ? {
+          fixed: "Исправлено",
+          false_positive: "Ложное срабатывание",
+          duplicate: "Дубликат",
+          not_related: "Вне изменений",
+          question: "Вопрос",
+          neutral: "Не требует действий",
+        }
+      : {
+          fixed: "Fixed",
+          false_positive: "False positive",
+          duplicate: "Duplicate",
+          not_related: "Outside the change",
+          question: "Question",
+          neutral: "No action needed",
+        };
+  const threadResult = (item: Json): string => {
+    const linked = (content.findings as Json[]).find(
+      (finding) => findingPublications.get(String(finding.id))?.thread_id === item.id,
+    );
+    const severity = linked?.severity ?? item.severity ?? "medium";
+    return item.assessment === "accepted"
+      ? `${(presentation.severity_labels as Json)[String(severity)]} · ${impact(severity)}`
+      : `${content.locale === "ru" ? "Результат проверки" : "Check result"}: ${assessments[String(item.assessment)]}`;
+  };
 
   const addThreadSection = (heading: string, items: Json[]): void => {
     lines.push(`## ${heading}`, "");
@@ -3169,7 +3394,14 @@ export async function reviewMarkdown(
       return;
     }
     for (const item of items) {
-      lines.push(`### [${item.id}](${item.url})`, "", item.rationale as string, "");
+      lines.push(
+        `### [${item.id}](${item.url})`,
+        "",
+        threadResult(item),
+        "",
+        item.rationale as string,
+        "",
+      );
       addPublicationAction(`thread-${item.id}`);
     }
   };
@@ -3201,6 +3433,8 @@ export async function reviewMarkdown(
     lines.push(
       `### [${item.id}](${item.url})`,
       "",
+      threadResult(item),
+      "",
       item.rationale as string,
       "",
       item.proposed_response as string,
@@ -3214,7 +3448,7 @@ export async function reviewMarkdown(
       lines.push(
         `### ${finding.summary}`,
         "",
-        `\`${finding.id}\` · ${(presentation.severity_labels as Json)[finding.severity as string]}`,
+        `\`${finding.id}\` · ${(presentation.severity_labels as Json)[finding.severity as string]} · ${finding.severity === "low" ? (content.locale === "ru" ? "Не блокирует слияние" : "Does not block merge") : content.locale === "ru" ? "Блокирует слияние" : "Blocks merge"}`,
         "",
         finding.risk as string,
         "",
@@ -3236,7 +3470,7 @@ export async function reviewMarkdown(
     lines.push(
       `### ${finding.summary}`,
       "",
-      `\`${finding.id}\` · ${(presentation.severity_labels as Json)[finding.severity as string]}`,
+      `\`${finding.id}\` · ${(presentation.severity_labels as Json)[finding.severity as string]} · ${finding.severity === "low" ? (content.locale === "ru" ? "Не блокирует слияние" : "Does not block merge") : content.locale === "ru" ? "Блокирует слияние" : "Blocks merge"}`,
       "",
       finding.risk as string,
       "",
@@ -3254,6 +3488,16 @@ export async function reviewMarkdown(
       "",
     );
     if (findingPublications.has(finding.id as string)) {
+      const spec = findingPublications.get(String(finding.id))!;
+      if (spec.type === "existing_thread") {
+        const thread = (content.thread_decisions as Json[]).find(
+          (thread) => thread.id === spec.thread_id,
+        )!;
+        lines.push(
+          `[${content.locale === "ru" ? "Фикс в исходном thread" : "Fix in the existing thread"}](${thread.url}): ${spec.body}`,
+          "",
+        );
+      }
       addPublicationAction(String(finding.id));
     }
   }
@@ -3266,7 +3510,14 @@ export async function reviewMarkdown(
       "",
     );
     for (const finding of existingFindings) {
-      lines.push(`### ${finding.summary}`, "", finding.minimum_fix as string, "");
+      lines.push(
+        `### ${finding.summary}`,
+        "",
+        `${(presentation.severity_labels as Json)[String(finding.severity)]} · ${impact(finding.severity)}`,
+        "",
+        finding.minimum_fix as string,
+        "",
+      );
       addPublicationAction(String(finding.id));
     }
   }
@@ -3294,6 +3545,8 @@ export async function reviewMarkdown(
       "",
       issue.risk as string,
       "",
+      String(issue.importance ?? ""),
+      ...(issue.existing_task ? [String(issue.existing_task), ""] : []),
       `**${presentation.evidence_label}**`,
       "",
       ...(issue.evidence as string[]).map((value) => `- ${value}`),
@@ -3314,20 +3567,14 @@ export async function reviewMarkdown(
     lines.push(presentation.no_items as string, "");
   } else {
     lines.push(
-      ...withoutPublication.map((item) => `- [${item.id}](${item.url}): ${item.rationale}`),
+      ...withoutPublication.map(
+        (item) => `- [${item.id}](${item.url}): ${threadResult(item)}. ${item.rationale}`,
+      ),
     );
     lines.push("");
   }
 
   lines.push(
-    `## ${presentation.architecture_heading}`,
-    "",
-    content.architecture_assessment as string,
-    "",
-    `## ${presentation.semver_heading}`,
-    "",
-    ...semverReportLines(content, content.locale as string),
-    "",
     `## ${presentation.checks_heading}`,
     "",
     ...[...new Set(content.checks as string[])].map((value) => `- ${value}`),
@@ -3737,6 +3984,17 @@ export async function scaffoldReview(
   if (!jsonEqual(acceptedFindings, findings)) {
     throw new WorkflowError("review plan findings do not match the review decision");
   }
+  content.thread_decisions = (content.thread_decisions as Json[]).map((thread) => {
+    const finding = findings.find((finding) =>
+      (content.finding_publications as Json[]).some(
+        (fix) =>
+          fix.type === "existing_thread" &&
+          fix.thread_id === thread.id &&
+          fix.finding_id === finding.id,
+      ),
+    );
+    return finding ? { ...thread, severity: finding.severity } : thread;
+  });
   const incremental = context.incremental as Json;
   const incrementalMode = String(incremental.mode);
   if ((incrementalMode === "incremental") !== (decision.mode === "incremental")) {
@@ -3859,12 +4117,27 @@ export async function scaffoldReview(
         throw new WorkflowError("finding old-line position is not in the exact diff");
       }
     }
+    if (item.type === "existing_thread") {
+      const thread = (content.thread_decisions as Json[]).find(
+        (thread) => thread.id === item.thread_id,
+      );
+      if (
+        !thread ||
+        thread.assessment !== "accepted" ||
+        !["suggestion", "patch"].includes(String(thread.fix_mode))
+      )
+        throw new WorkflowError(
+          "existing_thread must bind an accepted thread with its own validated fix",
+        );
+      continue;
+    }
     if (item.fix_mode === "patch") {
       if (!nonemptyString(item.patch_reason))
         throw new WorkflowError(
           "Patch fallback requires a concrete patch_reason; prefer suggestions",
         );
       validateGitPatch(repoRoot, headSha, item.patch as string);
+      validatePatchFallback(item, context, evidence);
     } else {
       const parts = suggestionParts(item);
       for (const part of parts) {
@@ -3950,6 +4223,7 @@ export async function scaffoldReview(
   }
   for (const [threadId, item] of actualThreads.entries()) {
     const source = expectedThreads[threadId] as Json;
+    validateUserConfirmation(item, source, context);
     if (item.state !== source.state) {
       throw new WorkflowError("thread decision state does not match review context");
     }
@@ -3970,7 +4244,15 @@ export async function scaffoldReview(
       !setsEqual(
         new Set(
           [...keySet(item)].filter(
-            (key) => !["suggestions", "split_rationale", "patch_reason"].includes(key),
+            (key) =>
+              ![
+                "suggestions",
+                "split_rationale",
+                "patch_reason",
+                "severity",
+                "user_confirmation",
+                "routing_response",
+              ].includes(key),
           ),
         ),
         new Set([
@@ -3996,6 +4278,7 @@ export async function scaffoldReview(
       throw new WorkflowError("thread decision does not bind the complete discussion");
     }
     validateThreadFix(item, source, repoRoot, headSha, baseSha);
+    validatePatchFallback(item, context, evidence);
     const assessmentValue = item.assessment as string;
     const outcome = item.outcome as string;
     if (assessmentValue === "accepted") {
@@ -4055,6 +4338,34 @@ export async function scaffoldReview(
   if (context.role === "reviewer" && threadDecisions.some((item) => item.outcome === "local_fix")) {
     throw new WorkflowError("reviewer thread decisions cannot promise local fixes");
   }
+  const expectedBlockers = blockingThreadIds(threadDecisions, findingPublications);
+  if (
+    decision.blocking_thread_ids !== undefined &&
+    !setsEqual(new Set(expectedBlockers), new Set(decision.blocking_thread_ids as string[]))
+  )
+    throw new WorkflowError("blocking_thread_ids do not match the accepted non-low thread defects");
+  // Legacy decisions may omit the field, but cannot omit the actual readiness gate.
+  decision.blocking_thread_ids = expectedBlockers;
+  const assessedEvidence =
+    draft?.source?.ci_snapshot !== undefined
+      ? artifactPayload(String(draft.source.ci_snapshot), "evidence_snapshot")[1]
+      : evidence;
+  validateReviewVerdict(
+    {
+      ...decision,
+      blocking_findings:
+        decision.blocking_findings ?? findings.some((finding) => finding.severity !== "low"),
+    },
+    findings,
+    assessedEvidence,
+  );
+  const blockingSummaries = findings
+    .filter((finding) => finding.severity !== "low")
+    .map((finding) => String(finding.summary));
+  const threadBlockers = threadDecisions.filter((thread) =>
+    expectedBlockers.includes(String(thread.id)),
+  );
+  content.summary = `${presentation.verdict_value}. ${[...blockingSummaries, ...threadBlockers.map((thread) => String(thread.rationale)), ...((decision.owner_decision_reasons ?? []) as string[])].join(". ") || (content.locale === "ru" ? "Блокирующих находок нет." : "No blocking findings.")}`;
   const metadata = metadataAssessment(evidence, content.mr_metadata_assessment);
   const [publication, enrichedPublications, enrichedIssues, enrichedThreads] =
     await structuredPublicationPreview(
@@ -4068,6 +4379,7 @@ export async function scaffoldReview(
       recommendedIssues,
       labelReview,
       draft?.dryRun ?? false,
+      String(content.locale),
     );
   const renderContent: Json = {
     ...content,
@@ -4544,6 +4856,10 @@ export function contentTemplate(
       last_note_id: binding.last_note_id,
       last_note_body_sha256: binding.last_note_body_sha256,
       thread_sha256: binding.thread_sha256,
+      user_confirmation: {
+        status: userProposedFix(binding, context) ? "required" : "not_applicable",
+        evidence_note_ids: [],
+      },
     });
   }
   return {
@@ -4591,6 +4907,57 @@ export function contentTemplate(
     ),
     thread_decisions: threads,
   };
+}
+
+function userFixProposalIndex(source: Json, context: Json): number {
+  const root = ((source.notes ?? []) as Json[]).find((note) => note.id === source.root_note_id);
+  if (root === undefined || username(root.author) !== context.current_user_username) return -1;
+  return ((source.notes ?? []) as Json[]).reduce(
+    (last, note, index) =>
+      note.system !== true &&
+      username(note.author) === context.current_user_username &&
+      /```(?:suggestion|diff|patch)|git\s+apply\s*<</m.test(String(note.body))
+        ? index
+        : last,
+    -1,
+  );
+}
+
+function userProposedFix(source: Json, context: Json): boolean {
+  return userFixProposalIndex(source, context) >= 0;
+}
+
+export function validateUserConfirmation(item: Json, source: Json, context: Json): void {
+  if (!userProposedFix(source, context)) return;
+  const confirmation = item.user_confirmation as Json | undefined;
+  if (confirmation?.status === "confirmed") {
+    const notes = ((source.notes ?? []) as Json[])
+      .slice(userFixProposalIndex(source, context) + 1)
+      .filter(
+        (note) => note.system !== true && username(note.author) === context.current_user_username,
+      );
+    const ids = confirmation.evidence_note_ids as number[];
+    if (
+      !Array.isArray(ids) ||
+      ids.length === 0 ||
+      ids.some((id) => !notes.some((note) => note.id === id))
+    )
+      throw new WorkflowError(
+        "user_confirmation.evidence_note_ids must identify the user's later confirmation in this complete discussion",
+      );
+    if (
+      item.assessment === "fixed" &&
+      item.outcome !== "no_publication" &&
+      !nonemptyString(confirmation.new_circumstances)
+    )
+      throw new WorkflowError(
+        "An already confirmed fix requires no_publication unless user_confirmation.new_circumstances explains new evidence",
+      );
+  } else if (item.outcome === "no_publication" && item.assessment === "fixed") {
+    throw new WorkflowError(
+      "The user's proposed fix still needs their confirmation, even when another participant resolved the thread; prepare a reply or bind their later confirmation note",
+    );
+  }
 }
 
 function ciProblemJobs(evidence: Json): [Json[], boolean, string] {
@@ -4794,6 +5161,7 @@ export async function templateReview(artifactRootValue: string, kind: string): P
       low_risk: mode === "fast",
       blocking_findings: blockingIds.length > 0,
       blocking_finding_ids: blockingIds,
+      blocking_thread_ids: [],
       ci_job_assessments: ciAssessments,
       owner_decision_reasons:
         ciBlocked && blockingIds.length === 0
@@ -4875,6 +5243,17 @@ export async function templateReview(artifactRootValue: string, kind: string): P
   };
 }
 
+export function blockingThreadIds(threads: Json[], publications: Json[]): string[] {
+  return threads
+    .filter(
+      (thread) =>
+        thread.assessment === "accepted" &&
+        thread.severity !== "low" &&
+        !publications.some((fix) => fix.type === "existing_thread" && fix.thread_id === thread.id),
+    )
+    .map((thread) => String(thread.id));
+}
+
 export function validateReviewVerdict(
   report: Json,
   acceptedFindings: Json[],
@@ -4912,15 +5291,29 @@ export function validateReviewVerdict(
     throw new WorkflowError("every accepted non-low finding must be blocking");
   }
   const reasons = report.owner_decision_reasons ?? [];
+  const threads = report.blocking_thread_ids ?? [];
+  if (
+    !Array.isArray(threads) ||
+    !threads.every(nonemptyString) ||
+    new Set(threads).size !== threads.length
+  )
+    throw new WorkflowError(
+      "blocking_thread_ids must be unique IDs of accepted non-low thread defects",
+    );
   if (!Array.isArray(reasons) || !(reasons as unknown[]).every((item) => nonemptyString(item))) {
     throw new WorkflowError("owner decision reasons are invalid");
   }
   const ciBlocked = ciBlocksReady(evidence, report.ci_job_assessments ?? []);
-  if (ciBlocked && blockingIds.size === 0 && (reasons as string[]).length === 0) {
+  if (
+    ciBlocked &&
+    blockingIds.size === 0 &&
+    threads.length === 0 &&
+    (reasons as string[]).length === 0
+  ) {
     throw new WorkflowError("blocking CI evidence requires an owner decision reason");
   }
   let expected: string;
-  if (blockingIds.size > 0) {
+  if (blockingIds.size > 0 || threads.length > 0) {
     expected = "not_ready";
   } else if (ciBlocked || (reasons as string[]).length > 0) {
     expected = "blocked";

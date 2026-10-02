@@ -303,7 +303,13 @@ export async function decide(args: WorkflowArguments): Promise<Json> {
     throw new WorkflowError("primary and critic finding IDs must be unique");
   }
   const responses = new Map((report.responses as Json[]).map((item) => [item.id, item]));
-  const accepted = candidates.filter((item) => responses.get(item.id)!.decision === "accept");
+  const accepted = candidates
+    .filter((item) => responses.get(item.id)!.decision === "accept")
+    .map((item): Json => ({
+      ...item,
+      severity:
+        (responses.get(item.id)!.severity_override as Json | undefined)?.severity ?? item.severity,
+    }));
   const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
   accepted.sort((left, right) => order[left.severity as string] - order[right.severity as string]);
   validateReviewVerdict(report, accepted, evidence);

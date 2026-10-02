@@ -146,6 +146,12 @@
       "reason": "release MRs route to it for the release verdict"
     },
     {
+      "from": "code-review",
+      "to": "task-prepare",
+      "type": "recommends",
+      "reason": "full preparation of out-of-MR follow-ups is a separate invocation"
+    },
+    {
       "from": "code-explain",
       "to": "code-review",
       "type": "recommends",
