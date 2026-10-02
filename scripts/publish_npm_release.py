@@ -380,20 +380,17 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
             if command(str(executable), "--version", cwd=root, env=env).strip() != version:
                 raise PublicationError(f"installed npm CLI {name} reports the wrong version")
             command(str(executable), "--help", cwd=root, env=env)
-        capabilities = json.loads(
+        catalog = json.loads(
             command(
                 str(root / "node_modules" / ".bin" / "agentomatic"),
-                "capabilities",
+                "catalog",
                 "--json",
                 cwd=root,
                 env=env,
             )
         )
-        if (
-            capabilities.get("status") != "ok"
-            or capabilities.get("version") != agentomatic["version"]
-        ):
-            raise PublicationError("installed npm CLI capabilities are invalid")
+        if catalog.get("status") != "ok" or catalog.get("version") != agentomatic["version"]:
+            raise PublicationError("installed npm CLI catalog is invalid")
         command("npm", "audit", "signatures", "--json", cwd=root, env=env)
 
 

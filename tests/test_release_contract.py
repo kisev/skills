@@ -686,7 +686,7 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
         calls.append(arguments)
         if arguments[-1:] == ("--version",):
             return f"{RELEASE_VERSION}\n"
-        if arguments[-2:] == ("capabilities", "--json"):
+        if arguments[-2:] == ("catalog", "--json"):
             return json.dumps({"status": "ok", "version": RELEASE_VERSION}) + "\n"
         return ""
 
@@ -704,6 +704,10 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
     for name in publish_npm_release.NPM_PUBLISH_ORDER:
         assert f"{name}@{RELEASE_VERSION}" in install
     assert "@opencode/plugin@2.0.19" in install
+    catalog_calls = [arguments for arguments in calls if arguments[-2:] == ("catalog", "--json")]
+    assert len(catalog_calls) == 1
+    assert Path(catalog_calls[0][0]).name == "agentomatic"
+    assert not any("capabilities" in arguments for arguments in calls)
     assert ("npm", "audit", "signatures", "--json") in calls
 
 
