@@ -127,6 +127,9 @@ The pre-merge release plan contains manual `glab` commands only. A read-only
 then atomically replaces the same stable runbook with commands bound to the exact
 publication SHA. Request bodies and long content remain immutable and
 content-addressed. Neither phase executes a remote mutation.
+The announcement command retains its illustration attachment without `--unique`,
+which glab forbids with `--attach`. It does not promise remote deduplication;
+the runbook requires checking the target discussion before repetition.
 
 Contract 6 adds required `semver_assessment` to the content and plan. Existing
 `semver_impact`/`semver_rationale` describe only the MR contribution and select

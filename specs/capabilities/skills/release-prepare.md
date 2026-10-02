@@ -66,6 +66,9 @@ Before merge, the runbook shall cover milestone creation when selected, MR and
 milestone update, an announcement comment with the illustration prompt attachment,
 and merge. After merge, it shall cover the exact GitLab Release and approved item
 comments or closures. Release notes shall be exactly the merged MR description.
+Announcement attachments shall not use glab's incompatible `--unique` flag.
+The runbook shall require inspecting the target discussion before repetition,
+including after an ambiguous mutation result; it shall not promise deduplication.
 
 Milestone selection shall present an evidence-based recommendation and a custom
 option for another existing or new milestone. Description structure precedence shall be current MR, local

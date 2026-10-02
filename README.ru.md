@@ -86,8 +86,9 @@ npx --yes skills@latest list --global
 
 ## Разработка
 
-Опциональные проверки с настоящим сервером: [GitLab](apps/gitlab-test/README.ru.md)
-и [Mattermost](apps/mattermost-test/README.ru.md). `task check` их не требует.
+Общее [dev-окружение](dev/README.ru.md) запускает GitLab и Mattermost.
+Опциональные проверки с настоящим сервером: [GitLab](tests/integration/gitlab/README.ru.md)
+и [Mattermost](tests/integration/mattermost/README.ru.md). `task check` их не требует.
 
 ```shell
 mise install

@@ -233,8 +233,11 @@ receipts, rollback, legacy journals, and rejection of unsafe backup or lock path
 
 ### REQ-F-548 - Verify GitLab workflows against a persistent local CE server
 
-The opt-in `apps/gitlab-test/` harness shall provision its own accounts,
-credentials, repositories, Git history and fixtures without manual registration.
+GitLab in the root development Compose project shall provision its fixture accounts,
+credentials and base project during `env:gitlab:up`, without manual registration.
+Integration scenarios under `tests/integration/gitlab/` shall create their own
+fixture repositories and Git history against an already initialized service;
+ordinary tests shall never start, stop or recreate containers or initialize accounts.
 It shall verify `code-review`/reviewmatic, `mr-prepare`, `task-prepare`,
 `task-triage`, `release-prepare` and `release-review` against the pinned CE server
 and real glab, including pagination, author/reviewer roles, inline positions,
@@ -244,13 +247,16 @@ tags/releases and readiness. Real shell jobs shall provide exact-commit evidence
 successful and failing traces and a child pipeline. Browser checks shall retain
 screenshots and verify rendered placement, application and thread state.
 
-Named volumes and an untouched free project shall survive ordinary runs and
-down/up. Preservation evidence shall include repository-independent free-zone
-data rather than only the default-branch tree. Checkout ownership shall be checked
-before resource adoption or mutation.
-Reset shall preview the exact selected scope, require its matching confirmation,
-retain reports and reject foreign resources or unsafe local paths. A separate
-disposable reset test shall verify isolation from the primary stand.
+Initialization shall provide separate `fixtures` and `manual` groups. Ordinary
+automation shall target only fixtures: it shall not read, enumerate, hash, mutate
+or clean manual data, nor claim a content comparison of that data. Named volumes
+shall survive down/up; retention evidence shall compare fixture data only.
+Checkout ownership shall be checked before resource adoption or mutation.
+Explicit `env:gitlab:clean` shall delete only GitLab volumes and private fixture/skill
+state, including manual data, without a prompt or digest; reports shall survive.
+Foreign resources and unsafe local paths shall be rejected. Ordinary tests shall
+never clean. Lifecycle verification shall operate on the shared development
+environment only when separately invoked; no disposable stand shall be created.
 
 Every run shall retain versions, durations, resource measurements and per-scenario
 observations, including UTC start time and pass/fail/not-run status. Copied
@@ -262,19 +268,37 @@ from actual server behavior. Optional live shall use existing host adapters,
 explicit provider/model/credentials and bounded execution with complete budget
 telemetry; it shall verify artifacts and the manual publication boundary.
 Neither a running stand nor a live provider shall be required by ordinary checks.
+Readiness shall establish a working Rails application and its dependencies, not
+only the proxy. Browser remap checks shall bind the pending discussion's active
+current position to the exact MR head before one diff navigation. Repeated
+navigation or a longer timeout shall not substitute for a diagnosis.
 
 #### Verification
 
-`tests/test_gitlab_stand.py` verifies offline safety boundaries. `task gitlab:test`
-and its repeat verify server and browser postconditions; `task gitlab:test-reset`
-verifies the disposable lifecycle. `task gitlab:live` provides separately reported
+`tests/test_gitlab_stand.py` and `tests/test_dev_environment.py` verify offline safety
+boundaries and cleanup scope. `task test:integration:gitlab` and its repeat verify
+server and browser postconditions; `task test:integration:lifecycle` explicitly
+verifies fixture retention during down/up, recreate and repeated up in the same
+environment. `task test:integration:gitlab:live` provides separately reported
 real-agent evidence when explicitly configured. Baseline API coverage alone does
 not establish the complete workflow contract.
 
 ### REQ-F-547 - Automate a persistent local Mattermost test environment
 
-The repository shall provide an opt-in local Mattermost environment with automatic,
-idempotent fixture and credential initialization. Normal runs shall preserve
+The root `docker-compose.yml` shall describe one persistent development project
+containing GitLab and Mattermost. Taskfile shall provide service-specific
+`env:gitlab:<operation>` and `env:mattermost:<operation>` tasks for up, stop, down,
+restart, recreate, clean, status and logs. Each common `env:<operation>` shall
+group the corresponding two service tasks through `deps`.
+Up shall wait for readiness and automatically initialize missing fixture accounts
+and base data idempotently. Stop shall retain containers and data; down shall retain
+volumes; recreate shall retain data. Migration from former default service projects
+shall adopt verified named volumes and retain local credentials and reports, never
+copy, inspect or clean their payloads. Foreign resources shall not be adopted.
+The environment shall remain separate from portable archives and ordinary offline checks.
+
+Mattermost fixture and credential initialization shall be automatic and idempotent.
+Normal runs shall preserve
 server data, local skill state, and the separate free zone for manual experiments.
 Automated tests may execute publication helpers only against owned local fixtures;
 ordinary skill publication remains manual.
@@ -285,14 +309,19 @@ fault tests. A separate live level shall reuse the repository's host adapters,
 require explicit model and budgets, and verify real skill artifacts. Missing
 usage or cost evidence shall not count as a successful live budget check.
 
-An explicit digest-confirmed reset shall bind the selected project's resources,
-remove its server and local state including the free zone, retain reports, and
-initialize again. Normal test failures shall never trigger a reset. Reports shall
+Explicit clean shall remove only the selected service's volumes and private local
+state, including the free zone, without confirmation; reports shall survive.
+Up after clean shall initialize fresh data. Ordinary integration tests shall require
+ready services, never manage containers or initialize accounts, and never read,
+enumerate, hash or mutate free-zone payloads. Normal failures shall never trigger
+cleanup. Reports shall
 distinguish observed results from unverified scenarios and preserve failure evidence.
 
 #### Verification
 
-Run the deterministic suite twice with stable fixture identities and unchanged
-free-zone content. Exercise reset on a separately owned disposable project and
-verify that the primary project and reports survive. Live tests require actual
+Run `task test:integration:mattermost` twice against the ready service and verify
+fixture-only access. `task test:integration:lifecycle` verifies stable fixture
+identities and retention without inspecting the free zone or creating another
+server. Offline cleanup tests verify exact service scope, rejection of foreign
+resources and symlink state, and retained reports. Live tests require actual
 configured host/model execution; no hostless result substitutes for them.

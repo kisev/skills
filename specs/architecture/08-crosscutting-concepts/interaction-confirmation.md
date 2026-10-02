@@ -28,6 +28,13 @@ action and boundary and checked before success. A matching synthetic continuatio
 preserves that gate, while unrelated exact frozen-objective actions remain
 authorized.
 
+For the user-run development environment, explicitly invoking the documented
+service-scoped or grouped `env:*:clean` / `env:clean` command is the cleanup request;
+the CLI adds no prompt or digest. This operator interface is owned by
+[REQ-F-547](../../requirements/functional/README.md#req-f-547---automate-a-persistent-local-mattermost-test-environment).
+An agent implementing or verifying that environment shall not infer permission
+to clean current data from implementation or test authorization alone.
+
 One digest authorizes one user-visible action, not a batch of messages or other
 independent actions. An immutable preview may define that action as compound when
 all internal mutations share its boundary and are required for the one result,

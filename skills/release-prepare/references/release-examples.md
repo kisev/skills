@@ -162,4 +162,8 @@ Ask the user to choose `Pixel-art release quest`, `Literary world`, `Neutral abs
 
 The single stable runbook first shows the immutable payloads and manual `glab` commands for the selected milestone, MR update, announcement comment with the illustration prompt attachment, and merge. After merge, the read-only helper refreshes that same runbook with the exact release command and approved work-item commands. Release notes are exactly the merged MR description, not a rewritten changelog.
 
+`glab` does not allow `--unique` with `--attach`. The announcement command keeps
+the attachment and is not automatically deduplicated. Inspect the MR discussion
+before repeating it, especially after a timeout or a missing response.
+
 For each bounded work-item candidate, show `close`, `comment`, or `no action`, its rationale, and uncertainty. Do not ask interactive work-item questions; the user controls the outcome by skipping commands they reject. Commands are examples for manual execution only; the skill never runs them.

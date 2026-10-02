@@ -70,12 +70,16 @@
       "ru": "apps/memomatic/README.ru.md"
     },
     {
-      "en": "apps/mattermost-test/README.md",
-      "ru": "apps/mattermost-test/README.ru.md"
+      "en": "tests/integration/mattermost/README.md",
+      "ru": "tests/integration/mattermost/README.ru.md"
     },
     {
-      "en": "apps/gitlab-test/README.md",
-      "ru": "apps/gitlab-test/README.ru.md"
+      "en": "tests/integration/gitlab/README.md",
+      "ru": "tests/integration/gitlab/README.ru.md"
+    },
+    {
+      "en": "dev/README.md",
+      "ru": "dev/README.ru.md"
     },
     {
       "en": "apps/reviewmatic/README.md",

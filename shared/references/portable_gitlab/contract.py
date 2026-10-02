@@ -2546,7 +2546,6 @@ def release_request_specs(
                 iid,
                 "-R",
                 repo,
-                "--unique",
                 "--resolvable=false",
                 "--message",
                 content["announcement"],
@@ -2772,6 +2771,13 @@ def release_publication_markdown(
     else:
         lines.append("Commands are withheld because the plan is incomplete.")
     lines.extend(["", f"## {stage.replace('_', '-')} commands", ""])
+    if stage == "pre_merge":
+        lines.extend(
+            [
+                "The announcement attachment is not deduplicated by glab. Inspect the target discussion before choosing to repeat that command.",
+                "",
+            ]
+        )
     for request in requests:
         lines.append(f"### {request['operation']}")
         if request["id"].startswith("work-item-"):

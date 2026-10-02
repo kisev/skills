@@ -86,8 +86,9 @@ packages; `--version` checks the CLI on PATH. npx does not install a global CLI;
 
 ## Development
 
-Optional real-server checks: [GitLab](apps/gitlab-test/README.md) and
-[Mattermost](apps/mattermost-test/README.md). Neither is required by `task check`.
+The shared [development environment](dev/README.md) runs GitLab and Mattermost.
+Optional real-server checks: [GitLab](tests/integration/gitlab/README.md) and
+[Mattermost](tests/integration/mattermost/README.md). Neither is required by `task check`.
 
 ```shell
 mise install

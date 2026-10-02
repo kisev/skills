@@ -19,7 +19,7 @@
 
 - [Работа с Taskmatic](how-to/taskmatic.md) - первая карточка, просмотр доски и подключение агента.
 
-- [Локальный Mattermost](../../apps/mattermost-test/README.ru.md) - инициализация
+- [Локальный Mattermost](../../tests/integration/mattermost/README.ru.md) - инициализация
   постоянного стенда и автоматические проверки чтения, публикации, триажа и браузера.
 
 - [Управление переносимыми навыками](how-to/portable-skills.md) - установка в

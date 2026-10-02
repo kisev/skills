@@ -5,107 +5,152 @@ set: [pipefail, errexit, nounset]
 
 vars:
   COMPOSE: docker-compose
+  ENV_COMPOSE: "{{.COMPOSE}} -p skills-dev --env-file .build/env/compose.env -f docker-compose.yml"
 
 tasks:
-  gitlab:config:
-    desc: Validate the checkout-bound optional GitLab CE stack
-    cmds:
-      - mise exec -- python apps/gitlab-test/scripts/stand.py config --compose '{{.COMPOSE}}'
+  env:up:
+    desc: Start both development services and initialize test fixtures
+    deps: [env:gitlab:up, env:mattermost:up]
+  env:stop:
+    desc: Stop both services without removing containers or data
+    deps: [env:gitlab:stop, env:mattermost:stop]
+  env:down:
+    desc: Remove both services' containers and networks, retaining data
+    deps: [env:gitlab:down, env:mattermost:down]
+  env:restart:
+    desc: Restart both development services
+    deps: [env:gitlab:restart, env:mattermost:restart]
+  env:recreate:
+    desc: Recreate both services' containers, retaining data
+    deps: [env:gitlab:recreate, env:mattermost:recreate]
+  env:clean:
+    desc: Delete both services' data, including manual experiments, without prompting
+    deps: [env:gitlab:clean, env:mattermost:clean]
+  env:status:
+    desc: Show both development services
+    deps: [env:gitlab:status, env:mattermost:status]
+  env:logs:
+    desc: Show recent logs for both development services
+    deps: [env:gitlab:logs, env:mattermost:logs]
 
-  gitlab:init:
-    desc: Start persistent GitLab and reconcile isolated owned fixtures
+  env:gitlab:up:
+    desc: Start GitLab and Runner and initialize fixtures
     cmds:
-      - mise exec -- python apps/gitlab-test/scripts/stand.py init --compose '{{.COMPOSE}}'
-
-  gitlab:up:
-    desc: Start the local GitLab CE and shell Runner containers
+      - mise exec -- python -m dev.env prepare gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --wait --wait-timeout 1200 gitlab gitlab-proxy gitlab-runner'
+      - mise exec -- python -m dev.env init gitlab --compose '{{.COMPOSE}}'
+  env:mattermost:up:
+    desc: Start Mattermost and initialize fixtures
     cmds:
-      - mise exec -- python apps/gitlab-test/scripts/stand.py up --compose '{{.COMPOSE}}'
+      - mise exec -- python -m dev.env prepare mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --wait --wait-timeout 240 mattermost-db mattermost mattermost-proxy'
+      - mise exec -- python -m dev.env init mattermost --compose '{{.COMPOSE}}'
 
-  gitlab:test:
-    desc: Run real local GitLab API, shell CI and browser checks
+  env:gitlab:stop:
+    desc: Stop GitLab and Runner without deleting data
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} stop gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:stop:
+    desc: Stop Mattermost without deleting data
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} stop mattermost-db mattermost mattermost-proxy'
+  env:gitlab:down:
+    desc: Remove GitLab containers and networks, retaining volumes
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:down:
+    desc: Remove Mattermost containers and networks, retaining volumes
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down mattermost-db mattermost mattermost-proxy'
+  env:gitlab:restart:
+    desc: Restart GitLab and Runner and wait for readiness
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} restart gitlab gitlab-proxy gitlab-runner'
+      - task: env:gitlab:up
+  env:mattermost:restart:
+    desc: Restart Mattermost and wait for readiness
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} restart mattermost-db mattermost mattermost-proxy'
+      - task: env:mattermost:up
+  env:gitlab:recreate:
+    desc: Recreate GitLab containers without deleting data
+    cmds:
+      - mise exec -- python -m dev.env prepare gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --force-recreate --wait --wait-timeout 1200 gitlab gitlab-proxy gitlab-runner'
+      - mise exec -- python -m dev.env init gitlab --compose '{{.COMPOSE}}'
+  env:mattermost:recreate:
+    desc: Recreate Mattermost containers without deleting data
+    cmds:
+      - mise exec -- python -m dev.env prepare mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --force-recreate --wait --wait-timeout 240 mattermost-db mattermost mattermost-proxy'
+      - mise exec -- python -m dev.env init mattermost --compose '{{.COMPOSE}}'
+  env:gitlab:clean:
+    desc: Delete GitLab data including manual projects, without prompting
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down gitlab gitlab-proxy gitlab-runner'
+      - mise exec -- python -m dev.env clean gitlab --compose '{{.COMPOSE}}'
+  env:mattermost:clean:
+    desc: Delete Mattermost data including manual messages, without prompting
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down mattermost-db mattermost mattermost-proxy'
+      - mise exec -- python -m dev.env clean mattermost --compose '{{.COMPOSE}}'
+  env:gitlab:status:
+    desc: Show GitLab and Runner status
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} ps -a gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:status:
+    desc: Show Mattermost status
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} ps -a mattermost-db mattermost mattermost-proxy'
+  env:gitlab:logs:
+    desc: Show recent GitLab and Runner logs
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} logs --tail=100 gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:logs:
+    desc: Show recent Mattermost logs
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} logs --tail=100 mattermost-db mattermost mattermost-proxy'
+
+  test:integration:gitlab:
+    desc: Run implemented GitLab workflows against the ready dev environment
     cmds:
       - task: build:skills
-      - mise exec -- python apps/gitlab-test/scripts/stand.py test --compose '{{.COMPOSE}}'
-
-  gitlab:live:
+      - mise exec -- python -m tests.integration.gitlab.scripts.stand test --compose '{{.COMPOSE}}'
+  test:integration:mattermost:
+    desc: Run Mattermost workflows against the ready dev environment
+    cmds:
+      - task: build:skills
+      - mise exec -- python -m tests.integration.mattermost.scripts.stand test --compose '{{.COMPOSE}}'
+  test:integration:gitlab:preflight:
+    desc: Record GitLab test prerequisites without starting services
+    cmds:
+      - mise exec -- python -m tests.integration.gitlab.scripts.stand preflight --compose '{{.COMPOSE}}'
+  test:integration:gitlab:live:
     desc: Run explicitly configured optional GitLab agent evaluation
     cmds:
       - task: build:skills
-      - mise exec -- python apps/gitlab-test/scripts/stand.py live --compose '{{.COMPOSE}}'
-
-  gitlab:logs:
-    desc: Show logs only after checking stand ownership
-    cmds:
-      - mise exec -- python apps/gitlab-test/scripts/stand.py logs --compose '{{.COMPOSE}}'
-
-  gitlab:down:
-    desc: Stop the owned GitLab stand without deleting volumes
-    cmds:
-      - mise exec -- python apps/gitlab-test/scripts/stand.py down --compose '{{.COMPOSE}}'
-
-  gitlab:reset:
-    desc: Preview exact reset scope or apply matching GL_RESET_CONFIRM digest
-    cmds:
-      - mise exec -- python apps/gitlab-test/scripts/stand.py reset --compose '{{.COMPOSE}}'
-
-  gitlab:test-reset:
-    desc: Verify reset on a separate disposable GitLab stand
-    cmds:
-      - mise exec -- python apps/gitlab-test/scripts/stand.py reset-test --compose '{{.COMPOSE}}'
-
-  mattermost:init:
-    desc: Initialize or reconcile the persistent local Mattermost fixtures
-    cmds:
-      - mise exec -- python apps/mattermost-test/scripts/stand.py init --compose '{{.COMPOSE}}'
-
-  mattermost:test:
-    desc: Run Mattermost contracts and real API/browser tests without manual setup
+      - mise exec -- python -m tests.integration.gitlab.scripts.stand live --compose '{{.COMPOSE}}'
+  test:integration:mattermost:live:
+    desc: Run explicitly configured optional Mattermost agent evaluation
     cmds:
       - task: build:skills
-      - mise exec -- python apps/mattermost-test/scripts/stand.py test --compose '{{.COMPOSE}}'
-
-  mattermost:live:
-    desc: Run the local stand checks plus explicitly configured real-agent evaluation
+      - mise exec -- python -m tests.integration.mattermost.scripts.stand live --compose '{{.COMPOSE}}'
+  test:integration:lifecycle:
+    desc: Explicitly verify dev down/up and recreate retention without cleanup
     cmds:
-      - task: build:skills
-      - mise exec -- python apps/mattermost-test/scripts/stand.py live --compose '{{.COMPOSE}}'
-
-  mattermost:reset:
-    desc: Preview full test-state reset or apply with the matching MM_RESET_CONFIRM digest
-    cmds:
-      - mise exec -- python apps/mattermost-test/scripts/stand.py reset --compose '{{.COMPOSE}}'
-
-  mattermost:test-reset:
-    desc: Verify reset isolation and reinitialization on a separate disposable project
-    cmds:
-      - mise exec -- python apps/mattermost-test/scripts/stand.py reset-test --compose '{{.COMPOSE}}'
-
-  mattermost:config:
-    desc: Validate the optional local Mattermost test stack
-    cmds:
-      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml config --quiet'
-
-  mattermost:up:
-    desc: Start local Mattermost, PostgreSQL and HTTPS proxy for manual card tests
-    cmds:
-      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml up -d --wait --wait-timeout 240'
-
-  mattermost:down:
-    desc: Stop the local Mattermost test stack while retaining test data
-    cmds:
-      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml down'
-
-  mattermost:logs:
-    desc: Show recent local Mattermost test stack logs
-    cmds:
-      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml logs --tail=100'
-
-  mattermost:ca:
-    desc: Export the local test CA certificate without installing system trust
-    cmds:
-      - mkdir -p .build/mattermost-test
-      - '{{.COMPOSE}} -f apps/mattermost-test/compose.yml cp proxy:/data/caddy/pki/authorities/local/root.crt .build/mattermost-test/root.crt'
+      - mise exec -- python -m tests.integration.lifecycle --compose '{{.COMPOSE}}'
 
   default:
     desc: Show all tasks

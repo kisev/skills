@@ -1,0 +1,179 @@
+---
+name: skills-dev
+
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:18.11.11-ce.0
+    shm_size: 256m
+    environment:
+      GITLAB_PRE_RECONFIGURE_SCRIPT: rm -f /run/gitlab-test/startup-complete
+      GITLAB_POST_RECONFIGURE_SCRIPT: touch /run/gitlab-test/startup-complete
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://localhost:${GL_TEST_PORT:-443}'
+        nginx['listen_port'] = 80
+        nginx['listen_https'] = false
+        letsencrypt['enable'] = false
+        gitlab_rails['gitlab_shell_ssh_port'] = 22
+        gitlab_rails['smtp_enable'] = false
+        gitlab_rails['usage_ping_enabled'] = false
+        gitlab_rails['initial_shared_runners_registration_token'] = nil
+        puma['worker_processes'] = 2
+        sidekiq['concurrency'] = 5
+        prometheus_monitoring['enable'] = false
+    tmpfs: [/run/gitlab-test]
+    volumes:
+      - gitlab-config:/etc/gitlab
+      - gitlab-logs:/var/log/gitlab
+      - gitlab-data:/var/opt/gitlab
+    networks: [gitlab-backend]
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - test -f /run/gitlab-test/startup-complete && exec curl --fail --silent 'http://127.0.0.1:8080/-/readiness?all=1'
+      interval: 10s
+      timeout: 10s
+      start_period: 300s
+      retries: 90
+
+  gitlab-proxy:
+    image: caddy:2.10.2-alpine
+    ports: ["127.0.0.1:${GL_TEST_PORT:-443}:443"]
+    volumes:
+      - ./dev/gitlab/Caddyfile:/etc/caddy/Caddyfile:ro
+      - gitlab-ca:/data
+    networks: [frontend, gitlab-backend]
+
+  gitlab-runner:
+    image: gitlab/gitlab-runner:v18.11.0
+    volumes:
+      - gitlab-runner-config:/etc/gitlab-runner
+      - gitlab-runner-builds:/home/gitlab-runner
+    networks: [gitlab-backend]
+
+  mattermost-db:
+    image: postgres:16.10-alpine
+    environment:
+      POSTGRES_DB: mattermost
+      POSTGRES_USER: mattermost
+      # Development database, reachable only on the internal network.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes: [mattermost-postgres-data:/var/lib/postgresql/data]
+    networks: [mattermost-backend]
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U mattermost -d mattermost]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mattermost:
+    image: ${MM_TEST_IMAGE:-mattermost/mattermost-team-edition:10.10.3}
+    depends_on:
+      mattermost-db:
+        condition: service_healthy
+    environment:
+      MM_SERVICESETTINGS_SITEURL: "https://localhost:${MM_TEST_PORT:-8443}"
+      MM_SERVICESETTINGS_LISTENADDRESS: :8065
+      MM_SERVICESETTINGS_ENABLELOCALMODE: "true"
+      MM_SERVICESETTINGS_ENABLEUSERACCESSTOKENS: "true"
+      MM_SQLSETTINGS_DRIVERNAME: postgres
+      MM_SQLSETTINGS_DATASOURCE: postgres://mattermost@mattermost-db:5432/mattermost?sslmode=disable&connect_timeout=10
+      MM_EMAILSETTINGS_REQUIREEMAILVERIFICATION: "false"
+      MM_EMAILSETTINGS_SENDEMAILNOTIFICATIONS: "false"
+      MM_LOGSETTINGS_CONSOLELEVEL: ERROR
+      MM_LOGSETTINGS_ENABLEFILE: "false"
+      MM_LOGSETTINGS_ENABLEDIAGNOSTICS: "false"
+      MM_PLUGINSETTINGS_ENABLEMARKETPLACE: "false"
+      MM_PLUGINSETTINGS_ENABLE: "false"
+    volumes:
+      - mattermost-config:/mattermost/config
+      - mattermost-socket:/var/tmp
+      - mattermost-data:/mattermost/data
+      - mattermost-plugins:/mattermost/plugins
+      - mattermost-client-plugins:/mattermost/client/plugins
+    networks: [mattermost-backend]
+    healthcheck:
+      test: [CMD, /mattermost/bin/mmctl, --local, system, status]
+      interval: 5s
+      timeout: 5s
+      start_period: 60s
+      retries: 30
+
+  mattermost-proxy:
+    image: caddy:2.10.2-alpine
+    depends_on:
+      mattermost:
+        condition: service_healthy
+    ports: ["127.0.0.1:${MM_TEST_PORT:-8443}:443"]
+    volumes:
+      - ./dev/mattermost/Caddyfile:/etc/caddy/Caddyfile:ro
+      - mattermost-caddy-data:/data
+      - mattermost-caddy-config:/config
+    networks: [frontend, mattermost-backend]
+
+  mattermost-admin:
+    image: python:3.12.12-alpine
+    profiles: [tools]
+    volumes:
+      - mattermost-socket:/var/tmp:ro
+      - ./dev/mattermost/socket_api.py:/harness/socket_api.py:ro
+    networks: [mattermost-backend]
+    entrypoint: [python, /harness/socket_api.py]
+
+networks:
+  frontend:
+    labels:
+      dev.agentomatic.checkout: ${DEV_CHECKOUT:-unprepared}
+  gitlab-backend:
+    internal: true
+    labels:
+      dev.agentomatic.checkout: ${DEV_CHECKOUT:-unprepared}
+  mattermost-backend:
+    internal: true
+    labels:
+      dev.agentomatic.checkout: ${DEV_CHECKOUT:-unprepared}
+
+# External names retain existing data when adopting the former per-service stacks.
+# env:up creates missing volumes; env:clean explicitly removes only its service's volumes.
+volumes:
+  gitlab-config:
+    external: true
+    name: ${DEV_GITLAB_CONFIG:-skills-dev_gitlab-config}
+  gitlab-logs:
+    external: true
+    name: ${DEV_GITLAB_LOGS:-skills-dev_gitlab-logs}
+  gitlab-data:
+    external: true
+    name: ${DEV_GITLAB_DATA:-skills-dev_gitlab-data}
+  gitlab-ca:
+    external: true
+    name: ${DEV_GITLAB_CA:-skills-dev_gitlab-ca}
+  gitlab-runner-config:
+    external: true
+    name: ${DEV_GITLAB_RUNNER_CONFIG:-skills-dev_gitlab-runner-config}
+  gitlab-runner-builds:
+    external: true
+    name: ${DEV_GITLAB_RUNNER_BUILDS:-skills-dev_gitlab-runner-builds}
+  mattermost-postgres-data:
+    external: true
+    name: ${DEV_MATTERMOST_POSTGRES_DATA:-skills-dev_mattermost-postgres-data}
+  mattermost-config:
+    external: true
+    name: ${DEV_MATTERMOST_CONFIG:-skills-dev_mattermost-config}
+  mattermost-socket:
+    external: true
+    name: ${DEV_MATTERMOST_SOCKET:-skills-dev_mattermost-socket}
+  mattermost-data:
+    external: true
+    name: ${DEV_MATTERMOST_DATA:-skills-dev_mattermost-data}
+  mattermost-plugins:
+    external: true
+    name: ${DEV_MATTERMOST_PLUGINS:-skills-dev_mattermost-plugins}
+  mattermost-client-plugins:
+    external: true
+    name: ${DEV_MATTERMOST_CLIENT_PLUGINS:-skills-dev_mattermost-client-plugins}
+  mattermost-caddy-data:
+    external: true
+    name: ${DEV_MATTERMOST_CADDY_DATA:-skills-dev_mattermost-caddy-data}
+  mattermost-caddy-config:
+    external: true
+    name: ${DEV_MATTERMOST_CADDY_CONFIG:-skills-dev_mattermost-caddy-config}

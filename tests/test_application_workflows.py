@@ -881,6 +881,14 @@ print(json.dumps(value))
             self.assertIn(
                 "glab mr note create 7 -R https://gitlab.example/group/project", markdown_value
             )
+            announcement = next(
+                request
+                for request in scaffold["requests"]
+                if request["id"] == "publish-announcement"
+            )
+            self.assertIn("--attach", announcement["command"])
+            self.assertNotIn("--unique", announcement["command"])
+            self.assertIn("not deduplicated by glab", markdown_value)
             self.assertIn(
                 f"glab mr merge 7 -R https://gitlab.example/group/project --sha {head_sha}",
                 markdown_value,

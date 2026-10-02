@@ -24,7 +24,7 @@
   strict = true
   disallow_any_unimported = true
   explicit_package_bases = true
-  files = ["scripts", "shared/references", "tests", "skills/*/scripts/*.py"]
+  files = ["scripts", "dev", "shared/references", "tests", "skills/*/scripts/*.py"]
 
 [tool.pytest.ini_options]
   addopts = [
