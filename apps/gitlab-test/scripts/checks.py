@@ -8,12 +8,10 @@ import secrets
 import sys
 import time
 import urllib.error
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
 from stand import APP, ROOT, Stand, command, load, private_directory, write_json
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 def verify(condition: bool, message: str) -> None:
@@ -33,6 +31,12 @@ def fixture(stand: Stand, directory: Path) -> dict[str, Any]:
     stand.request("POST", prefix + "/repository/branches", {"branch": branch, "ref": "main"})
     actions = [
         {"action": "create", "file_path": "sample.txt", "content": "context\nold\nkeep\nlast\n"},
+        {"action": "create", "file_path": "grouped.txt", "content": "before\nold first\nend\n"},
+        {
+            "action": "create",
+            "file_path": "grouped-extra.txt",
+            "content": "before\nold second\nend\n",
+        },
         {
             "action": "create",
             "file_path": ".gitlab-ci.yml",
@@ -76,7 +80,17 @@ child:
                     "action": "update",
                     "file_path": "sample.txt",
                     "content": "context\nnew\nkeep\nlast\nadded\n",
-                }
+                },
+                {
+                    "action": "update",
+                    "file_path": "grouped.txt",
+                    "content": "before\nnew first\nend\n",
+                },
+                {
+                    "action": "update",
+                    "file_path": "grouped-extra.txt",
+                    "content": "before\nnew second\nend\n",
+                },
             ],
         },
     )
@@ -426,6 +440,17 @@ def preparation(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
         output = command(args, env=stand.isolated_env("reviewer"), timeout=180).stdout
         result = json.loads(output)
         write_json(directory / (skill + ".json"), result)
+        verify(
+            result["status"] == "ok"
+            and all(
+                item["status"] == "ok"
+                and item["complete"] is True
+                and all(item["components_complete"].values())
+                and item["head_sha"] == f["head"]
+                for item in result["items"]
+            ),
+            skill + " returned incomplete or wrong-commit evidence",
+        )
         results[skill] = result
     output = command(
         [
@@ -442,6 +467,10 @@ def preparation(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     ).stdout
     results["task-triage"] = json.loads(output)
     write_json(directory / "task-triage.json", results["task-triage"])
+    verify(
+        results["task-triage"]["status"] == "ok" and not results["task-triage"]["errors"],
+        "Task triage collection is incomplete",
+    )
     task = {
         "version": 2,
         "plan_key": "harness-" + directory.name.lower(),
@@ -530,8 +559,20 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
             "repo": str(repo),
             "run": directory.name,
             "output": str(directory / "review-plan.json"),
+            "phase": "draft",
         },
     )
+    drafted = json.loads(
+        command(
+            ["node", str(APP / "scripts/review_plan.mjs"), str(input_path)],
+            env=environment,
+            timeout=240,
+        ).stdout
+    )
+    pipeline(stand, f, private_directory(directory / "ci-refresh"), report)
+    input_value = json.loads(input_path.read_text())
+    input_value.update(phase="ci-finish", started=drafted["started"])
+    write_json(input_path, input_value)
     result = json.loads(
         command(
             ["node", str(APP / "scripts/review_plan.mjs"), str(input_path)],
@@ -553,10 +594,64 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
             "receipt_origin": "deterministic fixture, not a real critic run",
         },
     )
+    record(report, "reviewmatic-presentation-repair", result["repair"])
+    record(report, "reviewmatic-ci-only-refresh", result["ci_refresh"])
+    publication = load("gitlab_review_publication", APP / "scripts/publication_checks.py")
+    runbook = Path(result["finished"]["markdown_path"]).read_text()
+    copied = []
+    for index, action in enumerate(result["actions"]):
+        if action["command"] not in runbook:
+            raise RuntimeError("Reviewmatic action is absent from the copied runbook")
+        publication.execute(stand, action["command"], directory, f"reviewmatic-copied-{index}")
+        copied.append(action["id"])
+    actual = stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions")
+    grouped = [
+        thread
+        for thread in actual
+        if any("Harness grouped" in note["body"] for note in thread["notes"])
+    ]
+    verify(
+        len(grouped) == 2 and all(thread["notes"][0].get("suggestions") for thread in grouped),
+        "Reviewmatic copied grouped suggestions missing on server",
+    )
+    f["grouped_threads"] = grouped
+    record(
+        report,
+        "reviewmatic-copied-commands",
+        {"actions": copied, "grouped_threads": [thread["id"] for thread in grouped]},
+    )
+    tui = load("gitlab_tui", APP / "scripts/tui_checks.py")
+    record(report, "reviewmatic-real-tui", tui.run(stand, f, result, directory))
+    material_input = directory / "material-refresh-input.json"
+    write_json(
+        material_input,
+        {
+            "draft": result["started"]["draft_path"],
+            "artifact_root": result["started"]["artifact_root"],
+            "output": str(directory / "material-refresh.json"),
+        },
+    )
+    before_refresh = stand.request(
+        "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"
+    )
+    refreshed = json.loads(
+        command(
+            ["node", str(APP / "scripts/refresh_review.mjs"), str(material_input)],
+            env=environment,
+            timeout=240,
+        ).stdout
+    )
+    verify(
+        before_refresh
+        == stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"),
+        "Material review refresh published a discussion",
+    )
+    record(report, "reviewmatic-material-refresh", refreshed)
 
 
 def reset_check(stand: Stand, directory: Path, report: dict[str, Any]) -> None:
-    primary = stand.request("GET", f"/projects/{stand.manifest['free']['id']}/repository/tree")
+    preservation = load("gitlab_reset_preservation", APP / "scripts/preservation_checks.py")
+    primary = preservation.snapshot(stand)
     disposable = Stand(
         "gl-reset-" + secrets.token_hex(5), stand.port + 1, " ".join(stand.compose[:-4])
     )
@@ -564,14 +659,21 @@ def reset_check(stand: Stand, directory: Path, report: dict[str, Any]) -> None:
     disposable.bootstrap()
     write_json(disposable.reports / "sentinel.json", {"retained": True})
     previous_owner = disposable.manifest["owner"]
-    disposable.reset(disposable.reset_plan()["digest"])
+    plan = disposable.reset_plan()
+    write_json(directory / "reset-scope.json", plan)
+    for confirmation in ("", "0" * 64):
+        try:
+            disposable.reset(confirmation)
+        except RuntimeError as exc:
+            verify("confirmation" in str(exc), "Reset refused for an unexpected reason")
+        else:
+            raise RuntimeError("Reset accepted absent or mismatched scope confirmation")
+        verify(disposable.reset_plan() == plan, "Rejected reset mutated resources")
+        verify(disposable.manifest["owner"] == previous_owner, "Rejected reset changed credentials")
+    disposable.reset(plan["digest"])
     verify(disposable.manifest["owner"] != previous_owner, "Reset retained credentials")
     verify((disposable.reports / "sentinel.json").exists(), "Reset removed reports")
-    verify(
-        primary
-        == stand.request("GET", f"/projects/{stand.manifest['free']['id']}/repository/tree"),
-        "Reset touched primary stand",
-    )
+    preservation.verify(primary, preservation.snapshot(stand))
     record(
         report,
         "reset-isolation",
@@ -588,31 +690,95 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
     report["coverage"] = {
         "status": "incomplete",
         "mandatory_remaining": [
-            "reviewmatic copied runbook commands and interactive TUI publication",
-            "grouped suggestions, partial application and complete-fix assessment",
-            "refresh/repair preserving findings and critic receipts; CI-only refresh",
+            "exhaustive six-workflow helper pagination and author/reviewer matrix",
+            "reviewmatic old/new/context and single-suggestion commands; separate resolve/reopen and issue actions in TUI/browser",
+            "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment",
+            "task-triage analysis/publication and supported CE relationships through actual helpers",
             "complete release inventory, readiness and manual publication workflows",
-            "network fault injection, cancellation and controlled retry",
-            "free-zone contents beyond repository tree",
+            "in-flight mutation cancellation, timeout and controlled retry after ambiguous writes",
+            "free-zone upload/snippet payloads and arbitrary data beyond the fingerprinted local free directory",
         ],
-        "fault_injection": "not-run; real API rejection is not fault injection",
+        "fault_injection": "synthetic CLI transport rejection and separate real-server read-only retry; not server behavior",
     }
-    free_before = stand.request("GET", f"/projects/{stand.manifest['free']['id']}/repository/tree")
-    f = fixture(stand, directory)
-    write_json(directory / "fixture.json", f)
-    api_matrix(stand, f, directory, report)
-    pipeline(stand, f, directory, report)
-    review_comments(stand, f, directory, report)
-    preparation(stand, f, directory, report)
-    review_plan(stand, f, directory, report)
-    browser = load("gitlab_browser", APP / "scripts/browser_checks.py")
-    browser.run(stand, f, directory, report)
-    verify(
-        free_before
-        == stand.request("GET", f"/projects/{stand.manifest['free']['id']}/repository/tree"),
-        "Free zone changed",
+    preservation = load("gitlab_preservation", APP / "scripts/preservation_checks.py")
+    free_before = preservation.snapshot(stand)
+    write_json(directory / "free-before.json", free_before)
+    names = (
+        "fixture",
+        "ce-api-matrix",
+        "real-shell-ci",
+        "real-inline-comments",
+        "workflow-collection",
+        "transport-fault-and-retry",
+        "mr-copied-publication",
+        "task-copied-publication",
+        "reviewmatic",
+        "browser",
+        "free-zone-preservation",
+        "down-up-preservation",
     )
-    record(report, "free-zone-preserved", {"project_id": stand.manifest["free"]["id"]})
+    report["scenarios"] = [{"name": name, "status": "not-run"} for name in names]
+
+    def scenario(name: str, operation: Any) -> Any:
+        entry = next(item for item in report["scenarios"] if item["name"] == name)
+        started = time.monotonic()
+        try:
+            result = operation()
+        except Exception as exc:
+            entry.update(status="failed", error=stand.redact(str(exc)))
+            raise
+        else:
+            entry["status"] = "passed"
+            return result
+        finally:
+            entry["duration_seconds"] = round(time.monotonic() - started, 3)
+
+    f = scenario("fixture", lambda: fixture(stand, directory))
+    write_json(directory / "fixture.json", f)
+    scenario("ce-api-matrix", lambda: api_matrix(stand, f, directory, report))
+    scenario("real-shell-ci", lambda: pipeline(stand, f, directory, report))
+    scenario("real-inline-comments", lambda: review_comments(stand, f, directory, report))
+    scenario("workflow-collection", lambda: preparation(stand, f, directory, report))
+    faults = load("gitlab_faults", APP / "scripts/fault_checks.py")
+    record(
+        report,
+        "transport-fault-and-retry",
+        scenario("transport-fault-and-retry", lambda: faults.run(stand, f, directory)),
+    )
+    publication = load("gitlab_publication", APP / "scripts/publication_checks.py")
+    record(
+        report,
+        "mr-copied-publication",
+        scenario("mr-copied-publication", lambda: publication.mr(stand, f, directory)),
+    )
+    record(
+        report,
+        "task-copied-publication",
+        scenario("task-copied-publication", lambda: publication.task(stand, f, directory)),
+    )
+    scenario("reviewmatic", lambda: review_plan(stand, f, directory, report))
+    browser = load("gitlab_browser", APP / "scripts/browser_checks.py")
+    scenario("browser", lambda: browser.run(stand, f, directory, report))
+
+    def retained_free(filename: str) -> dict[str, Any]:
+        observed = preservation.snapshot(stand)
+        write_json(directory / filename, observed)
+        preservation.verify(free_before, observed)
+        return {"project_id": stand.manifest["free"]["id"], "fingerprints": len(observed)}
+
+    record(
+        report,
+        "free-zone-preserved",
+        scenario("free-zone-preservation", lambda: retained_free("free-after.json")),
+    )
+
+    def retaining_restart() -> dict[str, Any]:
+        stand.resources()
+        stand.docker("down")
+        stand.start()
+        return retained_free("free-after-restart.json")
+
+    record(report, "free-zone-down-up", scenario("down-up-preservation", retaining_restart))
     if action == "live":
         report["live"] = load("gitlab_live", APP / "scripts/live_checks.py").run(
             stand, f, directory

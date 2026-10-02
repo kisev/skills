@@ -178,3 +178,232 @@ def test_compose_pins_versions_and_never_mounts_docker_socket() -> None:
 
 def test_standard_https_origin_omits_port(local: Any) -> None:
     assert STAND.Stand("standard-test", 443).origin == "https://localhost"
+
+
+@pytest.fixture
+def publication(monkeypatch: pytest.MonkeyPatch) -> Any:
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    monkeypatch.setitem(sys.modules, "stand", STAND)
+    return STAND.load("gitlab_publication_test", SCRIPTS / "publication_checks.py")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "glab api --hostname external.invalid --method POST projects/19/issues",
+        "glab api --hostname localhost --method POST projects/20/issues",
+        "glab api --hostname localhost --method POST ../graphql",
+        "glab api --hostname localhost --hostname external.invalid --method POST projects/19/issues",
+        "glab api --hostname localhost --method POST projects/19/../20/issues",
+        "sh -c glab api --hostname localhost --method POST projects/19/issues",
+    ],
+)
+def test_copied_publication_refuses_foreign_targets_and_wrappers(
+    publication: Any, local: Any, command: str
+) -> None:
+    local.manifest = {"fixtures": {"id": 19}}
+    with pytest.raises(ValueError, match=r"localhost|outside|wrapper"):
+        publication.execute(local, command, local.reports, "denied")
+
+
+def test_human_notes_preserve_thread_state_but_exclude_metadata_system_notes(
+    publication: Any,
+) -> None:
+    note = {"system": False, "body": "Literal `code`, $value and @here", "resolved": False}
+    before = [{"notes": [note]}]
+    after = [*before, {"notes": [{"system": True, "body": "Changed title"}]}]
+    assert publication.human_notes(before) == publication.human_notes(after)
+    assert publication.human_notes(before) != publication.human_notes(
+        [{"notes": [{**note, "resolved": True}]}]
+    )
+
+
+def test_copied_commands_are_extracted_verbatim_not_reconstructed(publication: Any) -> None:
+    text = "# Plan\n\n```sh\n# execution-status=not_run\nglab api --input 'path with spaces'\n```\n"
+    assert publication.commands(text) == ["glab api --input 'path with spaces'"]
+
+
+def test_graphql_publication_refuses_a_foreign_project_before_execution(
+    publication: Any, local: Any
+) -> None:
+    local.manifest = {"fixtures": {"id": 19, "path_with_namespace": "owned/fixtures"}}
+    payload = local.state / "payload.json"
+    STAND.write_json(
+        payload,
+        {
+            "query": "mutation { createIssue(input: $input) { errors } }",
+            "variables": {"input": {"projectPath": "foreign/project"}},
+        },
+    )
+    with pytest.raises(ValueError, match="outside the synthetic"):
+        publication.execute(
+            local,
+            f"glab api --hostname localhost --method POST graphql --input {payload}",
+            local.reports,
+            "denied",
+        )
+
+
+@pytest.fixture
+def preservation(monkeypatch: pytest.MonkeyPatch) -> Any:
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    monkeypatch.setitem(sys.modules, "stand", STAND)
+    return STAND.load("gitlab_preservation_test", SCRIPTS / "preservation_checks.py")
+
+
+def test_free_zone_pagination_and_drift_are_not_silently_accepted(
+    preservation: Any, local: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = []
+
+    def request(_method: str, path: str) -> list[dict[str, int]]:
+        calls.append(path)
+        return (
+            [{"id": index} for index in range(100)] if path.endswith("&page=1") else [{"id": 100}]
+        )
+
+    monkeypatch.setattr(local, "request", request)
+    assert len(preservation.pages(local, "/issues?state=all")) == 101
+    assert calls[-1].endswith("&per_page=100&page=2")
+    with pytest.raises(RuntimeError, match="fingerprints changed: issues"):
+        preservation.verify({"issues": "old"}, {"issues": "new"})
+
+
+def test_free_snapshot_covers_nondefault_refs_notes_and_local_files_without_following_links(
+    preservation: Any, local: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    local.manifest = {"free": {"id": 7}}
+    calls = []
+
+    def request(_method: str, path: str) -> Any:
+        calls.append(path)
+        if path == "/projects/7":
+            return {"id": 7}
+        if "/repository/branches?" in path:
+            return [{"name": "experiment", "commit": {"id": "exact-sha"}}]
+        if "/issues?" in path:
+            return [{"iid": 1, "description": "Outside the repository tree"}]
+        return []
+
+    monkeypatch.setattr(local, "request", request)
+    free = local.home / "free"
+    free.mkdir()
+    (free / "scratch.txt").write_text("manual experiment")
+    (free / "external").symlink_to("/not-accessible/no-such-file")
+    first = preservation.snapshot(local)
+    assert {
+        "issues",
+        "issues/1/discussions",
+        "issues/1/links",
+        "local/free/scratch.txt",
+        "local/free/external",
+        "tree/exact-sha",
+    } <= first.keys()
+    assert any("ref=exact-sha&recursive=true" in path for path in calls)
+    (free / "scratch.txt").write_text("changed")
+    with pytest.raises(RuntimeError, match=r"scratch\.txt"):
+        preservation.verify(first, preservation.snapshot(local))
+
+
+def test_browser_refresh_waits_for_remapped_notes_without_repeating_apply(
+    local: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    monkeypatch.setitem(sys.modules, "stand", STAND)
+    monkeypatch.setattr(STAND, "ROOT", ROOT)
+    browser_module = STAND.load("gitlab_browser_refresh_test", SCRIPTS / "browser_checks.py")
+    monkeypatch.setattr(local, "request", lambda *_args: {"diff_refs": {"head_sha": "exact"}})
+    monkeypatch.setattr(browser_module.time, "sleep", lambda _seconds: None)
+    calls = []
+    answers = iter((False, True))
+
+    class Browser:
+        def call(self, *args: str) -> None:
+            calls.append(args)
+
+        def evaluate(self, _expression: str) -> bool:
+            return next(answers)
+
+    fixture: dict[str, Any] = {
+        "prefix": "/projects/7",
+        "mr": {"iid": 2, "web_url": "https://localhost/owned/fixtures/-/merge_requests/2"},
+    }
+    browser_module.refresh(Browser(), local, fixture, "exact", "remaining suggestion")
+    assert fixture["browser_refreshes"] == [
+        {"head": "exact", "body": "remaining suggestion", "navigation_attempts": 2}
+    ]
+    assert [args[0] for args in calls] == ["open", "wait", "open", "wait"]
+
+
+def test_browser_refresh_missing_notes_is_a_bounded_failure(
+    local: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    monkeypatch.setitem(sys.modules, "stand", STAND)
+    monkeypatch.setattr(STAND, "ROOT", ROOT)
+    browser_module = STAND.load(
+        "gitlab_browser_refresh_timeout_test", SCRIPTS / "browser_checks.py"
+    )
+    monkeypatch.setattr(local, "request", lambda *_args: {"diff_refs": {"head_sha": "exact"}})
+    ticks = iter((0, 1, 61))
+    monkeypatch.setattr(browser_module.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(browser_module.time, "sleep", lambda _seconds: None)
+
+    class Browser:
+        def call(self, *_args: str) -> None:
+            pass
+
+        def evaluate(self, _expression: str) -> bool:
+            return False
+
+    fixture: dict[str, Any] = {
+        "prefix": "/projects/7",
+        "mr": {"iid": 2, "web_url": "https://localhost/owned/fixtures/-/merge_requests/2"},
+    }
+    with pytest.raises(RuntimeError, match="never rendered"):
+        browser_module.refresh(Browser(), local, fixture, "exact", "remaining suggestion")
+
+
+def test_browser_network_metadata_keeps_failures_without_credentials_or_bodies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.syspath_prepend(str(SCRIPTS))
+    monkeypatch.setitem(sys.modules, "stand", STAND)
+    browser_module = STAND.load("gitlab_browser_network_test", SCRIPTS / "browser_checks.py")
+    result = browser_module.network_metadata(
+        {
+            "success": True,
+            "data": {
+                "requests": [
+                    {
+                        "requestId": "request-1",
+                        "url": "https://localhost/discussions.json",
+                        "method": "GET",
+                        "status": 0,
+                        "errorText": "net::ERR_CONNECTION_RESET",
+                        "resourceType": "XHR",
+                        "headers": {"Cookie": "private-cookie"},
+                        "body": "private-body",
+                        "cookies": ["private-cookie"],
+                    }
+                ]
+            },
+        }
+    )
+    assert result == {
+        "origin": "real-browser",
+        "fault_injection": False,
+        "requests": [
+            {
+                "requestId": "request-1",
+                "url": "https://localhost/discussions.json",
+                "method": "GET",
+                "status": 0,
+                "errorText": "net::ERR_CONNECTION_RESET",
+                "resourceType": "XHR",
+            }
+        ],
+    }
+    for payload in ({"success": False}, {"success": True, "data": {}}):
+        with pytest.raises(RuntimeError, match="diagnostics are incomplete"):
+            browser_module.network_metadata(payload)

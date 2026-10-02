@@ -19,6 +19,7 @@ import time
 import traceback
 import urllib.error
 import urllib.request
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -331,6 +332,7 @@ def main() -> int:
         "status": "failed",
         "checks": [],
         "live": "not-run",
+        "started_at": datetime.now(UTC).isoformat(),
         "declared_versions": {
             "server_image": "gitlab/gitlab-ce:18.11.11-ce.0",
             "runner_image": "gitlab/gitlab-runner:v18.11.0",
@@ -419,6 +421,13 @@ def main() -> int:
             return 0
         finally:
             report["duration_seconds"] = round(time.monotonic() - started, 3)
+            if "resources" in report:
+                try:
+                    report["resources_final"] = stand.docker(
+                        "stats", "--no-stream", "--format", "{{json .}}"
+                    )
+                except Exception as exc:
+                    report["resources_final_error"] = stand.redact(str(exc))
             write_json(destination / "result.json", report)
             write_json(
                 stand.reports / "latest.json",

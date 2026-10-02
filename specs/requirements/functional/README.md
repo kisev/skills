@@ -245,13 +245,18 @@ successful and failing traces and a child pipeline. Browser checks shall retain
 screenshots and verify rendered placement, application and thread state.
 
 Named volumes and an untouched free project shall survive ordinary runs and
-down. Checkout ownership shall be checked before resource adoption or mutation.
+down/up. Preservation evidence shall include repository-independent free-zone
+data rather than only the default-branch tree. Checkout ownership shall be checked
+before resource adoption or mutation.
 Reset shall preview the exact selected scope, require its matching confirmation,
 retain reports and reject foreign resources or unsafe local paths. A separate
 disposable reset test shall verify isolation from the primary stand.
 
 Every run shall retain versions, durations, resource measurements and per-scenario
-observations. Missing mandatory coverage, failures and timeouts shall return
+observations, including UTC start time and pass/fail/not-run status. Copied
+publication commands shall retain their wrappers and literal payloads; successful
+CLI exit alone shall not establish the server postcondition. Missing mandatory
+coverage, failures and timeouts shall return
 nonzero, never a skipped success. Fault-injected observations shall be distinct
 from actual server behavior. Optional live shall use existing host adapters,
 explicit provider/model/credentials and bounded execution with complete budget

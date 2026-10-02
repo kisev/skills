@@ -51,6 +51,8 @@ credentials and isolated Git/glab/XDG directories. Reports live separately in
 Reports retain failures, versions, startup duration, container resource samples,
 API observations, traces and browser screenshots. Failures and timeouts return
 nonzero. Preparation is checked separately from authorized synthetic writes.
+`browser-network.json` retains XHR/fetch URLs, methods, statuses and transport
+errors without request headers, cookies or bodies, including on a failed UI check.
 
 | Scenario | Expected result | Server postcondition |
 | - | - | - |
@@ -63,21 +65,35 @@ nonzero. Preparation is checked separately from authorized synthetic writes.
 | Suggestions | Server recognizes a suggestion | Nonempty server suggestion metadata; browser application checks resulting file |
 | Replies and threads | Author reply; separate resolve/reopen | Author ID and resolved flag read back after each operation |
 | Negative API | Outsider and invalid line rejected | Expected non-2xx status, never a successful write |
-| MR/release preparation | Collect evidence without publication | Discussions unchanged, artifacts retained |
+| MR/release preparation | Collect complete exact-head evidence without publication | Discussions unchanged, incomplete helper evidence rejected |
+| MR publication | Copy the generated commands, as reviewer and author | Exact literal title/description/labels; human discussion notes unchanged |
+| Task publication | Execute the copied marker-wrapped GraphQL command | Real issue title, labels and milestone match the plan |
 | Task preparation/triage | Local plan and actual collection | Issue catalog unchanged during preparation |
-| Reviewmatic | Exact-head local preparation | Local artifacts and deterministic fixture receipts; discussions unchanged |
-| Browser | Comments visible in diff; suggestion applies | Screenshots and exact resulting repository file |
-| Free zone | Ordinary checks leave it alone | Repository tree unchanged |
+| Reviewmatic | Prepare, presentation-repair, then copy runbook commands | Findings, suggestions and fixture receipts retained; real grouped suggestions and replies published |
+| CI-only refresh | Rerun real shell CI on the same SHA, then finish the existing draft | Supplemental CI snapshot; original findings/evidence/receipts retained; no repeated `startReview` |
+| Material refresh | Collect changed conversations without publishing or rebinding receipts | Findings/dispositions and original draft preserved; new receipts empty; last finalized plan remains readable |
+| TUI | Real Ink CLI in a PTY; cancel confirmation, then confirm a reply | No early write; exactly one reviewer reply; thread state unchanged; transcript retained |
+| Browser | Single and cross-file grouped suggestions apply | Screenshots, exact files and partial/full application flags; partial is not a complete fix |
+| Transport fault/retry | Inject CLI failure, then retry the actual collector | Failure is nonzero; retry has complete evidence; server unchanged |
+| Free zone | Ordinary checks and down/up leave fingerprinted data alone | All branch/tag trees, issue/MR discussions, metadata, wiki content and local `free/` fingerprints unchanged |
 | Reset | Selected stand only, reports retained | New disposable identity; primary free project unchanged |
 
-This initial harness does **not** yet prove the complete acceptance matrix:
-reviewmatic's copied runbook commands and interactive TUI, grouped/partial
-suggestions, refresh/repair and CI-only refresh, complete semantic release
-readiness/publication, network fault injection and cancellation/retry still need
-real-server scenarios. Deterministic receipt inputs are not real critic runs.
+The harness does **not** yet prove the complete acceptance matrix. Missing cases
+include exhaustive helper pagination/roles for all six workflows, reviewmatic's
+old/new/context and single-suggestion commands, TUI issue and separate thread-state
+actions, same-file grouped stale-state recovery, task
+triage publication, full release inventory/readiness/publication and in-flight
+mutation cancellation/retry. Free-zone upload/snippet payloads and arbitrary data
+outside the fingerprinted local `free/` directory are not verified. Only metadata
+is fingerprinted for uploads/snippets; reports contain hashes, not free-zone prose.
+Deterministic receipt inputs are not real critic runs.
 Do not interpret baseline API checks or offline suites as those missing proofs.
 Until that mandatory coverage is implemented, `test` records the missing cases
 and returns nonzero even when every available baseline scenario passes.
+Reports include UTC `started_at`, per-scenario pass/fail/not-run and durations,
+plus initial/final resource samples. `test` performs a retaining down/up after
+browser checks. A transport fault wrapper is explicitly marked as injection;
+it is never used as evidence of a GitLab network response.
 
 ## Reset
 
