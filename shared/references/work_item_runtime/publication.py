@@ -25,7 +25,7 @@ else:
         from .state_artifacts import render_mutation_command, versioned_markdown, xdg_state_home
 
 CHECKS = {"target", "templates", "metadata", "duplicates", "semantics"}
-GRAPHQL_ENDPOINT = "../graphql"
+GRAPHQL_ENDPOINT = "graphql"
 WORK_ITEM_GID = re.compile(r"gid://gitlab/WorkItem/[1-9][0-9]*")
 WORK_ITEM_TYPE_GID = re.compile(r"gid://gitlab/WorkItems::Type/[1-9][0-9]*")
 TEXT = {
