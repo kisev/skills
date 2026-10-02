@@ -97,6 +97,14 @@ independence, no-op previews, and consent-gated apply.
 
 Profile mutations shall use preview and confirmed apply phases, exact ownership,
 atomic rollback, and restart semantics defined by the package contract.
+The selected fixed roles and selected additional critics shall be stored separately
+from saved model/variant choices. Partial installation, model changes, repeat
+installation, and repair shall preserve that selected set; an unselected role is
+`not-installed`, not damage. Saving a fixed-role model shall not install the role.
+Install may stage model and critic changes in the same owned-file transaction.
+Uninstall shall retain model choices while clearing the deployed selection.
+Repair shall restore missing selected files and safe mode-only damage, but shall
+not overwrite modified managed bytes or adopt user-owned collisions.
 
 #### Verification
 
@@ -153,7 +161,12 @@ through the config-setup executor while keeping package-owned and user-owned
 writes in separate transactions. Project scope without an npm project shall
 report a manual follow-up instead of creating files. `install --no-dependency`
 skips the dependency step, `--no-core` skips the fragment and the dependency,
-and `uninstall` never changes the dependency.
+and uninstall removes the dependency only after an explicit
+`--remove-dependency` selection or interactive approval. Uninstall proposes
+plugin disconnection by default, supports `--no-disconnect`, and preserves
+unrelated presets and plugin entries. npm removal is a separate non-atomic stage
+bound to the previewed package files; failure reports completed local stages and
+the remaining action rather than claiming rollback of npm.
 
 #### Verification
 

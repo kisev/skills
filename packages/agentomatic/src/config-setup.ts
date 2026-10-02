@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
-import { archiveMutations, type ArchiveCandidate } from "./installer.js";
+import { archiveMutations, coreSelectionMutation, type ArchiveCandidate } from "./installer.js";
 import { requirePackageVersion } from "./package-metadata.js";
 import { ensureDependency, planDependency, type DependencyRunner } from "./self-install.js";
 import {
@@ -21,9 +21,13 @@ import {
   type Scope,
 } from "./lifecycle.js";
 import { applyJsoncEdits, parseJsonc, type JsoncEdit } from "./jsonc.js";
-import { corePluginEdits, permissionEdits, type PermissionRule } from "./opencode-config.js";
+import {
+  corePluginEdits,
+  corePluginRemovalEdits,
+  permissionEdits,
+  type PermissionRule,
+} from "./opencode-config.js";
 
-const PACKAGE_NAME = "@kisev/agentomatic";
 const XDG_STATE_GLOB = "~/.local/state/agent-skills/**";
 const OPENCODE_SKILLS_GLOB = "~/.config/opencode/skills/**";
 const AGENTS_SKILLS_GLOB = "~/.agents/skills/**";
@@ -57,6 +61,12 @@ export type ConfigTargetName = (typeof CONFIG_TARGETS)[number];
 export type TargetFileKind = "main" | "tui";
 
 export const CONFIG_FRAGMENTS = [
+  {
+    name: "core-disable",
+    description: "Disconnect only the agentomatic plugin, preserving unrelated configuration",
+    targets: ["opencode"],
+    file: "main",
+  },
   {
     name: "core-plugin",
     description: "Register @kisev/agentomatic in the plugin array (OpenCode only)",
@@ -145,7 +155,7 @@ async function requireNoRecovery(stateRoot: string): Promise<void> {
   if (await readRegular(join(stateRoot, "transaction-journal.json")))
     throw new ConfigSetupError(
       "recovery_required",
-      "An interrupted transaction requires config recover --dry-run, then confirmed config recover before a fresh preview",
+      "An interrupted transaction requires maintenance recover --dry-run, then confirmed maintenance recover before a fresh preview",
     );
 }
 
@@ -166,16 +176,44 @@ export async function recoverConfigSetup(
 ): Promise<{ paths: string[]; recovered: boolean; digest: string | null }> {
   const root = deploymentRoot(scope, cwd, home);
   const state = lifecycleRoot(scope, cwd, home);
-  const built = await build(
-    { targets: [...CONFIG_TARGETS], fragments: [...FRAGMENT_NAMES] },
-    scope,
-    cwd,
-    home,
-  );
-  const allowed = [...built.allowedRoots, archiveRoot(scope, cwd, home)];
-  const paths = await inspectTransaction(root, state, allowed);
   const journalPath = join(state, "transaction-journal.json");
   const journal = await readRegular(journalPath);
+  const scopeRoot = resolve(scope === "global" ? home : cwd);
+  let recoveryRoot = root;
+  if (journal) {
+    let candidate: { root?: unknown; operations?: Array<{ path: string; root?: string }> };
+    try {
+      candidate = JSON.parse(journal.toString("utf8"));
+    } catch {
+      throw new ConfigSetupError("invalid_journal", "Transaction journal is not valid JSON");
+    }
+    if (candidate.root === scopeRoot && scopeRoot !== root) {
+      const prefix = scope === "global" ? ".config/opencode/" : ".opencode/";
+      if (
+        !Array.isArray(candidate.operations) ||
+        candidate.operations.some(
+          (operation) => !operation.root && !operation.path?.startsWith(prefix),
+        )
+      )
+        throw new ConfigSetupError(
+          "invalid_journal",
+          "Cleanup journal contains paths outside the deployment",
+        );
+      recoveryRoot = scopeRoot;
+    }
+  }
+  const allowed = [
+    root,
+    archiveRoot(scope, cwd, home),
+    ...(scope === "project"
+      ? [resolve(cwd)]
+      : [
+          join(home, ".config", "opencode"),
+          join(home, ".config", "kilo"),
+          join(home, ".config", "mimocode"),
+        ]),
+  ];
+  const paths = await inspectTransaction(recoveryRoot, state, allowed);
   const digest = journal ? sha256(journal) : null;
   if (dryRun || !paths.length) return { paths, recovered: false, digest };
   const recovered = await withLifecycleLock(state, async () => {
@@ -185,7 +223,7 @@ export async function recoverConfigSetup(
         "stale_receipt",
         "Recovery journal changed; preview recovery again",
       );
-    return recoverTransaction(root, state, allowed);
+    return recoverTransaction(recoveryRoot, state, allowed);
   });
   return { paths, recovered, digest };
 }
@@ -263,6 +301,7 @@ function fragmentEdits(
   if (fragment === "core-plugin") {
     return corePluginEdits(value);
   }
+  if (fragment === "core-disable") return corePluginRemovalEdits(value);
   if (fragment === "skills-state-permissions") {
     const statePaths =
       target === "opencode"
@@ -388,6 +427,8 @@ export function normalizeConfigSelection(
       "Project scope supports only the opencode target",
     );
   const requestedFragments = value.fragments ?? [];
+  if (requestedFragments.includes("core-plugin") && requestedFragments.includes("core-disable"))
+    throw new ConfigSetupError("invalid_selection", "Choose either core-plugin or core-disable");
   const fragments = FRAGMENT_NAMES.filter((fragment) => requestedFragments.includes(fragment));
   if (fragments.length !== requestedFragments.length)
     throw new ConfigSetupError("invalid_selection", "Unknown config fragment selection");
@@ -410,8 +451,32 @@ export async function defaultConfigSelection(
   }
   return normalizeConfigSelection(scope, {
     targets: [...new Set(targets)],
-    fragments: [...FRAGMENT_NAMES],
+    fragments: FRAGMENT_NAMES.filter((name) => name !== "core-disable"),
   });
+}
+
+export async function inspectIntegration(
+  scope: Scope,
+  cwd = process.cwd(),
+  home = homedir(),
+): Promise<{
+  path: string;
+  connected: boolean;
+  problem?: string;
+}> {
+  const file = await resolveTargetFile("opencode", scope, cwd, home);
+  const raw = await readRegular(file.absolute);
+  if (!raw) return { path: file.absolute, connected: false };
+  try {
+    const current = parseJsonc(raw.toString("utf8")) as Record<string, unknown>;
+    return { path: file.absolute, connected: corePluginRemovalEdits(current).length > 0 };
+  } catch (error) {
+    return {
+      path: file.absolute,
+      connected: false,
+      problem: error instanceof Error ? error.message : "Invalid configuration",
+    };
+  }
 }
 
 async function resolveTargetFile(
@@ -513,6 +578,7 @@ async function build(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
+  syncSelection = true,
 ): Promise<BuiltPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const operations: ConfigSetupOperation[] = [];
@@ -635,6 +701,29 @@ async function build(
           ? "TUI files are global-only"
           : "no selected target supports this fragment",
     }));
+  const core = selection.fragments.find(
+    (fragment) => fragment === "core-plugin" || fragment === "core-disable",
+  );
+  if (
+    syncSelection &&
+    core &&
+    selection.targets.includes("opencode") &&
+    !operations.some(
+      (operation) => operation.fragment === core && operation.operation === "conflict",
+    )
+  ) {
+    const mutation = await coreSelectionMutation(root, core === "core-plugin");
+    if (mutation) {
+      mutations.push(mutation);
+      operations.push({
+        target: "opencode",
+        path: join(root, mutation.path),
+        fragment: core,
+        operation: "update",
+        reason: "Save connection choice for repeat install and repair",
+      });
+    }
+  }
   const sorted = operations.sort(
     (left, right) =>
       CONFIG_TARGETS.indexOf(left.target) - CONFIG_TARGETS.indexOf(right.target) ||
@@ -674,11 +763,12 @@ export async function previewConfigSetup(
   cwd = process.cwd(),
   home = homedir(),
   provisionDependency = true,
+  syncSelection = true,
 ): Promise<ConfigSetupPlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   try {
     await requireNoRecovery(stateRoot);
-    const built = await build(selection, scope, cwd, home);
+    const built = await build(selection, scope, cwd, home, syncSelection);
     if (
       provisionDependency &&
       selection.fragments.includes("core-plugin") &&
@@ -692,6 +782,7 @@ export async function previewConfigSetup(
       resolve(cwd),
       resolve(home),
       provisionDependency,
+      syncSelection,
     ]);
     for (const [id, prior] of configReceipts)
       if (prior.key === key || prior.expires < Date.now()) configReceipts.delete(id);
@@ -717,6 +808,7 @@ export async function applyConfigSetup(
     dependencyRunner?: DependencyRunner;
     provisionDependency?: boolean;
     receipt?: string;
+    syncSelection?: boolean;
   } = {},
 ): Promise<ConfigSetupPlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
@@ -724,7 +816,8 @@ export async function applyConfigSetup(
   try {
     return await withLifecycleLock(stateRoot, async () => {
       await requireNoRecovery(stateRoot);
-      const built = await build(selection, scope, cwd, home);
+      const syncSelection = options.syncSelection !== false;
+      const built = await build(selection, scope, cwd, home, syncSelection);
       const provisionDependency = options.provisionDependency !== false;
       if (
         provisionDependency &&
@@ -738,6 +831,7 @@ export async function applyConfigSetup(
         resolve(cwd),
         resolve(home),
         provisionDependency,
+        syncSelection,
       ]);
       const id = options.receipt ?? [...configReceipts].find(([, entry]) => entry.key === key)?.[0];
       const receipt = id ? configReceipts.get(id) : undefined;

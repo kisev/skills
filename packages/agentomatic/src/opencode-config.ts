@@ -163,6 +163,18 @@ function ourEntry(entry: unknown): boolean {
   return object(entry) && typeof entry.package === "string" && OUR_PACKAGE.test(entry.package);
 }
 
+export function corePluginRemovalEdits(config: Record<string, unknown>): JsoncEdit[] {
+  return ["plugin", "plugins"].flatMap((key): JsoncEdit[] => {
+    if (!(key in config)) return [];
+    plugins(config[key], key === "plugin");
+    const entries = config[key] as unknown[];
+    const remaining = entries.filter((entry) => !ourEntry(Array.isArray(entry) ? entry[0] : entry));
+    return remaining.length === entries.length
+      ? []
+      : [{ kind: "set-value", path: [key], value: remaining }];
+  });
+}
+
 export function corePluginEdits(config: Record<string, unknown>): JsoncEdit[] {
   const edits: JsoncEdit[] = [
     { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/config.json" },

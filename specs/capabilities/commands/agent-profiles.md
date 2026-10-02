@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: Profile management remains available through `agentomatic agent` and `critic` commands.
+- Reason: Administration is CLI-only; current profiles use `agentomatic configure agent|critics` and `agent` commands.
 
 ## Purpose
 

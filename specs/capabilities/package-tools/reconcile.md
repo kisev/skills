@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: Reconciliation remains available through `agentomatic reconcile`.
+- Reason: Administration is CLI-only; current cleanup is `agentomatic maintenance cleanup`.
 
 ## Purpose
 

@@ -25,6 +25,7 @@ import {
 } from "../dist/agent-profiles.js";
 import { promptText, selectOption, selectOptions } from "../dist/terminal-wizard.js";
 import { apply, preview } from "../dist/installer.js";
+import { recoverConfigSetup } from "../dist/config-setup.js";
 import {
   LifecycleError,
   appendPrivate,
@@ -129,7 +130,11 @@ test("inventory separates package-owned, managed, user-owned, drift, and collisi
         collisionContext.project,
         collisionContext.home,
       );
-      assert.deepEqual(collision.collisions, ["critic"]);
+      assert.deepEqual(collision.collisions, []);
+      assert.equal(
+        collision.profiles.find((profile) => profile.name === "critic").ownership,
+        "user-owned",
+      );
     } finally {
       rmSync(collisionContext.directory, { recursive: true, force: true });
     }
@@ -178,7 +183,7 @@ test("incomplete non-TTY configure exits with JSON guidance and writes no state"
   const context = await roots();
   const result = spawnSync(
     process.execPath,
-    [join(PACKAGE, "dist", "cli.js"), "agent", "configure", "--dry-run", "--json"],
+    [join(PACKAGE, "dist", "cli.js"), "configure", "agent", "--dry-run", "--json"],
     {
       cwd: context.project,
       env: { ...process.env, HOME: context.home, XDG_STATE_HOME: join(context.home, ".state") },
@@ -189,10 +194,7 @@ test("incomplete non-TTY configure exits with JSON guidance and writes no state"
     assert.equal(result.status, 2);
     const error = JSON.parse(result.stdout).error;
     assert.equal(error.code, "terminal_required");
-    assert.equal(
-      error.message,
-      "agent configure requires a terminal or explicit agent <name> and either exact --model provider/model or --provider + --model",
-    );
+    assert.equal(error.message, "This operation requires an interactive terminal");
     assert.deepEqual(await fileSnapshot(join(context.project, ".opencode")), {});
     await assert.rejects(lstat(join(context.home, ".state")), { code: "ENOENT" });
   } finally {
@@ -208,8 +210,8 @@ test("non-TTY configure accepts an exact model without a separate provider", asy
       process.execPath,
       [
         join(PACKAGE, "dist", "cli.js"),
-        "agent",
         "configure",
+        "agent",
         "manager",
         "--model",
         "openai/gpt-5",
@@ -372,11 +374,13 @@ test("agent deselection removes managed profiles and preserves profile configura
     );
     assert.equal(
       plan.operations.some((item) => item.path === ".agentomatic/agent-profiles.json"),
-      false,
+      true,
     );
     await apply("install", "project", context.project, context.home, {}, selection);
 
-    assert.deepEqual(await readFile(configPath), config);
+    const retained = JSON.parse(await readFile(configPath, "utf8"));
+    assert.deepEqual(retained.fixed, JSON.parse(config).fixed);
+    assert.deepEqual(retained.selected_fixed, []);
     await assert.rejects(
       readFile(join(context.root, ".agentomatic", "agent-profiles.manifest.json")),
       { code: "ENOENT" },
@@ -564,7 +568,7 @@ test("injected failure rolls back every published file and final validation", as
   }
 });
 
-test("interrupted transaction recovers before requiring a fresh plan", async () => {
+test("preview preserves an interrupted transaction until explicit recovery", async () => {
   const context = await roots();
   try {
     await confirmedInstall(context.project, context.home);
@@ -578,8 +582,10 @@ test("interrupted transaction recovers before requiring a fresh plan", async () 
     );
     await assert.rejects(
       previewAgentProfileChange(request, "project", context.project, context.home),
-      (error) => error instanceof AgentProfileError && error.code === "recovered_transaction",
+      (error) => error instanceof AgentProfileError && error.code === "recovery_required",
     );
+    const recovery = await recoverConfigSetup("project", true, context.project, context.home);
+    await recoverConfigSetup("project", false, context.project, context.home, recovery.digest);
     assert.deepEqual(await fileSnapshot(context.root), before);
     await previewAgentProfileChange(request, "project", context.project, context.home);
   } finally {
@@ -607,7 +613,13 @@ test("recovery never overwrites a target changed after interruption", async () =
     );
     await writeFile(join(context.root, "agents", "worker.md"), "external change\n");
     await assert.rejects(
-      previewAgentProfileChange({ action: "reconcile" }, "project", context.project, context.home),
+      recoverConfigSetup(
+        "project",
+        false,
+        context.project,
+        context.home,
+        (await recoverConfigSetup("project", true, context.project, context.home)).digest,
+      ),
       (error) => error instanceof LifecycleError && error.code === "recovery_conflict",
     );
     assert.equal(
@@ -764,7 +776,7 @@ test("private append rejects an existing public file", async () => {
   }
 });
 
-test("explicit reconcile repairs only semantic-manifest-owned drift", async () => {
+test("repair preserves changed semantic-manifest-owned bytes", async () => {
   const context = await roots();
   try {
     await confirmedInstall(context.project, context.home);
@@ -777,12 +789,10 @@ test("explicit reconcile repairs only semantic-manifest-owned drift", async () =
       (error) => error instanceof AgentProfileError && error.code === "drift",
     );
     const reconcile = { action: "reconcile" };
-    const repaired = await confirmedProfile(reconcile, context.project, context.home);
-    assert.equal(
-      repaired.plan.operations.find((item) => item.path === "agents/manager.md").reason,
-      "explicit managed profile reconcile",
-    );
-    assert.doesNotMatch(await readFile(manager, "utf8"), /^drift$/);
+    await assert.rejects(confirmedProfile(reconcile, context.project, context.home), {
+      code: "drift",
+    });
+    assert.equal(await readFile(manager, "utf8"), "drift\n");
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
   }
@@ -1181,8 +1191,8 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
       true,
     );
     run([
-      "agent",
       "configure",
+      "agent",
       "manager",
       "--provider",
       "openai",
@@ -1193,8 +1203,8 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
       "--dry-run",
     ]);
     run([
-      "agent",
       "configure",
+      "agent",
       "manager",
       "--provider",
       "openai",

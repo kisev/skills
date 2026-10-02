@@ -12,7 +12,7 @@ update, and removal lifecycle.
 - Six fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`, and
   `critic`.
 - Capability routing plus direct CLI diagnostics, reconciliation, and profiles.
-- A confirmed `config` command that connects the package and recommended
+- A confirmed `configure integration` command that connects the package and recommended
   fragments into OpenCode `opencode.json(c)`/`cli.json`, `kilo.json(c)`, and
   `mimocode.json(c)` while preserving existing entries and comments.
 - Optional plugin wrappers: `rules-injector` and `zed-bell`;
@@ -96,11 +96,11 @@ matches the installed package. Confirm the printed plan summary in the install
 step, or pass explicit selections with `--yes` outside a terminal.
 When core integration is selected, the same confirmed install
 merges the `plugins` entry into user-owned OpenCode configuration while preserving
-existing entries. The separate `config` command can apply additional fragments
+existing entries. The separate `configure integration` command can apply additional fragments
 or retry a failed configuration step:
 
 ```shell
-npx agentomatic config --global --dry-run
+npx agentomatic configure integration --global --dry-run
 ```
 
 ```json
@@ -111,8 +111,11 @@ npx agentomatic config --global --dry-run
 ```
 
 Restart OpenCode after activation or asset changes. A confirmed `install` can
-apply its core config step; `uninstall` never edits user configuration. Other
-fragments use `config`, and command adapter selections do not install portable
+apply its core config step and stage optional models and additional critics.
+`configure` provides one settings menu; `status` shows the installed set and models.
+`uninstall` proposes plugin disconnection, retains models, and removes the npm
+dependency only with an explicit selection (`--remove-dependency`). Other
+fragments use `configure integration`, and command adapter selections do not install portable
 skills. OpenCode config output uses native V2 `plugins` and `permissions`;
 only touched legacy sections migrate, with ambiguous cases reported as conflicts.
 
@@ -125,5 +128,5 @@ The canonical documentation lives in `docs/`, not in the package source:
 - [Documentation index](https://github.com/kisev/skills/blob/main/docs/README.md)
 
 The complete guide covers global installation, asset selection, confirmation,
-activation, `config` fragments, `doctor`, update, `reconcile`, agent profiles,
+activation, `configure integration` fragments, `status`, `doctor`, update, maintenance, agent profiles,
 ownership, and uninstall.

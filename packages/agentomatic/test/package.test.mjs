@@ -89,16 +89,22 @@ function hostAgents() {
 }
 
 test("installer wizard uses shared multi-select groups and keeps defaults", () => {
-  const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
-  assert.match(source, /Portable skills are installed separately through npx skills/);
-  assert.match(source, /This installer does not install, update, or remove portable skills/);
+  const source = readFileSync(join(PACKAGE, "src", "command-cli.ts"), "utf8");
+  assert.match(source, /Portable skills are installed separately through the skills CLI/);
+  assert.match(source, /Selecting an adapter does not install its skill/);
   assert.match(source, /Skill command adapters/);
-  assert.match(source, /selectOptions\(\s*label,\s*names,\s*initialSelected,/);
-  assert.match(source, /group\("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS\)/);
-  assert.match(source, /group\("Fixed agents", defaults\.agents, defaults\.agents\)/);
-  assert.match(source, /group\("Selectable plugins", SELECTABLE_PLUGINS, defaults\.plugins\)/);
+  assert.match(
+    source,
+    /selectOptions\("Skill command adapters", SKILL_COMMANDS, defaults\.commands\)/,
+  );
+  assert.match(source, /selectOptions\("Fixed agents", FIXED_AGENT_ROLES, defaults\.agents\)/);
+  assert.match(
+    source,
+    /selectOptions\("Optional plugins", SELECTABLE_PLUGINS, defaults\.plugins\)/,
+  );
   assert.doesNotMatch(source, /"Select all", "Select none"/);
-  assert.match(source, /--skill-commands/);
+  assert.match(source, /--commands/);
+  assert.doesNotMatch(source, /--skill-commands/);
   assert.doesNotMatch(source, /--package-commands/);
 });
 
@@ -153,8 +159,8 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
     assert.equal(plan.confirmable, false);
     const output = renderReconcile(plan, { applied: false });
     assert.match(output, /Blocked:/);
-    assert.match(output, new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --dry-run`));
-    assert.match(output, /Apply that installer plan, then build a new reconcile preview\./);
+    assert.match(output, new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} doctor`));
+    assert.match(output, /Restore recorded bytes before retrying cleanup\./);
     assert.doesNotMatch(output, /\nApply:\n/);
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -183,7 +189,7 @@ test("blocked reconcile apply exits with code two", async () => {
 
     const reconcilePreview = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--dry-run", "--json"],
       { cwd: project, env: environment, encoding: "utf8" },
     );
     assert.equal(reconcilePreview.status, 0, reconcilePreview.stderr);
@@ -191,7 +197,7 @@ test("blocked reconcile apply exits with code two", async () => {
     assert.equal(blockedPlan.confirmable, false);
     const blockedApply = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--yes", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--yes", "--json"],
       { cwd: project, env: environment, encoding: "utf8" },
     );
     assert.equal(blockedApply.status, 2, blockedApply.stderr);
@@ -213,7 +219,7 @@ test("clean reconcile preview reports a no-op", async () => {
     assert.equal(plan.diagnostic_state_only.length, 0);
     assert.equal(plan.confirmable, false);
     const output = renderReconcile(plan, { applied: false });
-    assert.match(output, /No reconciliation changes are required\./);
+    assert.match(output, /No cleanup changes are required\./);
     assert.doesNotMatch(output, /Digest:/);
     assert.doesNotMatch(output, /\nApply:\n/);
     assert.doesNotMatch(output, /Blocked:/);
@@ -415,7 +421,7 @@ test("non-TTY install accepts an explicit skill command subset", () => {
       [
         join(PACKAGE, "dist", "cli.js"),
         "install",
-        "--skill-commands",
+        "--commands",
         "agents-md",
         "--agents",
         "none",
@@ -431,7 +437,7 @@ test("non-TTY install accepts an explicit skill command subset", () => {
       commands: ["agents-md"],
       agents: [],
       plugins: [],
-      core_activation: false,
+      core_activation: true,
     });
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -1492,7 +1498,7 @@ test("reconcile CLI returns stable JSON and an explicit no-op", () => {
     };
     const json = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--dry-run", "--json"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(json.status, 0);
@@ -1503,22 +1509,22 @@ test("reconcile CLI returns stable JSON and an explicit no-op", () => {
     assert.equal(parsed.plan.confirmable, false);
     const human = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--dry-run"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(human.status, 0);
-    assert.match(human.stdout, /No reconciliation changes are required\./);
+    assert.match(human.stdout, /No cleanup changes are required\./);
     assert.doesNotMatch(human.stdout, /\nApply:\n/);
     const invalid = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--json"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(invalid.status, 2);
-    assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
+    assert.equal(JSON.parse(invalid.stdout).error.code, "confirmation_required");
     assert.match(
       JSON.parse(invalid.stdout).error.message,
-      /Applying outside a terminal requires --yes; use --dry-run to preview/,
+      /Use --dry-run to inspect or --yes to apply outside a terminal/,
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -1643,7 +1649,7 @@ test("install core integration wires config and dependency in one run", async ()
     ]);
     assert.equal(skipped.status, 0, `${skipped.stdout}\n${skipped.stderr}`);
     assert.doesNotMatch(skipped.stdout, /core-plugin/m);
-    assert.match(skipped.stdout, /Connect the package into user configs:/m);
+    assert.match(skipped.stdout, /opencode\/core-disable: update/m);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

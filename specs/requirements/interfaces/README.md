@@ -117,6 +117,41 @@ only direct global selector.
 Contextual-help tests enumerate public command pages and assert read-only help
 behavior, scope defaults, and command-specific flags.
 
+### REQ-I-421 - Expose scenario-oriented integration administration
+
+Status: active since 2026-10-02.
+
+The primary CLI shall expose `install`, `configure`, `status`, `doctor`, and
+`uninstall`. `configure` shall offer components, models, critics, and application
+integration; direct operations are `configure components|agent|critics|integration`,
+`agent list|add-critic|remove`, `maintenance cleanup|repair|recover`, and `catalog`.
+`configure agent` shall accept exact model/variant options without a separate
+model-set command. `agent remove` shall reject fixed-role removal.
+
+Install shall offer optional presets and staged model/critic setup before one
+final confirmation; skipping model setup retains saved choices. Repeat runs
+shall start with saved component selections and show deselected-file removals.
+First non-TTY installation requires complete component flags; subsequent runs
+may reuse saved selection. All mutations support read-only preview and explicit
+non-TTY consent. Changed sources invalidate a confirmed plan. Preview shall not
+create locks, migrate namespaces, or recover interrupted journals. Recovery
+requires a displayed journal-bound plan and a fresh preview afterwards.
+
+Status shall distinguish selected installation, saved profiles, actual plugin
+connection, and npm dependency. Catalog describes the running package, not
+installed state; observations shall not mutate local state. Multi-stage effects
+shall identify partial completion, restart needs, and a concrete continuation.
+The previous `config`, `capabilities`, `reconcile`, `agent configure|model-set|reconcile`,
+and `critic add|remove` CLI entries have no aliases. CLI compatibility with those
+entries is intentionally not provided; this does not authorize data deletion.
+
+#### Verification
+
+`packages/agentomatic/test/command-cli.test.mjs` exercises partial installation,
+staged profiles, stale plans, interactive cancellation/setup, saved connection,
+repair, uninstall, and removed entrypoints. Existing lifecycle tests retain
+ownership, rollback, config-receipt, and recovery evidence.
+
 ### REQ-I-009 - Unify interactive selectors
 
 Interactive CLI selectors shall share one visual and keyboard contract. Single

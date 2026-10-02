@@ -616,7 +616,9 @@ export async function collectDoctorFacts(
         drift: inventory?.drift.length ?? 0,
         user_owned: inventory?.user_owned.length ?? 0,
       },
-      ["Review collisions and run agent reconcile only after explicit confirmation."],
+      [
+        "Resolve ownership conflicts and restore modified bytes; preview maintenance repair for missing selected files.",
+      ],
     ),
   );
   const config = await localConfig(scope, project, homeRoot);

@@ -63,7 +63,7 @@ The six fixed agents are `manager`, `architect`, `mapper`, `worker`, `review`, a
 
 ## Ownership and Archive
 
-Confirmed reconcile and uninstall archive only exact-owned package assets before
+Confirmed maintenance cleanup and uninstall archive only exact-owned package assets before
 removing deployed copies. Portable skills and their installer lock files remain
 outside package ownership. User-owned, unknown, unsafe, and ambiguous entries
 remain unchanged as findings or conflicts. Worktrees and runtime state are

@@ -61,6 +61,6 @@ commands have a separate contract below.
 - Standalone application: [memomatic](applications/memomatic.md) (MCP and CLI).
 - Package tool: [route](package-tools/route.md).
 - Package command: [rtk-stats](commands/rtk-stats.md).
-- Administration: [config](package-tools/config-setup.md), [doctor](package-tools/doctor.md),
-  [capabilities](package-tools/capabilities.md), [reconcile](package-tools/reconcile.md),
-  and [agent profiles](package-tools/agent_profiles.md).
+- Administration: [scenario-oriented CLI](../requirements/interfaces/README.md#req-i-421---expose-scenario-oriented-integration-administration)
+  and [application configuration](package-tools/config-setup.md). Withdrawn tools
+  remain historical records, not supported CLI entrypoints.

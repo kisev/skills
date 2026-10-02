@@ -1,7 +1,7 @@
-# Package Command `config`
+# Package CLI `configure integration`
 
 - Status: active
-- Status changed: 2026-09-30
+- Status changed: 2026-10-02
 
 ## Purpose
 
@@ -18,7 +18,7 @@ portable skills, or mutating provider credentials.
 ## Inputs/Outputs
 
 Input is optional global/project scope defaulting to project, target selection
-(`opencode`, `kilo`, `mimo`), and fragment selection (`core-plugin`,
+(`opencode`, `kilo`, `mimo`), and fragment selection (`core-plugin`, `core-disable`,
 `skills-state-permissions`, `secrets-guard`, `kilo-display`,
 `tui-schema`); output is a preview or applied plan with per-target and
 per-fragment operations, conflicts, and skipped fragments.
@@ -49,11 +49,12 @@ The preview declares that dependency plan. No portable skill mutation occurs.
 ## Errors/Partial/Escalation
 
 Stale, expired, or replayed receipts fail before writing. A fragment that
-cannot merge cleanly is reported as a conflict and skipped without blocking
-the remaining plan. Failed transactions roll back to the previewed state.
+cannot merge cleanly is reported as a conflict. The public CLI blocks apply until
+the conflict is resolved or excluded; the low-level merger can still describe
+the remaining applicable fragments. Failed transactions roll back to the previewed state.
 Preview never creates a lock or performs recovery. A pending transaction stops
-preview and apply. `config recover --dry-run` lists the affected paths without
-writing; confirmed `config recover` binds restoration to that journal's digest
+preview and apply. `maintenance recover --dry-run` lists the affected paths without
+writing; confirmed `maintenance recover` binds restoration to that journal's digest
 and requires a fresh config preview afterwards. Dependency provisioning is a separate
 effect: an npm failure after config commit reports failure and requires a retry;
 it does not claim to roll back npm's files or the completed config transaction.
@@ -67,7 +68,12 @@ Permission scalars become wildcard rules; converted aliases use native actions.
 Kilo/MiMo scalar permission maps retain the scalar as the `"*"` entry. Every
 written document must reparse as valid JSONC. A confirmed `install`
 with core selected applies this fragment under REQ-F-010. Its dependency opt-out
-applies through the entire path; `uninstall` never edits user configuration.
+applies through the entire path. `core-disable` removes only this package's
+registrations (including the former package name) without changing unrelated
+plugins, comments, or presets. It cannot be selected with `core-plugin`.
+Connection choices update saved installation metadata transactionally so repair
+does not reconnect a deliberately disabled plugin. Uninstall uses this same
+executor for explicitly selected disconnection under REQ-F-010.
 
 ## Requirement
 
@@ -75,7 +81,7 @@ applies through the entire path; `uninstall` never edits user configuration.
 
 Status: active since 2026-09-26.
 
-The `config` command shall merge selected fragments into user configuration
+`configure integration` shall merge selected fragments into user configuration
 files only after a confirmed preview, preserve user entries and comments, add
 only absent preset values except for the behavior-preserving native conversion
 of touched legacy sections under REQ-I-420, validate every merged document before and after writing, and
@@ -96,7 +102,7 @@ opt-out, and archived pre-images. CLI integration tests check core activation.
 
 ## Example
 
-`config --global --dry-run` converts a legacy OpenCode
+`configure integration --global --dry-run` converts a legacy OpenCode
 `"external_directory": "ask"` effect to an ordered wildcard rule and previews
 the selected skills-state exceptions after it. Kilo/MiMo retain map widening.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

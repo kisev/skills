@@ -13,7 +13,6 @@ import {
   lifecycleRoot,
   listDirectRegular,
   readRegular,
-  recoverTransaction,
   sha256,
   stable,
   withLifecycleLock,
@@ -37,6 +36,8 @@ export type FixedAgentRole = (typeof FIXED_AGENT_ROLES)[number];
 export type AgentModelSelection = { model: string; variant?: string };
 export type AgentProfileConfig = {
   schema_version: 1;
+  selected_fixed: FixedAgentRole[];
+  selected_critics: string[];
   fixed: Record<FixedAgentRole, AgentModelSelection | Record<string, never>>;
   additional_critics: Record<string, AgentModelSelection>;
 };
@@ -56,7 +57,7 @@ export type DeploymentManifest = {
   profiles: Record<string, DeploymentRecord>;
 };
 export type AgentOwnership = "package-owned" | "managed" | "user-owned";
-export type AgentState = "current" | "missing" | "drift" | "collision";
+export type AgentState = "current" | "missing" | "drift" | "collision" | "not-installed";
 export type AgentProfileRecord = {
   name: string;
   ownership: AgentOwnership;
@@ -89,6 +90,7 @@ export type AgentProfileRequest = {
   name?: string;
   model?: string;
   variant?: string | null;
+  changes?: AgentProfileRequest[];
 };
 export type AgentProfileOperation = {
   path: string;
@@ -105,6 +107,7 @@ export type AgentProfilePlan = {
   operations: AgentProfileOperation[];
   critic_pool: string[];
   requires_restart: boolean;
+  digest: string;
 };
 export type AgentProfileResult = {
   status: "ok";
@@ -174,6 +177,8 @@ function packageVersion(): string {
 function emptyConfig(): AgentProfileConfig {
   return {
     schema_version: 1,
+    selected_fixed: [],
+    selected_critics: [],
     fixed: Object.fromEntries(
       FIXED_AGENT_ROLES.map((role) => [role, {}]),
     ) as AgentProfileConfig["fixed"],
@@ -233,6 +238,9 @@ function parseConfig(raw: Buffer): AgentProfileConfig {
   }
   const config = value as Partial<AgentProfileConfig>;
   if (
+    !config ||
+    typeof config !== "object" ||
+    Array.isArray(config) ||
     config.schema_version !== 1 ||
     !config.fixed ||
     typeof config.fixed !== "object" ||
@@ -246,6 +254,22 @@ function parseConfig(raw: Buffer): AgentProfileConfig {
       "Agent profile configuration has an unsupported schema",
     );
   }
+  if (
+    Object.keys(config).some(
+      (key) =>
+        ![
+          "schema_version",
+          "selected_fixed",
+          "selected_critics",
+          "fixed",
+          "additional_critics",
+        ].includes(key),
+    )
+  )
+    throw new AgentProfileError(
+      "invalid_configuration",
+      "Agent profile configuration contains unknown fields; preserve and inspect it before retrying",
+    );
   if (Object.keys(config.fixed).sort().join(",") !== [...FIXED_AGENT_ROLES].sort().join(","))
     throw new AgentProfileError(
       "invalid_configuration",
@@ -254,6 +278,16 @@ function parseConfig(raw: Buffer): AgentProfileConfig {
   const fixed = Object.fromEntries(
     FIXED_AGENT_ROLES.map((role) => [role, parseSelection(config.fixed![role], false)]),
   ) as AgentProfileConfig["fixed"];
+  if (
+    config.selected_fixed !== undefined &&
+    (!Array.isArray(config.selected_fixed) ||
+      config.selected_fixed.some((role) => !FIXED_AGENT_ROLES.includes(role)) ||
+      new Set(config.selected_fixed).size !== config.selected_fixed.length)
+  )
+    throw new AgentProfileError(
+      "invalid_configuration",
+      "selected_fixed must contain unique fixed roles",
+    );
   const additional: Record<string, AgentModelSelection> = {};
   for (const [name, selection] of Object.entries(config.additional_critics)) {
     if (!CRITIC_PATTERN.test(name))
@@ -263,8 +297,20 @@ function parseConfig(raw: Buffer): AgentProfileConfig {
       );
     additional[name] = parseSelection(selection, true) as AgentModelSelection;
   }
+  if (
+    config.selected_critics !== undefined &&
+    (!Array.isArray(config.selected_critics) ||
+      config.selected_critics.some((name) => !CRITIC_PATTERN.test(name) || !(name in additional)) ||
+      new Set(config.selected_critics).size !== config.selected_critics.length)
+  )
+    throw new AgentProfileError(
+      "invalid_configuration",
+      "selected_critics must reference unique saved critics",
+    );
   return {
     schema_version: 1,
+    selected_fixed: config.selected_fixed ?? [],
+    selected_critics: config.selected_critics ?? [],
     fixed,
     additional_critics: Object.fromEntries(
       Object.entries(additional).sort(([left], [right]) => left.localeCompare(right)),
@@ -359,10 +405,19 @@ async function loadState(
     );
   if (manifestRaw && (await inspectFileMode(manifestPath)) !== 0o600)
     throw new AgentProfileError("unsafe_manifest", "Agent deployment manifest must use mode 0600");
+  const manifest = manifestRaw ? parseManifest(manifestRaw, scope) : undefined;
+  const config = configRaw ? parseConfig(configRaw) : emptyConfig();
+  // Recover the selected set from ownership when reading an existing pre-selection file.
+  if (configRaw && !("selected_fixed" in JSON.parse(configRaw.toString("utf8")))) {
+    config.selected_fixed = FIXED_AGENT_ROLES.filter((role) => Boolean(manifest?.profiles[role]));
+    config.selected_critics = Object.keys(config.additional_critics).filter((name) =>
+      Boolean(manifest?.profiles[name]),
+    );
+  }
   return {
-    config: configRaw ? parseConfig(configRaw) : emptyConfig(),
+    config,
     configRaw,
-    manifest: manifestRaw ? parseManifest(manifestRaw, scope) : undefined,
+    manifest,
     manifestRaw,
   };
 }
@@ -435,9 +490,16 @@ export function renderAgentProfile(
   if (!selection)
     throw new AgentProfileError("invalid_configuration", `No configuration exists for ${name}`);
   let rendered = withSelection(canonical[role].toString("utf8"), selection);
-  const pool = ["critic", ...Object.keys(config.additional_critics)].sort();
+  const pool = desiredNames(config).filter(
+    (item) => item === "critic" || CRITIC_PATTERN.test(item),
+  );
   if (name === "manager")
-    rendered = replaceTaskAllowlist(rendered, ["architect", "worker", "mapper", "review", ...pool]);
+    rendered = replaceTaskAllowlist(rendered, [
+      ...config.selected_fixed.filter((role) =>
+        ["architect", "worker", "mapper", "review"].includes(role),
+      ),
+      ...pool,
+    ]);
   if (name === "review") rendered = replaceTaskAllowlist(rendered, pool);
   return Buffer.from(rendered);
 }
@@ -452,7 +514,7 @@ function selectionFor(
 }
 
 function desiredNames(config: AgentProfileConfig): string[] {
-  return [...FIXED_AGENT_ROLES, ...Object.keys(config.additional_critics)].sort();
+  return [...config.selected_fixed, ...config.selected_critics].sort();
 }
 
 function desiredManifest(
@@ -489,6 +551,19 @@ function changeConfig(
   request: AgentProfileRequest,
 ): AgentProfileConfig {
   const config = JSON.parse(JSON.stringify(current)) as AgentProfileConfig;
+  if (request.changes) {
+    if (
+      request.changes.some(
+        (change) =>
+          change.changes || !["model-set", "critic-add", "critic-remove"].includes(change.action),
+      )
+    )
+      throw new AgentProfileError(
+        "invalid_input",
+        "Profile drafts accept only model and critic changes",
+      );
+    return request.changes.reduce((draft, change) => changeConfig(draft, change), config);
+  }
   if (request.action === "model-set") {
     const name = validateAgentName(request.name ?? "");
     if (!NAME_PATTERN.test(name) && !(name in config.additional_critics))
@@ -514,6 +589,7 @@ function changeConfig(
     const variant = validateVariant(request.variant);
     if (variant) selection.variant = variant;
     config.additional_critics[name] = selection;
+    config.selected_critics.push(name);
   } else if (request.action === "critic-remove") {
     const name = request.name ?? "";
     if (name === "critic" || NAME_PATTERN.test(name))
@@ -532,6 +608,7 @@ function changeConfig(
         `Additional critic is not configured: ${name}`,
       );
     delete config.additional_critics[name];
+    config.selected_critics = config.selected_critics.filter((item) => item !== name);
   }
   config.additional_critics = Object.fromEntries(
     Object.entries(config.additional_critics).sort(([left], [right]) => left.localeCompare(right)),
@@ -580,12 +657,16 @@ export async function buildAgentProfilePlan(
     agentFiles.filter((item) => item.name.endsWith(".md")).map((item) => [item.name, item.content]),
   );
   const config = changeConfig(state.config, request);
-  const names =
-    request.action === "uninstall"
-      ? []
-      : selectedAgents === undefined
-        ? desiredNames(config)
-        : [...selectedAgents, ...Object.keys(config.additional_critics)].sort();
+  if (request.action === "install" && selectedAgents === undefined && !state.configRaw)
+    config.selected_fixed = [...FIXED_AGENT_ROLES];
+  if (selectedAgents !== undefined) config.selected_fixed = [...selectedAgents];
+  if (request.action === "install")
+    config.selected_critics = Object.keys(config.additional_critics).sort();
+  if (request.action === "uninstall") {
+    config.selected_fixed = [];
+    config.selected_critics = [];
+  }
+  const names = request.action === "uninstall" ? [] : desiredNames(config);
   const rendered = Object.fromEntries(
     names.map((name) => [name, renderAgentProfile(name, config, canonical)]),
   );
@@ -659,11 +740,17 @@ export async function buildAgentProfilePlan(
       (!content ||
         sha256(content) !== ownedHash ||
         agentFiles.find((item) => item.name === `${name}.md`)?.mode !== 0o600);
-    if (drift && request.action !== "reconcile") {
+    if (
+      drift &&
+      !(
+        ["install", "reconcile"].includes(request.action) &&
+        (!content || sha256(content) === ownedHash)
+      )
+    ) {
       operations.push({
         path,
         operation: "conflict",
-        reason: "managed profile drift requires explicit reconcile",
+        reason: "managed profile drift is preserved; restore the recorded bytes before retrying",
         ...(content ? { sha256: sha256(content) } : {}),
       });
       continue;
@@ -704,8 +791,7 @@ export async function buildAgentProfilePlan(
 
   const configContent = Buffer.from(`${stable(config)}\n`);
   if (
-    request.action !== "uninstall" &&
-    names.length > 0 &&
+    (names.length > 0 || Boolean(state.configRaw) || request.action === "model-set") &&
     (!state.configRaw || !state.configRaw.equals(configContent))
   ) {
     operations.push({
@@ -774,13 +860,17 @@ export async function buildAgentProfilePlan(
   };
   const plan: AgentProfilePlan = {
     ...base,
+    digest: sha256(
+      stable({ mutations, config: state.configRaw, manifest: state.manifestRaw, base }),
+    ),
   };
   return {
     plan,
     mutations,
     config,
     manifest: finalManifest,
-    expectedConfig: names.length ? configContent : state.configRaw,
+    expectedConfig:
+      names.length || state.configRaw || request.action === "model-set" ? configContent : undefined,
     expectedManifest: manifestContent,
     legacyTransferred,
   };
@@ -862,16 +952,23 @@ export async function listAgentProfiles(
   const records: AgentProfileRecord[] = [];
   const collisions: string[] = [];
   const drift: string[] = [];
-  for (const name of configured) {
+  for (const name of [
+    ...new Set([
+      ...FIXED_AGENT_ROLES,
+      ...Object.keys(state.config.additional_critics),
+      ...configured,
+    ]),
+  ].sort()) {
     const file = byName.get(name);
     const owned = state.manifest?.profiles[name];
     let stateValue: AgentState;
-    if (!owned && file) stateValue = "collision";
+    if (!configured.includes(name) && !owned && !file) stateValue = "not-installed";
+    else if (!owned && file) stateValue = configured.includes(name) ? "collision" : "current";
     else if (!file) stateValue = owned ? "drift" : "missing";
     else if (
       !owned ||
       sha256(file.content) !== owned.rendered_sha256 ||
-      !file.content.equals(desired[name]) ||
+      (configured.includes(name) && !file.content.equals(desired[name])) ||
       file.mode !== 0o600
     )
       stateValue = owned ? "drift" : "collision";
@@ -881,7 +978,12 @@ export async function listAgentProfiles(
     const selection = selectionFor(state.config, name);
     records.push({
       name,
-      ownership: NAME_PATTERN.test(name) ? "package-owned" : "managed",
+      ownership:
+        !configured.includes(name) && file && !owned
+          ? "user-owned"
+          : NAME_PATTERN.test(name)
+            ? "package-owned"
+            : "managed",
       state: stateValue,
       ...("model" in selection
         ? { model: selection.model, ...(selection.variant ? { variant: selection.variant } : {}) }
@@ -906,9 +1008,12 @@ export async function listAgentProfiles(
     package_version: packageVersion(),
     critic_pool:
       state.manifest?.critic_pool ??
-      ["critic", ...Object.keys(state.config.additional_critics)].sort(),
+      configured.filter((name) => name === "critic" || CRITIC_PATTERN.test(name)),
     profiles: records.sort((left, right) => left.name.localeCompare(right.name)),
-    user_owned: userOwned,
+    user_owned: records
+      .filter((record) => record.ownership === "user-owned")
+      .map((record) => record.name)
+      .sort(),
     collisions,
     drift,
     requires_restart: false as const,
@@ -923,14 +1028,12 @@ export async function previewAgentProfileChange(
   home = homedir(),
 ): Promise<AgentProfilePlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
-  return withLifecycleLock(stateRoot, async () => {
-    if (await recoverTransaction(deploymentRoot(scope, cwd, home), stateRoot))
-      throw new AgentProfileError(
-        "recovered_transaction",
-        "Recovered an interrupted transaction; request a fresh plan",
-      );
-    return (await buildAgentProfilePlan(request, scope, cwd, home)).plan;
-  });
+  if (await readRegular(resolve(stateRoot, "transaction-journal.json")))
+    throw new AgentProfileError(
+      "recovery_required",
+      "Run maintenance recover before a fresh preview",
+    );
+  return (await buildAgentProfilePlan(request, scope, cwd, home)).plan;
 }
 
 export async function applyAgentProfileChange(
@@ -938,17 +1041,19 @@ export async function applyAgentProfileChange(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
-  options: TransactionOptions = {},
+  options: TransactionOptions & { expectedDigest?: string } = {},
 ): Promise<AgentProfileResult> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   const root = deploymentRoot(scope, cwd, home);
   return withLifecycleLock(stateRoot, async () => {
-    if (await recoverTransaction(root, stateRoot))
+    if (await readRegular(resolve(stateRoot, "transaction-journal.json")))
       throw new AgentProfileError(
-        "recovered_transaction",
-        "Recovered an interrupted transaction; request a fresh plan",
+        "recovery_required",
+        "Run maintenance recover before a fresh preview",
       );
     const built = await buildAgentProfilePlan(request, scope, cwd, home);
+    if (options.expectedDigest && options.expectedDigest !== built.plan.digest)
+      throw new AgentProfileError("stale_plan", "Profiles changed; request a fresh preview");
     if (
       built.plan.operations.some(
         (item) => item.operation === "conflict" && item.reason.includes("collision"),
@@ -957,10 +1062,12 @@ export async function applyAgentProfileChange(
       throw new AgentProfileError("collision", "Exact-name user-owned collision blocks apply");
     if (
       request.action !== "uninstall" &&
-      request.action !== "reconcile" &&
       built.plan.operations.some((item) => item.operation === "conflict")
     )
-      throw new AgentProfileError("drift", "Managed profile drift requires explicit reconcile");
+      throw new AgentProfileError(
+        "drift",
+        "Managed profile drift is preserved; restore the recorded bytes before retrying",
+      );
     await applyTransaction(root, stateRoot, built.mutations, {
       ...options,
       validateFinal: async () => {
@@ -973,7 +1080,7 @@ export async function applyAgentProfileChange(
             final.drift.length ||
             final.profiles
               .filter((item) => item.ownership !== "user-owned")
-              .some((item) => item.state !== "current"))
+              .some((item) => item.state !== "current" && item.state !== "not-installed"))
         ) {
           throw new AgentProfileError(
             "final_validation_failed",

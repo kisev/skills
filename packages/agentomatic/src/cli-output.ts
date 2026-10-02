@@ -53,7 +53,7 @@ function actionName(action: DisplayPlan["action"]): string {
       "model-set": "Configure agent model",
       "critic-add": "Add critic",
       "critic-remove": "Remove critic",
-      reconcile: "Reconcile agents",
+      reconcile: "Repair selected agents",
     } as const
   )[action];
 }
@@ -146,7 +146,7 @@ export function renderConfigSetup(
   options: { applied: boolean; applyHint?: string; hint?: string },
 ): string {
   const lines = [
-    `Config setup @kisev/agentomatic ${plan.package_version} (${plan.scope})`,
+    `Integration configuration @kisev/agentomatic ${plan.package_version} (${plan.scope})`,
     `Root: ${terminalSafe(plan.root)}`,
     "",
   ];
@@ -253,7 +253,7 @@ export function renderReconcile(
   options: { applied: boolean; applyHint?: string },
 ): string {
   const lines = [
-    `Reconcile (${plan.scope})`,
+    `Cleanup retired components (${plan.scope})`,
     `Target: ${terminalSafe(plan.root)}`,
     "",
     options.applied ? "Applied retired assets:" : "Planned retired assets:",
@@ -318,13 +318,13 @@ export function renderReconcile(
       lines.push("", "Blocked:");
       if (plan.modified_managed.length)
         lines.push(
-          `  Update managed assets first: ${shellCommand(["install", ...scopeArguments(plan.scope), "--dry-run"])}`,
-          "  Apply that installer plan, then build a new reconcile preview.",
+          "  Modified managed bytes are preserved. Restore recorded bytes before retrying cleanup.",
+          `  Inspect: ${shellCommand(["doctor", ...scopeArguments(plan.scope)])}`,
         );
       if (plan.conflicts.length)
         lines.push("  Manually resolve every ownership conflict listed above before reconciling.");
     } else if (!plan.confirmable) {
-      lines.push("", "No reconciliation changes are required.");
+      lines.push("", "No cleanup changes are required.");
     } else if (options.applyHint) {
       lines.push("", "Apply:", `  ${options.applyHint}`);
     }
@@ -338,7 +338,9 @@ export function renderDoctor(report: DoctorReport): string {
   );
   const next = new Set(actionable.flatMap((item) => item.remediation ?? []));
   if (report.conflicts.length) {
-    next.add(shellCommand(["reconcile", ...scopeArguments(report.scope), "--dry-run"]));
+    next.add(
+      shellCommand(["maintenance", "cleanup", ...scopeArguments(report.scope), "--dry-run"]),
+    );
   }
   if (actionable.some((item) => item.id.startsWith("assets."))) {
     next.add(shellCommand(["install", ...scopeArguments(report.scope), "--dry-run"]));

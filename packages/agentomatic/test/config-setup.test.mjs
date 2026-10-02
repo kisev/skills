@@ -400,17 +400,21 @@ test("config setup selection validation and project scope behavior", async () =>
   }
 });
 
-test("cli exposes the config command and install hints at it", () => {
-  const help = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "config", "--help"], {
-    encoding: "utf8",
-  });
+test("cli exposes application integration configuration", () => {
+  const help = spawnSync(
+    process.execPath,
+    [join(PACKAGE, "dist", "cli.js"), "configure", "integration", "--help"],
+    {
+      encoding: "utf8",
+    },
+  );
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /Connect the package and recommended fragments/);
+  assert.match(help.stdout, /Connect or disconnect the plugin and merge application presets/);
   assert.match(help.stdout, /--targets/);
   assert.match(help.stdout, /--fragments/);
 
-  const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
-  assert.match(source, /"config", \.\.\.scopeArguments\(options\.scope\), "--dry-run"/);
+  const source = readFileSync(join(PACKAGE, "src", "command-cli.ts"), "utf8");
+  assert.match(source, /configure integration/);
 });
 
 test("config --no-dependency applies the core fragment without provisioning npm", async () => {
@@ -425,7 +429,8 @@ test("config --no-dependency applies the core fragment without provisioning npm"
       process.execPath,
       [
         join(PACKAGE, "dist", "cli.js"),
-        "config",
+        "configure",
+        "integration",
         "--global",
         "--targets",
         "opencode",

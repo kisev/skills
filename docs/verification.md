@@ -48,7 +48,8 @@ global integration persists in the npm project at `~/.config/opencode`.
 Scope-aware direct commands default to the current directory and accept one
 `--global` flag for global state; `--scope` is unsupported. The installer
 requires preview/confirmation. It writes only selected managed assets after
-confirmation and never creates or edits `opencode.json`. The separate `config`
+confirmation and stages optional models/critics. It can connect or disconnect
+the core plugin and apply presets. `configure integration`
 command is the confirmed path for user configuration: it merges selected
 fragments into `opencode.json(c)` with native V2 `plugins`/`permissions` and
 global `cli.json`, plus `kilo.json(c)` and `mimocode.json(c)` for those hosts,
@@ -59,8 +60,8 @@ the scalar as the `"*"` entry. Update is
 an exact npm install followed by install preview, exact confirmation, and
 OpenCode restart.
 
-Uninstall order is asset preview and confirmation, user-owned plugin-entry
-removal, `npm uninstall` in the owning project, then restart. Reconcile and
+Uninstall previews owned assets, plugin disconnection, retained models, and
+opt-in npm removal; completed local stages remain if npm fails. Cleanup and
 uninstall archive exact-owned package assets. Reconcile ignores portable skill
 trees and installer lock files; `skills update/remove` owns that lifecycle.
 Conflicts, worktrees, and runtime state are preserved; no archive restore or

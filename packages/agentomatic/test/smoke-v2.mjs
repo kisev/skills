@@ -81,7 +81,8 @@ try {
   execFileSync(
     join(project, "node_modules/.bin/agentomatic"),
     [
-      "config",
+      "configure",
+      "integration",
       "--targets",
       "opencode",
       "--fragments",
@@ -95,7 +96,8 @@ try {
   execFileSync(
     join(project, "node_modules/.bin/agentomatic"),
     [
-      "config",
+      "configure",
+      "integration",
       "--targets",
       "opencode",
       "--fragments",
@@ -249,7 +251,16 @@ try {
   }
   execFileSync(
     join(project, "node_modules/.bin/agentomatic"),
-    ["config", "--targets", "opencode", "--fragments", "core-plugin", "--no-dependency", "--yes"],
+    [
+      "configure",
+      "integration",
+      "--targets",
+      "opencode",
+      "--fragments",
+      "core-plugin",
+      "--no-dependency",
+      "--yes",
+    ],
     { cwd: project, env, encoding: "utf8" },
   );
   const version = JSON.parse(

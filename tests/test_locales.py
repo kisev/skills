@@ -80,13 +80,23 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
     )
 
 
-def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
+def test_integration_documentation_covers_the_same_scenario_cli_flow() -> None:
     english = (ROOT / "docs/how-to/opencode-integration.md").read_text(encoding="utf-8")
     russian = (ROOT / "docs/ru/how-to/opencode-integration.md").read_text(encoding="utf-8")
     for document in (english, russian):
         assert "npx --yes skills@latest" in document
         assert "install --dry-run" in document
-        assert "reconcile" in document
+        assert "maintenance cleanup" in document
+        assert "maintenance repair" in document
+        assert "maintenance recover" in document
+        assert "configure agent" in document
+        assert "configure critics" in document
+        assert "configure integration" in document
+        assert "status --global" in document
+        assert "catalog --json" in document
+        assert "--remove-dependency" in document
+        assert "--no-disconnect" in document
+        assert "not-installed" in document
         assert "plugin" in document
         assert "restart" in document or "перезапуск" in document
         assert "Skill command adapters" in document
@@ -94,15 +104,15 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "npx --yes @kisev/agentomatic@latest" in document
         assert "npx --yes @kisev/agentomatic@dev" in document
         assert "npm exec -- agentomatic" not in document
-        assert "reconcile --yes" in document
+        assert "maintenance cleanup --yes" in document
         assert "uninstall --yes" in document
-        assert "Apply these changes?" in document
+        assert "Apply the displayed changes?" in document
         assert "--confirm" not in document
         assert "plan_digest" not in document
         assert "confirmation_digest" not in document
     assert "Manage\nportable skills separately" in english
     assert "Переносимыми навыками\nуправляйте отдельно" in russian
-    assert "lock files do not affect the\nreconcile plan" in english
+    assert "lock files do not affect the\ncleanup plan" in english
     assert "lock-файлы не влияют на план" in russian
 
     package_english = (ROOT / "packages/agentomatic/README.md").read_text(encoding="utf-8")

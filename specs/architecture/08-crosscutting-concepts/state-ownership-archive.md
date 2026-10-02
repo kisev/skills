@@ -10,6 +10,14 @@ Global archives have one global owner, while each project archive is isolated by
 the digest of its resolved project directory so one project's recovery cannot
 remove another project's objects.
 
+Integration selection and saved agent model choices are separate state. The
+profile transaction updates selected roles, model configuration, rendered files,
+and semantic ownership together under
+[REQ-F-006](../../requirements/functional/README.md#req-f-006---manage-package-owned-profiles-safely).
+Application configuration has a separate transaction; npm has no shared rollback
+with either local transaction. CLI reports completed stages and continuation under
+[REQ-I-421](../../requirements/interfaces/README.md#req-i-421---expose-scenario-oriented-integration-administration).
+
 Stable, substantive XDG state keeps content-addressed versions indefinitely.
 Human-readable stable Markdown contains only its latest body followed by a
 `History` list of absolute paths to earlier body-only snapshots. A changed write

@@ -89,10 +89,14 @@ try {
   };
   const cli = (arguments_) =>
     JSON.parse(
-      run(executable, [...arguments_, "--no-dependency", "--json"], {
-        cwd: project,
-        env: environment,
-      }),
+      run(
+        executable,
+        [...arguments_, ...(arguments_[0] === "install" ? ["--no-dependency"] : []), "--json"],
+        {
+          cwd: project,
+          env: environment,
+        },
+      ),
     );
   const dryRun = cli(["install", "--global", ...selection, "--no-core", "--dry-run"]);
   assert.equal(dryRun.applied, false);
@@ -110,8 +114,8 @@ try {
   assert.equal(JSON.parse(doctor.stdout).mutations, false);
   assert.equal(JSON.parse(doctor.stdout).scope, "global");
   cli([
+    "configure",
     "agent",
-    "model-set",
     "manager",
     "--global",
     "--model",
@@ -122,8 +126,8 @@ try {
   ]);
   assert.equal(
     cli([
+      "configure",
       "agent",
-      "model-set",
       "manager",
       "--global",
       "--model",
@@ -134,8 +138,8 @@ try {
     ]).requires_restart,
     true,
   );
-  cli(["critic", "add", "smoke", "--global", "--model", "opencode/gpt-5-nano", "--dry-run"]);
-  cli(["critic", "add", "smoke", "--global", "--model", "opencode/gpt-5-nano", "--yes"]);
+  cli(["agent", "add-critic", "smoke", "--global", "--model", "opencode/gpt-5-nano", "--dry-run"]);
+  cli(["agent", "add-critic", "smoke", "--global", "--model", "opencode/gpt-5-nano", "--yes"]);
   const inventory = cli(["agent", "list", "--global"]).inventory;
   assert.equal(inventory.profiles.find((item) => item.name === "manager").variant, "high");
   assert.equal(
