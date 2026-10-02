@@ -19,6 +19,7 @@ const input = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const result =
   input.started ?? (await startReview({ url: input.url, repoRoot: input.repo, locale: "en" }));
 if (result.status !== "ok") throw new Error(JSON.stringify(result));
+assert.equal(result.role, "reviewer");
 if (input.require_pagination) {
   const [, evidence] = artifactPayload(result.evidence_path, "evidence_snapshot");
   assert.ok(evidence.labels.pages >= 2, "Reviewmatic must collect the second real catalog page");

@@ -33,6 +33,22 @@ def record(report: dict[str, Any], name: str, evidence: object) -> None:
 
 def completed_coverage(report: dict[str, Any]) -> None:
     proven = {
+        "exhaustive six-workflow helper pagination and author/reviewer matrix": {
+            "helper-catalog-pagination",
+            "read-only-workflow-collection",
+            "reviewmatic-author-collection",
+            "reviewmatic-plan",
+            "mr-copied-publication",
+            "task-copied-publication",
+            "task-triage-publication",
+            "release-role-author",
+            "release-role-reviewer",
+        },
+        "complete release inventory/readiness/publication roles and negative-outcome matrix": {
+            "release-role-author",
+            "release-role-reviewer",
+            "release-workflows",
+        },
         "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands": {
             "reviewmatic-direct-positions-and-single-suggestion",
             "reviewmatic-separate-replies-resolve-reopen",
@@ -546,7 +562,7 @@ def preparation(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
         results["task-triage"]["status"] == "ok" and not results["task-triage"]["errors"],
         "Task triage collection is incomplete",
     )
-    task = {
+    task: dict[str, Any] = {
         "version": 2,
         "plan_key": "harness-" + directory.name.lower(),
         "locale": "en",
@@ -578,30 +594,34 @@ def preparation(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
         ],
         "links": [],
     }
-    input_path = directory / "task-input.json"
-    write_json(input_path, task)
     issues_before = stand.request("GET", f["prefix"] + "/issues?per_page=100")
-    output = command(
-        [
-            sys.executable,
-            str(ROOT / ".build/skills/task-prepare/scripts/prepare_publication.py"),
-            "--input",
-            str(input_path),
-            "--output-dir",
-            str((directory / "task-plan").relative_to(ROOT)),
-        ],
-        env=stand.isolated_env(),
-        timeout=180,
-    ).stdout
-    results["task-prepare"] = json.loads(output)
-    verify(
-        results["task-prepare"]["external_mutations"] is False, "Task preparation claims a mutation"
-    )
+    for actor in ("author", "reviewer"):
+        task["plan_key"] = "harness-" + directory.name.lower() + "-" + actor
+        task["items"][0]["title"] = "Synthetic task " + directory.name + " " + actor
+        input_path = directory / (
+            "task-input.json" if actor == "author" else "task-reviewer-input.json"
+        )
+        write_json(input_path, task)
+        output = command(
+            [
+                sys.executable,
+                str(ROOT / ".build/skills/task-prepare/scripts/prepare_publication.py"),
+                "--input",
+                str(input_path),
+                "--output-dir",
+                str((directory / ("task-plan-" + actor)).relative_to(ROOT)),
+            ],
+            env=stand.isolated_env(actor),
+            timeout=180,
+        ).stdout
+        result = json.loads(output)
+        results["task-prepare-" + actor] = result
+        verify(result["external_mutations"] is False, "Task preparation claims a mutation")
+        write_json(directory / ("task-prepare-" + actor + ".json"), result)
     verify(
         issues_before == stand.request("GET", f["prefix"] + "/issues?per_page=100"),
         "Task preparation created an issue",
     )
-    write_json(directory / "task-prepare.json", results["task-prepare"])
     verify(before == stand.request("GET", endpoint), "Preparation published a discussion")
     record(report, "read-only-workflow-collection", results)
 
@@ -630,6 +650,25 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
         ["git", "clone", stand.manifest["fixtures"]["http_url_to_repo"], str(repo)], env=environment
     )
     command(["git", "-C", str(repo), "checkout", "--detach", f["head"]], env=environment)
+    author_input = directory / "author-collector-input.json"
+    write_json(author_input, {"url": f["mr"]["web_url"], "repo": str(repo), "head": f["head"]})
+    author_before = stand.request(
+        "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"
+    )
+    author_collected = json.loads(
+        command(
+            ["node", str(APP / "scripts/collector_roles.mjs"), str(author_input)],
+            env=stand.isolated_env("author"),
+            timeout=240,
+        ).stdout
+    )
+    verify(
+        author_before
+        == stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"),
+        "Author reviewmatic collection published discussions",
+    )
+    write_json(directory / "author-collector.json", author_collected)
+    record(report, "reviewmatic-author-collection", author_collected)
     before = stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions")
     input_path = directory / "review-input.json"
     write_json(
@@ -824,9 +863,30 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             stand, f, directory
         )
         return
+    if action == "browser":
+        report["coverage"] = {"status": "deferred-browser", "mandatory_matrix_proven": False}
+        f = fixture(stand, directory)
+        api_matrix(stand, f, directory, report)
+        pipeline(stand, f, directory, report)
+        review_comments(stand, f, directory, report)
+        pagination_fixture(stand, directory, report)
+        review_plan(stand, f, directory, report)
+        load("gitlab_browser", APP / "scripts/browser_checks.py").run(stand, f, directory, report)
+        record(
+            report,
+            "same-file-browser-recovery",
+            load("gitlab_same_file", APP / "scripts/same_file_checks.py").run(
+                stand, directory, report, browser=True
+            ),
+        )
+        return
     report["coverage"] = {
         "status": "incomplete",
+        "scope": "GitLab API/backend acceptance; browser behavior is deferred and unverified",
         "excluded": ["experimental reviewmatic TUI (behavioral, Ink, PTY and server tests)"],
+        "deferred": [
+            "all GitLab browser scenarios, including exact-head UI remapping and application"
+        ],
         "mandatory_remaining": [
             "exhaustive six-workflow helper pagination and author/reviewer matrix",
             "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands",
@@ -840,6 +900,7 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
     names = (
         "fixture",
         "pagination-fixture",
+        "helper-catalog-pagination",
         "ce-api-matrix",
         "real-shell-ci",
         "real-inline-comments",
@@ -850,7 +911,6 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         "task-triage-publication",
         "task-triage-lifecycle",
         "reviewmatic",
-        "browser",
         "same-file-grouped-recovery",
         "release-workflows",
         "automation-scope",
@@ -875,6 +935,16 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
     f = scenario("fixture", lambda: fixture(stand, directory))
     write_json(directory / "fixture.json", f)
     scenario("pagination-fixture", lambda: pagination_fixture(stand, directory, report))
+    record(
+        report,
+        "helper-catalog-pagination",
+        scenario(
+            "helper-catalog-pagination",
+            lambda: load("gitlab_pagination_checks", APP / "scripts/pagination_checks.py").run(
+                stand, directory
+            ),
+        ),
+    )
     scenario("ce-api-matrix", lambda: api_matrix(stand, f, directory, report))
     scenario("real-shell-ci", lambda: pipeline(stand, f, directory, report))
     scenario("real-inline-comments", lambda: review_comments(stand, f, directory, report))
@@ -909,8 +979,6 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         scenario("task-triage-lifecycle", lambda: triage_lifecycle.run(stand, f, directory)),
     )
     scenario("reviewmatic", lambda: review_plan(stand, f, directory, report))
-    browser = load("gitlab_browser", APP / "scripts/browser_checks.py")
-    scenario("browser", lambda: browser.run(stand, f, directory, report))
     same_file = load("gitlab_same_file_checks", APP / "scripts/same_file_checks.py")
     record(
         report,

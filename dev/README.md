@@ -90,6 +90,8 @@ not another server environment. Ordinary `task check` needs no server or provide
 See the [GitLab](../tests/integration/gitlab/README.md) and
 [Mattermost](../tests/integration/mattermost/README.md) test guides for coverage,
 browser prerequisites, reports and optional live evaluation.
+`agent-browser` is required for Mattermost and separately invoked GitLab browser tests.
+Mandatory GitLab API/backend acceptance does not require a browser; UI coverage is deferred.
 
 `task test:integration:lifecycle` explicitly interrupts both services to verify
 down/up, recreate and repeated up against fixture snapshots in the same environment.

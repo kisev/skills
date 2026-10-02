@@ -10,19 +10,28 @@ GitLab CE `18.11.11-ce.0`, GitLab Runner `v18.11.0`
 
 ## Запуск
 
-Нужны Linux, Docker Engine, Compose v2, OpenSSL, Git, инструменты Mise и рабочий
-Chromium. Старт GitLab занимает несколько минут; памяти должно хватать для
-сервера и браузера. Образы и браузер
-нужно подготовить заранее. При их отсутствии preflight сохраняет диагностику и
+Нужны Linux, Docker Engine, Compose v2, OpenSSL, Git и инструменты Mise.
+Chromium и `agent-browser` нужны только для отдельного отложенного browser-прогона.
+Старт GitLab занимает несколько минут; памяти должно хватать для сервера.
+Образы нужно подготовить заранее. При их отсутствии preflight сохраняет диагностику и
 останавливается, не подменяя версии.
 
 ```sh
 mise install
-mise exec -- agent-browser install
 task generate
 task env:gitlab:up
 task test:integration:gitlab:preflight
 task test:integration:gitlab
+```
+
+Все GitLab browser-тесты отложены и не блокируют API/backend-приёмку этого этапа.
+Они сохранены для отдельного запуска; обычные `test` и `preflight` не запускают
+браузер и не проверяют его наличие. Отложенные сценарии не считаются прошедшими,
+а состояние UI остаётся непроверенным.
+
+```sh
+mise exec -- agent-browser install
+task test:integration:gitlab:browser
 ```
 
 Повтори `task test:integration:gitlab` на уже работающем сервисе. Тесты не управляют
@@ -62,6 +71,12 @@ GitLab и Runner общаются по внутренней Compose-сети. З
 Подготовка проверяется отдельно от разрешённых синтетических записей.
 `browser-network.json` сохраняет URL, методы, статусы и transport errors запросов
 XHR/fetch, в том числе при сбое UI-проверки. Headers, cookies и bodies не сохраняются.
+Поле `transport` сохраняет ошибки Chromium `Network.loadingFailed` из приватного
+временного HAR, запись которого начинается после входа. После извлечения разрешённых
+метаданных сырой HAR удаляется: `--content none` сам по себе не убирает headers и cookies.
+Статус `0` с `net::ERR_NETWORK_CHANGED` означает browser transport failure, а не
+HTTP-отказ. Диагностируй изменения адресов/маршрутов хоста; не перезагружай до зелёного,
+не увеличивай ожидания и не меняй сетевые настройки хоста из теста.
 `preflight.json` содержит версии Engine/Compose, identities закреплённых образов,
 версии CLI/браузера, SHA и dirty state checkout и ресурсы хоста.
 `automation-access.json` содержит ограниченные запросы driver, не данные manual.
@@ -78,6 +93,7 @@ XHR/fetch, в том числе при сбое UI-проверки. Headers, co
 | Аккаунты и повтор | Собственные аккаунты переиспользуются | ID авторизованных пользователей и проектов |
 | Пагинация | Настоящий glab проходит несколько страниц | Все три issues прогона при `per_page=1` |
 | Каталог helpers и роли | Настоящие collectors MR/релиза работают от автора и ревьюера; reviewmatic и triage читают повторно используемый каталог из 101 label | Все fixture labels присутствуют; collectors MR/релиза подтверждают минимум две страницы |
+| Ресурсы helpers | Поставляемые Python/TypeScript pagers читают реальные многостраничные каталоги от обеих ролей | Полные ID/count для issues, labels, milestones, tags/releases, MR/CI, trees и связей; issue links проверяются на пределе CE в 100 связей, этот API не принимает пагинацию |
 | Метаданные и связи | CE принимает labels, milestones, `relates_to` | GET issues и links возвращает точные значения |
 | Tags/releases | Релиз привязан к fixture commit | GET release возвращает точный SHA |
 | Shell CI | Выполняются success, allowed failure и child job | Состояния pipeline/jobs и маркеры настоящих traces на точном SHA |
@@ -87,28 +103,34 @@ XHR/fetch, в том числе при сбое UI-проверки. Headers, co
 | Негативный API | Outsider и неверная строка отвергнуты | Ожидаемый non-2xx, без успешной записи |
 | Подготовка MR/релиза | Полный evidence точного head без публикации | Discussions не изменились; неполный evidence helper отклоняется |
 | Публикация MR | Копируемые команды от ревьюера и автора | Точные title/description/labels, включая спецсимволы; пользовательские notes не изменились |
-| Публикация task | Копируемая GraphQL-команда с marker wrapper | Title, labels и milestone настоящего issue совпадают с планом |
+| Публикация task | Копируемые GraphQL-команды с marker wrapper от автора и ревьюера | Title, labels, milestone и ID автора настоящего issue совпадают с планом выбранной роли |
 | Task prepare/triage | Локальный план и настоящая коллекция | Каталог issues не изменился при подготовке |
 | Reviewmatic | Подготовка, presentation repair, затем копируемые команды | Находки, suggestions и fixture receipts сохранены; grouped suggestions и ответы опубликованы |
 | CI-only refresh | Повтор настоящего shell CI на прежнем SHA, затем финализация того же черновика | Дополнительный CI snapshot; исходные находки/evidence/receipts сохранены; повторного `startReview` нет |
 | Material refresh | Сбор изменившихся discussions без публикации и подмены receipts | Находки/dispositions и исходный черновик сохранены; новые receipts пусты; предыдущий план доступен |
-| Same-file grouped recovery | Применяется одна часть, обновляется точная версия diff оставшегося thread, затем применяется вторая | Точные файлы и флаги partial/full; backend refresh сохраняет находки без подмены receipts и проверяет результат на новом head |
+| Same-file API/backend recovery | Настоящий API применяет две части одного файла по очереди | Точные SHA, файлы и флаги partial/full; backend reassessment сохраняет находки без подмены receipts; browser remap проверяется только отдельно |
 | Цикл информации в triage | Копируются запрос, первый пинг, второй пинг, сообщение и отдельное закрытие; старая analysis отклоняется, отсутствующая CE связь восстанавливается | Настоящие note IDs идут по порядку с нужным авторством; до команды закрытия issue открыт; stale analysis не пишет; восстановлена ровно одна связь |
-| Браузер | Single и cross-file grouped suggestions применяются | Screenshots, точные файлы и флаги применения; частичное применение не считается полным исправлением |
+| Браузер (отложен) | Отдельный явный запуск проверяет inline placement, single/cross-file/same-file application и remap | Screenshots, точные файлы и флаги применения; не входит в обязательный API/backend-прогон |
 | Transport fault/retry | Синтетический отказ CLI, затем настоящий collector | Ошибка даёт nonzero; повтор собирает полный evidence; сервер не изменился |
 | Mutation faults | Отмена до отправки; отмена/таймаут после настоящей записи с подавленным ответом | Nonzero job; ровно один точный issue после контролируемого повтора или read-only сверки; неоднозначную запись вслепую не повторяют |
 | Публикация task triage | Настоящий helper собирает и формирует план, команды копируются от автора/ревьюера | Подготовка не пишет; точные title/description/labels/milestone и поддерживаемая CE связь |
-| Workflows релиза | Точный inventory содержит merged component, ревьюера и closing issue; readiness привязана к evidence; команды pre/post-merge копируются | Полный inventory, точные тексты MR/release и publication SHA; fixture-решения не выдают за оценку модели |
+| Workflows релиза | Каждая роль собирает inventory/readiness и копирует pre/post-merge runbooks со своей closing issue | Полный inventory, точные тексты MR/release, автор announcement и publication SHA; неверные bindings, неполный inventory, преждевременный post-merge и неверная readiness отклоняются без записи; fixture-решения не выдают за оценку модели |
 | Граница сохранения (отдельная lifecycle-задача) | Down/up и recreate сохраняют fixtures | Деревья branches/tags, discussions issues/MR и метаданные fixtures совпадают; сверка содержимого manual не заявляется |
 
-Harness **не доказывает** полную матрицу приёмки. Ещё не проверены полная
-пагинация всех ресурсов helpers и роли всех шести workflows, а также полный
-негативный/ролевой охват релиза. Same-file recovery и расширенные сценарии команд/triage
-требуют собственных успешных серверных проверок, а не базовых API-тестов.
+Отчёт API/backend объявляет охват полным только при прохождении всех обязательных
+проверок: пагинации ресурсов, обеих ролей, копируемых команд, same-file reassessment,
+triage lifecycle и release inventory/readiness/publication с негативными случаями.
+Базовых API-проверок или отдельного сценария недостаточно.
+Повторно используемый каталог создаёт настоящие вторые страницы; issue links
+проверяются на наблюдённом пределе CE в 100 связей как единая коллекция.
+Стрессовые CI jobs и bridges не запускаются: исполнение независимо проверяют
+обычные shell-CI сценарии. Повторяемость подтверждают два последовательных полных
+API/backend-прогона.
 Retention-проверки ограничены fixtures: payloads manual не читаются,
 сверка их содержимого не заявляется. Детерминированные fixture receipts не являются
 настоящими запусками critic. Базовые API-проверки и offline
-тесты не заменяют эти доказательства.
+тесты не заменяют эти доказательства. API/backend evidence не подтверждает
+работоспособность UI или качество решений модели.
 Пока обязательный охват неполон, `test` перечисляет недостающие случаи и
 возвращает ненулевой exit code, даже если все доступные базовые сценарии прошли.
 Отчёт содержит UTC `started_at`, pass/fail/not-run и время каждого сценария,
@@ -123,9 +145,9 @@ source-head `diff_id` (head-diff может использовать проме�
 открывает diff и ждёт нужный discussion, без повторных загрузок и mutation retries.
 Экспериментальным объявлен и исключён только TUI reviewmatic: поведенческие,
 Ink, PTY и серверные TUI-тесты не запускаются и не требуются для блокирующей
-приёмки. Backend reviewmatic, прямые команды runbook и браузерные проверки GitLab
-остаются в охвате. Отчёт отделяет исключение TUI от недостающих обязательных
-backend-проверок.
+приёмки. Backend reviewmatic и прямые команды runbook остаются обязательными.
+Все GitLab browser-сценарии отложены. Отчёт отделяет их от исключения TUI
+и недостающих обязательных backend-проверок.
 Команда release announcement сохраняет attachment промпта без несовместимого
 флага `--unique`. При потерянном ответе перед повтором проверяют настоящий discussion;
 advisory marker не доказывает запись и не защищает от дубликата.

@@ -104,6 +104,9 @@ existing, or unobserved proposals are invalid. A replacement uses guarded delete
 and receipt-dependent create commands with fresh evidence checks.
 In REST issue-link listings, the relationship identity is `issue_link_id`, not
 the linked issue's `id`; an invalid explicit relationship ID fails closed.
+Listing issue links returns one complete collection, not pages. Collection must
+retain all links at CE's 100-link boundary without requesting a repeated second page;
+this does not relax completeness checks for paged resources.
 Unknown deletion is reconciled only when fresh evidence proves absence or the exact original link;
 missing or unsupported observed link types fail closed. A relation also
 produces a contextual comment only when a concrete

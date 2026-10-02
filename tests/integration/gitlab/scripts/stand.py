@@ -316,7 +316,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
-        choices=("preflight", "test", "live"),
+        choices=("preflight", "test", "browser", "live"),
     )
     parser.add_argument("--compose", default="docker-compose")
     args = parser.parse_args()
@@ -349,13 +349,13 @@ def main() -> int:
             if args.action == "preflight":
                 report["preflight"] = shared.load(
                     "gitlab_preflight", APP / "scripts/preflight.py"
-                ).run(stand, destination, browser=True)
+                ).run(stand, destination, browser=False)
             else:
                 report["preflight"] = shared.load(
                     "gitlab_preflight", APP / "scripts/preflight.py"
-                ).run(stand, destination, browser=args.action == "test")
+                ).run(stand, destination, browser=args.action == "browser")
                 stand.connect()
-                if args.action in ("test", "live"):
+                if args.action in ("test", "browser", "live"):
                     report["versions"] = {
                         "server": stand.request("GET", "/version"),
                         "runner": stand.docker(
@@ -390,7 +390,7 @@ def main() -> int:
                     report["resources"] = stand.docker(
                         "stats", "--no-stream", "--format", "{{json .}}"
                     )
-                    if args.action in ("test", "live"):
+                    if args.action in ("test", "browser", "live"):
                         checks = shared.load("gitlab_checks", APP / "scripts/checks.py")
                         checks.run(stand, destination, report, args.action)
         except Exception as exc:

@@ -391,6 +391,8 @@ class Stand:
                 "free-sentinel", "free", "Manual area: automated checks preserve this channel."
             )
         reactions = self.request("GET", f"/posts/{root['id']}/reactions", actor="peer")
+        if reactions is None:
+            reactions = []
         if not any(
             reaction["user_id"] == ids[1] and reaction["emoji_name"] == "eyes"
             for reaction in reactions

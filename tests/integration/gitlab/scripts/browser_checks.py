@@ -50,6 +50,20 @@ class Browser(shared.Browser):
             + json.dumps("/" + self.stand.manifest["fixtures"]["path_with_namespace"])
             + ")",
         )
+        # This CLI version records loadingFailed only while HAR recording is active.
+        self.call("network", "har", "start", "--content", "none")
+
+    def diagnostics(self) -> dict[str, Any]:
+        result = network_metadata(
+            json.loads(self.call("network", "requests", "--type", "xhr,fetch", "--json"))
+        )
+        # Even content=none HAR contains cookies and headers. Keep the raw file
+        # private and temporary; only allowlisted transport metadata reaches reports.
+        with tempfile.TemporaryDirectory(dir=self.env["AGENT_BROWSER_SOCKET_DIR"]) as temporary:
+            path = Path(temporary) / "network.har"
+            self.call("network", "har", "stop", str(path))
+            result["transport"] = har_metadata(json.loads(path.read_text()))
+        return result
 
 
 def run(stand: Any, f: dict[str, Any], directory: Path, report: dict[str, Any]) -> None:
@@ -164,9 +178,7 @@ def run(stand: Any, f: dict[str, Any], directory: Path, report: dict[str, Any]) 
         try:
             write_json(
                 directory / "browser-network.json",
-                network_metadata(
-                    json.loads(browser.call("network", "requests", "--type", "xhr,fetch", "--json"))
-                ),
+                browser.diagnostics(),
             )
         finally:
             try:
@@ -312,3 +324,22 @@ def network_metadata(value: dict[str, Any]) -> dict[str, Any]:
             {key: item[key] for key in fields if key in item} for item in value["data"]["requests"]
         ],
     }
+
+
+def har_metadata(value: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = value.get("log", {}).get("entries")
+    if not isinstance(entries, list):
+        raise RuntimeError("Browser transport diagnostics are incomplete")
+    return [
+        {
+            "url": entry["request"]["url"],
+            "method": entry["request"]["method"],
+            "status": entry["response"]["status"],
+            "statusText": entry["response"]["statusText"],
+            "resourceType": entry["_resourceType"],
+            "started_at": entry["startedDateTime"],
+            "duration_ms": entry["time"],
+        }
+        for entry in entries
+        if entry.get("_resourceType") in ("XHR", "Fetch")
+    ]

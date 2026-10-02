@@ -3419,7 +3419,11 @@ export function paginated(
         items.push(item);
       }
     }
-    if (value.length < 100) {
+    // Issue links are returned as one whole collection, including exactly 100 links in CE.
+    if (
+      value.length < 100 ||
+      /^projects\/[^/]+\/issues\/[0-9]+\/links$/.test(endpoint.split("?")[0]!)
+    ) {
       return {
         items: items,
         complete: true,

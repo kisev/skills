@@ -10,7 +10,6 @@ from typing import Any
 from tests.integration.gitlab.scripts.browser_checks import (
     Browser,
     apply,
-    network_metadata,
     refresh,
 )
 from tests.integration.gitlab.scripts.checks import fixture, pipeline, review_environment, verify
@@ -25,7 +24,9 @@ from tests.integration.gitlab.scripts.stand import (
 )
 
 
-def run(stand: Stand, directory: Path, report: dict[str, Any]) -> dict[str, Any]:
+def run(
+    stand: Stand, directory: Path, report: dict[str, Any], *, browser: bool = False
+) -> dict[str, Any]:
     directory = private_directory(directory / ("same-file-" + directory.name))
     f = fixture(stand, directory)
     pipeline(stand, f, directory, report)
@@ -69,20 +70,24 @@ def run(stand: Stand, directory: Path, report: dict[str, Any]) -> dict[str, Any]
     ]
     verify(len(f["grouped_threads"]) == 2, "Same-file grouped suggestions missing")
     draft = result["started"]["draft_path"]
-    browser = Browser(stand, directory)
+    ui = Browser(stand, directory) if browser else None
     observations = []
     try:
-        browser.start()
-        browser.call("set", "viewport", "1440", "1000")
-        browser.call("open", f["mr"]["web_url"] + "/diffs")
-        browser.call("wait", "--fn", "document.body.innerText.includes('Harness grouped first')")
+        if ui is not None:
+            ui.start()
+            ui.call("set", "viewport", "1440", "1000")
+            ui.call("open", f["mr"]["web_url"] + "/diffs")
+            ui.call("wait", "--fn", "document.body.innerText.includes('Harness grouped first')")
         for index, (body, expected) in enumerate(
             (
                 ("Harness grouped first", "before\nfixed first\nnew second\nend\n"),
                 ("Harness grouped second", "before\nfixed first\nfixed second\nend\n"),
             )
         ):
-            apply(browser, body, directory, f"same-file-{index}")
+            if ui is not None:
+                apply(ui, body, directory, f"same-file-{index}")
+            else:
+                apply_api(stand, f, body, directory, index)
             file = stand.request(
                 "GET", f["prefix"] + "/repository/files/same%2Etxt?ref=" + f["branch"]
             )
@@ -138,29 +143,62 @@ def run(stand: Stand, directory: Path, report: dict[str, Any]) -> dict[str, Any]
                     "head": head,
                     "applied": applied,
                     "reassessment": reassessed,
-                    "screenshot": f"same-file-{index}-applied.png",
+                    "application": "browser" if ui is not None else "real GitLab suggestion API",
                 }
             )
-            if index == 0:
-                refresh(browser, stand, f, head, "Harness grouped second", directory)
+            if index == 0 and ui is not None:
+                refresh(ui, stand, f, head, "Harness grouped second", directory)
         return {
             "observations": observations,
-            "remaps": f["browser_refreshes"],
-            "origin": "real server/browser plus deterministic backend output assertions",
+            "remaps": f.get("browser_refreshes", []),
+            "origin": "real GitLab application plus deterministic backend output assertions",
+            "ui_verified": ui is not None,
         }
     finally:
-        try:
-            write_json(
-                directory / "browser-network.json",
-                network_metadata(
-                    json.loads(browser.call("network", "requests", "--type", "xhr,fetch", "--json"))
-                ),
-            )
-        finally:
+        if ui is not None:
             try:
-                browser.call("screenshot", str(directory / "last.png"))
-                (directory / "last-snapshot.txt").write_text(
-                    stand.redact(browser.call("snapshot", "-i"))
+                write_json(
+                    directory / "browser-network.json",
+                    ui.diagnostics(),
                 )
             finally:
-                browser.close()
+                try:
+                    ui.call("screenshot", str(directory / "last.png"))
+                    (directory / "last-snapshot.txt").write_text(
+                        stand.redact(ui.call("snapshot", "-i"))
+                    )
+                finally:
+                    ui.close()
+
+
+def apply_api(stand: Stand, f: dict[str, Any], body: str, directory: Path, index: int) -> None:
+    # Suggestions have global API IDs. Bind the ID to an observed discussion in
+    # the owned fixture MR before dispatch; never accept an arbitrary suggestion ID.
+    thread = next(
+        thread
+        for thread in f["grouped_threads"]
+        if any(note["body"].startswith(body) for note in thread["notes"])
+    )
+    observed = stand.request(
+        "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions/{thread['id']}"
+    )
+    suggestions = [
+        suggestion
+        for note in observed["notes"]
+        if note["body"].startswith(body)
+        for suggestion in note.get("suggestions", [])
+    ]
+    verify(
+        len(suggestions) == 1
+        and type(suggestions[0].get("id")) is int
+        and suggestions[0]["id"] > 0
+        and suggestions[0].get("applied") is False,
+        "No unique pending suggestion in the owned fixture discussion",
+    )
+    endpoint = f"suggestions/{suggestions[0]['id']}/apply"
+    output = command(
+        ["glab", "api", "--hostname", "localhost", "--method", "PUT", endpoint],
+        env=stand.isolated_env("author"),
+    )
+    stand.access_log.append({"method": "PUT", "path": "/" + endpoint, "actor": "author"})
+    write_json(directory / f"api-application-{index}.json", json.loads(output.stdout))

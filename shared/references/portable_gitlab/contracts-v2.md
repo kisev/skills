@@ -44,6 +44,11 @@ absolute deadline and a hard byte bound. It terminates the child process group
 on timeout, overflow, or collection failure, and reports unsupported POSIX
 streaming capabilities as a controlled workflow error.
 
+Issue-link listing is a whole-collection REST API, not a paged list. Collectors
+accept its complete single response even at CE's 100-link boundary, where
+`page` and `per_page` are ignored. Other resources still reject repeated pages
+and protective-limit exhaustion; this compatibility rule does not relax their completeness checks.
+
 MR evidence stores locale and template discovery in `project`. Discovery reads
 the project default description and bounded repository templates from an exact
 default-branch revision; failure is distinct from absence and is shown as a

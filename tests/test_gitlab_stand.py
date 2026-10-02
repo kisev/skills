@@ -38,6 +38,37 @@ def test_coverage_removes_only_criteria_with_all_required_passing_checks() -> No
 
 
 @pytest.mark.parametrize(
+    "missing",
+    [None, "helper-catalog-pagination", "reviewmatic-author-collection", "release-role-reviewer"],
+)
+def test_exhaustive_matrix_requires_pager_and_all_role_evidence(missing: str | None) -> None:
+    from tests.integration.gitlab.scripts.checks import completed_coverage
+
+    criterion = "exhaustive six-workflow helper pagination and author/reviewer matrix"
+    required = {
+        "helper-catalog-pagination",
+        "read-only-workflow-collection",
+        "reviewmatic-author-collection",
+        "reviewmatic-plan",
+        "mr-copied-publication",
+        "task-copied-publication",
+        "task-triage-publication",
+        "release-role-author",
+        "release-role-reviewer",
+    }
+    report: dict[str, Any] = {
+        "coverage": {"mandatory_remaining": [criterion]},
+        "checks": [
+            {"name": name, "status": "failed" if name == missing else "passed"}
+            for name in sorted(required)
+        ],
+    }
+    completed_coverage(report)
+    assert report["coverage"]["mandatory_remaining"] == ([criterion] if missing else [])
+    assert report["coverage"]["status"] == ("incomplete" if missing else "complete")
+
+
+@pytest.mark.parametrize(
     "change",
     [{"host": "external.invalid"}, {"project": 20}, {"role": 4}, {"kind": "merge_request"}],
 )
@@ -714,3 +745,245 @@ def test_browser_network_metadata_keeps_failures_without_credentials_or_bodies(
     for payload in ({"success": False}, {"success": True, "data": {}}):
         with pytest.raises(RuntimeError, match="diagnostics are incomplete"):
             browser_module.network_metadata(payload)
+
+
+def test_browser_har_metadata_keeps_transport_failure_without_private_data() -> None:
+    browser = STAND.load("gitlab_browser_har_test", SCRIPTS / "browser_checks.py")
+    entry = {
+        "request": {
+            "url": "https://localhost/discussions.json",
+            "method": "GET",
+            "cookies": [{"value": "private-cookie"}],
+            "headers": [{"value": "private-header"}],
+            "postData": {"text": "private-request"},
+        },
+        "response": {
+            "status": 0,
+            "statusText": "net::ERR_CONNECTION_RESET",
+            "cookies": [{"value": "private-cookie"}],
+            "headers": [{"value": "private-header"}],
+            "content": {"text": "private-response"},
+        },
+        "_resourceType": "Fetch",
+        "startedDateTime": "2026-10-02T11:32:58Z",
+        "time": 12,
+    }
+    assert browser.har_metadata({"log": {"entries": [entry, {"_resourceType": "Image"}]}}) == [
+        {
+            "url": "https://localhost/discussions.json",
+            "method": "GET",
+            "status": 0,
+            "statusText": "net::ERR_CONNECTION_RESET",
+            "resourceType": "Fetch",
+            "started_at": "2026-10-02T11:32:58Z",
+            "duration_ms": 12,
+        }
+    ]
+    with pytest.raises(RuntimeError, match="transport diagnostics are incomplete"):
+        browser.har_metadata({"log": {}})
+
+
+@pytest.mark.parametrize("valid", [True, False])
+def test_browser_diagnostics_removes_raw_har_even_on_invalid_output(
+    tmp_path: Path, valid: bool
+) -> None:
+    browser = STAND.load("gitlab_browser_har_cleanup_test", SCRIPTS / "browser_checks.py")
+    instance = object.__new__(browser.Browser)
+    instance.env = {"AGENT_BROWSER_SOCKET_DIR": str(tmp_path)}
+    paths = []
+
+    def call(*args: str) -> str:
+        if args[:2] == ("network", "requests"):
+            return json.dumps({"success": True, "data": {"requests": []}})
+        assert args[:3] == ("network", "har", "stop")
+        path = Path(args[3])
+        paths.append(path)
+        assert path.parent.stat().st_mode & 0o777 == 0o700
+        path.write_text(json.dumps({"log": {"entries": []}}) if valid else "invalid")
+        return ""
+
+    instance.call = call
+    if valid:
+        assert instance.diagnostics()["transport"] == []
+    else:
+        with pytest.raises(json.JSONDecodeError):
+            instance.diagnostics()
+    assert paths and not paths[0].exists() and not paths[0].parent.exists()
+
+
+def test_release_roles_have_distinct_closure_issues_and_run_scoped_paths(
+    local: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.integration.gitlab.scripts import release_checks
+
+    created = []
+    calls = []
+
+    def request(method: str, path: str, data: object, actor: str) -> dict[str, Any]:
+        assert method == "POST" and path == "/projects/7/issues"
+        created.append(actor)
+        return {"iid": len(created)}
+
+    def run_actor(
+        stand: Any, f: dict[str, Any], directory: Path, report: object, actor: str
+    ) -> object:
+        calls.append((actor, f["issue"]["iid"], directory.name))
+        return {"actor": actor}
+
+    monkeypatch.setattr(local, "request", request)
+    monkeypatch.setattr(release_checks, "run_actor", run_actor)
+    result = release_checks.run(local, {"prefix": "/projects/7"}, local.reports, {"checks": []})
+    assert created == ["author", "reviewer"]
+    assert calls == [
+        ("author", 1, "release-author-reports"),
+        ("reviewer", 2, "release-reviewer-reports"),
+    ]
+    assert set(result["roles"]) == {"author", "reviewer"}
+
+
+@pytest.mark.parametrize("wrong_author", [False, True])
+def test_task_copied_publication_verifies_each_real_author(
+    local: Any, monkeypatch: pytest.MonkeyPatch, wrong_author: bool
+) -> None:
+    from tests.integration.gitlab.scripts import publication_checks
+
+    local.manifest = {"users": {"author": {"id": 2}, "reviewer": {"id": 3}}}
+    for actor in ("author", "reviewer"):
+        runbook = local.reports / (actor + ".md")
+        runbook.write_text("```sh\nglab api create-fixture-" + actor + "\n```\n")
+        STAND.write_json(
+            local.reports / ("task-prepare-" + actor + ".json"), {"output": str(runbook)}
+        )
+    observed = []
+
+    def execute(stand: Any, text: str, directory: Path, name: str, actor: str) -> dict[str, str]:
+        observed.append(actor)
+        return {
+            "stdout": json.dumps(
+                {"data": {"createIssue": {"errors": [], "issue": {"iid": len(observed)}}}}
+            )
+        }
+
+    def request(*_args: object) -> dict[str, Any]:
+        actor = observed[-1]
+        return {
+            "title": "Synthetic task reports " + actor,
+            "labels": ["fixture"],
+            "milestone": {"id": 11},
+            "web_url": "https://localhost/fixture",
+            "author": {"id": 99 if wrong_author else local.manifest["users"][actor]["id"]},
+        }
+
+    monkeypatch.setattr(publication_checks, "execute", execute)
+    monkeypatch.setattr(local, "request", request)
+    f = {"prefix": "/projects/7", "issue": {"labels": ["fixture"], "milestone": {"id": 11}}}
+    if wrong_author:
+        with pytest.raises(RuntimeError, match="preserve"):
+            publication_checks.task(local, f, local.reports)
+        assert observed == ["author"]
+    else:
+        result = publication_checks.task(local, f, local.reports)
+        assert observed == ["author", "reviewer"]
+        assert [result["roles"][actor]["actor_id"] for actor in observed] == [2, 3]
+
+
+def test_backend_run_records_deferred_browser_without_loading_it(
+    local: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    from tests.integration.gitlab.scripts import checks
+
+    local.manifest = {"fixtures": {"id": 7}}
+    monkeypatch.setattr(checks, "fixture", lambda *_args: {})
+    for name in (
+        "pagination_fixture",
+        "api_matrix",
+        "pipeline",
+        "review_comments",
+        "preparation",
+        "review_plan",
+    ):
+        monkeypatch.setattr(checks, name, lambda *_args: None)
+    modules = []
+
+    def load(name: str, _path: Path) -> Any:
+        modules.append(name)
+        assert "browser" not in name
+        return SimpleNamespace(run=lambda *_args: {}, mr=lambda *_args: {}, task=lambda *_args: {})
+
+    monkeypatch.setattr(checks, "load", load)
+    report: dict[str, Any] = {"checks": []}
+    with pytest.raises(RuntimeError, match="mandatory workflow coverage is incomplete"):
+        checks.run(local, local.reports, report, "test")
+    assert report["coverage"]["deferred"]
+    assert report["coverage"]["mandatory_remaining"]
+    assert "browser" not in {entry["name"] for entry in report["scenarios"]}
+    assert "gitlab_same_file_checks" in modules
+
+
+@pytest.mark.parametrize(
+    "suggestions", [[], [{"id": True, "applied": False}], [{"id": 1, "applied": True}]]
+)
+def test_suggestion_application_rejects_missing_invalid_or_applied_ids(
+    local: Any, monkeypatch: pytest.MonkeyPatch, suggestions: list[dict[str, Any]]
+) -> None:
+    from tests.integration.gitlab.scripts import same_file_checks
+
+    monkeypatch.setattr(
+        local,
+        "request",
+        lambda *_args: {"notes": [{"body": "Harness grouped first", "suggestions": suggestions}]},
+    )
+    monkeypatch.setattr(
+        same_file_checks,
+        "command",
+        lambda *_args, **_kwargs: pytest.fail("Invalid suggestion was dispatched"),
+    )
+    f = {
+        "prefix": "/projects/7",
+        "mr": {"iid": 2},
+        "grouped_threads": [{"id": "thread", "notes": [{"body": "Harness grouped first"}]}],
+    }
+    with pytest.raises(RuntimeError, match="unique pending"):
+        same_file_checks.apply_api(local, f, "Harness grouped first", local.reports, 0)
+
+
+@pytest.mark.parametrize("foreign", [True, False])
+def test_pagination_state_rejects_foreign_project_and_symlink_before_requests(
+    local: Any, monkeypatch: pytest.MonkeyPatch, foreign: bool
+) -> None:
+    from tests.integration.gitlab.scripts.pagination_stress import resources
+
+    local.manifest = {"fixtures": {"id": 7}}
+    path = local.state / "pagination-stress.json"
+    if foreign:
+        STAND.write_json(path, {"project_id": 8})
+    else:
+        path.symlink_to(local.reports / "outside.json")
+    monkeypatch.setattr(
+        local,
+        "request",
+        lambda *_args, **_kwargs: pytest.fail("Unsafe paging state was dispatched"),
+    )
+    with pytest.raises(RuntimeError, match=r"another project|symlink"):
+        resources(local)
+
+
+def test_cached_pagination_endpoints_cannot_escape_fixtures(
+    local: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.integration.gitlab.scripts.pagination_stress import resources
+
+    local.manifest = {"fixtures": {"id": 7}}
+    STAND.write_json(
+        local.state / "pagination-stress.json",
+        {"project_id": 7, "endpoints": {"issues": "projects/8/issues"}, "head": "a" * 40},
+    )
+    monkeypatch.setattr(
+        local,
+        "request",
+        lambda *_args, **_kwargs: pytest.fail("Foreign paging endpoint was dispatched"),
+    )
+    with pytest.raises(ValueError, match="fixtures project"):
+        resources(local)

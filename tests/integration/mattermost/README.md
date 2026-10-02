@@ -131,6 +131,11 @@ out. A busy port can be changed through `MM_TEST_PORT`; a missing Compose plugin
 can be addressed with the standalone executable. Certificate export may need
 retrying briefly after first startup while Caddy creates its local CA.
 
+Fixture initialization accepts JSON `null` as an empty reaction list on fresh
+servers. If initialization fails after creating some fixtures, fix the cause and
+repeat `task env:mattermost:up` without another clean; existing fixtures and their
+reaction are reused.
+
 This is a local test stack: only HTTPS is bound to `127.0.0.1`;
 PostgreSQL has no host port and uses passwordless trust on an internal network.
 Email notifications, telemetry, and plugins are disabled. The healthcheck uses

@@ -200,12 +200,18 @@ def helper(stand: Stand, runner: Path, args: list[str], actor: str) -> dict[str,
 
 
 def task(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
-    plan = json.loads((directory / "task-prepare.json").read_text())
+    return {
+        "roles": {actor: task_actor(stand, f, directory, actor) for actor in ("author", "reviewer")}
+    }
+
+
+def task_actor(stand: Stand, f: dict[str, Any], directory: Path, actor: str) -> dict[str, Any]:
+    plan = json.loads((directory / ("task-prepare-" + actor + ".json")).read_text())
     text = Path(plan["output"]).read_text()
     copied = commands(text)
     if len(copied) != 1:
         raise RuntimeError("Expected one copied synthetic task creation command")
-    response = execute(stand, copied[0], directory, "task-copied-create", "author")
+    response = execute(stand, copied[0], directory, "task-copied-create-" + actor, actor)
     result = json.loads(response["stdout"])
     mutation = result["data"]["createIssue"]
     if mutation.get("errors") or not mutation.get("issue"):
@@ -213,9 +219,10 @@ def task(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
     iid = mutation["issue"]["iid"]
     actual = stand.request("GET", f["prefix"] + f"/issues/{iid}")
     if (
-        actual["title"] != "Synthetic task " + directory.name
+        actual["title"] != "Synthetic task " + directory.name + " " + actor
         or actual["labels"] != f["issue"]["labels"]
         or actual["milestone"]["id"] != f["issue"]["milestone"]["id"]
+        or actual["author"]["id"] != stand.manifest["users"][actor]["id"]
     ):
         raise RuntimeError("Task copied command did not preserve title, labels and milestone")
     return {
@@ -224,4 +231,5 @@ def task(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
         "command": copied[0],
         "labels": actual["labels"],
         "milestone_id": actual["milestone"]["id"],
+        "actor_id": actual["author"]["id"],
     }

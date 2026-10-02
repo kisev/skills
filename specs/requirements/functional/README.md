@@ -244,8 +244,11 @@ and real glab, including pagination, author/reviewer roles, inline positions,
 single/grouped suggestions and partial application, manual publication commands
 without the experimental TUI, refresh/repair and CI-only drift, supported issue relationships,
 tags/releases and readiness. Real shell jobs shall provide exact-commit evidence,
-successful and failing traces and a child pipeline. Browser checks shall retain
-screenshots and verify rendered placement, application and thread state.
+successful and failing traces and a child pipeline. Same-file suggestion application
+shall verify partial/full state and exact output through the real API and backend
+reassessment without depending on a browser. Browser checks shall remain separately
+invokable to retain screenshots and verify rendered placement, application and thread
+state; they are deferred from this stage's blocking acceptance.
 
 Initialization shall provide separate `fixtures` and `manual` groups. Ordinary
 automation shall target only fixtures: it shall not read, enumerate, hash, mutate
@@ -271,14 +274,19 @@ Neither a running stand nor a live provider shall be required by ordinary checks
 Only reviewmatic's TUI is experimental and excluded from blocking acceptance:
 behavioral, Ink, PTY and server TUI tests shall not run in the default gate.
 Backend reviewmatic checks, including helpers under `tui/support.js`, and GitLab
-browser checks shall remain mandatory. Reports shall distinguish this exclusion
-from missing mandatory coverage.
+API/backend checks shall remain mandatory. Reports shall distinguish the TUI exclusion,
+deferred GitLab browser coverage and missing mandatory API/backend coverage. A deferred
+browser scenario shall not be reported as passed or used to claim verified UI behavior.
 Readiness shall establish a working Rails application and its dependencies, not
 only the proxy. Browser remap checks shall bind the pending discussion's active
 current position to the exact MR head before one diff navigation.
 The navigation shall select the observed diff version at that source head rather
 than a head-diff preview with a synthetic merge SHA.
 Repeated navigation or a longer timeout shall not substitute for a diagnosis.
+Browser diagnostics shall retain transport failure metadata separately from HTTP
+responses, without retaining headers, cookies or bodies in reports. Raw temporary
+HAR files shall be removed after allowlisted metadata extraction, including when
+parsing fails. Tests shall not change host network configuration to suppress a fault.
 
 #### Verification
 
@@ -305,6 +313,8 @@ copy, inspect or clean their payloads. Foreign resources shall not be adopted.
 The environment shall remain separate from portable archives and ordinary offline checks.
 
 Mattermost fixture and credential initialization shall be automatic and idempotent.
+Fixture initialization shall treat a successful JSON `null` reaction response as
+an empty list and create the expected reaction only when it is absent.
 Normal runs shall preserve
 server data, local skill state, and the separate free zone for manual experiments.
 Automated tests may execute publication helpers only against owned local fixtures;

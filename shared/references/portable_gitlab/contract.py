@@ -1797,7 +1797,11 @@ def paginated(hostname: str, endpoint: str, *, max_pages: int = MAX_PAGES) -> di
             if key not in seen:
                 seen.add(key)
                 items.append(item)
-        if len(value) < 100:
+        # Issue-link listing is a whole-collection API, not a paged endpoint.
+        # CE can return exactly 100 links while ignoring page/per_page entirely.
+        if len(value) < 100 or re.fullmatch(
+            r"projects/[^/]+/issues/[0-9]+/links", endpoint.split("?", maxsplit=1)[0]
+        ):
             return {
                 "items": items,
                 "complete": True,

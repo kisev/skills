@@ -137,6 +137,11 @@ tasks:
     desc: Record GitLab test prerequisites without starting services
     cmds:
       - mise exec -- python -m tests.integration.gitlab.scripts.stand preflight --compose '{{.COMPOSE}}'
+  test:integration:gitlab:browser:
+    desc: Run deferred GitLab browser scenarios explicitly (not blocking API/backend acceptance)
+    cmds:
+      - task: build:skills
+      - mise exec -- python -m tests.integration.gitlab.scripts.stand browser --compose '{{.COMPOSE}}'
   test:integration:gitlab:live:
     desc: Run explicitly configured optional GitLab agent evaluation
     cmds:

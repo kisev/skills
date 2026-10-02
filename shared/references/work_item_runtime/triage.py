@@ -503,7 +503,11 @@ def paginated(hostname: str, endpoint: str) -> list[dict[str, Any]]:
                 items.append(raw)
                 if len(items) > MAX_ITEMS:
                     raise WorkflowError("GitLab collection exceeds the item limit")
-        if len(value) < 100:
+        # The issue-links API returns the entire collection, including at CE's
+        # 100-link boundary; a second page would repeat that same collection.
+        if len(value) < 100 or re.fullmatch(
+            r"projects/[^/]+/issues/[0-9]+/links", endpoint.split("?", maxsplit=1)[0]
+        ):
             return items
     raise WorkflowError("GitLab pagination exceeds the page limit")
 

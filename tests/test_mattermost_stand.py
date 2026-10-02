@@ -51,9 +51,9 @@ def test_tests_cannot_read_manual_posts(local: Any) -> None:
             local.request("GET", path)
 
 
-@pytest.mark.parametrize("existing", [True, False])
+@pytest.mark.parametrize("existing", [True, False, None])
 def test_bootstrap_does_not_republish_existing_reaction(
-    local: Any, monkeypatch: pytest.MonkeyPatch, existing: bool
+    local: Any, monkeypatch: pytest.MonkeyPatch, existing: bool | None
 ) -> None:
     roles = ("admin", "reader", "peer", "third")
     manifest = {
@@ -64,17 +64,26 @@ def test_bootstrap_does_not_republish_existing_reaction(
     }
     STAND.write_json(local.state / "fixtures.json", manifest)
     calls = []
+    reactions_present = existing is True
 
     def request(
         method: str, path: str, *_args: Any, **_kwargs: Any
-    ) -> dict[str, Any] | list[dict[str, Any]]:
+    ) -> dict[str, Any] | list[dict[str, Any]] | None:
+        nonlocal reactions_present
         calls.append((method, path))
+        if method == "POST" and path == "/reactions":
+            reactions_present = True
+            return {"user_id": "peer", "emoji_name": "eyes"}
         if path.endswith("/reactions"):
-            return [{"user_id": "peer", "emoji_name": "eyes"}] if existing else []
+            if existing is None and not reactions_present:
+                return None
+            return [{"user_id": "peer", "emoji_name": "eyes"}] if reactions_present else []
         return {"id": "fixture-resource", "name": "fixture"}
 
     monkeypatch.setattr(local, "request", request)
     monkeypatch.setattr(local, "post", lambda *_a: {"id": "root"})
+    local.bootstrap()
+    assert calls.count(("POST", "/reactions")) == (0 if existing else 1)
     local.bootstrap()
     assert calls.count(("POST", "/reactions")) == (0 if existing else 1)
     assert not any("/channels/name/free" in path for _method, path in calls)

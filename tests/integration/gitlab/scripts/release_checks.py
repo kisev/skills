@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import shlex
@@ -68,6 +69,25 @@ def checkout(stand: Stand, f: dict[str, Any], directory: Path) -> Path:
 
 def run(
     stand: Stand, original: dict[str, Any], directory: Path, report: dict[str, Any]
+) -> dict[str, Any]:
+    results = {}
+    for actor in ("author", "reviewer"):
+        selected = private_directory(directory / ("release-" + actor + "-" + directory.name))
+        issue = stand.request(
+            "POST",
+            original["prefix"] + "/issues",
+            {"title": f"Release closure {actor} {directory.name}"},
+            actor,
+        )
+        results[actor] = run_actor(stand, {**original, "issue": issue}, selected, report, actor)
+        report["checks"].append(
+            {"name": "release-role-" + actor, "status": "passed", "evidence": results[actor]}
+        )
+    return {"roles": results}
+
+
+def run_actor(
+    stand: Stand, original: dict[str, Any], directory: Path, report: dict[str, Any], actor: str
 ) -> dict[str, Any]:
     directory = private_directory(directory / "release-workflows")
     f = fixture(stand, private_directory(directory / ("release-" + directory.parent.name)))
@@ -138,7 +158,12 @@ def run(
         if name not in catalogs:
             stand.request("POST", prefix + "/labels", {"name": name, "color": "#428BCA"})
     prepared = invoke(
-        stand, "release-prepare", ["prepare", "--url", f["mr"]["web_url"]], directory, "prepare"
+        stand,
+        "release-prepare",
+        ["prepare", "--url", f["mr"]["web_url"]],
+        directory,
+        "prepare",
+        actor=actor,
     )
     evidence = prepared["items"][0]
     denied = invoke(
@@ -165,6 +190,7 @@ def run(
         ],
         directory,
         "inventory",
+        actor=actor,
     )
     inventory = json.loads(Path(inventory_result["artifact_path"]).read_text())["payload"]
     verify(
@@ -237,6 +263,7 @@ def run(
         ],
         directory,
         "scaffold",
+        actor=actor,
     )
     verify(
         plan["status"] == "ok" and before == stand.request("GET", endpoint),
@@ -248,8 +275,12 @@ def run(
         ["finalize", "--plan", plan["plan_path"], "--expected-binding", plan["binding"]],
         directory,
         "finalize",
+        actor=actor,
     )
-    readiness(stand, f, directory)
+    negatives = publication_negatives(
+        stand, f, directory, actor, evidence, inventory_result, source, plan, repo
+    )
+    readiness_evidence = readiness(stand, f, directory, actor)
     runbook = Path(plan["markdown_path"]).read_text()
     (directory / "pre-merge-runbook.md").write_text(runbook)
     copied = [text for text in commands(runbook) if "glab" in shlex.split(text)]
@@ -258,7 +289,7 @@ def run(
         "Pre-merge runbook lost a generated mutation command",
     )
     for index, text in enumerate(copied):
-        execute(stand, text, directory, f"pre-merge-{index}")
+        execute(stand, text, directory, f"pre-merge-{index}", actor)
     actual = stand.request("GET", endpoint)
     verify(
         actual["state"] == "merged"
@@ -274,6 +305,7 @@ def run(
         ["finalize", "--plan", plan["plan_path"], "--expected-binding", plan["binding"]],
         directory,
         "stale-pre-merge-finalize",
+        actor=actor,
         expected=2,
     )
     verify(stale["status"] == "stale", "Changed release evidence was incorrectly accepted as fresh")
@@ -284,7 +316,7 @@ def run(
     verify(
         len(announcements) == 1
         and "/uploads/" in announcements[0]["body"]
-        and announcements[0]["author"]["id"] == stand.manifest["users"]["reviewer"]["id"],
+        and announcements[0]["author"]["id"] == stand.manifest["users"][actor]["id"],
         "Copied announcement or real prompt attachment is missing/duplicated",
     )
     write_json(directory / "server-announcement.json", announcements)
@@ -294,13 +326,14 @@ def run(
         ["post-merge", "--plan", plan["plan_path"], "--expected-binding", plan["binding"]],
         directory,
         "post-merge",
+        actor=actor,
     )
     postbook = Path(post["markdown_path"]).read_text()
     (directory / "post-merge-runbook.md").write_text(postbook)
     for index, text in enumerate(
         text for text in commands(postbook) if "glab" in shlex.split(text)
     ):
-        execute(stand, text, directory, f"post-merge-{index}")
+        execute(stand, text, directory, f"post-merge-{index}", actor)
     release = stand.request("GET", prefix + "/releases/v" + version)
     verify(
         release["commit"]["id"] == actual["merge_commit_sha"]
@@ -322,18 +355,149 @@ def run(
         "inventory": inventory_result,
         "release": release["tag_name"],
         "publication_sha": release["commit"]["id"],
+        "actor_id": stand.manifest["users"][actor]["id"],
+        "negative_cases": negatives,
+        "readiness": readiness_evidence,
         "receipt_origin": "deterministic content; not a real critic or agent run",
     }
 
 
-def readiness(stand: Stand, f: dict[str, Any], directory: Path) -> None:
+def publication_negatives(
+    stand: Stand,
+    f: dict[str, Any],
+    directory: Path,
+    actor: str,
+    evidence: dict[str, Any],
+    inventory: dict[str, Any],
+    source: Path,
+    plan: dict[str, Any],
+    repo: Path,
+) -> list[str]:
+    endpoint = f["prefix"] + f"/merge_requests/{f['mr']['iid']}"
+    before = stand.request("GET", endpoint)
+    discussions = pages(stand, endpoint + "/discussions")
+    damaged = json.loads(Path(inventory["artifact_path"]).read_text())
+    damaged["payload"]["complete"] = False
+    damaged["payload"]["collection_completeness"]["work_items"] = False
+    damaged_input = directory / "incomplete-inventory-input.json"
+    write_json(damaged_input, damaged["payload"])
+    incomplete = command(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-B",
+            "-c",
+            (
+                "import json,sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); "
+                "from portable_runtime.contract import write_artifact; "
+                "print(write_artifact(Path(sys.argv[2]),'release_inventory',"
+                "json.loads(Path(sys.argv[3]).read_text()))[0])"
+            ),
+            str(ROOT / ".build/skills/release-prepare/scripts"),
+            evidence["artifact_root"],
+            str(damaged_input),
+        ],
+        env=stand.isolated_env(actor),
+    ).stdout.strip()
+    cases = {
+        "missing-inventory-boundary": [
+            "inventory",
+            "--evidence",
+            evidence["artifact_path"],
+            "--repo-root",
+            str(repo),
+            "--previous-ref",
+            "absent-fixture-boundary",
+        ],
+        "incomplete-inventory": [
+            "scaffold",
+            "--bundle",
+            evidence["artifact_path"],
+            "--inventory",
+            str(incomplete),
+            "--content",
+            str(source),
+        ],
+        "wrong-publication-binding": [
+            "finalize",
+            "--plan",
+            plan["plan_path"],
+            "--expected-binding",
+            "0" * 64,
+        ],
+        "post-merge-before-merge": [
+            "post-merge",
+            "--plan",
+            plan["plan_path"],
+            "--expected-binding",
+            plan["binding"],
+        ],
+    }
+    for name, args in cases.items():
+        refused = invoke(
+            stand,
+            "release-prepare",
+            args,
+            directory,
+            name,
+            actor=actor,
+            expected=0 if name == "incomplete-inventory" else 2,
+        )
+        verify(refused["status"] != "ok", name + " was accepted")
+        if name == "incomplete-inventory":
+            verify(
+                refused["status"] == "incomplete"
+                and refused["plan_path"] is None
+                and refused["markdown_path"] is None
+                and not any(request["command"] for request in refused["requests"]),
+                "Incomplete inventory exposed a publishable runbook",
+            )
+            finalized = invoke(
+                stand,
+                "release-prepare",
+                [
+                    "finalize",
+                    "--plan",
+                    refused["artifact_path"],
+                    "--expected-binding",
+                    refused["binding"],
+                ],
+                directory,
+                "incomplete-inventory-finalize",
+                actor=actor,
+                expected=2,
+            )
+            verify(finalized["status"] != "ok", "Incomplete release plan finalized successfully")
+        verify(
+            before == stand.request("GET", endpoint)
+            and discussions == pages(stand, endpoint + "/discussions"),
+            name + " mutated the server",
+        )
+    return list(cases)
+
+
+def readiness(
+    stand: Stand, f: dict[str, Any], directory: Path, actor: str = "reviewer"
+) -> dict[str, Any]:
     prepared = invoke(
         stand,
         "release-review",
         ["prepare", "--url", f["mr"]["web_url"]],
         directory,
         "review-prepare",
+        actor=actor,
     )
+    denied = invoke(
+        stand,
+        "release-review",
+        ["prepare", "--url", f["mr"]["web_url"]],
+        directory,
+        "outsider-review-prepare",
+        actor="outsider",
+        expected=1,
+    )
+    verify(denied["status"] != "ok", "Unauthorized release review was accepted")
     item = prepared["items"][0]
     bundle = json.loads(Path(item["artifact_path"]).read_text())["payload"]
     identity = {key: bundle[key] for key in ("base_sha", "start_sha", "head_sha")}
@@ -373,6 +537,7 @@ def readiness(stand: Stand, f: dict[str, Any], directory: Path) -> None:
             ],
             directory,
             "readiness-record-" + verdict,
+            actor=actor,
         )
         finalized = invoke(
             stand,
@@ -386,6 +551,7 @@ def readiness(stand: Stand, f: dict[str, Any], directory: Path) -> None:
             ],
             directory,
             "readiness-finalize-" + verdict,
+            actor=actor,
         )
         stored = json.loads(Path(recorded["artifact_path"]).read_text())["payload"]
         verify(
@@ -394,3 +560,49 @@ def readiness(stand: Stand, f: dict[str, Any], directory: Path) -> None:
             and finalized["result"]["release_readiness_valid"],
             "Readiness verdict or exact binding was lost",
         )
+    negative_inputs: dict[str, dict[str, Any]] = {
+        "wrong-evidence-digest": {"evidence_digest": "0" * 64},
+        "inconsistent-verdict": {"verdict": "ready", "readiness": False},
+        "external-mutation": {"external_mutations": True},
+    }
+    ready_source = json.loads((directory / "readiness-input-ready.json").read_text())
+    stale_range = copy.deepcopy(ready_source)
+    stale_range["gates"]["ci"]["range"]["head_sha"] = "0" * 40
+    missing_gate = copy.deepcopy(ready_source)
+    del missing_gate["gates"]["rollback"]
+    candidates = {name: {**ready_source, **changes} for name, changes in negative_inputs.items()}
+    candidates.update({"stale-gate-range": stale_range, "missing-gate": missing_gate})
+    endpoint = f["prefix"] + f"/merge_requests/{f['mr']['iid']}"
+    before = stand.request("GET", endpoint)
+    discussions = pages(stand, endpoint + "/discussions")
+    for name, value in candidates.items():
+        source = directory / ("readiness-invalid-" + name + ".json")
+        write_json(source, value)
+        refused = invoke(
+            stand,
+            "release-review",
+            [
+                "record-artifact",
+                "--kind",
+                "release_readiness",
+                "--evidence",
+                item["artifact_path"],
+                "--input",
+                str(source),
+            ],
+            directory,
+            "readiness-refused-" + name,
+            actor=actor,
+            expected=2,
+        )
+        verify(refused["status"] != "ok", "Invalid readiness was accepted")
+    verify(
+        before == stand.request("GET", endpoint)
+        and discussions == pages(stand, endpoint + "/discussions"),
+        "Readiness checks mutated the server",
+    )
+    return {
+        "verdicts": ["ready", "not_ready", "blocked"],
+        "negative_cases": list(candidates),
+        "actor_id": stand.manifest["users"][actor]["id"],
+    }

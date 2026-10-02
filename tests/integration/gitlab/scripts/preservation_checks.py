@@ -47,7 +47,8 @@ def snapshot(stand: Stand) -> dict[str, str]:
             endpoint = prefix + f"/{kind}/{item['iid']}"
             capture(f"{kind}/{item['iid']}/discussions", pages(stand, endpoint + "/discussions"))
             if kind == "issues":
-                capture(f"issues/{item['iid']}/links", pages(stand, endpoint + "/links"))
+                # Issue-link listing is one complete response, including at 100 links.
+                capture(f"issues/{item['iid']}/links", stand.request("GET", endpoint + "/links"))
     for kind in ("branches", "tags"):
         refs = pages(stand, prefix + "/repository/" + kind)
         capture("repository/" + kind, refs)

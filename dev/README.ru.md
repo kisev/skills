@@ -93,6 +93,8 @@ Git/glab/XDG не затрагивают рабочие установки: эт
 или провайдера. Охват, браузерные prerequisites, отчёты и опциональный live
 описаны в гайдах [GitLab](../tests/integration/gitlab/README.ru.md)
 и [Mattermost](../tests/integration/mattermost/README.ru.md).
+`agent-browser` нужен для Mattermost и отдельно запускаемых GitLab browser-тестов.
+Обязательная GitLab API/backend-приёмка не требует браузера; UI-охват отложен.
 
 `task test:integration:lifecycle` отдельно прерывает оба сервиса, чтобы проверить
 down/up, recreate и повторный up по snapshots fixtures в этом же окружении.

@@ -45,6 +45,7 @@ import {
   parseSemver,
   parseTarget,
   parseGlabTrace,
+  paginated,
   pipelineJob,
   redact,
   reviewLabels,
@@ -1397,6 +1398,34 @@ test("fingerprint keeps the canonical comparison order", () => {
   const mrBundle = { ...bundle, profile: "mr-prepare", project: { id: 1 } };
   assert.deepEqual(Object.keys(fingerprint(mrBundle)), ["mr_project", ...Object.keys(value)]);
   assert.equal(isDigest(digest(value)), true);
+});
+
+test("issue-link collection stops at the real API's complete 100-link boundary", (t) => {
+  const root = temporaryDirectory(t);
+  const glabDir = join(root, "bin");
+  mkdirSync(glabDir);
+  const calls = join(root, "calls.txt");
+  const script = join(glabDir, "glab");
+  writeFileSync(
+    script,
+    "#!/usr/bin/env node\n" +
+      `require('node:fs').appendFileSync(${JSON.stringify(calls)}, 'GET\\n');\n` +
+      "console.log(JSON.stringify(Array.from({length:100}, (_,i)=>({id:i+1,issue_link_id:i+1001}))));\n",
+  );
+  chmodSync(script, 0o755);
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${glabDir}:${previousPath}`;
+  t.after(() => {
+    process.env.PATH = previousPath;
+  });
+  const links = paginated("gitlab.example", "projects/5/issues/9/links");
+  assert.equal(links.complete, true);
+  assert.equal(links.pages, 1);
+  assert.equal(links.items.length, 100);
+  assert.equal(readFileSync(calls, "utf8"), "GET\n");
+  const issues = paginated("gitlab.example", "projects/5/issues", 3);
+  assert.equal(issues.complete, false);
+  assert.deepEqual(issues.errors, ["GitLab pagination repeated a page"]);
 });
 
 test("glab text streams a bounded trace through a child process", async (t) => {
