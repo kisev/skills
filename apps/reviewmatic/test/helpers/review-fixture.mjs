@@ -61,6 +61,9 @@ else if (clean === "projects/19/merge_requests/7") value = {
   iid: 7, title: "Current merge request title", description: "Current description",
   source_branch: "dev", target_branch: "main", web_url: "https://gitlab.example/group/project/-/merge_requests/7",
   author: { username: "author" }, state: "opened", labels: config.labels ?? [], updated_at: "fresh",
+  pipeline: config.mrPipeline,
+  latest_build_started_at: config.latestBuildStartedAt,
+  latest_build_finished_at: config.latestBuildFinishedAt,
   diff_refs: { base_sha: config.baseSha, start_sha: config.startSha, head_sha: config.headSha },
 };
 else if (clean === "projects/19/merge_requests/7/changes") value = {

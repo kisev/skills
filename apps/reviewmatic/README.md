@@ -65,6 +65,9 @@ in the same draft without another code review. Collection, validation, and final
 separately from host model/subagent time. Existing v2 artifacts and the low-level
 `prepare`/`context`/`template-review` commands remain supported; do not mix the two
 workflows in one review.
+The legacy MR `pipeline` object and `latest_build_started_at`/`latest_build_finished_at`
+timestamps belong to CI-only evidence. Changes to the reviewed head, metadata,
+discussions or conflicts remain material and must not reuse stale analysis.
 
 Local work-in-progress reviews use `prepare-local` and `finalize-local`;
 `status`, `next`, and `assess-mode` inspect progress. Every command prints a

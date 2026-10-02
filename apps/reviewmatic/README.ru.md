@@ -67,6 +67,9 @@ reviewmatic finish-review --draft <draft-path>
 возвращается отдельно от времени модели и сабагентов. Существующие артефакты v2
 и низкоуровневые команды `prepare`/`context`/`template-review` поддерживаются;
 не смешивайте два workflow в одном ревью.
+Legacy-поле MR `pipeline` и timestamps `latest_build_started_at`/`latest_build_finished_at`
+относятся к CI-only evidence. Изменения проверяемого head, метаданных, discussions
+или конфликтов остаются существенными: устаревшие оценки переиспользовать нельзя.
 
 Локальные ревью незакоммиченного используют `prepare-local` и `finalize-local`;
 `status`, `next` и `assess-mode` показывают прогресс. Каждая команда печатает

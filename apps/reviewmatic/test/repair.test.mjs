@@ -10,6 +10,7 @@ import {
   repairReview,
   refreshReview,
   schemaIssues,
+  analysisFingerprint,
 } from "../dist/draft.js";
 import { artifactPayload, artifactSchema, readJson, writeJson } from "../dist/contract.js";
 import { reportReview } from "../dist/context.js";
@@ -305,6 +306,48 @@ test("material refresh preserves findings and decisions without rebinding critic
   assert.deepEqual(retained.dispositions, draft.dispositions);
   assert.deepEqual(retained.critics, []);
   assert.deepEqual(readJson(result.draft_path).critics, draft.critics);
+});
+
+test("real CE pipeline and build timestamps are CI-only; review inputs remain material", async (t) => {
+  const fixture = reviewFixture(t, {
+    resolved: true,
+    pipelineStatus: "running",
+    mrPipeline: { id: 1, status: "running" },
+    latestBuildStartedAt: "2026-10-01T22:00:00Z",
+    latestBuildFinishedAt: null,
+  });
+  const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  const draft = completeDraft(readJson(started.draft_path), started);
+  writeJson(started.draft_path, draft);
+  writeJson(fixture.configPath, {
+    ...fixture.config,
+    pipelineStatus: "success",
+    mrPipeline: { id: 2, status: "success" },
+    latestBuildStartedAt: "2026-10-01T22:01:00Z",
+    latestBuildFinishedAt: "2026-10-01T22:01:10Z",
+  });
+  assert.equal((await finishReview(started.draft_path)).status, "refresh_required");
+  const retained = readJson(started.draft_path);
+  assert.deepEqual(retained.critics, draft.critics);
+  assert.equal(retained.evidence_digest, draft.evidence_digest);
+  retained.content.checks = ["Rechecked only the exact-head CI outcome."];
+  writeJson(started.draft_path, retained);
+  assert.equal((await finishReview(started.draft_path)).status, "ok");
+  const original = {
+    object: { title: "Bound retry", labels: [], sha: fixture.headSha, has_conflicts: false },
+    pipelines: { items: [] },
+  };
+  for (const change of [
+    { title: "Other scope" },
+    { labels: ["blocking"] },
+    { sha: fixture.baseSha },
+    { has_conflicts: true },
+  ]) {
+    assert.notDeepEqual(
+      analysisFingerprint(original),
+      analysisFingerprint({ ...original, object: { ...original.object, ...change } }),
+    );
+  }
 });
 
 test("an unfinished refreshed review does not hide the last finalized manual plan", async (t) => {

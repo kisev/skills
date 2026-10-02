@@ -95,6 +95,9 @@ empty draft. Original critic receipts remain historical, never rebound to new
 digests. CI-only refresh shall retain code analysis and receipts, attach an
 immutable supplemental snapshot, and request only updated CI assessments and
 affected prose. The verdict and report shall reflect the used CI snapshot.
+MR `pipeline`, `head_pipeline` and latest-build timestamps are CI-derived fields;
+their changes alone shall not invalidate code analysis. Head, metadata,
+discussion and conflict changes remain material freshness inputs.
 
 Every invocation shall read complete open/resolved conversations. Resolution,
 approval, green CI, and a short "Fixed" are not proof. Thread decisions bind full

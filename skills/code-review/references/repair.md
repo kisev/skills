@@ -41,3 +41,6 @@ analysis and the original critic receipts and attaches an immutable `ci_snapshot
 Update CI classifications and all affected CI prose/checks in that same draft,
 then finish again. Changed code, discussions, identities, or release basis are not
 CI-only drift. A failed schema is an input error, not evidence for a SemVer fallback.
+The MR's legacy `pipeline` object and `latest_build_started_at`/`latest_build_finished_at`
+timestamps are CI-derived fields, like `head_pipeline`; they do not by themselves
+require another code review.

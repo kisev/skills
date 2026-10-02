@@ -941,7 +941,14 @@ export function analysisFingerprint(evidence: Json): Json {
   delete value.pipelines;
   if (isDict(value.object)) {
     value.object = { ...value.object };
-    for (const key of ["updated_at", "head_pipeline"]) delete (value.object as Json)[key];
+    for (const key of [
+      "updated_at",
+      "head_pipeline",
+      "pipeline",
+      "latest_build_started_at",
+      "latest_build_finished_at",
+    ])
+      delete (value.object as Json)[key];
   }
   return value;
 }
