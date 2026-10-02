@@ -211,6 +211,7 @@ def refresh(
         if any(body in note["body"] for note in thread["notes"])
     )
     observations = []
+    diff_id = None
     deadline = time.monotonic() + 60
     endpoint = (
         f["mr"]["web_url"] + "/discussions.json?notes_filter=0&persist_filter=false&per_page=20"
@@ -238,7 +239,17 @@ def refresh(
             raise RuntimeError(
                 "Pending discussion did not acquire an active exact-head UI position"
             )
-        browser.call("open", f["mr"]["web_url"] + "/diffs")
+        versions = stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/versions")
+        exact = [
+            version["id"]
+            for version in versions
+            if version.get("head_commit_sha") == head and isinstance(version.get("id"), int)
+        ]
+        if not exact:
+            raise RuntimeError("No exact-head diff version is available for the pending discussion")
+        diff_id = max(exact)
+        # Head-diff previews may use a synthetic merge SHA, not the discussion's source SHA.
+        browser.call("open", f["mr"]["web_url"] + f"/diffs?diff_id={diff_id}")
         browser.call(
             "wait",
             "--fn",
@@ -247,6 +258,7 @@ def refresh(
         f.setdefault("browser_refreshes", []).append(
             {
                 "head": head,
+                "diff_id": diff_id,
                 "thread": thread_id,
                 "body": body,
                 "navigation_attempts": 1,
@@ -260,6 +272,7 @@ def refresh(
                 "origin": "real-server-ui-serializer",
                 "fault_injection": False,
                 "expected_head": head,
+                "diff_id": diff_id,
                 "thread": thread_id,
                 "observations": observations,
             },

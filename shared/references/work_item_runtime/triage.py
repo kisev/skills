@@ -1173,7 +1173,10 @@ def observed_issue_links(
             relation_type = link.get("link_type")
             if relation_type not in {"relates_to", "blocks", "is_blocked_by"}:
                 raise WorkflowError("observed issue link type is invalid")
-            link_id = link.get("id")
+            # REST list responses expose the relationship ID separately from the issue ID.
+            link_id = link.get("issue_link_id", link.get("id"))
+            if "issue_link_id" in link and not positive(link_id):
+                raise WorkflowError("observed issue link has an invalid relationship ID")
             if not positive(link_id):
                 matching = next(
                     (

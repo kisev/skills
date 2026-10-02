@@ -167,7 +167,10 @@ Each `agent_recommendation` contains exactly `proposal`, `rationale`, `assumptio
 or `high`, and assumptions and alternatives are lists. Each `issue_relations[]`
 contains exactly `target_hostname`, `target_project_id`, `target_issue_iid`,
 `relation_type`, `rationale`, nullable `existing_link`, and nullable `comment`. An
-existing link contains exactly its numeric `id` and `relation_type`. Relation type
+existing link contains exactly its numeric `id` and `relation_type`. In a REST
+issue-link listing, use `issue_link_id` for that relationship ID, not `id`, which
+identifies the linked issue. An invalid explicit `issue_link_id` blocks preparation;
+do not fall back to the issue ID. Relation type
 is `relates_to`, `blocks`, or `is_blocked_by`. Its target must be an observed
 different issue on the assessed issue's GitLab host. Missing relations and type
 replacements correspond exactly to `proposed_changes.links[]`; extra, duplicate,

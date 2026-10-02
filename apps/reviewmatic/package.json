@@ -1,7 +1,7 @@
 {
   "name": "@kisev/reviewmatic",
   "version": "0.1.0",
-  "description": "Interactive terminal review companion: guided GitLab review plans, thread replies, and local patch application.",
+  "description": "GitLab review backend and manual runbooks with an experimental terminal interface.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -25,7 +25,7 @@
   },
   "scripts": {
     "build": "node scripts/clean-dist.mjs && tsc --project tsconfig.json",
-    "test": "node --test test/",
+    "test": "node scripts/test.mjs",
     "pack:check": "node test/pack-allowlist.mjs"
   },
   "dependencies": {

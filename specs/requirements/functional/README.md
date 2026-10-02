@@ -242,7 +242,7 @@ It shall verify `code-review`/reviewmatic, `mr-prepare`, `task-prepare`,
 `task-triage`, `release-prepare` and `release-review` against the pinned CE server
 and real glab, including pagination, author/reviewer roles, inline positions,
 single/grouped suggestions and partial application, manual publication commands
-and TUI, refresh/repair and CI-only drift, supported issue relationships,
+without the experimental TUI, refresh/repair and CI-only drift, supported issue relationships,
 tags/releases and readiness. Real shell jobs shall provide exact-commit evidence,
 successful and failing traces and a child pipeline. Browser checks shall retain
 screenshots and verify rendered placement, application and thread state.
@@ -268,10 +268,17 @@ from actual server behavior. Optional live shall use existing host adapters,
 explicit provider/model/credentials and bounded execution with complete budget
 telemetry; it shall verify artifacts and the manual publication boundary.
 Neither a running stand nor a live provider shall be required by ordinary checks.
+Only reviewmatic's TUI is experimental and excluded from blocking acceptance:
+behavioral, Ink, PTY and server TUI tests shall not run in the default gate.
+Backend reviewmatic checks, including helpers under `tui/support.js`, and GitLab
+browser checks shall remain mandatory. Reports shall distinguish this exclusion
+from missing mandatory coverage.
 Readiness shall establish a working Rails application and its dependencies, not
 only the proxy. Browser remap checks shall bind the pending discussion's active
-current position to the exact MR head before one diff navigation. Repeated
-navigation or a longer timeout shall not substitute for a diagnosis.
+current position to the exact MR head before one diff navigation.
+The navigation shall select the observed diff version at that source head rather
+than a head-diff preview with a synthetic merge SHA.
+Repeated navigation or a longer timeout shall not substitute for a diagnosis.
 
 #### Verification
 

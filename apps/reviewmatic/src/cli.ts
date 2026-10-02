@@ -271,7 +271,7 @@ const definitions: CommandSpec[] = [
   },
   {
     signature: "plan",
-    description: "Open the finalized review plan interactively",
+    description: "Open the finalized review plan in the experimental TUI",
     options: [
       {
         name: "artifact-root",

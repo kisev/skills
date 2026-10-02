@@ -101,8 +101,10 @@ relation is bound to an observed issue on the same GitLab host, including target
 returned by collected issue-link evidence. Missing relations and relation-type
 replacements correspond exactly to proposed links; extra, duplicate, self,
 existing, or unobserved proposals are invalid. A replacement uses guarded delete
-and receipt-dependent create commands with fresh evidence checks. Unknown deletion
-is reconciled only when fresh evidence proves absence or the exact original link;
+and receipt-dependent create commands with fresh evidence checks.
+In REST issue-link listings, the relationship identity is `issue_link_id`, not
+the linked issue's `id`; an invalid explicit relationship ID fails closed.
+Unknown deletion is reconciled only when fresh evidence proves absence or the exact original link;
 missing or unsupported observed link types fail closed. A relation also
 produces a contextual comment only when a concrete
 decision, constraint, or research result should be transferred. New information

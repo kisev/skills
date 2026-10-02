@@ -153,6 +153,10 @@ chosen sequence. The user verifies GitLab in a browser and chooses repetition.
 Timeouts and cancellation may leave accepted remote requests and repetitions may
 duplicate them; this risk is visible but does not create a persisted block.
 
+The TUI is experimental and outside blocking behavioral acceptance; see
+[REQ-F-548](../../requirements/functional/README.md#req-f-548---verify-gitlab-workflows-against-a-persistent-local-ce-server)
+for the acceptance boundary. Preparing a runbook still requires the reviewmatic
+backend; its finished direct `glab` commands execute without reviewmatic.
 Opening/reading/navigating the TUI shall require no network. During sends, reading,
 navigation, exit, and cancellation remain available. The UI shows readable text,
 separate reply/context views, concrete errors rather than truncated JSON, and
@@ -174,8 +178,10 @@ Runtime and fixture tests cover local validation, real critic identity contracts
 atomic rollback, cumulative findings, targeted repair, refresh without lost
 findings, original receipt preservation, CI-only refresh, grouped suggestions,
 Markdown fences, field diagnostics, direct writes without GETs or publication
-state, errors, repetition, cancellation, responsive TUI navigation, and a real
-PTY smoke test. Tests use synthetic GitLab responses, never live publication.
+state, errors, repetition and cancellation. TUI behavioral, Ink and PTY suites
+remain separate experimental sources and are not run by the default gate.
+Backend worktree checks remain mandatory. Tests use synthetic GitLab responses,
+never live publication.
 Structural tests do not prove the model's semantic judgment.
 
 Transport tests use real `glab` 1.120.0 with isolated configuration and a local

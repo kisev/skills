@@ -101,7 +101,9 @@ replaces `<artifact-root>/runbook.md` and the review baseline. After
 `finish-review`, print its `chat` field verbatim as the compact review summary and
 append exactly one fenced code block with the manual launch command
 `reviewmatic plan --artifact-root <artifact-root>`. The user copies and runs it
-themselves; never execute it, and never publish, retry, or apply anything during
+themselves. Identify that TUI as experimental and point to `<artifact-root>/runbook.md`
+for supported direct `glab` publication without reviewmatic. Preparing that runbook
+still requires the reviewmatic backend. Never execute it, and never publish, retry, or apply anything during
 review. The interactive plan walkthrough, thread replies with editable drafts,
 label and issue publication, and local patch application through a dedicated git
 worktree belong to that manual `reviewmatic plan` session; read

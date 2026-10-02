@@ -37,6 +37,7 @@ test("version, help, and bogus subcommands exit cleanly", () => {
     assert.ok(result.stdout.includes("Usage:"));
   }
   const rootHelp = run(["--help"]).stdout;
+  assert.match(rootHelp, /experimental TUI/);
   for (const command of [
     "start-review",
     "resume-review",

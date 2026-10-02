@@ -19,6 +19,49 @@ from shared.references.work_item_runtime import triage
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_observed_ce_link_uses_relationship_id_not_target_issue_id() -> None:
+    snapshot = {
+        "links": [
+            {"id": 104, "project_id": 19, "iid": 7, "issue_link_id": 293, "link_type": "relates_to"}
+        ]
+    }
+    assert triage.observed_issue_links(snapshot, 19, 7) == [
+        {"id": 293, "relation_type": "relates_to"}
+    ]
+
+
+def test_observed_link_retains_explicit_relation_envelope_compatibility() -> None:
+    snapshot = {
+        "links": [
+            {
+                "id": 293,
+                "target_issue": {"id": 104, "project_id": 19, "iid": 7},
+                "link_type": "relates_to",
+            }
+        ]
+    }
+    assert triage.observed_issue_links(snapshot, 19, 7) == [
+        {"id": 293, "relation_type": "relates_to"}
+    ]
+
+
+@pytest.mark.parametrize("value", [None, 0, -1, True, "293"])
+def test_invalid_relationship_id_cannot_fall_back_to_issue_id(value: Any) -> None:
+    snapshot = {
+        "links": [
+            {
+                "id": 104,
+                "project_id": 19,
+                "iid": 7,
+                "issue_link_id": value,
+                "link_type": "relates_to",
+            }
+        ]
+    }
+    with pytest.raises(triage.WorkflowError, match="invalid relationship ID"):
+        triage.observed_issue_links(snapshot, 19, 7)
+
+
 def arguments(source: str) -> argparse.Namespace:
     return argparse.Namespace(
         source=[source],

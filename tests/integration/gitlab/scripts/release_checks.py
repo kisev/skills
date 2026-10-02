@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import shlex
@@ -12,7 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from tests.integration.gitlab.scripts.checks import fixture, pipeline, verify
+from tests.integration.gitlab.scripts.checks import fixture, pipeline, review_environment, verify
 from tests.integration.gitlab.scripts.preservation_checks import pages
 from tests.integration.gitlab.scripts.publication_checks import commands, execute
 from tests.integration.gitlab.scripts.stand import (
@@ -61,14 +60,7 @@ def invoke(
 
 def checkout(stand: Stand, f: dict[str, Any], directory: Path) -> Path:
     repo = private_directory(stand.state / "release-repositories") / directory.name
-    env = stand.isolated_env("reviewer")
-    user = stand.manifest["users"]["reviewer"]
-    token = base64.b64encode((user["username"] + ":" + user["token"]).encode()).decode()
-    env.update(
-        GIT_CONFIG_COUNT="1",
-        GIT_CONFIG_KEY_0="http.extraHeader",
-        GIT_CONFIG_VALUE_0="Authorization: Basic " + token,
-    )
+    env = review_environment(stand)
     command(["git", "clone", stand.manifest["fixtures"]["http_url_to_repo"], str(repo)], env=env)
     command(["git", "-C", str(repo), "checkout", "--detach", f["head"]], env=env)
     return repo

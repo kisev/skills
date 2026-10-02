@@ -16,6 +16,77 @@ STAND = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(STAND)
 
 
+def test_coverage_removes_only_criteria_with_all_required_passing_checks() -> None:
+    from tests.integration.gitlab.scripts.checks import completed_coverage
+
+    direct = "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands"
+    triage = "task-triage information-request lifecycle, stale analysis and relationship recovery"
+    report: dict[str, Any] = {
+        "coverage": {"mandatory_remaining": [direct, triage, "unimplemented matrix"]},
+        "checks": [
+            {"name": "reviewmatic-direct-positions-and-single-suggestion", "status": "passed"},
+            {"name": "reviewmatic-separate-replies-resolve-reopen", "status": "failed"},
+            {"name": "task-triage-lifecycle", "status": "passed"},
+        ],
+    }
+    completed_coverage(report)
+    assert report["coverage"]["mandatory_remaining"] == [direct, "unimplemented matrix"]
+    assert report["coverage"]["status"] == "incomplete"
+    assert report["coverage"]["proven"] == [
+        {"criterion": triage, "checks": ["task-triage-lifecycle"]}
+    ]
+
+
+@pytest.mark.parametrize(
+    "change",
+    [{"host": "external.invalid"}, {"project": 20}, {"role": 4}, {"kind": "merge_request"}],
+)
+def test_information_command_rejects_foreign_targets_before_dispatch(
+    local: Any, change: dict[str, Any]
+) -> None:
+    import shlex
+
+    from tests.integration.gitlab.scripts.triage_lifecycle_checks import guarded_argv
+
+    local.manifest = {"fixtures": {"id": 19}, "users": {"reviewer": {"id": 3}}}
+    guard = local.state / "guard.json"
+    STAND.write_json(
+        guard,
+        {
+            "host": change.get("host", "localhost"),
+            "current_user": {"id": change.get("role", 3)},
+            "request": {
+                "target": {
+                    "kind": change.get("kind", "issue"),
+                    "project_id": change.get("project", 19),
+                }
+            },
+        },
+    )
+    runner = ROOT / ".build/skills/task-triage/scripts/triage_task.py"
+    argv = [
+        sys.executable,
+        "-I",
+        "-S",
+        "-B",
+        str(runner.parent / "portable_runtime/state_artifacts.py"),
+        "marker-run",
+        "--",
+        sys.executable,
+        "-I",
+        "-S",
+        "-B",
+        str(runner),
+        "apply-information",
+        "--guard",
+        str(guard),
+        "--stage",
+        "message",
+    ]
+    with pytest.raises(ValueError, match="fixture role/target"):
+        guarded_argv(local, shlex.join(argv))
+
+
 @pytest.fixture
 def local(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     monkeypatch.setattr(STAND, "ROOT", tmp_path)
@@ -450,7 +521,15 @@ def test_browser_refresh_waits_for_server_position_then_navigates_once(
     monkeypatch.setitem(sys.modules, "stand", STAND)
     monkeypatch.setattr(STAND, "ROOT", ROOT)
     browser_module = STAND.load("gitlab_browser_refresh_test", SCRIPTS / "browser_checks.py")
-    monkeypatch.setattr(local, "request", lambda *_args: {"diff_refs": {"head_sha": "exact"}})
+    monkeypatch.setattr(
+        local,
+        "request",
+        lambda _method, path: (
+            [{"id": 17, "head_commit_sha": "exact"}, {"id": 18, "head_commit_sha": "other"}]
+            if path.endswith("/versions")
+            else {"diff_refs": {"head_sha": "exact"}}
+        ),
+    )
     monkeypatch.setattr(browser_module.time, "sleep", lambda _seconds: None)
     calls = []
     answers = iter(
@@ -478,6 +557,7 @@ def test_browser_refresh_waits_for_server_position_then_navigates_once(
     assert fixture["browser_refreshes"] == [
         {
             "head": "exact",
+            "diff_id": 17,
             "thread": "thread",
             "body": "remaining suggestion",
             "navigation_attempts": 1,
@@ -485,6 +565,7 @@ def test_browser_refresh_waits_for_server_position_then_navigates_once(
         }
     ]
     assert [args[0] for args in calls] == ["open", "wait"]
+    assert calls[0][1].endswith("/diffs?diff_id=17")
     evidence = json.loads((local.reports / "browser-remap-exact.json").read_text())
     assert [item["position"]["head_sha"] for item in evidence["observations"]] == ["old", "exact"]
 
@@ -520,6 +601,45 @@ def test_browser_refresh_missing_notes_is_a_bounded_failure(
             Browser(), local, fixture, "exact", "remaining suggestion", local.reports
         )
     assert (local.reports / "browser-remap-exact.json").exists()
+
+
+@pytest.mark.parametrize("versions", [[], [{"id": 17, "head_commit_sha": "stale"}]])
+def test_browser_never_navigates_to_an_unbound_head_diff(
+    local: Any, monkeypatch: pytest.MonkeyPatch, versions: list[dict[str, Any]]
+) -> None:
+    browser_checks = STAND.load("gitlab_unbound_diff_test", SCRIPTS / "browser_checks.py")
+
+    monkeypatch.setattr(
+        local,
+        "request",
+        lambda _method, path: (
+            versions if path.endswith("/versions") else {"diff_refs": {"head_sha": "exact"}}
+        ),
+    )
+
+    class Browser:
+        def evaluate(self, _expression: str) -> dict[str, Any]:
+            return {
+                "status": 200,
+                "id": "thread",
+                "active": True,
+                "position": {"head_sha": "exact"},
+            }
+
+        def call(self, *_args: str) -> None:
+            pytest.fail("An unbound diff must not be opened")
+
+    fixture = {
+        "prefix": "/projects/7",
+        "mr": {"iid": 2, "web_url": "https://localhost/owned/fixtures/-/merge_requests/2"},
+        "grouped_threads": [{"id": "thread", "notes": [{"body": "remaining suggestion"}]}],
+    }
+    with pytest.raises(RuntimeError, match="No exact-head diff version"):
+        browser_checks.refresh(
+            Browser(), local, fixture, "exact", "remaining suggestion", local.reports
+        )
+    evidence = json.loads((local.reports / "browser-remap-exact.json").read_text())
+    assert evidence["diff_id"] is None
 
 
 @pytest.mark.parametrize(

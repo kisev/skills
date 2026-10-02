@@ -67,7 +67,7 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
                         "relation_type": "relates_to",
                         "rationale": "The two synthetic outputs belong to the same fixture contract.",
                         "existing_link": {
-                            "id": existing["id"],
+                            "id": existing.get("issue_link_id", existing["id"]),
                             "relation_type": existing["link_type"],
                         }
                         if existing

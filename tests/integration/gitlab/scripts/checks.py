@@ -31,6 +31,37 @@ def record(report: dict[str, Any], name: str, evidence: object) -> None:
     report["checks"].append({"name": name, "status": "passed", "evidence": evidence})
 
 
+def completed_coverage(report: dict[str, Any]) -> None:
+    proven = {
+        "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands": {
+            "reviewmatic-direct-positions-and-single-suggestion",
+            "reviewmatic-separate-replies-resolve-reopen",
+        },
+        "task-triage information-request lifecycle, stale analysis and relationship recovery": {
+            "task-triage-lifecycle",
+        },
+        "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment": {
+            "same-file-grouped-recovery",
+        },
+        "non-TUI CLI faults, timeout and ambiguous-publication reconciliation": {
+            "transport-fault-and-retry",
+        },
+    }
+    passed = {entry["name"] for entry in report["checks"] if entry["status"] == "passed"}
+    coverage = report["coverage"]
+    coverage["proven"] = [
+        {"criterion": criterion, "checks": sorted(required)}
+        for criterion, required in proven.items()
+        if required <= passed
+    ]
+    coverage["mandatory_remaining"] = [
+        criterion
+        for criterion in coverage["mandatory_remaining"]
+        if criterion not in proven or not proven[criterion] <= passed
+    ]
+    coverage["status"] = "incomplete" if coverage["mandatory_remaining"] else "complete"
+
+
 def fixture(stand: Stand, directory: Path) -> dict[str, Any]:
     pid = stand.manifest["fixtures"]["id"]
     prefix = f"/projects/{pid}"
@@ -40,6 +71,11 @@ def fixture(stand: Stand, directory: Path) -> dict[str, Any]:
     actions = [
         {"action": "create", "file_path": "sample.txt", "content": "context\nold\nkeep\nlast\n"},
         {"action": "create", "file_path": "grouped.txt", "content": "before\nold first\nend\n"},
+        {
+            "action": "create",
+            "file_path": "same.txt",
+            "content": "before\nold first\nold second\nend\n",
+        },
         {
             "action": "create",
             "file_path": "grouped-extra.txt",
@@ -93,6 +129,11 @@ child:
                     "action": "update",
                     "file_path": "grouped.txt",
                     "content": "before\nnew first\nend\n",
+                },
+                {
+                    "action": "update",
+                    "file_path": "same.txt",
+                    "content": "before\nnew first\nnew second\nend\n",
                 },
                 {
                     "action": "update",
@@ -413,6 +454,21 @@ def review_comments(
         else:
             raise RuntimeError("GitLab accepted denied/invalid comment")
     f["threads"] = threads
+    states = []
+    for resolved in (True, False):
+        thread = stand.request(
+            "POST",
+            endpoint,
+            {
+                "body": "Harness state " + ("closed" if resolved else "open"),
+                "position": suggestion["position"],
+            },
+            "reviewer",
+        )
+        if resolved:
+            stand.request("PUT", endpoint + "/" + thread["id"], {"resolved": True}, "reviewer")
+        states.append({"id": thread["id"], "resolved": resolved})
+    f["state_threads"] = states
     write_json(directory / "discussions.json", stand.request("GET", endpoint))
     record(
         report,
@@ -550,7 +606,7 @@ def preparation(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     record(report, "read-only-workflow-collection", results)
 
 
-def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[str, Any]) -> None:
+def review_environment(stand: Stand) -> dict[str, str]:
     environment = stand.isolated_env("reviewer")
     user = stand.manifest["users"]["reviewer"]
     authorization = base64.b64encode((user["username"] + ":" + user["token"]).encode()).decode()
@@ -561,6 +617,11 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
             "GIT_CONFIG_VALUE_0": "Authorization: Basic " + authorization,
         }
     )
+    return environment
+
+
+def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[str, Any]) -> None:
+    environment = review_environment(stand)
     repo = stand.state / "repositories" / directory.name
     private_directory(repo.parent)
     if repo.is_symlink():
@@ -622,7 +683,28 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     for index, action in enumerate(result["actions"]):
         if action["command"] not in runbook:
             raise RuntimeError("Reviewmatic action is absent from the copied runbook")
+        state_before = {
+            thread["id"]: stand.request(
+                "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions/" + thread["id"]
+            )
+            for thread in f["state_threads"]
+        }
         publication.execute(stand, action["command"], directory, f"reviewmatic-copied-{index}")
+        for thread in f["state_threads"]:
+            after = stand.request(
+                "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions/" + thread["id"]
+            )
+            if action["operation"] == "reply":
+                verify(
+                    after["notes"][0]["resolved"]
+                    == state_before[thread["id"]]["notes"][0]["resolved"],
+                    "Copied reply implicitly changed thread state",
+                )
+            elif action["operation"] in ("resolve", "reopen"):
+                verify(
+                    len(after["notes"]) == len(state_before[thread["id"]]["notes"]),
+                    "Separate state command unexpectedly published a reply",
+                )
         copied.append(action["id"])
     actual = stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions")
     grouped = [
@@ -635,13 +717,73 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
         "Reviewmatic copied grouped suggestions missing on server",
     )
     f["grouped_threads"] = grouped
+    direct = {}
+    for side in ("old", "new", "context"):
+        matches = [
+            note
+            for thread in actual
+            for note in thread["notes"]
+            if note["body"].startswith("Harness direct " + side)
+        ]
+        verify(len(matches) == 1, "Copied direct " + side + " command missing or duplicated")
+        note = matches[0]
+        position = note["position"]
+        expected = (
+            {"old_line": 2, "new_line": None}
+            if side == "old"
+            else (
+                {"old_line": None, "new_line": 5}
+                if side == "new"
+                else {"old_line": 3, "new_line": 3}
+            )
+        )
+        verify(
+            position["head_sha"] == f["head"]
+            and position["old_path"] == position["new_path"] == "sample.txt"
+            and all(position.get(key) == value for key, value in expected.items()),
+            "Copied direct " + side + " position differs from the prepared exact-head command",
+        )
+        verify(
+            note["author"]["id"] == stand.manifest["users"]["reviewer"]["id"],
+            "Copied direct comment role mismatch",
+        )
+        if side == "new":
+            verify(
+                bool(note.get("suggestions")), "Copied single suggestion not recognized by GitLab"
+            )
+        direct[side] = {
+            "note": note["id"],
+            "position": position,
+            "suggestions": note.get("suggestions", []),
+        }
+    record(report, "reviewmatic-direct-positions-and-single-suggestion", direct)
+    states = [
+        stand.request(
+            "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions/" + thread["id"]
+        )
+        for thread in f["state_threads"]
+    ]
+    for original, actual_state in zip(f["state_threads"], states, strict=True):
+        verify(
+            actual_state["notes"][0]["resolved"] is not original["resolved"],
+            "Copied independent resolve/reopen state missing",
+        )
+        replies = [
+            note
+            for note in actual_state["notes"][1:]
+            if note["body"].startswith("Harness reviewmatic state")
+        ]
+        verify(
+            len(replies) == 1
+            and replies[0]["author"]["id"] == stand.manifest["users"]["reviewer"]["id"],
+            "Copied state-thread reply missing, duplicated or wrong role",
+        )
+    record(report, "reviewmatic-separate-replies-resolve-reopen", {"threads": states})
     record(
         report,
         "reviewmatic-copied-commands",
         {"actions": copied, "grouped_threads": [thread["id"] for thread in grouped]},
     )
-    tui = load("gitlab_tui", APP / "scripts/tui_checks.py")
-    record(report, "reviewmatic-real-tui", tui.run(stand, f, result, directory))
     material_input = directory / "material-refresh-input.json"
     write_json(
         material_input,
@@ -684,13 +826,14 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         return
     report["coverage"] = {
         "status": "incomplete",
+        "excluded": ["experimental reviewmatic TUI (behavioral, Ink, PTY and server tests)"],
         "mandatory_remaining": [
             "exhaustive six-workflow helper pagination and author/reviewer matrix",
-            "reviewmatic old/new/context and single-suggestion commands; separate resolve/reopen and issue actions in TUI/browser",
+            "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands",
             "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment",
             "task-triage information-request lifecycle, stale analysis and relationship recovery",
             "complete release inventory/readiness/publication roles and negative-outcome matrix",
-            "in-flight TUI mutation cancellation, timeout and controlled retry after ambiguous writes",
+            "non-TUI CLI faults, timeout and ambiguous-publication reconciliation",
         ],
         "fault_injection": "synthetic CLI transport rejection and separate real-server read-only retry; not server behavior",
     }
@@ -705,8 +848,10 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         "mr-copied-publication",
         "task-copied-publication",
         "task-triage-publication",
+        "task-triage-lifecycle",
         "reviewmatic",
         "browser",
+        "same-file-grouped-recovery",
         "release-workflows",
         "automation-scope",
     )
@@ -719,6 +864,7 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             result = operation()
         except Exception as exc:
             entry.update(status="failed", error=stand.redact(str(exc)))
+            completed_coverage(report)
             raise
         else:
             entry["status"] = "passed"
@@ -756,9 +902,21 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         "task-triage-publication",
         scenario("task-triage-publication", lambda: triage.run(stand, f, directory)),
     )
+    triage_lifecycle = load("gitlab_triage_lifecycle", APP / "scripts/triage_lifecycle_checks.py")
+    record(
+        report,
+        "task-triage-lifecycle",
+        scenario("task-triage-lifecycle", lambda: triage_lifecycle.run(stand, f, directory)),
+    )
     scenario("reviewmatic", lambda: review_plan(stand, f, directory, report))
     browser = load("gitlab_browser", APP / "scripts/browser_checks.py")
     scenario("browser", lambda: browser.run(stand, f, directory, report))
+    same_file = load("gitlab_same_file_checks", APP / "scripts/same_file_checks.py")
+    record(
+        report,
+        "same-file-grouped-recovery",
+        scenario("same-file-grouped-recovery", lambda: same_file.run(stand, directory, report)),
+    )
     releases = load("gitlab_release_checks", APP / "scripts/release_checks.py")
     record(
         report,
@@ -775,6 +933,7 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         ),
     )
 
+    completed_coverage(report)
     if report["coverage"]["mandatory_remaining"]:
         raise RuntimeError(
             "Baseline scenarios completed but mandatory workflow coverage is incomplete; see result.json coverage"

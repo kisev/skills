@@ -89,7 +89,8 @@ respond successfully. Startup failures remain failures; API writes are not retri
 | Reviewmatic | Prepare, presentation-repair, then copy runbook commands | Findings, suggestions and fixture receipts retained; real grouped suggestions and replies published |
 | CI-only refresh | Rerun real shell CI on the same SHA, then finish the existing draft | Supplemental CI snapshot; original findings/evidence/receipts retained; no repeated `startReview` |
 | Material refresh | Collect changed conversations without publishing or rebinding receipts | Findings/dispositions and original draft preserved; new receipts empty; last finalized plan remains readable |
-| TUI | Real Ink CLI in a PTY; cancel confirmation, then confirm a reply | No early write; exactly one reviewer reply; thread state unchanged; transcript retained |
+| Same-file grouped recovery | Apply one part, refresh the pending thread's exact diff version, then apply the other | Exact files and partial/full flags; backend refresh retains findings without rebinding receipts and checks the actual new-head output |
+| Triage information lifecycle | Copy request, first ping, second ping, message and separate closure; reject old analysis and restore a missing CE link | Ordered real note IDs/authorship; no closure before its command; stale analysis makes no write; exactly one restored relation |
 | Browser | Single and cross-file grouped suggestions apply | Screenshots, exact files and partial/full application flags; partial is not a complete fix |
 | Transport fault/retry | Inject CLI failure, then retry the actual collector | Failure is nonzero; retry has complete evidence; server unchanged |
 | Mutation faults | Cancel before dispatch, cancel/timeout after a real write while suppressing its response | Nonzero job; one exact issue after controlled retry or read-only reconciliation; ambiguous writes are not blindly repeated |
@@ -98,11 +99,9 @@ respond successfully. Startup failures remain failures; API writes are not retri
 | Retention boundary (separate lifecycle task) | Down/up and recreate retain fixtures | Fixture branch/tag trees, issues/MR discussions and metadata match; no manual-content comparison is claimed |
 
 The harness does **not** yet prove the complete acceptance matrix. Missing cases
-include exhaustive helper resource pagination/roles for all six workflows, reviewmatic's
-old/new/context and single-suggestion commands, TUI issue and separate thread-state
-actions, same-file grouped stale-state recovery, task
-triage information-request lifecycle and stale analysis, full release negative/role
-coverage and in-flight TUI mutation cancellation/retry. Fixture-only retention checks
+include exhaustive helper resource pagination/roles for all six workflows and full
+release negative/role coverage. Same-file recovery and the expanded command/triage
+scenarios require their own passing server evidence, not baseline API checks. Fixture-only retention checks
 do not inspect any manual payloads or claim that their contents were compared.
 Deterministic receipt inputs are not real critic runs.
 Do not interpret baseline API checks or offline suites as those missing proofs.
@@ -115,10 +114,13 @@ A transport fault wrapper is explicitly marked as injection;
 it is never used as evidence of a GitLab network response.
 `browser-remap-<sha>.json` records the real UI serializer before navigation.
 MR diff refs may advance while the remaining discussion is inactive at its old
-position. The browser waits for an active exact-head position, then navigates once
+position. The browser waits for an active exact-head position, selects the matching
+source-head `diff_id` (head-diff previews may use a synthetic merge SHA), then navigates once
 and waits for the scoped discussion, without repeated page loads or mutation retries.
-The TUI driver waits for a complete synchronized frame and the detail action footer,
-not a note title that is also present in the overview.
+Only the reviewmatic TUI is experimental and excluded: behavioral, Ink, PTY and
+server TUI tests are not run or required by blocking acceptance. Backend reviewmatic,
+direct runbook publication and GitLab browser checks remain in scope. Reports
+record the TUI exclusion separately from missing mandatory backend coverage.
 Release announcement commands keep their prompt attachment without the incompatible
 `--unique` flag. A missing response requires inspecting the actual discussion before
 repetition; an advisory marker is not proof of a write or duplicate protection.

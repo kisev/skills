@@ -1,8 +1,10 @@
 # Manual publication
 
-Review preparation never publishes. The user has two equally supported interfaces:
-copy direct `glab` commands from `runbook.md`, or launch `reviewmatic plan` in a
-terminal. The TUI executes the same commands without a shell. Enter only opens an
+Review preparation never publishes. The supported publication interface is to
+copy direct `glab` commands from `runbook.md`; those commands do not need reviewmatic.
+Runbook preparation still depends on the reviewmatic backend. The alternative
+`reviewmatic plan` terminal TUI is experimental and outside blocking behavioral
+acceptance. The TUI executes the same commands without a shell. Enter only opens an
 item. Sending, changing thread state, applying a local fix, committing, and pushing
 are explicit user choices; review agents never invoke them.
 

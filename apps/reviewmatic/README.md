@@ -75,6 +75,12 @@ compact JSON result and never mutates GitLab or the checkout.
 
 ## Interactive plan walkthrough
 
+The TUI is experimental and is not being developed or behaviorally tested for
+blocking acceptance. Ink, PTY and server TUI suites are excluded from the default
+gate. Backend collection, preparation, repair, refresh, finalization and direct
+publication commands remain supported and tested, including backend helpers in
+`tui/support.js`. `npm test` runs the backend suites and local worktree checks.
+
 `runbook.md` is an equally supported interface: read the body preview and copy its
 direct `glab` command. The TUI executes the same operations without a shell.
 

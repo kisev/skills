@@ -99,12 +99,84 @@ draft.content.finding_publications = [
       "Each line can be replaced independently; one application is not a complete fix.",
   },
 ];
+const samplePatch =
+  "diff --git a/sample.txt b/sample.txt\n--- a/sample.txt\n+++ b/sample.txt\n@@ -1,5 +1,5 @@\n context\n-new\n+fixed\n keep\n last\n added\n";
+if (input.same_file) {
+  draft.dispositions[0].dependencies.paths = ["same.txt"];
+  draft.findings[0].evidence = ["same.txt lines 2 and 3 at the exact synthetic fixture head."];
+  draft.content.finding_publications[0].suggestions[0].path = "same.txt";
+  draft.content.finding_publications[0].suggestions[1].path = "same.txt";
+  draft.content.finding_publications[0].suggestions[1].line = 3;
+}
+for (const [side, line, oldLine] of input.same_file
+  ? []
+  : [
+      ["old", null, 2],
+      ["new", 5, null],
+      ["context", 3, null],
+    ]) {
+  const id = `harness-direct-${side}`;
+  draft.findings.push({
+    id,
+    severity: "low",
+    summary: `Exercise direct ${side} publication`,
+    risk: "The synthetic expected output differs from the fixture text.",
+    evidence: [`sample.txt ${side} position at the exact fixture head.`],
+    consequence: "The fixture output assertion would remain unsatisfied.",
+    relation_to_change: "The position belongs to the synthetic diff hunk.",
+    minimum_fix: "Replace the synthetic output with the expected text.",
+  });
+  draft.dispositions.push({
+    id,
+    decision: "accept",
+    reason: "Deterministic transport probe, not a product defect.",
+    dependencies: { paths: ["sample.txt"], thread_ids: [], metadata_fields: [], ci: false },
+  });
+  draft.content.finding_publications.push({
+    finding_id: id,
+    type: "line",
+    path: "sample.txt",
+    line,
+    old_line: oldLine,
+    body:
+      side === "new"
+        ? "Harness direct new\n\n```suggestion\ndirect added\n```"
+        : `Harness direct ${side}; synthetic patch transport probe.`,
+    fix_mode: side === "new" ? "suggestion" : "patch",
+    patch: side === "new" ? null : samplePatch,
+    ...(side === "new"
+      ? {}
+      : { patch_reason: "Exercise exact old/context positioned patch commands." }),
+  });
+}
 for (const thread of draft.content.thread_decisions) {
   thread.assessment = "neutral";
   thread.rationale = "Synthetic placement probe, not a claimed code defect.";
   thread.outcome = thread.state === "open" ? "reply" : "no_publication";
   thread.proposed_response =
     thread.state === "open" ? "Harness reviewmatic reply; correction is still pending." : null;
+}
+const [, context] = artifactPayload(result.context_path, "review_context");
+for (const thread of draft.content.thread_decisions) {
+  const source = context.discussions.find((item) => String(item.root_note_id) === thread.id);
+  const body = source?.notes[0]?.body;
+  if (body === "Harness state closed") {
+    thread.assessment = "accepted";
+    thread.outcome = "reopen";
+    thread.rationale =
+      "The deterministic fixture output remains unchanged and requires correction.";
+    thread.proposed_response = "Harness reviewmatic state reopen; synthetic correction pending.";
+    thread.fix_mode = "patch";
+    thread.patch = samplePatch;
+    thread.patch_reason = "Exercise reopening independently of a positioned patch reply.";
+  } else if (body === "Harness state open") {
+    thread.assessment = "false_positive";
+    thread.outcome = "resolve";
+    thread.rationale =
+      "This fixture remark is intentionally a false positive; no code change is needed.";
+    thread.proposed_response =
+      "Harness reviewmatic state resolve; deterministic false-positive probe.";
+  }
 }
 for (const job of draft.ci_job_assessments) {
   job.classification = "process_gate";
