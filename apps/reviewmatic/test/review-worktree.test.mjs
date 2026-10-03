@@ -6,6 +6,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { test, after } from "node:test";
 import { startReview, refreshReview, checkReview, finishReview } from "../dist/draft.js";
 import { artifactPayload, readJson, writeJson } from "../dist/contract.js";
+import { prepareReviewWorktree, reviewSlug, saveReviewRegistry } from "../dist/review-worktree.js";
 import { loadProgress } from "../dist/context.js";
 import { localBundle } from "../dist/local-review.js";
 import { prepareApplication } from "../dist/worktree.js";
@@ -92,7 +93,10 @@ test("start-review prepares one managed worktree from a subdirectory without --r
   assert.equal(worktree.reused, false);
   assert.equal(worktree.switched, false);
   assert.equal(worktree.remote, "origin");
-  assert.match(worktree.path, /\.worktrees\/reviewmatic\/mr-gitlab\.example-group-project-iid7$/);
+  assert.match(
+    worktree.path,
+    /\.worktrees\/reviewmatic\/mr-gitlab\.example-group-project-iid7-[0-9a-f]{8}$/,
+  );
   assert.equal(worktree.refs.head_sha, fixture.headSha);
   assert.equal(worktree.refs.base_sha, fixture.baseSha);
   assert.equal(worktree.refs.start_sha, fixture.baseSha);
@@ -242,7 +246,7 @@ test("a new head switches the same worktree only when no review is active", asyn
 test("a finalized review no longer blocks switching to a new head", async (t) => {
   const fixture = reviewFixture(t);
   const first = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const draft = completeDraft(readJson(first.draft_path), first);
+  const draft = await completeDraft(readJson(first.draft_path), first);
   writeJson(first.draft_path, draft);
   const checked = await checkReview(first.draft_path);
   assert.equal(checked.status, "ok", JSON.stringify(checked.errors));
@@ -363,7 +367,7 @@ test("identical branch names in different projects never share a worktree", asyn
   });
   assert.equal(second.status, "ok", JSON.stringify(second));
   assert.notEqual(second.review_worktree.path, first.review_worktree.path);
-  assert.match(second.review_worktree.path, /mr-gitlab\.example-other-project-iid7$/);
+  assert.match(second.review_worktree.path, /mr-gitlab\.example-other-project-iid7-[0-9a-f]{8}$/);
   assert.equal(registry().items.length, 2);
 });
 
@@ -390,4 +394,270 @@ test("local WIP review creates no worktree and manual fix application keeps work
     artifactPayload(started.evidence_path, "evidence_snapshot")[1].head_sha,
     fixture.headSha,
   );
+});
+
+test("an interrupted repeated preparation keeps the active review protected", async (t) => {
+  const fixture = reviewFixture(t);
+  const first = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(first.status, "ok", JSON.stringify(first));
+  const worktreePath = first.review_worktree.path;
+
+  // A repeated preparation of the same head that stops before beginReview
+  // must not claim the tree away from the running review.
+  const [, evidence] = artifactPayload(first.evidence_path, "evidence_snapshot");
+  const repeated = prepareReviewWorktree({
+    repoRoot: fixture.repo,
+    evidence: { ...evidence, artifact_root: first.artifact_root },
+    evidenceDigest: "b".repeat(64),
+  });
+  assert.equal(repeated.path, worktreePath);
+  assert.equal(repeated.reused, true);
+  const marker = registry().items[0].analysis;
+  assert.equal(marker.artifact_root, first.artifact_root);
+  assert.equal(marker.evidence_digest, loadProgress(first.artifact_root).evidence_digest);
+
+  writeFileSync(join(fixture.repo, "review.txt"), "base\nreviewed change\nadvanced\n");
+  fixture.git("commit", "-qam", "advanced");
+  const newHead = fixture.git("rev-parse", "HEAD");
+  fixture.git("push", "-q", "origin", "main");
+  fixture.git("push", "-q", "origin", "dev");
+  execFileSync("git", ["-C", fixture.origin, "update-ref", "refs/merge-requests/7/head", newHead]);
+  writeFileSync(fixture.configPath, JSON.stringify({ ...fixture.config, headSha: newHead }));
+
+  const blocked = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(blocked.status, "blocked");
+  assert.match(JSON.stringify(blocked.errors), /in progress/);
+  assert.equal(worktreeHead(worktreePath), fixture.headSha);
+
+  const refreshed = await refreshReview(first.draft_path);
+  assert.equal(refreshed.status, "needs_reassessment", JSON.stringify(refreshed));
+  assert.equal(refreshed.review_worktree.switched, true);
+  assert.equal(worktreeHead(worktreePath), newHead);
+});
+
+test("a retired-layout worktree blocks preparation until it is migrated manually", async (t) => {
+  const fixture = reviewFixture(t);
+  const first = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(first.status, "ok", JSON.stringify(first));
+  const newPath = first.review_worktree.path;
+  const legacyPath = `${fixture.repo}.worktrees/reviewmatic/mr-gitlab.example-group-project-iid7`;
+  execFileSync("git", [
+    "-C",
+    fixture.repo,
+    "worktree",
+    "add",
+    "--detach",
+    legacyPath,
+    fixture.headSha,
+  ]);
+  const registryFile = join(
+    process.env.XDG_STATE_HOME,
+    "agent-skills",
+    "reviewmatic",
+    "review-worktrees.json",
+  );
+  const state = readJson(registryFile, "registry");
+  state.items[0].path = legacyPath;
+  writeJson(registryFile, state);
+
+  const blocked = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(blocked.status, "blocked");
+  const reported = JSON.stringify(blocked.errors);
+  assert.match(reported, /retired path layout/);
+  assert.match(reported, /worktree remove/);
+  assert.match(reported, new RegExp(newPath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.equal(gitIn(legacyPath, "rev-parse", "HEAD"), fixture.headSha);
+  assert.equal(readJson(registryFile, "registry").items[0].path, legacyPath);
+
+  execFileSync("git", ["-C", fixture.repo, "worktree", "remove", legacyPath]);
+  const migrated = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(migrated.status, "ok", JSON.stringify(migrated));
+  assert.equal(migrated.review_worktree.path, newPath);
+  assert.equal(migrated.review_worktree.reused, true);
+  const items = registry().items;
+  assert.equal(items.length, 1);
+  assert.equal(items[0].path, newPath);
+
+  saveReviewRegistry({ schema: "reviewmatic/review-worktree-registry/v1", items: [] });
+  rmSync(legacyPath, { recursive: true, force: true });
+  mkdirSync(legacyPath, { recursive: true });
+  writeFileSync(join(legacyPath, "keep.txt"), "legacy\n");
+  const unmanaged = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(unmanaged.status, "blocked");
+  assert.match(JSON.stringify(unmanaged.errors), /retired path layout/);
+  assert.equal(readFileSync(join(legacyPath, "keep.txt"), "utf8"), "legacy\n");
+});
+
+test("parallel preparations of different merge requests keep both registry records", async (t) => {
+  const fixture = reviewFixture(t);
+  const worker = new URL("./helpers/registry-worker.mjs", import.meta.url).pathname;
+  const writeRecord = (project) =>
+    new Promise((done, failed) => {
+      const child = spawn(
+        process.execPath,
+        [
+          worker,
+          JSON.stringify({
+            schema: "reviewmatic/review-worktree/v1",
+            path: `${fixture.repo}.worktrees/reviewmatic/mr-${project.replace(/\//g, "-")}-iid7`,
+            host: "gitlab.example",
+            project_path: project,
+            iid: 7,
+          }),
+        ],
+        { env: process.env, stdio: ["ignore", "pipe", "pipe"] },
+      );
+      let error = "";
+      child.stderr.on("data", (chunk) => {
+        error += chunk;
+      });
+      child.on("close", (code, signal) => {
+        if (code === 0) done();
+        else failed(new Error(`registry writer for ${project} failed: ${signal ?? code} ${error}`));
+      });
+    });
+  await Promise.all([writeRecord("group/project"), writeRecord("other/project")]);
+  const raced = registry()
+    .items.map((item) => item.project_path)
+    .sort();
+  assert.deepEqual(raced, ["group/project", "other/project"]);
+
+  fixture.git("remote", "add", "second", "https://gitlab.example/other/project.git");
+  fixture.git(
+    "config",
+    "--add",
+    `url.${fixture.origin}.insteadOf`,
+    "https://gitlab.example/other/project.git",
+  );
+  const first = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  const second = await startReview({
+    url: "https://gitlab.example/other/project/-/merge_requests/7",
+    repoRoot: fixture.repo,
+  });
+  assert.equal(first.status, "ok", JSON.stringify(first));
+  assert.equal(second.status, "ok", JSON.stringify(second));
+
+  const repeatedFirst = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  const repeatedSecond = await startReview({
+    url: "https://gitlab.example/other/project/-/merge_requests/7",
+    repoRoot: fixture.repo,
+  });
+  assert.equal(repeatedFirst.review_worktree.reused, true);
+  assert.equal(repeatedSecond.review_worktree.reused, true);
+  const kept = registry()
+    .items.map((item) => item.project_path)
+    .sort();
+  assert.deepEqual(kept, ["group/project", "other/project"]);
+});
+
+test("worktree paths separate the full host, project, and IID identity", async (t) => {
+  const fixture = reviewFixture(t);
+  assert.notEqual(
+    reviewSlug("gitlab.example", "group/a-b", 7),
+    reviewSlug("gitlab.example", "group-a/b", 7),
+  );
+  assert.notEqual(
+    reviewSlug("gitlab.example", "group/project", 7),
+    reviewSlug("gitlab.example", "group/project", 8),
+  );
+  const longA = `long/${"a".repeat(120)}`;
+  const longB = `long/${"a".repeat(119)}b`;
+  assert.notEqual(reviewSlug("gitlab.example", longA, 7), reviewSlug("gitlab.example", longB, 7));
+
+  const first = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(first.status, "ok", JSON.stringify(first));
+  const addProject = (remote, url) => {
+    fixture.git("remote", "add", remote, url);
+    fixture.git("config", "--add", `url.${fixture.origin}.insteadOf`, url);
+  };
+  addProject("slash", "https://gitlab.example/group/a-b.git");
+  const slash = await startReview({
+    url: "https://gitlab.example/group/a-b/-/merge_requests/7",
+    repoRoot: fixture.repo,
+  });
+  assert.equal(slash.status, "ok", JSON.stringify(slash));
+  addProject("dashed", "https://gitlab.example/group-a/b.git");
+  const dashed = await startReview({
+    url: "https://gitlab.example/group-a/b/-/merge_requests/7",
+    repoRoot: fixture.repo,
+  });
+  assert.equal(dashed.status, "ok", JSON.stringify(dashed));
+  addProject("long-a", `https://gitlab.example/${longA}.git`);
+  const longReviewA = await startReview({
+    url: `https://gitlab.example/${longA}/-/merge_requests/7`,
+    repoRoot: fixture.repo,
+  });
+  assert.equal(longReviewA.status, "ok", JSON.stringify(longReviewA));
+  addProject("long-b", `https://gitlab.example/${longB}.git`);
+  const longReviewB = await startReview({
+    url: `https://gitlab.example/${longB}/-/merge_requests/7`,
+    repoRoot: fixture.repo,
+  });
+  assert.equal(longReviewB.status, "ok", JSON.stringify(longReviewB));
+
+  const paths = [
+    first.review_worktree.path,
+    slash.review_worktree.path,
+    dashed.review_worktree.path,
+    longReviewA.review_worktree.path,
+    longReviewB.review_worktree.path,
+  ];
+  assert.equal(new Set(paths).size, 5);
+  for (const path of paths) {
+    assert.match(basename(path), /^mr-gitlab\.example-.*-[0-9a-f]{8}$/);
+    assert.ok(basename(path).length <= 96 + 1 + 8);
+  }
+  assert.equal(
+    basename(longReviewA.review_worktree.path).slice(0, -9),
+    basename(longReviewB.review_worktree.path).slice(0, -9),
+  );
+  assert.equal(registry().items.length, 5);
+});
+
+test("remote matching normalizes the project path case on both sides", async (t) => {
+  const fixture = reviewFixture(t);
+  fixture.git("remote", "set-url", "origin", "https://gitlab.example/Group/Project.git");
+  fixture.git(
+    "config",
+    "--add",
+    `url.${fixture.origin}.insteadOf`,
+    "https://gitlab.example/Group/Project.git",
+  );
+  const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  assert.equal(result.status, "ok", JSON.stringify(result));
+  assert.equal(result.review_worktree.remote, "origin");
+
+  const forkFixture = reviewFixture(t);
+  const forkOrigin = join(forkFixture.tmp, "fork.git");
+  execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch=main", forkOrigin]);
+  const forkClone = join(forkFixture.tmp, "fork-clone-case");
+  execFileSync("git", ["clone", "-q", forkFixture.origin, forkClone]);
+  const forkGit = (...args) =>
+    execFileSync("git", ["-C", forkClone, ...args], { encoding: "utf8" }).trim();
+  forkGit("config", "user.email", "author@example.invalid");
+  forkGit("config", "user.name", "Author");
+  forkGit("config", "commit.gpgsign", "false");
+  writeFileSync(join(forkClone, "review.txt"), "base\nreviewed change\nfork change\n");
+  forkGit("commit", "-qam", "fork change");
+  const forkHead = forkGit("rev-parse", "HEAD");
+  forkGit("push", "-q", forkOrigin, "HEAD:refs/heads/dev");
+  forkFixture.git("remote", "add", "contrib", "https://gitlab.example/Fork/Project.git");
+  forkFixture.git(
+    "config",
+    `url.${forkOrigin}.insteadOf`,
+    "https://gitlab.example/Fork/Project.git",
+  );
+  writeFileSync(
+    forkFixture.configPath,
+    JSON.stringify({
+      ...forkFixture.config,
+      headSha: forkHead,
+      sourceProjectId: 21,
+      sourceProjectPath: "Fork/Project",
+    }),
+  );
+  const forked = await startReview({ url: forkFixture.url, repoRoot: forkFixture.repo });
+  assert.equal(forked.status, "ok", JSON.stringify(forked));
+  assert.equal(forked.review_worktree.remote, "contrib");
+  assert.equal(forked.review_worktree.refs.head_sha, forkHead);
 });

@@ -10,6 +10,7 @@ import {
   writeFileSync,
   writeSync,
 } from "node:fs";
+import { createHash } from "node:crypto";
 import { join, dirname, resolve } from "node:path";
 import { WorkflowError, glabJson, isDict, nonemptyString } from "./contract.js";
 import { loadProgress } from "./context.js";
@@ -174,7 +175,9 @@ function remotesFor(root: string, host: string, projects: string[]): RemoteTarge
     }
     for (const url of urls.split("\n")) {
       const parsed = parseRemoteUrl(url);
-      if (parsed && parsed.host === host && wanted.includes(parsed.project)) {
+      // Both sides are normalized; the original project path stays on the
+      // target for display.
+      if (parsed && parsed.host === host && wanted.includes(parsed.project.toLowerCase())) {
         result.push({ name, host: parsed.host, project: parsed.project });
         break;
       }
@@ -277,8 +280,33 @@ function fetchTargetRevision(
   );
 }
 
+// The readable part can collide (group/a-b versus group-a/b) and the readable
+// form is truncated for long project paths, so the slug ends with a short hash
+// of the full host/project/IID identity. The suffix is appended after
+// truncation and is never cut.
 export function reviewSlug(host: string, project: string, iid: number): string {
+  const readable = `mr-${host}-${project}-iid${iid}`.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 96);
+  return `${readable}-${identitySuffix(host, project, iid)}`;
+}
+
+function identitySuffix(host: string, project: string, iid: number): string {
+  return createHash("sha256").update(`${host}\n${project}\n${iid}\n`).digest("hex").slice(0, 8);
+}
+
+// Directory layout used before the identity suffix was introduced. Managed
+// trees with such paths are never reused; preparation stops with a manual
+// migration instruction instead.
+function legacyReviewSlug(host: string, project: string, iid: number): string {
   return `mr-${host}-${project}-iid${iid}`.replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 120);
+}
+
+function sameIdentity(
+  item: ReviewWorktreeRecord,
+  host: string,
+  project: string,
+  iid: number,
+): boolean {
+  return item.host === host && item.project_path === project && item.iid === iid;
 }
 
 function reviewWorktreeBase(mainCheckout: string): string {
@@ -308,12 +336,20 @@ export function loadReviewRegistry(): WorktreeRegistry {
   return value as WorktreeRegistry;
 }
 
-function saveReviewRegistry(registry: WorktreeRegistry): void {
+export function saveReviewRegistry(registry: WorktreeRegistry): void {
   const path = registryPath();
   mkdirSync(dirname(path), { recursive: true });
   const temporary = `${path}.${process.pid}.tmp`;
   writeFileSync(temporary, `${JSON.stringify(registry, null, 2)}\n`, { mode: 0o600 });
   renameSync(temporary, path);
+}
+
+// The registry file is shared by all merge requests, so every read-modify-write
+// holds one short global lock. Fetches never run under it: they happen before
+// the lock is taken, so parallel preparations of different merge requests only
+// serialize the final record update.
+export function withReviewRegistryLock<T>(operation: () => T): T {
+  return withPreparationLock(dirname(registryPath()), "registry", operation);
 }
 
 function pathExists(path: string): boolean {
@@ -390,8 +426,11 @@ function liveAnalysis(
     else throw error;
   }
   if (progress !== null) {
-    if (progress.stage === "plan_ready") return null;
-    return progress.evidence_digest === marker.evidence_digest ? marker : null;
+    // Unfinished progress at the marker's artifact root means the tree is
+    // being analyzed even when the progress digest differs from the marker
+    // (a reused preparation restarted collection on the same root). Only a
+    // finalized plan or an explicit supersede root frees the tree.
+    return progress.stage === "plan_ready" ? null : marker;
   }
   const started = Date.parse(marker.started_at);
   return Number.isFinite(started) && Date.now() - started < ANALYSIS_GRACE_MS ? marker : null;
@@ -492,9 +531,36 @@ export function prepareReviewWorktree(options: {
   }));
   const headRemote = fetchRevision(main, headSha, "merge request head", headAttempts);
 
+  // Refuse retired layouts before any mutation: a managed tree of the old
+  // path scheme is never replaced, moved, or shadowed by a second directory.
+  const legacyPath = join(reviewWorktreeBase(main), legacyReviewSlug(host, projectPath, iid));
+  for (const record of loadReviewRegistry().items) {
+    if (!sameIdentity(record, host, projectPath, iid) || record.path === path) continue;
+    if (pathExists(record.path)) {
+      throw new WorkflowError(
+        `the review worktree for ${host}/${projectPath}!${iid} is registered under the ` +
+          `retired path layout at ${record.path}; migrate it manually: keep or finish the ` +
+          `active review there, check \`git -C ${record.path} status --porcelain\` for local ` +
+          `changes, then remove the tree with ` +
+          `\`git -C ${main} worktree remove ${record.path}\` (--force only after preserving ` +
+          `changes) and start the review again; it will create ${path}. The registry record ` +
+          `for the removed tree is replaced automatically`,
+      );
+    }
+  }
+  if (legacyPath !== path && pathExists(legacyPath)) {
+    throw new WorkflowError(
+      `a review worktree of the retired path layout exists at ${legacyPath}; it may belong ` +
+        `to ${host}/${projectPath}!${iid} or to a merge request whose readable path collides ` +
+        `with it, and it is not managed by the registry. Inspect it and remove it manually ` +
+        `with \`git -C ${main} worktree remove ${legacyPath}\` only after preserving any ` +
+        `active review and local changes; the next preparation creates ${path}`,
+    );
+  }
+
   return withPreparationLock(reviewWorktreeBase(main), slug, () => {
-    const registry = loadReviewRegistry();
-    const existing = registry.items.find((item) => item.path === path) ?? null;
+    const known = loadReviewRegistry();
+    const existing = known.items.find((item) => sameIdentity(item, host, projectPath, iid)) ?? null;
     let targetSha: string;
     let remote: string;
     if (existing !== null && hasCommit(main, existing.target_sha)) {
@@ -581,19 +647,45 @@ export function prepareReviewWorktree(options: {
       target_ref: targetBranch,
       target_sha: targetSha,
       remote,
-      analysis: {
-        head_sha: headSha,
-        evidence_digest: options.evidenceDigest,
-        artifact_root: artifactRoot,
-        pid: process.pid,
-        started_at: now,
-      },
+      analysis:
+        // A live analysis keeps its marker: a preparation that has not run
+        // beginReview yet must not claim the tree away from the running review.
+        active !== null
+          ? active
+          : {
+              head_sha: headSha,
+              evidence_digest: options.evidenceDigest,
+              artifact_root: artifactRoot,
+              pid: process.pid,
+              started_at: now,
+            },
       created_at: existing?.created_at ?? now,
       updated_at: now,
     };
-    saveReviewRegistry({
-      schema: REGISTRY_SCHEMA,
-      items: [...registry.items.filter((item) => item.path !== path), record],
+    // Re-read and merge under the shared registry lock so parallel
+    // preparations of different merge requests cannot lose each other's
+    // records. No fetch happens inside this lock.
+    withReviewRegistryLock(() => {
+      const registry = loadReviewRegistry();
+      const sameIdentityRecord = registry.items.find((item) =>
+        sameIdentity(item, host, projectPath, iid),
+      );
+      if (sameIdentityRecord !== undefined && sameIdentityRecord.path !== path) {
+        if (pathExists(sameIdentityRecord.path)) {
+          throw new WorkflowError(
+            `the review worktree for ${host}/${projectPath}!${iid} is registered under the ` +
+              `retired path layout at ${sameIdentityRecord.path}; migrate it manually as ` +
+              `reported before the worktree was prepared`,
+          );
+        }
+      }
+      saveReviewRegistry({
+        schema: REGISTRY_SCHEMA,
+        items: [
+          ...registry.items.filter((item) => !sameIdentity(item, host, projectPath, iid)),
+          record,
+        ],
+      });
     });
     return {
       path,
