@@ -33,7 +33,7 @@
 
 **После (en):**
 
-> The heavy beat adds to the aggressive tone.
+> The beat rides under the vocals and adds to the aggression and atmosphere.
 
 **До (ru):**
 
@@ -139,7 +139,8 @@
 
 **После (en):**
 
-> Session tokens are rotated every 24 hours, in place, and clients refresh
+> Session tokens are rotated every 24 hours. Restarting the auth service would
+> drop every active session, so rotation happens in place and clients refresh
 > transparently.
 
 **До (ru):**
@@ -150,8 +151,9 @@
 
 **После (ru):**
 
-> Токены сессии меняются каждые 24 часа прямо на месте, и клиенты обновляют
-> токен прозрачно.
+> Токены сессии меняются каждые 24 часа. Перезапуск auth-сервиса сбросил бы
+> все активные сессии, поэтому ротация происходит на месте, и клиенты
+> обновляют токен прозрачно.
 
 ## B. Ритм по правилу
 
@@ -448,8 +450,9 @@
 
 **После (en):**
 
-> It blends OKRs, KPIs, and visual strategy tools like the Business Model
-> Canvas.
+> It blends OKRs (Objectives and Key Results), KPIs (Key Performance
+> Indicators), and visual strategy tools such as the Business Model Canvas
+> (BMC).
 
 **До (ru):**
 
@@ -459,8 +462,8 @@
 
 **После (ru):**
 
-> Подход сочетает OKR, KPI и визуальные инструменты стратегии, такие как
-> Business Model Canvas.
+> Подход сочетает OKR (цели и ключевые результаты), KPI (ключевые показатели)
+> и визуальные инструменты стратегии, такие как Business Model Canvas.
 
 ### 20. Декоративные заголовки (слабо в одиночку)
 

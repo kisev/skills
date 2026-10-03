@@ -4,7 +4,7 @@
     "max_tokens": 4000,
     "timeout_seconds": 30
   },
-  "digest": "137d3e46db3539eb4b982b3b407ee74d6ee640508a24cc5ed20252b3ae407bf5",
+  "digest": "7daa3f8167e97ba1c2061d9ea781f626167228d346cae47bdb9177ecc7c0333d",
   "expected": {
     "case_outcomes": [
       {
@@ -17,6 +17,10 @@
       },
       {
         "id": "protected-tokens",
+        "outcome": true
+      },
+      {
+        "id": "quote-keeps-marks",
         "outcome": true
       },
       {
@@ -37,28 +41,62 @@
         {
           "expect": "The template is removed without new facts; `deploy --env=prod` and \"deployment OK\" stay byte-identical; the cold-node caveat is kept.",
           "id": "protected-tokens",
-          "text": "We didn't just speed up search \u2014 we rewrote the whole pipeline! Run `deploy --env=prod` and wait for the line \"deployment OK\". That said, individual failures are still possible on cold nodes."
+          "text": "We didn't just speed up search \u2014 we rewrote the whole pipeline! Run `deploy --env=prod` and wait for the line \"deployment OK\". That said, individual failures are still possible on cold nodes.",
+          "verify": {
+            "avoid": ["10x", "lightning-fast"],
+            "claims": [
+              "search",
+              "the whole pipeline",
+              "individual failures are still possible on cold nodes"
+            ],
+            "protected": ["`deploy --env=prod`", "\"deployment OK\""]
+          }
         },
         {
           "expect": "The sample voice is matched (short, straight to the point), but the dash from the sample is not carried into the result; the speedup claim is kept.",
           "id": "sample-conflict",
           "sample": "Short and direct: no warm-up \u2014 straight to the point.",
-          "text": "Please allow me to present the results of this performance iteration: search now responds noticeably faster."
+          "text": "Please allow me to present the results of this performance iteration: search now responds noticeably faster.",
+          "verify": {
+            "avoid": ["allow me", "performance iteration"],
+            "claims": ["search", "noticeably faster"],
+            "protected": []
+          }
         },
         {
           "expect": "The approximate-date hedge and the missing-documentation caveat are kept; no confident date, reaction, or promise is added.",
           "id": "caveat-preserved",
-          "text": "According to the available sources, the function appeared around 2019. The exact founding date is not documented."
+          "text": "According to the available sources, the function appeared around 2019. The exact founding date is not documented.",
+          "verify": {
+            "avoid": ["appeared in 2019", "definitely"],
+            "claims": ["around 2019", "is not documented"],
+            "protected": []
+          }
         },
         {
           "expect": "The text stays essentially unchanged: a single stock word without a meaning obstruction does not justify an edit.",
           "id": "isolated-weak-tell",
-          "text": "Additionally, the report is attached to the email. The meeting moved to 14:00."
+          "text": "Additionally, the report is attached to the email. The meeting moved to 14:00.",
+          "verify": {
+            "avoid": [],
+            "claims": ["report is attached to the email", "moved to 14:00"],
+            "protected": []
+          }
+        },
+        {
+          "expect": "The hype is removed and no new facts are added; the exact quotation stays byte-identical with its dash inside the quotation marks; the prose around it introduces no forbidden characters.",
+          "id": "quote-keeps-marks",
+          "text": "I am truly excited to share that we crushed it! The status page stated: \"We restored service \u2014 data was never lost.\"",
+          "verify": {
+            "avoid": ["crushed it", "guarantee this will never happen again"],
+            "claims": ["We restored service", "data was never lost"],
+            "protected": ["\"We restored service \u2014 data was never lost.\""]
+          }
         }
       ],
       "selected": ["skill:humanize"]
     },
-    "prompt": "Apply the humanize skill to the text of every case below; when a case has a sample, that sample is the author's voice. Edit each case text and verify the result: 1) protected bytes are byte-identical (commands, paths, IDs, exact quotations); 2) every supported claim and caveat is kept; 3) the new prose contains none of U+2013, U+2014, U+00AB, U+00BB, U+201C, U+201D outside protected fragments; 4) no facts, reactions, or promises are added. For every case follow its expect field. Return case_outcomes with one {id, outcome} entry per case: outcome true only when the conditions hold, otherwise false. Perform no writes."
+    "prompt": "Apply the humanize skill to the text of every case below; when a case has a sample, that sample is the author's voice. Edit each case text and verify the result: 1) protected bytes are byte-identical (commands, paths, IDs, exact quotations); 2) every supported claim and caveat is kept; 3) the new prose contains none of U+2013, U+2014, U+00AB, U+00BB, U+201C, U+201D outside protected fragments; 4) no facts, reactions, or promises are added. For every case follow its expect field. Return case_outcomes with one {id, outcome} entry per case; the outcome must be an object whose rewrite field carries the complete edited text of that case and whose notes field describes the changes; never reduce the outcome to a boolean self-assessment. Perform no writes."
   },
   "invariants": [
     {
@@ -80,12 +118,17 @@
       "contains": "as weak alone: 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25",
       "id": "humanize-weak-alone-set",
       "path": "skills/humanize/references/workflow.md"
+    },
+    {
+      "contains": "rewrite_case_assertions",
+      "id": "eval-rewrite-verification",
+      "path": "scripts/eval_runner.py"
     }
   ],
   "kind": "golden",
   "locale": "en",
   "pair_id": "skill.humanize.edit-contract",
-  "revision": 1,
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,

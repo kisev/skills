@@ -542,6 +542,112 @@ def test_live_case_outcomes_reject_missing_extra_and_incorrect_results(tmp_path:
         assert len(evaluated["case_outcomes"]) == expected_count + expected_delta
 
 
+# The rewrites a fake host returns for the humanize edit-contract fixture. The
+# "good" set passes every mechanical check, including a forbidden dash that
+# survives only inside the preserved exact quotation of `quote-keeps-marks`.
+HUMANIZE_REWRITES = {
+    "caveat-preserved": (
+        "According to the available sources, the function appeared around 2019. "
+        "The exact founding date is not documented."
+    ),
+    "isolated-weak-tell": (
+        "Additionally, the report is attached to the email. The meeting moved to 14:00."
+    ),
+    "protected-tokens": (
+        "We sped up search by rewriting the whole pipeline. Run `deploy --env=prod` "
+        'and wait for the line "deployment OK". That said, individual failures '
+        "are still possible on cold nodes."
+    ),
+    "quote-keeps-marks": (
+        'The status page stated: "We restored service \u2014 data was never lost."'
+    ),
+    "sample-conflict": "Search now responds noticeably faster.",
+}
+
+
+def rewrite_host(directory: Path, name: str, outcomes: list[dict[str, Any]]) -> Path:
+    """A fake host that reports the given case_outcomes for rewrite scenarios."""
+    payload_file = directory / f"outcomes-{name}.json"
+    payload_file.write_text(json.dumps(outcomes), encoding="utf-8")
+    executable = directory / f"fake-rewrites-{name}"
+    executable.write_text(
+        textwrap.dedent(
+            f"""\
+            #!{sys.executable}
+            import json
+            import sys
+            from pathlib import Path
+            outcomes = json.loads((Path(__file__).parent / "{payload_file.name}").read_text())
+            print(json.dumps({{"selected": ["skill:humanize"], "case_outcomes": outcomes, "usage": {{"total_tokens": 12, "cost": 0.1}}}}))
+            """
+        ),
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    return executable
+
+
+def rewrite_outcomes(mode: str) -> list[dict[str, Any]]:
+    rewrites = dict(HUMANIZE_REWRITES)
+    if mode == "protected-broken":
+        rewrites["protected-tokens"] = rewrites["protected-tokens"].replace(
+            "deploy --env=prod", "deploy --env=production"
+        )
+    if mode == "punctuation-broken":
+        rewrites["quote-keeps-marks"] += " Confirmed \u2014 done."
+    if mode == "claim-lost":
+        rewrites["caveat-preserved"] = (
+            "According to the available sources, the function appeared around 2019."
+        )
+    if mode == "missing":
+        return [
+            {"id": identifier, "outcome": {"passed": True, "notes": "all conditions hold"}}
+            for identifier in sorted(rewrites)
+        ]
+    return [
+        {"id": identifier, "outcome": {"rewrite": rewrites[identifier], "notes": "edited"}}
+        for identifier in sorted(rewrites)
+    ]
+
+
+def test_humanize_edit_contract_rejects_defective_rewrites(tmp_path: Path) -> None:
+    expectations = {
+        "good": ("passed", set()),
+        "missing": ("failed", {"rewrite:caveat-preserved:present", "case:caveat-preserved"}),
+        "protected-broken": ("failed", {"rewrite:protected-tokens:protected"}),
+        "punctuation-broken": ("failed", {"rewrite:quote-keeps-marks:punctuation"}),
+        "claim-lost": ("failed", {"rewrite:caveat-preserved:claims"}),
+    }
+    for mode, (expected_status, failing) in expectations.items():
+        result = run_eval(
+            *live_arguments(
+                "opencode",
+                rewrite_host(tmp_path, mode, rewrite_outcomes(mode)),
+                tmp_path / f"{mode}.json",
+                scenario="skill.humanize.edit-contract.en",
+            )
+        )
+        evaluated = payload(result)["results"][0]
+        assert evaluated["observation_mode"] == "trusted-live", mode
+        assert evaluated["status"] == expected_status, (mode, evaluated["assertions"])
+        assertions = {item["id"]: item["status"] for item in evaluated["assertions"]}
+        for identifier in failing:
+            assert assertions.get(identifier) == "failed", (mode, identifier)
+        if mode == "good":
+            # The dash survives only inside the preserved exact quotation, and
+            # the aggregate case result follows the mechanical checks alone.
+            assert assertions["rewrite:quote-keeps-marks:protected"] == "passed"
+            assert assertions["rewrite:quote-keeps-marks:punctuation"] == "passed"
+            assert assertions["case:quote-keeps-marks"] == "passed"
+        else:
+            # A self-reported success never rescues a defective rewrite: the
+            # overall result fails through the mechanical assertions alone.
+            assert any(
+                identifier.startswith(("rewrite:", "case:")) and status == "failed"
+                for identifier, status in assertions.items()
+            )
+
+
 def test_live_rejects_malformed_case_result(tmp_path: Path) -> None:
     result = run_eval(
         *live_arguments(

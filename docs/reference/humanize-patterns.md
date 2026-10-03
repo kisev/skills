@@ -31,7 +31,7 @@ punctuation and no-invention rules apply regardless of this classification.
 
 **After (en):**
 
-> The heavy beat adds to the aggressive tone.
+> The beat rides under the vocals and adds to the aggression and atmosphere.
 
 **Before (ru):**
 
@@ -141,7 +141,8 @@ punctuation and no-invention rules apply regardless of this classification.
 
 **After (en):**
 
-> Session tokens are rotated every 24 hours, in place, and clients refresh
+> Session tokens are rotated every 24 hours. Restarting the auth service would
+> drop every active session, so rotation happens in place and clients refresh
 > transparently.
 
 **Before (ru):**
@@ -451,8 +452,9 @@ forbidden.
 
 **After (en):**
 
-> It blends OKRs, KPIs, and visual strategy tools like the Business Model
-> Canvas.
+> It blends OKRs (Objectives and Key Results), KPIs (Key Performance
+> Indicators), and visual strategy tools such as the Business Model Canvas
+> (BMC).
 
 **Before (ru):**
 

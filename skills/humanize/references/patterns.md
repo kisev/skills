@@ -38,7 +38,7 @@ a belief the reader actually holds or both halves carry information.
 
 **After:**
 
-> The heavy beat adds to the aggressive tone.
+> The beat rides under the vocals and adds to the aggression and atmosphere.
 
 ### 2. One-line closers and dramatic fragments
 
@@ -115,7 +115,8 @@ attributes or answers in full.
 
 **After:**
 
-> Session tokens are rotated every 24 hours, in place, and clients refresh
+> Session tokens are rotated every 24 hours. Restarting the auth service would
+> drop every active session, so rotation happens in place and clients refresh
 > transparently.
 
 ## B. Rhythm by rule
@@ -359,8 +360,9 @@ labels carry no information of their own.
 
 **After:**
 
-> It blends OKRs, KPIs, and visual strategy tools like the Business Model
-> Canvas.
+> It blends OKRs (Objectives and Key Results), KPIs (Key Performance
+> Indicators), and visual strategy tools such as the Business Model Canvas
+> (BMC).
 
 ### 20. Decorative headings (weak alone)
 
@@ -395,7 +397,10 @@ applies to edited prose regardless of clustering.
 
 ## E. Leftovers from the chat and the draft
 
-Remove these outright. Nothing here needs rewriting.
+Categories 22 and 23 are chat and draft residue: remove the wrapper outright
+and keep the content. Categories 24 and 25 are weak alone: a single sighting
+that does not obstruct the meaning is not enough for an edit, and the
+mandatory punctuation and no-invention rules still apply.
 
 ### 22. Chatbot residue
 

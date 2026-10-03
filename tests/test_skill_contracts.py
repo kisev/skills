@@ -822,6 +822,7 @@ def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
     edit_en = json.loads((scenarios / "skill.humanize.edit-contract.en.json").read_text())
     for scenario in (edit_ru, edit_en):
         assert scenario["kind"] == "golden"
+        assert scenario["revision"] == 2
         cases = scenario["input"]["fixture"]["cases"]
         expected_ids = {item["id"] for item in scenario["expected"]["case_outcomes"]}
         assert (
@@ -832,12 +833,27 @@ def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
                 "sample-conflict",
                 "caveat-preserved",
                 "isolated-weak-tell",
+                "quote-keeps-marks",
             }
         )
         for case in cases:
             assert case["text"] and case["expect"]
+            # Every case carries a machine-checkable rewrite contract, and the
+            # quote case keeps a forbidden mark inside a protected quotation.
+            verify = case["verify"]
+            assert set(verify) == {"protected", "claims", "avoid"}
+            assert all(
+                isinstance(entry, str) and entry for group in verify.values() for entry in group
+            )
+            assert any(verify.values())
+        quote = next(case for case in cases if case["id"] == "quote-keeps-marks")
+        assert any("\u2014" in item for item in quote["verify"]["protected"])
         assert all(item["outcome"] is True for item in scenario["expected"]["case_outcomes"])
-        assert "humanize" in scenario["input"]["prompt"].lower()
+        prompt = scenario["input"]["prompt"]
+        assert "humanize" in prompt.lower()
+        # The scenario consumes the returned rewrite itself; a boolean
+        # self-report alone is not an observed result.
+        assert "rewrite" in prompt
     # The bilingual cases must differ; the protected-token pair exercises an
     # exact quotation and a command in both languages.
     for key in ("text", "expect"):

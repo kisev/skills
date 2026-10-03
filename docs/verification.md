@@ -134,7 +134,13 @@ credentials.
 
 Scenarios with `expected.case_outcomes` require one observed result for every
 case. Missing, extra, malformed, or incorrect outcomes fail the evaluation.
-Read-only boundaries are checked from the project sandbox diff; `specs-only`
+Fixture cases that declare a `verify` contract, such as the `humanize`
+edit-contract pair, additionally require the returned `outcome` to carry the
+complete edited text: the harness checks that rewrite itself for byte-identical
+protected fragments, absence of forbidden punctuation outside preserved exact
+quotations, surviving declared claims, and absent declared inventions. A
+missing or defective rewrite fails those assertions even when the host reports
+success. Read-only boundaries are checked from the project sandbox diff; `specs-only`
 scenarios fail when a changed path is outside sandbox `specs/`. Live output is
 private run evidence and is not committed.
 
