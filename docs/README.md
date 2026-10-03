@@ -43,6 +43,9 @@ make that boundary explicit.
 - [Skill catalog](reference/skill-catalog.md) - active skills, requirements, team
   profiles, and external tool boundaries.
 
+- [humanize editing patterns](reference/humanize-patterns.md) - bilingual
+  before/after examples for all 26 editing categories of the `humanize` skill.
+
 - [Migration inventory](migration-inventory.md) - active and retired names,
   replacements, package surfaces, and ownership records.
 

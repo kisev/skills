@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "765aae932067c24089ebc79e777bc0af98a103dda2f86c2f2424d78ff65dfd0d",
+  "digest": "f99203d6f4c05d386b930c2743408a5333c4035993c9615073a521b7e374395c",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": ["skill:humanize"],
@@ -17,18 +17,23 @@
     "fixture": {
       "selected": []
     },
-    "prompt": "\u0420\u0443\u0441\u0441\u043a\u0438\u0439: \u044d\u0442\u043e \u043d\u0430\u043c\u0435\u0440\u0435\u043d\u043d\u043e \u043d\u0435 \u043e\u0442\u043d\u043e\u0441\u0438\u0442\u0441\u044f \u043a \u043d\u0430\u0432\u044b\u043a\u0443 humanize; \u043d\u0435 \u043d\u0430\u043f\u0440\u0430\u0432\u043b\u044f\u0439 \u0437\u0430\u043f\u0440\u043e\u0441 \u0432 \u044d\u0442\u043e\u0442 \u043d\u0430\u0432\u044b\u043a."
+    "prompt": "\u041e\u0442\u0440\u0435\u0444\u0430\u043a\u0442\u043e\u0440\u0438 \u0444\u0443\u043d\u043a\u0446\u0438\u044e format_price \u0432 src/pricing.py \u0438 \u043e\u0431\u043d\u043e\u0432\u0438 \u0435\u0451 docstring."
   },
   "invariants": [
     {
       "id": "stage20.skill.humanize.near-miss.source",
       "path": ".build/skills/humanize/SKILL.md"
+    },
+    {
+      "contains": "never activates this skill by itself",
+      "id": "humanize-explicit-activation",
+      "path": "skills/humanize/SKILL.source.md"
     }
   ],
   "kind": "near-miss",
   "locale": "ru",
   "pair_id": "stage20.skill.humanize.near-miss",
-  "revision": 1,
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,

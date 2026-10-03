@@ -102,7 +102,9 @@ Prepare an archive only on a separate explicit request, after the diagnosis is
 recorded. Author the already anonymized content: identification of the skill
 (name, declared source, version or an explicit unknown), expected and actual
 behavior, a minimal example that reproduces the problem without private data,
-the known workaround, and recommendations. Never include conversation history,
+the known workaround, and recommendations. Apply `humanize` to the authored
+prose and keep the section names, technical identifiers, and redaction
+contract exact. Never include conversation history,
 raw session logs, project files, private diagnosis records, or the
 anonymization mapping, and keep the sections `## Identification`,
 `## Expected behavior`, `## Actual behavior`, `## Minimal example`,

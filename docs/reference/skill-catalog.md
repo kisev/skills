@@ -46,7 +46,7 @@ are not included.
 | `docs-prepare` | Prepare one evidence-based user document directly in the project. |
 | `docs-review` | Review user documentation for accuracy and usability. |
 | `goal` | Produce a read-only structured Markdown goal of at most 4000 characters. |
-| `humanize` | Edit technical prose into direct, natural language. |
+| `humanize` | On explicit request only, edit prose into direct, natural language while preserving meaning and voice. |
 | `mattermost` | Read bounded Mattermost conversations and prepare manual publications, including opt-in Issue/MR cards. |
 | `mattermost-triage` | Find Mattermost conversations that need attention and prepare durable manual response plans. |
 | `mr-prepare` | Prepare metadata and a local publication plan for a GitLab MR. |

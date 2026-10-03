@@ -11,6 +11,47 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evals" / "scenarios"
 SKILLS = json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["skills"]
 
+# Per-skill prompt overrides keep contract scenarios realistic where the generic
+# routing template would be misleading, together with the revision that marks
+# the content change. Keys are (skill, kind, locale) and (skill, kind).
+PROMPT_OVERRIDES: dict[tuple[str, str, str], str] = {
+    ("humanize", "trigger", "ru"): (
+        'Примени навык humanize к абзацу из заметки о релизе: "Мы не просто '
+        'ускорили поиск, а переписали его с нуля. Это настоящий прорыв!"'
+    ),
+    ("humanize", "trigger", "en"): (
+        "Apply the humanize skill to this release-note paragraph: \"We didn't "
+        "just speed up search, we rewrote it from scratch. This is a real "
+        'breakthrough!"'
+    ),
+    ("humanize", "near-miss", "ru"): (
+        "Отрефактори функцию format_price в src/pricing.py и обнови её docstring."
+    ),
+    ("humanize", "near-miss", "en"): (
+        "Refactor the format_price function in src/pricing.py and update its docstring."
+    ),
+}
+REVISION_OVERRIDES: dict[tuple[str, str], int] = {
+    ("humanize", "trigger"): 2,
+    ("humanize", "near-miss"): 2,
+}
+EXTRA_INVARIANTS: dict[tuple[str, str], list[dict[str, str]]] = {
+    ("humanize", "trigger"): [
+        {
+            "id": "humanize-explicit-activation",
+            "path": "skills/humanize/SKILL.source.md",
+            "contains": "only on an explicit invocation",
+        }
+    ],
+    ("humanize", "near-miss"): [
+        {
+            "id": "humanize-explicit-activation",
+            "path": "skills/humanize/SKILL.source.md",
+            "contains": "never activates this skill by itself",
+        }
+    ],
+}
+
 
 def digest(value: dict[str, object]) -> str:
     content = {key: item for key, item in value.items() if key != "digest"}
@@ -29,11 +70,13 @@ def scenario(
     surface: str,
     path: str,
     boundary: str,
+    revision: int = 1,
+    extra_invariants: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
     value: dict[str, object] = {
         "schema": "eval-scenario/v1",
         "id": identifier,
-        "revision": 1,
+        "revision": revision,
         "locale": locale,
         "pair_id": None if kind == "deterministic" else pair,
         "kind": kind,
@@ -46,7 +89,10 @@ def scenario(
             "structured_outcome": "contract-passed" if selected else "safe-escalation",
             "mutation_boundary": boundary,
         },
-        "invariants": [{"id": f"{pair or identifier}.source", "path": path}],
+        "invariants": [
+            {"id": f"{pair or identifier}.source", "path": path},
+            *(extra_invariants or []),
+        ],
         "sandbox": {"network": False, "user_config": False, "writes": "sandbox-only"},
         "budgets": {"timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1},
     }
@@ -68,12 +114,15 @@ def main() -> None:
             for locale, language in (("en", "English"), ("ru", "Russian")):
                 suffix = "" if locale == "ru" else ".en"
                 wording = "Select" if language == "English" else "Выбери"
-                prompt = (
-                    f"{wording} the {name} skill for its exact contract scenario."
-                    if locale == "en"
-                    else f"Выбери навык {name} для его точного контрактного сценария."
+                prompt = PROMPT_OVERRIDES.get(
+                    (name, kind, locale),
+                    (
+                        f"{wording} the {name} skill for its exact contract scenario."
+                        if locale == "en"
+                        else f"Выбери навык {name} для его точного контрактного сценария."
+                    ),
                 )
-                if kind == "near-miss":
+                if kind == "near-miss" and (name, kind, locale) not in PROMPT_OVERRIDES:
                     prompt = (
                         f"{language}: this is intentionally unrelated to {name}; do not route it to that skill."
                         if locale == "en"
@@ -91,6 +140,8 @@ def main() -> None:
                         "skill",
                         f".build/skills/{name}/SKILL.md",
                         "no-writes",
+                        revision=REVISION_OVERRIDES.get((name, kind), 1),
+                        extra_invariants=EXTRA_INVARIANTS.get((name, kind)),
                     )
                 )
 

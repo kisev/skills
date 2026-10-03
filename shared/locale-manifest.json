@@ -46,6 +46,10 @@
       "ru": "docs/ru/reference/skill-catalog.md"
     },
     {
+      "en": "docs/reference/humanize-patterns.md",
+      "ru": "docs/ru/reference/humanize-patterns.md"
+    },
+    {
       "en": "docs/architecture.md",
       "ru": "docs/ru/architecture.md"
     },

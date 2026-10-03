@@ -55,9 +55,10 @@ For the manager: per-person signal table, team aggregates, and the two or
 three signals that most need a decision, each with the journal dates that
 back it. For the team view: aggregates and team-level zones of attention
 only, no per-person rows, no names beside weak signals. Write artifacts with
-`artifact-write`; recommend the natural follow-up skill per zone (`team-1on1`
-for cadence gaps, `team-feedback` for balance, `team-agreements` for aged
-commitments) without running them.
+`artifact-write`; apply `humanize` to the drafted review prose while keeping
+every signal and its journal dates exact. Recommend the natural follow-up
+skill per zone (`team-1on1` for cadence gaps, `team-feedback` for balance,
+`team-agreements` for aged commitments) without running them.
 
 ## 6. Verify and Report
 

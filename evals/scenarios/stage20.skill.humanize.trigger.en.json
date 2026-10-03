@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "e15e10be0803f3492eb63dc59247c79dde7754fcea9bece264413cd231099fbc",
+  "digest": "76f187a94841cfe7232831e785c316bd6abb0eb97d61abc8c2244581689c0668",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -17,18 +17,23 @@
     "fixture": {
       "selected": ["skill:humanize"]
     },
-    "prompt": "Select the humanize skill for its exact contract scenario."
+    "prompt": "Apply the humanize skill to this release-note paragraph: \"We didn't just speed up search, we rewrote it from scratch. This is a real breakthrough!\""
   },
   "invariants": [
     {
       "id": "stage20.skill.humanize.trigger.source",
       "path": ".build/skills/humanize/SKILL.md"
+    },
+    {
+      "contains": "only on an explicit invocation",
+      "id": "humanize-explicit-activation",
+      "path": "skills/humanize/SKILL.source.md"
     }
   ],
   "kind": "trigger",
   "locale": "en",
   "pair_id": "stage20.skill.humanize.trigger",
-  "revision": 1,
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,

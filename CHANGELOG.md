@@ -10,6 +10,28 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- `humanize` now activates only on an explicit invocation: a direct user
+  request including the `/humanize` command, or an explicit text-preparation
+  step of another skill's workflow; drafting ordinary replies, statuses, or
+  explanations no longer loads it. The skill fixes a constraint priority
+  (meaning and protected fragments, then mandatory constraints, then voice
+  adaptation, so a writing sample guides the voice but never licenses
+  forbidden punctuation or template patterns), extends the prose punctuation
+  rule to U+2013, U+2014, U+00AB, U+00BB, U+201C, and U+201D with a matching
+  verification pattern, scopes the review-comment guidance to its genre, and
+  adds `references/patterns.md` mapping all 26 upstream categories with
+  bilingual before/after examples that add no unsupported facts. The catalog
+  and the workflow name the same twelve weak-alone categories, and the
+  mandatory punctuation bans apply regardless of that classification. All 21
+  dependent skills now invoke it at an explicit step on a concrete artifact,
+  while preliminary statuses, clarifying questions, and blocker reports are
+  written normally. The capability spec adds REQ-F-551, REQ-F-552, and
+  REQ-F-553, and the humanize eval scenarios were replaced with realistic
+  explicit-invocation, code-task near-miss, and chained-invocation pairs;
+  the chain names only the caller skill, and golden bilingual cases report
+  per-case outcomes for protected bytes, preserved claims, allowed
+  punctuation, and absence of invented reactions.
+
 - `skill-improve` is removed and replaced by the new `skill-doctor` skill:
   experience with real skill usage is now kept as private, incremental
   per-session diagnoses in XDG state instead of a static checker cycle, with

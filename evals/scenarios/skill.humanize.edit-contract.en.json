@@ -1,0 +1,96 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 4000,
+    "timeout_seconds": 30
+  },
+  "digest": "137d3e46db3539eb4b982b3b407ee74d6ee640508a24cc5ed20252b3ae407bf5",
+  "expected": {
+    "case_outcomes": [
+      {
+        "id": "caveat-preserved",
+        "outcome": true
+      },
+      {
+        "id": "isolated-weak-tell",
+        "outcome": true
+      },
+      {
+        "id": "protected-tokens",
+        "outcome": true
+      },
+      {
+        "id": "sample-conflict",
+        "outcome": true
+      }
+    ],
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:humanize"],
+    "structured_outcome": "edit-contract"
+  },
+  "host": "any",
+  "id": "skill.humanize.edit-contract.en",
+  "input": {
+    "fixture": {
+      "cases": [
+        {
+          "expect": "The template is removed without new facts; `deploy --env=prod` and \"deployment OK\" stay byte-identical; the cold-node caveat is kept.",
+          "id": "protected-tokens",
+          "text": "We didn't just speed up search \u2014 we rewrote the whole pipeline! Run `deploy --env=prod` and wait for the line \"deployment OK\". That said, individual failures are still possible on cold nodes."
+        },
+        {
+          "expect": "The sample voice is matched (short, straight to the point), but the dash from the sample is not carried into the result; the speedup claim is kept.",
+          "id": "sample-conflict",
+          "sample": "Short and direct: no warm-up \u2014 straight to the point.",
+          "text": "Please allow me to present the results of this performance iteration: search now responds noticeably faster."
+        },
+        {
+          "expect": "The approximate-date hedge and the missing-documentation caveat are kept; no confident date, reaction, or promise is added.",
+          "id": "caveat-preserved",
+          "text": "According to the available sources, the function appeared around 2019. The exact founding date is not documented."
+        },
+        {
+          "expect": "The text stays essentially unchanged: a single stock word without a meaning obstruction does not justify an edit.",
+          "id": "isolated-weak-tell",
+          "text": "Additionally, the report is attached to the email. The meeting moved to 14:00."
+        }
+      ],
+      "selected": ["skill:humanize"]
+    },
+    "prompt": "Apply the humanize skill to the text of every case below; when a case has a sample, that sample is the author's voice. Edit each case text and verify the result: 1) protected bytes are byte-identical (commands, paths, IDs, exact quotations); 2) every supported claim and caveat is kept; 3) the new prose contains none of U+2013, U+2014, U+00AB, U+00BB, U+201C, U+201D outside protected fragments; 4) no facts, reactions, or promises are added. For every case follow its expect field. Return case_outcomes with one {id, outcome} entry per case: outcome true only when the conditions hold, otherwise false. Perform no writes."
+  },
+  "invariants": [
+    {
+      "contains": "only on an explicit invocation",
+      "id": "humanize-explicit-activation",
+      "path": "skills/humanize/SKILL.source.md"
+    },
+    {
+      "contains": "Do not invent facts, names, numbers, dates, quotations, citations, opinions, reactions, or sources",
+      "id": "humanize-no-invention-rule",
+      "path": "skills/humanize/references/workflow.md"
+    },
+    {
+      "contains": "Do not introduce en dashes (U+2013), em dashes (U+2014)",
+      "id": "humanize-punctuation-rule",
+      "path": "skills/humanize/references/workflow.md"
+    },
+    {
+      "contains": "as weak alone: 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25",
+      "id": "humanize-weak-alone-set",
+      "path": "skills/humanize/references/workflow.md"
+    }
+  ],
+  "kind": "golden",
+  "locale": "en",
+  "pair_id": "skill.humanize.edit-contract",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

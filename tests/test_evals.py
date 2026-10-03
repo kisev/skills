@@ -414,6 +414,8 @@ def test_list_selectors_and_capability_detection_are_machine_readable() -> None:
         {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"},
         {"id": "question-guidelines.rounds.en", "kind": "golden", "surface": "skill"},
         {"id": "question-guidelines.rounds.ru", "kind": "golden", "surface": "skill"},
+        {"id": "skill.humanize.edit-contract.en", "kind": "golden", "surface": "skill"},
+        {"id": "skill.humanize.edit-contract", "kind": "golden", "surface": "skill"},
         {"id": "spec-manage.audit-behavior.en", "kind": "golden", "surface": "skill"},
         {"id": "spec-manage.audit-behavior.ru", "kind": "golden", "surface": "skill"},
         {
@@ -498,6 +500,7 @@ def test_live_redacts_evidence_and_rejects_sandbox_escape() -> None:
         "spec-manage.mode-selection.en",
         "question-guidelines.rounds.en",
         "question-guidelines.rounds.ru",
+        "skill.humanize.edit-contract.en",
     ],
 )
 def test_case_outcomes_require_trusted_live_observation(scenario: str) -> None:
