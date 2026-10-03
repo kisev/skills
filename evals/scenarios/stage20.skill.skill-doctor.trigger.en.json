@@ -4,30 +4,30 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "d188b50707994bda1bdfc0bb913bfd745d1e3c4a86bd5e7effb0dce0ae84b3c7",
+  "digest": "18bdf4a59d61107edafa5661a35b393feed1ce37bbeff17c2a939c94fd0f6bfc",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
-    "selected": ["skill:skill-improve"],
+    "selected": ["skill:skill-doctor"],
     "structured_outcome": "contract-passed"
   },
   "host": "any",
-  "id": "stage20.skill.skill-improve.trigger.en",
+  "id": "stage20.skill.skill-doctor.trigger.en",
   "input": {
     "fixture": {
-      "selected": ["skill:skill-improve"]
+      "selected": ["skill:skill-doctor"]
     },
-    "prompt": "Select the skill-improve skill for its exact contract scenario."
+    "prompt": "Select the skill-doctor skill for its exact contract scenario."
   },
   "invariants": [
     {
-      "id": "stage20.skill.skill-improve.trigger.source",
-      "path": ".build/skills/skill-improve/SKILL.md"
+      "id": "stage20.skill.skill-doctor.trigger.source",
+      "path": ".build/skills/skill-doctor/SKILL.md"
     }
   ],
   "kind": "trigger",
   "locale": "en",
-  "pair_id": "stage20.skill.skill-improve.trigger",
+  "pair_id": "stage20.skill.skill-doctor.trigger",
   "revision": 1,
   "sandbox": {
     "network": false,

@@ -600,7 +600,7 @@ def test_stage_16_core_workflow_boundaries_are_observable() -> None:
     docs_review = (ROOT / "skills/docs-review/references/workflow.md").read_text(encoding="utf-8")
     goal = (ROOT / "skills/goal/references/workflow.md").read_text(encoding="utf-8")
     humanize = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
-    improve = (ROOT / "skills/skill-improve/references/workflow.md").read_text(encoding="utf-8")
+    doctor = (ROOT / "skills/skill-doctor/references/workflow.md").read_text(encoding="utf-8")
     assert "Create the root file when no applicable file exists" in agents
     assert "repeat a question answered" in askme
     assert "commitlint/configuration" in commit_msg
@@ -612,4 +612,6 @@ def test_stage_16_core_workflow_boundaries_are_observable() -> None:
     assert "Do not invent facts" in humanize
     assert "strong-versus-weak safeguard" in humanize
     assert "punctuation rules below" in humanize
-    assert "absence of real" in improve
+    assert "Run only on an explicit user request" in doctor
+    assert "suspected causes stay" in doctor
+    assert "keep them only in private" in doctor

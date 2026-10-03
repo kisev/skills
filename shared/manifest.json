@@ -238,7 +238,7 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "skill-improve/references/language-policy.md"
+      "destination": "skill-doctor/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -642,7 +642,7 @@
     },
     {
       "source": "references/python_runtime/__init__.py",
-      "destination": "skill-improve/scripts/portable_runtime/__init__.py"
+      "destination": "skill-doctor/scripts/portable_runtime/__init__.py"
     },
     {
       "source": "references/python_runtime/capabilities.py",
@@ -658,7 +658,7 @@
     },
     {
       "source": "references/python_runtime/capabilities.py",
-      "destination": "skill-improve/scripts/portable_runtime/capabilities.py"
+      "destination": "skill-doctor/scripts/portable_runtime/capabilities.py"
     },
     {
       "source": "references/python_runtime/contract.py",
@@ -674,7 +674,7 @@
     },
     {
       "source": "references/python_runtime/contract.py",
-      "destination": "skill-improve/scripts/portable_runtime/contract.py"
+      "destination": "skill-doctor/scripts/portable_runtime/contract.py"
     },
     {
       "source": "references/question-guidelines.md",
@@ -746,7 +746,7 @@
     },
     {
       "source": "references/question-guidelines.md",
-      "destination": "skill-improve/references/question-guidelines.md"
+      "destination": "skill-doctor/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
@@ -847,6 +847,10 @@
     {
       "source": "references/state_artifacts.py",
       "destination": "release-review/scripts/portable_runtime/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
+      "destination": "skill-doctor/scripts/state_artifacts.py"
     },
     {
       "source": "references/state_artifacts.py",

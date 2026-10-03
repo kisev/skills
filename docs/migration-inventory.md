@@ -17,7 +17,7 @@ There are exactly 38 active portable skills:
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
 `docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
 `mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
-`skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
+`skill-doctor`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
 `task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
 `team-agreements`, `team-feedback`, `team-health`, `team-incident`,
 `team-onboarding`, `team-people`, `team-performance`, `team-report`,
@@ -30,7 +30,7 @@ byte-for-byte.
 
 ## Portable Cleanup Records
 
-The current migration inventory names exactly these eleven retired portable skills. It
+The current migration inventory names exactly these twelve retired portable skills. It
 does not contain a portable `multi-run` record.
 
 | Retired name | Current replacement |
@@ -43,6 +43,7 @@ does not contain a portable `multi-run` record.
 | `lsp-report` | None |
 | `project-spec` | `spec-manage` |
 | `skill-improver` | `skill-improve` |
+| `skill-improve` | `skill-doctor` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 | `summary` | `briefing` |

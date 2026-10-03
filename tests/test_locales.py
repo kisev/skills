@@ -172,7 +172,7 @@ def test_portable_cleanup_docs_cover_every_retired_skill_name() -> None:
         *inventory["renamed"],
         *inventory["replacements"],
     }
-    assert len(retired) == 11
+    assert len(retired) == 12
 
     for relative in (
         "docs/migration-inventory.md",

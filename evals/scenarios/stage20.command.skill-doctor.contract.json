@@ -4,24 +4,24 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "a2c769b501fd95ca7126d13a605f3fb4b7ea7173ef0234762504e9eea2922db6",
+  "digest": "28aa05ee177e140ebc8a30e63bef64bc44e5b579901f7edcb5e92c4254e4f9fe",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
-    "selected": ["command:skill-improve"],
+    "selected": ["command:skill-doctor"],
     "structured_outcome": "contract-passed"
   },
   "host": "any",
-  "id": "stage20.command.skill-improve.contract",
+  "id": "stage20.command.skill-doctor.contract",
   "input": {
     "fixture": {
-      "selected": ["command:skill-improve"]
+      "selected": ["command:skill-doctor"]
     },
-    "prompt": "Verify command skill-improve contract."
+    "prompt": "Verify command skill-doctor contract."
   },
   "invariants": [
     {
-      "id": "stage20.command.skill-improve.contract.source",
+      "id": "stage20.command.skill-doctor.contract.source",
       "path": "packages/agentomatic/src/registry.ts"
     }
   ],

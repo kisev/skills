@@ -34,6 +34,7 @@ SCHEMA_PATHS = {
     "shared/references/team_runtime/team-context.schema.json",
     "shared/references/people_runtime/people-context.schema.json",
     "shared/references/work-item-contract.schema.json",
+    "skills/skill-doctor/references/diagnosis.schema.json",
     "skills/taskmatic/references/snapshot.schema.json",
 }
 DIGEST = "a" * 64
@@ -418,6 +419,82 @@ def taskmatic_snapshot_instance() -> dict[str, Any]:
     return cast("dict[str, Any]", load("skills/taskmatic/references/snapshot.example.json"))
 
 
+def skill_doctor_diagnosis_instance() -> dict[str, Any]:
+    return {
+        "schema": "agent-skills/skill-doctor/diagnosis/v1",
+        "session": {
+            "id": "ses_example0001",
+            "host": "opencode",
+            "workspace": "/home/example/workspace",
+            "title": "Investigate a failing skill",
+        },
+        "recorded_at": "2026-10-03T10:00:00Z",
+        "coverage": {
+            "complete": False,
+            "notes": ["2 of 40 parts could not be parsed"],
+            "parts_scanned": 40,
+            "parts_skipped": 2,
+            "truncated": False,
+        },
+        "skills": [
+            {
+                "name": "stopit",
+                "origin": {
+                    "kind": "declared",
+                    "source": "https://kisev.github.io/skills",
+                    "root": None,
+                },
+            }
+        ],
+        "evidence": [
+            {
+                "id": "ev-001",
+                "kind": "skill-error",
+                "excerpt": "error: failed to atomically write the handoff",
+                "time": 100,
+            },
+            {
+                "id": "ev-002",
+                "kind": "user-intervention",
+                "excerpt": "the same error happens again after a retry",
+                "time": 200,
+            },
+        ],
+        "observations": [
+            {
+                "id": "obs-001",
+                "classification": "skill-defect",
+                "skill": "stopit",
+                "status": "suspected",
+                "summary": "The runner reports a write failure and the user repeats the request.",
+                "evidence": ["ev-001", "ev-002"],
+                "fingerprints": ["atomic_write", "handoff_path"],
+                "proposal": "Check the error path of the atomic write helper.",
+                "workaround": None,
+            },
+            {
+                "id": "obs-002",
+                "classification": "environment",
+                "skill": None,
+                "status": "confirmed",
+                "summary": "The state directory was read-only during the first attempt.",
+                "evidence": ["ev-001"],
+                "fingerprints": [],
+                "proposal": "Document the permission requirement.",
+                "workaround": "Fix the directory mode before rerunning.",
+            },
+        ],
+        "conclusions": ["The suspected defect stays unconfirmed until reproduced."],
+        "open_questions": ["Does the failure persist with a writable state root?"],
+    }
+
+
+def validate_skill_doctor_contract_instances() -> None:
+    validator("skills/skill-doctor/references/diagnosis.schema.json").validate(
+        skill_doctor_diagnosis_instance()
+    )
+
+
 def validate_taskmatic_contract_instances() -> None:
     taskmatic_validator = validator("skills/taskmatic/references/snapshot.schema.json")
     instance = taskmatic_snapshot_instance()
@@ -449,6 +526,7 @@ def test_every_committed_json_schema_has_a_concrete_contract() -> None:
     validate_eval_contract_instances()
     validate_shared_contract_instances()
     validate_opencode_contract_instances()
+    validate_skill_doctor_contract_instances()
     validate_taskmatic_contract_instances()
     validate_schema_runtime_rejections()
 

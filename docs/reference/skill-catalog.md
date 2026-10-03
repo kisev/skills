@@ -53,7 +53,7 @@ are not included.
 | `release-prepare` | Prepare a release MR, inventory, announcement, and publication plan. |
 | `release-review` | Review a release MR for completeness and compatibility. |
 | `rtk` | Use RTK selectively to compress verbose command output. |
-| `skill-improve` | Check and improve one Agent Skill through an iterative loop. |
+| `skill-doctor` | Diagnose current-session skill usage into private incremental notes and prepare confirmed public bug reports. |
 | `slides-prompts-prepare` | Combine a chosen presentation theme with factual team and technology references. |
 | `spec-manage` | Create greenfield specs, describe an existing project, change canonical target state, or audit specs read-only; mode tokens are optional. |
 | `stopit` | Write a sanitized handoff for the next session. |

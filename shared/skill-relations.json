@@ -348,6 +348,12 @@
       "to": "humanize",
       "type": "uses",
       "reason": "applied to the team-view artifact prose"
+    },
+    {
+      "from": "skill-doctor",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to diagnosis and bug-report prose"
     }
   ]
 }

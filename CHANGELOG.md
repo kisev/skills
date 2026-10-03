@@ -10,6 +10,16 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- `skill-improve` is removed and replaced by the new `skill-doctor` skill:
+  experience with real skill usage is now kept as private, incremental
+  per-session diagnoses in XDG state instead of a static checker cycle, with
+  source matching for development use and a preview-confirmed anonymized
+  bug-report archive on a separate request. Catalogs, capability specs
+  (`skill-improve` records are withdrawn, `skill-doctor` adds REQ-F-549 and
+  REQ-F-550, and the command adapter is REQ-I-422), eval surfaces, the
+  migration inventory (`skill-improve` now maps to `skill-doctor`), and
+  documentation are updated.
+
 - Agentomatic now supports only OpenCode `2.0.x`: V1 dependencies, entrypoints,
   adapters, and checks are removed. V1 users can retain the pre-V2 stable release.
   Config setup writes native `plugins`, ordered `permissions`, and global

@@ -33,7 +33,7 @@ const SKILL_NAMES = [
   "release-prepare",
   "release-review",
   "rtk",
-  "skill-improve",
+  "skill-doctor",
   "slides-prompts-prepare",
   "spec-manage",
   "stopit",

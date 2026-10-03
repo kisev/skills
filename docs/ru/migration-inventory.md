@@ -16,7 +16,7 @@ GitHub Release. Необязательный пакет интеграции - `
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
 `docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
 `mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
-`skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
+`skill-doctor`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
 `task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
 `team-agreements`, `team-feedback`, `team-health`, `team-incident`,
 `team-onboarding`, `team-people`, `team-performance`, `team-report`,
@@ -28,7 +28,7 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Сведения об очистке переносимых навыков
 
-Текущий инвентарь миграции содержит ровно эти одиннадцать устаревших имён переносимых
+Текущий инвентарь миграции содержит ровно эти двенадцать устаревших имён переносимых
 навыков. Имени `multi-run` в нём нет.
 
 | Устаревшее имя | Текущая замена |
@@ -41,6 +41,7 @@ GitHub Release. Необязательный пакет интеграции - `
 | `lsp-report` | Нет |
 | `project-spec` | `spec-manage` |
 | `skill-improver` | `skill-improve` |
+| `skill-improve` | `skill-doctor` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 | `summary` | `briefing` |

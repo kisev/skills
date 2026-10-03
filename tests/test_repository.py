@@ -5,7 +5,6 @@ import json
 import os
 import re
 import shutil
-import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -34,7 +33,7 @@ PORTABLE_SKILLS = (
     "release-prepare",
     "release-review",
     "rtk",
-    "skill-improve",
+    "skill-doctor",
     "slides-prompts-prepare",
     "spec-manage",
     "stopit",
@@ -180,14 +179,15 @@ WORKFLOW_CONTRACTS = {
         "--dry-run",
         "must not trigger installation",
     ),
-    "skill-improve": (
-        "exactly one existing directory",
-        "<skill-improvement-complete>",
-        "not commands, plugins, agents, or tools",
-        "strictly read-only",
-        "evidence, not decisions",
-        "never copy them into persisted files",
-        "must not block the static check cycle",
+    "skill-doctor": (
+        "run only on an explicit user request",
+        "never substitute another session",
+        "suspected causes stay labeled as hypotheses",
+        "different sessions never overwrite each other",
+        "evidence is append-only",
+        "a matching skill name alone is insufficient",
+        "doctor does not modify skill sources",
+        "transfer of a finished archive is manual",
     ),
     "rtk": (
         "external cli and is not installed by this skill",
@@ -199,7 +199,7 @@ CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 RUNNERS = {
     "ast-grep": "scripts/ast_grep.py",
     "rtk": "scripts/rtk.py",
-    "skill-improve": "scripts/skill_improver.py",
+    "skill-doctor": "scripts/skill_doctor.py",
     "code-explain": "scripts/walkthrough.py",
     "task-triage": "scripts/triage_task.py",
     "task-review": "scripts/review_task.py",
@@ -432,7 +432,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             if entry["source"].startswith("references/python_runtime/")
         ]
         destinations = {entry["destination"] for entry in runtime_entries}
-        for name in ("ast-grep", "rtk", "skill-improve", "code-explain"):
+        for name in ("ast-grep", "rtk", "skill-doctor", "code-explain"):
             with self.subTest(skill=name):
                 self.assertIn(f"{name}/scripts/portable_runtime/capabilities.py", destinations)
                 self.assertIn(f"{name}/scripts/portable_runtime/contract.py", destinations)
@@ -908,212 +908,6 @@ class PortableRunnerTests(unittest.TestCase):
                 module.atomic_replace([(first, b"first after"), (second, b"second after")])
             self.assertEqual(first.read_text(encoding="utf-8"), "first before")
             self.assertEqual(second.read_text(encoding="utf-8"), "second before")
-
-    def test_skill_improver_checks_agent_skills_without_host_rules(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            target = Path(temporary) / "demo"
-            target.mkdir()
-            (target / "SKILL.md").write_text(
-                '---\nname: demo\ndescription: Демонстрационный Agent Skill.\nlicense: MIT\nmetadata:\n  author: "Test"\n  version: "1.0.0"\n---\n\n# Demo\n',
-                encoding="utf-8",
-            )
-            valid = self.run_runner("skill-improve", "check", "--path", str(target))
-            self.assertEqual(valid.returncode, 0, valid.stderr)
-            self.assertEqual(json.loads(valid.stdout)["issues"], [])
-            (target / "SKILL.md").write_text(
-                (target / "SKILL.md")
-                .read_text(encoding="utf-8")
-                .replace("license: MIT", "custom.entrypoint: path:scripts/missing.py"),
-                encoding="utf-8",
-            )
-            rejected = self.run_runner("skill-improve", "check", "--path", str(target))
-            self.assertEqual(rejected.returncode, 1)
-            self.assertIn(
-                "frontmatter-unsupported-field",
-                {issue["rule"] for issue in json.loads(rejected.stdout)["issues"]},
-            )
-
-    def test_skill_improver_sessions_report_extracts_usage_evidence(self) -> None:
-        def tool_part(
-            tool: str,
-            state: dict[str, object],
-            call_id: str | None = None,
-        ) -> str:
-            payload: dict[str, object] = {"type": "tool", "tool": tool, "state": state}
-            if call_id is not None:
-                payload["callID"] = call_id
-            return json.dumps(payload)
-
-        with tempfile.TemporaryDirectory() as temporary:
-            database = Path(temporary) / "fixture.db"
-            connection = sqlite3.connect(database)
-            connection.executescript(
-                """
-                CREATE TABLE session (
-                    id TEXT PRIMARY KEY, title TEXT, directory TEXT, time_created INTEGER);
-                CREATE TABLE message (
-                    id TEXT PRIMARY KEY, session_id TEXT, data TEXT);
-                CREATE TABLE part (
-                    id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
-                    time_created INTEGER, data TEXT);
-                INSERT INTO session VALUES ('s1', 'First', '/tmp/demo', 100);
-                INSERT INTO session VALUES ('s2', 'Second', '/tmp/demo', 200);
-                INSERT INTO message VALUES ('m1', 's1', '{"role": "user"}');
-                INSERT INTO message VALUES ('m2', 's1', '{"role": "assistant"}');
-                INSERT INTO message VALUES ('m5', 's1', '{"role": "user"}');
-                INSERT INTO message VALUES ('m3', 's2', '{"role": "user"}');
-                INSERT INTO message VALUES ('m4', 's2', '{"role": "assistant"}');
-                INSERT INTO part VALUES ('p1', 'm1', 's1', 100,
-                    '{"type": "text", "text": "Fix the checker"}');
-                INSERT INTO part VALUES ('p5', 'm5', 's1', 600,
-                    '{"type": "text", "text": "не работает после правки"}');
-                """
-            )
-            tool_parts = (
-                (
-                    "p2",
-                    "m2",
-                    "s1",
-                    200,
-                    tool_part(
-                        "skill",
-                        {
-                            "status": "completed",
-                            "input": {"name": "demo"},
-                            "time": {"start": 200, "end": 350},
-                        },
-                        "call_1",
-                    ),
-                ),
-                (
-                    "p3",
-                    "m2",
-                    "s1",
-                    400,
-                    tool_part(
-                        "bash", {"status": "completed", "input": {"command": "git status --short"}}
-                    ),
-                ),
-                (
-                    "p4",
-                    "m2",
-                    "s1",
-                    500,
-                    tool_part(
-                        "bash", {"status": "completed", "input": {"command": "git diff --stat"}}
-                    ),
-                ),
-                (
-                    "p7",
-                    "m4",
-                    "s2",
-                    300,
-                    tool_part(
-                        "skill",
-                        {"status": "error", "input": {"name": "demo"}, "error": "boom"},
-                        "call_2",
-                    ),
-                ),
-                (
-                    "p8",
-                    "m4",
-                    "s2",
-                    320,
-                    tool_part(
-                        "skill", {"status": "completed", "input": {"name": "demo"}}, "call_3"
-                    ),
-                ),
-                (
-                    "p9",
-                    "m4",
-                    "s2",
-                    700,
-                    tool_part(
-                        "bash", {"status": "completed", "input": {"command": "git status --short"}}
-                    ),
-                ),
-                (
-                    "p10",
-                    "m4",
-                    "s2",
-                    800,
-                    tool_part(
-                        "bash", {"status": "completed", "input": {"command": "git diff --stat"}}
-                    ),
-                ),
-            )
-            connection.executemany("INSERT INTO part VALUES (?, ?, ?, ?, ?)", tool_parts)
-            connection.commit()
-            connection.close()
-            result = self.run_runner(
-                "skill-improve",
-                "sessions",
-                "--db",
-                str(database),
-                "--min-pattern-count",
-                "2",
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            payload = json.loads(result.stdout)
-            self.assertEqual(payload["databases"][0]["host"], "custom")
-            self.assertEqual(payload["databases"][0]["sessions_scanned"], 2)
-            demo = payload["skills"]["demo"]
-            self.assertEqual(demo["invocations"], 3)
-            self.assertEqual(demo["sessions"], 2)
-            self.assertEqual(demo["error_count"], 1)
-            self.assertEqual(demo["errors"][0]["error"], "boom")
-            self.assertEqual(demo["retry_sessions"][0]["count"], 2)
-            self.assertEqual(demo["durations_ms"], {"samples": 1, "avg": 150, "max": 150})
-            self.assertEqual(len(demo["followups"]), 1)
-            self.assertEqual(demo["followups"][0]["text"], "не работает после правки")
-            self.assertEqual(demo["followups"][0]["gap_ms"], 400)
-            patterns = payload["patterns"]
-            self.assertEqual(
-                [
-                    (pattern["actions"], pattern["count"], pattern["sessions"])
-                    for pattern in patterns
-                ],
-                [(["bash:git status", "bash:git diff"], 2, 2)],
-            )
-            self.assertEqual(
-                [(candidate["kind"], candidate["count"]) for candidate in payload["candidates"]],
-                [("new-skill-candidate", 2)],
-            )
-            frequent = {action["action"]: action["count"] for action in payload["frequent_actions"]}
-            self.assertEqual(frequent["bash:git status"], 2)
-            filtered = self.run_runner(
-                "skill-improve",
-                "sessions",
-                "--db",
-                str(database),
-                "--skill",
-                "absent",
-            )
-            self.assertEqual(filtered.returncode, 0, filtered.stderr)
-            self.assertEqual(json.loads(filtered.stdout)["skills"], {})
-            missing = self.run_runner(
-                "skill-improve",
-                "sessions",
-                "--db",
-                str(Path(temporary) / "absent.db"),
-            )
-            self.assertEqual(missing.returncode, 2)
-            self.assertEqual(
-                json.loads(missing.stdout)["error"]["code"],
-                "sessions_error",
-            )
-            isolated = self.run_runner(
-                "skill-improve",
-                "sessions",
-                "--host",
-                "auto",
-                env={"XDG_DATA_HOME": temporary},
-            )
-            self.assertEqual(isolated.returncode, 2)
-            self.assertEqual(
-                json.loads(isolated.stdout)["error"]["code"],
-                "sessions_error",
-            )
 
     def test_code_explain_current_range_diff_file_and_chunk_coverage(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

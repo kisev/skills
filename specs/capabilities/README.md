@@ -29,7 +29,7 @@ commands have a separate contract below.
 | [release-prepare](skills/release-prepare.md) | [release-prepare](commands/release-prepare.md) |
 | [release-review](skills/release-review.md) | [release-review](commands/release-review.md) |
 | [rtk](skills/rtk.md) | [rtk](commands/rtk.md) |
-| [skill-improve](skills/skill-improve.md) | [skill-improve](commands/skill-improve.md) |
+| [skill-doctor](skills/skill-doctor.md) | [skill-doctor](commands/skill-doctor.md) |
 | [slides-prompts-prepare](skills/slides-prompts-prepare.md) | [slides-prompts-prepare](commands/slides-prompts-prepare.md) |
 | [spec-manage](skills/spec-manage.md) | [spec-manage](commands/spec-manage.md) |
 | [stopit](skills/stopit.md) | [stopit](commands/stopit.md) |

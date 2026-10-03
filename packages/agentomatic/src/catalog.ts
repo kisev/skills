@@ -18,7 +18,7 @@ export const CATALOG = {
     "release-prepare",
     "release-review",
     "rtk",
-    "skill-improve",
+    "skill-doctor",
     "slides-prompts-prepare",
     "spec-manage",
     "stopit",

@@ -109,6 +109,11 @@ def inspect_private_directory(path: Path, boundary: Path) -> Path:
     return path
 
 
+def open_state_directory(path: Path, boundary: Path, *, create: bool) -> int:
+    """Open one state directory descriptor through validated safe traversal."""
+    return _open_directory(path, boundary, create=create)
+
+
 def _write_immutable(path: Path, content: bytes, boundary: Path) -> None:
     directory = _open_directory(path.parent, boundary, create=True)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)

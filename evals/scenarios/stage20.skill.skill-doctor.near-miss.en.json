@@ -4,30 +4,30 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "bc0cff7be27460177afe971d6d02b41f2b0c117f93aa66a06bde5db14e73c9a4",
+  "digest": "0e40aaf0ce337f7339fe2219e028e41438c1c4fcc9dac4f395de17ea7ea31157",
   "expected": {
     "mutation_boundary": "no-writes",
-    "not_selected": ["skill:skill-improve"],
+    "not_selected": ["skill:skill-doctor"],
     "selected": [],
     "structured_outcome": "safe-escalation"
   },
   "host": "any",
-  "id": "stage20.skill.skill-improve.near-miss.en",
+  "id": "stage20.skill.skill-doctor.near-miss.en",
   "input": {
     "fixture": {
       "selected": []
     },
-    "prompt": "English: this is intentionally unrelated to skill-improve; do not route it to that skill."
+    "prompt": "English: this is intentionally unrelated to skill-doctor; do not route it to that skill."
   },
   "invariants": [
     {
-      "id": "stage20.skill.skill-improve.near-miss.source",
-      "path": ".build/skills/skill-improve/SKILL.md"
+      "id": "stage20.skill.skill-doctor.near-miss.source",
+      "path": ".build/skills/skill-doctor/SKILL.md"
     }
   ],
   "kind": "near-miss",
   "locale": "en",
-  "pair_id": "stage20.skill.skill-improve.near-miss",
+  "pair_id": "stage20.skill.skill-doctor.near-miss",
   "revision": 1,
   "sandbox": {
     "network": false,

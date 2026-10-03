@@ -180,9 +180,6 @@
         "S607",                                                             # The host browser opener is intentionally PATH-resolved.
         "TRY300",                                                           # Transaction success returns remain in their guarded branches.
       ]
-      "skills/skill-improve/scripts/skill_improver.py" = [
-        "S603"
-      ]                                                                     # The validator receives a bounded temporary skill path.
 
     [tool.ruff.lint.mccabe]
       max-complexity = 40
