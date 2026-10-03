@@ -77,10 +77,14 @@ receive it as their primary task context, and answer the questions assigned to
 them in receipt `question_answers`; with several critics, each selected critic
 answers each assigned question, and one critic's answer never covers another's
 assignment. Recording stamps every question with the digest of the meaningful
-content it depends on, and every answer and verification copies the
+content it depends on — the question itself plus the goal, acceptance
+criteria, claims, constraints, agreed prior decisions, and thread registry —
+and every answer and verification copies the
 `context_digest` it was produced against: re-recording after an edited
-question or requirement retires the affected answers into the draft's
-`superseded_question_results` history and requires fresh results for the
+question, requirement, or agreed prior decision retires exactly the affected
+stale answers into the draft's
+`superseded_question_results` history (fresh results for the same question
+stay in place) and requires fresh results for the
 affected scope, a background-only edit keeps them, and a late answer still
 bound to the superseded version is rejected instead of certifying the changed
 question. The primary review addresses every
@@ -142,8 +146,10 @@ review completes and records the same shared context package
 ref and the committed, staged, unstaged, and untracked sections, and the
 report binds the recorded package at finalization; the returned
 `record_command` names the exact immutable snapshot path. Re-recording a
-package with a changed question or requirement retires the report's answers
-for the previous wording into `superseded_question_results` and requires
+package with a changed question, requirement, or agreed prior decision
+retires exactly the report's stale answers
+for the previous wording into `superseded_question_results` — fresh results
+for the same question stay in place — and requires
 fresh answers before finalization; report answers and verifications copy the
 question's `context_digest`, and finalization rejects a missing or superseded
 binding, so a late result for the previous wording cannot certify the changed

@@ -163,9 +163,11 @@ shall carry the version it was produced against. Acceptance and finalization
 shall reject a missing or superseded binding with a concrete diagnostic
 instead of filling it from the current package, so a result collected before
 the package changed can never certify the changed question. Re-recording the
-package after an edited question, goal, acceptance criterion, claim, or
-constraint shall preserve the affected results as history with their
-authorship and original bindings and shall require fresh results for the
+package after an edited question, goal, acceptance criterion, claim,
+constraint, or agreed prior decision shall preserve exactly the affected
+stale results as history with their
+authorship and original bindings, shall keep fresh results for the same
+question in place, and shall require fresh results for the
 affected scope, an edited question shall not invalidate results for
 unaffected questions, and a
 representation-only change such as an edited background shall not invalidate

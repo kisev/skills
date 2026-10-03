@@ -60,6 +60,7 @@ import {
   canonicalPackageDigest,
   collectAnswers,
   extractSupersededResults,
+  isCurrentResult,
   narrativePackageDigest,
   packageTemplateForMr,
   questionContextVersionList,
@@ -637,11 +638,13 @@ export async function recordDraftPackage(path: string, inputPath: string): Promi
 }
 
 // Re-recording a canonically changed package must not silently keep critic
-// results collected for the previous questions. The affected answers and
-// verifications move to the draft's historical section, and check-review
-// demands fresh results for the affected scope. Representation-only changes
-// keep every collected result in place. The pointer names the package recorded
-// before this call, so it must be read before writeContextPackage overwrites it.
+// results collected for the previous questions. Exactly the affected answers
+// and verifications — selected by their own binding — move to the draft's
+// historical section, and check-review demands fresh results for the affected
+// scope. A fresh result from another critic of the same question stays in
+// place. Representation-only changes keep every collected result. The pointer
+// names the package recorded before this call, so it must be read before
+// writeContextPackage overwrites it.
 function retireSupersededResults(draft: Json, pointer: Json | null, input: Json): string[] {
   let previous: { payload: Json; digest: string } | null = null;
   if (pointer !== null) {
@@ -652,6 +655,7 @@ function retireSupersededResults(draft: Json, pointer: Json | null, input: Json)
       if (!(error instanceof WorkflowError)) throw error;
     }
   }
+  const versions = questionContextVersions(input);
   const superseded = extractSupersededResults(
     previous,
     input,
@@ -659,15 +663,11 @@ function retireSupersededResults(draft: Json, pointer: Json | null, input: Json)
     (draft.question_verifications ?? []) as Json[],
   );
   if (superseded === null) return [];
-  const retired = new Set(superseded.questionIds);
+  const current = (item: Json): boolean => isCurrentResult(item, versions);
   for (const receipt of draft.critics as Json[]) {
-    receipt.question_answers = ((receipt.question_answers ?? []) as Json[]).filter(
-      (answer) => !retired.has(String(answer.question_id)),
-    );
+    receipt.question_answers = ((receipt.question_answers ?? []) as Json[]).filter(current);
   }
-  draft.question_verifications = ((draft.question_verifications ?? []) as Json[]).filter(
-    (verification) => !retired.has(String(verification.question_id)),
-  );
+  draft.question_verifications = ((draft.question_verifications ?? []) as Json[]).filter(current);
   draft.superseded_question_results = [
     ...((draft.superseded_question_results ?? []) as Json[]),
     superseded.entry,

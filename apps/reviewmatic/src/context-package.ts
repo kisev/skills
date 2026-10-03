@@ -52,34 +52,34 @@ export function narrativePackageDigest(payload: Json): string {
   return digest(payload.background ?? "");
 }
 
-// The version of the package content that answers and verifications are
-// produced against. Binding fields and the narrative background are excluded:
-// a new evidence snapshot or reworded background never invalidates collected
-// results, while an edited question, claim, or constraint does.
-export function questionContextDigest(payload: Json): string {
-  return digest({
+// The shared meaningful context every question and its results depend on.
+// Binding fields and the narrative background are excluded: a new evidence
+// snapshot or reworded background never invalidates collected results, while
+// an edited question, claim, constraint, or agreed decision does.
+function sharedContextInputs(payload: Json): Json {
+  return {
     goal: payload.goal ?? null,
     acceptance_criteria: payload.acceptance_criteria ?? null,
     claims: payload.claims ?? [],
     constraints: payload.constraints ?? [],
-    questions: payload.questions ?? [],
+    prior_decisions: payload.prior_decisions ?? [],
     thread_registry: payload.thread_registry ?? null,
+  };
+}
+
+export function questionContextDigest(payload: Json): string {
+  return digest({
+    ...sharedContextInputs(payload),
+    questions: payload.questions ?? [],
   });
 }
 
 // The version of the meaningful content one question and its answer depend on:
-// the question itself plus the supporting context (goal, acceptance criteria,
-// claims, constraints, thread registry). Binding fields and the narrative
-// background are excluded: refreshing them never invalidates collected
-// results, while an edited question, claim, or constraint does.
+// the question itself plus the shared supporting context.
 export function questionContextVersion(payload: Json, question: Json): string {
   const { context_digest: _declared, ...content } = question;
   return digest({
-    goal: payload.goal ?? null,
-    acceptance_criteria: payload.acceptance_criteria ?? null,
-    claims: payload.claims ?? [],
-    constraints: payload.constraints ?? [],
-    thread_registry: payload.thread_registry ?? null,
+    ...sharedContextInputs(payload),
     question: content,
   });
 }
@@ -156,6 +156,14 @@ export type SupersededResults = {
   verifications: Json[];
 };
 
+// True when the result's binding names the meaningful-context version the
+// package assigns to its question. Results without a binding are never
+// current. Retirement must move exactly the entries this predicate rejects,
+// never every result sharing the question ID.
+export function isCurrentResult(item: Json, versions: Map<string, string>): boolean {
+  return item.context_digest === versions.get(String(item.question_id));
+}
+
 // Compares the context version bound into each collected answer and
 // verification with the version the new package assigns to its question.
 // Results bound to another meaningful context — including results without a
@@ -170,8 +178,7 @@ export function extractSupersededResults(
   verifications: Json[],
 ): SupersededResults | null {
   const versions = questionContextVersions(next);
-  const stale = (item: Json): boolean =>
-    item.context_digest !== versions.get(String(item.question_id));
+  const stale = (item: Json): boolean => !isCurrentResult(item, versions);
   const staleAnswers = answers.filter(stale);
   const staleVerifications = verifications.filter(stale);
   if (staleAnswers.length === 0 && staleVerifications.length === 0) return null;

@@ -22,6 +22,7 @@ import {
   bindQuestionContexts,
   canonicalPackageDigest,
   extractSupersededResults,
+  isCurrentResult,
   localSectionDigests,
   narrativePackageDigest,
   packageTemplateForLocal,
@@ -842,7 +843,9 @@ export async function recordLocalPackage(
 // Local counterpart of the draft package guard: re-recording a canonically
 // changed package moves the report's answers and verifications collected for
 // the previous questions into the report's historical section so that
-// finalization cannot count them against the current questions.
+// finalization cannot count them against the current questions. Exactly the
+// entries selected by their own binding move; fresh results for the same
+// question stay in place.
 function retireSupersededResults(
   root: string,
   pointer: Record<string, unknown> | null,
@@ -871,11 +874,10 @@ function retireSupersededResults(
     (report.question_verifications as Record<string, unknown>[] | undefined) ?? [];
   const superseded = extractSupersededResults(previous, input, answers, verifications);
   if (superseded === null) return [];
-  const retired = new Set(superseded.questionIds);
-  report.question_answers = answers.filter((item) => !retired.has(String(item.question_id)));
-  report.question_verifications = verifications.filter(
-    (item) => !retired.has(String(item.question_id)),
-  );
+  const versions = questionContextVersions(input);
+  const current = (item: Record<string, unknown>): boolean => isCurrentResult(item, versions);
+  report.question_answers = answers.filter(current);
+  report.question_verifications = verifications.filter(current);
   report.superseded_question_results = [
     ...((report.superseded_question_results as Record<string, unknown>[] | undefined) ?? []),
     superseded.entry,

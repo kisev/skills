@@ -15,7 +15,13 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { WorkflowError, readJson, writeArtifact, writeJson } from "../dist/contract.js";
+import {
+  WorkflowError,
+  artifactPayload,
+  readJson,
+  writeArtifact,
+  writeJson,
+} from "../dist/contract.js";
 import {
   baseline,
   emptyScopeReason,
@@ -831,4 +837,227 @@ test("a verification bound to the previous context cannot verify the changed que
   writeJson(context.draft_path, updated);
   const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
   assert.equal(saved.verdict, "not_ready");
+});
+
+test("a significant local prior decision invalidates a late answer for the same question", async (t) => {
+  const repo = repository(t);
+  const [snapshot, context, report] = await initialReport(repo);
+  const templatePath = context.context_package.template_path;
+  const template = readJson(templatePath, "template");
+  template.goal = { status: "known", text: report.task.goal };
+  template.prior_decisions = [
+    {
+      id: "scope-deferral",
+      decision: "Credential revocation on renderer failure is deferred.",
+      source: "Earlier user decision in the local conversation.",
+    },
+  ];
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Does the staged renderer change touch protected values?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v1 = await recordLocalPackage(snapshot, templatePath);
+  const draft = structuredClone(report);
+  draft.context_package = { path: v1.artifact_path, digest: v1.digest };
+  writeJson(context.draft_path, draft);
+
+  // The user withdraws the deferral. The question keeps its ID and subject;
+  // the significant agreed decision still moves its version.
+  template.supersedes = v1.digest;
+  template.prior_decisions.push({
+    id: "scope-correction",
+    decision: "The deferral is withdrawn; revocation is required in this review.",
+    source: "Explicit later user correction in the local conversation.",
+  });
+  writeJson(templatePath, template);
+  const v2 = await recordLocalPackage(snapshot, templatePath);
+  assert.deepEqual(v2.superseded_questions, []);
+  assert.notEqual(
+    v1.question_context_versions["q-renderer"],
+    v2.question_context_versions["q-renderer"],
+    "the agreed decision change moves the question version",
+  );
+
+  // The late V1 answer arrives with its original binding.
+  const updated = readJson(context.draft_path, "local review draft");
+  updated.context_package = { path: v2.artifact_path, digest: v2.digest };
+  const lateAnswer = {
+    question_id: "q-renderer",
+    verdict: "confirmed",
+    evidence: "Inspected the staged diff under the original deferral.",
+    run_id: "local-critic-run",
+    session_id: "local-critic-session",
+    context_digest: v1.question_context_versions["q-renderer"],
+  };
+  updated.question_answers = [lateAnswer];
+  writeJson(context.draft_path, updated);
+  const cli = new URL("../dist/cli.js", import.meta.url).pathname;
+  const execution = spawnSync(
+    process.execPath,
+    [cli, "finalize-local", "--bundle", snapshot, "--report", context.draft_path, "--json"],
+    { encoding: "utf8", env: process.env },
+  );
+  assert.notEqual(execution.status, 0, "finalize-local accepted the stale V1 answer for V2");
+  assert.match(execution.stderr, /is bound to context digest/);
+  assert.match(execution.stderr, /q-renderer/);
+
+  // Documented recovery: re-record the current package.
+  template.supersedes = v2.digest;
+  writeJson(templatePath, template);
+  const v3 = await recordLocalPackage(snapshot, templatePath);
+  assert.deepEqual(v3.superseded_questions, ["q-renderer"]);
+  const recovered = readJson(context.draft_path, "local review draft");
+  assert.deepEqual(recovered.question_answers, []);
+  assert.equal(recovered.superseded_question_results.length, 1);
+  assert.equal(recovered.superseded_question_results[0].answers.length, 1);
+  assert.equal(recovered.superseded_question_results[0].answers[0].evidence, lateAnswer.evidence);
+  assert.equal(recovered.superseded_question_results[0].answers[0].run_id, "local-critic-run");
+  assert.equal(
+    recovered.superseded_question_results[0].answers[0].context_digest,
+    v1.question_context_versions["q-renderer"],
+  );
+
+  // A fresh bound answer finalizes; the saved report keeps the complete fresh
+  // evidence and the full retired history.
+  recovered.context_package = { path: v3.artifact_path, digest: v3.digest };
+  recovered.question_answers = [
+    {
+      question_id: "q-renderer",
+      verdict: "confirmed",
+      evidence: "Traced revocation in the staged renderer under the corrected scope.",
+      run_id: "local-critic-run-2",
+      session_id: "local-critic-session-2",
+      context_digest: v3.question_context_versions["q-renderer"],
+    },
+  ];
+  writeJson(context.draft_path, recovered);
+  const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
+  assert.equal(saved.verdict, "not_ready");
+  const [, payload] = artifactPayload(saved.artifact_path, "local_review_report");
+  assert.deepEqual(
+    payload.question_answers.map((item) => [item.evidence, item.run_id, item.context_digest]),
+    [
+      [
+        "Traced revocation in the staged renderer under the corrected scope.",
+        "local-critic-run-2",
+        v3.question_context_versions["q-renderer"],
+      ],
+    ],
+  );
+  assert.equal(payload.superseded_question_results.length, 1);
+  assert.equal(payload.superseded_question_results[0].answers[0].evidence, lateAnswer.evidence);
+  assert.equal(
+    payload.superseded_question_results[0].answers[0].context_digest,
+    v1.question_context_versions["q-renderer"],
+  );
+});
+
+test("local mixed-version recovery keeps the fresh critic answer and retires only the stale one", async (t) => {
+  const repo = repository(t);
+  const [snapshot, context, report] = await initialReport(repo);
+  const templatePath = context.context_package.template_path;
+  const template = readJson(templatePath, "template");
+  template.goal = { status: "known", text: report.task.goal };
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Does the staged renderer change touch protected values?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v1 = await recordLocalPackage(snapshot, templatePath);
+  const draft = structuredClone(report);
+  draft.context_package = { path: v1.artifact_path, digest: v1.digest };
+  writeJson(context.draft_path, draft);
+
+  // The question changes before critic A answers; the late V1 answer and a
+  // fresh V2 answer from critic B then coexist in the report.
+  template.supersedes = v1.digest;
+  template.questions[0].subject = "Is credential revocation enforced on renderer failure?";
+  writeJson(templatePath, template);
+  const v2 = await recordLocalPackage(snapshot, templatePath);
+  assert.deepEqual(v2.superseded_questions, []);
+
+  const updated = readJson(context.draft_path, "local review draft");
+  updated.context_package = { path: v2.artifact_path, digest: v2.digest };
+  const staleAnswer = {
+    question_id: "q-renderer",
+    verdict: "confirmed",
+    evidence: "Critic A inspected protected values under V1, late.",
+    run_id: "local-critic-a",
+    session_id: "local-critic-a-session",
+    context_digest: v1.question_context_versions["q-renderer"],
+  };
+  const freshAnswer = {
+    question_id: "q-renderer",
+    verdict: "not_verified",
+    reason: "Critic B could not trace the revocation path in time.",
+    run_id: "local-critic-b",
+    session_id: "local-critic-b-session",
+    context_digest: v2.question_context_versions["q-renderer"],
+  };
+  const freshVerification = {
+    question_id: "q-renderer",
+    original: {
+      run_id: "local-critic-b",
+      session_id: "local-critic-b-session",
+      verdict: "not_verified",
+    },
+    verdict: "confirmed",
+    evidence: "Primary traced the revocation path in the staged renderer.",
+    context_digest: v2.question_context_versions["q-renderer"],
+  };
+  updated.question_answers = [staleAnswer, freshAnswer];
+  updated.question_verifications = [freshVerification];
+  writeJson(context.draft_path, updated);
+
+  // Documented recovery: re-record the current package.
+  template.supersedes = v2.digest;
+  writeJson(templatePath, template);
+  const v3 = await recordLocalPackage(snapshot, templatePath);
+  assert.deepEqual(v3.superseded_questions, ["q-renderer"]);
+  const after = readJson(context.draft_path, "local review draft");
+  assert.deepEqual(
+    after.question_answers,
+    [freshAnswer],
+    "only critic A's stale answer leaves the active results",
+  );
+  assert.deepEqual(after.question_verifications, [freshVerification]);
+  assert.equal(after.superseded_question_results.length, 1);
+  assert.deepEqual(after.superseded_question_results[0].answers, [staleAnswer]);
+  assert.deepEqual(after.superseded_question_results[0].verifications, []);
+
+  // A repeated recovery neither duplicates history nor drops fresh results.
+  template.supersedes = v3.digest;
+  template.background = "Presentation-only narrative revision.";
+  writeJson(templatePath, template);
+  const v4 = await recordLocalPackage(snapshot, templatePath);
+  assert.deepEqual(v4.superseded_questions, []);
+  const stable = readJson(context.draft_path, "local review draft");
+  assert.equal(stable.superseded_question_results.length, 1);
+  assert.deepEqual(stable.question_answers, [freshAnswer]);
+  assert.deepEqual(stable.question_verifications, [freshVerification]);
+
+  // Critic A's retired V1 answer never counts: the report finalizes only
+  // through critic B's current answer, and the saved payload shows the fresh
+  // evidence as the sole active result with the stale one only in history.
+  stable.context_package = { path: v4.artifact_path, digest: v4.digest };
+  writeJson(context.draft_path, stable);
+  const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
+  assert.equal(saved.verdict, "not_ready");
+  const [, payload] = artifactPayload(saved.artifact_path, "local_review_report");
+  assert.deepEqual(
+    payload.question_answers.map((item) => [item.evidence ?? item.reason, item.run_id]),
+    [["Critic B could not trace the revocation path in time.", "local-critic-b"]],
+  );
+  assert.equal(payload.question_verifications.length, 1);
+  assert.equal(payload.superseded_question_results.length, 1);
+  assert.equal(payload.superseded_question_results[0].answers[0].run_id, "local-critic-a");
 });

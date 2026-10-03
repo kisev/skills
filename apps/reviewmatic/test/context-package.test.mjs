@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdirSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -787,6 +795,254 @@ test("re-recording an edited question keeps answers for unaffected questions", a
     readJson(started.draft_path, "draft").critics[0].question_answers[0].context_digest,
     unaffected.context_digest,
     "the unaffected answer keeps its original binding",
+  );
+});
+
+test("a significant prior decision change supersedes answers for the same question", async (t) => {
+  const fixture = reviewFixture(t);
+  const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  templateWith(started, {
+    prior_decisions: [
+      {
+        id: "scope-deferral",
+        decision: "Credential revocation is deferred; this review checks idempotency only.",
+        source: "Earlier user decision in the supplied conversation.",
+      },
+    ],
+    questions: [
+      {
+        id: "q-stable",
+        subject: "Does retry satisfy the agreed safety boundary?",
+        source: "Isolated test conversation",
+        critic: true,
+      },
+    ],
+  });
+  const draft = await completeDraft(readJson(started.draft_path), started);
+  const v1Answer = boundAnswer(draft, "q-stable", {
+    evidence: "Checked idempotency under the originally agreed boundary.",
+  });
+  const v1Version = v1Answer.context_digest;
+  writeJson(started.draft_path, draft);
+
+  // The user withdraws the exception. The question keeps its ID and subject;
+  // the significant agreed decision still changes the version it depends on.
+  const template = readJson(started.context_package.template_path, "template");
+  template.supersedes = readJson(started.draft_path, "draft").context_package_digest;
+  template.prior_decisions.push({
+    id: "scope-correction",
+    decision: "The deferral is withdrawn; credential revocation is required in this review.",
+    source: "Explicit later user correction in the supplied conversation.",
+  });
+  writeJson(started.context_package.template_path, template);
+  const v2 = await recordDraftPackage(started.draft_path, started.context_package.template_path);
+  assert.deepEqual(v2.superseded_questions, []);
+  assert.notEqual(
+    v2.question_context_versions["q-stable"],
+    v1Version,
+    "the agreed decision change moves the question version",
+  );
+
+  // The late V1 answer arrives with its original binding and cannot close V2.
+  const updated = readJson(started.draft_path, "draft");
+  const { run_id: _run, session_id: _session, ...lateAnswer } = v1Answer;
+  updated.critics[0].question_answers = [lateAnswer];
+  writeJson(started.draft_path, updated);
+  const checked = await checkReview(started.draft_path);
+  assert.equal(checked.status, "invalid");
+  assert.match(JSON.stringify(checked.errors), /is bound to context digest/);
+  const finished = await finishReview(started.draft_path);
+  assert.equal(finished.status, "invalid", "the stale answer must not finalize to ready");
+  assert.equal(finished.artifact_path, undefined);
+
+  // Documented recovery: re-record the current package; the stale answer moves
+  // to history with its authorship and the binding it was collected under.
+  template.supersedes = v2.digest;
+  writeJson(started.context_package.template_path, template);
+  const v3 = await recordDraftPackage(started.draft_path, started.context_package.template_path);
+  assert.deepEqual(v3.superseded_questions, ["q-stable"]);
+  const recovered = readJson(started.draft_path, "draft");
+  assert.deepEqual(recovered.critics[0].question_answers, []);
+  assert.equal(recovered.superseded_question_results.length, 1);
+  const history = recovered.superseded_question_results[0];
+  assert.equal(history.answers.length, 1);
+  assert.equal(history.answers[0].evidence, v1Answer.evidence);
+  assert.equal(history.answers[0].run_id, "critic-run");
+  assert.equal(history.answers[0].session_id, "child-session");
+  assert.equal(history.answers[0].context_digest, v1Version);
+
+  const demanded = await checkReview(started.draft_path);
+  assert.equal(demanded.status, "invalid");
+  assert.match(JSON.stringify(demanded.errors), /superseded context package/);
+
+  // A fresh bound answer finalizes; the finalized receipt carries only the
+  // complete fresh evidence, never the retired one.
+  recovered.critics[0].question_answers = [
+    boundAnswer(recovered, "q-stable", {
+      evidence: "Traced credential revocation under the corrected scope.",
+    }),
+  ];
+  writeJson(started.draft_path, recovered);
+  const done = await finishReview(started.draft_path);
+  assert.equal(done.status, "ok", JSON.stringify(done));
+  const [, receipt] = artifactPayload(
+    join(
+      started.artifact_root,
+      "artifacts",
+      "critic_receipt",
+      readdirSync(join(started.artifact_root, "artifacts", "critic_receipt"))[0],
+    ),
+    "critic_receipt",
+  );
+  assert.equal(receipt.question_answers.length, 1);
+  assert.equal(
+    receipt.question_answers[0].evidence,
+    "Traced credential revocation under the corrected scope.",
+  );
+  assert.equal(
+    receipt.question_answers[0].context_digest,
+    v3.question_context_versions["q-stable"],
+  );
+  const finalDraft = readJson(started.draft_path, "draft");
+  assert.equal(finalDraft.superseded_question_results.length, 1, "history is retained");
+});
+
+test("mixed-version recovery keeps fresh results and retires only the stale entry", async (t) => {
+  const fixture = reviewFixture(t);
+  const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  templateWith(started, {
+    questions: [
+      {
+        id: "q-retry",
+        subject: "Does the exact head always set the idempotency key?",
+        source: "Discussion 42 of the collected evidence",
+        critic: true,
+      },
+    ],
+  });
+  const draft = await completeDraft(readJson(started.draft_path), started);
+  draft.critics[0].question_answers = [
+    boundAnswer(draft, "q-retry", { evidence: "Critic A inspected the idempotency key under V1." }),
+  ];
+  writeJson(started.draft_path, draft);
+
+  // The subject changes under the stable ID; critic A's V1 answer retires.
+  const template = readJson(started.context_package.template_path, "template");
+  template.supersedes = readJson(started.draft_path, "draft").context_package_digest;
+  template.questions[0].subject = "Is credential revocation enforced when a key is reused?";
+  writeJson(started.context_package.template_path, template);
+  const v2 = await recordDraftPackage(started.draft_path, started.context_package.template_path);
+  assert.deepEqual(v2.superseded_questions, ["q-retry"]);
+
+  // Critic B already returns a fresh V2 answer that the primary targets.
+  const updated = readJson(started.draft_path, "draft");
+  const v1Version = updated.superseded_question_results[0].answers[0].context_digest;
+  const freshAnswer = boundAnswer(updated, "q-retry", {
+    verdict: "not_verified",
+    evidence: undefined,
+    reason: "Critic B could not trace the revocation path in time.",
+  });
+  delete freshAnswer.evidence;
+  const freshVerification = boundVerification(updated, "q-retry", {
+    original: { run_id: "critic-run-b", session_id: "critic-session-b", verdict: "not_verified" },
+    evidence: "Primary traced the revocation path in the exact head.",
+  });
+  updated.critics = [
+    updated.critics[0],
+    {
+      ...updated.critics[0],
+      run_id: "critic-run-b",
+      session_id: "critic-session-b",
+      question_answers: [freshAnswer],
+    },
+  ];
+  updated.critic_count = 2;
+  updated.question_verifications = [freshVerification];
+  writeJson(started.draft_path, updated);
+
+  // The late V1 answer from critic A arrives on top.
+  updated.critics[0].question_answers = [
+    {
+      question_id: "q-retry",
+      verdict: "confirmed",
+      evidence: "Critic A inspected the idempotency key under V1, late.",
+      context_digest: v1Version,
+    },
+  ];
+  writeJson(started.draft_path, updated);
+
+  // Documented recovery: re-record the current package.
+  template.supersedes = v2.digest;
+  writeJson(started.context_package.template_path, template);
+  const v3 = await recordDraftPackage(started.draft_path, started.context_package.template_path);
+  assert.deepEqual(v3.superseded_questions, ["q-retry"]);
+
+  const after = readJson(started.draft_path, "draft");
+  assert.deepEqual(
+    after.critics[0].question_answers,
+    [],
+    "only critic A's stale late answer leaves the active results",
+  );
+  assert.deepEqual(after.critics[1].question_answers, [freshAnswer], "critic B's answer is intact");
+  assert.deepEqual(after.question_verifications, [freshVerification]);
+  assert.equal(after.superseded_question_results.length, 2);
+  const lateHistory = after.superseded_question_results[1];
+  assert.deepEqual(
+    lateHistory.answers.map((item) => item.evidence),
+    ["Critic A inspected the idempotency key under V1, late."],
+  );
+  assert.equal(lateHistory.answers[0].run_id, "critic-run");
+  assert.equal(lateHistory.answers[0].session_id, "child-session");
+  assert.equal(lateHistory.answers[0].context_digest, v1Version);
+  assert.deepEqual(lateHistory.verifications, []);
+
+  // A repeated recovery neither duplicates history nor drops fresh results.
+  template.supersedes = v3.digest;
+  template.background = "Presentation-only narrative revision.";
+  writeJson(started.context_package.template_path, template);
+  const v4 = await recordDraftPackage(started.draft_path, started.context_package.template_path);
+  assert.deepEqual(v4.superseded_questions, []);
+  const stable = readJson(started.draft_path, "draft");
+  assert.equal(stable.superseded_question_results.length, 2);
+  assert.deepEqual(stable.critics[1].question_answers, [freshAnswer]);
+  assert.deepEqual(stable.question_verifications, [freshVerification]);
+
+  // Critic A still owes a fresh answer for the assigned question; the retired
+  // V1 answer never counts as the required current one.
+  const demanded = await checkReview(started.draft_path);
+  assert.equal(demanded.status, "invalid");
+  assert.match(JSON.stringify(demanded.errors), /critic-run\/child-session did not answer/);
+
+  stable.critics[0].question_answers = [
+    boundAnswer(stable, "q-retry", { evidence: "Critic A traced revocation under V2." }),
+  ];
+  writeJson(started.draft_path, stable);
+  const done = await finishReview(started.draft_path);
+  assert.equal(done.status, "ok", JSON.stringify(done));
+  const [, receipt] = artifactPayload(
+    join(
+      started.artifact_root,
+      "artifacts",
+      "critic_receipt",
+      readdirSync(join(started.artifact_root, "artifacts", "critic_receipt"))[0],
+    ),
+    "critic_receipt",
+  );
+  const receiptEvidence = receipt.question_answers.map((item) => item.evidence);
+  assert.ok(
+    receiptEvidence.includes("Critic A traced revocation under V2."),
+    "the finalized receipt carries the fresh answers",
+  );
+  assert.ok(
+    !receiptEvidence.some(
+      (evidence) => typeof evidence === "string" && evidence.includes("under V1"),
+    ),
+    "the retired stale evidence never ships as an active answer",
+  );
+  assert.equal(
+    readJson(started.draft_path, "draft").superseded_question_results.length,
+    2,
+    "history is retained after finalization",
   );
 });
 

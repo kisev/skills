@@ -83,22 +83,27 @@ critics the primary keeps its current duties and readiness rules.
 
 Every recorded question carries a `context_digest`: the version of the
 meaningful content that question depends on — the question itself plus the
-goal, acceptance criteria, claims, constraints, and thread registry. Every
+goal, acceptance criteria, claims, constraints, agreed prior decisions, and
+thread registry. Every
 answer and verification copies the `context_digest` of the recorded package
 it was produced against. The runtime recomputes the version and rejects a
 missing or different binding, so a result collected before the package
 changed can never certify the changed question, and a binding is never
 filled in silently from the current package. Move such a result into the
 draft's or report's `superseded_question_results` history — or re-record the
-package with `supersedes`, which retires unbound and stale-bound results
-automatically — and collect a fresh bound result for the current question.
+package with `supersedes`, which retires exactly the unbound and stale-bound
+results into that history and keeps every result already bound to the current
+version — and collect a fresh bound result for the current question.
 
 Re-recording the package after editing a question, goal, acceptance criterion,
-claim, or constraint moves the affected results into the draft's
+claim, constraint, or agreed prior decision moves exactly the affected results
+into the draft's
 `superseded_question_results` history with their authorship and original
 bindings preserved, and validation then requires fresh answers or
 verifications for the affected scope. Editing one question keeps results for
-unaffected questions; shared supporting context affects every question.
+unaffected questions, and a fresh answer or verification from another critic
+of the same question stays in place; shared supporting context affects every
+question.
 Rewording `background` or refreshing the evidence binding never invalidates
 collected results and never requires another technical pass.
 
