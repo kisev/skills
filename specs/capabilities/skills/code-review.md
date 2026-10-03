@@ -239,6 +239,20 @@ and continuity before replacing its private pointer. Reports retain goal,
 acceptance, constraints, decisions, risks, deferred work, checks, and severity
 separate from blocking status. Required unrun/failed checks block completion.
 
+Without an explicit comparison ref the local scope shall be exactly the staged,
+unstaged, and non-ignored untracked changes against HEAD, kept as separate
+sections even when their changes cancel out, and commits shall not enter the
+scope automatically. An explicitly named local comparison ref shall add the
+commits from its merge base with HEAD, shall be used exactly as it exists locally
+without fetching, and shall never be derived from an upstream, tracking, or
+guessed target branch. Preparation shall stop with a concrete reason when that
+ref is missing, ambiguous, or has no common merge base with HEAD, and shall
+return an explicit empty-scope result instead of a review when the selected
+boundary has no changes; the empty result shall not create a baseline. Local
+preparation and finalization shall require no `glab`, GitLab authentication,
+network, remote, or worktree creation, and shall preserve HEAD, the index, and
+user files.
+
 #### Verification
 
 Runtime and fixture tests cover local validation, real critic identity contracts,
@@ -250,7 +264,13 @@ fork sources under arbitrary remote names, unrelated or missing repositories,
 dirty source and occupied or foreign worktrees, new heads with active and
 finalized reviews, same branch names in different projects, concurrent runs,
 fetch failures with recovery, revision mismatch, preservation of the user's
-checkout, and the absence of per-file code fetches. TUI behavioral, Ink and PTY suites
+checkout, and the absence of per-file code fetches. Local scope regressions
+cover staged, unstaged, and untracked sections separately and together,
+compensating staged and unstaged changes, explicit empty-scope results, missing,
+ambiguous, and unrelated comparison refs, branch reviews bound to an explicit
+ref, repeated runs that retain the agreed boundary, linked-worktree checkouts,
+and preparation without any remote that preserves HEAD and the index. TUI
+behavioral, Ink and PTY suites
 remain separate experimental sources and are not run by the default gate.
 Backend worktree checks remain mandatory. Tests use synthetic GitLab responses,
 never live publication.

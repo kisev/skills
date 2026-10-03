@@ -11,7 +11,7 @@ not an instruction to publish. When no new information is needed, choose
 
 Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/necessity-doctrine.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, and `references/semver.md`. Apply the necessity and completion doctrine to both targets. For local WIP follow `references/local-review.md`, then stop; the remote stages below do not apply. For a GitLab MR also read `references/incremental-review.md` and `references/review-state-machine.md`.
 
-`/code-review` distinguishes a remote-MR target from local-WIP input.
+`/code-review` distinguishes a remote-MR target from local-WIP input by the explicit request. One exact MR URL selects the remote-MR mode. An explicit local review request selects the local-WIP mode and uses the current checkout exactly as it is, including when that checkout is itself an existing Git worktree; never search for an MR by branch name for it. When the request does not clearly name one of these targets, stop and ask which one to review instead of assuming.
 
 A release MR — one that publishes or tags a version — routes to the `release-review` skill, which owns the release verdict and its SemVer, compatibility, migration, rollback, and CI gates. Review such an MR here only when the user explicitly requests this skill in addition.
 

@@ -10,6 +10,16 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- `reviewmatic prepare-local` now defines the local scope explicitly: without
+  `--ref` it is the uncommitted work against HEAD — staged, unstaged, and
+  non-ignored untracked files; an explicit `--ref <revision>` adds the commits
+  from its merge base with HEAD and is used exactly as it exists locally,
+  without fetching. A missing, ambiguous, or merge-base-less `--ref` stops with
+  a concrete reason, and a boundary without any changes returns `empty_scope`
+  instead of a snapshot that could be finalized as a review. The `code-review`
+  skill selects the remote-MR or local-WIP mode only from the explicit request,
+  and local reports state the scope composition and the exact revisions used.
+
 - Agentomatic now supports only OpenCode `2.0.x`: V1 dependencies, entrypoints,
   adapters, and checks are removed. V1 users can retain the pre-V2 stable release.
   Config setup writes native `plugins`, ordered `permissions`, and global

@@ -109,7 +109,13 @@ discussions or conflicts remain material and must not reuse stale analysis.
 
 Local work-in-progress reviews use `prepare-local` and `finalize-local`;
 `status`, `next`, and `assess-mode` inspect progress. Every command prints a
-compact JSON result and never mutates GitLab or the checkout.
+compact JSON result and never mutates GitLab or the checkout. Without `--ref`,
+the scope is the staged, unstaged, and non-ignored untracked work against HEAD;
+an explicit `--ref <revision>` adds the commits from its merge base with HEAD
+and is used exactly as it exists locally, without fetching. A missing,
+ambiguous, or merge-base-less `--ref` stops with a concrete reason, and a
+boundary without any changes returns `empty_scope` instead of a snapshot.
+Local preparation needs no `glab`, network, remote, or worktree.
 
 ## Interactive plan walkthrough
 

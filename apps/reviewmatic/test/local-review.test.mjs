@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -16,6 +18,7 @@ import test from "node:test";
 import { WorkflowError, writeArtifact, writeJson } from "../dist/contract.js";
 import {
   baseline,
+  emptyScopeReason,
   finalizeLocal,
   localBundle,
   prepareFollowup,
@@ -351,6 +354,122 @@ test("changed comparison ref invalidates freshness", async (t) => {
   assert.equal(result.status, "stale");
   assert.ok(Array.isArray(result.changed));
   assert.ok(result.changed.includes("base_sha"));
+});
+
+test("empty local scope stops with an explicit reason instead of a review", async (t) => {
+  const repo = repository(t);
+  git(repo, "checkout", "--", "renderer.txt");
+  let bundle = await localBundle(repo, "code-review", null);
+  assert.equal(bundle.retrieval_complete, true);
+  assert.equal(emptyScopeReason(bundle), "no_uncommitted_changes");
+
+  git(repo, "branch", "merge-target");
+  const withRef = await localBundle(repo, "code-review", "merge-target");
+  assert.equal(withRef.sections.committed.diff, "");
+  assert.equal(emptyScopeReason(withRef), "no_changes_relative_to_ref");
+
+  writeFileSync(join(repo, "renderer.txt"), "wip\n");
+  const wip = await localBundle(repo, "code-review", "merge-target");
+  assert.equal(emptyScopeReason(wip), null);
+  git(repo, "commit", "-qam", "accepted work");
+  const committed = await localBundle(repo, "code-review", "merge-target");
+  assert.ok(committed.sections.committed.diff.includes("diff --git"));
+  assert.equal(emptyScopeReason(committed), null);
+});
+
+test("staged and unstaged sections stay separate when their changes cancel out", async (t) => {
+  const repo = repository(t);
+  writeFileSync(join(repo, "renderer.txt"), "broken\n");
+  git(repo, "add", "renderer.txt");
+  writeFileSync(join(repo, "renderer.txt"), "base\n");
+  const bundle = await localBundle(repo, "code-review", null);
+  assert.ok(bundle.sections.staged.diff.includes("+broken"));
+  assert.ok(bundle.sections.unstaged.diff.includes("+base"));
+  assert.equal(bundle.sections.committed.diff, "");
+  assert.equal(emptyScopeReason(bundle), null);
+});
+
+test("missing, ambiguous, or unrelated comparison refs stop with concrete reasons", async (t) => {
+  const repo = repository(t);
+  await assert.rejects(
+    () => localBundle(repo, "code-review", "missing-branch"),
+    isWorkflowError(/comparison ref 'missing-branch' was not found/),
+  );
+  git(repo, "branch", "dup");
+  git(repo, "-c", "tag.gpgsign=false", "tag", "-m", "duplicate name", "dup");
+  await assert.rejects(
+    () => localBundle(repo, "code-review", "dup"),
+    isWorkflowError(/comparison ref 'dup' is ambiguous.*refs\/heads\/dup.*refs\/tags\/dup/),
+  );
+  const unambiguous = await localBundle(repo, "code-review", "refs/heads/dup");
+  assert.equal(unambiguous.retrieval_complete, true);
+  const originalBranch = git(repo, "rev-parse", "--abbrev-ref", "HEAD");
+  git(repo, "checkout", "-q", "--orphan", "isolated");
+  git(repo, "commit", "-q", "-m", "isolated", "--allow-empty");
+  git(repo, "checkout", "-q", originalBranch);
+  await assert.rejects(
+    () => localBundle(repo, "code-review", "isolated"),
+    isWorkflowError(/no common merge base between 'isolated' and HEAD/),
+  );
+});
+
+test("a repeated run keeps the agreed comparison boundary", async (t) => {
+  const repo = repository(t);
+  git(repo, "branch", "merge-target");
+  const bundle = await localBundle(repo, "code-review", "merge-target");
+  const root = bundle.artifact_root;
+  const [snapshot, digestValue] = await writeArtifact(root, "local_wip_snapshot", bundle);
+  const first = prepareFollowup(root, bundle, digestValue, "auto");
+  assert.equal(first.mode, "full");
+  const report = reportPayload();
+  report.evidence_digest = digestValue;
+  writeJson(first.draft_path, report);
+  await recordReview(dirname(first.draft_path), snapshot, first.draft_path);
+
+  const again = await localBundle(repo, "code-review", "merge-target");
+  const [, againDigest] = await writeArtifact(root, "local_wip_snapshot", again);
+  const second = prepareFollowup(root, again, againDigest, "auto");
+  assert.equal(second.mode, "unchanged");
+  assert.equal(second.previous_ref, "merge-target");
+
+  const drifted = await localBundle(repo, "code-review", null);
+  const [, driftedDigest] = await writeArtifact(root, "local_wip_snapshot", drifted);
+  const third = prepareFollowup(root, drifted, driftedDigest, "auto");
+  assert.equal(third.mode, "full");
+  assert.equal(third.reason, "incompatible_boundary_or_incomplete_evidence");
+  assert.equal(third.previous_ref, "merge-target");
+});
+
+test("local preparation works without remotes and preserves HEAD, index, and tree", async (t) => {
+  const repo = repository(t);
+  assert.equal(git(repo, "remote"), "");
+  const headBefore = git(repo, "rev-parse", "HEAD");
+  const indexBefore = readFileSync(join(repo, ".git", "index"));
+  const statusBefore = git(repo, "status", "--porcelain");
+  const bundle = await localBundle(repo, "code-review", null);
+  const [path] = await writeArtifact(bundle.artifact_root, "local_wip_snapshot", bundle);
+  assert.equal(git(repo, "rev-parse", "HEAD"), headBefore);
+  assert.deepEqual(readFileSync(join(repo, ".git", "index")), indexBefore);
+  assert.equal(git(repo, "status", "--porcelain"), statusBefore);
+  assert.equal(existsSync(`${repo}.worktrees`), false);
+  assert.ok(!path.startsWith(repo));
+  assert.ok(!String(bundle.artifact_root).startsWith(repo));
+});
+
+test("an existing linked worktree is reviewed in place", async (t) => {
+  const repo = repository(t);
+  const nested = join(dirname(repo), "linked-checkout");
+  git(repo, "worktree", "add", "-q", nested, "-b", "topic");
+  writeFileSync(join(nested, "renderer.txt"), "touched in the worktree\n");
+  writeFileSync(join(nested, "note.txt"), "untracked\n");
+  const bundle = await localBundle(nested, "code-review", null);
+  assert.equal(bundle.repo_root, realpathSync(nested));
+  assert.ok(bundle.sections.unstaged.diff.includes("touched in the worktree"));
+  assert.deepEqual(
+    bundle.sections.untracked.items.map((item) => item.path),
+    ["note.txt"],
+  );
+  assert.equal(bundle.retrieval_complete, true);
 });
 
 test("untracked symlinks and unreadable files mark the evidence incomplete", async (t) => {

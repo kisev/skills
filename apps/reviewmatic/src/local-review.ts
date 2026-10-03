@@ -421,6 +421,7 @@ export function prepareFollowup(
     previous_review_digest: previousDigest,
     previous_report: report,
     previous_evidence_digest: report ? report.evidence_digest : null,
+    previous_ref: prior !== null ? pythonGet(prior, "ref") : null,
     delta: delta,
     report_template: template,
     draft_path: `${root}/local-review-draft.json`,
@@ -593,6 +594,59 @@ function localUntracked(root: string): Record<string, unknown> {
   return { items: items, complete: errors.length === 0, errors: errors };
 }
 
+export function emptyScopeReason(bundle: Record<string, unknown>): string | null {
+  if (bundle.retrieval_complete !== true) return null;
+  const sections = bundle.sections as Record<string, Record<string, unknown>>;
+  const untracked = sections.untracked as Record<string, unknown>;
+  const uncommittedWorkEmpty =
+    (sections.staged.diff as string).length === 0 &&
+    (sections.unstaged.diff as string).length === 0 &&
+    (untracked.items as Record<string, unknown>[]).length === 0;
+  if (!uncommittedWorkEmpty) return null;
+  if (bundle.ref === null || bundle.ref === undefined) return "no_uncommitted_changes";
+  return (sections.committed.diff as string).length === 0 ? "no_changes_relative_to_ref" : null;
+}
+
+function shortRefCandidates(root: string, ref: string): string[] {
+  const names = new Set([
+    `refs/${ref}`,
+    `refs/heads/${ref}`,
+    `refs/tags/${ref}`,
+    `refs/remotes/${ref}`,
+  ]);
+  return String(gitRead(root, ["for-each-ref", "--format=%(refname)"]))
+    .split("\n")
+    .filter((name) => names.has(name));
+}
+
+function comparisonBase(root: string, ref: string): string {
+  if (!ref.startsWith("refs/")) {
+    const candidates = shortRefCandidates(root, ref);
+    if (candidates.length > 1) {
+      throw new WorkflowError(
+        `comparison ref '${ref}' is ambiguous in the local checkout (${candidates.join(", ")}); ` +
+          "ask which revision to use or pass one full refname; the runner does not fetch or choose for you",
+      );
+    }
+  }
+  try {
+    gitRead(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+  } catch {
+    throw new WorkflowError(
+      `comparison ref '${ref}' was not found or is not a commit in the local checkout; ` +
+        "pass an existing local revision; the runner does not fetch or substitute one",
+    );
+  }
+  try {
+    return String(gitRead(root, ["merge-base", ref, "HEAD"])).trim();
+  } catch {
+    throw new WorkflowError(
+      `no common merge base between '${ref}' and HEAD in the local checkout; ` +
+        "ask how to proceed instead of falling back; the runner does not fetch",
+    );
+  }
+}
+
 export async function localBundle(
   repoRoot: string,
   profile: string,
@@ -616,8 +670,15 @@ export async function localBundle(
   if (!existsSync(`${root}/.git`)) {
     throw new WorkflowError("repo root must be a real Git checkout");
   }
-  const head = String(gitRead(root, ["rev-parse", "HEAD"])).trim();
-  const base = ref ? String(gitRead(root, ["merge-base", ref, "HEAD"])).trim() : head;
+  let head: string;
+  try {
+    head = String(gitRead(root, ["rev-parse", "HEAD"])).trim();
+  } catch {
+    throw new WorkflowError(
+      "the checkout has no readable HEAD; the repository needs at least one commit",
+    );
+  }
+  const base = ref ? comparisonBase(root, ref) : head;
   const staged = localSection(root, "staged", [
     "diff",
     "--cached",

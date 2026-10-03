@@ -2,17 +2,40 @@
 
 ## Prepare
 
-Use the existing checkout and run:
+Use the existing checkout — an ordinary checkout or an already existing Git
+worktree — and run:
 
 ```sh
 reviewmatic prepare-local --repo-root <checkout> --incremental auto
 ```
 
-Retain the original `--ref <comparison-ref>` when one was supplied. Do not infer a
-new comparison boundary on each invocation. The runner stores the immutable
-committed, staged, unstaged, and non-ignored untracked snapshot. It returns
-`review.mode`, the reason, the previous report, a section delta, and a
-`report_template` with the current evidence and previous-review digests.
+Without `--ref` the scope is exactly the uncommitted work against HEAD: staged
+changes, unstaged changes, and non-ignored untracked files. Already made commits
+do not enter the scope automatically. When the user explicitly names the local
+branch or revision that this development will merge into, pass it as
+`--ref <comparison-ref>`: the scope then also includes the commits from the merge
+base of that revision with HEAD. Never derive `--ref` from an upstream, tracking,
+or guessed target branch, and never fetch.
+
+Retain the original `--ref <comparison-ref>` when one was supplied; the returned
+`review.previous_ref` names the retained boundary. Do not infer a new comparison
+boundary on each invocation. The runner stores the immutable committed, staged,
+unstaged, and non-ignored untracked snapshot. It returns `review.mode`, the
+reason, the previous report, a section delta, and a `report_template` with the
+current evidence and previous-review digests.
+
+An `empty_scope` result means the selected boundary contains no changes: without
+`--ref` there is no staged, unstaged, or untracked work; with `--ref` the commits
+since the merge base and the uncommitted work are both empty. Stop there and ask
+the user how to proceed. Offer only supported options: compare against an
+explicitly named local branch or revision with `--ref`, or review a specific
+GitLab MR. Do not select an upstream or target branch automatically and do not
+finalize an empty run as a review.
+
+When the named `--ref` is missing, ambiguous, or has no common merge base with
+HEAD, preparation stops with that concrete reason. Report it and ask how to
+proceed; never fetch, substitute another base, or quietly fall back to reviewing
+only the uncommitted work.
 
 - `full`: first review, incompatible or unavailable previous evidence, or an
   explicitly requested fresh audit. State the reason before reviewing.
@@ -104,7 +127,11 @@ Stale evidence or an invalid report does not replace the baseline. The legacy
 baseline. A report with open findings may be finalized for subsequent fixes;
 finalized does not mean ready.
 
-Report the mode and scope, closed and remaining required findings, optional
+Report the mode, the scope composition (which of the committed, staged, unstaged,
+and untracked sections changed), and the actual revisions used: the comparison
+ref by name and its merge base and HEAD. A named `--ref` was used exactly as it
+exists locally without fetching, so do not claim it is current relative to the
+server. Also report closed and remaining required findings, optional
 improvements separately, checks and limitations, architecture/SemVer assessment,
 and the absolute report path. Local output is authored in the user's language;
 remote `report-review` and publication stages do not apply.

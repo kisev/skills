@@ -13,7 +13,13 @@ import {
   writeJson,
   WorkflowError,
 } from "./contract.js";
-import { finalizeLocal, localBundle, prepareFollowup, recordReview } from "./local-review.js";
+import {
+  emptyScopeReason,
+  finalizeLocal,
+  localBundle,
+  prepareFollowup,
+  recordReview,
+} from "./local-review.js";
 import { markerRun, StateArtifactError } from "./state-artifacts.js";
 import { VERSION } from "./version.js";
 import { dispatch, prepared, type WorkflowArguments } from "./workflow.js";
@@ -211,7 +217,11 @@ const definitions: CommandSpec[] = [
     description: "Collect local WIP evidence: staged, unstaged, and untracked",
     options: [
       { name: "repo-root", description: "local checkout root", required: true },
-      { name: "ref", description: "base ref for the WIP diff" },
+      {
+        name: "ref",
+        description:
+          "explicit local comparison revision; adds its commits since the merge base with HEAD",
+      },
       {
         name: "incremental",
         description: "incremental baseline policy",
@@ -409,6 +419,27 @@ async function runPrepareLocal(fields: Fields): Promise<void> {
     "code-review",
     (fields.ref as string | undefined) ?? null,
   );
+  const sections = bundle.sections as Record<string, Record<string, unknown>>;
+  const empty = emptyScopeReason(bundle);
+  if (empty !== null) {
+    emit({
+      status: "empty_scope",
+      reason: empty,
+      summary: {
+        tldr: "No reviewable local scope exists at the selected boundary.",
+        scope: [String(bundle.repo_root)],
+        risks: [],
+        checks: ["HEAD", "staged", "unstaged", "non-ignored untracked", "merge base"],
+      },
+      head_sha: bundle.head_sha,
+      base_sha: bundle.base_sha,
+      ref: bundle.ref,
+      complete: bundle.retrieval_complete,
+      external_mutations: false,
+    });
+    process.exitCode = 2;
+    return;
+  }
   const root = await artifactRoot(String(bundle.artifact_root));
   const [path, digestValue] = await writeArtifact(root, "local_wip_snapshot", bundle);
   const review = prepareFollowup(
@@ -434,6 +465,14 @@ async function runPrepareLocal(fields: Fields): Promise<void> {
     artifact_path: path,
     digest: digestValue,
     head_sha: bundle.head_sha,
+    base_sha: bundle.base_sha,
+    ref: bundle.ref,
+    scope: {
+      committed: (sections.committed.diff as string).length > 0,
+      staged: (sections.staged.diff as string).length > 0,
+      unstaged: (sections.unstaged.diff as string).length > 0,
+      untracked_files: (sections.untracked.items as Record<string, unknown>[]).length,
+    },
     complete: bundle.retrieval_complete,
     review: review,
     external_mutations: false,
