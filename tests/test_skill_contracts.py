@@ -615,3 +615,263 @@ def test_stage_16_core_workflow_boundaries_are_observable() -> None:
     assert "Run only on an explicit user request" in doctor
     assert "suspected causes stay" in doctor
     assert "keep them only in private" in doctor
+
+
+def test_humanize_activates_only_on_explicit_invocation() -> None:
+    entrypoint = (ROOT / "skills/humanize/SKILL.source.md").read_text(encoding="utf-8")
+    normalized = " ".join(entrypoint.split())
+    for marker in (
+        "Load this skill only on an explicit invocation",
+        "including the `/humanize` command",
+        "explicit text-preparation step of another skill's workflow",
+        "never activates this skill by itself",
+        "never become a standing profile or a global default",
+    ):
+        assert marker in normalized, marker
+    assert "Other skills should always load humanize" not in normalized
+    assert "writing or editing any user-facing prose" not in normalized
+
+    workflow = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
+    assert "Run only on an explicit invocation" in workflow
+    assert "references/patterns.md" in workflow
+
+
+def test_humanize_prioritizes_meaning_constraints_then_voice() -> None:
+    workflow = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
+    meaning = workflow.index("Meaning and protected fragments")
+    constraints = workflow.index("Mandatory constraints")
+    voice = workflow.index("Voice adaptation")
+    assert meaning < constraints < voice
+    assert "A writing sample never cancels them" in workflow
+    assert "A sample guides the voice, not the defects" in workflow
+    assert (
+        "Do not invent facts, names, numbers, dates, quotations, citations, "
+        "opinions, reactions, or sources" in workflow
+    )
+
+
+def test_humanize_punctuation_rule_and_check_cover_forbidden_code_points() -> None:
+    workflow = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
+    for point in ("U+2013", "U+2014", "U+00AB", "U+00BB", "U+201C", "U+201D"):
+        assert point in workflow, point
+    assert "rg -n -P '[\\x{2013}\\x{2014}\\x{00AB}\\x{00BB}\\x{201C}\\x{201D}]'" in workflow
+    assert (
+        "Keep matches that belong to exact quotations, code, commands, paths, "
+        "identifiers, or source data" in workflow
+    )
+
+
+def test_humanize_relations_carry_explicit_workflow_invocations() -> None:
+    relations = json.loads((ROOT / "shared/skill-relations.json").read_text(encoding="utf-8"))
+    sources = sorted(entry["from"] for entry in relations["relations"] if entry["to"] == "humanize")
+    assert len(sources) == 21
+    for source in sources:
+        workflow = (ROOT / "skills" / source / "references/workflow.md").read_text(encoding="utf-8")
+        assert "humanize" in workflow, source
+
+
+def test_humanize_patterns_catalog_maps_all_26_upstream_categories() -> None:
+    catalog = (ROOT / "skills/humanize/references/patterns.md").read_text(encoding="utf-8")
+    assert "26 categories" in catalog
+    assert "A writing sample never overrides" in catalog
+    assert "did not express" in catalog
+    for heading in (
+        "### 1. Not X but Y",
+        "### 2. One-line closers and dramatic fragments",
+        "### 3. Sayings that sound deep",
+        "### 4. Staged run-up before the point",
+        "### 5. Arguing with no one",
+        "### 6. Forced triads (weak alone)",
+        "### 7. Repeated sentence openings (weak alone)",
+        "### 8. Dashes as the universal connector",
+        "### 9. Stacked qualifiers (weak alone)",
+        "### 10. Hyphenated pairs everywhere (weak alone)",
+        "### 11. Passive voice and missing subjects (weak alone)",
+        "### 12. Overused AI words (weak alone)",
+        "### 13. Inflated significance",
+        "### 14. Vague connection or association",
+        "### 15. Shallow participial riders (weak alone)",
+        "### 16. Sales language",
+        "### 17. Borrowed authority",
+        "### 18. Avoiding is, are, and has (weak alone)",
+        "### 19. Bold as decoration (weak alone)",
+        "### 20. Decorative headings (weak alone)",
+        "### 21. Curly quotation marks",
+        "### 22. Chatbot residue",
+        "### 23. Knowledge-limit disclaimers and guesses",
+        "### 24. A heading repeated in the first sentence (weak alone)",
+        "### 25. Writing about the document instead of its subject (weak alone)",
+        "### 26. Re-explaining what the reader knows",
+    ):
+        assert heading in catalog, heading
+
+    english = (ROOT / "docs/reference/humanize-patterns.md").read_text(encoding="utf-8")
+    russian = (ROOT / "docs/ru/reference/humanize-patterns.md").read_text(encoding="utf-8")
+    for heading in (
+        "### 6. Forced triads (weak alone)",
+        "### 12. Overused AI words (weak alone)",
+        "### 25. Writing about the document instead of its subject (weak alone)",
+    ):
+        assert heading in english, heading
+    for heading in (
+        "### 6. Вынужденные триады (слабо в одиночку)",
+        "### 12. Заезженные слова ИИ (слабо в одиночку)",
+        "### 25. Текст о самом тексте вместо предмета (слабо в одиночку)",
+    ):
+        assert heading in russian, heading
+
+
+WEAK_ALONE_CATEGORIES = frozenset({6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, 25})
+
+
+def test_humanize_weak_alone_classification_is_consistent() -> None:
+    import re
+
+    catalog = (ROOT / "skills/humanize/references/patterns.md").read_text(encoding="utf-8")
+    marked: set[int] = set()
+    for match in re.finditer(r"^### (\d+)\. .+?( \(weak alone\))?$", catalog, re.MULTILINE):
+        if match.group(2):
+            marked.add(int(match.group(1)))
+    assert marked == WEAK_ALONE_CATEGORIES
+
+    workflow = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
+    assert "as weak alone: 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25" in workflow
+    # The mandatory punctuation bans hold regardless of the strong/weak split.
+    assert "do not follow this classification" in workflow
+    assert "regardless of this classification" in catalog
+
+
+def test_humanize_dependent_workflows_invoke_at_a_concrete_artifact() -> None:
+    relations = json.loads((ROOT / "shared/skill-relations.json").read_text(encoding="utf-8"))
+    consumers = sorted(
+        entry["from"] for entry in relations["relations"] if entry["to"] == "humanize"
+    )
+    assert len(consumers) == 21
+    for source in consumers:
+        workflow = (ROOT / "skills" / source / "references/workflow.md").read_text(encoding="utf-8")
+        assert "humanize" in workflow, source
+        lowered = " ".join(workflow.lower().split())
+        assert "for all drafted prose" not in lowered, source
+        assert "before drafting prose" not in lowered, source
+    for entry in relations["relations"]:
+        if entry["to"] == "humanize":
+            assert "all drafted prose" not in entry["reason"], entry
+    code_review = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
+    assert "Apply `humanize` to each drafted thread reply" in code_review
+    assert "do not invoke it" in code_review
+    mr_prepare = (ROOT / "skills/mr-prepare/references/workflow.md").read_text(encoding="utf-8")
+    assert "Apply `humanize` to the drafted `title` and `description`" in mr_prepare
+    task_prepare = (ROOT / "skills/task-prepare/references/workflow.md").read_text(encoding="utf-8")
+    assert "Apply `humanize` to the drafted task" in task_prepare
+
+
+def test_humanize_documentation_carries_bilingual_examples() -> None:
+    english = (ROOT / "docs/reference/humanize-patterns.md").read_text(encoding="utf-8")
+    russian = (ROOT / "docs/ru/reference/humanize-patterns.md").read_text(encoding="utf-8")
+    for document in (english, russian):
+        for heading in (
+            "### 1. ",
+            "### 13. ",
+            "### 26. ",
+            "**Before (en):**" if document is english else "**До (en):**",
+        ):
+            assert heading in document, heading
+        assert "**Before (ru):**" in document or "**До (ru):**" in document
+        assert "**After (ru):**" in document or "**После (ru):**" in document
+    assert "A writing sample never overrides" in english
+    assert "образец" in russian.lower() or "Образец" in russian
+    readme = (ROOT / "docs/README.md").read_text(encoding="utf-8")
+    readme_ru = (ROOT / "docs/ru/README.md").read_text(encoding="utf-8")
+    assert "reference/humanize-patterns.md" in readme
+    assert "reference/humanize-patterns.md" in readme_ru
+
+
+def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
+    scenarios = ROOT / "evals/scenarios"
+    trigger_ru = json.loads((scenarios / "stage20.skill.humanize.trigger.json").read_text())
+    trigger_en = json.loads((scenarios / "stage20.skill.humanize.trigger.en.json").read_text())
+    near_miss_ru = json.loads((scenarios / "stage20.skill.humanize.near-miss.json").read_text())
+    near_miss_en = json.loads((scenarios / "stage20.skill.humanize.near-miss.en.json").read_text())
+    for scenario in (trigger_ru, trigger_en):
+        assert scenario["expected"]["selected"] == ["skill:humanize"]
+        assert "humanize" in scenario["input"]["prompt"].lower()
+    for scenario in (near_miss_ru, near_miss_en):
+        assert scenario["expected"]["not_selected"] == ["skill:humanize"]
+        assert scenario["expected"]["selected"] == []
+    prompts = [
+        trigger_ru["input"]["prompt"],
+        trigger_en["input"]["prompt"],
+        near_miss_ru["input"]["prompt"],
+        near_miss_en["input"]["prompt"],
+    ]
+    assert len(set(prompts)) == 4
+    assert "намеренно не относится" not in near_miss_ru["input"]["prompt"]
+
+    chained_ru = json.loads((scenarios / "skill.humanize.workflow-step.json").read_text())
+    chained_en = json.loads((scenarios / "skill.humanize.workflow-step.en.json").read_text())
+    for scenario in (chained_ru, chained_en):
+        assert scenario["expected"]["selected"] == ["skill:briefing", "skill:humanize"]
+        assert scenario["kind"] == "trigger"
+        # A workflow-step invocation names only the caller skill; humanize is
+        # reached through its workflow, never named by the user.
+        assert "humanize" not in scenario["input"]["prompt"].lower()
+        assert "briefing" in scenario["input"]["prompt"].lower()
+        assert scenario["revision"] == 2
+
+    edit_ru = json.loads((scenarios / "skill.humanize.edit-contract.json").read_text())
+    edit_en = json.loads((scenarios / "skill.humanize.edit-contract.en.json").read_text())
+    # The RU scenario gained the strengthened whole-rewrite claim after the EN
+    # pair, so its revision moved past the shared revision 3.
+    assert (edit_ru["revision"], edit_en["revision"]) == (4, 3)
+    for scenario in (edit_ru, edit_en):
+        assert scenario["kind"] == "golden"
+        cases = scenario["input"]["fixture"]["cases"]
+        expected_ids = {item["id"] for item in scenario["expected"]["case_outcomes"]}
+        assert (
+            expected_ids
+            == {item["id"] for item in cases}
+            == {
+                "protected-tokens",
+                "sample-conflict",
+                "caveat-preserved",
+                "isolated-weak-tell",
+                "quote-keeps-marks",
+            }
+        )
+        for case in cases:
+            assert case["text"] and case["expect"]
+            # Every case carries a machine-checkable rewrite contract, and the
+            # quote case keeps a forbidden mark inside a protected quotation.
+            verify = case["verify"]
+            assert set(verify) == {"protected", "claims", "avoid"}
+            assert all(
+                isinstance(entry, str) and entry for group in verify.values() for entry in group
+            )
+            assert any(verify.values())
+        quote = next(case for case in cases if case["id"] == "quote-keeps-marks")
+        assert any("\u2014" in item for item in quote["verify"]["protected"])
+        # The protected-tokens claims bind the original author and both core
+        # actions, not just the object nouns.
+        protected = next(case for case in cases if case["id"] == "protected-tokens")
+        claims = [item.casefold() for item in protected["verify"]["claims"]]
+        assert any(item.startswith(("we ", "мы ")) for item in claims)
+        pipeline_claims = [item for item in claims if "pipeline" in item or "конвейер" in item]
+        assert pipeline_claims
+        assert all(item not in {"the whole pipeline", "конвейер"} for item in pipeline_claims)
+        # A pipeline claim binds the whole rewrite scope, never a bare action.
+        assert all("whole pipeline" in item or "целиком" in item for item in pipeline_claims)
+        assert all(item["outcome"] is True for item in scenario["expected"]["case_outcomes"])
+        prompt = scenario["input"]["prompt"]
+        assert "humanize" in prompt.lower()
+        # The scenario consumes the returned rewrite itself; a boolean
+        # self-report alone is not an observed result.
+        assert "rewrite" in prompt
+    # The bilingual cases must differ; the protected-token pair exercises an
+    # exact quotation and a command in both languages.
+    for key in ("text", "expect"):
+        assert (
+            edit_ru["input"]["fixture"]["cases"][0][key]
+            != edit_en["input"]["fixture"]["cases"][0][key]
+        )
+    assert edit_ru["input"]["fixture"]["cases"][1].get("sample")
+    assert edit_en["input"]["fixture"]["cases"][1].get("sample")

@@ -49,9 +49,10 @@ the meeting fits its configured minutes.
 
 Produce a compact preparation note: agenda items with one line of context
 each, open questions ranked, and the single most important outcome to reach.
-Quote journal facts with their dates. Follow `caution` entries from the
-profile verbatim as boundaries: they override any suggested phrasing. Do not
-fabricate commitments, moods, or history that the journal does not contain.
+Apply `humanize` to the drafted preparation note. Quote journal facts with
+their dates. Follow `caution` entries from the profile verbatim as
+boundaries: they override any suggested phrasing. Do not fabricate
+commitments, moods, or history that the journal does not contain.
 
 ## 5. Record Outcomes
 

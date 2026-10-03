@@ -1,7 +1,10 @@
 # Deep review
 
-Use `humanize` for all drafted prose. Its conversation guidance applies to the
-entire thread, including objections, explanations and applied suggestions.
+Apply `humanize` to each drafted thread reply at the explicit drafting step in
+the discussion stage below. Preliminary statuses, clarifying questions, and
+blocked or partial review reports are written normally and do not invoke it.
+The skill's conversation guidance applies to the entire thread, including
+objections, explanations and applied suggestions.
 Keep label proposals exclusively in `label_assessments`. Do not repeat label
 names or label recommendations in metadata `overall`, its recommendation, or
 the general summary. Metadata describes only the MR's presentation and state.

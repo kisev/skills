@@ -48,7 +48,9 @@ Structure by audience:
 
 Credit external contributors by policy exactly as `team-retro` prescribes.
 The manager's own assessment of the period is written by the manager; this
-skill assembles and formats, it does not editorialize morale.
+skill assembles and formats, it does not editorialize morale. Apply
+`humanize` to the drafted roll-up prose without softening a `[no data]` gap
+or an unfinished item.
 
 ## 5. Render and Record
 

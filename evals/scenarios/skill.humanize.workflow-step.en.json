@@ -1,0 +1,45 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "391fcb347350d6963b3a1a605c95345a07f66c09f00e41375d357dce383996a7",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:briefing", "skill:humanize"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "skill.humanize.workflow-step.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:briefing", "skill:humanize"]
+    },
+    "prompt": "Summarize the meeting notes below with the briefing skill.\n\nNotes: Release 2.4 sync, Tuesday. Ana: search got twice as fast after the pipeline rework; she will post the metrics tomorrow. Peter: the rollback plan is not ready and blocks the date. Agreed: Peter drafts the rollback plan by Friday, Ana posts the metrics in the same ticket."
+  },
+  "invariants": [
+    {
+      "contains": "`humanize` to the drafted summary",
+      "id": "briefing-applies-humanize",
+      "path": "skills/briefing/references/workflow.md"
+    },
+    {
+      "contains": "only on an explicit invocation",
+      "id": "humanize-explicit-activation",
+      "path": "skills/humanize/SKILL.source.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "skill.humanize.workflow-step",
+  "revision": 2,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -414,6 +414,8 @@ def test_list_selectors_and_capability_detection_are_machine_readable() -> None:
         {"id": "golden.goal.work-item", "kind": "golden", "surface": "skill"},
         {"id": "question-guidelines.rounds.en", "kind": "golden", "surface": "skill"},
         {"id": "question-guidelines.rounds.ru", "kind": "golden", "surface": "skill"},
+        {"id": "skill.humanize.edit-contract.en", "kind": "golden", "surface": "skill"},
+        {"id": "skill.humanize.edit-contract", "kind": "golden", "surface": "skill"},
         {"id": "spec-manage.audit-behavior.en", "kind": "golden", "surface": "skill"},
         {"id": "spec-manage.audit-behavior.ru", "kind": "golden", "surface": "skill"},
         {
@@ -498,6 +500,7 @@ def test_live_redacts_evidence_and_rejects_sandbox_escape() -> None:
         "spec-manage.mode-selection.en",
         "question-guidelines.rounds.en",
         "question-guidelines.rounds.ru",
+        "skill.humanize.edit-contract.en",
     ],
 )
 def test_case_outcomes_require_trusted_live_observation(scenario: str) -> None:
@@ -537,6 +540,219 @@ def test_live_case_outcomes_reject_missing_extra_and_incorrect_results(tmp_path:
         )
         expected_delta = {"cases-missing": -1, "cases-extra": 1}.get(mode, 0)
         assert len(evaluated["case_outcomes"]) == expected_count + expected_delta
+
+
+# The rewrites a fake host returns for the humanize edit-contract fixture. The
+# "good" sets pass every mechanical check, including a forbidden dash that
+# survives only inside the preserved exact quotation of `quote-keeps-marks`.
+HUMANIZE_REWRITES: dict[str, dict[str, str]] = {
+    "en": {
+        "caveat-preserved": (
+            "According to the available sources, the function appeared around 2019. "
+            "The exact founding date is not documented."
+        ),
+        "isolated-weak-tell": (
+            "Additionally, the report is attached to the email. The meeting moved to 14:00."
+        ),
+        "protected-tokens": (
+            "We sped up search by rewriting the whole pipeline. Run `deploy --env=prod` "
+            'and wait for the line "deployment OK". That said, individual failures '
+            "are still possible on cold nodes."
+        ),
+        "quote-keeps-marks": (
+            'The status page stated: "We restored service \u2014 data was never lost."'
+        ),
+        "sample-conflict": "Search now responds noticeably faster.",
+    },
+    "ru": {
+        "caveat-preserved": (
+            "По доступным источникам, функция появилась примерно в 2019 году. "
+            "Точная дата основания не задокументирована."
+        ),
+        "isolated-weak-tell": (
+            "Дополнительно отчёт приложен к письму. Встреча перенесена на 14:00."
+        ),
+        "protected-tokens": (
+            "Мы ускорили поиск, переписав конвейер целиком. Запускайте `deploy --env=prod` "
+            'и ждите строки "deployment OK". Впрочем, на холодных узлах возможны '
+            "отдельные сбои."
+        ),
+        "quote-keeps-marks": (
+            'Страница статуса сообщила: "Мы восстановили сервис \u2014 данные не потеряны."'
+        ),
+        "sample-conflict": "Поиск теперь отвечает заметно быстрее.",
+    },
+}
+
+# Negative protected-tokens controls. Object names, protected bytes, and the
+# cold-node caveat survive every defect, so only the strengthened claims can
+# reject the lost speedup, the lost rewrite, the replaced author, and the
+# nouns-only probe that motivated the contract. The RU-only scope controls
+# prove the whole-rewrite claim: dropping the "целиком" qualifier or claiming
+# a partial rewrite must fail while every other claim stays intact.
+HUMANIZE_PROTECTED_DEFECTS: dict[str, dict[str, str]] = {
+    "en": {
+        "speedup-lost": (
+            "By rewriting the whole pipeline, we finished the migration. "
+            'Run `deploy --env=prod` and wait for the line "deployment OK". '
+            "That said, individual failures are still possible on cold nodes."
+        ),
+        "rewrite-lost": (
+            "We sped up search and cleaned up the whole pipeline. "
+            'Run `deploy --env=prod` and wait for the line "deployment OK". '
+            "That said, individual failures are still possible on cold nodes."
+        ),
+        "author-changed": (
+            "The team sped up search by rewriting the whole pipeline. "
+            'Run `deploy --env=prod` and wait for the line "deployment OK". '
+            "That said, individual failures are still possible on cold nodes."
+        ),
+        "actions-lost": (
+            "They inspected search and the whole pipeline. "
+            'Run `deploy --env=prod` and wait for the line "deployment OK". '
+            "That said, individual failures are still possible on cold nodes."
+        ),
+    },
+    "ru": {
+        "speedup-lost": (
+            "Переписав конвейер целиком, мы завершили миграцию. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+        "rewrite-lost": (
+            "Мы ускорили поиск и расчистили конвейер целиком. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+        "author-changed": (
+            "Команда ускорила поиск, переписав конвейер целиком. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+        "actions-lost": (
+            "Они осмотрели поиск и конвейер целиком. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+        "scope-lost": (
+            "Мы ускорили поиск, переписав конвейер. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+        "partial-claimed": (
+            "Мы ускорили поиск, переписав конвейер частично. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+    },
+}
+
+
+def rewrite_host(directory: Path, name: str, outcomes: list[dict[str, Any]]) -> Path:
+    """A fake host that reports the given case_outcomes for rewrite scenarios."""
+    payload_file = directory / f"outcomes-{name}.json"
+    payload_file.write_text(json.dumps(outcomes), encoding="utf-8")
+    executable = directory / f"fake-rewrites-{name}"
+    executable.write_text(
+        textwrap.dedent(
+            f"""\
+            #!{sys.executable}
+            import json
+            import sys
+            from pathlib import Path
+            outcomes = json.loads((Path(__file__).parent / "{payload_file.name}").read_text())
+            print(json.dumps({{"selected": ["skill:humanize"], "case_outcomes": outcomes, "usage": {{"total_tokens": 12, "cost": 0.1}}}}))
+            """
+        ),
+        encoding="utf-8",
+    )
+    executable.chmod(0o755)
+    return executable
+
+
+def rewrite_outcomes(mode: str, locale: str) -> list[dict[str, Any]]:
+    rewrites = dict(HUMANIZE_REWRITES[locale])
+    if mode in HUMANIZE_PROTECTED_DEFECTS[locale]:
+        rewrites["protected-tokens"] = HUMANIZE_PROTECTED_DEFECTS[locale][mode]
+    if mode == "protected-broken":
+        rewrites["protected-tokens"] = rewrites["protected-tokens"].replace(
+            "deploy --env=prod", "deploy --env=production"
+        )
+    if mode == "punctuation-broken":
+        suffix = " Confirmed \u2014 done." if locale == "en" else " Подтверждаем \u2014 сделано."
+        rewrites["quote-keeps-marks"] += suffix
+    if mode == "claim-lost":
+        rewrites["caveat-preserved"] = (
+            "According to the available sources, the function appeared around 2019."
+            if locale == "en"
+            else "По доступным источникам, функция появилась примерно в 2019 году."
+        )
+    if mode == "missing":
+        return [
+            {"id": identifier, "outcome": {"passed": True, "notes": "all conditions hold"}}
+            for identifier in sorted(rewrites)
+        ]
+    return [
+        {"id": identifier, "outcome": {"rewrite": rewrites[identifier], "notes": "edited"}}
+        for identifier in sorted(rewrites)
+    ]
+
+
+@pytest.mark.parametrize("locale", ["en", "ru"])
+def test_humanize_edit_contract_rejects_defective_rewrites(tmp_path: Path, locale: str) -> None:
+    scenario = (
+        "skill.humanize.edit-contract.en" if locale == "en" else "skill.humanize.edit-contract"
+    )
+    # The claim defects lose a core action, replace the author, or (RU only)
+    # drop the whole-rewrite scope while object names, protected bytes, and
+    # the caveat survive.
+    expectations = {
+        "good": ("passed", set()),
+        "missing": ("failed", {"rewrite:caveat-preserved:present", "case:caveat-preserved"}),
+        "protected-broken": ("failed", {"rewrite:protected-tokens:protected"}),
+        "punctuation-broken": ("failed", {"rewrite:quote-keeps-marks:punctuation"}),
+        "claim-lost": ("failed", {"rewrite:caveat-preserved:claims"}),
+        **{
+            mode: ("failed", {"rewrite:protected-tokens:claims"})
+            for mode in HUMANIZE_PROTECTED_DEFECTS[locale]
+        },
+    }
+    for mode, (expected_status, failing) in expectations.items():
+        result = run_eval(
+            *live_arguments(
+                "opencode",
+                rewrite_host(tmp_path, f"{locale}-{mode}", rewrite_outcomes(mode, locale)),
+                tmp_path / f"{locale}-{mode}.json",
+                scenario=scenario,
+            )
+        )
+        evaluated = payload(result)["results"][0]
+        assert evaluated["observation_mode"] == "trusted-live", mode
+        assert evaluated["status"] == expected_status, (mode, evaluated["assertions"])
+        assertions = {item["id"]: item["status"] for item in evaluated["assertions"]}
+        for identifier in failing:
+            assert assertions.get(identifier) == "failed", (mode, identifier)
+        if mode == "good":
+            # The dash survives only inside the preserved exact quotation, and
+            # the aggregate case result follows the mechanical checks alone.
+            assert assertions["rewrite:quote-keeps-marks:protected"] == "passed"
+            assert assertions["rewrite:quote-keeps-marks:punctuation"] == "passed"
+            assert assertions["case:quote-keeps-marks"] == "passed"
+            assert assertions["rewrite:protected-tokens:claims"] == "passed"
+        elif mode in HUMANIZE_PROTECTED_DEFECTS[locale]:
+            # Names and bytes stay intact; the lost action or replaced author
+            # is rejected by the claims check alone.
+            assert assertions["rewrite:protected-tokens:protected"] == "passed", mode
+            assert assertions["rewrite:protected-tokens:punctuation"] == "passed", mode
+            assert assertions["rewrite:protected-tokens:avoid"] == "passed", mode
+            assert assertions["case:protected-tokens"] == "failed", mode
+        else:
+            # A self-reported success never rescues a defective rewrite: the
+            # overall result fails through the mechanical assertions alone.
+            assert any(
+                identifier.startswith(("rewrite:", "case:")) and status == "failed"
+                for identifier, status in assertions.items()
+            )
 
 
 def test_live_rejects_malformed_case_result(tmp_path: Path) -> None:

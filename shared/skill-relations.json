@@ -11,7 +11,7 @@
       "from": "task-prepare",
       "to": "humanize",
       "type": "uses",
-      "reason": "applied before drafting user-facing prose"
+      "reason": "applied to the drafted task title and body"
     },
     {
       "from": "task-prepare",
@@ -53,13 +53,13 @@
       "from": "code-review",
       "to": "humanize",
       "type": "uses",
-      "reason": "applied to all drafted prose"
+      "reason": "applied to drafted thread replies before publication"
     },
     {
       "from": "mr-prepare",
       "to": "humanize",
       "type": "uses",
-      "reason": "applied to all drafted prose"
+      "reason": "applied to the drafted MR title and description"
     },
     {
       "from": "mr-prepare",

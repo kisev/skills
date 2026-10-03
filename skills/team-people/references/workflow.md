@@ -74,5 +74,6 @@ and cadence gaps. Do not dump journal contents; summarize decisions.
 After any mutation, rerun `action-check --kind people` or re-read the changed
 store to confirm the write. Report the exact fields or entries added, the
 digest-bound commands that ran, and every unresolved ambiguity. Apply
-`references/language-policy.md` to user-facing prose and keep personal
-details out of shared channels.
+`references/language-policy.md` to user-facing prose, apply `humanize` to
+summary prose written for the user, and keep personal details out of shared
+channels.

@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "3dfbbec8ee50729ff341cf90fd616623b3d44a4b931c5fc618fea243935489c7",
+  "digest": "0957e2b13ab1db60d13fd33b34ce068b8993492854208aea086cf215bc6a0ecc",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
@@ -17,18 +17,23 @@
     "fixture": {
       "selected": ["skill:humanize"]
     },
-    "prompt": "\u0412\u044b\u0431\u0435\u0440\u0438 \u043d\u0430\u0432\u044b\u043a humanize \u0434\u043b\u044f \u0435\u0433\u043e \u0442\u043e\u0447\u043d\u043e\u0433\u043e \u043a\u043e\u043d\u0442\u0440\u0430\u043a\u0442\u043d\u043e\u0433\u043e \u0441\u0446\u0435\u043d\u0430\u0440\u0438\u044f."
+    "prompt": "\u041f\u0440\u0438\u043c\u0435\u043d\u0438 \u043d\u0430\u0432\u044b\u043a humanize \u043a \u0430\u0431\u0437\u0430\u0446\u0443 \u0438\u0437 \u0437\u0430\u043c\u0435\u0442\u043a\u0438 \u043e \u0440\u0435\u043b\u0438\u0437\u0435: \"\u041c\u044b \u043d\u0435 \u043f\u0440\u043e\u0441\u0442\u043e \u0443\u0441\u043a\u043e\u0440\u0438\u043b\u0438 \u043f\u043e\u0438\u0441\u043a, \u0430 \u043f\u0435\u0440\u0435\u043f\u0438\u0441\u0430\u043b\u0438 \u0435\u0433\u043e \u0441 \u043d\u0443\u043b\u044f. \u042d\u0442\u043e \u043d\u0430\u0441\u0442\u043e\u044f\u0449\u0438\u0439 \u043f\u0440\u043e\u0440\u044b\u0432!\""
   },
   "invariants": [
     {
       "id": "stage20.skill.humanize.trigger.source",
       "path": ".build/skills/humanize/SKILL.md"
+    },
+    {
+      "contains": "only on an explicit invocation",
+      "id": "humanize-explicit-activation",
+      "path": "skills/humanize/SKILL.source.md"
     }
   ],
   "kind": "trigger",
   "locale": "ru",
   "pair_id": "stage20.skill.humanize.trigger",
-  "revision": 1,
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,

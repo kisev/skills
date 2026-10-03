@@ -241,7 +241,98 @@ def case_outcome_contract(scenario: dict[str, Any], filename: str) -> list[dict[
         raise EvalError(
             "malformed_scenario", f"{filename}: fixture and expected case IDs must match"
         )
+    rewrite_contracts(scenario, filename)
     return expected
+
+
+REWRITE_CONTRACT_KEYS = ("protected", "claims", "avoid")
+
+FORBIDDEN_PROSE_MARKS: tuple[tuple[str, str], ...] = (
+    ("U+2013", "\u2013"),
+    ("U+2014", "\u2014"),
+    ("U+00AB", "\u00ab"),
+    ("U+00BB", "\u00bb"),
+    ("U+201C", "\u201c"),
+    ("U+201D", "\u201d"),
+)
+
+
+def rewrite_contracts(scenario: dict[str, Any], filename: str) -> dict[str, dict[str, Any]]:
+    """Fixture cases that declare a machine-checkable rewrite contract."""
+    contracts: dict[str, dict[str, Any]] = {}
+    fixture = scenario["input"].get("fixture")
+    cases = fixture.get("cases") if isinstance(fixture, dict) else None
+    for case in cases or []:
+        verify = case.get("verify") if isinstance(case, dict) else None
+        if verify is None:
+            continue
+        invalid = (
+            not isinstance(verify, dict)
+            or set(verify) != set(REWRITE_CONTRACT_KEYS)
+            or any(
+                not isinstance(verify.get(key), list)
+                or any(not isinstance(entry, str) or not entry.strip() for entry in verify[key])
+                for key in REWRITE_CONTRACT_KEYS
+            )
+            or not any(verify.get(key) for key in REWRITE_CONTRACT_KEYS)
+        )
+        if invalid:
+            raise EvalError(
+                "malformed_scenario",
+                f"{filename}: case verify must map protected, claims, and avoid to string "
+                "lists with at least one entry",
+            )
+        contracts[str(case.get("id"))] = verify
+    return contracts
+
+
+def rewrite_from_outcome(outcome: Any) -> str | None:
+    """Extract the actual edited text a host returned for one fixture case."""
+    candidate = outcome.get("rewrite") if isinstance(outcome, dict) else outcome
+    if not isinstance(candidate, str) or not candidate.strip():
+        return None
+    return candidate
+
+
+def normalized_prose(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
+def rewrite_case_assertions(
+    case_id: str, verify: dict[str, Any], outcome: Any
+) -> list[dict[str, str]]:
+    """Check the returned rewrite itself; a host self-report never gates these."""
+    rewrite = rewrite_from_outcome(outcome)
+    text = rewrite or ""
+    present = rewrite is not None
+    protected = list(verify.get("protected", []))
+    claims = list(verify.get("claims", []))
+    avoid = list(verify.get("avoid", []))
+    checks: list[dict[str, str]] = []
+
+    def record(suffix: str, passed: bool) -> None:
+        checks.append(
+            {"id": f"rewrite:{case_id}:{suffix}", "status": "passed" if passed else "failed"}
+        )
+
+    record("present", present)
+    record("protected", present and all(item in text for item in protected))
+    masked = text
+    for fragment in sorted(protected, key=len, reverse=True):
+        masked = masked.replace(fragment, "\x00")
+    record(
+        "punctuation",
+        present and not any(mark in masked for _, mark in FORBIDDEN_PROSE_MARKS),
+    )
+    record(
+        "claims",
+        present and all(normalized_prose(item) in normalized_prose(text) for item in claims),
+    )
+    record(
+        "avoid",
+        present and all(normalized_prose(item) not in normalized_prose(text) for item in avoid),
+    )
+    return checks
 
 
 def validate_scenario(scenario: dict[str, Any], filename: str) -> list[str]:
@@ -631,10 +722,26 @@ def expected_assertions(
                 item["id"]: item["outcome"] for item in observation.get("case_outcomes", [])
             }
             expected_ids = {item["id"] for item in expected_cases}
+            contracts = rewrite_contracts(scenario, str(scenario.get("id", "scenario")))
             for item in expected_cases:
+                identifier = item["id"]
+                if identifier in contracts:
+                    checks = rewrite_case_assertions(
+                        identifier, contracts[identifier], observed_cases.get(identifier)
+                    )
+                    result.extend(checks)
+                    result.append(
+                        {
+                            "id": f"case:{identifier}",
+                            "status": "failed"
+                            if any(check["status"] == "failed" for check in checks)
+                            else "passed",
+                        }
+                    )
+                    continue
                 result.append(
                     {
-                        "id": f"case:{item['id']}",
+                        "id": f"case:{identifier}",
                         "status": "passed"
                         if observed_cases.get(item["id"], object()) == item["outcome"]
                         else "failed",
