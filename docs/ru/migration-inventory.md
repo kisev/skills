@@ -16,7 +16,7 @@ GitHub Release. Необязательный пакет интеграции - `
 `agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
 `docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
 `mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
-`skill-doctor`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
+`skill-doctor`, `slides-prompts-prepare`, `spec-manage`, `handoff`, `briefing`,
 `task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
 `team-agreements`, `team-feedback`, `team-health`, `team-incident`,
 `team-onboarding`, `team-people`, `team-performance`, `team-report`,

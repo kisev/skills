@@ -32,7 +32,7 @@ commands have a separate contract below.
 | [skill-doctor](skills/skill-doctor.md) | [skill-doctor](commands/skill-doctor.md) |
 | [slides-prompts-prepare](skills/slides-prompts-prepare.md) | [slides-prompts-prepare](commands/slides-prompts-prepare.md) |
 | [spec-manage](skills/spec-manage.md) | [spec-manage](commands/spec-manage.md) |
-| [stopit](skills/stopit.md) | [stopit](commands/stopit.md) |
+| [handoff](skills/handoff.md) | [handoff](commands/handoff.md) |
 | [task-prepare](skills/task-prepare.md) | [task-prepare](commands/task-prepare.md) |
 | [task-review](skills/task-review.md) | [task-review](commands/task-review.md) |
 | [task-triage](skills/task-triage.md) | [task-triage](commands/task-triage.md) |

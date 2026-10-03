@@ -1,5 +1,5 @@
 ---
-name: stopit
+name: handoff
 description: >-
   Create a redacted handoff in workspace-scoped XDG state. Russian discovery terms: передача контекста.
 license: MIT
@@ -8,7 +8,7 @@ metadata:
   source: "https://kisev.github.io/skills"
 ---
 
-# stopit
+# handoff
 
 Before asking the user, apply `references/question-guidelines.md`.
 

@@ -56,7 +56,7 @@ are not included.
 | `skill-doctor` | Diagnose current-session skill usage into private incremental notes and prepare confirmed public bug reports. |
 | `slides-prompts-prepare` | Combine a chosen presentation theme with factual team and technology references. |
 | `spec-manage` | Create greenfield specs, describe an existing project, change canonical target state, or audit specs read-only; mode tokens are optional. |
-| `stopit` | Write a sanitized handoff for the next session. |
+| `handoff` | Write a sanitized handoff for the next session. |
 | `briefing` | Turn transcripts, notes, or research into a structured factual summary. |
 | `task-prepare` | Prepare tasks with shared review, scoped release planning, and manual GitLab publication commands. |
 | `task-review` | Review semantic quality and release-milestone compatibility standalone or inside other task workflows. |

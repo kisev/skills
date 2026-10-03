@@ -132,7 +132,11 @@ Install shall offer optional presets and staged model/critic setup before one
 final confirmation; skipping model setup retains saved choices. Repeat runs
 shall start with saved component selections and show deselected-file removals.
 First non-TTY installation requires complete component flags; subsequent runs
-may reuse saved selection. All mutations support read-only preview and explicit
+may reuse saved selection. A complete explicit component selection shall replace
+saved component names before validation against the current catalog, allowing
+installation after a selected command is removed. The saved core connection
+choice shall remain unless explicitly overridden. All mutations support read-only
+preview and explicit
 non-TTY consent. Changed sources invalidate a confirmed plan. Preview shall not
 create locks, migrate namespaces, or recover interrupted journals. Recovery
 requires a displayed journal-bound plan and a fresh preview afterwards.
@@ -151,6 +155,9 @@ entries is intentionally not provided; this does not authorize data deletion.
 staged profiles, stale plans, interactive cancellation/setup, saved connection,
 repair, uninstall, and removed entrypoints. Existing lifecycle tests retain
 ownership, rollback, config-receipt, and recovery evidence.
+`packages/agentomatic/test/stage19.test.mjs` verifies explicit replacement of a
+retired command through CLI preview and apply, preserving the saved core choice
+and archiving the exact-owned old adapter.
 
 ### REQ-I-009 - Unify interactive selectors
 

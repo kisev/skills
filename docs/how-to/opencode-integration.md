@@ -163,6 +163,12 @@ If any selection flag is present outside a TTY, `--commands`, `--agents`, and
 npx --yes @kisev/agentomatic@latest catalog --json
 ```
 
+If a saved selection contains a command removed by an update, rerun `install`
+with all three selection flags and current names. The explicit selection
+replaces the saved component names before validation; the saved core connection
+choice stays unchanged unless `--core` or `--no-core` overrides it. Preview with
+`--dry-run`, then confirm the same selection. This does not migrate skill state.
+
 The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`; `rtk` is
 preselected by the installer. OpenCode loads deployed wrapper files from the
 `plugins` directory automatically, so they need no `plugin` array entry; that

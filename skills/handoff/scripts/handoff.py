@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve and atomically write a workspace-scoped stopit handoff."""
+"""Resolve and atomically write a workspace-scoped handoff."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def state_root() -> Path:
 def handoff_path(workspace: Path) -> tuple[Path, int]:
     workspace_id = hashlib.sha256(os.fsencode(workspace)).hexdigest()
     root = state_root()
-    path = root / "agent-skills" / "stopit" / workspace_id / "handoff.md"
+    path = root / "agent-skills" / "handoff" / workspace_id / "handoff.md"
     return path, len(root.parts) - 1
 
 
@@ -169,7 +169,7 @@ def require_locking() -> FileLocking:
         or not isinstance(getattr(fcntl, "LOCK_EX", None), int)
         or not isinstance(getattr(fcntl, "LOCK_NB", None), int)
     ):
-        raise HandoffError("stopit handoff locking requires POSIX fcntl")
+        raise HandoffError("handoff locking requires POSIX fcntl")
     return fcntl
 
 
@@ -309,11 +309,11 @@ def _drop_memory_distillate(workspace: Path, content: bytes) -> None:
         summary = " ".join(content.decode("utf-8", "replace").split())[:400]
         workspace_key = hashlib.sha256(os.fsencode(workspace)).hexdigest()[:12]
         lines = inbox.entry_lines(
-            [f"stopit handoff for {{workspace}}: {summary}"],
-            source="stopit",
-            key=f"stopit-{workspace_key}",
+            [f"handoff for {{workspace}}: {summary}"],
+            source="handoff",
+            key=f"handoff-{workspace_key}",
         )
-        inbox.drop_memory(lines, "stopit")
+        inbox.drop_memory(lines, "handoff")
     except Exception:
         return
 
@@ -327,7 +327,7 @@ def main() -> int:
             inspect_path(path, state_parts)
         else:
             if Path(arguments.expected_path) != path:
-                raise HandoffError("handoff destination changed after confirmation")
+                raise HandoffError("handoff destination changed after resolution")
             content = read_handoff()
             atomic_write(path, state_parts, content)
             _drop_memory_distillate(workspace, content)

@@ -21,7 +21,7 @@ export const CATALOG = {
     "skill-doctor",
     "slides-prompts-prepare",
     "spec-manage",
-    "stopit",
+    "handoff",
     "briefing",
     "task-prepare",
     "task-review",

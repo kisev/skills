@@ -1,38 +1,48 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "skill.core-contracts.trigger",
-  "revision": 2,
-  "kind": "trigger",
-  "locale": "ru",
-  "pair_id": "skill.core-contracts.trigger",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Проверь общие portable contracts и границы подтверждений для core skills.",
-    "fixture": { "selected": ["skill:askme", "skill:docs-prepare"] }
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
   },
+  "digest": "b600c4480c4afc2b8d38f0ef18e133561d7b69a282b4cd9fbd6c28acef5dea23",
   "expected": {
-    "selected": ["skill:askme", "skill:docs-prepare"],
-    "not_selected": ["skill:briefing", "skill:stopit"]
+    "not_selected": ["skill:briefing", "skill:handoff"],
+    "selected": ["skill:askme", "skill:docs-prepare"]
+  },
+  "host": "any",
+  "id": "skill.core-contracts.trigger",
+  "input": {
+    "fixture": {
+      "selected": ["skill:askme", "skill:docs-prepare"]
+    },
+    "prompt": "\u041f\u0440\u043e\u0432\u0435\u0440\u044c \u043e\u0431\u0449\u0438\u0435 portable contracts \u0438 \u0433\u0440\u0430\u043d\u0438\u0446\u044b \u043f\u043e\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0435\u043d\u0438\u0439 \u0434\u043b\u044f core skills."
   },
   "invariants": [
     {
+      "contains": "Do not declare a result complete",
       "id": "shared-evidence",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "Do not declare a result complete"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "same mutation boundary",
       "id": "risk-grouping",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "same mutation boundary"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "complete user-facing documentation set",
       "id": "docs-scope",
-      "path": "skills/docs-review/references/workflow.md",
-      "contains": "complete user-facing documentation set"
+      "path": "skills/docs-review/references/workflow.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "2f0e7a3029ddeeb73abd3901f4797b7ddd1ccf90ee5ae2a01bbb8cc0eef8fe44"
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "skill.core-contracts.trigger",
+  "revision": 2,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

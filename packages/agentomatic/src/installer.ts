@@ -138,6 +138,7 @@ export async function installedSelection(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
+  overrides: Partial<InstallerSelection> = {},
 ): Promise<InstallerSelection | null> {
   const { manifest } = await currentManifest(deploymentRoot(scope, cwd, home));
   return manifest
@@ -146,6 +147,7 @@ export async function installedSelection(
         agents: manifest.agents,
         plugins: manifest.plugins,
         core_activation: manifest.core_activation,
+        ...overrides,
       })
     : null;
 }

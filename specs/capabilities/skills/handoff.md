@@ -1,4 +1,4 @@
-# `stopit`
+# `handoff`
 
 ## Purpose
 
@@ -12,14 +12,15 @@ Trigger when pausing or changing context; near-miss: committing project notes.
 
 Input is current session context and an existing workspace. Output is a redacted
 handoff with facts and next step under the XDG state directory at
-`$XDG_STATE_HOME/agent-skills/stopit/<workspace-id>/handoff.md`; the runner uses
+`$XDG_STATE_HOME/agent-skills/handoff/<workspace-id>/handoff.md`; the runner uses
 the platform default state directory when the variable is unset.
 
 ## Workflow Stages
 
-Resolve the canonical workspace and destination read-only, redact, show the full
-draft and exact path, confirm, require that path as the write binding, atomically
-write the approved standard input, report.
+Resolve the canonical workspace and destination read-only, redact, accumulate
+relevant context from the existing handoff body, prepare the draft, write it
+immediately without preview or confirmation while binding the write to the
+resolved path, report the destination and applied redactions.
 
 ## Dependencies
 
@@ -28,9 +29,9 @@ descriptor traversal and `fcntl` locking.
 
 ## Remote/Local Effects
 
-After explicit confirmation, privately and atomically replaces only the stable
-workspace handoff and retains changed body-only versions in content-addressed
-XDG history; no repository or remote effects.
+Privately and atomically replaces only the stable workspace handoff, without a
+preview or confirmation gate, and retains changed body-only versions in
+content-addressed XDG history; no repository or remote effects.
 
 ## Errors, Partial, Escalation
 
@@ -48,11 +49,16 @@ workspace ID is a deterministic digest of the canonical existing workspace path.
 
 ### REQ-F-121 - Keep handoffs stable, scoped, and redacted
 
-The skill shall preview the complete draft and exact read-only-resolved path,
-require explicit confirmation and the same path as the write binding, and then
-write only bounded, nonempty, valid UTF-8 approved content to the designated
-workspace-scoped XDG state file. The runner shall reject changed destinations,
-unsafe and symlinked state paths and use private directories, a private file, and
+The skill shall resolve the exact destination read-only, write the prepared
+content immediately without preview or confirmation while binding the write to
+the resolved path, and report the destination and applied redactions afterward.
+Each handoff shall cover the whole session from its first request to the end,
+carry forward relevant context from the existing handoff body above its
+`## History` footer, and reference only durable repository or build artifacts
+without session identifiers, session names, or session log or transcript paths.
+The runner shall write only bounded, nonempty, valid UTF-8 content to the
+designated workspace-scoped XDG state file, reject changed destinations, unsafe
+and symlinked state paths, and use private directories, a private file, and
 atomic replacement without creating a separate draft artifact. The current file
 shall list only paths to earlier body-only snapshots after its latest handoff.
 A workspace lock shall serialize stable-file reads, history creation, and
@@ -68,6 +74,6 @@ paths, and unchanged project files; the handoff retains blockers and next action
 
 ## Example
 
-`stopit` records a blocker and next step for one canonical workspace without
+`handoff` records a blocker and next step for one canonical workspace without
 copying secrets or chain of thought.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

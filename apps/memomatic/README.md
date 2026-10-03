@@ -78,7 +78,7 @@ when memomatic is absent.
 
 Every entry can carry a `source` annotation. Visibility derives from it:
 `team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing
-artifacts; every other source (`people-journal`, `stopit`,
+artifacts; every other source (`people-journal`, `handoff`,
 `mattermost-triage`, `task-*`, `docs-*`, `user`) is personal-only. The label
 is exposed in search responses.
 

@@ -15,7 +15,7 @@ HELPER = ROOT / "shared/references/memomatic_inbox.py"
 PEOPLE_JOURNAL = ROOT / "shared/references/people_runtime/people_journal.py"
 TRIAGE = ROOT / "shared/references/work_item_runtime/triage.py"
 CONTRACT = ROOT / "shared/references/work_item_runtime/contract.py"
-BUILT_STOPIT = ROOT / ".build/skills/stopit/scripts/handoff.py"
+BUILT_HANDOFF = ROOT / ".build/skills/handoff/scripts/handoff.py"
 
 
 def load_module(name: str, path: Path) -> Any:
@@ -150,16 +150,16 @@ def test_triage_and_prepare_hooks_drop_entries(inbox_env: Path) -> None:
 
 
 @pytest.mark.skipif(
-    not BUILT_STOPIT.exists(),
-    reason="built stopit archive is required",
+    not BUILT_HANDOFF.exists(),
+    reason="built handoff archive is required",
 )
-def test_built_stopit_handoff_mirrors_the_inbox(inbox_env: Path, tmp_path: Path) -> None:
+def test_built_handoff_mirrors_the_inbox(inbox_env: Path, tmp_path: Path) -> None:
     workspace = tmp_path / "repo"
     workspace.mkdir()
-    helper = BUILT_STOPIT.with_name("memomatic_inbox.py")
-    assert helper.exists(), "memomatic_inbox.py must be materialized into the stopit archive"
+    helper = BUILT_HANDOFF.with_name("memomatic_inbox.py")
+    assert helper.exists(), "memomatic_inbox.py must be materialized into the handoff archive"
     expected = subprocess.run(
-        [sys.executable, str(BUILT_STOPIT), "path", "--workspace", str(workspace)],
+        [sys.executable, str(BUILT_HANDOFF), "path", "--workspace", str(workspace)],
         capture_output=True,
         text=True,
         check=True,
@@ -168,7 +168,7 @@ def test_built_stopit_handoff_mirrors_the_inbox(inbox_env: Path, tmp_path: Path)
     subprocess.run(
         [
             sys.executable,
-            str(BUILT_STOPIT),
+            str(BUILT_HANDOFF),
             "write",
             "--workspace",
             str(workspace),
@@ -181,8 +181,8 @@ def test_built_stopit_handoff_mirrors_the_inbox(inbox_env: Path, tmp_path: Path)
         check=True,
         env={**os.environ, "XDG_STATE_HOME": str(inbox_env.parents[1])},
     )
-    drops = list(inbox_env.glob("stopit-*.md"))
+    drops = list(inbox_env.glob("handoff-*.md"))
     assert len(drops) == 1
     body = drops[0].read_text(encoding="utf-8")
-    assert "<!-- source: stopit -->" in body
+    assert "<!-- source: handoff -->" in body
     assert "verify inbox mirroring" in body
