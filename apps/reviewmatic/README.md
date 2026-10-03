@@ -67,8 +67,24 @@ artifact bindings; the agent supplies the semantic assessments, concrete fixes,
 label rationales, and thread outcomes.
 
 The input package includes `draft_schema_path`, `input_contract`, and valid field
-examples in `input_examples`, separately from final artifact envelopes. Start the
-critic as soon as these exact snapshots are ready, in background alongside primary
+examples in `input_examples`, separately from final artifact envelopes. After
+snapshot preparation the agent completes and records one shared context package
+(`context-package` template plus `record-package --draft`): goal, claims with
+sources, constraints, prior decisions, and questions, stored privately outside
+the checkout and bound to the collected evidence. Recording and reading it
+never contacts GitLab. Critics start only after the package is recorded,
+receive it as their primary task context, and answer the questions assigned to
+them in receipt `question_answers`; with several critics, each selected critic
+answers each assigned question, and one critic's answer never covers another's
+assignment. Answers bind to the package version they were produced against:
+re-recording after an edited question or requirement retires the affected
+answers into the draft's `superseded_question_results` history and requires
+fresh results for the affected scope, while a background-only edit keeps them.
+The primary review addresses every
+`not_verified` answer in the draft's `question_verifications`, preserving the
+original answer. Start the
+critic as soon as these exact snapshots and the recorded package are ready, in
+background alongside primary
 analysis when supported. Resume verifies and reuses snapshots without rebuilding
 them. No numerical response-time SLA is implied.
 
@@ -113,9 +129,19 @@ compact JSON result and never mutates GitLab or the checkout. Without `--ref`,
 the scope is the staged, unstaged, and non-ignored untracked work against HEAD;
 an explicit `--ref <revision>` adds the commits from its merge base with HEAD
 and is used exactly as it exists locally, without fetching. A missing,
-ambiguous, or merge-base-less `--ref` stops with a concrete reason, and a
+ambiguous, or merge-base-less `--ref` stops with a concrete reason — including
+expressions such as `dup~0` when the base name matches both a branch and a
+tag; pass one fully qualified ref — and a
 boundary without any changes returns `empty_scope` instead of a snapshot.
-Local preparation needs no `glab`, network, remote, or worktree.
+Local preparation needs no `glab`, network, remote, or worktree. The local
+review completes and records the same shared context package
+(`record-package --bundle`) bound to the prepared snapshot with its comparison
+ref and the committed, staged, unstaged, and untracked sections, and the
+report binds the recorded package at finalization; the returned
+`record_command` names the exact immutable snapshot path. Re-recording a
+package with a changed question or requirement retires the report's answers
+for the previous wording into `superseded_question_results` and requires
+fresh answers before finalization.
 
 ## Interactive plan walkthrough
 
@@ -207,7 +233,16 @@ still requires targeted fix repair.
 Created worktrees are recorded in
 `$XDG_STATE_HOME/agent-skills/reviewmatic/worktrees.json`; review worktrees
 prepared by `start-review` are recorded in `review-worktrees.json` beside it.
-Nothing is deleted
+The shared registry file is updated under one short lock, so parallel
+preparations of different merge requests keep both records, and no fetch runs
+under that lock. Review worktree paths end with a short hash of the full host,
+project, and MR identity, so colliding readable names and truncated long
+project paths never share a tree. A managed tree under the retired layout
+without the hash is never reused, moved, or deleted automatically:
+preparation stops with a concrete manual migration instruction — preserve the
+active review and local changes, remove the tree with
+`git worktree remove`, and the next run replaces the stale record and creates
+the hashed path. Nothing else is deleted
 automatically; `reviewmatic worktree list` prints the fix-application registry
 with commit and push state per worktree.
 

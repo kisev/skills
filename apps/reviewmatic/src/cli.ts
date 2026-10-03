@@ -18,6 +18,7 @@ import {
   finalizeLocal,
   localBundle,
   prepareFollowup,
+  recordLocalPackage,
   recordReview,
 } from "./local-review.js";
 import { markerRun, StateArtifactError } from "./state-artifacts.js";
@@ -32,6 +33,7 @@ import {
   resumeReview,
   checkReview,
   finishReview,
+  recordDraftPackage,
   repairReview,
   refreshReview,
 } from "./draft.js";
@@ -210,6 +212,15 @@ const definitions: CommandSpec[] = [
     options: [
       { name: "artifact-root", description: "artifact root", required: true },
       { name: "report", description: "readiness report path" },
+    ],
+  },
+  {
+    signature: "record-package",
+    description: "Record the agent-authored context package bound to selected evidence",
+    options: [
+      { name: "draft", description: "generated editable review draft (remote MR mode)" },
+      { name: "bundle", description: "local WIP snapshot path (local mode)" },
+      { name: "input", description: "completed context package input", required: true },
     ],
   },
   {
@@ -480,6 +491,21 @@ async function runPrepareLocal(fields: Fields): Promise<void> {
   process.exitCode = complete ? 0 : 2;
 }
 
+async function runRecordPackage(fields: Fields): Promise<void> {
+  const hasDraft = fields.draft !== undefined;
+  const hasBundle = fields.bundle !== undefined;
+  if (hasDraft === hasBundle) {
+    throw new WorkflowError(
+      "record-package requires exactly one target: --draft for a remote MR review or --bundle for a local review",
+    );
+  }
+  if (hasDraft) {
+    emit(await recordDraftPackage(String(fields.draft), String(fields.input)));
+    return;
+  }
+  emit(await recordLocalPackage(String(fields.bundle), String(fields.input)));
+}
+
 async function runFinalizeLocal(fields: Fields): Promise<void> {
   let result = await finalizeLocal(String(fields.bundle));
   const [, bundle] = artifactPayload(String(fields.bundle), "local_wip_snapshot");
@@ -641,6 +667,7 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
     }
     if (command === "prepare") await runPrepare(fields);
     else if (command === "prepare-local") await runPrepareLocal(fields);
+    else if (command === "record-package") await runRecordPackage(fields);
     else if (command === "finalize-local") await runFinalizeLocal(fields);
     else if (command === "assess-mode") runAssessMode(fields);
     else process.exitCode = contractError("invalid_command", "a supported subcommand is required");

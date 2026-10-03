@@ -73,7 +73,7 @@ async function ready(t, grouped = false) {
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
   writeJson(
     result.draft_path,
-    finding(completeDraft(readJson(result.draft_path), result), grouped),
+    finding(await completeDraft(readJson(result.draft_path), result), grouped),
   );
   const finished = await finishReview(result.draft_path);
   assert.equal(finished.status, "ok", JSON.stringify(finished));
@@ -284,7 +284,7 @@ test("changed fix needs targeted checks but not a new critic; changed decisions 
 test("CI-only refresh retains original critique and finishes after a targeted CI assessment", async (t) => {
   const fixture = reviewFixture(t, { resolved: true, pipelineStatus: "running" });
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const draft = completeDraft(readJson(result.draft_path), result);
+  const draft = await completeDraft(readJson(result.draft_path), result);
   writeJson(result.draft_path, draft);
   writeJson(fixture.configPath, { ...fixture.config, pipelineStatus: "success" });
   assert.equal((await finishReview(result.draft_path)).status, "refresh_required");
@@ -302,7 +302,7 @@ test("CI-only refresh retains original critique and finishes after a targeted CI
 test("material refresh preserves findings and decisions without rebinding critic receipts", async (t) => {
   const fixture = reviewFixture(t);
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const draft = finding(completeDraft(readJson(result.draft_path), result));
+  const draft = finding(await completeDraft(readJson(result.draft_path), result));
   writeJson(result.draft_path, draft);
   writeJson(fixture.configPath, {
     ...fixture.config,
@@ -326,7 +326,7 @@ test("real CE pipeline and build timestamps are CI-only; review inputs remain ma
     latestBuildFinishedAt: null,
   });
   const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const draft = completeDraft(readJson(started.draft_path), started);
+  const draft = await completeDraft(readJson(started.draft_path), started);
   writeJson(started.draft_path, draft);
   writeJson(fixture.configPath, {
     ...fixture.config,

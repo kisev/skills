@@ -24,7 +24,7 @@ test("direct commands preserve arguments and never evaluate shell content", () =
 test("manual sends make one write and no GETs, can fail and repeat, and keep no publication state", async (t) => {
   const fixture = reviewFixture(t);
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  writeJson(result.draft_path, completeDraft(readJson(result.draft_path), result));
+  writeJson(result.draft_path, await completeDraft(readJson(result.draft_path), result));
   await finishReview(result.draft_path);
   const bundle = loadPlan(result.artifact_root);
   const item = planItems(bundle).find((item) => item.kind === "thread");

@@ -10,12 +10,29 @@ import {
   gitRead,
   isDigest,
   readJson,
+  regularFile,
   schemaValid,
   stateDirectory,
   writeArtifact,
   writeJson,
 } from "./contract.js";
+import { runnerAction } from "./context.js";
 import { contentDigest } from "./state-artifacts.js";
+import {
+  canonicalPackageDigest,
+  extractSupersededResults,
+  localSectionDigests,
+  narrativePackageDigest,
+  packageTemplateForLocal,
+  questionReport,
+  readPackagePointer,
+  recordedPackage,
+  supersedesDigest,
+  validateAnswers,
+  validatePackagePayload,
+  validateVerifications,
+  writeContextPackage,
+} from "./context-package.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -393,10 +410,26 @@ export function prepareFollowup(
     reason = "incompatible_boundary_or_incomplete_evidence";
   }
   const retained = reusable ? report : null;
+  const packageTemplate = packageTemplateForLocal(
+    bundle,
+    digestValue,
+    retained as Record<string, unknown> | null,
+  );
+  const packageTemplatePath = `${root}/local-context-package-input.json`;
+  writeJson(packageTemplatePath, packageTemplate);
+  const recorded = recordedPackage(root);
+  const packageCurrent =
+    recorded !== null &&
+    recorded.payload.mode === "local" &&
+    String((recorded.payload.binding as Record<string, unknown>).evidence_digest) === digestValue;
+  const snapshotPath = `${root}/artifacts/local_wip_snapshot/${digestValue}.json`;
   const template = {
     evidence_digest: digestValue,
     previous_review_digest: previousDigest,
     mode: mode,
+    context_package: null,
+    question_answers: [],
+    question_verifications: [],
     task: retained
       ? structuredClone((retained as Record<string, unknown>).task)
       : {
@@ -425,6 +458,18 @@ export function prepareFollowup(
     delta: delta,
     report_template: template,
     draft_path: `${root}/local-review-draft.json`,
+    context_package: {
+      template_path: packageTemplatePath,
+      package_path: recorded === null ? null : recorded.path,
+      package_digest: recorded === null ? null : recorded.digest,
+      status: packageCurrent ? "recorded" : "pending",
+      record_command: runnerAction("record-package", [
+        "--bundle",
+        snapshotPath,
+        "--input",
+        packageTemplatePath,
+      ]).command,
+    },
   };
 }
 
@@ -619,9 +664,17 @@ function shortRefCandidates(root: string, ref: string): string[] {
     .filter((name) => names.has(name));
 }
 
+// Revision expressions such as `dup~0` resolve through the ambiguous short
+// name without warning, so ambiguity is decided for the expression's base
+// name, not only for a literal refname.
+function comparisonBaseName(ref: string): string {
+  return ref.split(/[~^:@]/, 1)[0];
+}
+
 function comparisonBase(root: string, ref: string): string {
   if (!ref.startsWith("refs/")) {
-    const candidates = shortRefCandidates(root, ref);
+    const base = comparisonBaseName(ref);
+    const candidates = base === "" || base === "HEAD" ? [] : shortRefCandidates(root, base);
     if (candidates.length > 1) {
       throw new WorkflowError(
         `comparison ref '${ref}' is ambiguous in the local checkout (${candidates.join(", ")}); ` +
@@ -738,6 +791,177 @@ export async function finalizeLocal(bundleFile: string): Promise<Record<string, 
   };
 }
 
+// Records the agent-authored context package for a prepared local snapshot.
+// Purely mechanical validation and binding; no network, fetch, or worktree.
+export async function recordLocalPackage(
+  bundlePath: string,
+  inputPath: string,
+): Promise<Record<string, unknown>> {
+  const [, bundle] = artifactPayload(bundlePath, "local_wip_snapshot");
+  const envelope = readJson(bundlePath, "local evidence");
+  const digestValue = digest(envelope);
+  const root = String(bundle.artifact_root);
+  if (realpathSync(bundlePath) !== `${root}/artifacts/local_wip_snapshot/${digestValue}.json`) {
+    throw new WorkflowError("context package requires the canonical immutable local snapshot");
+  }
+  const input = readJson(regularFile(inputPath, "context package input"), "context package input");
+  validatePackagePayload(input, {
+    mode: "local",
+    evidenceDigest: digestValue,
+    artifactRoot: root,
+    repoRoot: String(bundle.repo_root),
+    headSha: String(bundle.head_sha),
+    ref: pythonGet(bundle, "ref") as string | null,
+    sections: localSectionDigests(bundle),
+  });
+  supersedesDigest(root, input.supersedes);
+  const previousPointer = readPackagePointer(root);
+  const [path, packageDigest] = await writeContextPackage(root, input);
+  const superseded = retireSupersededResults(root, previousPointer, input);
+  return {
+    status: "ok",
+    artifact_path: path,
+    digest: packageDigest,
+    canonical_digest: canonicalPackageDigest(input),
+    background_digest: narrativePackageDigest(input),
+    question_summary: questionReport((input.questions as Record<string, unknown>[]) ?? [], [], []),
+    superseded_questions: superseded,
+    external_mutations: false,
+  };
+}
+
+// Local counterpart of the draft package guard: re-recording a canonically
+// changed package moves the report's answers and verifications collected for
+// the previous questions into the report's historical section so that
+// finalization cannot count them against the current questions.
+function retireSupersededResults(
+  root: string,
+  pointer: Record<string, unknown> | null,
+  input: Record<string, unknown>,
+): string[] {
+  const draftPath = `${root}/local-review-draft.json`;
+  if (!existsSync(draftPath)) return [];
+  let report: Record<string, unknown>;
+  try {
+    report = readJson(regularFile(draftPath, "local review draft"), "local review draft");
+  } catch (error) {
+    if (!(error instanceof WorkflowError)) throw error;
+    return [];
+  }
+  let previous: { payload: Record<string, unknown>; digest: string } | null = null;
+  if (pointer !== null) {
+    try {
+      const [, payload] = artifactPayload(String(pointer.package_path), "context_package");
+      previous = { payload: payload, digest: String(pointer.package_digest) };
+    } catch (error) {
+      if (!(error instanceof WorkflowError)) throw error;
+    }
+  }
+  const answers = (report.question_answers as Record<string, unknown>[] | undefined) ?? [];
+  const verifications =
+    (report.question_verifications as Record<string, unknown>[] | undefined) ?? [];
+  const superseded = extractSupersededResults(previous, input, answers, verifications);
+  if (superseded === null) return [];
+  const retired = new Set(superseded.questionIds);
+  report.question_answers = answers.filter((item) => !retired.has(String(item.question_id)));
+  report.question_verifications = verifications.filter(
+    (item) => !retired.has(String(item.question_id)),
+  );
+  report.superseded_question_results = [
+    ...((report.superseded_question_results as Record<string, unknown>[] | undefined) ?? []),
+    superseded.entry,
+  ];
+  writeJson(draftPath, report);
+  return superseded.questionIds;
+}
+
+function validateLocalPackage(
+  report: Record<string, unknown>,
+  root: string,
+  bundle: Record<string, unknown>,
+  digestValue: string,
+): Record<string, unknown> {
+  const binding = report.context_package;
+  if (
+    !isObject(binding) ||
+    typeof binding.path !== "string" ||
+    !isDigest(binding.digest as string)
+  ) {
+    throw new WorkflowError(
+      "local review must bind the recorded context package; complete the returned template and run record-package",
+    );
+  }
+  const pointer = readPackagePointer(root);
+  if (
+    pointer === null ||
+    String(pointer.package_path) !== resolve(binding.path) ||
+    String(pointer.package_digest) !== binding.digest
+  ) {
+    throw new WorkflowError(
+      "local review package binding does not match the recorded context package; run record-package again",
+    );
+  }
+  const [, packagePayload] = artifactPayload(String(binding.path), "context_package");
+  validatePackagePayload(packagePayload, {
+    mode: "local",
+    evidenceDigest: digestValue,
+    artifactRoot: root,
+    repoRoot: String(bundle.repo_root),
+    headSha: String(bundle.head_sha),
+    ref: pythonGet(bundle, "ref") as string | null,
+    sections: localSectionDigests(bundle),
+  });
+  const questions = (packagePayload.questions as Record<string, unknown>[]) ?? [];
+  const questionIds = new Set(questions.map((item) => String(item.id)));
+  const answers = (report.question_answers as Record<string, unknown>[] | undefined) ?? [];
+  validateAnswers(answers, questionIds, "$.question_answers");
+  const verifications =
+    (report.question_verifications as Record<string, unknown>[] | undefined) ?? [];
+  validateVerifications(verifications, questionIds, answers);
+  const answered = new Set(answers.map((item) => String(item.question_id)));
+  const covered = (id: string): boolean =>
+    answered.has(id) || verifications.some((item) => String(item.question_id) === id);
+  for (const entry of (report.superseded_question_results as
+    | Record<string, unknown>[]
+    | undefined) ?? []) {
+    for (const answer of (entry.answers as Record<string, unknown>[] | undefined) ?? []) {
+      const id = String(answer.question_id);
+      if (questionIds.has(id) && !covered(id)) {
+        throw new WorkflowError(
+          `question ${id} was answered against a superseded context package ` +
+            `(context digest ${String(entry.context_digest)}); the current package changed it, ` +
+            `so it needs a fresh critic answer or primary verification`,
+        );
+      }
+    }
+  }
+  for (const question of questions) {
+    if (question.critic !== true) continue;
+    const id = String(question.id);
+    if (!covered(id)) {
+      throw new WorkflowError(
+        `question ${id} is assigned to critics but no critic answer or primary verification covers it`,
+      );
+    }
+  }
+  for (const answer of answers) {
+    if (answer.verdict !== "not_verified") continue;
+    const preserved = verifications.some(
+      (item) =>
+        String(item.question_id) === String(answer.question_id) &&
+        isObject(item.original) &&
+        String((item.original as Record<string, unknown>).run_id) === String(answer.run_id) &&
+        String((item.original as Record<string, unknown>).session_id) === String(answer.session_id),
+    );
+    if (!preserved) {
+      throw new WorkflowError(
+        `critic answer for ${String(answer.question_id)} is not_verified; add one question_verifications entry that preserves the original answer`,
+      );
+    }
+  }
+  return questionReport(questions, answers, verifications);
+}
+
 export async function recordReview(
   root: string,
   bundlePath: string,
@@ -769,6 +993,7 @@ export async function recordReview(
   if (followup.baseline_compatible === true) {
     validateContinuity(report, followup.previous_report as Record<string, unknown>);
   }
+  const questionSummary = validateLocalPackage(report, root, bundle, digestValue);
   if ((await finalizeLocal(bundlePath)).status !== "ok") {
     throw new WorkflowError("local evidence changed before report finalization");
   }
@@ -779,5 +1004,6 @@ export async function recordReview(
     digest: reportDigest,
     mode: report.mode,
     verdict: report.verdict,
+    question_summary: questionSummary,
   };
 }

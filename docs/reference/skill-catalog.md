@@ -101,7 +101,11 @@ authorize a new contract.
 
 The OpenCode `review` agent can be selected directly or called by `manager`.
 It performs the primary review and calls independent critics when the selected
-skill requires them. Fixing project sources requires an explicit request and a
+skill requires them. Before any critic starts, the primary review records one
+context package per prepared snapshot: goal, claims with sources, constraints,
+prior decisions, and questions, stored privately outside the checkout and
+handed to critics as their primary context. Fixing project sources requires an
+explicit request and a
 separate fixing phase. Portable `code-review` also works without this agent layer.
 
 1. Request a code review and read the resulting `runbook.md`.

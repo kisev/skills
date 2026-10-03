@@ -1545,6 +1545,32 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             )
         ):
             raise WorkflowError("finalize report payload is schema-invalid")
+    elif kind == "local_review_report":
+        # The canonical schema above owns the structure; the reviewmatic
+        # runtime owns verdict, continuity, and package-binding semantics.
+        pass
+    elif kind == "context_package":
+        if (
+            not isinstance(payload, dict)
+            or payload.get("schema") != "portable-gitlab/context-package/v2"
+            or payload.get("mode") not in {"mr", "local"}
+            or payload.get("external_mutations") is not False
+            or not isinstance(payload.get("binding"), dict)
+            or not is_digest(payload["binding"].get("evidence_digest"))
+        ):
+            raise WorkflowError("context package payload is schema-invalid")
+        goal = payload.get("goal")
+        acceptance = payload.get("acceptance_criteria")
+        if (
+            not isinstance(goal, dict)
+            or not isinstance(acceptance, dict)
+            or (goal.get("status") == "known" and not goal.get("text"))
+            or (
+                acceptance.get("status") == "known"
+                and (not isinstance(acceptance.get("items"), list) or not acceptance["items"])
+            )
+        ):
+            raise WorkflowError("context package goal or acceptance is schema-invalid")
     else:
         raise WorkflowError("unknown artifact kind")
 

@@ -15,13 +15,14 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { WorkflowError, writeArtifact, writeJson } from "../dist/contract.js";
+import { WorkflowError, readJson, writeArtifact, writeJson } from "../dist/contract.js";
 import {
   baseline,
   emptyScopeReason,
   finalizeLocal,
   localBundle,
   prepareFollowup,
+  recordLocalPackage,
   recordReview,
   validateReport,
 } from "../dist/local-review.js";
@@ -123,8 +124,26 @@ async function initialReport(repo) {
   return [snapshot, context, report];
 }
 
+async function completePackage(snapshot, context, report) {
+  const template = readJson(context.context_package.template_path, "context package template");
+  template.goal =
+    typeof report.task.goal === "string" && report.task.goal.length > 0
+      ? { status: "known", text: report.task.goal }
+      : { status: "unknown" };
+  template.acceptance_criteria = {
+    status: report.task.acceptance_criteria.length > 0 ? "known" : "unknown",
+    items: report.task.acceptance_criteria,
+  };
+  template.constraints = report.task.constraints;
+  writeJson(context.context_package.template_path, template);
+  const recorded = await recordLocalPackage(snapshot, context.context_package.template_path);
+  report.context_package = { path: recorded.artifact_path, digest: recorded.digest };
+  return recorded;
+}
+
 async function record(snapshot, context, report) {
   const draft = context.draft_path;
+  await completePackage(snapshot, context, report);
   writeJson(draft, report);
   return recordReview(dirname(draft), snapshot, draft);
 }
@@ -401,6 +420,12 @@ test("missing, ambiguous, or unrelated comparison refs stop with concrete reason
     () => localBundle(repo, "code-review", "dup"),
     isWorkflowError(/comparison ref 'dup' is ambiguous.*refs\/heads\/dup.*refs\/tags\/dup/),
   );
+  await assert.rejects(
+    () => localBundle(repo, "code-review", "dup~0"),
+    isWorkflowError(/comparison ref 'dup~0' is ambiguous.*refs\/heads\/dup.*refs\/tags\/dup/),
+  );
+  const tagged = await localBundle(repo, "code-review", "refs/tags/dup");
+  assert.equal(tagged.retrieval_complete, true);
   const unambiguous = await localBundle(repo, "code-review", "refs/heads/dup");
   assert.equal(unambiguous.retrieval_complete, true);
   const originalBranch = git(repo, "rev-parse", "--abbrev-ref", "HEAD");
@@ -423,6 +448,7 @@ test("a repeated run keeps the agreed comparison boundary", async (t) => {
   assert.equal(first.mode, "full");
   const report = reportPayload();
   report.evidence_digest = digestValue;
+  await completePackage(snapshot, first, report);
   writeJson(first.draft_path, report);
   await recordReview(dirname(first.draft_path), snapshot, first.draft_path);
 
@@ -513,5 +539,142 @@ test("finalize-local rejects non-repository and symlinked roots", async (t) => {
   await assert.rejects(
     () => localBundle(join(linked, "repo"), "code-review", null),
     isWorkflowError(/repo root must not be a symbolic link/),
+  );
+});
+
+test("prepare-local returns an executable record command for the immutable snapshot", async (t) => {
+  const repo = repository(t);
+  const [snapshot, context] = await prepare(repo);
+  const command = context.context_package.record_command;
+  assert.ok(command.includes(snapshot), command);
+  assert.ok(!command.includes("<snapshot>"));
+  const template = readJson(context.context_package.template_path, "template");
+  template.goal = { status: "known", text: "Link plain text." };
+  template.acceptance_criteria = { status: "known", items: ["Plain references link."] };
+  writeJson(context.context_package.template_path, template);
+  const cli = new URL("../dist/cli.js", import.meta.url).pathname;
+  const argv = command.split(" ");
+  assert.equal(argv[0], "reviewmatic");
+  const execution = spawnSync(process.execPath, [cli, ...argv.slice(1), "--json"], {
+    encoding: "utf8",
+    env: process.env,
+  });
+  assert.equal(execution.status, 0, execution.stderr + execution.stdout);
+  assert.equal(JSON.parse(execution.stdout).status, "ok");
+});
+
+test("a full critic answer passes the schema and finalizes the local report", async (t) => {
+  const report = reportPayload();
+  report.question_answers = [
+    {
+      question_id: "q-renderer",
+      verdict: "confirmed",
+      evidence: "The staged diff only rewrites plain text values.",
+      run_id: "local-critic-run",
+      session_id: "local-critic-session",
+    },
+  ];
+  validateReport(report);
+
+  const repo = repository(t);
+  const [snapshot, context, review] = await initialReport(repo);
+  review.verdict = "ready";
+  review.findings[0].status = "fixed";
+  review.findings[0].blocking = false;
+  review.findings[0].evidence = "Table remains unchanged.";
+  const template = readJson(context.context_package.template_path, "template");
+  template.goal = { status: "known", text: review.task.goal };
+  template.acceptance_criteria = { status: "known", items: review.task.acceptance_criteria };
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Does the staged renderer change touch protected values?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(context.context_package.template_path, template);
+  const recorded = await recordLocalPackage(snapshot, context.context_package.template_path);
+  review.context_package = { path: recorded.artifact_path, digest: recorded.digest };
+  review.question_answers = report.question_answers;
+  writeJson(context.draft_path, review);
+  const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
+  assert.equal(saved.verdict, "ready");
+  assert.equal(saved.question_summary.answered, 1);
+});
+
+test("re-recording a changed local package retires answers for the old questions", async (t) => {
+  const repo = repository(t);
+  const [snapshot, context, report] = await initialReport(repo);
+  const templatePath = context.context_package.template_path;
+  const template = readJson(templatePath, "template");
+  template.goal = { status: "known", text: report.task.goal };
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Does the staged renderer change touch protected values?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v1 = await recordLocalPackage(snapshot, templatePath);
+  const draft = structuredClone(report);
+  draft.context_package = { path: v1.artifact_path, digest: v1.digest };
+  draft.question_answers = [
+    {
+      question_id: "q-renderer",
+      verdict: "confirmed",
+      evidence: "Inspected protected values in the staged diff.",
+      run_id: "local-critic-run",
+      session_id: "local-critic-session",
+    },
+  ];
+  writeJson(context.draft_path, draft);
+
+  template.supersedes = v1.digest;
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Is credential revocation enforced on renderer failure?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v2 = await recordLocalPackage(snapshot, templatePath);
+  assert.deepEqual(v2.superseded_questions, ["q-renderer"]);
+  const updated = readJson(context.draft_path, "local review draft");
+  assert.deepEqual(updated.question_answers, []);
+  assert.equal(updated.superseded_question_results.length, 1);
+  assert.equal(updated.superseded_question_results[0].package_digest, v1.digest);
+  assert.equal(
+    updated.superseded_question_results[0].answers[0].run_id,
+    "local-critic-run",
+    "authorship is preserved historically",
+  );
+
+  updated.context_package = { path: v2.artifact_path, digest: v2.digest };
+  writeJson(context.draft_path, updated);
+  await assert.rejects(
+    () => recordReview(dirname(context.draft_path), snapshot, context.draft_path),
+    isWorkflowError(/superseded context package/),
+  );
+
+  updated.question_answers = [
+    {
+      question_id: "q-renderer",
+      verdict: "confirmed",
+      evidence: "Traced the revocation path in the staged renderer.",
+      run_id: "local-critic-run-2",
+      session_id: "local-critic-session-2",
+    },
+  ];
+  writeJson(context.draft_path, updated);
+  const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
+  assert.equal(saved.verdict, "not_ready");
+  assert.equal(
+    readJson(context.draft_path, "local review draft").superseded_question_results.length,
+    1,
   );
 });

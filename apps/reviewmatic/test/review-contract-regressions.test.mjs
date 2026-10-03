@@ -316,7 +316,7 @@ test("a later user-proposed patch and prior confirmation use the complete chrono
 async function prepared(t, overrides = {}) {
   const fixture = reviewFixture(t, overrides);
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  return { fixture, result, draft: completeDraft(readJson(result.draft_path), result) };
+  return { fixture, result, draft: await completeDraft(readJson(result.draft_path), result) };
 }
 function linkedDefect(draft) {
   const thread = draft.content.thread_decisions[0];
@@ -440,7 +440,7 @@ test("a user's suggestion closed by somebody else still requires their confirmat
     }),
   );
   const next = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const confirmed = completeDraft(readJson(next.draft_path), next);
+  const confirmed = await completeDraft(readJson(next.draft_path), next);
   confirmed.content.thread_decisions[0].user_confirmation = {
     status: "confirmed",
     evidence_note_ids: [44],
@@ -488,7 +488,7 @@ test("grouped suggestions use the original position or link a new positioned thr
   assert.match(plan.publication_preview.body_files[0].content, /```suggestion/);
   const { fixture } = await prepared(t, { positionHead: "a".repeat(40) });
   const other = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const stalePosition = completeDraft(readJson(other.draft_path), other);
+  const stalePosition = await completeDraft(readJson(other.draft_path), other);
   Object.assign(stalePosition.content.thread_decisions[0], {
     assessment: "accepted",
     severity: "medium",

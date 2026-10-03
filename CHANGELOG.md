@@ -8,6 +8,25 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+### Added
+
+- `reviewmatic` and the `code-review` skill now share one context package for
+  GitLab MR and local WIP reviews. After snapshot preparation the agent records
+  it with `record-package` — goal, claims with sources and separated
+  credibility, constraints, prior decisions, and questions with stable IDs —
+  and critics start only afterwards, reading the package as their primary task
+  context and answering assigned questions in receipt `question_answers` with
+  confirmed, refuted, or not\_verified verdicts. The runtime formats mechanical
+  data (bindings, the MR thread registry covering every collected discussion,
+  retained decisions) and validates structure and bindings without its own
+  model call. The primary review addresses every `not_verified` answer in
+  `question_verifications`, preserving the original answer; direct invocations
+  with unclear task context ask once, automatic ones record unknown goal and
+  acceptance criteria explicitly. The package stays private outside the
+  checkout, binds the `prepare-local` snapshot sections in local mode, involves
+  no GitLab recollection, and refresh reports stale threads while keeping the
+  previous package as immutable history.
+
 ### Changed
 
 - `reviewmatic prepare-local` now defines the local scope explicitly: without
@@ -84,6 +103,48 @@ All notable changes to this project are documented in this file. Entries follow
   worktree at the exact reviewed head with separate commit and push
   confirmations. A worktree registry records every created worktree. The npm
   publication graph now includes the package in dependency order.
+
+### Fixed
+
+- Local review reports with critic answers pass the shared schema again: the
+  closed `context_answer` definition no longer forbids its own fields, the
+  schema mapping guards a non-empty local report, and a full answer with
+  question ID, verdict, evidence, and critic identities finalizes through
+  `finalize-local`.
+- Context package answers and verifications bind to the version of the
+  meaningful package content: re-recording after an edited question, goal,
+  acceptance criterion, claim, or constraint moves the affected results into
+  the draft's `superseded_question_results` history with authorship preserved
+  and requires fresh results for the affected scope, while a background-only
+  edit keeps every collected result.
+- `record-package` for local reviews returns the exact immutable snapshot path
+  in `record_command` instead of a literal `<snapshot>` placeholder, so the
+  returned command executes as printed.
+- Ambiguous local comparison refs are detected for revision expressions:
+  `dup~0` with both a branch and a tag named `dup` stops with the ambiguity
+  instead of silently resolving through the tag; fully qualified refs keep
+  working without fetch.
+- Review worktree paths end with an untruncated hash of the full host, project,
+  and MR identity, so colliding readable names (`group/a-b` versus `group-a/b`),
+  different IIDs, and truncated long project paths never share a tree. Managed
+  trees of the retired layout stop preparation with a concrete manual migration
+  instruction and are never moved, deleted, or shadowed by a second directory.
+- An interrupted repeated preparation no longer frees an occupied worktree: the
+  live occupancy marker survives reuse, and unfinished progress at the marker's
+  artifact root keeps the tree protected until the review finishes or is
+  explicitly superseded.
+- The shared review-worktree registry updates under one short lock, so parallel
+  preparations of different merge requests keep both records; no fetch runs
+  under that lock, and record reuse compares the full identity, not only the
+  path.
+- Remote matching normalizes the project path case on both sides while keeping
+  original values for display, so a remote URL such as
+  `https://gitlab.example/Group/Project.git` is recognized, including fork
+  remotes.
+- With several critics, validation requires every selected critic to answer
+  every critic-assigned question; one critic's answer no longer covers another
+  critic's missing assignment, and authorship, contradictions, and targeted
+  follow-up for `not_verified` answers are preserved.
 
 ## \[11.0.2] - 2026-09-30
 

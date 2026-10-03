@@ -21,6 +21,13 @@ installed runtime's source to discover input fields.
    Do not duplicate MR collection with `glab mr view`.
    Read `draft_schema_path`, `input_contract` and `input_examples` immediately;
    they describe editable input separately from final artifact envelopes.
+   Complete the returned context package template and record it with the
+   returned `record-package` action before launching critics; critics receive
+   the recorded package path as their primary task context. Assigned questions
+   are answered by critics in receipt `question_answers`, and every
+   `not_verified` answer is checked by the primary in `question_verifications`
+   while the original answer stays untouched; see
+   `references/context-package.md`.
 2. Select independent critics as described below. Review the exact code and all
    discussions; fill the returned `draft_path`. Put primary candidates in
    `findings`, actual independent receipts in `critics`, and one explicit
@@ -89,15 +96,27 @@ normal routing/receipt mechanism for routed specialist calls; preview and
 dispatch must describe the same task. Set `critic_count` to the selected count,
 run independent critics in parallel when the host supports it, and retain every
 receipt. The runner aggregates them without discarding contributor identities.
-Launch selected independent runs as soon as their evidence is ready, alongside
+Launch selected independent runs as soon as the recorded context package and
+snapshots are ready, alongside
 primary inspection when the host supports native background work; join their
 results before validation, without supplying primary conclusions.
 
 If no specialist profiles are installed, launch an ordinary independent native
 subagent of the current agent; one critic is the default and no profile-selection
-question is needed. Absence of `critic` is not a blocker. Supply the exact
-evidence/context/inspection paths, accepted scope and user decisions, but no
-primary findings. Request complete detailed findings in the host/profile's
+question is needed. Absence of `critic` is not a blocker. Supply the recorded
+context package path, the exact evidence/context/inspection paths, accepted
+scope and user decisions, but no primary findings. The critic reads the
+package as its primary context and opens the snapshots directly when a detail
+is unclear; it answers every question assigned to critics in receipt
+`question_answers` with one verdict — `confirmed`, `refuted`, or
+`not_verified` — plus evidence or a concrete reason. With several critics the
+runtime enforces the pair rule: each selected critic answers each assigned
+question, and one critic's answer never covers another critic's assignment.
+Answers are bound to the question wording they were produced against; a
+re-recorded package with an edited question retires the previous answers into
+the draft's `superseded_question_results` history and requires fresh answers
+for the affected scope. Request complete detailed
+findings in the host/profile's
 required report envelope; `review_report` is valid for routed specialists.
 Populate the returned `critic_receipt_template` from those findings and real
 native invocation run/session metadata, or use a returned receipt when its
@@ -110,6 +129,13 @@ delegation policy. If the host truly cannot launch any independent subagent,
 report that capability failure before an extended review rather than silently
 weakening its depth. A failed specialist is not replaced or omitted without
 reconciling the user's selected critic count.
+
+After the critics join, preserve their assignments, authorship, and
+contradictions: answers stay attached to their receipts and are never merged
+away. Check every `not_verified` answer against the available evidence and
+code in `question_verifications`, keeping the original answer untouched;
+`unresolved` stays explicit when evidence is insufficient. No answer resolves
+publication automatically.
 
 ## Compatibility and verdict
 

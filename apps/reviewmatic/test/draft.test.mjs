@@ -72,7 +72,7 @@ test("one draft completes remote review, validates locally, and retains real thr
   const inspection = readJson(started.inspection_path);
   const headFile = inspection.files.find((item) => item.side === "head");
   assert.equal(readFileSync(headFile.snapshot_path, "utf8"), "base\nreviewed change\n");
-  const draft = completeDraft(readJson(started.draft_path), started);
+  const draft = await completeDraft(readJson(started.draft_path), started);
   writeJson(started.draft_path, draft);
   const checked = await checkReview(started.draft_path);
   assert.equal(checked.status, "ok", JSON.stringify(checked.errors));
@@ -153,7 +153,7 @@ test("public guided CLI completes the same contract without low-level staging co
     return JSON.parse(execution.stdout);
   };
   const result = run("start-review", "--url", fixture.url, "--repo-root", fixture.repo);
-  writeJson(result.draft_path, completeDraft(readJson(result.draft_path), result));
+  writeJson(result.draft_path, await completeDraft(readJson(result.draft_path), result));
   assert.equal(run("check-review", "--draft", result.draft_path).status, "ok");
   const finished = run("finish-review", "--draft", result.draft_path);
   assert.match(finished.chat, /runbook\.md/);
@@ -163,7 +163,7 @@ test("public guided CLI completes the same contract without low-level staging co
 test("fast, unchanged, and incremental modes keep their original critic and baseline rules", async (t) => {
   const fixture = reviewFixture(t, { resolved: true });
   const first = await startReview({ url: fixture.url, repoRoot: fixture.repo, reviewMode: "fast" });
-  const fast = completeDraft(readJson(first.draft_path), first);
+  const fast = await completeDraft(readJson(first.draft_path), first);
   fast.critics = [];
   writeJson(first.draft_path, fast);
   assert.match(JSON.stringify((await checkReview(first.draft_path)).errors), /low-risk/);
@@ -172,7 +172,7 @@ test("fast, unchanged, and incremental modes keep their original critic and base
   assert.equal((await finishReview(first.draft_path)).status, "ok");
   const same = await startReview({ url: fixture.url, repoRoot: fixture.repo });
   assert.equal(same.mode, "unchanged");
-  const unchanged = completeDraft(readJson(same.draft_path), same);
+  const unchanged = await completeDraft(readJson(same.draft_path), same);
   unchanged.critics = [];
   writeJson(same.draft_path, unchanged);
   assert.equal((await finishReview(same.draft_path)).status, "ok");
@@ -185,7 +185,7 @@ test("fast, unchanged, and incremental modes keep their original critic and base
   const changed = await startReview({ url: fixture.url, repoRoot: fixture.repo });
   assert.equal(changed.mode, "incremental");
   assert.equal(typeof changed.critic_receipt_template.scope_digest, "string");
-  const incremental = completeDraft(readJson(changed.draft_path), changed);
+  const incremental = await completeDraft(readJson(changed.draft_path), changed);
   writeJson(changed.draft_path, incremental);
   const checked = await checkReview(changed.draft_path);
   assert.equal(checked.status, "ok", JSON.stringify(checked.errors));
@@ -195,7 +195,7 @@ test("fast, unchanged, and incremental modes keep their original critic and base
 test("publication errors are repairable in the same draft before any decision is frozen", async (t) => {
   const fixture = reviewFixture(t, { resolved: true });
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const draft = completeDraft(readJson(result.draft_path), result);
+  const draft = await completeDraft(readJson(result.draft_path), result);
   draft.findings = [
     {
       id: "primary-1",
@@ -264,7 +264,7 @@ test("publication errors are repairable in the same draft before any decision is
 test("chosen critic count, independent identities, and stale discussions remain enforced", async (t) => {
   const fixture = reviewFixture(t);
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-  const draft = completeDraft(readJson(result.draft_path), result);
+  const draft = await completeDraft(readJson(result.draft_path), result);
   draft.critic_count = 2;
   writeJson(result.draft_path, draft);
   assert.match(JSON.stringify((await checkReview(result.draft_path)).errors), /critic_count/);

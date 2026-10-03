@@ -3,6 +3,8 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
+import { readJson, writeJson } from "../../dist/contract.js";
+import { recordDraftPackage } from "../../dist/draft.js";
 
 export const FAKE_GLAB = `#!/usr/bin/env node
 const { readFileSync, appendFileSync, writeFileSync } = require("node:fs");
@@ -149,7 +151,23 @@ export function reviewFixture(t, overrides = {}) {
   };
 }
 
-export function completeDraft(draft, result) {
+export async function completeDraft(draft, result) {
+  const template = readJson(result.context_package.template_path, "context package template");
+  template.goal = {
+    status: "known",
+    text: "Bound the retry write behind an idempotency key without changing callers.",
+  };
+  template.acceptance_criteria = { status: "unknown", items: [] };
+  for (const item of template.thread_registry) {
+    item.summary = "A reviewer remarked on the retry path.";
+    item.review_relevance = "The change touches this path; the remark is assessed directly.";
+  }
+  writeJson(result.context_package.template_path, template);
+  await recordDraftPackage(result.draft_path, result.context_package.template_path);
+  const recorded = readJson(result.draft_path, "review draft");
+  draft.context_package_path = recorded.context_package_path;
+  draft.context_package_digest = recorded.context_package_digest;
+  draft.question_verifications = [];
   draft.run_id = "primary-run";
   draft.session_id = "primary-session";
   draft.critics = [
