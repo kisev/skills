@@ -4,30 +4,30 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "d22498ca1f1bd64b91bb9518940fa234ec2381478ec0ed330ca8851af8d5147e",
+  "digest": "91357447a55ba449e7444411db8800c411f5f8ed02ad5f764b7c6891ebacc2d4",
   "expected": {
     "mutation_boundary": "no-writes",
-    "not_selected": ["skill:stopit"],
+    "not_selected": ["skill:handoff"],
     "selected": [],
     "structured_outcome": "safe-escalation"
   },
   "host": "any",
-  "id": "stage20.skill.stopit.near-miss.en",
+  "id": "stage20.skill.handoff.near-miss.en",
   "input": {
     "fixture": {
       "selected": []
     },
-    "prompt": "English: this is intentionally unrelated to stopit; do not route it to that skill."
+    "prompt": "English: this is intentionally unrelated to handoff; do not route it to that skill."
   },
   "invariants": [
     {
-      "id": "stage20.skill.stopit.near-miss.source",
-      "path": ".build/skills/stopit/SKILL.md"
+      "id": "stage20.skill.handoff.near-miss.source",
+      "path": ".build/skills/handoff/SKILL.md"
     }
   ],
   "kind": "near-miss",
   "locale": "en",
-  "pair_id": "stage20.skill.stopit.near-miss",
+  "pair_id": "stage20.skill.handoff.near-miss",
   "revision": 1,
   "sandbox": {
     "network": false,

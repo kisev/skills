@@ -319,7 +319,7 @@ memomatic search "deployment" --project atlas --explain
 
 ```markdown
 - never-save: credentials
-- auto-clean: older-than=90d scope=episodic source=stopit
+- auto-clean: older-than=90d scope=episodic source=handoff
 - auto-clean: older-than=180d scope=episodic unused-after=30d
 ```
 

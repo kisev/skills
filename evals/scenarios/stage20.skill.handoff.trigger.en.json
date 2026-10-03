@@ -4,30 +4,30 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "7196c29b5b751f3e206f674460e9239663ee66b7987e1905f5eb30eaf6ed5e50",
+  "digest": "3008115d0bc6d59ba17f6ed808f01688dcb21d26d732aba1f2c6a0d7d8e0ec49",
   "expected": {
     "mutation_boundary": "no-writes",
     "not_selected": [],
-    "selected": ["skill:stopit"],
+    "selected": ["skill:handoff"],
     "structured_outcome": "contract-passed"
   },
   "host": "any",
-  "id": "stage20.skill.stopit.trigger.en",
+  "id": "stage20.skill.handoff.trigger.en",
   "input": {
     "fixture": {
-      "selected": ["skill:stopit"]
+      "selected": ["skill:handoff"]
     },
-    "prompt": "Select the stopit skill for its exact contract scenario."
+    "prompt": "Select the handoff skill for its exact contract scenario."
   },
   "invariants": [
     {
-      "id": "stage20.skill.stopit.trigger.source",
-      "path": ".build/skills/stopit/SKILL.md"
+      "id": "stage20.skill.handoff.trigger.source",
+      "path": ".build/skills/handoff/SKILL.md"
     }
   ],
   "kind": "trigger",
   "locale": "en",
-  "pair_id": "stage20.skill.stopit.trigger",
+  "pair_id": "stage20.skill.handoff.trigger",
   "revision": 1,
   "sandbox": {
     "network": false,

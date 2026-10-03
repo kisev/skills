@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-RUNNER = ROOT / "skills" / "stopit" / "scripts" / "handoff.py"
+RUNNER = ROOT / "skills" / "handoff" / "scripts" / "handoff.py"
 MAX_HANDOFF_BYTES = 256 * 1024
 
 
@@ -82,7 +82,7 @@ def test_path_is_stable_canonical_workspace_scoped_and_read_only(tmp_path: Path)
     assert through_alias.returncode == 0, through_alias.stderr.decode()
     assert direct.stdout == through_alias.stdout
     destination = Path(direct.stdout.decode().strip())
-    assert destination.parent.parent.name == "stopit"
+    assert destination.parent.parent.name == "handoff"
     assert destination.parent.parent.parent.name == "agent-skills"
     assert destination.name == "handoff.md"
     assert len(destination.parent.name) == 64
@@ -214,6 +214,41 @@ def test_write_privately_creates_and_atomically_replaces_handoff(tmp_path: Path)
     assert not list(destination.parent.glob(".handoff.*.tmp"))
 
 
+def test_retired_stopit_state_is_never_read_migrated_or_removed(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    state = tmp_path / "state"
+    legacy_id = "0" * 64
+    state.mkdir(mode=0o700)
+    legacy = state / "agent-skills" / "stopit" / legacy_id / "handoff.md"
+    legacy.parent.mkdir(parents=True)
+    for directory in (
+        state,
+        state / "agent-skills",
+        state / "agent-skills" / "stopit",
+        legacy.parent,
+    ):
+        directory.chmod(0o700)
+    legacy.write_bytes(b"# Legacy stopit handoff\n")
+    legacy_before = legacy.read_bytes()
+
+    destination = Path(run_handoff("path", workspace, state).stdout.decode().strip())
+    result = run_handoff("write", workspace, state, content=b"# First handoff\n")
+
+    assert result.returncode == 0, result.stderr.decode()
+    assert destination.parent.parent.name == "handoff"
+    assert destination.parent.name != legacy_id
+    current = destination.read_text(encoding="utf-8")
+    assert current.startswith("# First handoff\n")
+    assert "Legacy stopit handoff" not in current
+    assert destination.read_text(encoding="utf-8").count("## History") == 1
+    assert legacy.read_bytes() == legacy_before
+    assert {entry.name for entry in (state / "agent-skills").iterdir()} == {
+        "handoff",
+        "stopit",
+    }
+
+
 def test_concurrent_writes_retain_every_handoff_version(tmp_path: Path) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
@@ -289,7 +324,7 @@ def test_commands_reject_symlinked_state_components(tmp_path: Path, command: str
 
     assert result.returncode == 2
     assert "unsafe" in result.stderr.decode()
-    assert not (outside / "stopit").exists()
+    assert not (outside / "handoff").exists()
 
 
 def test_write_rejects_symlink_handoff_without_changing_target(tmp_path: Path) -> None:
@@ -299,7 +334,7 @@ def test_write_rejects_symlink_handoff_without_changing_target(tmp_path: Path) -
     reported = run_handoff("path", workspace, state)
     destination = Path(reported.stdout.decode().strip())
     destination.parent.mkdir(parents=True, mode=0o700)
-    for directory in (state / "agent-skills", state / "agent-skills" / "stopit"):
+    for directory in (state / "agent-skills", state / "agent-skills" / "handoff"):
         directory.chmod(0o700)
     target = tmp_path / "target.md"
     target.write_text("keep\n", encoding="utf-8")
@@ -312,7 +347,7 @@ def test_write_rejects_symlink_handoff_without_changing_target(tmp_path: Path) -
     assert target.read_text(encoding="utf-8") == "keep\n"
 
 
-def test_write_rejects_workspace_changed_after_preview(tmp_path: Path) -> None:
+def test_write_rejects_workspace_changed_after_resolution(tmp_path: Path) -> None:
     first_workspace = tmp_path / "first"
     first_workspace.mkdir()
     second_workspace = tmp_path / "second"
@@ -328,5 +363,5 @@ def test_write_rejects_workspace_changed_after_preview(tmp_path: Path) -> None:
     result = run_handoff("write", alias, state, content=b"approved\n", expected_path=expected_path)
 
     assert result.returncode == 2
-    assert "changed after confirmation" in result.stderr.decode()
+    assert "changed after resolution" in result.stderr.decode()
     assert not state.exists()

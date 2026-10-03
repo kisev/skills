@@ -1,4 +1,4 @@
-# `stopit`
+# `handoff`
 
 ## Purpose
 
@@ -12,7 +12,7 @@ Trigger when pausing or changing context; near-miss: committing project notes.
 
 Input is current session context and an existing workspace. Output is a redacted
 handoff with facts and next step under the XDG state directory at
-`$XDG_STATE_HOME/agent-skills/stopit/<workspace-id>/handoff.md`; the runner uses
+`$XDG_STATE_HOME/agent-skills/handoff/<workspace-id>/handoff.md`; the runner uses
 the platform default state directory when the variable is unset.
 
 ## Workflow Stages
@@ -74,6 +74,6 @@ paths, and unchanged project files; the handoff retains blockers and next action
 
 ## Example
 
-`stopit` records a blocker and next step for one canonical workspace without
+`handoff` records a blocker and next step for one canonical workspace without
 copying secrets or chain of thought.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

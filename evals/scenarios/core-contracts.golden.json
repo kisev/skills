@@ -1,38 +1,48 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "golden.core-contracts",
-  "revision": 3,
-  "kind": "golden",
-  "locale": "ru",
-  "pair_id": "golden.core-contracts",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Подготовь изменение пользовательской документации с полными evidence, планом и отдельными confirmations по рискам.",
-    "fixture": { "selected": ["skill:docs-prepare"] }
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
   },
+  "digest": "a63a42d6cf359cace8bc2f61260d8bcbee94b5ff5d2c5cccfc03bf99e888f4b3",
   "expected": {
-    "selected": ["skill:docs-prepare"],
-    "not_selected": ["skill:briefing", "skill:stopit"]
+    "not_selected": ["skill:briefing", "skill:handoff"],
+    "selected": ["skill:docs-prepare"]
+  },
+  "host": "any",
+  "id": "golden.core-contracts",
+  "input": {
+    "fixture": {
+      "selected": ["skill:docs-prepare"]
+    },
+    "prompt": "\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u044c \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435 \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044c\u0441\u043a\u043e\u0439 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430\u0446\u0438\u0438 \u0441 \u043f\u043e\u043b\u043d\u044b\u043c\u0438 evidence, \u043f\u043b\u0430\u043d\u043e\u043c \u0438 \u043e\u0442\u0434\u0435\u043b\u044c\u043d\u044b\u043c\u0438 confirmations \u043f\u043e \u0440\u0438\u0441\u043a\u0430\u043c."
   },
   "invariants": [
     {
+      "contains": "exact accepted objective",
       "id": "plan-bound",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "exact accepted objective"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "history rewrite",
       "id": "separate-history",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "history rewrite"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "one explicit owner",
       "id": "state-owner",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "one explicit owner"
+      "path": "shared/references/interaction-contract.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "ada83d011454bd0a66024b658782254c4cbf0e0df7b6e64583a6f70790c0cd4c"
+  "kind": "golden",
+  "locale": "ru",
+  "pair_id": "golden.core-contracts",
+  "revision": 3,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

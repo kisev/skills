@@ -1,8 +1,8 @@
-# `/stopit`
+# `/handoff`
 
-### REQ-I-221 - Route the stopit command
+### REQ-I-221 - Route the handoff command
 
-The command shall load [stopit](../skills/stopit.md) through the
+The command shall load [handoff](../skills/handoff.md) through the
 [shared command interface](../../requirements/interfaces/README.md#req-i-002---command-interface).
 
 #### Verification

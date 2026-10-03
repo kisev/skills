@@ -1,38 +1,48 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "skill.core-contracts.trigger.en",
-  "revision": 2,
-  "kind": "trigger",
-  "locale": "en",
-  "pair_id": "skill.core-contracts.trigger",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Check shared portable contracts and confirmation boundaries for core skills.",
-    "fixture": { "selected": ["skill:askme", "skill:docs-prepare"] }
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
   },
+  "digest": "27aca7166c21a221e7c81a5b43973b83ed46cc357e7919512e78e752fd442294",
   "expected": {
-    "selected": ["skill:askme", "skill:docs-prepare"],
-    "not_selected": ["skill:briefing", "skill:stopit"]
+    "not_selected": ["skill:briefing", "skill:handoff"],
+    "selected": ["skill:askme", "skill:docs-prepare"]
+  },
+  "host": "any",
+  "id": "skill.core-contracts.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:askme", "skill:docs-prepare"]
+    },
+    "prompt": "Check shared portable contracts and confirmation boundaries for core skills."
   },
   "invariants": [
     {
+      "contains": "Do not declare a result complete",
       "id": "shared-evidence",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "Do not declare a result complete"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "same mutation boundary",
       "id": "risk-grouping",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "same mutation boundary"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "complete user-facing documentation set",
       "id": "docs-scope",
-      "path": "skills/docs-review/references/workflow.md",
-      "contains": "complete user-facing documentation set"
+      "path": "skills/docs-review/references/workflow.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "77a67fe41bbb7d389386f40f5d687d46e1a2bb7c51b4eecfc0880457fef48fff"
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "skill.core-contracts.trigger",
+  "revision": 2,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

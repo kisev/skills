@@ -4,7 +4,7 @@
 
 - Store the handoff outside the repository under the XDG state directory at the
   stable workspace-scoped path
-  `$XDG_STATE_HOME/agent-skills/stopit/<workspace-id>/handoff.md`. The bundled
+  `$XDG_STATE_HOME/agent-skills/handoff/<workspace-id>/handoff.md`. The bundled
   runner resolves the platform default when `XDG_STATE_HOME` is unset.
 - Derive `<workspace-id>` only from the canonical existing workspace path by
   using the bundled runner. Do not construct or shorten the ID manually.
@@ -47,26 +47,38 @@ file ends with paths to earlier snapshots.
 
 ## Procedure
 
-1. Treat the supplied focus as the purpose of the next session.
-2. Collect only verifiable facts from the repository, existing artifacts, and
-   the whole session. The handoff covers the whole conversation from its first
-   request to the end, including tasks, decisions, blockers, artifacts, and
-   completed checks; separate decisions from assumptions and unresolved
-   questions. Summarize briefly; do not paste raw conversation content.
-3. Read the existing handoff body, everything above its `## History` footer,
-   and carry forward what stays relevant: open blockers, durable decisions,
-   environment constraints, and artifacts. Compress carried-forward material
-   harder the older it is, and drop closed or stale items. Never read the
-   footer or the snapshots it lists.
-4. Prepare the draft. As needed, use the sections `Decisions`, `Current state`,
+1. Treat the supplied focus as the purpose of the next session; a continuation
+   focus never drops earlier topics from the walkthrough.
+2. Run the read-only `path` command to resolve the exact destination before
+   reading any state.
+3. Read the existing handoff only from that resolved path, and only its body
+   above the `## History` footer; when the file does not exist, this is the
+   first handoff. Carry forward what stays relevant: open blockers, durable
+   decisions, environment constraints, obligations, and artifact references.
+   Remove duplicates and stale statuses; closed work leaves no open items, but
+   its significant outcomes stay in the walkthrough. Compress carried-forward
+   material harder the older it is. Never read the footer or the snapshots it
+   lists.
+4. Collect only verifiable facts from the repository, existing artifacts, and
+   the whole session. The body is a brief walkthrough of the whole conversation
+   from its first request to the end: the initial goal, significant topics and
+   direction changes, decisions, completed and current work, checks, blockers,
+   and next actions. Separate decisions from assumptions and unresolved
+   questions. Mark context lost to compaction as a gap; never invent facts.
+   Summarize briefly; do not paste raw conversation content.
+5. Prepare the draft. As needed, use the sections `Decisions`, `Current state`,
    `Blockers`, `Next steps`, `Artifacts`, and `Recommended skills`; do not add
-   empty sections. Keep the body within roughly 8-16 KiB; the runner rejects
+   empty sections. Keep the body within roughly 8-16 KiB without padding short
+   handoffs or dropping essential decisions to save space; the runner rejects
    anything beyond its hard 256 KiB limit.
-5. Run the read-only `path` command. Then write the draft immediately through
-   the `write` command, passing the returned path as `--expected-path`. Do not
-   show the draft and do not ask for confirmation.
-6. Briefly report the destination path, which data were summarized or redacted,
-   and which references were retained instead of being copied.
+6. Write the draft immediately through the `write` command, passing the path
+   returned in step 2 as `--expected-path`. Do not show the draft and do not
+   ask for confirmation; provide the in-memory content on standard input and do
+   not create a separate draft artifact.
+7. After a successful write, report the destination path, which data were
+   summarized or redacted, and which references were retained instead of being
+   copied. If the write fails, report the failure as-is and never claim
+   success.
 
 ## Result
 
@@ -86,6 +98,6 @@ file ends with paths to earlier snapshots.
 When restoring a handoff, optionally search personal memory (`memory_search`
 tool or `memomatic search`) for durable facts about this workspace; the
 handoff itself carries the transient context. Writing a handoff mirrors a
-short distillate into the memomatic inbox automatically (`source: stopit`,
-superseded per workspace, auto-cleaned through a `source=stopit` rule); when
+short distillate into the memomatic inbox automatically (`source: handoff`,
+superseded per workspace, auto-cleaned through a `source=handoff` rule); when
 memomatic is absent the mirror is skipped silently.

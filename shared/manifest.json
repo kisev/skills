@@ -250,7 +250,7 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "stopit/references/language-policy.md"
+      "destination": "handoff/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -334,7 +334,7 @@
     },
     {
       "source": "references/memomatic_inbox.py",
-      "destination": "stopit/scripts/memomatic_inbox.py"
+      "destination": "handoff/scripts/memomatic_inbox.py"
     },
     {
       "source": "references/memomatic_inbox.py",
@@ -758,7 +758,7 @@
     },
     {
       "source": "references/question-guidelines.md",
-      "destination": "stopit/references/question-guidelines.md"
+      "destination": "handoff/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
@@ -854,7 +854,7 @@
     },
     {
       "source": "references/state_artifacts.py",
-      "destination": "stopit/scripts/state_artifacts.py"
+      "destination": "handoff/scripts/state_artifacts.py"
     },
     {
       "source": "references/state_artifacts.py",

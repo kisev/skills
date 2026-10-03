@@ -100,8 +100,8 @@ test("rules parsing extracts never-save topics and auto-clean", () => {
   assert.deepEqual(rules.autoClean, { olderThanDays: 90, scope: "episodic", source: undefined });
   assert.ok(isForbidden("Don't store INTERNAL CREDENTIALS here", rules));
   assert.ok(!isForbidden("ordinary engineering fact", rules));
-  const sourced = parseRules("- auto-clean: older-than=30d scope=episodic source=stopit\n");
-  assert.deepEqual(sourced.autoClean, { olderThanDays: 30, scope: "episodic", source: "stopit" });
+  const sourced = parseRules("- auto-clean: older-than=30d scope=episodic source=handoff\n");
+  assert.deepEqual(sourced.autoClean, { olderThanDays: 30, scope: "episodic", source: "handoff" });
   const decaying = parseRules("- auto-clean: older-than=90d scope=episodic unused-after=30d\n");
   assert.deepEqual(decaying.autoClean, {
     olderThanDays: 90,
@@ -551,14 +551,14 @@ test("auto-clean preserves unrelated, pinned, and fresh entries in the same dail
   const env = environment();
   try {
     const ctx = await context();
-    ctx.rules.autoClean = { olderThanDays: 30, scope: "episodic", source: "stopit" };
+    ctx.rules.autoClean = { olderThanDays: 30, scope: "episodic", source: "handoff" };
     const { writeCorpusFile, dailyNotePath } = await import("../dist/corpus.js");
     const file = dailyNotePath(ctx.paths);
     const lines = [
-      entryLine("remove", { observed: "2020-01-01", source: "stopit" }),
+      entryLine("remove", { observed: "2020-01-01", source: "handoff" }),
       entryLine("other source", { observed: "2020-01-01", source: "user" }),
-      entryLine("pinned", { observed: "2020-01-01", source: "stopit", pinned: true }),
-      entryLine("fresh", { observed: new Date().toISOString().slice(0, 10), source: "stopit" }),
+      entryLine("pinned", { observed: "2020-01-01", source: "handoff", pinned: true }),
+      entryLine("fresh", { observed: new Date().toISOString().slice(0, 10), source: "handoff" }),
     ];
     await writeCorpusFile(ctx.paths, file, `${lines.join("\n")}\n`);
     await rebuildIndex(ctx);
@@ -630,7 +630,7 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
     const { writeCorpusFile, dailyNotePath } = await import("../dist/corpus.js");
     const old = new Date(Date.now() - 120 * 86_400_000);
     const file = dailyNotePath(ctx.paths, old);
-    const stopitFile = dailyNotePath(ctx.paths, new Date(old.getTime() - 86_400_000));
+    const handoffFile = dailyNotePath(ctx.paths, new Date(old.getTime() - 86_400_000));
     await writeCorpusFile(
       ctx.paths,
       file,
@@ -642,12 +642,12 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
     );
     await writeCorpusFile(
       ctx.paths,
-      stopitFile,
-      `${entryLine("Old stopit handoff distillate subject to cleanup", {
-        key: "old-stopit",
+      handoffFile,
+      `${entryLine("Old handoff distillate subject to cleanup", {
+        key: "old-handoff",
         observed: old.toISOString().slice(0, 10),
         origin: "agent",
-        source: "stopit",
+        source: "handoff",
       })}\n`,
     );
     await rebuildIndex(ctx);
@@ -662,14 +662,14 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
     mkdirSync(join(env.config, "memomatic"), { recursive: true });
     writeFileSync(
       join(env.config, "memomatic", "MEMORY_RULES.md"),
-      "- auto-clean: older-than=90d scope=episodic source=stopit\n",
+      "- auto-clean: older-than=90d scope=episodic source=handoff\n",
       "utf8",
     );
     const scoped = await context();
     const scopedArchived = await archiveOldEpisodic(scoped);
     assert.equal(scopedArchived.length, 1);
     assert.ok(scopedArchived[0].endsWith(".md"));
-    assert.ok(!existsSync(stopitFile));
+    assert.ok(!existsSync(handoffFile));
     assert.ok(existsSync(file));
     scoped.store.close();
 

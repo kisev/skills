@@ -1,38 +1,48 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "golden.core-contracts.en",
-  "revision": 3,
-  "kind": "golden",
-  "locale": "en",
-  "pair_id": "golden.core-contracts",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Prepare a user-documentation change with complete evidence, a bounded plan, and risk-specific confirmations.",
-    "fixture": { "selected": ["skill:docs-prepare"] }
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
   },
+  "digest": "946e0775c54a7f1efbcb5abcce837d9b5f01ce3f00748aba9bff1429bf02121b",
   "expected": {
-    "selected": ["skill:docs-prepare"],
-    "not_selected": ["skill:briefing", "skill:stopit"]
+    "not_selected": ["skill:briefing", "skill:handoff"],
+    "selected": ["skill:docs-prepare"]
+  },
+  "host": "any",
+  "id": "golden.core-contracts.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:docs-prepare"]
+    },
+    "prompt": "Prepare a user-documentation change with complete evidence, a bounded plan, and risk-specific confirmations."
   },
   "invariants": [
     {
+      "contains": "exact accepted objective",
       "id": "plan-bound",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "exact accepted objective"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "history rewrite",
       "id": "separate-history",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "history rewrite"
+      "path": "shared/references/interaction-contract.md"
     },
     {
+      "contains": "one explicit owner",
       "id": "state-owner",
-      "path": "shared/references/interaction-contract.md",
-      "contains": "one explicit owner"
+      "path": "shared/references/interaction-contract.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "d0c4abff0981f459a833a9902b0f037c4e1bb488352cf0e2a7bdc4c87d8697ab"
+  "kind": "golden",
+  "locale": "en",
+  "pair_id": "golden.core-contracts",
+  "revision": 3,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

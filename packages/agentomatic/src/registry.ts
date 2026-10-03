@@ -36,7 +36,7 @@ const SKILL_NAMES = [
   "skill-improve",
   "slides-prompts-prepare",
   "spec-manage",
-  "stopit",
+  "handoff",
   "briefing",
   "task-prepare",
   "task-review",
