@@ -30,7 +30,7 @@ byte-for-byte.
 
 ## Portable Cleanup Records
 
-The current migration inventory names exactly these twelve retired portable skills. It
+The current migration inventory names exactly these thirteen retired portable skills. It
 does not contain a portable `multi-run` record.
 
 | Retired name | Current replacement |
@@ -44,6 +44,7 @@ does not contain a portable `multi-run` record.
 | `project-spec` | `spec-manage` |
 | `skill-improver` | `skill-improve` |
 | `skill-improve` | `skill-doctor` |
+| `stopit` | `handoff` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 | `summary` | `briefing` |

@@ -108,13 +108,16 @@ export type ArchiveCandidate = {
   kind: "command" | "agent" | "plugin" | "state" | "config-backup";
 };
 
+function migrationInventory(): {
+  retired_command_hashes?: Record<string, string>;
+  retired_plugin_hashes?: Record<string, string>;
+  renamed?: Record<string, string>;
+} {
+  return JSON.parse(readFileSync(resolve(assetsRoot, "migration-inventory.json"), "utf8"));
+}
+
 function retiredAssetPaths(): Set<string> {
-  const inventory = JSON.parse(
-    readFileSync(resolve(assetsRoot, "migration-inventory.json"), "utf8"),
-  ) as {
-    retired_command_hashes?: Record<string, string>;
-    retired_plugin_hashes?: Record<string, string>;
-  };
+  const inventory = migrationInventory();
   return new Set([
     ...Object.keys(inventory.retired_command_hashes ?? {}),
     ...Object.keys(inventory.retired_plugin_hashes ?? {}),
@@ -134,6 +137,39 @@ export function defaultSelection(): InstallerSelection {
   };
 }
 
+const RENAME_CHAIN_LIMIT = 8;
+
+function migrateSavedCommand(renamed: Record<string, string>, name: string): string {
+  let current = name;
+  for (let depth = 0; depth < RENAME_CHAIN_LIMIT; depth += 1) {
+    const replacement: string | undefined = renamed[current];
+    if (replacement === undefined) return current;
+    current = replacement;
+  }
+  return current;
+}
+
+export function savedSelection(
+  manifest: Pick<Manifest, "commands" | "agents" | "plugins">,
+): Partial<InstallerSelection> {
+  const renamed = migrationInventory().renamed ?? {};
+  const requested = (manifest.commands ?? defaultSelection().commands).map((name) =>
+    migrateSavedCommand(renamed, name),
+  );
+  const commands = requested.filter((name) => SKILL_COMMANDS.includes(name));
+  const agents = (manifest.agents ?? FIXED_AGENT_ROLES).filter((role) =>
+    FIXED_AGENT_ROLES.includes(role),
+  );
+  const plugins = (manifest.plugins ?? ["rtk"]).filter((plugin) =>
+    SELECTABLE_PLUGINS.includes(plugin),
+  );
+  if (requested.join("\0") !== commands.join("\0"))
+    process.stderr.write(
+      `Saved selection migrated to the current catalog: ${requested.join(", ")} -> ${commands.join(", ") || "none"}\n`,
+    );
+  return { commands, agents, plugins };
+}
+
 export async function installedSelection(
   scope: Scope,
   cwd = process.cwd(),
@@ -143,9 +179,7 @@ export async function installedSelection(
   const { manifest } = await currentManifest(deploymentRoot(scope, cwd, home));
   return manifest
     ? normalizeSelection({
-        commands: manifest.commands,
-        agents: manifest.agents,
-        plugins: manifest.plugins,
+        ...savedSelection(manifest),
         core_activation: manifest.core_activation,
         ...overrides,
       })
@@ -563,9 +597,7 @@ async function build(
     requestedSelection ??
       (owned.manifest
         ? {
-            commands: owned.manifest.commands,
-            agents: owned.manifest.agents,
-            plugins: owned.manifest.plugins,
+            ...savedSelection(owned.manifest),
             core_activation: owned.manifest.core_activation,
           }
         : undefined),

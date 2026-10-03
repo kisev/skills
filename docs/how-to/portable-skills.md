@@ -106,12 +106,12 @@ lifecycle described in the [OpenCode integration guide](opencode-integration.md#
 
 ## Remove Retired Names
 
-The current [migration inventory](../migration-inventory.md) defines twelve
+The current [migration inventory](../migration-inventory.md) defines thirteen
 retired names. Normally, accept their removal when `skills update` reports them.
 To remove them explicitly from a global installation, run:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver skill-improve walkthrough team-workflow summary doit lsp-report --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver skill-improve walkthrough team-workflow summary doit lsp-report stopit --global --yes
 ```
 
 To remove from one host only, add its `--agent <name>` option.

@@ -28,7 +28,7 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Сведения об очистке переносимых навыков
 
-Текущий инвентарь миграции содержит ровно эти двенадцать устаревших имён переносимых
+Текущий инвентарь миграции содержит ровно эти тринадцать устаревших имён переносимых
 навыков. Имени `multi-run` в нём нет.
 
 | Устаревшее имя | Текущая замена |
@@ -42,6 +42,7 @@ GitHub Release. Необязательный пакет интеграции - `
 | `project-spec` | `spec-manage` |
 | `skill-improver` | `skill-improve` |
 | `skill-improve` | `skill-doctor` |
+| `stopit` | `handoff` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 | `summary` | `briefing` |

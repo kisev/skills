@@ -110,13 +110,13 @@ OpenCode](opencode-integration.md#обновление).
 
 ## Удаление устаревших имён
 
-Текущий [инвентарь миграции](../migration-inventory.md) определяет двенадцать
+Текущий [инвентарь миграции](../migration-inventory.md) определяет тринадцать
 устаревших имён. Обычно достаточно согласиться на их удаление, когда о них
 сообщит `skills update`. Чтобы явно удалить их из глобальной установки,
 выполните:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver skill-improve walkthrough team-workflow summary doit lsp-report --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver skill-improve walkthrough team-workflow summary doit lsp-report stopit --global --yes
 ```
 
 Чтобы удалить только для одной среды, добавьте её параметр `--agent <name>`.

@@ -16,7 +16,7 @@ import test from "node:test";
 
 import { migrateLegacyDeploymentNamespace, migrateLegacyNamespaces } from "../dist/lifecycle.js";
 import { applyJsoncEdits } from "../dist/jsonc.js";
-import { apply, preview } from "../dist/installer.js";
+import { apply, installedSelection, preview } from "../dist/installer.js";
 
 const PACKAGE = join(import.meta.dirname, "..");
 
@@ -240,6 +240,68 @@ test("install migrates a legacy-named ownership manifest in one transaction", as
       readFileSync(join(config, "commands", "agents-md.md"), "utf8"),
       /native Skill tool/,
     );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("saved legacy selection migrates renamed commands instead of failing install", async () => {
+  const root = mkdtempSync(join(tmpdir(), "agentomatic-legacy-selection-"));
+  try {
+    const home = join(root, "home");
+    const project = join(root, "project");
+    const deployment = join(home, ".config", "opencode");
+    mkdirSync(join(deployment, "commands"), { recursive: true });
+    mkdirSync(project, { recursive: true });
+    const hash = (value) => createHash("sha256").update(value).digest("hex");
+    const files = {};
+    for (const name of ["stopit", "skill-improver"]) {
+      const content = `legacy ${name}\n`;
+      writeFileSync(join(deployment, "commands", `${name}.md`), content);
+      files[`commands/${name}.md`] = { sha256: hash(content), mode: 0o644, kind: "command" };
+    }
+    const manifest = {
+      schema_version: 2,
+      package: "@kisev/agentomatic",
+      package_version: "11.0.2",
+      version: "11.0.2",
+      scope: "global",
+      commands: ["stopit", "skill-improver"],
+      agents: [],
+      plugins: [],
+      core_activation: false,
+      files,
+    };
+    writeFileSync(join(deployment, ".agentomatic-manifest.json"), `${JSON.stringify(manifest)}\n`, {
+      mode: 0o600,
+    });
+    const saved = await installedSelection("global", project, home);
+    assert.deepEqual(saved, {
+      commands: ["handoff", "skill-doctor"],
+      agents: [],
+      plugins: [],
+      core_activation: false,
+    });
+
+    const cli = (arguments_) =>
+      spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), ...arguments_], {
+        cwd: project,
+        env: { ...process.env, HOME: home },
+        encoding: "utf8",
+      });
+    const applied = cli(["install", "--global", "--no-dependency", "--yes", "--json"]);
+    assert.equal(applied.status, 0, applied.stdout + applied.stderr);
+    assert.equal(JSON.parse(applied.stdout).plan.selection.commands.length, 2);
+    const updated = JSON.parse(
+      readFileSync(join(deployment, ".agentomatic-manifest.json"), "utf8"),
+    );
+    assert.deepEqual(updated.commands, ["handoff", "skill-doctor"]);
+    assert.equal(existsSync(join(deployment, "commands", "stopit.md")), false);
+    assert.equal(existsSync(join(deployment, "commands", "skill-improver.md")), false);
+    assert.match(readFileSync(join(deployment, "commands", "handoff.md"), "utf8"), /handoff/);
+    const status = cli(["status", "--global", "--json"]);
+    assert.equal(status.status, 0, status.stdout + status.stderr);
+    assert.deepEqual(JSON.parse(status.stdout).selection.commands, ["handoff", "skill-doctor"]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

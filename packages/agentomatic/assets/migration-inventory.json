@@ -216,7 +216,8 @@
     "skill-improver": "skill-improve",
     "summary": "briefing",
     "walkthrough": "code-explain",
-    "skill-improve": "skill-doctor"
+    "skill-improve": "skill-doctor",
+    "stopit": "handoff"
   },
   "replacements": {
     "team-workflow": [
