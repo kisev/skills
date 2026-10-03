@@ -588,8 +588,8 @@ tasks:
     internal: true
     dir: .
     cmds:
-      - mise exec -- npm audit --package-lock-only
-      - mise exec -- npm audit --package-lock-only --prefix apps/docs-site
+      - mise exec -- uv run --locked python scripts/check_npm_audit.py
+      - mise exec -- uv run --locked python scripts/check_npm_audit.py --prefix apps/docs-site
 
   site:install:
     internal: true
