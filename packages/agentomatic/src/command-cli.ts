@@ -537,21 +537,26 @@ async function profileDraft(options: Options, names: string[]): Promise<AgentPro
 }
 
 async function componentSelection(options: Options): Promise<InstallerSelection> {
-  const saved = await installedSelection(options.scope);
-  const defaults = saved ?? defaultSelection();
   const supplied = [options.commands, options.agents, options.plugins].some(
     (selection) => selection !== undefined,
   );
+  if (supplied && (!options.commands || !options.agents || !options.plugins))
+    fail(
+      "invalid_input",
+      "Supply --commands, --agents, and --plugins together (none selects an empty set)",
+    );
+  const overrides: Partial<InstallerSelection> = supplied
+    ? {
+        commands: options.commands,
+        agents: options.agents as InstallerSelection["agents"],
+        plugins: options.plugins as InstallerSelection["plugins"],
+      }
+    : {};
+  const saved = await installedSelection(options.scope, undefined, undefined, overrides);
+  const defaults = saved ?? defaultSelection();
   if (supplied) {
-    if (!options.commands || !options.agents || !options.plugins)
-      fail(
-        "invalid_input",
-        "Supply --commands, --agents, and --plugins together (none selects an empty set)",
-      );
     return normalizeSelection({
-      commands: options.commands,
-      agents: options.agents as InstallerSelection["agents"],
-      plugins: options.plugins as InstallerSelection["plugins"],
+      ...overrides,
       core_activation: options.core ?? defaults.core_activation,
     });
   }
@@ -589,9 +594,10 @@ async function componentSelection(options: Options): Promise<InstallerSelection>
 }
 
 async function deploy(options: Options, repair = false): Promise<void> {
-  const saved = await installedSelection(options.scope);
-  if (repair && !saved) fail("not_installed", "No saved installation to repair; use install");
-  const selection = repair ? saved! : await componentSelection(options);
+  const selection = repair
+    ? await installedSelection(options.scope)
+    : await componentSelection(options);
+  if (!selection) fail("not_installed", "No saved installation to repair; use install");
   requireApply(options);
   let integration: ConfigSetupSelection = {
     targets: ["opencode"],

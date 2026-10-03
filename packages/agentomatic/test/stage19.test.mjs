@@ -466,3 +466,86 @@ test("non-TTY install requires explicit complete selection and writes no state",
     rmSync(base, { recursive: true, force: true });
   }
 });
+
+test("explicit CLI selection replaces retired saved commands without resetting core", async () => {
+  for (const core of [false, true]) {
+    const base = mkdtempSync(join(tmpdir(), "agentomatic-command-rename-"));
+    const project = join(base, "project");
+    const home = join(base, "home");
+    const deployment = join(project, ".opencode");
+    const legacyPath = "commands/stopit.md";
+    const legacyContent = "Load skill `stopit`.\n";
+    const manifestPath = join(deployment, ".agentomatic-manifest.json");
+    try {
+      await Promise.all([mkdir(join(deployment, "commands"), { recursive: true }), mkdir(home)]);
+      await writeFile(join(deployment, legacyPath), legacyContent);
+      const manifest = JSON.stringify({
+        schema_version: 2,
+        package: "@kisev/agentomatic",
+        package_version: PACKAGE_VERSION,
+        version: PACKAGE_VERSION,
+        scope: "project",
+        commands: ["stopit"],
+        agents: [],
+        plugins: [],
+        core_activation: core,
+        files: { [legacyPath]: { sha256: hash(legacyContent), mode: 0o644, kind: "command" } },
+      });
+      await writeFile(manifestPath, manifest);
+      const invoke = (commands, action) =>
+        spawnSync(
+          process.execPath,
+          [
+            join(PACKAGE, "dist/cli.js"),
+            "install",
+            "--commands",
+            commands,
+            "--agents",
+            "none",
+            "--plugins",
+            "none",
+            "--no-dependency",
+            "--json",
+            action,
+          ],
+          {
+            cwd: project,
+            env: {
+              ...process.env,
+              HOME: home,
+              XDG_CONFIG_HOME: join(home, "config"),
+              XDG_DATA_HOME: join(home, ".local/share"),
+              XDG_STATE_HOME: join(home, "state"),
+            },
+            encoding: "utf8",
+          },
+        );
+      const rejected = invoke("stopit", "--dry-run");
+      assert.equal(rejected.status, 2);
+      assert.equal(JSON.parse(rejected.stdout).error.code, "invalid_selection");
+      const planned = invoke("handoff", "--dry-run");
+      assert.equal(planned.status, 0, planned.stdout + planned.stderr);
+      const selection = JSON.parse(planned.stdout).plan.selection;
+      assert.deepEqual(selection.commands, ["handoff"]);
+      assert.equal(selection.core_activation, core);
+      assert.equal(await readFile(manifestPath, "utf8"), manifest);
+      assert.equal(await readFile(join(deployment, legacyPath), "utf8"), legacyContent);
+      const applied = invoke("handoff", "--yes");
+      assert.equal(applied.status, 0, applied.stdout + applied.stderr);
+      const updated = JSON.parse(await readFile(manifestPath, "utf8"));
+      assert.deepEqual(updated.commands, ["handoff"]);
+      assert.equal(updated.core_activation, core);
+      assert.match(
+        await readFile(join(deployment, "commands/handoff.md"), "utf8"),
+        /skill `handoff`/,
+      );
+      await assert.rejects(lstat(join(deployment, legacyPath)), { code: "ENOENT" });
+      const archive = JSON.parse(
+        await readFile(join(archiveRoot("project", project, home), "index.json"), "utf8"),
+      );
+      assert.ok(archive.entries.some((entry) => entry.original_hash === hash(legacyContent)));
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  }
+});
