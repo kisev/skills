@@ -258,11 +258,82 @@ alongside `sessions` and `dream`:
 ```
 
 The URL must be an OpenAI-compatible embeddings endpoint, not Ollama's
-`/api/embed`. Memomatic sends entry and query text to this endpoint; a loopback
-endpoint keeps embedding requests local. No dimension setting is needed.
-Run `memomatic index` after changing the model, then check `memomatic search`.
-Keep the endpoint available for indexing and search: an embedding request failure
-is reported as an error rather than silently falling back to text-only search.
+`/api/embed`. The full URL, model, authentication, timeout and request limits
+are configured per service in `settings.json`; no server is built in. Any
+OpenAI-compatible deployment works, including vLLM:
+
+```json
+{
+  "embedding": {
+    "url": "http://127.0.0.1:8080/v1/embeddings",
+    "model": "embedding",
+    "queryPrefix": "query: ",
+    "documentPrefix": "passage: ",
+    "bearerEnv": "EMBEDDING_TOKEN",
+    "timeoutMs": 120000,
+    "maxBatchTexts": 32,
+    "maxTextChars": 8000
+  }
+}
+```
+
+`queryPrefix` and `documentPrefix` format queries and documents independently;
+both default to raw text, and the Qwen3 `Instruct`/`Query` instruction still
+applies to queries automatically for Qwen3 models unless
+`embedding.queryInstruction` overrides it (an explicit empty value disables
+wrapping). `bearerEnv` names an environment variable holding a Bearer token;
+it is sent as `Authorization: Bearer ...` and never logged. `timeoutMs`
+defaults to 30000 and may be raised for a server that loads its model on the
+first request. `maxBatchTexts` bounds inputs per request and `maxTextChars`
+bounds one formatted input; longer entries are split at paragraph, line or
+space boundaries, embedded chunk-wise, and mean-pooled onto one vector per
+entry, so long entries surface once. 8000 characters is a conservative proxy
+for the common 4096-token input budget — roughly two characters per token for
+dense scripts — not an exact token count.
+
+Memomatic sends `encoding_format: "float"` and reads vectors from
+`data[i].embedding`, restoring request order through `data[i].index`. Run
+`memomatic index` after changing the model or document formatting, then check
+`memomatic search`. Keep the endpoint available for indexing and search: an
+embedding request failure is reported as an error rather than silently falling
+back to text-only search.
+
+## Optional Reranking
+
+A reranker reorders a wider candidate set with a cross-encoder model. It is
+disabled by default and works with or without embeddings:
+
+```json
+{
+  "reranker": {
+    "url": "http://127.0.0.1:8080/rerank",
+    "model": "reranker",
+    "bearerEnv": "RERANKER_TOKEN",
+    "timeoutMs": 120000,
+    "candidates": 64,
+    "minScore": 0,
+    "maxDocuments": 64,
+    "maxChars": 8000
+  }
+}
+```
+
+The endpoint receives `POST` with `{model, query, documents, top_n}` and must
+return `{results: [{index, relevance_score}]}` — the contract served by vLLM's
+`/rerank` and Jina/Cohere-compatible rerankers. Documents are raw entry text
+without embedding prefixes. With a reranker enabled, lexical and vector search
+first collect up to `candidates` candidates each, skipping the strict
+relevance gates, and the project filter is applied before anything is sent.
+The reranker score then becomes the final relevance and order — an exact
+keyword match no longer wins unconditionally — and `reranker.minScore` (default
+0\) drops weak results. Scores are ranking signals, not universal probabilities;
+their scale depends on the model, so calibrate `minScore` against your own
+relevant and irrelevant examples. Long documents are chunked so the query, one
+document chunk and the server-side template stay inside `maxChars`; chunk
+scores aggregate by maximum and each entry surfaces at most once. Reranker
+errors, malformed responses and timeouts fail the search explicitly instead of
+falling back to another mode. Changing reranker settings never requires
+reindexing; only embedding model or document-format changes do.
 
 ## Search Quality and Diagnostics
 
@@ -274,15 +345,18 @@ memomatic search "deployment" --project atlas --explain
 
 After upgrading from an index without model metadata, run `memomatic index` once.
 This rebuilds derived search data and embeddings, not your Markdown knowledge or
-session history. Changing the embedding endpoint/model requires another reindex;
-same-sized vectors from different models are not compatible. A failed embedding
+session history. The recorded fingerprint covers endpoint, model, document
+prefix and chunk budget; changing any of them requires another reindex
+(upgrading memomatic itself counts, because the fingerprint format changed).
+Same-sized vectors from different models are not compatible. A failed embedding
 rebuild preserves the previous committed index and reports an error.
 
 For Qwen3-Embedding, search automatically adds the model's `Instruct`/`Query`
 retrieval instruction to queries; documents remain raw. Other models use raw
 queries unless `embedding.queryInstruction` is configured. An explicit empty
-instruction disables query wrapping. Query-only instruction changes do not require
-rewriting document vectors.
+instruction disables query wrapping. Query-only instruction and prefix changes
+do not require rewriting document vectors; changing `embedding.documentPrefix`
+or `maxTextChars` does.
 
 Full token matches rank first. Lexical coverage and vector similarity are checked
 before importance and age adjustments; lexical evidence never lowers relevance.
@@ -292,11 +366,15 @@ probabilities. These defaults were checked with a small local Qwen3 positive/neg
 sample, not a universal benchmark. The same query can behave differently with a
 different model. A high threshold may miss a weak but useful paraphrase.
 
-`--explain` shows matched tokens, lexical coverage, cosine similarity, relevance,
-age and importance factors, and the acceptance reason. MCP accepts `explain: true`
+With a reranker enabled these strict gates only select the wide candidate set;
+the final relevance and order come from the reranker, and `--explain` reports
+`reason: "rerank"` with the reranker score, candidate count and threshold.
+Without a reranker, `--explain` shows matched tokens, lexical coverage, cosine
+similarity, relevance, age and importance factors, and the acceptance reason.
+MCP accepts `explain: true`
 and `project` on `memory_search`. No accepted hits prints `No relevant memory found.`
-in the CLI and returns `[]` through MCP. An embedding error is not reported as an
-empty successful search.
+in the CLI and returns `[]` through MCP. An embedding or reranker error is not
+reported as an empty successful search.
 
 A project filter includes exactly that project's entries plus user-level memory;
 old entries without project annotations are not assigned a scope automatically.

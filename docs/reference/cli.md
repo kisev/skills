@@ -33,10 +33,10 @@ Values resolve in this order: **CLI arguments > environment > JSON configuration
 `AGENTOMATIC_CONFIG`, `MEMOMATIC_CONFIG`, or `TASKMATIC_CONFIG`. Generic option keys
 in that file are camelCase (`logLevel`, `logFormat`, `progress`, `color`, `json`).
 Taskmatic also accepts command fields such as `home`, `board`, `host`, and `port`.
-Memomatic keeps its `sessions`, `dream`, `embedding`, `search`, and `archive`
-sections. Run-specific overrides such as `--model` take precedence over the
-matching `sessions.model`/`dream.model` setting, and a legacy `dream` extraction
-value migrates to `sessions` until the new section overrides it. No
+Memomatic keeps its `sessions`, `dream`, `embedding`, `reranker`, `search`, and
+`archive` sections. Run-specific overrides such as `--model` take precedence over
+the matching `sessions.model`/`dream.model` setting, and a legacy `dream`
+extraction value migrates to `sessions` until the new section overrides it. No
 configuration file is written automatically by these overrides.
 
 Environment names for application options appear in help: for example,

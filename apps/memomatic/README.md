@@ -4,8 +4,8 @@
 
 `@kisev/memomatic` is a personal learning memory for agents following the OpenClaw
 memory architecture: a tiered Markdown corpus you can read as plain files, a
-rebuildable SQLite index with FTS5 and optional local embeddings, a `sessions`
-extraction pass, and a nightly `dream` consolidation sweep.
+rebuildable SQLite index with FTS5, optional local embeddings and an optional
+reranker, a `sessions` extraction pass, and a nightly `dream` consolidation sweep.
 
 ## Install
 

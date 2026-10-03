@@ -17,6 +17,7 @@ import { openMemomatic } from "../dist/service.js";
 import { planIngestion } from "../dist/ingestion.js";
 import { runSessions } from "../dist/sessions.js";
 import { reindex } from "../dist/search.js";
+import { normalizeSettings } from "../dist/settings.js";
 import { OpenCodeExecutor } from "../dist/executor.js";
 import { withRunLock } from "../dist/inbox.js";
 import { createSessionTables, insertMessage } from "./opencode-fixture.mjs";
@@ -178,7 +179,9 @@ test("discussing the internal marker does not hide a normal session", async (t) 
 test("embedding cache processes only changed documents, and force deliberately bypasses it", async (t) => {
   const { context } = await fixture(t);
   let inputs = [];
-  context.settings.embedding = { url: "http://localhost/embeddings", model: "test" };
+  context.settings.embedding = normalizeSettings({
+    embedding: { url: "http://localhost/embeddings", model: "test" },
+  }).embedding;
   t.mock.method(globalThis, "fetch", async (_url, options) => {
     const batch = JSON.parse(options.body).input;
     inputs.push(...batch);

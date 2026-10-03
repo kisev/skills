@@ -31,6 +31,7 @@ import {
 import { runDream, parseConsolidation } from "../dist/dream.js";
 import { runSessions, parseExtraction } from "../dist/sessions.js";
 import { handleMcpRequest } from "../dist/mcp.js";
+import { normalizeSettings } from "../dist/settings.js";
 import { stableIdFor } from "../dist/store.js";
 
 function environment() {
@@ -765,6 +766,33 @@ test("MCP exposes the complete explicit memory lifecycle without plugin hooks", 
   }
 });
 
+test("an unreachable enabled reranker fails the MCP search explicitly", async () => {
+  const env = environment();
+  try {
+    mkdirSync(join(env.config, "memomatic"), { recursive: true });
+    writeFileSync(
+      join(env.config, "memomatic", "settings.json"),
+      JSON.stringify({ reranker: { url: "http://127.0.0.1:1/rerank", model: "reranker" } }),
+    );
+    const ctx = await context();
+    await writeEntry(ctx, { origin: "agent", text: "Reranker failure stays visible." });
+    await processInbox(ctx);
+    ctx.store.close();
+    const response = JSON.parse(
+      await handleMcpRequest({
+        id: 9,
+        method: "tools/call",
+        params: { arguments: { query: "reranker failure stays visible" }, name: "memory_search" },
+      }),
+    );
+    assert.equal(response.result.isError, true);
+    const payload = JSON.parse(response.result.content[0].text);
+    assert.match(payload.error, /reranker request failed/);
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
 test("forgetting preserves surviving vectors and line references without embedding access", async () => {
   const env = environment();
   try {
@@ -776,7 +804,9 @@ test("forgetting preserves surviving vectors and line references without embeddi
     await rebuildIndex(ctx);
     for (const entry of ctx.store.allEntries())
       ctx.store.setVector(entry.stableId, new Float32Array([1, 0]));
-    ctx.settings.embedding = { url: "http://127.0.0.1:1/v1/embeddings", model: "unavailable" };
+    ctx.settings.embedding = normalizeSettings({
+      embedding: { url: "http://127.0.0.1:1/v1/embeddings", model: "unavailable" },
+    }).embedding;
     await withRunLock(ctx.paths, async () => {
       await assert.rejects(
         forgetEntry(ctx, { file: "MEMORY.md", line: 1 }),

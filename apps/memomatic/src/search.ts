@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { cosineSimilarity, type IndexedEntry, MemoryStore, stableIdFor } from "./store.js";
 import { entryKind, parseCorpusEntries } from "./corpus.js";
 import { entryImportance, entryObservedAt } from "./entries.js";
-import { embedTexts, embeddingFingerprint } from "./settings.js";
+import { embedTexts, embeddingFingerprint, rerankTexts } from "./settings.js";
 import type { MemomaticPaths } from "./paths.js";
 import type { MemomaticSettings } from "./settings.js";
 import { check, type OperationOptions } from "./operations.js";
@@ -21,7 +21,8 @@ export type SearchHit = {
     exact: boolean;
     recency: number;
     importance: number;
-    reason: "lexical" | "semantic" | "both";
+    reason: "lexical" | "semantic" | "both" | "rerank";
+    rerank?: { candidates: number; threshold: number };
   };
 };
 
@@ -103,9 +104,10 @@ export async function reindex(
     completed: 0,
     cached: entries.length - missing.length,
   });
-  for (let start = 0; start < missing.length; start += 32) {
+  const batchSize = Math.min(32, settings.embedding?.maxBatchTexts ?? 32);
+  for (let start = 0; start < missing.length; start += batchSize) {
     check(options);
-    const batch = missing.slice(start, start + 32);
+    const batch = missing.slice(start, start + batchSize);
     const computed = await embedTexts(
       settings,
       batch.map((item) => item.entry.text),
@@ -120,7 +122,7 @@ export async function reindex(
       phase: "index.embeddings",
       message: "Embedding batch complete",
       total: missing.length,
-      completed: Math.min(start + 32, missing.length),
+      completed: Math.min(start + batchSize, missing.length),
     });
   }
   check(options);
@@ -157,6 +159,143 @@ export function queryTokens(query: string): string[] {
   ].filter((token) => token.length >= 2);
 }
 
+function lexicalCoverage(
+  entry: IndexedEntry,
+  tokens: string[],
+  keyword: Map<string, number>,
+): { matchedTokens: string[]; lexical: number } {
+  const words = queryTokens(entry.text);
+  const matchedTokens = tokens.filter((token) => words.some((word) => word.startsWith(token)));
+  return {
+    matchedTokens,
+    lexical:
+      keyword.has(entry.stableId) && tokens.length ? matchedTokens.length / tokens.length : 0,
+  };
+}
+
+function gatedHits(
+  tokens: string[],
+  keyword: Map<string, number>,
+  vector: Map<string, number>,
+  byId: Map<string, IndexedEntry>,
+  settings: MemomaticSettings,
+): SearchHit[] {
+  const hits: SearchHit[] = [];
+  for (const stableId of new Set([...keyword.keys(), ...vector.keys()])) {
+    const entry = byId.get(stableId);
+    if (!entry) continue;
+    const { matchedTokens, lexical } = lexicalCoverage(entry, tokens, keyword);
+    const semantic = vector.get(stableId) ?? null;
+    const lexicalAccepted = lexical >= settings.search.minScore && lexical >= 0.5;
+    const semanticAccepted =
+      semantic !== null &&
+      semantic >= settings.search.minSemanticScore &&
+      semantic >= settings.search.minScore;
+    if (!lexicalAccepted && !semanticAccepted) continue;
+    const relevance = Math.max(lexicalAccepted ? lexical : 0, semanticAccepted ? semantic! : 0);
+    const recency = recencyMultiplier(entry, settings.search.halfLifeDays);
+    const importance = Math.max(0, Math.min(1, (entry.importance - 1) / 9));
+    const score = relevance * recency * (0.85 + 0.15 * importance);
+    if (score < settings.search.minScore) continue;
+    const words = queryTokens(entry.text);
+    hits.push({
+      entry,
+      score,
+      snippet: entry.text.slice(0, 240),
+      explanation: {
+        matchedTokens,
+        lexical,
+        semantic,
+        relevance,
+        recency,
+        importance,
+        exact: tokens.length > 0 && tokens.every((token) => words.includes(token)),
+        reason: lexicalAccepted ? (semanticAccepted ? "both" : "lexical") : "semantic",
+      },
+    });
+  }
+  return hits.sort(
+    (left, right) =>
+      Number(right.explanation.exact) - Number(left.explanation.exact) ||
+      right.score - left.score ||
+      (right.explanation.semantic ?? 0) - (left.explanation.semantic ?? 0) ||
+      left.entry.stableId.localeCompare(right.entry.stableId),
+  );
+}
+
+/**
+ * Reranker path: collect a bounded wide candidate set from lexical and vector
+ * search before the strict relevance gates, apply the project filter, and let
+ * the reranker decide final relevance and order without giving literal
+ * matches an unconditional priority.
+ */
+async function rerankedHits(
+  query: string,
+  tokens: string[],
+  keyword: Map<string, number>,
+  vector: Map<string, number>,
+  byId: Map<string, IndexedEntry>,
+  settings: MemomaticSettings,
+): Promise<SearchHit[]> {
+  const reranker = settings.reranker!;
+  // The project filter narrows the pool before top-N selection, so hidden
+  // entries cannot consume the candidate budget.
+  const visible = (scores: Map<string, number>) => {
+    const filtered = new Map<string, number>();
+    for (const [stableId, score] of scores) if (byId.has(stableId)) filtered.set(stableId, score);
+    return filtered;
+  };
+  const widest = (scores: Map<string, number>) =>
+    [...scores.entries()]
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .slice(0, reranker.candidates)
+      .flatMap(([stableId]) => {
+        const entry = byId.get(stableId);
+        return entry ? [entry] : [];
+      });
+  const candidates: IndexedEntry[] = [];
+  const seen = new Set<string>();
+  for (const entry of [...widest(visible(keyword)), ...widest(visible(vector))]) {
+    if (seen.has(entry.stableId)) continue;
+    seen.add(entry.stableId);
+    candidates.push(entry);
+  }
+  if (!candidates.length) return [];
+  // Reranker documents stay raw entry text without embedding prefixes.
+  const ranked = await rerankTexts(
+    settings,
+    query,
+    candidates.map((entry) => entry.text),
+  );
+  const hits: SearchHit[] = [];
+  for (const { index, score } of ranked) {
+    if (score < reranker.minScore) continue;
+    const entry = candidates[index];
+    const { matchedTokens, lexical } = lexicalCoverage(entry, tokens, keyword);
+    const semantic = vector.get(entry.stableId) ?? null;
+    const recency = recencyMultiplier(entry, settings.search.halfLifeDays);
+    const importance = Math.max(0, Math.min(1, (entry.importance - 1) / 9));
+    const words = queryTokens(entry.text);
+    hits.push({
+      entry,
+      score,
+      snippet: entry.text.slice(0, 240),
+      explanation: {
+        matchedTokens,
+        lexical,
+        semantic,
+        relevance: score,
+        recency,
+        importance,
+        exact: tokens.length > 0 && tokens.every((token) => words.includes(token)),
+        reason: "rerank",
+        rerank: { candidates: candidates.length, threshold: reranker.minScore },
+      },
+    });
+  }
+  return hits;
+}
+
 export async function search(
   store: MemoryStore,
   query: string,
@@ -165,7 +304,10 @@ export async function search(
 ): Promise<SearchHit[]> {
   if (!query.trim()) throw new Error("query is required");
   const tokens = queryTokens(query);
-  const keyword = store.ftsSearch(query, 200);
+  const keyword = store.ftsSearch(
+    query,
+    settings.reranker ? Math.max(200, settings.reranker.candidates) : 200,
+  );
   const vector = new Map<string, number>();
   const storedVectors = store.vectors();
   if (
@@ -183,7 +325,6 @@ export async function search(
       if (similarity > 0.05) vector.set(row.stableId, similarity);
     }
   }
-  const candidates = new Set([...keyword.keys(), ...vector.keys()]);
   const entries = store
     .allEntries()
     .filter(
@@ -191,49 +332,9 @@ export async function search(
         options.project === undefined || item.project === options.project || item.kind === "user",
     );
   const byId = new Map(entries.map((entry) => [entry.stableId, entry]));
-  const hits: SearchHit[] = [];
-  for (const stableId of candidates) {
-    const entry = byId.get(stableId);
-    if (!entry) continue;
-    const words = queryTokens(entry.text);
-    const matchedTokens = tokens.filter((token) => words.some((word) => word.startsWith(token)));
-    const lexical =
-      keyword.has(stableId) && tokens.length ? matchedTokens.length / tokens.length : 0;
-    const semantic = vector.get(stableId) ?? null;
-    const lexicalAccepted = lexical >= settings.search.minScore && lexical >= 0.5;
-    const semanticAccepted =
-      semantic !== null &&
-      semantic >= settings.search.minSemanticScore &&
-      semantic >= settings.search.minScore;
-    if (!lexicalAccepted && !semanticAccepted) continue;
-    const relevance = Math.max(lexicalAccepted ? lexical : 0, semanticAccepted ? semantic! : 0);
-    const recency = recencyMultiplier(entry, settings.search.halfLifeDays);
-    const importance = Math.max(0, Math.min(1, (entry.importance - 1) / 9));
-    const score = relevance * recency * (0.85 + 0.15 * importance);
-    if (score < settings.search.minScore) continue;
-    hits.push({
-      entry,
-      score,
-      snippet: entry.text.slice(0, 240),
-      explanation: {
-        matchedTokens,
-        lexical,
-        semantic,
-        relevance,
-        recency,
-        importance,
-        exact: tokens.length > 0 && tokens.every((token) => words.includes(token)),
-        reason: lexicalAccepted ? (semanticAccepted ? "both" : "lexical") : "semantic",
-      },
-    });
-  }
-  hits.sort(
-    (left, right) =>
-      Number(right.explanation.exact) - Number(left.explanation.exact) ||
-      right.score - left.score ||
-      (right.explanation.semantic ?? 0) - (left.explanation.semantic ?? 0) ||
-      left.entry.stableId.localeCompare(right.entry.stableId),
-  );
+  const hits = settings.reranker
+    ? await rerankedHits(query, tokens, keyword, vector, byId, settings)
+    : gatedHits(tokens, keyword, vector, byId, settings);
   const limited = hits.slice(0, settings.search.maxResults);
   if (options.markSurfaced !== false && limited.length)
     store.markSurfaced(

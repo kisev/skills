@@ -42,15 +42,45 @@ old low-ranking episodic entries.
 
 Qwen3 embedding queries use an English task instruction in `Instruct`/`Query`
 format; documents remain raw. Other models keep raw queries unless an explicit
-`embedding.queryInstruction` is configured. The index records a fingerprint of
-endpoint, model and document format. Missing/mismatched fingerprints or dimensions
-require explicit reindexing. Invalid, incomplete or unavailable embeddings fail
-visibly; failed indexing preserves the previous committed index. A completed
-reindex replaces entries, vectors and the fingerprint in one transaction.
+`embedding.queryInstruction` is configured; an explicit empty value disables
+wrapping. Optional `embedding.queryPrefix` and `embedding.documentPrefix`
+settings format queries and documents independently, defaulting to raw text.
+Embedding and reranker endpoints are configured independently, each with a full
+URL, model, optional `bearerEnv` naming the environment variable that holds a
+Bearer token, a configurable per-request timeout that may cover cold model
+loads, and request limits (`maxBatchTexts`, `maxTextChars`, `candidates`,
+`minScore`, `maxDocuments`, `maxChars`). No server is built in, both services
+default to disabled, and tokens never reach logs. The index records a
+fingerprint of endpoint, model and document format including prefix and chunk
+budget; query-only and reranker settings are excluded, so changing them never
+requires recomputing vectors. Missing/mismatched fingerprints or dimensions
+require explicit reindexing. Invalid, incomplete, timed-out or unavailable
+enabled endpoints fail visibly in CLI and MCP without falling back to another
+search mode; failed indexing preserves the previous committed index. A
+completed reindex replaces entries, vectors and the fingerprint in one
+transaction.
+
+Texts longer than `embedding.maxTextChars` are split at paragraph, line or
+space boundaries; chunk vectors are mean-pooled onto one vector per entry, so
+chunked entries surface once. Reranker documents are chunked so the query, one
+document chunk and the server-side template stay inside `reranker.maxChars`,
+and chunk scores aggregate by maximum per entry. Character budgets are a
+conservative proxy of roughly two characters per token, not exact tokenization;
+defaults target the common 4096-token input budget.
+
+An enabled reranker collects a bounded wide candidate set of up to
+`reranker.candidates` entries from lexical and vector search before the strict
+relevance gates, applies the project filter before sending, and posts
+`{model, query, documents, top_n}` to the configured `/rerank`-style endpoint,
+reading `results[].index` and `results[].relevance_score`. Reranker scores
+become the final relevance and order without an unconditional literal-match
+priority; `reranker.minScore` drops weak results. Reranker scores stay ranking
+signals, not universal probabilities.
 
 CLI `search --explain` and MCP `memory_search` with `explain: true` expose matched
 tokens, lexical coverage, vector similarity, relevance, age/importance factors
-and acceptance reason. Optional `project` limits recall to that exact project
+and acceptance reason, plus the candidate count and threshold for reranked
+results. Optional `project` limits recall to that exact project
 plus user-level memory; unscoped entries are not guessed into a project. Returned
 source, origin, kind and project identify learned context. Such context does not
 override repository instructions, policy or current user decisions. No automatic
@@ -60,13 +90,19 @@ injection or full historical rebuild is introduced.
 
 Regression tests cover exact matches, paraphrases, an unknown name, unrelated
 queries, project filtering, inactive embedding endpoints, malformed vectors and
-model changes with equal dimensions. Local Qwen3 calibration uses anonymized
+model changes with equal dimensions, the documented vLLM-style embeddings and
+`/rerank` contract with permuted response indices, Bearer authentication
+without token leakage, chunking with per-input pooling, document-format-change
+migration with preserved indexes on failure, explicit timeout and malformed
+reranker failures, and reranker ordering that ranks a relevant paraphrase above
+a literal match. Local Qwen3 calibration uses anonymized
 positive and negative examples; thresholds remain configurable rather than a
-claim of universal semantic accuracy.
+claim of universal semantic accuracy. Live server availability and concrete
+threshold quality are not asserted.
 
 ## Dependencies
 
-Node.js 22.13+, `node:sqlite`, Commander, `jsonc-parser`, the build-materialized common CLI runtime, an optional OpenAI-compatible embedding endpoint, and a configured OpenCode V2 provider for Sessions extraction and Dream consolidation (a legacy `dream` extraction configuration migrates to `sessions` until overridden). Agentomatic does not depend on memomatic; applications remain independently installed.
+Node.js 22.13+, `node:sqlite`, Commander, `jsonc-parser`, the build-materialized common CLI runtime, optional OpenAI-compatible embedding and `/rerank`-style reranking endpoints, and a configured OpenCode V2 provider for Sessions extraction and Dream consolidation (a legacy `dream` extraction configuration migrates to `sessions` until overridden). Agentomatic does not depend on memomatic; applications remain independently installed.
 
 Session ingestion (the `sessions` command) reads user and assistant text from
 OpenCode's native V2 `session_v2`/`session_message` projections in sequence
