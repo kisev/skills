@@ -328,12 +328,12 @@ async function install(scope, cwd, home) {
   };
 }
 
-test("registry generates thirty-eight thin skill command assets and one package command", () => {
-  assert.equal(COMMAND_REGISTRY.length, 39);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 39);
+test("registry generates forty thin skill command assets and one package command", () => {
+  assert.equal(COMMAND_REGISTRY.length, 41);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 41);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
   const skillCommands = COMMAND_REGISTRY.filter((entry) => "skill" in entry);
-  assert.equal(skillCommands.length, 38);
+  assert.equal(skillCommands.length, 40);
   for (const entry of skillCommands) {
     assert.ok(skills.has(entry.skill), entry.skill);
     const rendered = renderCommand(entry);
@@ -514,11 +514,11 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second.operations, first.operations);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 49);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 51);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 39);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 41);
     assert.deepEqual(readdirSync(join(home, ".config", "opencode", "plugins")), ["rtk.js"]);
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), {
       code: "ENOENT",
@@ -610,7 +610,7 @@ test("install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 49);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 51);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

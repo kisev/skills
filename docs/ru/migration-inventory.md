@@ -11,19 +11,19 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Активные переносимые навыки
 
-Активны ровно 38 переносимых навыков:
+Активны ровно 40 переносимых навыков:
 
-`agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
-`mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
-`skill-doctor`, `slides-prompts-prepare`, `spec-manage`, `handoff`, `briefing`,
-`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
-`team-agreements`, `team-feedback`, `team-health`, `team-incident`,
+`agents-md`, `asd-ste100`, `askme`, `ast-grep`, `code-explain`, `code-review`,
+`commit-msg`, `docs-prepare`, `docs-review`, `eli5`, `goal`, `humanize`,
+`mattermost`, `mattermost-triage`, `mr-prepare`, `release-prepare`,
+`release-review`, `rtk`, `skill-doctor`, `slides-prompts-prepare`, `spec-manage`,
+`handoff`, `briefing`, `task-prepare`, `task-review`, `task-triage`, `taskmatic`,
+`team-1on1`, `team-agreements`, `team-feedback`, `team-health`, `team-incident`,
 `team-onboarding`, `team-people`, `team-performance`, `team-report`,
 `team-retro`, `team-roadmap`, `team-sprint-close` и `team-sprint-start`.
 
 Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
-те же 38 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+те же 40 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
 добавляются только в `.build/skills` и проверяются побайтово.
 
 ## Сведения об очистке переносимых навыков
@@ -53,7 +53,7 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Текущий состав интеграции OpenCode
 
-Текущий состав пакета содержит 38 команд: по одной для каждого активного навыка.
+Текущий состав пакета содержит 40 команд: по одной для каждого активного навыка.
 Инструмент пакета `route` доступен без слеш-команды.
 
 Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,

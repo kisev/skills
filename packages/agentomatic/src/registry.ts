@@ -18,6 +18,7 @@ function description(english: string, russianTrigger: string): string {
 
 const SKILL_NAMES = [
   "agents-md",
+  "asd-ste100",
   "askme",
   "ast-grep",
   "code-explain",
@@ -25,6 +26,7 @@ const SKILL_NAMES = [
   "commit-msg",
   "docs-prepare",
   "docs-review",
+  "eli5",
   "goal",
   "humanize",
   "mattermost",

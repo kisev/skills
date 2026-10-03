@@ -19,6 +19,7 @@ BUILT_SKILLS = ROOT / ".build" / "skills"
 SKILLS_BINARY = subprocess.check_output(["mise", "which", "skills"], cwd=ROOT, text=True).strip()
 PORTABLE_SKILLS = (
     "agents-md",
+    "asd-ste100",
     "askme",
     "ast-grep",
     "code-explain",
@@ -26,6 +27,7 @@ PORTABLE_SKILLS = (
     "commit-msg",
     "docs-prepare",
     "docs-review",
+    "eli5",
     "goal",
     "humanize",
     "mattermost",
@@ -211,6 +213,18 @@ WORKFLOW_CONTRACTS = {
         "external cli and is not installed by this skill",
         "original command directly",
         "do not add a hook",
+    ),
+    "asd-ste100": (
+        "never claims certified asd-ste100 compliance",
+        "do not invent it",
+        "do not rewrite text that is already clear for the sake of rewriting",
+        "obligation, permission, and prohibition strength",
+    ),
+    "eli5": (
+        "assume an intelligent adult outside the field",
+        "simplify the wording, never the conditions",
+        "preserve uncertainty as uncertainty",
+        "never replaces exact conditions, numbers, or boundaries",
     ),
 }
 CYRILLIC = re.compile(r"[А-Яа-яЁё]")

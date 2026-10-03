@@ -21,6 +21,11 @@ technical fragments, and include a brief completion/report contract with status,
 evidence for every criterion, checks, unresolved items, and the next safe step.
 Do not declare complete when required evidence is partial or a blocker remains.
 
+Apply `references/clarity-rules.md` to every criterion and boundary: consistent
+terms; the actor, action, conditions, and scope wherever meaning depends on
+them; agreed requirements separated from new proposals; and a definite check
+sufficient to verify each acceptance criterion.
+
 A ready result is non-empty, at most 4000 characters, and has no blocking open
 questions. If material conditions do not fit, stop and propose splitting the
 request into several goals rather than truncating or hiding them. If a required

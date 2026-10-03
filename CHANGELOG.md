@@ -94,6 +94,25 @@ All notable changes to this project are documented in this file. Entries follow
   confirmations. A worktree registry records every created worktree. The npm
   publication graph now includes the package in dependency order.
 
+- New portable skills `eli5` and `asd-ste100`. `eli5` explains a complex
+  concept in plain language calibrated to the available knowledge about the
+  reader, preserving essential constraints and uncertainty; it never assumes a
+  five-year-old audience by default, and analogies never replace exact
+  conditions. `asd-ste100` checks and rewrites technical text in the task's
+  language using Simplified Technical English principles while preserving
+  obligation strength, numbers, conditions, and exceptions; it does not claim
+  certified ASD-STE100 compliance and does not transfer English grammar or word
+  lists mechanically to another language. Compact shared clarity rules are
+  defined once in `shared/references/clarity-rules.md` and materialized into
+  `askme`, `goal`, and `task-prepare` (and the new skills) through
+  `shared/manifest.json`: consistent terms; explicit actor, action, conditions,
+  and scope where meaning depends on them; separated facts, decisions,
+  assumptions, and recommendations; simplification that never changes
+  obligation, confidence, numbers, exceptions, or boundaries; already-clear
+  text kept unchanged. Both skills declare a `humanize` relation, and
+  catalogs, capability specs (REQ-F-554/555, REQ-I-423/424), eval surfaces,
+  the migration inventory, and documentation are updated.
+
 ## \[11.0.2] - 2026-09-30
 
 ### Fixed

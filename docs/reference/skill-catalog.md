@@ -2,7 +2,7 @@
 
 [Русский](../ru/reference/skill-catalog.md)
 
-The maintained catalog contains 38 portable Agent Skills. Its release
+The maintained catalog contains 40 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
 of `@kisev/agentomatic`.
@@ -38,13 +38,15 @@ are not included.
 | Skill | Purpose |
 | - | - |
 | `agents-md` | Create or review repository-scoped `AGENTS.md` instructions. |
-| `askme` | Clarify an incomplete task or design through a bounded interview. |
+| `asd-ste100` | Check and rewrite technical text in the task's language using Simplified Technical English principles, preserving conditions, exceptions, and obligations. |
+| `askme` | Clarify a task or design through a bounded interview; every call returns all current agreements, including those made before the first interview. |
 | `ast-grep` | Run structural search or a safe direct AST rewrite through ast-grep. |
 | `code-explain` | Build a read-only guided map of current WIP, a Git range, branch, or MR history. |
 | `code-review` | Review a GitLab MR or local WIP for defects and risks. |
 | `commit-msg` | Produce one concise English commit message from local changes. |
 | `docs-prepare` | Prepare one evidence-based user document directly in the project. |
 | `docs-review` | Review user documentation for accuracy and usability. |
+| `eli5` | Explain a complex concept in plain language calibrated to the reader, keeping essential constraints and uncertainty. |
 | `goal` | Produce a read-only structured Markdown goal of at most 4000 characters. |
 | `humanize` | On explicit request only, edit prose into direct, natural language while preserving meaning and voice. |
 | `mattermost` | Read bounded Mattermost conversations and prepare manual publications, including opt-in Issue/MR cards. |

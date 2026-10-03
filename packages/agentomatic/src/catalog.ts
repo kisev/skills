@@ -3,6 +3,7 @@ import { requirePackageVersion } from "./package-metadata.js";
 export const CATALOG = {
   skills: [
     "agents-md",
+    "asd-ste100",
     "askme",
     "ast-grep",
     "code-explain",
@@ -10,6 +11,7 @@ export const CATALOG = {
     "commit-msg",
     "docs-prepare",
     "docs-review",
+    "eli5",
     "goal",
     "humanize",
     "mattermost",

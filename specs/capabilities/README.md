@@ -13,6 +13,7 @@ commands have a separate contract below.
 | Skill | Command adapter |
 | - | - |
 | [agents-md](skills/agents-md.md) | [agents-md](commands/agents-md.md) |
+| [asd-ste100](skills/asd-ste100.md) | [asd-ste100](commands/asd-ste100.md) |
 | [askme](skills/askme.md) | [askme](commands/askme.md) |
 | [ast-grep](skills/ast-grep.md) | [ast-grep](commands/ast-grep.md) |
 | [briefing](skills/briefing.md) | [briefing](commands/briefing.md) |
@@ -21,6 +22,7 @@ commands have a separate contract below.
 | [commit-msg](skills/commit-msg.md) | [commit-msg](commands/commit-msg.md) |
 | [docs-prepare](skills/docs-prepare.md) | [docs-prepare](commands/docs-prepare.md) |
 | [docs-review](skills/docs-review.md) | [docs-review](commands/docs-review.md) |
+| [eli5](skills/eli5.md) | [eli5](commands/eli5.md) |
 | [goal](skills/goal.md) | [goal](commands/goal.md) |
 | [humanize](skills/humanize.md) | [humanize](commands/humanize.md) |
 | [mattermost](skills/mattermost.md) | [mattermost](commands/mattermost.md) |
