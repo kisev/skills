@@ -822,7 +822,7 @@ def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
     edit_en = json.loads((scenarios / "skill.humanize.edit-contract.en.json").read_text())
     for scenario in (edit_ru, edit_en):
         assert scenario["kind"] == "golden"
-        assert scenario["revision"] == 2
+        assert scenario["revision"] == 3
         cases = scenario["input"]["fixture"]["cases"]
         expected_ids = {item["id"] for item in scenario["expected"]["case_outcomes"]}
         assert (
@@ -848,6 +848,14 @@ def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
             assert any(verify.values())
         quote = next(case for case in cases if case["id"] == "quote-keeps-marks")
         assert any("\u2014" in item for item in quote["verify"]["protected"])
+        # The protected-tokens claims bind the original author and both core
+        # actions, not just the object nouns.
+        protected = next(case for case in cases if case["id"] == "protected-tokens")
+        claims = [item.casefold() for item in protected["verify"]["claims"]]
+        assert any(item.startswith(("we ", "мы ")) for item in claims)
+        pipeline_claims = [item for item in claims if "pipeline" in item or "конвейер" in item]
+        assert pipeline_claims
+        assert all(item not in {"the whole pipeline", "конвейер"} for item in pipeline_claims)
         assert all(item["outcome"] is True for item in scenario["expected"]["case_outcomes"])
         prompt = scenario["input"]["prompt"]
         assert "humanize" in prompt.lower()

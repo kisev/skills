@@ -4,7 +4,7 @@
     "max_tokens": 4000,
     "timeout_seconds": 30
   },
-  "digest": "7daa3f8167e97ba1c2061d9ea781f626167228d346cae47bdb9177ecc7c0333d",
+  "digest": "e2822bca7480e8062e87e95377afb9114138d34da61aa5507ba331696c663a7c",
   "expected": {
     "case_outcomes": [
       {
@@ -39,14 +39,14 @@
     "fixture": {
       "cases": [
         {
-          "expect": "The template is removed without new facts; `deploy --env=prod` and \"deployment OK\" stay byte-identical; the cold-node caveat is kept.",
+          "expect": "The template is removed without new facts; the search speedup and the whole-pipeline rewrite are kept in the original first-person voice; `deploy --env=prod` and \"deployment OK\" stay byte-identical; the cold-node caveat is kept.",
           "id": "protected-tokens",
           "text": "We didn't just speed up search \u2014 we rewrote the whole pipeline! Run `deploy --env=prod` and wait for the line \"deployment OK\". That said, individual failures are still possible on cold nodes.",
           "verify": {
             "avoid": ["10x", "lightning-fast"],
             "claims": [
-              "search",
-              "the whole pipeline",
+              "we sped up search",
+              "rewriting the whole pipeline",
               "individual failures are still possible on cold nodes"
             ],
             "protected": ["`deploy --env=prod`", "\"deployment OK\""]
@@ -128,7 +128,7 @@
   "kind": "golden",
   "locale": "en",
   "pair_id": "skill.humanize.edit-contract",
-  "revision": 2,
+  "revision": 3,
   "sandbox": {
     "network": false,
     "user_config": false,
