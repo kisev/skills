@@ -39,13 +39,25 @@ hooks маршрутизации сабагентов. Дополнительн�
 decision и content:
 
 ```bash
-reviewmatic start-review --url <mr-url> --repo-root <checkout> --review-mode normal --locale ru
+reviewmatic start-review --url <mr-url> --review-mode normal --locale ru
 reviewmatic check-review --draft <draft-path>
 reviewmatic finish-review --draft <draft-path>
 ```
 
+`--repo-root <checkout>` необязателен: без него используется репозиторий текущей
+директории, подходит и подкаталог чекаута.
+
 `start-review` собирает evidence и context, возвращает черновик, снимки файлов
-из точных коммитов и шаблон квитанции независимого критика. Ревью и запуск нативных
+из точных коммитов и шаблон квитанции независимого критика. Дополнительно он
+готовит один управляемый review worktree на MR в `<repo>.worktrees/reviewmatic/`:
+detached-чекаут точного head MR вне рабочего дерева пользователя. В ответе
+`review_worktree` содержит путь к этому дереву, исходный `source_repo_root` и
+точные `base_sha`, `start_sha`, `head_sha`, `target_sha` и `target_ref`.
+Отсутствующие ревизии загружаются через Git с remote, соответствующего исходному
+или целевому проекту MR (любое имя remote, форки поддерживаются); репозиторий не
+клонируется, а HEAD, ветка, index, файлы и локальные ветки пользователя остаются
+нетронутыми. Код читается из worktree локальным Git; содержимое файлов не
+получается из GitLab. Ревью и запуск нативных
 сабагентов выполняет текущий агент. Если есть дополнительные профили критиков,
 можно выбрать их количество и состав. Если их нет, используются обычные
 независимые сабагенты. `critic_count` фиксирует выбранное количество, `critics`
@@ -190,9 +202,10 @@ Routing-only ответ редактируется как проза, а не к
 ## Реестр worktree
 
 Созданные worktree записываются в
-`$XDG_STATE_HOME/agent-skills/reviewmatic/worktrees.json`. Ничего не удаляется
-автоматически; `reviewmatic worktree list` печатает реестр с состоянием коммита
-и пуша по каждому worktree.
+`$XDG_STATE_HOME/agent-skills/reviewmatic/worktrees.json`; review worktree,
+подготовленные `start-review`, — в `review-worktrees.json` рядом. Ничего не
+удаляется автоматически; `reviewmatic worktree list` печатает реестр применения
+исправлений с состоянием коммита и пуша по каждому worktree.
 
 ## Контракт совместимости
 

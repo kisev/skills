@@ -49,6 +49,19 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- `start-review` prepares one managed review worktree per merge request under
+  `<repo>.worktrees/reviewmatic/`: a detached checkout at the exact MR head
+  outside the user's working tree, returned with the source repository and exact
+  base/start/head/target refs. Missing revisions are fetched over Git from the
+  remote matching the MR's source or target project (any remote name, forks
+  included), the repository is never cloned, and the user's checkout is never
+  modified. The same worktree is reused for the same revision and switches to a
+  new head only when no review is active there, the tree is clean, and it holds
+  no unexpected commits; otherwise preparation blocks with the concrete reason.
+  Review worktrees are recorded in `review-worktrees.json`; reviewed code is
+  read locally, never through per-file GitLab content requests, and `--repo-root`
+  is now optional for `start-review`.
+
 - New workspace app `@kisev/reviewmatic` (`apps/reviewmatic`): the TypeScript
   runtime of the code-review chain with byte-compatible artifacts and digests.
   It ports evidence collection, the review state machine, immutable plans, and

@@ -83,7 +83,10 @@ const definitions: CommandSpec[] = [
     description: "Collect evidence and context once and create one editable review draft",
     options: [
       { name: "url", description: "exact HTTPS GitLab merge request URL", required: true },
-      { name: "repo-root", description: "local checkout root", required: true },
+      {
+        name: "repo-root",
+        description: "local checkout root; defaults to the current repository",
+      },
       {
         name: "review-mode",
         description: "review depth",
@@ -578,7 +581,7 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
         command === "start-review"
           ? await startReview({
               url: String(fields.url),
-              repoRoot: String(fields.repoRoot),
+              repoRoot: fields.repoRoot as string | undefined,
               reviewMode: fields.reviewMode as string,
               locale: fields.locale as string,
               incremental: fields.incremental as string,

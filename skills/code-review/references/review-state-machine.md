@@ -7,8 +7,13 @@ installed runtime's source to discover input fields.
 
 ## One editable draft
 
-1. Run `reviewmatic start-review --url MR_URL --repo-root CHECKOUT --review-mode MODE --locale LOCALE --incremental INCREMENTAL`.
+1. Run `reviewmatic start-review --url MR_URL --review-mode MODE --locale LOCALE --incremental INCREMENTAL`.
    Modes are `fast|normal|deep`, locales `en|ru`, incremental policies `auto|off`.
+   `--repo-root CHECKOUT` is optional and only needed when the current directory's
+   repository does not host or source the merge request. The runner prepares a
+   managed review worktree at the exact MR head and returns it in `review_worktree`
+   with the source repository and exact base/start/head/target refs; pass these
+   exact paths to critics and read all code there without recollection.
    Inspect its evidence, context, and `inspection_path`. The inspection index
    contains the complete diff and exact base/head source snapshots, not working
    tree files. Missing, binary, non-regular, or over-budget source snapshots are

@@ -70,6 +70,33 @@ complete paginated discussions, notes, labels, commits, changes, exact Git objec
 release/tag catalogs, target revision, and exact-head CI evidence. Missing, binary,
 non-regular, and over-budget inspection inputs shall be explicit.
 
+Remote preparation shall prepare one persistent managed review worktree per merge
+request under `<repo>.worktrees/reviewmatic/`, separate from manual fix-application
+trees. It shall identify the repository from the invocation directory, its
+subdirectory, or an explicit `--repo-root`, and accept it only when some remote —
+under any name, including fork remotes — points at the MR's source or target
+project; otherwise it shall stop and request the correct checkout without cloning.
+The MR's base/start/head and target revisions shall be fixed from the evidence;
+missing objects shall be fetched through Git and verified against those SHAs, and
+the current target tip shall never replace the MR diff base. Unavailable objects,
+mismatched revisions, or incomplete evidence shall block preparation, and no
+per-file GitLab content request shall fetch reviewed code. The worktree shall be a
+detached checkout at the exact head whose identity binds the local repository,
+GitLab host, project, and merge request rather than the branch name. Preparation
+shall not change the user's HEAD, branch, index, tracked or untracked files, or
+local branches, shall allow a dirty source checkout, and shall limit its writes to
+fetched objects, `refs/reviewmatic/...` service refs, the managed worktree, and
+private artifacts; foreign directories shall never be overwritten. A clean worktree
+of the same revision shall be reused. A new head shall switch the same worktree
+only when no review is active there, the tree is clean, and it holds no unexpected
+commits; otherwise preparation shall block without reset, clean, or data loss.
+Concurrent preparations shall serialize safely or report occupancy, different merge
+requests shall stay independent, and interrupted preparations shall recover on a
+later run or report the concrete blocker. `start-review` shall return the source
+repository, the review worktree, and the exact refs, and primary analysis, critics,
+resume, refresh, incremental review, and finalization shall reuse that binding
+without recollection; older results shall never be rebound to a new head.
+
 `start-review`, `check-review`, and `finish-review` shall operate on one editable
 draft. Local validation shall not recollect GitLab or freeze decisions. Runtime
 timings shall distinguish collection, validation, and finalization from model
@@ -218,7 +245,12 @@ Runtime and fixture tests cover local validation, real critic identity contracts
 atomic rollback, cumulative findings, targeted repair, refresh without lost
 findings, original receipt preservation, CI-only refresh, grouped suggestions,
 Markdown fences, field diagnostics, direct writes without GETs or publication
-state, errors, repetition and cancellation. TUI behavioral, Ink and PTY suites
+state, errors, repetition and cancellation, and review worktree preparation:
+fork sources under arbitrary remote names, unrelated or missing repositories,
+dirty source and occupied or foreign worktrees, new heads with active and
+finalized reviews, same branch names in different projects, concurrent runs,
+fetch failures with recovery, revision mismatch, preservation of the user's
+checkout, and the absence of per-file code fetches. TUI behavioral, Ink and PTY suites
 remain separate experimental sources and are not run by the default gate.
 Backend worktree checks remain mandatory. Tests use synthetic GitLab responses,
 never live publication.

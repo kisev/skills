@@ -57,6 +57,7 @@ import {
 import { suggestionParts, suggestionsPatch } from "./fixes.js";
 import { validateLabelAssessments } from "./label-assessment.js";
 import { validate as validateSemver } from "./review-semver.js";
+import { checkoutRoot, prepareReviewWorktree, type ReviewWorktree } from "./review-worktree.js";
 
 type Json = Record<string, unknown>;
 export type DraftIssue = { path: string; message: string };
@@ -632,10 +633,11 @@ async function inspectionInputs(
 
 export async function startReview(args: {
   url: string;
-  repoRoot: string;
+  repoRoot?: string;
   reviewMode?: string;
   locale?: string;
   incremental?: string;
+  supersedeRoot?: string | null;
 }): Promise<Json> {
   const started = performance.now();
   const mode = args.reviewMode ?? "normal",
@@ -647,7 +649,18 @@ export async function startReview(args: {
     !["auto", "off"].includes(incremental)
   )
     throw new WorkflowError("Invalid mode, locale, or incremental policy");
-  const repoRoot = regularDirectory(args.repoRoot);
+  let repoRoot: string;
+  try {
+    repoRoot = checkoutRoot(args.repoRoot ?? process.cwd());
+  } catch (error) {
+    if (!(error instanceof WorkflowError)) throw error;
+    return {
+      status: "blocked",
+      reason: "review requires a suitable local Git checkout",
+      errors: [error.message],
+      external_mutations: false,
+    };
+  }
   const target = parseTarget(args.url, new Set(["merge_requests"]));
   const bundle = await collect(target, "code-review", { locale });
   const collected = performance.now();
@@ -659,18 +672,36 @@ export async function startReview(args: {
       artifact_root: bundle.artifact_root,
       external_mutations: false,
     };
+  let review: ReviewWorktree;
+  try {
+    review = prepareReviewWorktree({
+      repoRoot,
+      evidence: bundle as Json,
+      evidenceDigest: String(bundle.preview_digest),
+      supersedeRoot: args.supersedeRoot ?? null,
+    });
+  } catch (error) {
+    if (!(error instanceof WorkflowError)) throw error;
+    return {
+      status: "blocked",
+      reason: "review worktree preparation failed",
+      errors: [error.message],
+      artifact_root: String(bundle.artifact_root),
+      external_mutations: false,
+    };
+  }
   await beginReview(
     String(bundle.preview_artifact_path),
     String(bundle.preview_digest),
     String(bundle.artifact_root),
-    repoRoot,
+    review.path,
     mode,
     locale,
     incremental,
   );
   const result = await prepareContext(
     String(bundle.preview_artifact_path),
-    repoRoot,
+    review.path,
     incremental,
     mode,
     locale,
@@ -678,18 +709,12 @@ export async function startReview(args: {
   if (result.complete !== true) return result;
   return {
     ...(await resumeReview(String(bundle.artifact_root))),
+    review_worktree: review,
     timings: {
       evidence_ms: Math.round(collected - started),
       context_ms: Math.round(performance.now() - collected),
     },
   };
-}
-
-function regularDirectory(path: string): string {
-  const root = resolve(path);
-  if (String(gitRead(root, ["rev-parse", "--is-inside-work-tree"])).trim() !== "true")
-    throw new WorkflowError("A local Git checkout is required");
-  return root;
 }
 
 async function selectedDraft(
@@ -1411,7 +1436,7 @@ function validateRepair(draft: Json, root: string, progress: Json, evidence: Jso
 }
 
 export async function refreshReview(path: string): Promise<Json> {
-  const { draft, progress, context: previousContext } = await selectedDraft(path);
+  const { draft, root, progress, context: previousContext } = await selectedDraft(path);
   const old = structuredClone(draft);
   const [, evidence] = artifactPayload(String(draft.evidence_path), "evidence_snapshot");
   const result = await startReview({
@@ -1421,6 +1446,7 @@ export async function refreshReview(path: string): Promise<Json> {
       ? String(progress.mode)
       : "normal",
     locale: String(progress.locale),
+    supersedeRoot: root,
   });
   if (result.status !== "ok") return result;
   const next = readJson(String(result.draft_path), "refreshed draft");

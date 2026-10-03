@@ -50,7 +50,8 @@ const discussion = {
 };
 let value = null;
 if (clean === "user") value = { id: 23, username: "reviewer" };
-else if (clean === "projects/group%2Fproject") value = { id: 19, path_with_namespace: "group/project", default_branch: "main" };
+else if (clean.startsWith("projects/") && clean.includes("%2F")) value = { id: 19, path_with_namespace: decodeURIComponent(clean.slice("projects/".length)), default_branch: "main" };
+else if (config.sourceProjectId !== undefined && clean === "projects/" + config.sourceProjectId) value = { id: config.sourceProjectId, path_with_namespace: config.sourceProjectPath ?? "group/project", default_branch: "main" };
 else if (clean === "projects/19/repository/branches/main" || clean === "projects/19/releases" || clean === "projects/19/repository/tags") value = [];
 else if (clean.startsWith("projects/19/labels")) value = [
   { name: "ship-ready", description: "semantic-role: change_type; semantic-value: release" },
@@ -62,6 +63,7 @@ else if (clean === "projects/19/merge_requests/7") value = {
   iid: 7, title: "Current merge request title", description: "Current description",
   source_branch: "dev", target_branch: "main", web_url: "https://gitlab.example/group/project/-/merge_requests/7",
   author: { username: config.mrAuthor ?? "author" }, state: "opened", labels: config.labels ?? [], updated_at: "fresh",
+  source_project_id: config.sourceProjectId ?? 19,
   pipeline: config.mrPipeline,
   latest_build_started_at: config.latestBuildStartedAt,
   latest_build_finished_at: config.latestBuildFinishedAt,
@@ -93,7 +95,7 @@ export function reviewFixture(t, overrides = {}) {
   const repo = join(tmp, "repository");
   mkdirSync(repo);
   const git = (...args) => execFileSync("git", ["-C", repo, ...args], { encoding: "utf8" }).trim();
-  git("init", "--quiet");
+  git("init", "--quiet", "--initial-branch=main");
   git("config", "commit.gpgsign", "false");
   git("config", "user.email", "reviewer@example.invalid");
   git("config", "user.name", "Example Reviewer");
@@ -104,6 +106,15 @@ export function reviewFixture(t, overrides = {}) {
   writeFileSync(join(repo, "review.txt"), "base\nreviewed change\n");
   git("commit", "-qam", "change");
   const headSha = git("rev-parse", "HEAD");
+  const origin = join(tmp, "origin.git");
+  const originUrl = "https://gitlab.example/group/project.git";
+  execFileSync("git", ["init", "--quiet", "--bare", "--initial-branch=main", origin]);
+  git("remote", "add", "origin", originUrl);
+  git("config", `url.${origin}.insteadOf`, originUrl);
+  git("push", "-q", "origin", "main");
+  git("branch", "dev", headSha);
+  git("push", "-q", "origin", "dev");
+  execFileSync("git", ["-C", origin, "update-ref", "refs/merge-requests/7/head", headSha]);
   const bin = join(tmp, "bin");
   mkdirSync(bin);
   writeFileSync(join(bin, "glab"), FAKE_GLAB);
@@ -126,6 +137,8 @@ export function reviewFixture(t, overrides = {}) {
   return {
     tmp,
     repo,
+    origin,
+    originUrl,
     git,
     config,
     configPath,

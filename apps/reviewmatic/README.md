@@ -39,13 +39,25 @@ Agents use one editable draft, without copying bindings between decision and
 content files:
 
 ```bash
-reviewmatic start-review --url <mr-url> --repo-root <checkout> --review-mode normal --locale en
+reviewmatic start-review --url <mr-url> --review-mode normal --locale en
 reviewmatic check-review --draft <draft-path>
 reviewmatic finish-review --draft <draft-path>
 ```
 
+`--repo-root <checkout>` is optional; without it the runner uses the repository of
+the current directory, and a subdirectory of the checkout works too.
+
 `start-review` collects evidence and context and returns the draft, exact-commit
-inspection snapshots, and an independent critic receipt template. The host agent
+inspection snapshots, and an independent critic receipt template. It also prepares
+one managed review worktree per merge request under `<repo>.worktrees/reviewmatic/`:
+a detached checkout at the exact MR head, outside the user's working tree. The
+result's `review_worktree` names that path, the original `source_repo_root`, and
+the exact `base_sha`, `start_sha`, `head_sha`, `target_sha`, and `target_ref`.
+Missing revisions are fetched over Git from the remote matching the MR's source or
+target project (any remote name, forks included); the repository is never cloned,
+and the user's HEAD, branch, index, files, and local branches stay untouched.
+Read code from the worktree with local Git; file contents never come from GitLab.
+The host agent
 does the review and launches native subagents. Optional specialist critics can be
 selected by count and profile; without them, ordinary independent subagents are
 supported. `critic_count` records the chosen count, and `critics` contains their
@@ -187,9 +199,11 @@ still requires targeted fix repair.
 ## Worktree registry
 
 Created worktrees are recorded in
-`$XDG_STATE_HOME/agent-skills/reviewmatic/worktrees.json`. Nothing is deleted
-automatically; `reviewmatic worktree list` prints the registry with commit and
-push state per worktree.
+`$XDG_STATE_HOME/agent-skills/reviewmatic/worktrees.json`; review worktrees
+prepared by `start-review` are recorded in `review-worktrees.json` beside it.
+Nothing is deleted
+automatically; `reviewmatic worktree list` prints the fix-application registry
+with commit and push state per worktree.
 
 ## Compatibility contract
 
