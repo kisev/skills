@@ -15,7 +15,7 @@ CLI `skills` управляет переносимыми навыками; npm-�
 
 ## Установка всего
 
-Установите переносимые навыки, `agentomatic`, [memomatic](docs/ru/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.ru.md) и [taskmatic](docs/ru/how-to/taskmatic.md); обновление - те же команды.
+Установите переносимые навыки, `agentomatic`, [memomatic](docs/ru/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.ru.md) и [taskmatic](docs/ru/how-to/taskmatic.md); обновление - те же команды. Проход `update` после `add` также предлагает удалить устаревшие имена навыков.
 `install` и `configure` требуют подтверждения в терминале или явного выбора компонентов с `--yes`. До первого стабильного релиза пакета `latest` может быть пререлизом.
 После обновления перезапустите OpenCode, остальные работающие MCP-хосты и веб-сервис taskmatic.
 
@@ -31,6 +31,7 @@ npm view --prefer-online @kisev/taskmatic@latest version
 
 # Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills --global
+npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@latest install --global
 npx --yes @kisev/agentomatic@latest configure integration --global
 npm install --global @kisev/memomatic
@@ -58,6 +59,7 @@ npm view --prefer-online @kisev/taskmatic@dev version
 
 # Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@dev install --global
 npx --yes @kisev/agentomatic@dev configure integration --global
 npm install --global @kisev/memomatic@dev

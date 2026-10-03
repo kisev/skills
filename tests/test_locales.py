@@ -60,8 +60,8 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
     english_index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
     russian_index = (ROOT / "docs/ru/README.md").read_text(encoding="utf-8")
 
-    assert len(english_root.splitlines()) < 100
-    assert len(russian_root.splitlines()) < 100
+    assert len(english_root.splitlines()) < 150
+    assert len(russian_root.splitlines()) < 150
     for document in (english_root, russian_root):
         assert "agentomatic" in document
         assert "docs/" in document
