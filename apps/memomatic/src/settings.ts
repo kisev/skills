@@ -360,6 +360,13 @@ function bearerToken(bearerEnv: string | null, service: string): string | undefi
   if (!bearerEnv) return undefined;
   const token = process.env[bearerEnv];
   if (!token) throw new Error(`${service} bearerEnv "${bearerEnv}" is not set`);
+  // A control character makes the Authorization header value invalid; the
+  // fetch-level rejection echoes the token back, so reject it here where the
+  // diagnostic stays free of the secret.
+  if (/[\u0000-\u001f\u007f]/.test(token))
+    throw new Error(
+      `${service} bearerEnv "${bearerEnv}" contains a control character; expected a single-line token`,
+    );
   return token;
 }
 
@@ -402,16 +409,35 @@ async function postJson(
 export const MEMORY_QUERY_INSTRUCTION =
   "Given a search query, retrieve relevant personal memory entries that answer the query.";
 
-export function embeddingQueryText(embedding: EmbeddingSettings, query: string): string {
-  const instruction =
+function queryInstructionFor(embedding: EmbeddingSettings): string {
+  return (
     embedding.queryInstruction ??
-    (/qwen3[-_]?embedding/i.test(embedding.model) ? MEMORY_QUERY_INSTRUCTION : "");
-  const wrapped = instruction ? `Instruct: ${instruction}\nQuery:${query}` : query;
-  return `${embedding.queryPrefix}${wrapped}`;
+    (/qwen3[-_]?embedding/i.test(embedding.model) ? MEMORY_QUERY_INSTRUCTION : "")
+  );
+}
+
+export function embeddingQueryText(embedding: EmbeddingSettings, query: string): string {
+  const instruction = queryInstructionFor(embedding);
+  return `${embedding.queryPrefix}${
+    instruction ? `Instruct: ${instruction}\nQuery:${query}` : query
+  }`;
+}
+
+/** Headroom a formatted query chunk needs beyond its raw text. */
+export function embeddingQueryOverhead(embedding: EmbeddingSettings): number {
+  const instruction = queryInstructionFor(embedding);
+  return (
+    embedding.queryPrefix.length + (instruction ? `Instruct: ${instruction}\nQuery:`.length : 0)
+  );
 }
 
 export function embeddingDocumentText(embedding: EmbeddingSettings, text: string): string {
   return `${embedding.documentPrefix}${text}`;
+}
+
+/** Headroom a formatted document chunk needs beyond its raw text. */
+export function embeddingDocumentOverhead(embedding: EmbeddingSettings): number {
+  return embedding.documentPrefix.length;
 }
 
 function parseEmbeddingPayload(payload: unknown, count: number): Float32Array[] {
@@ -458,10 +484,12 @@ function meanPool(vectors: Float32Array[]): Float32Array {
 }
 
 /**
- * Embeds texts through an OpenAI-compatible `embeddings` endpoint. Long inputs
- * are split with chunkText, embedded chunk-wise and mean-pooled back onto one
- * vector per input text. Request character budgets are a conservative proxy,
- * not exact tokenization.
+ * Embeds texts through an OpenAI-compatible `embeddings` endpoint. Raw inputs
+ * are split with chunkText first and every chunk is formatted afterwards, so
+ * each document chunk carries the document prefix and each query chunk the
+ * query prefix plus the Qwen instruction, all inside maxTextChars. Chunks are
+ * embedded chunk-wise and mean-pooled back onto one vector per input text.
+ * Request character budgets are a conservative proxy, not exact tokenization.
  */
 export async function embedTexts(
   settings: MemomaticSettings,
@@ -472,14 +500,20 @@ export async function embedTexts(
   if (!settings.embedding || !texts.length) return null;
   const embedding = settings.embedding;
   const token = bearerToken(embedding.bearerEnv, "embedding");
-  const chunkLists = texts.map((text) =>
-    chunkText(
-      purpose === "query"
-        ? embeddingQueryText(embedding, text)
-        : embeddingDocumentText(embedding, text),
-      embedding.maxTextChars,
-    ),
-  );
+  const format =
+    purpose === "query"
+      ? (text: string) => embeddingQueryText(embedding, text)
+      : (text: string) => embeddingDocumentText(embedding, text);
+  const overhead =
+    purpose === "query" ? embeddingQueryOverhead(embedding) : embeddingDocumentOverhead(embedding);
+  const chunkBudget = embedding.maxTextChars - overhead;
+  if (chunkBudget < 1)
+    throw new Error(
+      `embedding ${purpose} formatting needs ${overhead} characters of headroom and leaves no room inside maxTextChars=${embedding.maxTextChars}`,
+    );
+  // Split the raw text with formatting headroom reserved, then format each
+  // chunk so prefixes and instructions cover every piece, not just the first.
+  const chunkLists = texts.map((text) => chunkText(text, chunkBudget).map(format));
   const chunks = chunkLists.flat();
   const vectors = new Array<Float32Array>(chunks.length);
   for (let start = 0; start < chunks.length; start += embedding.maxBatchTexts) {
@@ -510,6 +544,10 @@ export type RerankHit = { index: number; score: number };
 function parseRerankResults(payload: unknown, count: number, offset: number): RerankHit[] {
   const results = (payload as { results?: unknown }).results;
   if (!Array.isArray(results)) throw new Error("reranker response is missing results");
+  // top_n equals the number of sent documents, so a complete answer ranks
+  // every candidate; an empty or shortened response is a failure, not an
+  // empty success.
+  if (results.length !== count) throw new Error("reranker response is incomplete");
   const seen = new Set<number>();
   const hits: RerankHit[] = [];
   for (const item of results) {
@@ -530,9 +568,11 @@ function parseRerankResults(payload: unknown, count: number, offset: number): Re
 /**
  * Ranks documents against a query through a `/rerank`-style endpoint
  * (`{model, query, documents, top_n}` request, `results[].index` and
- * `results[].relevance_score` response). Long documents are chunked so the
- * query, one document chunk and the server template stay inside maxChars;
- * chunk scores aggregate to one best score per input document.
+ * `results[].relevance_score` response). Documents are chunked so the query,
+ * one document chunk and the server template stay inside maxChars; a query
+ * too large to leave room for a chunk fails before the request. Responses
+ * must contain exactly top_n results, and chunk scores aggregate to one best
+ * score per input document.
  */
 export async function rerankTexts(
   settings: MemomaticSettings,
@@ -543,12 +583,15 @@ export async function rerankTexts(
   const reranker = settings.reranker;
   if (!reranker || !documents.length) return [];
   const token = bearerToken(reranker.bearerEnv, "reranker");
-  const formattedQuery = query.slice(0, reranker.maxChars);
-  const budget = Math.max(
-    256,
-    reranker.maxChars - RERANKER_TEMPLATE_ALLOWANCE_CHARS - formattedQuery.length,
-  );
-  const chunkLists = documents.map((document) => chunkText(document, budget));
+  // Query, one document chunk and the template allowance share maxChars. A
+  // small remainder is honored as-is; inflating it would push the request
+  // past the model input budget.
+  const remaining = reranker.maxChars - RERANKER_TEMPLATE_ALLOWANCE_CHARS - query.length;
+  if (remaining < 1)
+    throw new Error(
+      `reranker query of ${query.length} characters leaves no document room inside maxChars=${reranker.maxChars}`,
+    );
+  const chunkLists = documents.map((document) => chunkText(document, remaining));
   const offsets: number[] = [];
   let total = 0;
   for (const list of chunkLists) {
@@ -563,7 +606,7 @@ export async function rerankTexts(
       reranker.url,
       {
         model: reranker.model,
-        query: formattedQuery,
+        query,
         documents: batch,
         top_n: batch.length,
       },
@@ -599,6 +642,10 @@ export function embeddingFingerprint(settings: MemomaticSettings): string {
                 prefix: settings.embedding.documentPrefix,
                 maxChars: settings.embedding.maxTextChars,
                 pooling: "mean-v1",
+                // Chunking now happens before formatting, so every chunk
+                // carries the prefix/instruction; bumping this version
+                // invalidates indexes built by the previous algorithm.
+                formatting: "per-chunk-v2",
               },
             }
           : null,

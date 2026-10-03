@@ -41,38 +41,48 @@ failed relevance gates. Full token matches rank first; age decay still excludes
 old low-ranking episodic entries.
 
 Qwen3 embedding queries use an English task instruction in `Instruct`/`Query`
-format; documents remain raw. Other models keep raw queries unless an explicit
-`embedding.queryInstruction` is configured; an explicit empty value disables
-wrapping. Optional `embedding.queryPrefix` and `embedding.documentPrefix`
-settings format queries and documents independently, defaulting to raw text.
+format; documents stay raw apart from the document prefix. Other models keep
+raw queries unless an explicit `embedding.queryInstruction` is configured; an
+explicit empty value disables wrapping. Optional `embedding.queryPrefix` and
+`embedding.documentPrefix` settings format queries and documents independently,
+defaulting to raw text. Raw inputs are split into chunks first and every chunk
+is formatted afterwards, so each document chunk carries the document prefix and
+each query chunk the query prefix plus instruction, all inside
+`embedding.maxTextChars`; a wrapper leaving no room for text fails explicitly.
 Embedding and reranker endpoints are configured independently, each with a full
 URL, model, optional `bearerEnv` naming the environment variable that holds a
-Bearer token, a configurable per-request timeout that may cover cold model
-loads, and request limits (`maxBatchTexts`, `maxTextChars`, `candidates`,
-`minScore`, `maxDocuments`, `maxChars`). No server is built in, both services
-default to disabled, and tokens never reach logs. The index records a
-fingerprint of endpoint, model and document format including prefix and chunk
-budget; query-only and reranker settings are excluded, so changing them never
-requires recomputing vectors. Missing/mismatched fingerprints or dimensions
+Bearer token — a token with control characters is rejected before any request,
+so its value never reaches an error message — a configurable per-request
+timeout that may cover cold model loads, and request limits (`maxBatchTexts`,
+`maxTextChars`, `candidates`, `minScore`, `maxDocuments`, `maxChars`). No
+server is built in, both services default to disabled, and tokens never reach
+logs. The index records a fingerprint of endpoint, model and document format
+including prefix, chunk budget and the document-processing version; query-only
+and reranker settings are excluded, so changing them never requires
+recomputing vectors. Missing/mismatched fingerprints or dimensions
 require explicit reindexing. Invalid, incomplete, timed-out or unavailable
 enabled endpoints fail visibly in CLI and MCP without falling back to another
 search mode; failed indexing preserves the previous committed index. A
 completed reindex replaces entries, vectors and the fingerprint in one
 transaction.
 
-Texts longer than `embedding.maxTextChars` are split at paragraph, line or
-space boundaries; chunk vectors are mean-pooled onto one vector per entry, so
-chunked entries surface once. Reranker documents are chunked so the query, one
-document chunk and the server-side template stay inside `reranker.maxChars`,
-and chunk scores aggregate by maximum per entry. Character budgets are a
+Chunk vectors are mean-pooled onto one vector per entry, so chunked entries
+surface once. Reranker documents are chunked so the query, one document chunk
+and the server-side template stay inside `reranker.maxChars`; the remaining
+budget is never inflated, and a query leaving no room for a document chunk
+fails before anything is sent. Chunk scores aggregate by maximum per entry.
+Character budgets are a
 conservative proxy of roughly two characters per token, not exact tokenization;
 defaults target the common 4096-token input budget.
 
 An enabled reranker collects a bounded wide candidate set of up to
 `reranker.candidates` entries from lexical and vector search before the strict
 relevance gates, applies the project filter before sending, and posts
-`{model, query, documents, top_n}` to the configured `/rerank`-style endpoint,
-reading `results[].index` and `results[].relevance_score`. Reranker scores
+`{model, query, documents, top_n}` to the configured `/rerank`-style endpoint.
+Because `top_n` equals the number of sent documents, a complete answer must
+contain exactly `top_n` results with unique in-range indices and finite
+scores; an empty or shortened response to a non-empty batch fails instead of
+returning an empty success. Reranker scores
 become the final relevance and order without an unconditional literal-match
 priority; `reranker.minScore` drops weak results. Reranker scores stay ranking
 signals, not universal probabilities.
@@ -92,9 +102,14 @@ Regression tests cover exact matches, paraphrases, an unknown name, unrelated
 queries, project filtering, inactive embedding endpoints, malformed vectors and
 model changes with equal dimensions, the documented vLLM-style embeddings and
 `/rerank` contract with permuted response indices, Bearer authentication
-without token leakage, chunking with per-input pooling, document-format-change
-migration with preserved indexes on failure, explicit timeout and malformed
-reranker failures, and reranker ordering that ranks a relevant paraphrase above
+without token leakage — including control-character tokens rejected before any
+request through real fetch, CLI and MCP diagnostics — per-chunk query and
+document formatting inside `maxTextChars`, indexes stamped by the previous
+formatting version that require explicit reindexing, chunking with per-input
+pooling, document-format-change migration with preserved indexes on failure,
+explicit timeout and malformed reranker failures, reranker budget rejections
+before any request, incomplete reranker answers failing instead of empty
+successes, and reranker ordering that ranks a relevant paraphrase above
 a literal match. Local Qwen3 calibration uses anonymized
 positive and negative examples; thresholds remain configurable rather than a
 claim of universal semantic accuracy. Live server availability and concrete

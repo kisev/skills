@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -789,6 +789,52 @@ test("an unreachable enabled reranker fails the MCP search explicitly", async ()
     const payload = JSON.parse(response.result.content[0].text);
     assert.match(payload.error, /reranker request failed/);
   } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("malformed bearer tokens fail CLI and MCP diagnostics without leaking the token", async () => {
+  const env = environment();
+  process.env.MEMOMATIC_TEST_BROKEN_TOKEN = "secret\r\nX-Injected: value";
+  try {
+    mkdirSync(join(env.config, "memomatic"), { recursive: true });
+    writeFileSync(
+      join(env.config, "memomatic", "settings.json"),
+      JSON.stringify({
+        embedding: {
+          url: "http://127.0.0.1:9/v1/embeddings",
+          model: "embedding",
+          bearerEnv: "MEMOMATIC_TEST_BROKEN_TOKEN",
+        },
+      }),
+    );
+    const response = JSON.parse(
+      await handleMcpRequest({
+        id: 11,
+        method: "tools/call",
+        params: { arguments: { query: "anything" }, name: "memory_search" },
+      }),
+    );
+    assert.equal(response.result.isError, true);
+    const payload = JSON.parse(response.result.content[0].text);
+    assert.match(
+      payload.error,
+      /bearerEnv "MEMOMATIC_TEST_BROKEN_TOKEN" contains a control character/,
+    );
+    assert.ok(!payload.error.includes("secret"), payload.error);
+    assert.ok(!payload.error.includes("X-Injected"), payload.error);
+    const cli = spawnSync(process.execPath, ["dist/cli.js", "search", "anything"], {
+      cwd: new URL("..", import.meta.url),
+      encoding: "utf8",
+      env: process.env,
+    });
+    assert.notEqual(cli.status, 0);
+    const output = `${cli.stdout}${cli.stderr}`;
+    assert.match(output, /control character/);
+    assert.ok(!output.includes("secret"), output);
+    assert.ok(!output.includes("X-Injected"), output);
+  } finally {
+    delete process.env.MEMOMATIC_TEST_BROKEN_TOKEN;
     rmSync(env.root, { force: true, recursive: true });
   }
 });

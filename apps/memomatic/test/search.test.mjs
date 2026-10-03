@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -9,6 +10,8 @@ import {
   normalizeSettings,
   embedTexts,
   embeddingFingerprint,
+  rerankTexts,
+  RERANKER_TEMPLATE_ALLOWANCE_CHARS,
   MEMORY_QUERY_INSTRUCTION,
   defaultSettings,
 } from "../dist/settings.js";
@@ -669,4 +672,248 @@ test("document-format changes invalidate vectors; reranker changes reuse them", 
     (await search(store, "memory", rerankedSettings, { markSurfaced: false })).length,
     1,
   );
+});
+
+test("a token with control characters fails before any request without leaking the value", async (t) => {
+  // No fetch mock: the safe rejection must precede the real transport.
+  process.env.MEMOMATIC_TEST_BROKEN_TOKEN = "secret\r\nX-Injected: value";
+  t.after(() => delete process.env.MEMOMATIC_TEST_BROKEN_TOKEN);
+  const settings = normalizeSettings({
+    embedding: {
+      url: "http://127.0.0.1:9/v1/embeddings",
+      model: "embedding",
+      bearerEnv: "MEMOMATIC_TEST_BROKEN_TOKEN",
+    },
+    reranker: {
+      url: "http://127.0.0.1:9/rerank",
+      model: "reranker",
+      bearerEnv: "MEMOMATIC_TEST_BROKEN_TOKEN",
+    },
+  });
+  const errors = [];
+  for (const attempt of [embedTexts(settings, ["text"]), rerankTexts(settings, "query", ["doc"])]) {
+    try {
+      await attempt;
+      assert.fail("expected the malformed token to be rejected");
+    } catch (error) {
+      errors.push(error.message);
+    }
+  }
+  assert.equal(errors.length, 2);
+  for (const message of errors) {
+    assert.match(message, /control character/);
+    assert.ok(!message.includes("secret"), message);
+    assert.ok(!message.includes("X-Injected"), message);
+  }
+});
+
+test("formatting covers every chunk after splitting and stays inside maxTextChars", async (t) => {
+  const settings = normalizeSettings({
+    embedding: {
+      url: "http://localhost/embeddings",
+      model: "qwen3-embedding:4b",
+      queryPrefix: "query: ",
+      documentPrefix: "passage: ",
+      maxTextChars: 500,
+    },
+  });
+  const inputs = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    const input = JSON.parse(options.body).input;
+    inputs.push(input);
+    return Response.json({ data: input.map((text, index) => ({ index, embedding: [1, 0] })) });
+  });
+  await embedTexts(settings, ["sentence about recall. ".repeat(90)], "document");
+  const documentChunks = inputs.pop();
+  await embedTexts(settings, ["find memory ".repeat(60)], "query");
+  const queryChunks = inputs.pop();
+  assert.ok(documentChunks.length >= 4);
+  assert.ok(queryChunks.length >= 2);
+  for (const text of documentChunks) {
+    assert.ok(text.length <= 500, `document chunk exceeds maxTextChars: ${text.length}`);
+    assert.ok(text.startsWith("passage: "));
+  }
+  for (const text of queryChunks) {
+    assert.ok(text.length <= 500, `query chunk exceeds maxTextChars: ${text.length}`);
+    assert.ok(text.startsWith(`query: Instruct: ${MEMORY_QUERY_INSTRUCTION}\nQuery:`));
+  }
+  // Raw formatting keeps every chunk free of wrappers.
+  const raw = normalizeSettings({
+    embedding: { url: "http://localhost/embeddings", model: "plain", maxTextChars: 300 },
+  });
+  await embedTexts(raw, ["word ".repeat(80)], "query");
+  const rawChunks = inputs.pop();
+  assert.ok(rawChunks.length >= 2);
+  for (const text of rawChunks) {
+    assert.ok(text.length <= 300);
+    assert.ok(!text.includes("Instruct:"));
+    assert.ok(!text.includes("passage: "));
+  }
+  // Impossible wrapper sizes fail before any request.
+  const sent = inputs.length;
+  await assert.rejects(
+    embedTexts(
+      normalizeSettings({
+        embedding: {
+          url: "http://localhost/embeddings",
+          model: "plain",
+          documentPrefix: "x".repeat(500),
+          maxTextChars: 500,
+        },
+      }),
+      ["text"],
+    ),
+    /leaves no room inside maxTextChars=500/,
+  );
+  await assert.rejects(
+    embedTexts(
+      normalizeSettings({
+        embedding: {
+          url: "http://localhost/embeddings",
+          model: "qwen3-embedding:4b",
+          queryInstruction: "i".repeat(495),
+          maxTextChars: 500,
+        },
+      }),
+      ["q"],
+      "query",
+    ),
+    /leaves no room inside maxTextChars=500/,
+  );
+  assert.equal(inputs.length, sent);
+});
+
+test("indexes built by the previous formatting require reindexing and survive failed rebuilds", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "memomatic-formatting-"));
+  const store = await MemoryStore.open(":memory:");
+  t.after(() => {
+    store.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  mkdirSync(join(root, "memory"));
+  writeFileSync(join(root, "MEMORY.md"), "- Fresh replacement entry.\n");
+  const paths = { stateRoot: root, dailyDir: join(root, "memory") };
+  const settings = normalizeSettings({
+    embedding: { url: "http://localhost/embeddings", model: "test", documentPrefix: "passage: " },
+  });
+  // The fingerprint an index built by the previous formatting would store.
+  const legacy = createHash("sha256")
+    .update(
+      JSON.stringify({
+        url: settings.embedding.url,
+        model: settings.embedding.model,
+        document: {
+          prefix: settings.embedding.documentPrefix,
+          maxChars: settings.embedding.maxTextChars,
+          pooling: "mean-v1",
+        },
+      }),
+    )
+    .digest("hex");
+  assert.notEqual(legacy, embeddingFingerprint(settings));
+  store.replaceIndex([entry("old", "Previous verified memory")], [vector(0.8)], legacy);
+  await assert.rejects(search(store, "memory", settings), /run memomatic index/);
+  t.mock.method(globalThis, "fetch", async () => {
+    throw new Error("offline");
+  });
+  await assert.rejects(reindex(paths, settings, store), /offline/);
+  assert.equal(store.allEntries()[0].stableId, "old");
+  assert.equal(store.getMeta("embeddingFingerprint"), legacy);
+  assert.equal(store.vectors().length, 1);
+});
+
+test("reranker budgets honor small remainders and reject impossible queries", async (t) => {
+  const bodies = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    const body = JSON.parse(options.body);
+    bodies.push(body);
+    return Response.json({
+      results: body.documents.map((document, index) => ({ index, relevance_score: 0.5 })),
+    });
+  });
+  const settings = (maxChars) =>
+    normalizeSettings({
+      reranker: { url: "http://localhost/rerank", model: "reranker", maxChars },
+    });
+  // A positive remainder below the old 256 floor is honored, not inflated.
+  await rerankTexts(settings(1200), "q".repeat(150), ["x".repeat(2000)]);
+  const small = 1200 - RERANKER_TEMPLATE_ALLOWANCE_CHARS - 150;
+  assert.equal(small, 26);
+  assert.ok(bodies[0].documents.length > 1);
+  for (const document of bodies[0].documents) {
+    assert.ok(document.length <= small, `chunk exceeds the remainder: ${document.length}`);
+    assert.ok(150 + document.length + RERANKER_TEMPLATE_ALLOWANCE_CHARS <= 1200);
+  }
+  // Ordinary queries keep the full remaining budget.
+  bodies.length = 0;
+  await rerankTexts(settings(8000), "short query", ["x".repeat(20000)]);
+  const ordinary = 8000 - RERANKER_TEMPLATE_ALLOWANCE_CHARS - "short query".length;
+  assert.ok(bodies[0].documents.length > 1);
+  for (const document of bodies[0].documents) assert.ok(document.length <= ordinary);
+  // Queries without document room fail before any request, including the
+  // maxChars=1000 with a 10-character query case where the old floor inflated
+  // the negative remainder into oversized chunks.
+  bodies.length = 0;
+  await assert.rejects(
+    rerankTexts(settings(8000), "q".repeat(7500), ["document"]),
+    /leaves no document room inside maxChars=8000/,
+  );
+  await assert.rejects(
+    rerankTexts(settings(1000), "q".repeat(10), ["document"]),
+    /leaves no document room inside maxChars=1000/,
+  );
+  await assert.rejects(
+    rerankTexts(settings(1100), "q".repeat(100), ["document"]),
+    /leaves no document room/,
+  );
+  assert.deepEqual(bodies, []);
+});
+
+test("reranker answers must be complete for every batch", async (t) => {
+  const settings = normalizeSettings({
+    reranker: { url: "http://localhost/rerank", model: "reranker" },
+  });
+  const store = await MemoryStore.open(":memory:");
+  t.after(() => store.close());
+  store.replaceIndex([entry("one", "note about indexing")], null, "");
+  const queue = [];
+  const bodies = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    bodies.push(JSON.parse(options.body));
+    return Response.json(queue.shift());
+  });
+  // Zero and one result for top_n=2 fail instead of returning an empty success.
+  for (const answer of [{ results: [] }, { results: [{ index: 0, relevance_score: 0.5 }] }]) {
+    queue.push(answer);
+    await assert.rejects(rerankTexts(settings, "query", ["a", "b"]), /reranker response/);
+  }
+  // A complete permuted answer ranks normally.
+  queue.push({
+    results: [
+      { index: 1, relevance_score: 0.9 },
+      { index: 0, relevance_score: 0.1 },
+    ],
+  });
+  assert.deepEqual(await rerankTexts(settings, "query", ["a", "b"]), [
+    { index: 1, score: 0.9 },
+    { index: 0, score: 0.1 },
+  ]);
+  // A shortened answer in a later batch fails the whole aggregation.
+  const batched = normalizeSettings({
+    reranker: { url: "http://localhost/rerank", model: "reranker", maxDocuments: 1 },
+  });
+  queue.push(
+    { results: [{ index: 0, relevance_score: 0.5 }] },
+    { results: [{ index: 0, relevance_score: 0.5 }] },
+    { results: [] },
+  );
+  await assert.rejects(rerankTexts(batched, "query", ["a", "b", "c"]), /incomplete/);
+  assert.ok(bodies.every((body) => body.top_n === body.documents.length));
+  // The same failure surfaces through search instead of an empty success.
+  queue.push({ results: [] });
+  await assert.rejects(
+    search(store, "note", settings, { markSurfaced: false }),
+    /reranker response/,
+  );
+  assert.ok(bodies.at(-1).top_n >= 1);
 });
