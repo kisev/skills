@@ -209,6 +209,7 @@ def artifact_instances() -> list[dict[str, Any]]:
                     "subject": "Does the exact head always set the idempotency key?",
                     "source": "Discussion 42 of the collected evidence",
                     "critic": True,
+                    "context_digest": DIGEST,
                 }
             ],
             "thread_registry": [
@@ -417,9 +418,22 @@ def artifact_instances() -> list[dict[str, Any]]:
                     "evidence": "The staged diff only rewrites plain text values.",
                     "run_id": "critic-run-1",
                     "session_id": "critic-session-1",
+                    "context_digest": DIGEST,
                 }
             ],
-            "question_verifications": [],
+            "question_verifications": [
+                {
+                    "question_id": "q-renderer",
+                    "original": {
+                        "run_id": "critic-run-1",
+                        "session_id": "critic-session-1",
+                        "verdict": "not_verified",
+                    },
+                    "verdict": "confirmed",
+                    "evidence": "The staged diff only rewrites plain text values.",
+                    "context_digest": DIGEST,
+                }
+            ],
             "superseded_question_results": [
                 {
                     "context_digest": DIGEST,
@@ -431,6 +445,7 @@ def artifact_instances() -> list[dict[str, Any]]:
                             "reason": "The previous package asked a different subject.",
                             "run_id": "critic-run-1",
                             "session_id": "critic-session-1",
+                            "context_digest": DIGEST,
                         }
                     ],
                     "verifications": [],
@@ -575,6 +590,7 @@ def validate_shared_contract_instances() -> None:
                     "question_id": "q-retry",
                     "verdict": "confirmed" if index == 0 else "refuted",
                     "evidence": "The exact head sets the idempotency key before write.",
+                    "context_digest": DIGEST,
                 }
             ],
             "external_mutations": False,
@@ -591,6 +607,29 @@ def validate_shared_contract_instances() -> None:
                 "payload": receipt,
             }
         )
+
+    # The meaningful-context binding is optional in the canonical schema so
+    # historical artifacts stay readable, but any present binding must be a
+    # real digest.
+    context_package_mr = next(
+        instance
+        for instance in instances
+        if instance["kind"] == "context_package" and instance["payload"]["mode"] == "mr"
+    )
+    local_review = next(
+        instance for instance in instances if instance["kind"] == "local_review_report"
+    )
+    mr_package = dict(context_package_mr["payload"])
+    bad_question = copy.deepcopy(mr_package["questions"][0])
+    bad_question["context_digest"] = "not-a-digest"
+    invalid_package = copy.deepcopy(context_package_mr)
+    invalid_package["payload"] = {**mr_package, "questions": [bad_question]}
+    with pytest.raises(ValidationError):
+        artifact_validator.validate(invalid_package)
+    bad_answer = copy.deepcopy(local_review["payload"])
+    bad_answer["question_answers"][0]["context_digest"] = "not-a-digest"
+    with pytest.raises(ValidationError):
+        artifact_validator.validate({**local_review, "payload": bad_answer})
 
 
 def validate_opencode_contract_instances() -> None:

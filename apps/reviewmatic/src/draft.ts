@@ -56,11 +56,14 @@ import {
 } from "./context.js";
 import { suggestionParts, suggestionsPatch } from "./fixes.js";
 import {
+  bindQuestionContexts,
   canonicalPackageDigest,
   collectAnswers,
   extractSupersededResults,
   narrativePackageDigest,
   packageTemplateForMr,
+  questionContextVersionList,
+  questionContextVersions,
   questionReport,
   readPackagePointer,
   recordedPackage,
@@ -508,6 +511,8 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       package_path: recorded === null ? null : recorded.path,
       package_digest: recorded === null ? null : recorded.digest,
       status: packageCurrent ? "recorded" : "pending",
+      question_context_versions:
+        packageCurrent && recorded !== null ? questionContextVersionList(recorded.payload) : null,
       record_command: runnerAction("record-package", [
         "--draft",
         draftPath,
@@ -561,7 +566,7 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       },
     },
     input_contract:
-      "The schema describes editable draft input, not final v2 artifacts. Examples are field shapes, not receipts or code to copy blindly. Preserve generated bindings and use actual native run/session identities. Suggestion ranges use suggestion:-N+M, each 0..100, bounded by the exact head file. Run check-review once the analysis is complete.",
+      "The schema describes editable draft input, not final v2 artifacts. Examples are field shapes, not receipts or code to copy blindly. Preserve generated bindings and use actual native run/session identities. Every question_answers and question_verifications entry copies the question context_digest of the recorded package it was produced against. Suggestion ranges use suggestion:-N+M, each 0..100, bounded by the exact head file. Run check-review once the analysis is complete.",
     critic_task: {
       required: ["normal", "deep", "incremental"].includes(String(progress.mode)),
       launch_when: "evidence_ready",
@@ -578,7 +583,7 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       context_package_path: packageCurrent && recorded !== null ? recorded.path : null,
       scope: context.incremental,
       instructions:
-        "Record the agent-authored context package first with the returned record-package action; critics never start before it is recorded. Launch immediately after this evidence package is ready, in native background mode when supported, alongside primary inspection. Run an independent read-only subagent of the current agent, without primary findings. Pass these exact evidence/context/inspection snapshots, the recorded context package path, and the input schema, never manually transcribed evidence or duplicate collection requests. The critic reads the context package as its primary task context, consults the snapshots directly when details are unclear, and answers every question assigned to critics in receipt question_answers with verdict confirmed, refuted, or not_verified plus evidence or a concrete reason. Prefer selected specialist profiles; their absence is normal. Return complete detailed findings in the selected locale and the host/profile's required envelope (review_report is supported). Preserve the returned JSON without rewriting findings, attach actual native run/session metadata, and use distinct finding ID prefixes. Never ask a child to guess identities, fabricate a receipt, or start an alternate CLI. Join before check-review. Report collection, primary analysis, critic waiting, fix validation and freshness separately, without a numerical SLA.",
+        "Record the agent-authored context package first with the returned record-package action; critics never start before it is recorded. Launch immediately after this evidence package is ready, in native background mode when supported, alongside primary inspection. Run an independent read-only subagent of the current agent, without primary findings. Pass these exact evidence/context/inspection snapshots, the recorded context package path, and the input schema, never manually transcribed evidence or duplicate collection requests. The critic reads the context package as its primary task context, consults the snapshots directly when details are unclear, and answers every question assigned to critics in receipt question_answers with verdict confirmed, refuted, or not_verified plus evidence or a concrete reason. Every question_answers entry copies that question's context_digest from the recorded package; results bound to a different version, or without a binding, are rejected as stale and never certify the current question. Prefer selected specialist profiles; their absence is normal. Return complete detailed findings in the selected locale and the host/profile's required envelope (review_report is supported). Preserve the returned JSON without rewriting findings, attach actual native run/session metadata, and use distinct finding ID prefixes. Never ask a child to guess identities, fabricate a receipt, or start an alternate CLI. Join before check-review. Report collection, primary analysis, critic waiting, fix validation and freshness separately, without a numerical SLA.",
     },
     next_action: runnerAction("check-review", ["--draft", draftPath]),
     external_mutations: false,
@@ -604,6 +609,9 @@ export async function recordDraftPackage(path: string, inputPath: string): Promi
     targetSha: evidence.target_sha == null ? null : String(evidence.target_sha),
     bindings: expectedThreadBindings(context),
   });
+  // Stamp the meaningful-context version onto every question before the
+  // package becomes immutable; late answers carry the stamp they saw.
+  bindQuestionContexts(input);
   supersedesDigest(root, input.supersedes);
   const previousPointer = readPackagePointer(root);
   const [packagePath, packageDigest] = await writeContextPackage(root, input);
@@ -617,6 +625,7 @@ export async function recordDraftPackage(path: string, inputPath: string): Promi
     digest: packageDigest,
     canonical_digest: canonicalPackageDigest(input),
     background_digest: narrativePackageDigest(input),
+    question_context_versions: questionContextVersionList(input),
     draft_path: resolve(path),
     thread_registry_size: ((input.thread_registry as Json[]) ?? []).length,
     question_summary: questionReport(input.questions as Json[], [], []),
@@ -703,8 +712,9 @@ function validateDraftPackage(
   });
   const questions = payload.questions as Json[];
   const questionIds = new Set(questions.map((item) => String(item.id)));
+  const versions = questionContextVersions(payload);
   const { answers } = collectAnswers(draft.critics as Json[]);
-  validateAnswers(answers, questionIds, "$.critics[].question_answers");
+  validateAnswers(answers, questionIds, versions, "$.critics[].question_answers");
   const verifications = (draft.question_verifications ?? []) as Json[];
   const criticCount = Number(draft.critic_count);
   const assigned = questions.filter((item) => item.critic === true);
@@ -744,7 +754,7 @@ function validateDraftPackage(
         );
     }
   }
-  validateVerifications(verifications, questionIds, answers);
+  validateVerifications(verifications, questionIds, versions, answers);
   for (const answer of answers) {
     if (answer.verdict !== "not_verified") continue;
     const preserved = verifications.some(

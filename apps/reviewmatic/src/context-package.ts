@@ -17,6 +17,7 @@ import { expectedThreadBindings } from "./context.js";
 type Json = Record<string, unknown>;
 
 export const PACKAGE_POINTER_NAME = "context-package.json";
+const ZERO_DIGEST = "0".repeat(64);
 const VERDICTS = new Set(["confirmed", "refuted", "not_verified"]);
 const PRIMARY_VERDICTS = new Set(["confirmed", "refuted", "unresolved"]);
 const CLAIM_KINDS = new Set([
@@ -66,6 +67,88 @@ export function questionContextDigest(payload: Json): string {
   });
 }
 
+// The version of the meaningful content one question and its answer depend on:
+// the question itself plus the supporting context (goal, acceptance criteria,
+// claims, constraints, thread registry). Binding fields and the narrative
+// background are excluded: refreshing them never invalidates collected
+// results, while an edited question, claim, or constraint does.
+export function questionContextVersion(payload: Json, question: Json): string {
+  const { context_digest: _declared, ...content } = question;
+  return digest({
+    goal: payload.goal ?? null,
+    acceptance_criteria: payload.acceptance_criteria ?? null,
+    claims: payload.claims ?? [],
+    constraints: payload.constraints ?? [],
+    thread_registry: payload.thread_registry ?? null,
+    question: content,
+  });
+}
+
+export function questionContextVersions(payload: Json): Map<string, string> {
+  const versions = new Map<string, string>();
+  for (const question of (payload.questions ?? []) as Json[])
+    versions.set(String(question.id), questionContextVersion(payload, question));
+  return versions;
+}
+
+export function questionContextVersionList(payload: Json): Json {
+  return Object.fromEntries(questionContextVersions(payload));
+}
+
+// Stamps every question of a package that is about to become an immutable
+// artifact with its meaningful-context version. Answers and verifications copy
+// this value, so a result produced against one package version can never be
+// silently re-bound to a newer one. Already stamped questions must match.
+export function bindQuestionContexts(payload: Json): void {
+  for (const question of (payload.questions ?? []) as Json[]) {
+    const expected = questionContextVersion(payload, question);
+    if (question.context_digest !== undefined && question.context_digest !== expected)
+      throw new WorkflowError(
+        `context package question ${String(question.id)} context_digest does not match its ` +
+          "meaningful context; remove manual bindings and let record-package stamp them",
+      );
+    question.context_digest = expected;
+  }
+}
+
+// Verifies the stamps of an already recorded package. Unstamped questions are
+// accepted only while the payload is still an unbound agent input; recorded
+// artifacts always carry stamps.
+function verifyQuestionContexts(payload: Json): void {
+  const versions = questionContextVersions(payload);
+  for (const question of (payload.questions ?? []) as Json[]) {
+    if (question.context_digest === undefined) continue;
+    const expected = versions.get(String(question.id));
+    if (question.context_digest !== expected)
+      throw new WorkflowError(
+        `context package question ${String(question.id)} context_digest does not match its ` +
+          `meaningful context (${expected}); re-record the package instead of editing bindings`,
+      );
+  }
+}
+
+function requireCurrentBinding(
+  item: Json,
+  versions: Map<string, string>,
+  description: string,
+): void {
+  const id = String(item.question_id);
+  const stored = item.context_digest;
+  const expected = versions.get(id);
+  if (typeof stored !== "string" || stored.length === 0)
+    throw new WorkflowError(
+      `${description} for question ${id} has no context binding; every result must copy the ` +
+        "question context_digest of the recorded context package it was produced against, " +
+        "so a result for older wording can never certify the current question",
+    );
+  if (stored !== expected)
+    throw new WorkflowError(
+      `${description} for question ${id} is bound to context digest ${stored}, but the ` +
+        `recorded package's meaningful context for this question is ${expected}; collect a ` +
+        "fresh result bound to the current package and keep this one as superseded history",
+    );
+}
+
 export type SupersededResults = {
   entry: Json;
   questionIds: string[];
@@ -73,49 +156,29 @@ export type SupersededResults = {
   verifications: Json[];
 };
 
-// Compares the previously recorded package with the new input and reports the
-// collected answers and verifications that no longer address the current
-// questions. Changed supporting context (goal, acceptance criteria, claims,
-// constraints, thread registry) affects every question; otherwise only the
-// edited questions do. Representation-only changes return null.
+// Compares the context version bound into each collected answer and
+// verification with the version the new package assigns to its question.
+// Results bound to another meaningful context — including results without a
+// binding — no longer address the current questions; they move to the
+// historical section instead of certifying the current package. Results bound
+// to the current versions stay in place, so representation-only changes and
+// unaffected questions keep their collected evidence.
 export function extractSupersededResults(
   previous: { payload: Json; digest: string } | null,
   next: Json,
   answers: Json[],
   verifications: Json[],
 ): SupersededResults | null {
-  if (previous === null) return null;
-  const previousDigest = questionContextDigest(previous.payload);
-  if (previousDigest === questionContextDigest(next)) return null;
-  if (answers.length === 0 && verifications.length === 0) return null;
-  const supporting = ["goal", "acceptance_criteria", "claims", "constraints", "thread_registry"];
-  let affected: Set<string> | "all";
-  if (
-    supporting.some((key) => digest(previous.payload[key] ?? null) !== digest(next[key] ?? null))
-  ) {
-    affected = "all";
-  } else {
-    affected = new Set<string>();
-    const before = new Map(
-      ((previous.payload.questions ?? []) as Json[]).map((item) => [String(item.id), item]),
-    );
-    const after = new Map(
-      ((next.questions ?? []) as Json[]).map((item) => [String(item.id), item]),
-    );
-    for (const [id, question] of before)
-      if (digest(question) !== digest(after.get(id))) affected.add(id);
-    for (const id of after.keys()) if (!before.has(id)) affected.add(id);
-    if (affected.size === 0) return null;
-  }
-  const isAffected = (item: Json): boolean =>
-    affected === "all" || affected.has(String(item.question_id));
-  const staleAnswers = answers.filter(isAffected);
-  const staleVerifications = verifications.filter(isAffected);
+  const versions = questionContextVersions(next);
+  const stale = (item: Json): boolean =>
+    item.context_digest !== versions.get(String(item.question_id));
+  const staleAnswers = answers.filter(stale);
+  const staleVerifications = verifications.filter(stale);
   if (staleAnswers.length === 0 && staleVerifications.length === 0) return null;
   return {
     entry: {
-      context_digest: previousDigest,
-      package_digest: previous.digest,
+      context_digest: previous === null ? ZERO_DIGEST : questionContextDigest(previous.payload),
+      package_digest: previous === null ? ZERO_DIGEST : previous.digest,
       answers: staleAnswers,
       verifications: staleVerifications,
     },
@@ -274,7 +337,12 @@ function requireText(value: unknown, field: string): void {
     throw new WorkflowError(`context package ${field} must be a non-empty string`);
 }
 
-export function validateAnswers(answers: unknown, questionIds: Set<string>, field: string): Json[] {
+export function validateAnswers(
+  answers: unknown,
+  questionIds: Set<string>,
+  versions: Map<string, string>,
+  field: string,
+): Json[] {
   if (!Array.isArray(answers)) throw new WorkflowError(`${field} must be an array`);
   const seen = new Set<string>();
   for (const [index, item] of answers.entries()) {
@@ -294,6 +362,7 @@ export function validateAnswers(answers: unknown, questionIds: Set<string>, fiel
       );
     requireText(answer.run_id, `${where}.run_id`);
     requireText(answer.session_id, `${where}.session_id`);
+    requireCurrentBinding(answer, versions, where);
     const key = `${String(answer.run_id)}:${String(answer.session_id)}:${String(answer.question_id)}`;
     if (seen.has(key))
       throw new WorkflowError(`${where} duplicates one answer for the same critic`);
@@ -305,6 +374,7 @@ export function validateAnswers(answers: unknown, questionIds: Set<string>, fiel
 export function validateVerifications(
   verifications: unknown,
   questionIds: Set<string>,
+  versions: Map<string, string>,
   answers: Json[],
 ): Json[] {
   if (!Array.isArray(verifications)) throw new WorkflowError("verifications must be an array");
@@ -321,6 +391,7 @@ export function validateVerifications(
       throw new WorkflowError(
         `${where}.question_id does not name a question of the recorded context package`,
       );
+    requireCurrentBinding(verification, versions, where);
     const original = verification.original as Json;
     if (
       !isDict(original) ||
@@ -557,6 +628,7 @@ export function validatePackagePayload(
   const questionIds = new Set((payload.questions as Json[]).map((item) => String(item.id)));
   if (questionIds.size !== (payload.questions as Json[]).length)
     throw new WorkflowError("context package question IDs must be unique");
+  verifyQuestionContexts(payload);
 }
 
 function requireGoalText(goal: Json): boolean {

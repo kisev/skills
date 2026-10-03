@@ -44,7 +44,8 @@ action before anything else; `check-review` rejects an unrecorded package.
 Then launch the selected independent critic immediately, in native background
 mode when supported, alongside primary inspection. Pass the recorded package
 path plus the exact snapshot paths, and preserve returned JSON findings and
-receipt `question_answers` without manual transcription. Do not recollect
+receipt `question_answers` — including each answer's copied
+`context_digest` — without manual transcription. Do not recollect
 evidence or rediscover its shape. Join before validation. Report collection,
 package recording, analysis, critic waiting, fix checks, and freshness
 separately; do not promise a numerical SLA or reduce review depth. Follow

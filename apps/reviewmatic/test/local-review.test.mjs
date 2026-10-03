@@ -596,7 +596,10 @@ test("a full critic answer passes the schema and finalizes the local report", as
   writeJson(context.context_package.template_path, template);
   const recorded = await recordLocalPackage(snapshot, context.context_package.template_path);
   review.context_package = { path: recorded.artifact_path, digest: recorded.digest };
-  review.question_answers = report.question_answers;
+  review.question_answers = report.question_answers.map((answer) => ({
+    ...answer,
+    context_digest: recorded.question_context_versions[answer.question_id],
+  }));
   writeJson(context.draft_path, review);
   const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
   assert.equal(saved.verdict, "ready");
@@ -628,6 +631,7 @@ test("re-recording a changed local package retires answers for the old questions
       evidence: "Inspected protected values in the staged diff.",
       run_id: "local-critic-run",
       session_id: "local-critic-session",
+      context_digest: v1.question_context_versions["q-renderer"],
     },
   ];
   writeJson(context.draft_path, draft);
@@ -653,6 +657,11 @@ test("re-recording a changed local package retires answers for the old questions
     "local-critic-run",
     "authorship is preserved historically",
   );
+  assert.equal(
+    updated.superseded_question_results[0].answers[0].context_digest,
+    v1.question_context_versions["q-renderer"],
+    "history keeps the binding the answer was collected under",
+  );
 
   updated.context_package = { path: v2.artifact_path, digest: v2.digest };
   writeJson(context.draft_path, updated);
@@ -668,6 +677,7 @@ test("re-recording a changed local package retires answers for the old questions
       evidence: "Traced the revocation path in the staged renderer.",
       run_id: "local-critic-run-2",
       session_id: "local-critic-session-2",
+      context_digest: v2.question_context_versions["q-renderer"],
     },
   ];
   writeJson(context.draft_path, updated);
@@ -677,4 +687,148 @@ test("re-recording a changed local package retires answers for the old questions
     readJson(context.draft_path, "local review draft").superseded_question_results.length,
     1,
   );
+});
+
+test("a late local answer for the previous package cannot certify the changed question", async (t) => {
+  const repo = repository(t);
+  const [snapshot, context, report] = await initialReport(repo);
+  const templatePath = context.context_package.template_path;
+  const template = readJson(templatePath, "template");
+  template.goal = { status: "known", text: report.task.goal };
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Does the staged renderer change touch protected values?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v1 = await recordLocalPackage(snapshot, templatePath);
+  const draft = structuredClone(report);
+  draft.context_package = { path: v1.artifact_path, digest: v1.digest };
+  writeJson(context.draft_path, draft);
+
+  // The report author records a changed question before the critic answers.
+  template.supersedes = v1.digest;
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Is credential revocation enforced on renderer failure?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v2 = await recordLocalPackage(snapshot, templatePath);
+  assert.deepEqual(v2.superseded_questions, []);
+
+  // The late answer arrives, still bound to the superseded context version.
+  const updated = readJson(context.draft_path, "local review draft");
+  updated.context_package = { path: v2.artifact_path, digest: v2.digest };
+  updated.question_answers = [
+    {
+      question_id: "q-renderer",
+      verdict: "confirmed",
+      evidence: "Inspected protected values only, before the package changed.",
+      run_id: "local-critic-run",
+      session_id: "local-critic-session",
+      context_digest: v1.question_context_versions["q-renderer"],
+    },
+  ];
+  writeJson(context.draft_path, updated);
+  const cli = new URL("../dist/cli.js", import.meta.url).pathname;
+  const execution = spawnSync(
+    process.execPath,
+    [cli, "finalize-local", "--bundle", snapshot, "--report", context.draft_path, "--json"],
+    { encoding: "utf8", env: process.env },
+  );
+  assert.notEqual(execution.status, 0, "finalize-local accepted a stale V1 answer for V2");
+  assert.match(execution.stderr, /is bound to context digest/);
+  assert.match(execution.stderr, /q-renderer/);
+  await assert.rejects(
+    () => recordReview(dirname(context.draft_path), snapshot, context.draft_path),
+    isWorkflowError(/is bound to context digest/),
+  );
+
+  // Recovery: a fresh answer bound to the recorded package finalizes normally.
+  updated.question_answers = [
+    {
+      question_id: "q-renderer",
+      verdict: "confirmed",
+      evidence: "Traced the revocation path in the staged renderer.",
+      run_id: "local-critic-run-2",
+      session_id: "local-critic-session-2",
+      context_digest: v2.question_context_versions["q-renderer"],
+    },
+  ];
+  writeJson(context.draft_path, updated);
+  const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
+  assert.equal(saved.verdict, "not_ready");
+  const finalized = readJson(context.draft_path, "local review draft");
+  assert.equal(finalized.superseded_question_results, undefined);
+});
+
+test("a verification bound to the previous context cannot verify the changed question", async (t) => {
+  const repo = repository(t);
+  const [snapshot, context, report] = await initialReport(repo);
+  const templatePath = context.context_package.template_path;
+  const template = readJson(templatePath, "template");
+  template.goal = { status: "known", text: report.task.goal };
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Does the staged renderer change touch protected values?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v1 = await recordLocalPackage(snapshot, templatePath);
+  const draft = structuredClone(report);
+  draft.context_package = { path: v1.artifact_path, digest: v1.digest };
+  writeJson(context.draft_path, draft);
+
+  template.supersedes = v1.digest;
+  template.questions = [
+    {
+      id: "q-renderer",
+      subject: "Is credential revocation enforced on renderer failure?",
+      source: "Local conversation with the author",
+      critic: true,
+    },
+  ];
+  writeJson(templatePath, template);
+  const v2 = await recordLocalPackage(snapshot, templatePath);
+
+  // A primary verification performed before the supersession is bound to V1.
+  const updated = readJson(context.draft_path, "local review draft");
+  updated.context_package = { path: v2.artifact_path, digest: v2.digest };
+  updated.question_verifications = [
+    {
+      question_id: "q-renderer",
+      original: { run_id: "local-primary", session_id: "local-session", verdict: "not_verified" },
+      verdict: "confirmed",
+      evidence: "Verified the protected-value question before the package changed.",
+      context_digest: v1.question_context_versions["q-renderer"],
+    },
+  ];
+  writeJson(context.draft_path, updated);
+  await assert.rejects(
+    () => recordReview(dirname(context.draft_path), snapshot, context.draft_path),
+    isWorkflowError(/is bound to context digest/),
+  );
+
+  updated.question_verifications = [
+    {
+      question_id: "q-renderer",
+      original: { run_id: "local-primary", session_id: "local-session", verdict: "not_verified" },
+      verdict: "confirmed",
+      evidence: "Traced the revocation path in the staged renderer.",
+      context_digest: v2.question_context_versions["q-renderer"],
+    },
+  ];
+  writeJson(context.draft_path, updated);
+  const saved = await recordReview(dirname(context.draft_path), snapshot, context.draft_path);
+  assert.equal(saved.verdict, "not_ready");
 });

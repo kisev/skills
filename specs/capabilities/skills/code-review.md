@@ -157,11 +157,17 @@ critics run, the runtime shall check every assigned critic-and-question pair:
 each selected critic shall answer each assigned question, and one critic's
 answer shall never satisfy another critic's missing assignment. Multiple
 critics shall retain assignments, authorship, and contradictions instead of
-merging them. Answers and verifications shall be bound to the version of the
-meaningful package content they were produced against: re-recording the
+merging them. Recording shall stamp every question with the version of the
+meaningful package content it depends on, and every answer and verification
+shall carry the version it was produced against. Acceptance and finalization
+shall reject a missing or superseded binding with a concrete diagnostic
+instead of filling it from the current package, so a result collected before
+the package changed can never certify the changed question. Re-recording the
 package after an edited question, goal, acceptance criterion, claim, or
 constraint shall preserve the affected results as history with their
-authorship and require fresh results for the affected scope, while a
+authorship and original bindings and shall require fresh results for the
+affected scope, an edited question shall not invalidate results for
+unaffected questions, and a
 representation-only change such as an edited background shall not invalidate
 collected results. The primary agent shall target every not\_verified answer in
 verifications that preserve the original answer separately, with unresolved

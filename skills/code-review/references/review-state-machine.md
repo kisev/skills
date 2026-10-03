@@ -109,13 +109,16 @@ scope and user decisions, but no primary findings. The critic reads the
 package as its primary context and opens the snapshots directly when a detail
 is unclear; it answers every question assigned to critics in receipt
 `question_answers` with one verdict — `confirmed`, `refuted`, or
-`not_verified` — plus evidence or a concrete reason. With several critics the
+`not_verified` — plus evidence or a concrete reason, copying that question's
+`context_digest` from the recorded package. With several critics the
 runtime enforces the pair rule: each selected critic answers each assigned
 question, and one critic's answer never covers another critic's assignment.
-Answers are bound to the question wording they were produced against; a
-re-recorded package with an edited question retires the previous answers into
-the draft's `superseded_question_results` history and requires fresh answers
-for the affected scope. Request complete detailed
+Each answer is bound to the meaningful context version it was produced
+against; a re-recorded package with an edited question retires the previous
+answers into the draft's `superseded_question_results` history and requires
+fresh answers for the affected scope, and a late receipt bound to the
+superseded version is rejected instead of certifying the changed question.
+Request complete detailed
 findings in the host/profile's
 required report envelope; `review_report` is valid for routed specialists.
 Populate the returned `critic_receipt_template` from those findings and real

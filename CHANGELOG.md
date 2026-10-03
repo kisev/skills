@@ -29,6 +29,20 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- Context package results are now bound to the meaningful context they were
+  produced against. `record-package` stamps every question with the digest of
+  its meaningful content — the question plus goal, acceptance criteria,
+  claims, constraints, and thread registry — and every answer and verification
+  copies the `context_digest` it was produced against. `check-review`,
+  `finish-review`, and `finalize-local` reject a missing or superseded
+  binding with a concrete diagnostic, so a late answer or verification
+  collected for the previous package can no longer certify a changed question
+  or produce a false `ready`. Re-recording a changed package retires affected
+  results into `superseded_question_results` with their authorship and
+  original bindings preserved, unaffected questions and background-only edits
+  keep their results, and re-recording the package retires still-unbound
+  results explicitly instead of counting them.
+
 - `reviewmatic prepare-local` now defines the local scope explicitly: without
   `--ref` it is the uncommitted work against HEAD — staged, unstaged, and
   non-ignored untracked files; an explicit `--ref <revision>` adds the commits

@@ -81,14 +81,26 @@ explicit. No answer resolves publication automatically — thread decisions,
 dispositions, and verdict rules keep their own gates. In modes without
 critics the primary keeps its current duties and readiness rules.
 
-Answers and verifications are bound to the version of the meaningful package
-content they were produced against. Re-recording the package after editing a
-question, goal, acceptance criterion, claim, or constraint moves the affected
-results into the draft's `superseded_question_results` history with their
-authorship preserved, and validation then requires fresh answers or
-verifications for the affected scope. Rewording `background` or refreshing
-the evidence binding never invalidates collected results and never requires
-another technical pass.
+Every recorded question carries a `context_digest`: the version of the
+meaningful content that question depends on — the question itself plus the
+goal, acceptance criteria, claims, constraints, and thread registry. Every
+answer and verification copies the `context_digest` of the recorded package
+it was produced against. The runtime recomputes the version and rejects a
+missing or different binding, so a result collected before the package
+changed can never certify the changed question, and a binding is never
+filled in silently from the current package. Move such a result into the
+draft's or report's `superseded_question_results` history — or re-record the
+package with `supersedes`, which retires unbound and stale-bound results
+automatically — and collect a fresh bound result for the current question.
+
+Re-recording the package after editing a question, goal, acceptance criterion,
+claim, or constraint moves the affected results into the draft's
+`superseded_question_results` history with their authorship and original
+bindings preserved, and validation then requires fresh answers or
+verifications for the affected scope. Editing one question keeps results for
+unaffected questions; shared supporting context affects every question.
+Rewording `background` or refreshing the evidence binding never invalidates
+collected results and never requires another technical pass.
 
 ## Lifecycle
 

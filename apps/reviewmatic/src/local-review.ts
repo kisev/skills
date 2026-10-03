@@ -19,11 +19,14 @@ import {
 import { runnerAction } from "./context.js";
 import { contentDigest } from "./state-artifacts.js";
 import {
+  bindQuestionContexts,
   canonicalPackageDigest,
   extractSupersededResults,
   localSectionDigests,
   narrativePackageDigest,
   packageTemplateForLocal,
+  questionContextVersionList,
+  questionContextVersions,
   questionReport,
   readPackagePointer,
   recordedPackage,
@@ -463,6 +466,8 @@ export function prepareFollowup(
       package_path: recorded === null ? null : recorded.path,
       package_digest: recorded === null ? null : recorded.digest,
       status: packageCurrent ? "recorded" : "pending",
+      question_context_versions:
+        packageCurrent && recorded !== null ? questionContextVersionList(recorded.payload) : null,
       record_command: runnerAction("record-package", [
         "--bundle",
         snapshotPath,
@@ -814,6 +819,9 @@ export async function recordLocalPackage(
     ref: pythonGet(bundle, "ref") as string | null,
     sections: localSectionDigests(bundle),
   });
+  // Stamp the meaningful-context version onto every question before the
+  // package becomes immutable; report answers carry the stamp they saw.
+  bindQuestionContexts(input);
   supersedesDigest(root, input.supersedes);
   const previousPointer = readPackagePointer(root);
   const [path, packageDigest] = await writeContextPackage(root, input);
@@ -824,6 +832,7 @@ export async function recordLocalPackage(
     digest: packageDigest,
     canonical_digest: canonicalPackageDigest(input),
     background_digest: narrativePackageDigest(input),
+    question_context_versions: questionContextVersionList(input),
     question_summary: questionReport((input.questions as Record<string, unknown>[]) ?? [], [], []),
     superseded_questions: superseded,
     external_mutations: false,
@@ -913,11 +922,12 @@ function validateLocalPackage(
   });
   const questions = (packagePayload.questions as Record<string, unknown>[]) ?? [];
   const questionIds = new Set(questions.map((item) => String(item.id)));
+  const versions = questionContextVersions(packagePayload);
   const answers = (report.question_answers as Record<string, unknown>[] | undefined) ?? [];
-  validateAnswers(answers, questionIds, "$.question_answers");
+  validateAnswers(answers, questionIds, versions, "$.question_answers");
   const verifications =
     (report.question_verifications as Record<string, unknown>[] | undefined) ?? [];
-  validateVerifications(verifications, questionIds, answers);
+  validateVerifications(verifications, questionIds, versions, answers);
   const answered = new Set(answers.map((item) => String(item.question_id)));
   const covered = (id: string): boolean =>
     answered.has(id) || verifications.some((item) => String(item.question_id) === id);

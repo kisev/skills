@@ -2387,7 +2387,8 @@
         "id": { "$ref": "#/$defs/context_id" },
         "subject": { "type": "string", "minLength": 1 },
         "source": { "type": "string", "minLength": 1 },
-        "critic": { "type": "boolean" }
+        "critic": { "type": "boolean" },
+        "context_digest": { "$ref": "#/$defs/digest" }
       }
     },
     "context_thread": {
@@ -2458,7 +2459,8 @@
         "question_id": { "$ref": "#/$defs/context_id" },
         "verdict": { "enum": ["confirmed", "refuted", "not_verified"] },
         "evidence": { "type": "string" },
-        "reason": { "type": "string" }
+        "reason": { "type": "string" },
+        "context_digest": { "$ref": "#/$defs/digest" }
       }
     },
     "context_answer": {
@@ -2471,7 +2473,8 @@
         "evidence": { "type": "string" },
         "reason": { "type": "string" },
         "run_id": { "type": "string", "minLength": 1 },
-        "session_id": { "type": "string", "minLength": 1 }
+        "session_id": { "type": "string", "minLength": 1 },
+        "context_digest": { "$ref": "#/$defs/digest" }
       }
     },
     "context_verification": {
@@ -2492,7 +2495,8 @@
         },
         "verdict": { "enum": ["confirmed", "refuted", "unresolved"] },
         "evidence": { "type": "string" },
-        "reason": { "type": "string" }
+        "reason": { "type": "string" },
+        "context_digest": { "$ref": "#/$defs/digest" }
       }
     },
     "context_package_payload": {

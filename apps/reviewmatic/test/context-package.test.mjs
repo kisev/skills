@@ -4,9 +4,10 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { readJson, writeArtifact, writeJson } from "../dist/contract.js";
+import { artifactPayload, readJson, writeArtifact, writeJson } from "../dist/contract.js";
 import {
   checkReview,
+  finishReview,
   recordDraftPackage,
   refreshReview,
   resumeReview,
@@ -36,6 +37,35 @@ function templateWith(started, edits = {}) {
 
 function pristineTemplate(started) {
   return structuredClone(readJson(started.context_package.template_path, "template"));
+}
+
+// Builds a critic answer bound to the meaningful-context version of the
+// package currently recorded for the draft, the way a real critic copies the
+// question's context_digest from its primary context.
+function boundAnswer(draft, questionId, extra = {}) {
+  const [, payload] = artifactPayload(draft.context_package_path, "context_package");
+  const question = (payload.questions ?? []).find((item) => item.id === questionId);
+  assert.ok(question, `question ${questionId} is not in the recorded package`);
+  return {
+    question_id: questionId,
+    verdict: "confirmed",
+    evidence: "Inspected the exact head.",
+    context_digest: question.context_digest,
+    ...extra,
+  };
+}
+
+function boundVerification(draft, questionId, extra = {}) {
+  const verification = {
+    question_id: questionId,
+    original: { run_id: "critic-run", session_id: "child-session", verdict: "not_verified" },
+    verdict: "confirmed",
+    evidence: "Inspected the exact head.",
+    context_digest: boundAnswer(draft, questionId).context_digest,
+    ...extra,
+  };
+  if (verification.evidence === undefined) delete verification.evidence;
+  return verification;
 }
 
 function writeTemplate(started, base, edits = {}) {
@@ -141,11 +171,9 @@ test("a dropped thread blocks recording and answers keep critic authorship", asy
       run_id: "critic-run-1",
       session_id: "critic-session-1",
       question_answers: [
-        {
-          question_id: "q-retry",
-          verdict: "confirmed",
+        boundAnswer(draft, "q-retry", {
           evidence: "The exact head sets the key before write.",
-        },
+        }),
       ],
     },
     {
@@ -153,11 +181,10 @@ test("a dropped thread blocks recording and answers keep critic authorship", asy
       run_id: "critic-run-2",
       session_id: "critic-session-2",
       question_answers: [
-        {
-          question_id: "q-retry",
+        boundAnswer(draft, "q-retry", {
           verdict: "refuted",
           evidence: "The exact head leaves the write unkeyed.",
-        },
+        }),
       ],
     },
     {
@@ -165,11 +192,10 @@ test("a dropped thread blocks recording and answers keep critic authorship", asy
       run_id: "critic-run-3",
       session_id: "critic-session-3",
       question_answers: [
-        {
-          question_id: "q-retry",
+        boundAnswer(draft, "q-retry", {
           verdict: "not_verified",
           reason: "Could not trace the retry caller in the exact head.",
-        },
+        }),
       ],
     },
   ];
@@ -184,12 +210,12 @@ test("a dropped thread blocks recording and answers keep critic authorship", asy
 
   const verified = readJson(started.draft_path, "draft");
   verified.question_verifications = [
-    {
-      question_id: "q-retry",
+    boundVerification(verified, "q-retry", {
       original: { run_id: "critic-run-3", session_id: "critic-session-3", verdict: "not_verified" },
       verdict: "unresolved",
+      evidence: undefined,
       reason: "No reachable retry caller exists in the exact head; the doubt stays explicit.",
-    },
+    }),
   ];
   writeJson(started.draft_path, verified);
   const ok = await checkReview(started.draft_path);
@@ -239,12 +265,10 @@ test("without a critic the primary answers assigned questions itself", async (t)
 
   const answered = readJson(started.draft_path, "draft");
   answered.question_verifications = [
-    {
-      question_id: "q-fast",
+    boundVerification(answered, "q-fast", {
       original: { run_id: "primary-run", session_id: "primary-session", verdict: "not_verified" },
-      verdict: "confirmed",
       evidence: "The diff bounds one retry write with a concrete key.",
-    },
+    }),
   ];
   writeJson(started.draft_path, answered);
   const ok = await checkReview(started.draft_path);
@@ -353,6 +377,8 @@ test("the local package binds the prepared snapshot and gates finalization", asy
   const recorded = await recordLocalPackage(snapshot, followup.context_package.template_path);
   assert.equal(recorded.status, "ok");
   assert.ok(!recorded.artifact_path.startsWith(repo), "the package stays outside the checkout");
+  const version = recorded.question_context_versions["q-renderer"];
+  assert.ok(version, "recording reports the meaningful-context version per question");
 
   const report = {
     evidence_digest: digestValue,
@@ -397,6 +423,7 @@ test("the local package binds the prepared snapshot and gates finalization", asy
       original: { run_id: "local-primary", session_id: "local-session", verdict: "not_verified" },
       verdict: "confirmed",
       evidence: "The staged diff only rewrites plain text values.",
+      context_digest: version,
     },
   ];
   writeJson(draft, report);
@@ -447,13 +474,7 @@ test("every selected critic must answer each assigned question", async (t) => {
       ...draft.critics[0],
       run_id: "critic-run-1",
       session_id: "critic-session-1",
-      question_answers: [
-        {
-          question_id: "q-retry",
-          verdict: "confirmed",
-          evidence: "The exact head sets the key before write.",
-        },
-      ],
+      question_answers: [boundAnswer(draft, "q-retry")],
     },
     { ...draft.critics[0], run_id: "critic-run-2", session_id: "critic-session-2" },
   ];
@@ -463,11 +484,7 @@ test("every selected critic must answer each assigned question", async (t) => {
   assert.match(JSON.stringify(missing.errors), /critic-run-2\/critic-session-2 did not answer/);
 
   draft.critics[1].question_answers = [
-    {
-      question_id: "q-retry",
-      verdict: "confirmed",
-      evidence: "Independent read confirms the keyed write.",
-    },
+    boundAnswer(draft, "q-retry", { evidence: "Independent read confirms the keyed write." }),
   ];
   writeJson(started.draft_path, draft);
   const answered = await checkReview(started.draft_path);
@@ -489,15 +506,12 @@ test("an edited question supersedes answers collected for the previous wording",
   });
   const draft = await completeDraft(readJson(started.draft_path), started);
   draft.critics[0].question_answers = [
-    {
-      question_id: "q-retry",
-      verdict: "confirmed",
-      evidence: "Inspected idempotency key.",
-    },
+    boundAnswer(draft, "q-retry", { evidence: "Inspected idempotency key." }),
   ];
   writeJson(started.draft_path, draft);
   const before = await checkReview(started.draft_path);
   assert.equal(before.status, "ok", JSON.stringify(before.errors));
+  const v1Answer = draft.critics[0].question_answers[0];
 
   // The agent changes the question subject under the stable ID and re-records.
   const v1Digest = readJson(started.draft_path, "draft").context_package_digest;
@@ -527,17 +541,18 @@ test("an edited question supersedes answers collected for the previous wording",
   assert.equal(history.answers[0].evidence, "Inspected idempotency key.");
   assert.equal(history.answers[0].run_id, "critic-run");
   assert.equal(history.answers[0].session_id, "child-session");
+  assert.equal(
+    history.answers[0].context_digest,
+    v1Answer.context_digest,
+    "history keeps the binding the answer was collected under",
+  );
 
   const stale = await checkReview(started.draft_path);
   assert.equal(stale.status, "invalid");
   assert.match(JSON.stringify(stale.errors), /superseded context package/);
 
   updated.critics[0].question_answers = [
-    {
-      question_id: "q-retry",
-      verdict: "confirmed",
-      evidence: "Traced the revocation path in the exact head.",
-    },
+    boundAnswer(updated, "q-retry", { evidence: "Traced the revocation path in the exact head." }),
   ];
   writeJson(started.draft_path, updated);
   const fresh = await checkReview(started.draft_path);
@@ -556,4 +571,282 @@ test("an edited question supersedes answers collected for the previous wording",
   const finalDraft = readJson(started.draft_path, "draft");
   assert.equal(finalDraft.critics[0].question_answers.length, 1);
   assert.equal(finalDraft.superseded_question_results.length, 1);
+  const stillValid = await checkReview(started.draft_path);
+  assert.equal(stillValid.status, "ok", JSON.stringify(stillValid.errors));
+});
+
+test("a late answer for the previous package cannot certify the changed question", async (t) => {
+  const fixture = reviewFixture(t);
+  const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  templateWith(started, {
+    questions: [
+      {
+        id: "q-retry",
+        subject: "Does the exact head always set the idempotency key?",
+        source: "Discussion 42 of the collected evidence",
+        critic: true,
+      },
+    ],
+  });
+  const draft = await completeDraft(readJson(started.draft_path), started);
+  // A real background critic can finish after the primary records a changed
+  // package: the receipt is still on its way when the supersession happens.
+  const pendingV1 = {
+    ...draft.critics[0],
+    question_answers: [
+      boundAnswer(draft, "q-retry", {
+        evidence: "Inspected the idempotency key only, before the package changed.",
+      }),
+    ],
+  };
+  draft.critics = [];
+  writeJson(started.draft_path, draft);
+  const v1 = draft.context_package_digest;
+  const template = readJson(started.context_package.template_path, "template");
+  template.supersedes = v1;
+  template.questions = [
+    {
+      id: "q-retry",
+      subject: "Is credential revocation enforced when a key is reused?",
+      source: "Discussion 42 of the collected evidence",
+      critic: true,
+    },
+  ];
+  writeJson(started.context_package.template_path, template);
+  const recorded = await recordDraftPackage(
+    started.draft_path,
+    started.context_package.template_path,
+  );
+  assert.deepEqual(
+    recorded.superseded_questions,
+    [],
+    "nothing was attached when the package changed",
+  );
+
+  // The late V1 receipt arrives and is added to the current draft unchanged.
+  const updated = readJson(started.draft_path, "draft");
+  updated.critics = [pendingV1];
+  writeJson(started.draft_path, updated);
+  const checked = await checkReview(started.draft_path);
+  assert.equal(checked.status, "invalid", "the stale V1 receipt was accepted for V2");
+  assert.match(JSON.stringify(checked.errors), /is bound to context digest/);
+  assert.match(JSON.stringify(checked.errors), /q-retry/);
+  const finished = await finishReview(started.draft_path);
+  assert.equal(finished.status, "invalid", "finalization refused the stale receipt");
+  assert.equal(finished.artifact_path, undefined);
+
+  // Recovery: archive the late answer with its original binding and authorship,
+  // then answer the current question with a freshly bound receipt.
+  updated.superseded_question_results = [
+    {
+      context_digest: pendingV1.question_answers[0].context_digest,
+      package_digest: v1,
+      answers: [
+        {
+          ...pendingV1.question_answers[0],
+          run_id: pendingV1.run_id,
+          session_id: pendingV1.session_id,
+        },
+      ],
+      verifications: [],
+    },
+  ];
+  updated.critics = [
+    {
+      ...pendingV1,
+      question_answers: [
+        boundAnswer(updated, "q-retry", {
+          evidence: "Traced the revocation path in the exact head.",
+        }),
+      ],
+    },
+  ];
+  writeJson(started.draft_path, updated);
+  const recovered = await checkReview(started.draft_path);
+  assert.equal(recovered.status, "ok", JSON.stringify(recovered.errors));
+  const done = await finishReview(started.draft_path);
+  assert.equal(done.status, "ok", JSON.stringify(done));
+  const finalDraft = readJson(started.draft_path, "draft");
+  assert.equal(finalDraft.superseded_question_results.length, 1, "history is retained");
+  assert.equal(finalDraft.superseded_question_results[0].answers[0].run_id, "critic-run");
+  assert.notEqual(
+    finalDraft.superseded_question_results[0].answers[0].context_digest,
+    finalDraft.critics[0].question_answers[0].context_digest,
+  );
+});
+
+test("an answer without a context binding is retired by re-recording, never counted", async (t) => {
+  const fixture = reviewFixture(t);
+  const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  templateWith(started, {
+    questions: [
+      {
+        id: "q-retry",
+        subject: "Does the exact head always set the idempotency key?",
+        source: "Discussion 42 of the collected evidence",
+        critic: true,
+      },
+    ],
+  });
+  const draft = await completeDraft(readJson(started.draft_path), started);
+  draft.critics[0].question_answers = [
+    {
+      question_id: "q-retry",
+      verdict: "confirmed",
+      evidence: "Collected before binding existed.",
+    },
+  ];
+  writeJson(started.draft_path, draft);
+  const unbound = await checkReview(started.draft_path);
+  assert.equal(unbound.status, "invalid");
+  assert.match(JSON.stringify(unbound.errors), /has no context binding/);
+
+  // Re-recording the current package retires the unbound result into history.
+  const recorded = readJson(started.draft_path, "draft").context_package_digest;
+  const template = readJson(started.context_package.template_path, "template");
+  template.supersedes = recorded;
+  writeJson(started.context_package.template_path, template);
+  const rerecorded = await recordDraftPackage(
+    started.draft_path,
+    started.context_package.template_path,
+  );
+  assert.deepEqual(rerecorded.superseded_questions, ["q-retry"]);
+  const updated = readJson(started.draft_path, "draft");
+  assert.deepEqual(updated.critics[0].question_answers, []);
+  assert.equal(updated.superseded_question_results.length, 1);
+  assert.equal(
+    updated.superseded_question_results[0].answers[0].evidence,
+    "Collected before binding existed.",
+  );
+
+  const demanded = await checkReview(started.draft_path);
+  assert.equal(demanded.status, "invalid");
+  assert.match(JSON.stringify(demanded.errors), /superseded context package/);
+
+  updated.critics[0].question_answers = [boundAnswer(updated, "q-retry")];
+  writeJson(started.draft_path, updated);
+  const recovered = await checkReview(started.draft_path);
+  assert.equal(recovered.status, "ok", JSON.stringify(recovered.errors));
+  assert.equal(readJson(started.draft_path, "draft").superseded_question_results.length, 1);
+});
+
+test("re-recording an edited question keeps answers for unaffected questions", async (t) => {
+  const fixture = reviewFixture(t);
+  const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
+  templateWith(started, {
+    questions: [
+      {
+        id: "q-retry",
+        subject: "Does the exact head always set the idempotency key?",
+        source: "Discussion 42 of the collected evidence",
+        critic: true,
+      },
+      {
+        id: "q-caller",
+        subject: "Do existing callers pass a stable key?",
+        source: "Primary inspection of the retry callers",
+        critic: true,
+      },
+    ],
+  });
+  const draft = await completeDraft(readJson(started.draft_path), started);
+  draft.critics[0].question_answers = [
+    boundAnswer(draft, "q-retry", { evidence: "Inspected idempotency key." }),
+    boundAnswer(draft, "q-caller", { evidence: "Both callers build the key from the request." }),
+  ];
+  writeJson(started.draft_path, draft);
+  const before = await checkReview(started.draft_path);
+  assert.equal(before.status, "ok", JSON.stringify(before.errors));
+  const unaffected = draft.critics[0].question_answers[1];
+
+  const recorded = readJson(started.draft_path, "draft").context_package_digest;
+  const template = readJson(started.context_package.template_path, "template");
+  template.supersedes = recorded;
+  template.questions[0].subject = "Is credential revocation enforced when a key is reused?";
+  writeJson(started.context_package.template_path, template);
+  const rerecorded = await recordDraftPackage(
+    started.draft_path,
+    started.context_package.template_path,
+  );
+  assert.deepEqual(rerecorded.superseded_questions, ["q-retry"]);
+
+  const updated = readJson(started.draft_path, "draft");
+  assert.deepEqual(updated.critics[0].question_answers, [unaffected]);
+  const stale = await checkReview(started.draft_path);
+  assert.equal(stale.status, "invalid");
+  assert.match(JSON.stringify(stale.errors), /superseded context package/);
+
+  updated.critics[0].question_answers = [
+    ...updated.critics[0].question_answers,
+    boundAnswer(updated, "q-retry", { evidence: "Traced the revocation path." }),
+  ];
+  writeJson(started.draft_path, updated);
+  const fresh = await checkReview(started.draft_path);
+  assert.equal(fresh.status, "ok", JSON.stringify(fresh.errors));
+  assert.equal(
+    readJson(started.draft_path, "draft").critics[0].question_answers[0].context_digest,
+    unaffected.context_digest,
+    "the unaffected answer keeps its original binding",
+  );
+});
+
+test("primary verifications follow their question's context version", async (t) => {
+  const fixture = reviewFixture(t);
+  const started = await startReview({
+    url: fixture.url,
+    repoRoot: fixture.repo,
+    reviewMode: "fast",
+  });
+  templateWith(started, {
+    questions: [
+      {
+        id: "q-fast",
+        subject: "Is the fast scope really low risk?",
+        source: "User request",
+        critic: true,
+      },
+    ],
+  });
+  const draft = await completeDraft(readJson(started.draft_path), started);
+  draft.critic_count = 0;
+  draft.critics = [];
+  draft.low_risk = true;
+  draft.question_verifications = [boundVerification(draft, "q-fast")];
+  writeJson(started.draft_path, draft);
+  const before = await checkReview(started.draft_path);
+  assert.equal(before.status, "ok", JSON.stringify(before.errors));
+  const originalVerification = draft.question_verifications[0];
+
+  // A verification attached when the question changes retires into history.
+  const v1 = draft.context_package_digest;
+  const template = readJson(started.context_package.template_path, "template");
+  template.supersedes = v1;
+  template.questions[0].subject = "Is the fast scope free of blocking findings?";
+  writeJson(started.context_package.template_path, template);
+  const recorded = await recordDraftPackage(
+    started.draft_path,
+    started.context_package.template_path,
+  );
+  assert.deepEqual(recorded.superseded_questions, ["q-fast"]);
+  const updated = readJson(started.draft_path, "draft");
+  assert.deepEqual(updated.question_verifications, []);
+  assert.equal(updated.superseded_question_results[0].verifications.length, 1);
+  assert.equal(
+    updated.superseded_question_results[0].verifications[0].context_digest,
+    originalVerification.context_digest,
+    "history keeps the binding the verification was performed under",
+  );
+
+  // A late verification still bound to the previous version is rejected.
+  updated.question_verifications = [boundVerification(draft, "q-fast")];
+  writeJson(started.draft_path, updated);
+  const late = await checkReview(started.draft_path);
+  assert.equal(late.status, "invalid");
+  assert.match(JSON.stringify(late.errors), /is bound to context digest/);
+
+  updated.question_verifications = [boundVerification(updated, "q-fast")];
+  writeJson(started.draft_path, updated);
+  const fresh = await checkReview(started.draft_path);
+  assert.equal(fresh.status, "ok", JSON.stringify(fresh.errors));
+  assert.equal(readJson(started.draft_path, "draft").superseded_question_results.length, 1);
 });

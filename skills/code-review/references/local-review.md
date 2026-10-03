@@ -73,7 +73,11 @@ snapshot binding is current and keeps the previous package as immutable
 history. Re-recording the package after changing a question, goal, acceptance
 criterion, claim, or constraint retires the report's answers collected for
 the previous wording into `superseded_question_results` and requires fresh
-answers before finalization; editing the background keeps them. When local
+answers before finalization; editing the background keeps them. Every answer
+and verification in the report copies the question's `context_digest` from
+the recorded package, and finalization rejects a missing or superseded
+binding, so a late result for the previous wording never certifies the
+changed question. When local
 critics run, they receive the recorded package as their
 primary context and answer assigned questions in the report's
 `question_answers`; answer every `not_verified` result in
