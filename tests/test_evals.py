@@ -587,7 +587,9 @@ HUMANIZE_REWRITES: dict[str, dict[str, str]] = {
 # Negative protected-tokens controls. Object names, protected bytes, and the
 # cold-node caveat survive every defect, so only the strengthened claims can
 # reject the lost speedup, the lost rewrite, the replaced author, and the
-# nouns-only probe that motivated the contract.
+# nouns-only probe that motivated the contract. The RU-only scope controls
+# prove the whole-rewrite claim: dropping the "целиком" qualifier or claiming
+# a partial rewrite must fail while every other claim stays intact.
 HUMANIZE_PROTECTED_DEFECTS: dict[str, dict[str, str]] = {
     "en": {
         "speedup-lost": (
@@ -629,6 +631,16 @@ HUMANIZE_PROTECTED_DEFECTS: dict[str, dict[str, str]] = {
         ),
         "actions-lost": (
             "Они осмотрели поиск и конвейер целиком. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+        "scope-lost": (
+            "Мы ускорили поиск, переписав конвейер. "
+            'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
+            "Впрочем, на холодных узлах возможны отдельные сбои."
+        ),
+        "partial-claimed": (
+            "Мы ускорили поиск, переписав конвейер частично. "
             'Запускайте `deploy --env=prod` и ждите строки "deployment OK". '
             "Впрочем, на холодных узлах возможны отдельные сбои."
         ),
@@ -691,18 +703,19 @@ def test_humanize_edit_contract_rejects_defective_rewrites(tmp_path: Path, local
     scenario = (
         "skill.humanize.edit-contract.en" if locale == "en" else "skill.humanize.edit-contract"
     )
-    # The four claim defects lose a core action or replace the author while
-    # object names, protected bytes, and the caveat survive.
+    # The claim defects lose a core action, replace the author, or (RU only)
+    # drop the whole-rewrite scope while object names, protected bytes, and
+    # the caveat survive.
     expectations = {
         "good": ("passed", set()),
         "missing": ("failed", {"rewrite:caveat-preserved:present", "case:caveat-preserved"}),
         "protected-broken": ("failed", {"rewrite:protected-tokens:protected"}),
         "punctuation-broken": ("failed", {"rewrite:quote-keeps-marks:punctuation"}),
         "claim-lost": ("failed", {"rewrite:caveat-preserved:claims"}),
-        "speedup-lost": ("failed", {"rewrite:protected-tokens:claims"}),
-        "rewrite-lost": ("failed", {"rewrite:protected-tokens:claims"}),
-        "author-changed": ("failed", {"rewrite:protected-tokens:claims"}),
-        "actions-lost": ("failed", {"rewrite:protected-tokens:claims"}),
+        **{
+            mode: ("failed", {"rewrite:protected-tokens:claims"})
+            for mode in HUMANIZE_PROTECTED_DEFECTS[locale]
+        },
     }
     for mode, (expected_status, failing) in expectations.items():
         result = run_eval(
