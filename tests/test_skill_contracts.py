@@ -49,6 +49,41 @@ def test_askme_discovery_and_manual_continuation_contract() -> None:
     assert "confirmation of the proposed task permits it to continue" not in workflow
 
 
+def test_askme_context_and_closing_contract_apply_to_every_invocation() -> None:
+    workflow = (ROOT / "skills/askme/references/workflow.md").read_text(encoding="utf-8")
+    interview = workflow.split("## Interview\n", 1)[1].split("\n## ", 1)[0]
+    closing = workflow.split("## Closing result\n", 1)[1].split("\n## ", 1)[0]
+    assert "On every invocation, including the first" in interview
+    assert "ordinary discussion before any interview" in interview
+    assert "including the first and a no-questions result" in interview
+    assert "Preserve confirmed decisions as agreed" in interview
+    assert "every agreement still in force numbered as a decision" in closing
+    assert "ordinary discussion before the first interview" in closing
+    assert "When this call continues an earlier interview" not in interview
+
+
+def test_askme_repeated_invocations_preserve_topic_agreements() -> None:
+    workflow = (ROOT / "skills/askme/references/workflow.md").read_text(encoding="utf-8")
+    normalized = " ".join(workflow.split())
+    for marker in (
+        "continues that topic instead of restarting it",
+        "rebuild the current statement of the problem together with the agreements in force",
+        "reachable session context",
+        "do not claim to restore unavailable history",
+        "New information supplements the statement",
+        "a short note of what changed and why",
+        "do not accumulate a history of withdrawn decisions",
+        "do not silently drop the agreed condition",
+        "independent topics never merge into one statement",
+        "cumulative for the topic and self-contained",
+        "numbered as a decision",
+        "recommendations remain recommendations",
+        "not a reason to invent deadlines, metrics, or obligations",
+        "an explicit call still ends with manual continuation",
+    ):
+        assert marker in normalized, marker
+
+
 def test_spec_and_docs_skills_own_post_change_triggers() -> None:
     for name in ("spec-manage", "docs-prepare"):
         entrypoint = (ROOT / "skills" / name / "SKILL.source.md").read_text(encoding="utf-8")

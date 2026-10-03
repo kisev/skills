@@ -38,7 +38,7 @@ are not included.
 | Skill | Purpose |
 | - | - |
 | `agents-md` | Create or review repository-scoped `AGENTS.md` instructions. |
-| `askme` | Clarify an incomplete task or design through a bounded interview. |
+| `askme` | Clarify a task or design through a bounded interview; every call returns all current agreements, including those made before the first interview. |
 | `ast-grep` | Run structural search or a safe direct AST rewrite through ast-grep. |
 | `code-explain` | Build a read-only guided map of current WIP, a Git range, branch, or MR history. |
 | `code-review` | Review a GitLab MR or local WIP for defects and risks. |

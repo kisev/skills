@@ -17,12 +17,26 @@ Quoted examples, negated requests such as "do not ask me", and discussion such a
 
 ## Interview
 
-1. Determine the goal, known facts, decisions, unknowns, and dependencies between them. Build a decision tree, not a linear list of questions. For review follow-ups, first apply the necessity check in `references/necessity-doctrine.md`; a finding is a candidate, not an agreed requirement.
-2. Show a concise **Proposed task** block in chat before the first question, or before the no-questions result: problem, expected outcome, boundaries, acceptance criteria, and unknowns. This is a hypothesis that the user can confirm or correct, not an agreed decision.
+1. On every invocation, including the first, rebuild the current statement of the problem together with the agreements in force from the whole reachable session context: the original request, ordinary discussion before any interview, prior interviews and their answers, and later additions. Determine the goal, known facts, decisions, unknowns, and dependencies between them. Rely only on available context; do not claim to restore unavailable history, and name the gap when it changes a decision. Build a decision tree, not a linear list of questions. For review follow-ups, first apply the necessity check in `references/necessity-doctrine.md`; a finding is a candidate, not an agreed requirement.
+2. Show a concise **Proposed task** block in chat before the first question, or before the no-questions result: problem, expected outcome, boundaries, acceptance criteria, and unknowns. Preserve confirmed decisions as agreed; only new interpretations are hypotheses the user can correct. Showing the current statement does not require reconfirming established agreements.
 3. Form the current frontier using the independence check in `references/question-guidelines.md`. If any plausible answer, including a custom answer, could change another question, ask the prerequisite alone and wait. Never treat a recommended answer as selected.
 4. Conduct the smallest useful independent round through the host's standard interactive tool. If the host has no such tool, ask the questions in chat. Apply `references/question-guidelines.md` for context, practical option effects and risks, recommendation rationale, and free-form input. Never repeat a question answered by evidence or the user, or ask for a decision that does not affect the task. If facts are sufficient, explicitly say that no clarification questions remain; do not invent a question or require a redundant confirmation.
 5. After each answer, interpret the actual choice and qualifications, investigate changed assumptions, remove or rewrite stale follow-ups, and rebuild the tree before proceeding. Stop asking when no material questions remain or a blocker cannot be resolved with available facts. Distinguish unanswered decisions from information unavailable to both the agent and user.
-6. Finish with a brief decision boundary: expected result, supported scenarios, acceptance checks, constraints, accepted risks, deferred work, decisions made, open questions or explicitly none, and the next appropriate workflow. Keep it proportional to the task; distinguish user-approved decisions from recommendations and cite their conversation basis. Follow the invocation boundary below.
+6. Finish every invocation, including the first and a no-questions result, with the self-contained decision boundary in `Closing result`. Follow the invocation boundary below.
+
+## Closing result
+
+The closing boundary is cumulative for the topic and self-contained: the context, every agreement still in force numbered as a decision, and the expected result, not a summary of the last round alone. Include decisions from ordinary discussion before the first interview. State supported scenarios, acceptance checks, material consequences, constraints, accepted risks, deferred work, open questions or explicitly none, and the next appropriate workflow in proportion to the discussion. Section names stay flexible, and nothing is invented to fill a template.
+
+Number only decisions the user approved and cite their conversation basis; agent and premortem recommendations remain recommendations. Make each decision concrete enough to check; SMART (specific, measurable, achievable, relevant, time-bound) is a guide for that concreteness and verifiability, not a reason to invent deadlines, metrics, or obligations.
+
+## Continuation across invocations
+
+A repeated `askme` call about the topic of an earlier interview continues that topic instead of restarting it. Apply the same context reconstruction and closing result as on the first invocation; do not add a confirmation round merely because this is a continuation.
+
+New information supplements the statement, and agreements in force stay effective. An addition after a finished interview reopens only the decisions it actually affects; a question answered by evidence or the user stays answered. An explicit user decision may replace an earlier agreement: show the current version plus a short note of what changed and why, and do not accumulate a history of withdrawn decisions. When new input appears to contradict an agreement but the intent is ambiguous, do not silently drop the agreed condition; ask one bounded clarification or state the conflict explicitly. Keep topics separate and carry only the agreements of the topic under discussion, so independent topics never merge into one statement.
+
+Continuation does not change the invocation boundary: an explicit call still ends with manual continuation.
 
 ## Invocation boundary
 

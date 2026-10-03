@@ -1,0 +1,111 @@
+{
+  "description": "Manual behavioral replay. Apply the current authored skill and shared references, retain actual generated replies between turns, and inspect responses against each rubric. This fixture is not executed by task eval:check; source-text tests and model self-assessments are not behavioral evidence. Keep live output outside Git. No repository or external tools are needed.",
+  "initial_context": "Обсуждаем исправление дубликатов при импорте CSV-счетов. Решения уже приняты мной в обычном разговоре: повтор строки с тем же invoice_id пропускаем и отражаем в отчёте; импорт синхронный; максимум 1000 строк на файл; миграции БД исключены. Успех: повторная загрузка того же файла не создаёт новых счетов, а отчёт показывает число пропусков. Срок не назначен. Других неизвестных по постановке нет.",
+  "turns": [
+    {
+      "id": "first-call",
+      "skill": "askme",
+      "prompt": "/askme",
+      "checks": [
+        "Context and expected result describe duplicate CSV invoice imports.",
+        "Numbered decisions preserve invoice_id deduplication/reporting, synchronous import, 1000 rows, and no database migration from ordinary discussion.",
+        "No questions remain; no redundant confirmation or invented deadline; explicit invocation stops."
+      ]
+    },
+    {
+      "id": "repeat-no-change",
+      "skill": "askme",
+      "prompt": "Новых данных нет. /askme",
+      "checks": [
+        "All four earlier decisions and the success condition remain in a self-contained result.",
+        "No answered question is reopened and continuation needs no confirmation."
+      ]
+    },
+    {
+      "id": "add-context",
+      "skill": "askme",
+      "prompt": "Дополняю ту же тему после итогов: принимаем CSV в UTF-8 как с BOM, так и без него. Это принятое решение. /askme",
+      "checks": [
+        "Both UTF-8 variants are added while all earlier decisions remain.",
+        "The result is cumulative, not just an encoding decision."
+      ]
+    },
+    {
+      "id": "replace-decision",
+      "skill": "askme",
+      "prompt": "Меняю ранее выбранный максимум с 1000 на 2000 строк, потому что обычный файл клиента содержит 1500 строк. Остальное сохраняем. /askme",
+      "checks": [
+        "The active limit is 2000, with a short note that 1000 was replaced and the supplied reason.",
+        "Other decisions remain; 1000 is not listed as another active limit."
+      ]
+    },
+    {
+      "id": "ambiguous-change",
+      "skill": "askme",
+      "prompt": "Насчёт импорта ещё мысль: может, всё-таки запускать его в фоне? Я пока не решил. /askme",
+      "checks": [
+        "Synchronous import remains the last agreed mode; background processing is not promoted to an approved decision.",
+        "Ask one bounded question about replacing that mode, or explicitly retain the unresolved conflict without declaring the task ready.",
+        "Do not ask dependent queue-provider or retry questions."
+      ]
+    },
+    {
+      "id": "resolve-conflict",
+      "skill": "askme",
+      "prompt": "Оставляем синхронный импорт. Фоновую обработку откладываем. /askme",
+      "checks": [
+        "All five active decisions are retained with the 2000-row limit.",
+        "Background processing is deferred, not active; there is no unresolved mode question."
+      ]
+    },
+    {
+      "id": "switch-topic",
+      "skill": "askme",
+      "prompt": "Теперь другая независимая тема: тёмная тема страницы справки. Решаю брать тему из системных настроек и не делать ручной переключатель. Успех: страница соответствует выбранной в ОС светлой или тёмной теме. Других вопросов нет. /askme",
+      "checks": [
+        "The result concerns the help-page theme and its two decisions only.",
+        "Invoice limits, encoding and database constraints are not assigned to the theme task."
+      ]
+    },
+    {
+      "id": "return-topic",
+      "skill": "askme",
+      "prompt": "Вернёмся к импорту CSV-счетов. Новых изменений нет. /askme",
+      "checks": [
+        "Restore all five import decisions, including 2000 rows, both UTF-8 variants and no migration.",
+        "Preserve deferred background processing and the deduplication success condition.",
+        "Do not import the theme decisions or repeat a growing history of withdrawn choices."
+      ]
+    }
+  ],
+  "handoffs": [
+    {
+      "id": "goal-handoff",
+      "skill": "goal",
+      "prompt": "Подготовь /goal по согласованному импорту CSV-счетов.",
+      "checks": [
+        "Produce an agent assignment at most 4000 characters preserving all five active import decisions and deferred background processing.",
+        "Include concrete duplicate-upload and 2000-row-limit acceptance evidence; no theme requirements, invented deadlines or implementation actions."
+      ]
+    },
+    {
+      "id": "task-handoff",
+      "skill": "task-prepare",
+      "prompt": "Подготовь нейтральную задачу для человека по согласованному импорту CSV-счетов. Верни её только в чат.",
+      "checks": [
+        "Produce a self-contained human-facing task preserving all five active import decisions and deferred background processing.",
+        "Keep concrete acceptance checks, no theme requirements or invented owner/deadline, and no publication or implementation."
+      ]
+    }
+  ],
+  "internal_case": {
+    "id": "internal-return",
+    "skill": "askme",
+    "context": "An already-authorized task-prepare workflow is preparing a neutral task in chat and internally requested askme to clarify the CSV import mode. The user answered: synchronous, skip duplicate invoice_id and report skips, maximum 2000 rows, UTF-8 with or without BOM, no database migration. No material questions remain. This is an internal caller, not an explicit user invocation of askme.",
+    "prompt": "Return the clarification result to the calling workflow.",
+    "checks": [
+      "Return all five decisions to the caller without demanding manual permission to resume task preparation.",
+      "Do not perform task preparation, implementation or publication inside the interview."
+    ]
+  }
+}
