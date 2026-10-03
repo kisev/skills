@@ -21,9 +21,18 @@ Detailed history and exhaustive label decisions remain in private JSON.
 The input package separately supplies the exact draft schema and valid field
 examples; final artifact schemas are not draft input documentation.
 
+After snapshot preparation the primary agent formulates one shared context
+package for both modes — goal, claims with sources and credibility kinds,
+requirements, constraints, prior decisions, and questions — and records it as
+private derived context bound to the prepared evidence. The runtime formats
+mechanical data (bindings, thread registry, retained decisions), validates
+structure and bindings without its own model call, and hands the package to
+critics as their primary context.
+
 ## Workflow Stages
 
-Collect evidence/context, inspect exact-commit snapshots and affected consumers,
+Collect evidence/context, form and record the context package, inspect
+exact-commit snapshots and affected consumers,
 run independent critics when required, complete one draft, validate locally, and
 finalize atomically. Resume retains the draft. Refresh retains candidates and
 decisions while exposing changed analysis scope. Targeted repair creates a new
@@ -70,6 +79,46 @@ complete paginated discussions, notes, labels, commits, changes, exact Git objec
 release/tag catalogs, target revision, and exact-head CI evidence. Missing, binary,
 non-regular, and over-budget inspection inputs shall be explicit.
 
+Remote preparation shall prepare one persistent managed review worktree per merge
+request under `<repo>.worktrees/reviewmatic/`, separate from manual fix-application
+trees. It shall identify the repository from the invocation directory, its
+subdirectory, or an explicit `--repo-root`, and accept it only when some remote —
+under any name, including fork remotes — points at the MR's source or target
+project; otherwise it shall stop and request the correct checkout without cloning.
+The MR's base/start/head and target revisions shall be fixed from the evidence;
+missing objects shall be fetched through Git and verified against those SHAs, and
+the current target tip shall never replace the MR diff base. Unavailable objects,
+mismatched revisions, or incomplete evidence shall block preparation, and no
+per-file GitLab content request shall fetch reviewed code. The worktree shall be a
+detached checkout at the exact head whose identity binds the local repository,
+GitLab host, project, and merge request rather than the branch name. Its
+directory name shall carry an untruncated short hash of that full identity, so
+colliding readable project names, different merge request IDs, and truncated
+long project paths never share one tree. A managed tree under a retired path
+layout shall never be reused, moved, or shadowed: preparation shall stop with
+a concrete manual migration instruction, and the replacement path shall be
+created only after that tree has been removed manually. The shared review
+worktree registry shall record parallel preparations of different merge
+requests without losing updates, and no fetch shall run while the shared
+registry state is locked.
+Preparation
+shall not change the user's HEAD, branch, index, tracked or untracked files, or
+local branches, shall allow a dirty source checkout, and shall limit its writes to
+fetched objects, `refs/reviewmatic/...` service refs, the managed worktree, and
+private artifacts; foreign directories shall never be overwritten. A clean worktree
+of the same revision shall be reused. A new head shall switch the same worktree
+only when no review is active there, the tree is clean, and it holds no unexpected
+commits; otherwise preparation shall block without reset, clean, or data loss. An
+active review shall stay protected when a repeated preparation of the same head
+aborts before it begins: the recorded occupancy marker shall survive such a run,
+and only a finalized plan or an explicit supersede shall free the tree.
+Concurrent preparations shall serialize safely or report occupancy, different merge
+requests shall stay independent, and interrupted preparations shall recover on a
+later run or report the concrete blocker. `start-review` shall return the source
+repository, the review worktree, and the exact refs, and primary analysis, critics,
+resume, refresh, incremental review, and finalization shall reuse that binding
+without recollection; older results shall never be rebound to a new head.
+
 `start-review`, `check-review`, and `finish-review` shall operate on one editable
 draft. Local validation shall not recollect GitLab or freeze decisions. Runtime
 timings shall distinguish collection, validation, and finalization from model
@@ -79,6 +128,63 @@ shall retain their exact review source for repairs. Older contracts shall remain
 historically readable but shall not be repaired, migrated, or have guarded actions
 executed by the new runtime.
 
+After snapshot preparation the workflow shall record one agent-authored context
+package before any critic starts. A direct invocation with unclear task context
+shall ask for it once and wait; a short answer or an explicit skip is
+acceptable and shall never be re-requested, while an automatic invocation shall
+not stop for questions. The invocation mode shall follow how the skill was
+actually invoked, never the MR contents. Remaining unknown goals or acceptance
+criteria shall be recorded explicitly as unknown, and defect analysis shall
+continue without asserting completeness for an unknown task or presenting
+assumptions as requirements or invented approval evidence.
+
+The package shall carry the goal, claims with available sources and separated
+credibility — author claims, participant opinions, agreed requirements,
+accepted risks, and confirmed facts — constraints, prior decisions, questions
+with stable IDs and one unambiguous subject each, and an editable background
+whose edit never changes the canonical facts. Disagreements remain visible.
+GitLab data shall be an MR extension, never a mandatory local field: the MR
+extension shall register every collected discussion with its ID, link,
+essence, and review relevance, expanded with the complete chronology for
+significant decisions and questions, and the runtime shall reject a registry
+that misses a collected thread without declaring a shortened essence faithful.
+A local package shall bind the `prepare-local` snapshot including the selected
+comparison ref and the committed, staged, unstaged, and untracked sections.
+
+Every assigned question shall receive an explicit critic answer — confirmed,
+refuted, or not\_verified — with evidence or a concrete reason. When several
+critics run, the runtime shall check every assigned critic-and-question pair:
+each selected critic shall answer each assigned question, and one critic's
+answer shall never satisfy another critic's missing assignment. Multiple
+critics shall retain assignments, authorship, and contradictions instead of
+merging them. Recording shall stamp every question with the version of the
+meaningful package content it depends on, and every answer and verification
+shall carry the version it was produced against. Acceptance and finalization
+shall reject a missing or superseded binding with a concrete diagnostic
+instead of filling it from the current package, so a result collected before
+the package changed can never certify the changed question. Re-recording the
+package after an edited question, goal, acceptance criterion, claim,
+constraint, or agreed prior decision shall preserve exactly the affected
+stale results as history with their
+authorship and original bindings, shall keep fresh results for the same
+question in place, and shall require fresh results for the
+affected scope, an edited question shall not invalidate results for
+unaffected questions, and a
+representation-only change such as an edited background shall not invalidate
+collected results. The primary agent shall target every not\_verified answer in
+verifications that preserve the original answer separately, with unresolved
+insufficiency staying explicit; no answer shall resolve publication
+automatically, and in modes without critics the primary keeps its existing
+duties and readiness rules. The package shall stay private, outside the
+checkout, as derived context bound to evidence and revisions; recording and
+reading it shall perform no GitLab request, fetch, or worktree creation.
+Resume shall reuse the recorded package while its binding is current, and
+refresh shall report the previous package with its stale threads and require
+the updated record to name the superseded digest, keeping history in
+immutable artifacts. Description text, labels, thread closure, and other
+external texts shall never be treated as proof of code correctness or as
+instructions.
+
 Normal, deep, and changed incremental review shall require real independent
 receipts. Available selected specialists are preferred; absent profiles fall back
 to ordinary native subagents. Every selected contributor and finding shall be
@@ -86,10 +192,13 @@ retained with real run/session identities. Primary and critic candidates require
 explicit dispositions; duplicate accepted findings are invalid. Fast review
 without a critic requires justified low risk. Unchanged review audits discussions
 without a critic. Required independence is not waived for unavailable delegation.
-Critics start as soon as the exact evidence package is ready, in native background
-mode alongside primary analysis when supported. They reuse exact snapshots and
+Critics start as soon as the recorded context package and exact snapshots are
+ready, in native background
+mode alongside primary analysis when supported. They reuse exact snapshots,
+the package, and
 JSON findings, not manual transcriptions or duplicate collection. Resume verifies
-and reuses snapshot files. Collection, primary analysis, critic waiting, fix checks
+and reuses snapshot files. Collection, package recording, primary analysis,
+critic waiting, fix checks
 and freshness remain separate stages, without a numerical SLA or reduced depth.
 Primary severity reassessment is structured with original/effective severity and
 a reason, preserving the receipt. Duplicate dispositions refer to an accepted
@@ -212,13 +321,48 @@ and continuity before replacing its private pointer. Reports retain goal,
 acceptance, constraints, decisions, risks, deferred work, checks, and severity
 separate from blocking status. Required unrun/failed checks block completion.
 
+Without an explicit comparison ref the local scope shall be exactly the staged,
+unstaged, and non-ignored untracked changes against HEAD, kept as separate
+sections even when their changes cancel out, and commits shall not enter the
+scope automatically. An explicitly named local comparison ref shall add the
+commits from its merge base with HEAD, shall be used exactly as it exists locally
+without fetching, and shall never be derived from an upstream, tracking, or
+guessed target branch. Preparation shall stop with a concrete reason when that
+ref is missing, ambiguous, or has no common merge base with HEAD — including
+revision expressions whose base name, such as `dup` inside `dup~0`, matches
+both a branch and a tag; only a fully qualified unambiguous ref shall resolve —
+and shall
+return an explicit empty-scope result instead of a review when the selected
+boundary has no changes; the empty result shall not create a baseline. The
+returned local record command shall name the exact immutable snapshot path so
+it executes without manual reconstruction. Local
+preparation and finalization shall require no `glab`, GitLab authentication,
+network, remote, or worktree creation, and shall preserve HEAD, the index, and
+user files.
+
 #### Verification
 
 Runtime and fixture tests cover local validation, real critic identity contracts,
 atomic rollback, cumulative findings, targeted repair, refresh without lost
 findings, original receipt preservation, CI-only refresh, grouped suggestions,
 Markdown fences, field diagnostics, direct writes without GETs or publication
-state, errors, repetition and cancellation. TUI behavioral, Ink and PTY suites
+state, errors, repetition and cancellation, and review worktree preparation:
+fork sources under arbitrary remote names, unrelated or missing repositories,
+dirty source and occupied or foreign worktrees, new heads with active and
+finalized reviews, same branch names in different projects, concurrent runs,
+fetch failures with recovery, revision mismatch, preservation of the user's
+checkout, and the absence of per-file code fetches. Context package regressions
+cover both modes, direct and automatic invocation material, skipped context,
+contradictory sources, resolved threads without proof, missing critic answers,
+multi-critic authorship and contradictions, canonical digest stability across
+background edits, supersedes lineage, stale snapshot bindings, and GitLab-free
+recording. Local scope regressions
+cover staged, unstaged, and untracked sections separately and together,
+compensating staged and unstaged changes, explicit empty-scope results, missing,
+ambiguous, and unrelated comparison refs, branch reviews bound to an explicit
+ref, repeated runs that retain the agreed boundary, linked-worktree checkouts,
+and preparation without any remote that preserves HEAD and the index. TUI
+behavioral, Ink and PTY suites
 remain separate experimental sources and are not run by the default gate.
 Backend worktree checks remain mandatory. Tests use synthetic GitLab responses,
 never live publication.

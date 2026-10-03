@@ -10,12 +10,33 @@ import {
   gitRead,
   isDigest,
   readJson,
+  regularFile,
   schemaValid,
   stateDirectory,
   writeArtifact,
   writeJson,
 } from "./contract.js";
+import { runnerAction } from "./context.js";
 import { contentDigest } from "./state-artifacts.js";
+import {
+  bindQuestionContexts,
+  canonicalPackageDigest,
+  extractSupersededResults,
+  isCurrentResult,
+  localSectionDigests,
+  narrativePackageDigest,
+  packageTemplateForLocal,
+  questionContextVersionList,
+  questionContextVersions,
+  questionReport,
+  readPackagePointer,
+  recordedPackage,
+  supersedesDigest,
+  validateAnswers,
+  validatePackagePayload,
+  validateVerifications,
+  writeContextPackage,
+} from "./context-package.js";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -393,10 +414,26 @@ export function prepareFollowup(
     reason = "incompatible_boundary_or_incomplete_evidence";
   }
   const retained = reusable ? report : null;
+  const packageTemplate = packageTemplateForLocal(
+    bundle,
+    digestValue,
+    retained as Record<string, unknown> | null,
+  );
+  const packageTemplatePath = `${root}/local-context-package-input.json`;
+  writeJson(packageTemplatePath, packageTemplate);
+  const recorded = recordedPackage(root);
+  const packageCurrent =
+    recorded !== null &&
+    recorded.payload.mode === "local" &&
+    String((recorded.payload.binding as Record<string, unknown>).evidence_digest) === digestValue;
+  const snapshotPath = `${root}/artifacts/local_wip_snapshot/${digestValue}.json`;
   const template = {
     evidence_digest: digestValue,
     previous_review_digest: previousDigest,
     mode: mode,
+    context_package: null,
+    question_answers: [],
+    question_verifications: [],
     task: retained
       ? structuredClone((retained as Record<string, unknown>).task)
       : {
@@ -421,9 +458,24 @@ export function prepareFollowup(
     previous_review_digest: previousDigest,
     previous_report: report,
     previous_evidence_digest: report ? report.evidence_digest : null,
+    previous_ref: prior !== null ? pythonGet(prior, "ref") : null,
     delta: delta,
     report_template: template,
     draft_path: `${root}/local-review-draft.json`,
+    context_package: {
+      template_path: packageTemplatePath,
+      package_path: recorded === null ? null : recorded.path,
+      package_digest: recorded === null ? null : recorded.digest,
+      status: packageCurrent ? "recorded" : "pending",
+      question_context_versions:
+        packageCurrent && recorded !== null ? questionContextVersionList(recorded.payload) : null,
+      record_command: runnerAction("record-package", [
+        "--bundle",
+        snapshotPath,
+        "--input",
+        packageTemplatePath,
+      ]).command,
+    },
   };
 }
 
@@ -593,6 +645,67 @@ function localUntracked(root: string): Record<string, unknown> {
   return { items: items, complete: errors.length === 0, errors: errors };
 }
 
+export function emptyScopeReason(bundle: Record<string, unknown>): string | null {
+  if (bundle.retrieval_complete !== true) return null;
+  const sections = bundle.sections as Record<string, Record<string, unknown>>;
+  const untracked = sections.untracked as Record<string, unknown>;
+  const uncommittedWorkEmpty =
+    (sections.staged.diff as string).length === 0 &&
+    (sections.unstaged.diff as string).length === 0 &&
+    (untracked.items as Record<string, unknown>[]).length === 0;
+  if (!uncommittedWorkEmpty) return null;
+  if (bundle.ref === null || bundle.ref === undefined) return "no_uncommitted_changes";
+  return (sections.committed.diff as string).length === 0 ? "no_changes_relative_to_ref" : null;
+}
+
+function shortRefCandidates(root: string, ref: string): string[] {
+  const names = new Set([
+    `refs/${ref}`,
+    `refs/heads/${ref}`,
+    `refs/tags/${ref}`,
+    `refs/remotes/${ref}`,
+  ]);
+  return String(gitRead(root, ["for-each-ref", "--format=%(refname)"]))
+    .split("\n")
+    .filter((name) => names.has(name));
+}
+
+// Revision expressions such as `dup~0` resolve through the ambiguous short
+// name without warning, so ambiguity is decided for the expression's base
+// name, not only for a literal refname.
+function comparisonBaseName(ref: string): string {
+  return ref.split(/[~^:@]/, 1)[0];
+}
+
+function comparisonBase(root: string, ref: string): string {
+  if (!ref.startsWith("refs/")) {
+    const base = comparisonBaseName(ref);
+    const candidates = base === "" || base === "HEAD" ? [] : shortRefCandidates(root, base);
+    if (candidates.length > 1) {
+      throw new WorkflowError(
+        `comparison ref '${ref}' is ambiguous in the local checkout (${candidates.join(", ")}); ` +
+          "ask which revision to use or pass one full refname; the runner does not fetch or choose for you",
+      );
+    }
+  }
+  try {
+    gitRead(root, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
+  } catch {
+    throw new WorkflowError(
+      `comparison ref '${ref}' was not found or is not a commit in the local checkout; ` +
+        "pass an existing local revision; the runner does not fetch or substitute one",
+    );
+  }
+  try {
+    return String(gitRead(root, ["merge-base", ref, "HEAD"])).trim();
+  } catch {
+    throw new WorkflowError(
+      `no common merge base between '${ref}' and HEAD in the local checkout; ` +
+        "ask how to proceed instead of falling back; the runner does not fetch",
+    );
+  }
+}
+
 export async function localBundle(
   repoRoot: string,
   profile: string,
@@ -616,8 +729,15 @@ export async function localBundle(
   if (!existsSync(`${root}/.git`)) {
     throw new WorkflowError("repo root must be a real Git checkout");
   }
-  const head = String(gitRead(root, ["rev-parse", "HEAD"])).trim();
-  const base = ref ? String(gitRead(root, ["merge-base", ref, "HEAD"])).trim() : head;
+  let head: string;
+  try {
+    head = String(gitRead(root, ["rev-parse", "HEAD"])).trim();
+  } catch {
+    throw new WorkflowError(
+      "the checkout has no readable HEAD; the repository needs at least one commit",
+    );
+  }
+  const base = ref ? comparisonBase(root, ref) : head;
   const staged = localSection(root, "staged", [
     "diff",
     "--cached",
@@ -677,6 +797,183 @@ export async function finalizeLocal(bundleFile: string): Promise<Record<string, 
   };
 }
 
+// Records the agent-authored context package for a prepared local snapshot.
+// Purely mechanical validation and binding; no network, fetch, or worktree.
+export async function recordLocalPackage(
+  bundlePath: string,
+  inputPath: string,
+): Promise<Record<string, unknown>> {
+  const [, bundle] = artifactPayload(bundlePath, "local_wip_snapshot");
+  const envelope = readJson(bundlePath, "local evidence");
+  const digestValue = digest(envelope);
+  const root = String(bundle.artifact_root);
+  if (realpathSync(bundlePath) !== `${root}/artifacts/local_wip_snapshot/${digestValue}.json`) {
+    throw new WorkflowError("context package requires the canonical immutable local snapshot");
+  }
+  const input = readJson(regularFile(inputPath, "context package input"), "context package input");
+  validatePackagePayload(input, {
+    mode: "local",
+    evidenceDigest: digestValue,
+    artifactRoot: root,
+    repoRoot: String(bundle.repo_root),
+    headSha: String(bundle.head_sha),
+    ref: pythonGet(bundle, "ref") as string | null,
+    sections: localSectionDigests(bundle),
+  });
+  // Stamp the meaningful-context version onto every question before the
+  // package becomes immutable; report answers carry the stamp they saw.
+  bindQuestionContexts(input);
+  supersedesDigest(root, input.supersedes);
+  const previousPointer = readPackagePointer(root);
+  const [path, packageDigest] = await writeContextPackage(root, input);
+  const superseded = retireSupersededResults(root, previousPointer, input);
+  return {
+    status: "ok",
+    artifact_path: path,
+    digest: packageDigest,
+    canonical_digest: canonicalPackageDigest(input),
+    background_digest: narrativePackageDigest(input),
+    question_context_versions: questionContextVersionList(input),
+    question_summary: questionReport((input.questions as Record<string, unknown>[]) ?? [], [], []),
+    superseded_questions: superseded,
+    external_mutations: false,
+  };
+}
+
+// Local counterpart of the draft package guard: re-recording a canonically
+// changed package moves the report's answers and verifications collected for
+// the previous questions into the report's historical section so that
+// finalization cannot count them against the current questions. Exactly the
+// entries selected by their own binding move; fresh results for the same
+// question stay in place.
+function retireSupersededResults(
+  root: string,
+  pointer: Record<string, unknown> | null,
+  input: Record<string, unknown>,
+): string[] {
+  const draftPath = `${root}/local-review-draft.json`;
+  if (!existsSync(draftPath)) return [];
+  let report: Record<string, unknown>;
+  try {
+    report = readJson(regularFile(draftPath, "local review draft"), "local review draft");
+  } catch (error) {
+    if (!(error instanceof WorkflowError)) throw error;
+    return [];
+  }
+  let previous: { payload: Record<string, unknown>; digest: string } | null = null;
+  if (pointer !== null) {
+    try {
+      const [, payload] = artifactPayload(String(pointer.package_path), "context_package");
+      previous = { payload: payload, digest: String(pointer.package_digest) };
+    } catch (error) {
+      if (!(error instanceof WorkflowError)) throw error;
+    }
+  }
+  const answers = (report.question_answers as Record<string, unknown>[] | undefined) ?? [];
+  const verifications =
+    (report.question_verifications as Record<string, unknown>[] | undefined) ?? [];
+  const superseded = extractSupersededResults(previous, input, answers, verifications);
+  if (superseded === null) return [];
+  const versions = questionContextVersions(input);
+  const current = (item: Record<string, unknown>): boolean => isCurrentResult(item, versions);
+  report.question_answers = answers.filter(current);
+  report.question_verifications = verifications.filter(current);
+  report.superseded_question_results = [
+    ...((report.superseded_question_results as Record<string, unknown>[] | undefined) ?? []),
+    superseded.entry,
+  ];
+  writeJson(draftPath, report);
+  return superseded.questionIds;
+}
+
+function validateLocalPackage(
+  report: Record<string, unknown>,
+  root: string,
+  bundle: Record<string, unknown>,
+  digestValue: string,
+): Record<string, unknown> {
+  const binding = report.context_package;
+  if (
+    !isObject(binding) ||
+    typeof binding.path !== "string" ||
+    !isDigest(binding.digest as string)
+  ) {
+    throw new WorkflowError(
+      "local review must bind the recorded context package; complete the returned template and run record-package",
+    );
+  }
+  const pointer = readPackagePointer(root);
+  if (
+    pointer === null ||
+    String(pointer.package_path) !== resolve(binding.path) ||
+    String(pointer.package_digest) !== binding.digest
+  ) {
+    throw new WorkflowError(
+      "local review package binding does not match the recorded context package; run record-package again",
+    );
+  }
+  const [, packagePayload] = artifactPayload(String(binding.path), "context_package");
+  validatePackagePayload(packagePayload, {
+    mode: "local",
+    evidenceDigest: digestValue,
+    artifactRoot: root,
+    repoRoot: String(bundle.repo_root),
+    headSha: String(bundle.head_sha),
+    ref: pythonGet(bundle, "ref") as string | null,
+    sections: localSectionDigests(bundle),
+  });
+  const questions = (packagePayload.questions as Record<string, unknown>[]) ?? [];
+  const questionIds = new Set(questions.map((item) => String(item.id)));
+  const versions = questionContextVersions(packagePayload);
+  const answers = (report.question_answers as Record<string, unknown>[] | undefined) ?? [];
+  validateAnswers(answers, questionIds, versions, "$.question_answers");
+  const verifications =
+    (report.question_verifications as Record<string, unknown>[] | undefined) ?? [];
+  validateVerifications(verifications, questionIds, versions, answers);
+  const answered = new Set(answers.map((item) => String(item.question_id)));
+  const covered = (id: string): boolean =>
+    answered.has(id) || verifications.some((item) => String(item.question_id) === id);
+  for (const entry of (report.superseded_question_results as
+    | Record<string, unknown>[]
+    | undefined) ?? []) {
+    for (const answer of (entry.answers as Record<string, unknown>[] | undefined) ?? []) {
+      const id = String(answer.question_id);
+      if (questionIds.has(id) && !covered(id)) {
+        throw new WorkflowError(
+          `question ${id} was answered against a superseded context package ` +
+            `(context digest ${String(entry.context_digest)}); the current package changed it, ` +
+            `so it needs a fresh critic answer or primary verification`,
+        );
+      }
+    }
+  }
+  for (const question of questions) {
+    if (question.critic !== true) continue;
+    const id = String(question.id);
+    if (!covered(id)) {
+      throw new WorkflowError(
+        `question ${id} is assigned to critics but no critic answer or primary verification covers it`,
+      );
+    }
+  }
+  for (const answer of answers) {
+    if (answer.verdict !== "not_verified") continue;
+    const preserved = verifications.some(
+      (item) =>
+        String(item.question_id) === String(answer.question_id) &&
+        isObject(item.original) &&
+        String((item.original as Record<string, unknown>).run_id) === String(answer.run_id) &&
+        String((item.original as Record<string, unknown>).session_id) === String(answer.session_id),
+    );
+    if (!preserved) {
+      throw new WorkflowError(
+        `critic answer for ${String(answer.question_id)} is not_verified; add one question_verifications entry that preserves the original answer`,
+      );
+    }
+  }
+  return questionReport(questions, answers, verifications);
+}
+
 export async function recordReview(
   root: string,
   bundlePath: string,
@@ -708,6 +1005,7 @@ export async function recordReview(
   if (followup.baseline_compatible === true) {
     validateContinuity(report, followup.previous_report as Record<string, unknown>);
   }
+  const questionSummary = validateLocalPackage(report, root, bundle, digestValue);
   if ((await finalizeLocal(bundlePath)).status !== "ok") {
     throw new WorkflowError("local evidence changed before report finalization");
   }
@@ -718,5 +1016,6 @@ export async function recordReview(
     digest: reportDigest,
     mode: report.mode,
     verdict: report.verdict,
+    question_summary: questionSummary,
   };
 }

@@ -8,6 +8,25 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+### Added
+
+- `reviewmatic` and the `code-review` skill now share one context package for
+  GitLab MR and local WIP reviews. After snapshot preparation the agent records
+  it with `record-package` — goal, claims with sources and separated
+  credibility, constraints, prior decisions, and questions with stable IDs —
+  and critics start only afterwards, reading the package as their primary task
+  context and answering assigned questions in receipt `question_answers` with
+  confirmed, refuted, or not\_verified verdicts. The runtime formats mechanical
+  data (bindings, the MR thread registry covering every collected discussion,
+  retained decisions) and validates structure and bindings without its own
+  model call. The primary review addresses every `not_verified` answer in
+  `question_verifications`, preserving the original answer; direct invocations
+  with unclear task context ask once, automatic ones record unknown goal and
+  acceptance criteria explicitly. The package stays private outside the
+  checkout, binds the `prepare-local` snapshot sections in local mode, involves
+  no GitLab recollection, and refresh reports stale threads while keeping the
+  previous package as immutable history.
+
 ### Changed
 
 - `humanize` now activates only on an explicit invocation: a direct user
@@ -41,6 +60,30 @@ All notable changes to this project are documented in this file. Entries follow
   REQ-F-550, and the command adapter is REQ-I-422), eval surfaces, the
   migration inventory (`skill-improve` now maps to `skill-doctor`), and
   documentation are updated.
+
+- Context package results are now bound to the meaningful context they were
+  produced against. `record-package` stamps every question with the digest of
+  its meaningful content — the question plus goal, acceptance criteria,
+  claims, constraints, and thread registry — and every answer and verification
+  copies the `context_digest` it was produced against. `check-review`,
+  `finish-review`, and `finalize-local` reject a missing or superseded
+  binding with a concrete diagnostic, so a late answer or verification
+  collected for the previous package can no longer certify a changed question
+  or produce a false `ready`. Re-recording a changed package retires affected
+  results into `superseded_question_results` with their authorship and
+  original bindings preserved, unaffected questions and background-only edits
+  keep their results, and re-recording the package retires still-unbound
+  results explicitly instead of counting them.
+
+- `reviewmatic prepare-local` now defines the local scope explicitly: without
+  `--ref` it is the uncommitted work against HEAD — staged, unstaged, and
+  non-ignored untracked files; an explicit `--ref <revision>` adds the commits
+  from its merge base with HEAD and is used exactly as it exists locally,
+  without fetching. A missing, ambiguous, or merge-base-less `--ref` stops with
+  a concrete reason, and a boundary without any changes returns `empty_scope`
+  instead of a snapshot that could be finalized as a review. The `code-review`
+  skill selects the remote-MR or local-WIP mode only from the explicit request,
+  and local reports state the scope composition and the exact revisions used.
 
 - Agentomatic now supports only OpenCode `2.0.x`: V1 dependencies, entrypoints,
   adapters, and checks are removed. V1 users can retain the pre-V2 stable release.
@@ -81,6 +124,19 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- `start-review` prepares one managed review worktree per merge request under
+  `<repo>.worktrees/reviewmatic/`: a detached checkout at the exact MR head
+  outside the user's working tree, returned with the source repository and exact
+  base/start/head/target refs. Missing revisions are fetched over Git from the
+  remote matching the MR's source or target project (any remote name, forks
+  included), the repository is never cloned, and the user's checkout is never
+  modified. The same worktree is reused for the same revision and switches to a
+  new head only when no review is active there, the tree is clean, and it holds
+  no unexpected commits; otherwise preparation blocks with the concrete reason.
+  Review worktrees are recorded in `review-worktrees.json`; reviewed code is
+  read locally, never through per-file GitLab content requests, and `--repo-root`
+  is now optional for `start-review`.
+
 - New workspace app `@kisev/reviewmatic` (`apps/reviewmatic`): the TypeScript
   runtime of the code-review chain with byte-compatible artifacts and digests.
   It ports evidence collection, the review state machine, immutable plans, and
@@ -112,6 +168,48 @@ All notable changes to this project are documented in this file. Entries follow
   text kept unchanged. Both skills declare a `humanize` relation, and
   catalogs, capability specs (REQ-F-554/555, REQ-I-423/424), eval surfaces,
   the migration inventory, and documentation are updated.
+
+### Fixed
+
+- Local review reports with critic answers pass the shared schema again: the
+  closed `context_answer` definition no longer forbids its own fields, the
+  schema mapping guards a non-empty local report, and a full answer with
+  question ID, verdict, evidence, and critic identities finalizes through
+  `finalize-local`.
+- Context package answers and verifications bind to the version of the
+  meaningful package content: re-recording after an edited question, goal,
+  acceptance criterion, claim, or constraint moves the affected results into
+  the draft's `superseded_question_results` history with authorship preserved
+  and requires fresh results for the affected scope, while a background-only
+  edit keeps every collected result.
+- `record-package` for local reviews returns the exact immutable snapshot path
+  in `record_command` instead of a literal `<snapshot>` placeholder, so the
+  returned command executes as printed.
+- Ambiguous local comparison refs are detected for revision expressions:
+  `dup~0` with both a branch and a tag named `dup` stops with the ambiguity
+  instead of silently resolving through the tag; fully qualified refs keep
+  working without fetch.
+- Review worktree paths end with an untruncated hash of the full host, project,
+  and MR identity, so colliding readable names (`group/a-b` versus `group-a/b`),
+  different IIDs, and truncated long project paths never share a tree. Managed
+  trees of the retired layout stop preparation with a concrete manual migration
+  instruction and are never moved, deleted, or shadowed by a second directory.
+- An interrupted repeated preparation no longer frees an occupied worktree: the
+  live occupancy marker survives reuse, and unfinished progress at the marker's
+  artifact root keeps the tree protected until the review finishes or is
+  explicitly superseded.
+- The shared review-worktree registry updates under one short lock, so parallel
+  preparations of different merge requests keep both records; no fetch runs
+  under that lock, and record reuse compares the full identity, not only the
+  path.
+- Remote matching normalizes the project path case on both sides while keeping
+  original values for display, so a remote URL such as
+  `https://gitlab.example/Group/Project.git` is recognized, including fork
+  remotes.
+- With several critics, validation requires every selected critic to answer
+  every critic-assigned question; one critic's answer no longer covers another
+  critic's missing assignment, and authorship, contradictions, and targeted
+  follow-up for `not_verified` answers are preserved.
 
 ## \[11.0.2] - 2026-09-30
 

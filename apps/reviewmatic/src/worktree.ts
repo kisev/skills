@@ -21,7 +21,7 @@ export type WorktreeRegistry = {
   items: WorktreeRecord[];
 };
 
-function git(cwd: string, args: string[], input?: string, timeoutMs = 45000): string {
+export function git(cwd: string, args: string[], input?: string, timeoutMs = 45000): string {
   const result = spawnSync("git", args, {
     cwd,
     ...(input !== undefined ? { input } : {}),

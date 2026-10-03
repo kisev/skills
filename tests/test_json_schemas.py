@@ -162,6 +162,100 @@ def identity() -> dict[str, str]:
 
 def artifact_instances() -> list[dict[str, Any]]:
     gate = {"status": "passed", "evidence": ["task check"], "range": identity()}
+    context_binding = {
+        "evidence_digest": DIGEST,
+        "artifact_root": "/tmp/portable-artifacts",
+        "repo_root": "/tmp/repository",
+        "base_sha": "a",
+        "start_sha": "b",
+        "head_sha": "c",
+        "target_sha": None,
+        "target_ref": None,
+    }
+    context_package_mr = envelope(
+        "context_package",
+        {
+            "schema": "portable-gitlab/context-package/v2",
+            "mode": "mr",
+            "binding": context_binding,
+            "goal": {"status": "known", "text": "Bound the retry write behind an idempotency key."},
+            "acceptance_criteria": {"status": "unknown", "items": []},
+            "background": "Conversation summary prepared for a future transfer.",
+            "claims": [
+                {
+                    "id": "claim-description",
+                    "kind": "author_claim",
+                    "statement": "The description says the retry is already safe.",
+                    "sources": ["MR description section 'Behavior'"],
+                },
+                {
+                    "id": "claim-agreed",
+                    "kind": "agreed_requirement",
+                    "statement": "Retries must stay idempotent.",
+                    "sources": ["Discussion 42 reviewer request"],
+                    "disputed_by": ["claim-description"],
+                },
+            ],
+            "constraints": ["Do not change public callers."],
+            "prior_decisions": [
+                {
+                    "id": "prior-thread-42",
+                    "decision": "resolve: the exact head already bounds the write.",
+                    "source": "https://gitlab.example/group/project/-/merge_requests/7#note_42",
+                }
+            ],
+            "questions": [
+                {
+                    "id": "q-retry",
+                    "subject": "Does the exact head always set the idempotency key?",
+                    "source": "Discussion 42 of the collected evidence",
+                    "critic": True,
+                    "context_digest": DIGEST,
+                }
+            ],
+            "thread_registry": [
+                {
+                    "id": "42",
+                    "url": "https://gitlab.example/group/project/-/merge_requests/7#note_42",
+                    "state": "open",
+                    "summary": "A reviewer remarked on the retry path.",
+                    "review_relevance": "The change touches this path; the remark is assessed directly.",
+                }
+            ],
+            "supersedes": None,
+            "external_mutations": False,
+        },
+    )
+    context_package_local = envelope(
+        "context_package",
+        {
+            "schema": "portable-gitlab/context-package/v2",
+            "mode": "local",
+            "binding": {
+                "evidence_digest": DIGEST,
+                "artifact_root": "/tmp/portable-artifacts",
+                "repo_root": "/tmp/repository",
+                "base_sha": "a",
+                "head_sha": "c",
+                "ref": None,
+                "sections": {
+                    "committed": DIGEST,
+                    "staged": DIGEST,
+                    "unstaged": DIGEST,
+                    "untracked": DIGEST,
+                },
+            },
+            "goal": {"status": "unknown"},
+            "acceptance_criteria": {"status": "unknown", "items": []},
+            "background": "",
+            "claims": [],
+            "constraints": [],
+            "prior_decisions": [],
+            "questions": [],
+            "supersedes": None,
+            "external_mutations": False,
+        },
+    )
     evidence = envelope(
         "evidence_snapshot",
         {
@@ -308,7 +402,106 @@ def artifact_instances() -> list[dict[str, Any]]:
             "head_sha": "c",
         },
     )
-    return [evidence, inventory, publication, readiness, finalized]
+    local_review = envelope(
+        "local_review_report",
+        {
+            "evidence_digest": DIGEST,
+            "previous_review_digest": None,
+            "mode": "full",
+            "context_package": {
+                "path": f"/tmp/portable-artifacts/artifacts/context_package/{DIGEST}.json",
+                "digest": DIGEST,
+            },
+            "question_answers": [
+                {
+                    "question_id": "q-renderer",
+                    "verdict": "confirmed",
+                    "evidence": "The staged diff only rewrites plain text values.",
+                    "run_id": "critic-run-1",
+                    "session_id": "critic-session-1",
+                    "context_digest": DIGEST,
+                }
+            ],
+            "question_verifications": [
+                {
+                    "question_id": "q-renderer",
+                    "original": {
+                        "run_id": "critic-run-1",
+                        "session_id": "critic-session-1",
+                        "verdict": "not_verified",
+                    },
+                    "verdict": "confirmed",
+                    "evidence": "The staged diff only rewrites plain text values.",
+                    "context_digest": DIGEST,
+                }
+            ],
+            "superseded_question_results": [
+                {
+                    "context_digest": DIGEST,
+                    "package_digest": DIGEST,
+                    "answers": [
+                        {
+                            "question_id": "q-renderer",
+                            "verdict": "not_verified",
+                            "reason": "The previous package asked a different subject.",
+                            "run_id": "critic-run-1",
+                            "session_id": "critic-session-1",
+                            "context_digest": DIGEST,
+                        }
+                    ],
+                    "verifications": [],
+                }
+            ],
+            "task": {
+                "goal": "Link plain text without modifying mixed Markdown.",
+                "acceptance_criteria": ["Plain references link."],
+                "constraints": [],
+                "accepted_risks": [],
+                "deferred": [],
+                "decision_evidence": "User chose plain-text linking.",
+            },
+            "task_change_reason": None,
+            "findings": [
+                {
+                    "id": "markdown-1",
+                    "severity": "low",
+                    "status": "open",
+                    "summary": "Mixed Markdown is modified.",
+                    "requirement": "Preserve mixed Markdown verbatim.",
+                    "scenario": "A user includes an issue reference in a Markdown table.",
+                    "evidence": "renderer('table #7') rewrites a protected value.",
+                    "consequence": "The generated table is corrupted.",
+                    "origin": "regression",
+                    "minimum_fix": "Keep non-plain-text values unchanged.",
+                    "blocking": True,
+                    "rationale": "A small correction restores the agreed behavior.",
+                    "decision_evidence": None,
+                    "reopen_reason": None,
+                }
+            ],
+            "checks": [
+                {
+                    "name": "Renderer acceptance cases",
+                    "status": "passed",
+                    "required": True,
+                    "evidence": "Plain text and protected input examples inspected.",
+                }
+            ],
+            "assessment": "A narrow renderer fix suffices.",
+            "verdict": "not_ready",
+            "external_mutations": False,
+        },
+    )
+    return [
+        evidence,
+        inventory,
+        publication,
+        readiness,
+        finalized,
+        local_review,
+        context_package_mr,
+        context_package_local,
+    ]
 
 
 def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
@@ -373,8 +566,10 @@ def validate_shared_contract_instances() -> None:
     )
     instances = artifact_instances()
     assert {instance["kind"] for instance in instances} == {
+        "context_package",
         "evidence_snapshot",
         "finalize_report",
+        "local_review_report",
         "publication_plan",
         "release_inventory",
         "release_readiness",
@@ -391,6 +586,14 @@ def validate_shared_contract_instances() -> None:
             "run_id": f"critic-run-{index}",
             "session_id": f"critic-session-{index}",
             "findings": [],
+            "question_answers": [
+                {
+                    "question_id": "q-retry",
+                    "verdict": "confirmed" if index == 0 else "refuted",
+                    "evidence": "The exact head sets the idempotency key before write.",
+                    "context_digest": DIGEST,
+                }
+            ],
             "external_mutations": False,
         }
         for index in range(2)
@@ -405,6 +608,29 @@ def validate_shared_contract_instances() -> None:
                 "payload": receipt,
             }
         )
+
+    # The meaningful-context binding is optional in the canonical schema so
+    # historical artifacts stay readable, but any present binding must be a
+    # real digest.
+    context_package_mr = next(
+        instance
+        for instance in instances
+        if instance["kind"] == "context_package" and instance["payload"]["mode"] == "mr"
+    )
+    local_review = next(
+        instance for instance in instances if instance["kind"] == "local_review_report"
+    )
+    mr_package = dict(context_package_mr["payload"])
+    bad_question = copy.deepcopy(mr_package["questions"][0])
+    bad_question["context_digest"] = "not-a-digest"
+    invalid_package = copy.deepcopy(context_package_mr)
+    invalid_package["payload"] = {**mr_package, "questions": [bad_question]}
+    with pytest.raises(ValidationError):
+        artifact_validator.validate(invalid_package)
+    bad_answer = copy.deepcopy(local_review["payload"])
+    bad_answer["question_answers"][0]["context_digest"] = "not-a-digest"
+    with pytest.raises(ValidationError):
+        artifact_validator.validate({**local_review, "payload": bad_answer})
 
 
 def validate_opencode_contract_instances() -> None:

@@ -11,6 +11,7 @@
     { "$ref": "#/$defs/publication_plan" },
     { "$ref": "#/$defs/review_plan" },
     { "$ref": "#/$defs/analysis_report" },
+    { "$ref": "#/$defs/context_package" },
     { "$ref": "#/$defs/critic_receipt" },
     { "$ref": "#/$defs/review_decision" },
     { "$ref": "#/$defs/release_readiness" },
@@ -52,6 +53,45 @@
         "evidence_digest": { "$ref": "#/$defs/digest" },
         "previous_review_digest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
         "mode": { "enum": ["full", "incremental", "unchanged"] },
+        "context_package": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": ["path", "digest"],
+              "additionalProperties": false,
+              "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "digest": { "$ref": "#/$defs/digest" }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "question_answers": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/context_answer" }
+        },
+        "question_verifications": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/context_verification" }
+        },
+        "superseded_question_results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["context_digest", "package_digest", "answers", "verifications"],
+            "additionalProperties": false,
+            "properties": {
+              "context_digest": { "$ref": "#/$defs/digest" },
+              "package_digest": { "$ref": "#/$defs/digest" },
+              "answers": { "type": "array", "items": { "$ref": "#/$defs/context_answer" } },
+              "verifications": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/context_verification" }
+              }
+            }
+          }
+        },
         "task": {
           "type": "object",
           "required": [
@@ -2272,6 +2312,10 @@
                       "target_finding_ids": {
                         "type": "array",
                         "items": { "type": "string", "minLength": 1 }
+                      },
+                      "question_answers": {
+                        "type": "array",
+                        "items": { "$ref": "#/$defs/context_answer_ref" }
                       }
                     }
                   }
@@ -2286,9 +2330,240 @@
                   "items": { "type": "string", "minLength": 1 }
                 },
                 "external_mutations": { "const": false },
-                "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } }
+                "findings": { "type": "array", "items": { "$ref": "#/$defs/finding" } },
+                "question_answers": {
+                  "type": "array",
+                  "items": { "$ref": "#/$defs/context_answer_ref" }
+                }
               }
             }
+          }
+        }
+      ]
+    },
+    "context_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+    "context_claim": {
+      "type": "object",
+      "required": ["id", "kind", "statement", "sources"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/context_id" },
+        "kind": {
+          "enum": [
+            "author_claim",
+            "participant_opinion",
+            "agreed_requirement",
+            "accepted_risk",
+            "confirmed_fact"
+          ]
+        },
+        "statement": { "type": "string", "minLength": 1 },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "disputed_by": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/context_id" }
+        }
+      }
+    },
+    "context_decision": {
+      "type": "object",
+      "required": ["id", "decision", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/context_id" },
+        "decision": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "context_question": {
+      "type": "object",
+      "required": ["id", "subject", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/context_id" },
+        "subject": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 },
+        "critic": { "type": "boolean" },
+        "context_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "context_thread": {
+      "type": "object",
+      "required": ["id", "url", "state", "summary", "review_relevance"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["open", "resolved", "plain"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "review_relevance": { "type": "string", "minLength": 1 }
+      }
+    },
+    "context_goal": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["known", "unknown"] },
+        "text": { "type": "string", "minLength": 1 }
+      }
+    },
+    "context_acceptance": {
+      "type": "object",
+      "required": ["status", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["known", "unknown"] },
+        "items": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "context_package_binding": {
+      "type": "object",
+      "required": ["evidence_digest", "artifact_root", "repo_root"],
+      "additionalProperties": false,
+      "properties": {
+        "evidence_digest": { "$ref": "#/$defs/digest" },
+        "artifact_root": { "type": "string", "minLength": 1 },
+        "repo_root": { "type": "string", "minLength": 1 },
+        "base_sha": { "$ref": "#/$defs/sha" },
+        "start_sha": { "$ref": "#/$defs/sha" },
+        "head_sha": { "$ref": "#/$defs/sha" },
+        "target_sha": { "anyOf": [{ "$ref": "#/$defs/sha" }, { "type": "null" }] },
+        "target_ref": { "type": ["string", "null"] },
+        "ref": { "type": ["string", "null"] },
+        "sections": {
+          "type": "object",
+          "required": ["committed", "staged", "unstaged", "untracked"],
+          "additionalProperties": false,
+          "properties": {
+            "committed": { "$ref": "#/$defs/digest" },
+            "staged": { "$ref": "#/$defs/digest" },
+            "unstaged": { "$ref": "#/$defs/digest" },
+            "untracked": { "$ref": "#/$defs/digest" }
+          }
+        }
+      }
+    },
+    "context_answer_ref": {
+      "type": "object",
+      "required": ["question_id", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "question_id": { "$ref": "#/$defs/context_id" },
+        "verdict": { "enum": ["confirmed", "refuted", "not_verified"] },
+        "evidence": { "type": "string" },
+        "reason": { "type": "string" },
+        "context_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "context_answer": {
+      "type": "object",
+      "required": ["question_id", "verdict", "run_id", "session_id"],
+      "additionalProperties": false,
+      "properties": {
+        "question_id": { "$ref": "#/$defs/context_id" },
+        "verdict": { "enum": ["confirmed", "refuted", "not_verified"] },
+        "evidence": { "type": "string" },
+        "reason": { "type": "string" },
+        "run_id": { "type": "string", "minLength": 1 },
+        "session_id": { "type": "string", "minLength": 1 },
+        "context_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "context_verification": {
+      "type": "object",
+      "required": ["question_id", "original", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "question_id": { "$ref": "#/$defs/context_id" },
+        "original": {
+          "type": "object",
+          "required": ["run_id", "session_id", "verdict"],
+          "additionalProperties": false,
+          "properties": {
+            "run_id": { "type": "string", "minLength": 1 },
+            "session_id": { "type": "string", "minLength": 1 },
+            "verdict": { "enum": ["confirmed", "refuted", "not_verified"] }
+          }
+        },
+        "verdict": { "enum": ["confirmed", "refuted", "unresolved"] },
+        "evidence": { "type": "string" },
+        "reason": { "type": "string" },
+        "context_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "context_package_payload": {
+      "type": "object",
+      "required": [
+        "schema",
+        "mode",
+        "binding",
+        "goal",
+        "acceptance_criteria",
+        "background",
+        "claims",
+        "constraints",
+        "prior_decisions",
+        "questions",
+        "external_mutations"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "mr" } }, "required": ["mode"] },
+          "then": { "required": ["thread_registry"] }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "local" } }, "required": ["mode"] },
+          "then": { "not": { "required": ["thread_registry"] } }
+        }
+      ],
+      "properties": {
+        "schema": { "const": "portable-gitlab/context-package/v2" },
+        "mode": { "enum": ["mr", "local"] },
+        "binding": { "$ref": "#/$defs/context_package_binding" },
+        "goal": { "$ref": "#/$defs/context_goal" },
+        "acceptance_criteria": { "$ref": "#/$defs/context_acceptance" },
+        "background": { "type": "string" },
+        "claims": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/context_claim" }
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "prior_decisions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/context_decision" }
+        },
+        "questions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/context_question" }
+        },
+        "thread_registry": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/context_thread" }
+        },
+        "supersedes": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+        "external_mutations": { "const": false }
+      }
+    },
+    "context_package": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        {
+          "properties": {
+            "schema": { "const": "portable-gitlab/context_package/v2" },
+            "kind": { "const": "context_package" },
+            "payload": { "$ref": "#/$defs/context_package_payload" }
           }
         }
       ]

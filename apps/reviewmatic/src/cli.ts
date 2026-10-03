@@ -13,7 +13,14 @@ import {
   writeJson,
   WorkflowError,
 } from "./contract.js";
-import { finalizeLocal, localBundle, prepareFollowup, recordReview } from "./local-review.js";
+import {
+  emptyScopeReason,
+  finalizeLocal,
+  localBundle,
+  prepareFollowup,
+  recordLocalPackage,
+  recordReview,
+} from "./local-review.js";
 import { markerRun, StateArtifactError } from "./state-artifacts.js";
 import { VERSION } from "./version.js";
 import { dispatch, prepared, type WorkflowArguments } from "./workflow.js";
@@ -26,6 +33,7 @@ import {
   resumeReview,
   checkReview,
   finishReview,
+  recordDraftPackage,
   repairReview,
   refreshReview,
 } from "./draft.js";
@@ -83,7 +91,10 @@ const definitions: CommandSpec[] = [
     description: "Collect evidence and context once and create one editable review draft",
     options: [
       { name: "url", description: "exact HTTPS GitLab merge request URL", required: true },
-      { name: "repo-root", description: "local checkout root", required: true },
+      {
+        name: "repo-root",
+        description: "local checkout root; defaults to the current repository",
+      },
       {
         name: "review-mode",
         description: "review depth",
@@ -204,11 +215,24 @@ const definitions: CommandSpec[] = [
     ],
   },
   {
+    signature: "record-package",
+    description: "Record the agent-authored context package bound to selected evidence",
+    options: [
+      { name: "draft", description: "generated editable review draft (remote MR mode)" },
+      { name: "bundle", description: "local WIP snapshot path (local mode)" },
+      { name: "input", description: "completed context package input", required: true },
+    ],
+  },
+  {
     signature: "prepare-local",
     description: "Collect local WIP evidence: staged, unstaged, and untracked",
     options: [
       { name: "repo-root", description: "local checkout root", required: true },
-      { name: "ref", description: "base ref for the WIP diff" },
+      {
+        name: "ref",
+        description:
+          "explicit local comparison revision; adds its commits since the merge base with HEAD",
+      },
       {
         name: "incremental",
         description: "incremental baseline policy",
@@ -406,6 +430,27 @@ async function runPrepareLocal(fields: Fields): Promise<void> {
     "code-review",
     (fields.ref as string | undefined) ?? null,
   );
+  const sections = bundle.sections as Record<string, Record<string, unknown>>;
+  const empty = emptyScopeReason(bundle);
+  if (empty !== null) {
+    emit({
+      status: "empty_scope",
+      reason: empty,
+      summary: {
+        tldr: "No reviewable local scope exists at the selected boundary.",
+        scope: [String(bundle.repo_root)],
+        risks: [],
+        checks: ["HEAD", "staged", "unstaged", "non-ignored untracked", "merge base"],
+      },
+      head_sha: bundle.head_sha,
+      base_sha: bundle.base_sha,
+      ref: bundle.ref,
+      complete: bundle.retrieval_complete,
+      external_mutations: false,
+    });
+    process.exitCode = 2;
+    return;
+  }
   const root = await artifactRoot(String(bundle.artifact_root));
   const [path, digestValue] = await writeArtifact(root, "local_wip_snapshot", bundle);
   const review = prepareFollowup(
@@ -431,11 +476,34 @@ async function runPrepareLocal(fields: Fields): Promise<void> {
     artifact_path: path,
     digest: digestValue,
     head_sha: bundle.head_sha,
+    base_sha: bundle.base_sha,
+    ref: bundle.ref,
+    scope: {
+      committed: (sections.committed.diff as string).length > 0,
+      staged: (sections.staged.diff as string).length > 0,
+      unstaged: (sections.unstaged.diff as string).length > 0,
+      untracked_files: (sections.untracked.items as Record<string, unknown>[]).length,
+    },
     complete: bundle.retrieval_complete,
     review: review,
     external_mutations: false,
   });
   process.exitCode = complete ? 0 : 2;
+}
+
+async function runRecordPackage(fields: Fields): Promise<void> {
+  const hasDraft = fields.draft !== undefined;
+  const hasBundle = fields.bundle !== undefined;
+  if (hasDraft === hasBundle) {
+    throw new WorkflowError(
+      "record-package requires exactly one target: --draft for a remote MR review or --bundle for a local review",
+    );
+  }
+  if (hasDraft) {
+    emit(await recordDraftPackage(String(fields.draft), String(fields.input)));
+    return;
+  }
+  emit(await recordLocalPackage(String(fields.bundle), String(fields.input)));
 }
 
 async function runFinalizeLocal(fields: Fields): Promise<void> {
@@ -578,7 +646,7 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
         command === "start-review"
           ? await startReview({
               url: String(fields.url),
-              repoRoot: String(fields.repoRoot),
+              repoRoot: fields.repoRoot as string | undefined,
               reviewMode: fields.reviewMode as string,
               locale: fields.locale as string,
               incremental: fields.incremental as string,
@@ -599,6 +667,7 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
     }
     if (command === "prepare") await runPrepare(fields);
     else if (command === "prepare-local") await runPrepareLocal(fields);
+    else if (command === "record-package") await runRecordPackage(fields);
     else if (command === "finalize-local") await runFinalizeLocal(fields);
     else if (command === "assess-mode") runAssessMode(fields);
     else process.exitCode = contractError("invalid_command", "a supported subcommand is required");

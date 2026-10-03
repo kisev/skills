@@ -39,13 +39,25 @@ Agents use one editable draft, without copying bindings between decision and
 content files:
 
 ```bash
-reviewmatic start-review --url <mr-url> --repo-root <checkout> --review-mode normal --locale en
+reviewmatic start-review --url <mr-url> --review-mode normal --locale en
 reviewmatic check-review --draft <draft-path>
 reviewmatic finish-review --draft <draft-path>
 ```
 
+`--repo-root <checkout>` is optional; without it the runner uses the repository of
+the current directory, and a subdirectory of the checkout works too.
+
 `start-review` collects evidence and context and returns the draft, exact-commit
-inspection snapshots, and an independent critic receipt template. The host agent
+inspection snapshots, and an independent critic receipt template. It also prepares
+one managed review worktree per merge request under `<repo>.worktrees/reviewmatic/`:
+a detached checkout at the exact MR head, outside the user's working tree. The
+result's `review_worktree` names that path, the original `source_repo_root`, and
+the exact `base_sha`, `start_sha`, `head_sha`, `target_sha`, and `target_ref`.
+Missing revisions are fetched over Git from the remote matching the MR's source or
+target project (any remote name, forks included); the repository is never cloned,
+and the user's HEAD, branch, index, files, and local branches stay untouched.
+Read code from the worktree with local Git; file contents never come from GitLab.
+The host agent
 does the review and launches native subagents. Optional specialist critics can be
 selected by count and profile; without them, ordinary independent subagents are
 supported. `critic_count` records the chosen count, and `critics` contains their
@@ -55,8 +67,31 @@ artifact bindings; the agent supplies the semantic assessments, concrete fixes,
 label rationales, and thread outcomes.
 
 The input package includes `draft_schema_path`, `input_contract`, and valid field
-examples in `input_examples`, separately from final artifact envelopes. Start the
-critic as soon as these exact snapshots are ready, in background alongside primary
+examples in `input_examples`, separately from final artifact envelopes. After
+snapshot preparation the agent completes and records one shared context package
+(`context-package` template plus `record-package --draft`): goal, claims with
+sources, constraints, prior decisions, and questions, stored privately outside
+the checkout and bound to the collected evidence. Recording and reading it
+never contacts GitLab. Critics start only after the package is recorded,
+receive it as their primary task context, and answer the questions assigned to
+them in receipt `question_answers`; with several critics, each selected critic
+answers each assigned question, and one critic's answer never covers another's
+assignment. Recording stamps every question with the digest of the meaningful
+content it depends on — the question itself plus the goal, acceptance
+criteria, claims, constraints, agreed prior decisions, and thread registry —
+and every answer and verification copies the
+`context_digest` it was produced against: re-recording after an edited
+question, requirement, or agreed prior decision retires exactly the affected
+stale answers into the draft's
+`superseded_question_results` history (fresh results for the same question
+stay in place) and requires fresh results for the
+affected scope, a background-only edit keeps them, and a late answer still
+bound to the superseded version is rejected instead of certifying the changed
+question. The primary review addresses every
+`not_verified` answer in the draft's `question_verifications`, preserving the
+original answer. Start the
+critic as soon as these exact snapshots and the recorded package are ready, in
+background alongside primary
 analysis when supported. Resume verifies and reuses snapshots without rebuilding
 them. No numerical response-time SLA is implied.
 
@@ -97,7 +132,28 @@ discussions or conflicts remain material and must not reuse stale analysis.
 
 Local work-in-progress reviews use `prepare-local` and `finalize-local`;
 `status`, `next`, and `assess-mode` inspect progress. Every command prints a
-compact JSON result and never mutates GitLab or the checkout.
+compact JSON result and never mutates GitLab or the checkout. Without `--ref`,
+the scope is the staged, unstaged, and non-ignored untracked work against HEAD;
+an explicit `--ref <revision>` adds the commits from its merge base with HEAD
+and is used exactly as it exists locally, without fetching. A missing,
+ambiguous, or merge-base-less `--ref` stops with a concrete reason — including
+expressions such as `dup~0` when the base name matches both a branch and a
+tag; pass one fully qualified ref — and a
+boundary without any changes returns `empty_scope` instead of a snapshot.
+Local preparation needs no `glab`, network, remote, or worktree. The local
+review completes and records the same shared context package
+(`record-package --bundle`) bound to the prepared snapshot with its comparison
+ref and the committed, staged, unstaged, and untracked sections, and the
+report binds the recorded package at finalization; the returned
+`record_command` names the exact immutable snapshot path. Re-recording a
+package with a changed question, requirement, or agreed prior decision
+retires exactly the report's stale answers
+for the previous wording into `superseded_question_results` — fresh results
+for the same question stay in place — and requires
+fresh answers before finalization; report answers and verifications copy the
+question's `context_digest`, and finalization rejects a missing or superseded
+binding, so a late result for the previous wording cannot certify the changed
+question.
 
 ## Interactive plan walkthrough
 
@@ -187,9 +243,20 @@ still requires targeted fix repair.
 ## Worktree registry
 
 Created worktrees are recorded in
-`$XDG_STATE_HOME/agent-skills/reviewmatic/worktrees.json`. Nothing is deleted
-automatically; `reviewmatic worktree list` prints the registry with commit and
-push state per worktree.
+`$XDG_STATE_HOME/agent-skills/reviewmatic/worktrees.json`; review worktrees
+prepared by `start-review` are recorded in `review-worktrees.json` beside it.
+The shared registry file is updated under one short lock, so parallel
+preparations of different merge requests keep both records, and no fetch runs
+under that lock. Review worktree paths end with a short hash of the full host,
+project, and MR identity, so colliding readable names and truncated long
+project paths never share a tree. A managed tree under the retired layout
+without the hash is never reused, moved, or deleted automatically:
+preparation stops with a concrete manual migration instruction — preserve the
+active review and local changes, remove the tree with
+`git worktree remove`, and the next run replaces the stale record and creates
+the hashed path. Nothing else is deleted
+automatically; `reviewmatic worktree list` prints the fix-application registry
+with commit and push state per worktree.
 
 ## Compatibility contract
 

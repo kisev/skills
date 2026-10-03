@@ -12,7 +12,7 @@ test(
   async (t) => {
     const fixture = reviewFixture(t, { resolved: true });
     const started = await startReview({ url: fixture.url, repoRoot: fixture.repo });
-    writeJson(started.draft_path, completeDraft(readJson(started.draft_path), started));
+    writeJson(started.draft_path, await completeDraft(readJson(started.draft_path), started));
     assert.equal((await finishReview(started.draft_path)).status, "ok");
     const requests = fixture.requestCount();
     const cli = new URL("../dist/cli.js", import.meta.url).pathname;

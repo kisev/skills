@@ -186,6 +186,7 @@ const ARTIFACT_KINDS = new Set([
   "publication_plan",
   "review_plan",
   "analysis_report",
+  "context_package",
   "critic_receipt",
   "review_decision",
   "release_readiness",
@@ -2905,6 +2906,7 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
     ]);
     const payloadKeys = keySet(payload);
     if (kind === "critic_receipt") payloadKeys.delete("contributors");
+    if (kind === "critic_receipt") payloadKeys.delete("question_answers");
     if (
       !setsEqual(payloadKeys, requiredReport) &&
       !setsEqual(payloadKeys, new Set([...requiredReport, "scope_digest"])) &&
@@ -2928,6 +2930,27 @@ export function validateV2Artifact(value: Record<string, unknown>, kind: string)
       throw new WorkflowError(`${kind} payload is schema-invalid`);
     }
     if (kind === "critic_receipt") validateCritic(payload, String(payload.evidence_digest));
+  } else if (kind === "context_package") {
+    if (
+      payload.schema !== "portable-gitlab/context-package/v2" ||
+      !["mr", "local"].includes(payload.mode as string) ||
+      payload.external_mutations !== false ||
+      !isDict(payload.binding) ||
+      !isDigest((payload.binding as Record<string, unknown>).evidence_digest)
+    ) {
+      throw new WorkflowError("context package payload is schema-invalid");
+    }
+    const goal = payload.goal as Record<string, unknown>;
+    const acceptance = payload.acceptance_criteria as Record<string, unknown>;
+    if (
+      !isDict(goal) ||
+      !isDict(acceptance) ||
+      (goal.status === "known" && !nonemptyString(goal.text)) ||
+      (acceptance.status === "known" &&
+        (!Array.isArray(acceptance.items) || (acceptance.items as unknown[]).length === 0))
+    ) {
+      throw new WorkflowError("context package goal or acceptance is schema-invalid");
+    }
   } else if (kind === "review_decision") {
     const required = new Set([
       "schema",
@@ -4184,6 +4207,19 @@ export function gitRead(root: string, args: string[], text = true): string | Buf
   return completed.stdout as string | Buffer;
 }
 
+function answersAreValid(answers: unknown): boolean {
+  return (
+    Array.isArray(answers) &&
+    (answers as unknown[]).every(
+      (item) =>
+        isDict(item) &&
+        nonemptyString(item.question_id) &&
+        ["confirmed", "refuted", "not_verified"].includes(String(item.verdict)) &&
+        (nonemptyString(item.evidence) || nonemptyString(item.reason)),
+    )
+  );
+}
+
 export function validateCritic(
   receipt: Record<string, unknown>,
   evidenceDigest: string,
@@ -4197,9 +4233,16 @@ export function validateCritic(
     "findings",
     "external_mutations",
   ]);
-  const allowed = new Set([...required, "scope_digest", "target_finding_ids", "contributors"]);
+  const allowed = new Set([
+    ...required,
+    "scope_digest",
+    "target_finding_ids",
+    "contributors",
+    "question_answers",
+  ]);
   const keys = keySet(receipt);
   const targetFindingIds = receipt.target_finding_ids;
+  const answers = receipt.question_answers;
   if (
     receipt.schema !== "portable-gitlab/critic-receipt/v2" ||
     ![...required].every((key) => keys.has(key)) ||
@@ -4213,6 +4256,7 @@ export function validateCritic(
       (!Array.isArray(targetFindingIds) ||
         !(targetFindingIds as unknown[]).every((item) => nonemptyString(item)) ||
         (targetFindingIds as string[]).length !== new Set(targetFindingIds as string[]).size)) ||
+    ("question_answers" in receipt && !answersAreValid(answers)) ||
     receipt.external_mutations !== false
   ) {
     throw new WorkflowError("critic receipt is schema-invalid or does not bind evidence");

@@ -34,7 +34,11 @@ For changed MR facts use `refresh-review --draft DRAFT`, not a new empty review.
 The runner retains findings and dispositions and updates current thread bindings.
 Reassess the reported delta and affected consumers. Old critic receipts remain in
 the old draft and are never rebound by replacing digests. Obtain real independent
-coverage when the changed analysis scope requires it.
+coverage when the changed analysis scope requires it. The context package is
+re-recorded for the refreshed evidence: carry still-valid items forward, update
+entries that cite stale threads or changed evidence, set `supersedes` to the
+previous package digest, and keep prior answers in the previous draft; the
+runtime reports the previous package and its stale threads.
 
 When `finish-review` returns `refresh_required` for CI-only drift, it preserves
 analysis and the original critic receipts and attaches an immutable `ci_snapshot`.

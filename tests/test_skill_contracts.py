@@ -192,6 +192,37 @@ def test_review_followups_preserve_the_decision_boundary() -> None:
     assert "does not prove the model chose" in examples
 
 
+def test_code_review_local_scope_contract_is_explicit() -> None:
+    workflow = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
+    local = " ".join(
+        (ROOT / "skills/code-review/references/local-review.md").read_text(encoding="utf-8").split()
+    )
+    for marker in (
+        "One exact MR URL selects the remote-MR mode",
+        "including when that checkout is itself an existing Git worktree",
+        "never search for an MR by branch name",
+        "stop and ask which one to review instead of assuming",
+    ):
+        assert marker in workflow
+    for marker in (
+        "Without `--ref` the scope is exactly the uncommitted work against HEAD",
+        "Already made commits do not enter the scope automatically",
+        "the scope then also includes the commits from the merge base of that revision with HEAD",
+        "Never derive `--ref` from an upstream, tracking, or guessed target branch, and never fetch",
+        "the returned `review.previous_ref` names the retained boundary",
+        "An `empty_scope` result means the selected boundary contains no changes",
+        "Stop there and ask the user how to proceed",
+        "compare against an explicitly named local branch or revision with `--ref`, or review a specific GitLab MR",
+        "Do not select an upstream or target branch automatically and do not finalize an empty run as a review",
+        "preparation stops with that concrete reason",
+        "never fetch, substitute another base, or quietly fall back to reviewing only the uncommitted work",
+        "the scope composition (which of the committed, staged, unstaged, and untracked sections changed)",
+        "the comparison ref by name and its merge base and HEAD",
+        "do not claim it is current relative to the server",
+    ):
+        assert marker in local
+
+
 def test_portable_skill_build_output_is_ignored() -> None:
     result = subprocess.run(
         ["git", "check-ignore", ".build/skills"],

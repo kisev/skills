@@ -441,7 +441,11 @@ subagents. No standalone `opencode run` workaround or agent installation is
 required for that fallback.
 Routed independent critics may return `review_report` or a code-review receipt;
 the caller retains real native invocation identities in reviewmatic's draft.
-Parallel critic calls keep separate bindings. Receipts expire before launch;
+Critics receive the recorded context package — goal, claims with sources,
+constraints, prior decisions, questions — as their primary task context and
+answer the questions assigned to them in their receipts; the primary review
+verifies every unanswered or unverified question afterwards. Parallel critic
+calls keep separate bindings. Receipts expire before launch;
 an already admitted review does not expire merely because the model took longer.
 The core plugin supplies actual current session identity to primary and child
 agents for receipts; this metadata does not authorize mutations or publication.

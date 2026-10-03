@@ -55,8 +55,29 @@ import {
   validatePatchFallback,
 } from "./context.js";
 import { suggestionParts, suggestionsPatch } from "./fixes.js";
+import {
+  bindQuestionContexts,
+  canonicalPackageDigest,
+  collectAnswers,
+  extractSupersededResults,
+  isCurrentResult,
+  narrativePackageDigest,
+  packageTemplateForMr,
+  questionContextVersionList,
+  questionContextVersions,
+  questionReport,
+  readPackagePointer,
+  recordedPackage,
+  staleThreadIds,
+  supersedesDigest,
+  validateAnswers,
+  validatePackagePayload,
+  validateVerifications,
+  writeContextPackage,
+} from "./context-package.js";
 import { validateLabelAssessments } from "./label-assessment.js";
 import { validate as validateSemver } from "./review-semver.js";
+import { checkoutRoot, prepareReviewWorktree, type ReviewWorktree } from "./review-worktree.js";
 
 type Json = Record<string, unknown>;
 export type DraftIssue = { path: string; message: string };
@@ -261,6 +282,26 @@ export const DRAFT_SCHEMA: Json = {
   ],
   properties: {
     ci_snapshot: text,
+    context_package_path: { anyOf: [text, { type: "null" }] },
+    context_package_digest: { anyOf: [ref("digest"), { type: "null" }] },
+    superseded_question_results: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["context_digest", "package_digest", "answers", "verifications"],
+        additionalProperties: false,
+        properties: {
+          context_digest: ref("digest"),
+          package_digest: ref("digest"),
+          answers: { type: "array", items: ref("context_answer") },
+          verifications: { type: "array", items: ref("context_verification") },
+        },
+      },
+    },
+    question_verifications: {
+      type: "array",
+      items: ref("context_verification"),
+    },
     repair: {
       type: "object",
       additionalProperties: false,
@@ -374,6 +415,7 @@ function criticReceipt(context: Json, mode: string): Json {
     run_id: "",
     session_id: "",
     findings: [],
+    question_answers: [],
     external_mutations: false,
   };
   if (mode === "incremental") {
@@ -423,6 +465,9 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       context_path: contextPath,
       evidence_digest: progress.evidence_digest,
       context_digest: contextDigest,
+      context_package_path: null,
+      context_package_digest: null,
+      question_verifications: [],
       run_id: "",
       session_id: "",
       low_risk: false,
@@ -438,6 +483,17 @@ export async function resumeReview(rootValue: string): Promise<Json> {
   const inspection = await inspectionInputs(root, contextDigest, evidence, context);
   const schemaPath = join(draftDirectory, "draft-input.schema.json");
   writeJson(schemaPath, { ...DRAFT_SCHEMA, $defs: artifactSchema().$defs });
+  const packageTemplatePath = join(draftDirectory, `context-package-${contextDigest}.json`);
+  if (!existsSync(packageTemplatePath)) {
+    const packageTemplate = packageTemplateForMr(evidence, context);
+    (packageTemplate.binding as Json).evidence_digest = String(progress.evidence_digest);
+    writeJson(packageTemplatePath, packageTemplate);
+  } else regularFile(packageTemplatePath, "context package template");
+  const recorded = recordedPackage(root);
+  const packageCurrent =
+    recorded !== null &&
+    recorded.payload.mode === "mr" &&
+    String((recorded.payload.binding as Json).evidence_digest) === String(progress.evidence_digest);
   return {
     status: "ok",
     artifact_root: root,
@@ -451,6 +507,20 @@ export async function resumeReview(rootValue: string): Promise<Json> {
     critic_receipt_template: criticReceipt(context, String(progress.mode)),
     inspection_path: inspection,
     draft_schema_path: schemaPath,
+    context_package: {
+      template_path: packageTemplatePath,
+      package_path: recorded === null ? null : recorded.path,
+      package_digest: recorded === null ? null : recorded.digest,
+      status: packageCurrent ? "recorded" : "pending",
+      question_context_versions:
+        packageCurrent && recorded !== null ? questionContextVersionList(recorded.payload) : null,
+      record_command: runnerAction("record-package", [
+        "--draft",
+        draftPath,
+        "--input",
+        packageTemplatePath,
+      ]).command,
+    },
     input_examples: {
       disposition: {
         id: "primary-retry",
@@ -497,7 +567,7 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       },
     },
     input_contract:
-      "The schema describes editable draft input, not final v2 artifacts. Examples are field shapes, not receipts or code to copy blindly. Preserve generated bindings and use actual native run/session identities. Suggestion ranges use suggestion:-N+M, each 0..100, bounded by the exact head file. Run check-review once the analysis is complete.",
+      "The schema describes editable draft input, not final v2 artifacts. Examples are field shapes, not receipts or code to copy blindly. Preserve generated bindings and use actual native run/session identities. Every question_answers and question_verifications entry copies the question context_digest of the recorded package it was produced against. Suggestion ranges use suggestion:-N+M, each 0..100, bounded by the exact head file. Run check-review once the analysis is complete.",
     critic_task: {
       required: ["normal", "deep", "incremental"].includes(String(progress.mode)),
       launch_when: "evidence_ready",
@@ -511,13 +581,195 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       context_path: contextPath,
       repo_root: progress.repo_root,
       inspection_path: inspection,
+      context_package_path: packageCurrent && recorded !== null ? recorded.path : null,
       scope: context.incremental,
       instructions:
-        "Launch immediately after this evidence package is ready, in native background mode when supported, alongside primary inspection. Run an independent read-only subagent of the current agent, without primary findings. Pass these exact evidence/context/inspection snapshots and the input schema, never manually transcribed evidence or duplicate collection requests. Prefer selected specialist profiles; their absence is normal. Return complete detailed findings in the selected locale and the host/profile's required envelope (review_report is supported). Preserve the returned JSON without rewriting findings, attach actual native run/session metadata, and use distinct finding ID prefixes. Never ask a child to guess identities, fabricate a receipt, or start an alternate CLI. Join before check-review. Report collection, primary analysis, critic waiting, fix validation and freshness separately, without a numerical SLA.",
+        "Record the agent-authored context package first with the returned record-package action; critics never start before it is recorded. Launch immediately after this evidence package is ready, in native background mode when supported, alongside primary inspection. Run an independent read-only subagent of the current agent, without primary findings. Pass these exact evidence/context/inspection snapshots, the recorded context package path, and the input schema, never manually transcribed evidence or duplicate collection requests. The critic reads the context package as its primary task context, consults the snapshots directly when details are unclear, and answers every question assigned to critics in receipt question_answers with verdict confirmed, refuted, or not_verified plus evidence or a concrete reason. Every question_answers entry copies that question's context_digest from the recorded package; results bound to a different version, or without a binding, are rejected as stale and never certify the current question. Prefer selected specialist profiles; their absence is normal. Return complete detailed findings in the selected locale and the host/profile's required envelope (review_report is supported). Preserve the returned JSON without rewriting findings, attach actual native run/session metadata, and use distinct finding ID prefixes. Never ask a child to guess identities, fabricate a receipt, or start an alternate CLI. Join before check-review. Report collection, primary analysis, critic waiting, fix validation and freshness separately, without a numerical SLA.",
     },
     next_action: runnerAction("check-review", ["--draft", draftPath]),
     external_mutations: false,
   };
+}
+
+// Records the agent-authored context package for the selected draft. The
+// runtime validates structure and bindings mechanically; it never formulates
+// context and never contacts GitLab during recording.
+export async function recordDraftPackage(path: string, inputPath: string): Promise<Json> {
+  const started = performance.now();
+  const { draft, root, progress, evidence, context } = await selectedDraft(path);
+  const input = readJson(regularFile(inputPath, "context package input"), "context package input");
+  const exact = context.exact_git as Json;
+  validatePackagePayload(input, {
+    mode: "mr",
+    evidenceDigest: String(progress.evidence_digest),
+    artifactRoot: root,
+    repoRoot: String(exact.repo_root),
+    baseSha: String(evidence.base_sha),
+    startSha: String(evidence.start_sha),
+    headSha: String(evidence.head_sha),
+    targetSha: evidence.target_sha == null ? null : String(evidence.target_sha),
+    bindings: expectedThreadBindings(context),
+  });
+  // Stamp the meaningful-context version onto every question before the
+  // package becomes immutable; late answers carry the stamp they saw.
+  bindQuestionContexts(input);
+  supersedesDigest(root, input.supersedes);
+  const previousPointer = readPackagePointer(root);
+  const [packagePath, packageDigest] = await writeContextPackage(root, input);
+  draft.context_package_path = packagePath;
+  draft.context_package_digest = packageDigest;
+  const superseded = retireSupersededResults(draft, previousPointer, input);
+  writeJson(path, draft);
+  return {
+    status: "ok",
+    artifact_path: packagePath,
+    digest: packageDigest,
+    canonical_digest: canonicalPackageDigest(input),
+    background_digest: narrativePackageDigest(input),
+    question_context_versions: questionContextVersionList(input),
+    draft_path: resolve(path),
+    thread_registry_size: ((input.thread_registry as Json[]) ?? []).length,
+    question_summary: questionReport(input.questions as Json[], [], []),
+    superseded_questions: superseded,
+    next_action: runnerAction("check-review", ["--draft", resolve(path)]),
+    timings: { recording_ms: Math.round(performance.now() - started) },
+    external_mutations: false,
+  };
+}
+
+// Re-recording a canonically changed package must not silently keep critic
+// results collected for the previous questions. Exactly the affected answers
+// and verifications — selected by their own binding — move to the draft's
+// historical section, and check-review demands fresh results for the affected
+// scope. A fresh result from another critic of the same question stays in
+// place. Representation-only changes keep every collected result. The pointer
+// names the package recorded before this call, so it must be read before
+// writeContextPackage overwrites it.
+function retireSupersededResults(draft: Json, pointer: Json | null, input: Json): string[] {
+  let previous: { payload: Json; digest: string } | null = null;
+  if (pointer !== null) {
+    try {
+      const [, payload] = artifactPayload(String(pointer.package_path), "context_package");
+      previous = { payload, digest: String(pointer.package_digest) };
+    } catch (error) {
+      if (!(error instanceof WorkflowError)) throw error;
+    }
+  }
+  const versions = questionContextVersions(input);
+  const superseded = extractSupersededResults(
+    previous,
+    input,
+    collectAnswers(draft.critics as Json[]).answers,
+    (draft.question_verifications ?? []) as Json[],
+  );
+  if (superseded === null) return [];
+  const current = (item: Json): boolean => isCurrentResult(item, versions);
+  for (const receipt of draft.critics as Json[]) {
+    receipt.question_answers = ((receipt.question_answers ?? []) as Json[]).filter(current);
+  }
+  draft.question_verifications = ((draft.question_verifications ?? []) as Json[]).filter(current);
+  draft.superseded_question_results = [
+    ...((draft.superseded_question_results ?? []) as Json[]),
+    superseded.entry,
+  ];
+  return superseded.questionIds;
+}
+
+function validateDraftPackage(
+  draft: Json,
+  root: string,
+  progress: Json,
+  evidence: Json,
+  context: Json,
+): Json {
+  const path = draft.context_package_path;
+  const recordedDigest = draft.context_package_digest;
+  if (typeof path !== "string" || typeof recordedDigest !== "string")
+    throw new WorkflowError(
+      "Record the context package with record-package before check-review; critics use it as their primary context",
+    );
+  const pointer = readPackagePointer(root);
+  if (
+    pointer === null ||
+    String(pointer.package_path) !== resolve(path) ||
+    String(pointer.package_digest) !== recordedDigest
+  )
+    throw new WorkflowError(
+      "Draft package binding does not match the recorded context package; run record-package again",
+    );
+  const [, payload] = artifactPayload(path, "context_package");
+  const exact = context.exact_git as Json;
+  validatePackagePayload(payload, {
+    mode: "mr",
+    evidenceDigest: String(progress.evidence_digest),
+    artifactRoot: root,
+    repoRoot: String(exact.repo_root),
+    baseSha: String(evidence.base_sha),
+    startSha: String(evidence.start_sha),
+    headSha: String(evidence.head_sha),
+    targetSha: evidence.target_sha == null ? null : String(evidence.target_sha),
+    bindings: expectedThreadBindings(context),
+  });
+  const questions = payload.questions as Json[];
+  const questionIds = new Set(questions.map((item) => String(item.id)));
+  const versions = questionContextVersions(payload);
+  const { answers } = collectAnswers(draft.critics as Json[]);
+  validateAnswers(answers, questionIds, versions, "$.critics[].question_answers");
+  const verifications = (draft.question_verifications ?? []) as Json[];
+  const criticCount = Number(draft.critic_count);
+  const assigned = questions.filter((item) => item.critic === true);
+  const answered = new Set(answers.map((item) => String(item.question_id)));
+  const covered = (id: string): boolean =>
+    answered.has(id) || verifications.some((item) => String(item.question_id) === id);
+  for (const entry of (draft.superseded_question_results ?? []) as Json[]) {
+    for (const answer of (entry.answers ?? []) as Json[]) {
+      const id = String(answer.question_id);
+      if (questionIds.has(id) && !covered(id))
+        throw new WorkflowError(
+          `Question ${id} was answered against a superseded context package ` +
+            `(context digest ${String(entry.context_digest)}); the current package changed it, ` +
+            `so every selected critic must answer it again or the primary must verify it`,
+        );
+    }
+  }
+  if (criticCount >= 1) {
+    for (const receipt of draft.critics as Json[]) {
+      const own = new Set(
+        ((receipt.question_answers ?? []) as Json[]).map((item) => String(item.question_id)),
+      );
+      for (const question of assigned) {
+        if (!own.has(String(question.id)))
+          throw new WorkflowError(
+            `Critic ${String(receipt.run_id)}/${String(receipt.session_id)} did not answer ` +
+              `critic-assigned question ${String(question.id)}; one critic's answer does not ` +
+              `cover another critic's assignment`,
+          );
+      }
+    }
+  } else {
+    for (const question of assigned) {
+      if (!covered(String(question.id)))
+        throw new WorkflowError(
+          `Question ${String(question.id)} is assigned without a critic; the primary must answer it in question_verifications`,
+        );
+    }
+  }
+  validateVerifications(verifications, questionIds, versions, answers);
+  for (const answer of answers) {
+    if (answer.verdict !== "not_verified") continue;
+    const preserved = verifications.some(
+      (item) =>
+        String(item.question_id) === String(answer.question_id) &&
+        isDict(item.original) &&
+        String((item.original as Json).run_id) === String(answer.run_id) &&
+        String((item.original as Json).session_id) === String(answer.session_id),
+    );
+    if (!preserved)
+      throw new WorkflowError(
+        `Critic answer for ${String(answer.question_id)} is not_verified; add one question_verifications entry that preserves the original answer`,
+      );
+  }
+  return questionReport(questions, answers, verifications);
 }
 
 async function inspectionInputs(
@@ -632,10 +884,11 @@ async function inspectionInputs(
 
 export async function startReview(args: {
   url: string;
-  repoRoot: string;
+  repoRoot?: string;
   reviewMode?: string;
   locale?: string;
   incremental?: string;
+  supersedeRoot?: string | null;
 }): Promise<Json> {
   const started = performance.now();
   const mode = args.reviewMode ?? "normal",
@@ -647,7 +900,18 @@ export async function startReview(args: {
     !["auto", "off"].includes(incremental)
   )
     throw new WorkflowError("Invalid mode, locale, or incremental policy");
-  const repoRoot = regularDirectory(args.repoRoot);
+  let repoRoot: string;
+  try {
+    repoRoot = checkoutRoot(args.repoRoot ?? process.cwd());
+  } catch (error) {
+    if (!(error instanceof WorkflowError)) throw error;
+    return {
+      status: "blocked",
+      reason: "review requires a suitable local Git checkout",
+      errors: [error.message],
+      external_mutations: false,
+    };
+  }
   const target = parseTarget(args.url, new Set(["merge_requests"]));
   const bundle = await collect(target, "code-review", { locale });
   const collected = performance.now();
@@ -659,18 +923,36 @@ export async function startReview(args: {
       artifact_root: bundle.artifact_root,
       external_mutations: false,
     };
+  let review: ReviewWorktree;
+  try {
+    review = prepareReviewWorktree({
+      repoRoot,
+      evidence: bundle as Json,
+      evidenceDigest: String(bundle.preview_digest),
+      supersedeRoot: args.supersedeRoot ?? null,
+    });
+  } catch (error) {
+    if (!(error instanceof WorkflowError)) throw error;
+    return {
+      status: "blocked",
+      reason: "review worktree preparation failed",
+      errors: [error.message],
+      artifact_root: String(bundle.artifact_root),
+      external_mutations: false,
+    };
+  }
   await beginReview(
     String(bundle.preview_artifact_path),
     String(bundle.preview_digest),
     String(bundle.artifact_root),
-    repoRoot,
+    review.path,
     mode,
     locale,
     incremental,
   );
   const result = await prepareContext(
     String(bundle.preview_artifact_path),
-    repoRoot,
+    review.path,
     incremental,
     mode,
     locale,
@@ -678,18 +960,12 @@ export async function startReview(args: {
   if (result.complete !== true) return result;
   return {
     ...(await resumeReview(String(bundle.artifact_root))),
+    review_worktree: review,
     timings: {
       evidence_ms: Math.round(collected - started),
       context_ms: Math.round(performance.now() - collected),
     },
   };
-}
-
-function regularDirectory(path: string): string {
-  const root = resolve(path);
-  if (String(gitRead(root, ["rev-parse", "--is-inside-work-tree"])).trim() !== "true")
-    throw new WorkflowError("A local Git checkout is required");
-  return root;
 }
 
 async function selectedDraft(
@@ -756,6 +1032,7 @@ function mergedCritics(draft: Json, context: Json, mode: string): Json | null {
     target_finding_ids: [
       ...new Set(receipts.flatMap((item) => (item.target_finding_ids ?? []) as string[])),
     ],
+    question_answers: receipts.flatMap((item) => (item.question_answers ?? []) as Json[]),
     contributors: receipts,
   };
   validateCritic(aggregate, String(draft.evidence_digest), scope);
@@ -907,6 +1184,7 @@ export async function checkReview(path: string): Promise<Json> {
   const started = performance.now();
   const { draft, root, progress, evidence, context } = await selectedDraft(path);
   const errors = schemaIssues(DRAFT_SCHEMA, draft);
+  let questionStatus: Json | null = null;
   const check = (field: string, operation: () => unknown): void => {
     try {
       operation();
@@ -1051,6 +1329,10 @@ export async function checkReview(path: string): Promise<Json> {
       );
     if (draft.repair !== undefined)
       check("$.repair", () => validateRepair(draft, root, progress, evidence));
+    if (safe("$.context_package_digest") && safe("$.context_package_path"))
+      check("$.context_package_digest", () => {
+        questionStatus = validateDraftPackage(draft, root, progress, evidence, context);
+      });
     if (errors.length === 0) {
       let compiled: ReturnType<typeof compileDraft> | null = null;
       try {
@@ -1103,6 +1385,7 @@ export async function checkReview(path: string): Promise<Json> {
     draft_path: resolve(path),
     draft_digest: digest(draft),
     errors,
+    question_status: questionStatus,
     repair:
       "Edit these fields in the same draft, then repeat check-review. No decision or plan was finalized; no remote collection was repeated.",
     next_action: runnerAction(errors.length === 0 ? "finish-review" : "check-review", [
@@ -1334,8 +1617,16 @@ function validateRepair(draft: Json, root: string, progress: Json, evidence: Jso
     throw new WorkflowError(
       "Changing findings or severity requires decision repair; prose still requires semantic comparison",
     );
-  for (const key of ["critics", "dispositions", "owner_decision_reasons"])
-    if (digest(draft[key]) !== digest(original[key]))
+  for (const key of [
+    "critics",
+    "dispositions",
+    "owner_decision_reasons",
+    "context_package_path",
+    "context_package_digest",
+    "question_verifications",
+    "superseded_question_results",
+  ])
+    if (digest(draft[key] ?? null) !== digest(original[key] ?? null))
       throw new WorkflowError(`Changing ${key} requires decision repair`);
   if (
     draft.ci_snapshot === original.ci_snapshot &&
@@ -1411,9 +1702,15 @@ function validateRepair(draft: Json, root: string, progress: Json, evidence: Jso
 }
 
 export async function refreshReview(path: string): Promise<Json> {
-  const { draft, progress, context: previousContext } = await selectedDraft(path);
+  const { draft, root, progress, context: previousContext } = await selectedDraft(path);
   const old = structuredClone(draft);
   const [, evidence] = artifactPayload(String(draft.evidence_path), "evidence_snapshot");
+  const previousBindings = expectedThreadBindings(previousContext);
+  const previousPackage = recordedPackage(root);
+  const previousRegistry =
+    previousPackage !== null && previousPackage.payload.mode === "mr"
+      ? ((previousPackage.payload.thread_registry as Json[]) ?? [])
+      : [];
   const result = await startReview({
     url: String((evidence.target as Json).url),
     repoRoot: String(progress.repo_root),
@@ -1421,6 +1718,7 @@ export async function refreshReview(path: string): Promise<Json> {
       ? String(progress.mode)
       : "normal",
     locale: String(progress.locale),
+    supersedeRoot: root,
   });
   if (result.status !== "ok") return result;
   const next = readJson(String(result.draft_path), "refreshed draft");
@@ -1455,6 +1753,7 @@ export async function refreshReview(path: string): Promise<Json> {
   next.session_id = old.session_id;
   next.owner_decision_reasons = old.owner_decision_reasons;
   next.low_risk = old.low_risk;
+  next.question_verifications = [];
   writeJson(String(result.draft_path), next);
   const [, currentEvidence] = artifactPayload(String(next.evidence_path), "evidence_snapshot");
   const [, currentContext] = artifactPayload(String(next.context_path), "review_context");
@@ -1470,18 +1769,29 @@ export async function refreshReview(path: string): Promise<Json> {
         digest(previousContext[key] ?? null) !== digest(currentContext[key] ?? null),
     ),
   };
+  const staleThreads =
+    previousRegistry.length > 0
+      ? staleThreadIds(previousRegistry, previousBindings, expectedThreadBindings(currentContext))
+      : [];
   return {
     ...result,
     status: "needs_reassessment",
     previous_draft_path: path,
     refresh_scope: refreshScope,
+    previous_context_package: {
+      package_path: previousPackage === null ? null : previousPackage.path,
+      package_digest: previousPackage === null ? null : previousPackage.digest,
+      stale_threads: staleThreads,
+      note: "The previous package remains immutable; record the updated package with supersedes set to its digest.",
+    },
+    context_package: result.context_package,
     critic_task: {
       ...(result.critic_task as Json),
       refresh_scope: refreshScope,
-      instructions: `${(result.critic_task as Json).instructions} This is a targeted refresh, not a new zero-context audit. Assess the listed changed evidence/context and affected consumers; unchanged code need not be re-reviewed. The primary retains prior findings and dispositions.`,
+      instructions: `${(result.critic_task as Json).instructions} This is a targeted refresh, not a new zero-context audit. Assess the listed changed evidence/context and affected consumers; unchanged code need not be re-reviewed. The primary retains prior findings and dispositions. Carry still-valid context package items forward, update entries that cite stale threads or changed evidence, and keep prior answers in the previous draft.`,
     },
     reason:
-      "Findings and decisions were retained. Reassess the returned delta and affected consumers. Original critic receipts remain in the previous draft, never rebound to new evidence.",
+      "Findings and decisions were retained. Reassess the returned delta and affected consumers. Original critic receipts remain in the previous draft, never rebound to new evidence. The context package must be re-recorded for the refreshed evidence; the previous package stays immutable.",
     external_mutations: false,
   };
 }
