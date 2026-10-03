@@ -159,9 +159,14 @@ WORKFLOW_CONTRACTS = {
         "this mode never edits the reviewed project",
     ),
     "stopit": (
-        "stable workspace-scoped path",
-        "show the complete draft and its exact output path",
-        "obtain explicit confirmation before writing",
+        "$xdg_state_home/agent-skills/stopit/<workspace-id>/handoff.md",
+        "the handoff covers the whole conversation from its first request to the end",
+        "carry forward what stays relevant",
+        "never include session identifiers",
+        "write the draft immediately through the `write` command",
+        "do not show the draft and do not ask for confirmation",
+        "reading only the handoff body above the `## history` footer",
+        "roughly 8-16 kib",
     ),
     "goal": (
         "strictly read-only",
