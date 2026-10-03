@@ -17,6 +17,26 @@
   },
   "files": [
     {
+      "source": "references/clarity-rules.md",
+      "destination": "asd-ste100/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "askme/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "eli5/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "goal/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "task-prepare/references/clarity-rules.md"
+    },
+    {
       "source": "references/documentation-review.md",
       "destination": "docs-review/references/documentation-review.md"
     },
@@ -174,6 +194,10 @@
     },
     {
       "source": "references/language-policy.md",
+      "destination": "asd-ste100/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
       "destination": "askme/references/language-policy.md"
     },
     {
@@ -203,6 +227,10 @@
     {
       "source": "references/language-policy.md",
       "destination": "docs-review/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "eli5/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -686,6 +714,10 @@
     },
     {
       "source": "references/question-guidelines.md",
+      "destination": "asd-ste100/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
       "destination": "ast-grep/references/question-guidelines.md"
     },
     {
@@ -711,6 +743,10 @@
     {
       "source": "references/question-guidelines.md",
       "destination": "docs-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "eli5/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",

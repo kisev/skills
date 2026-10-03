@@ -59,6 +59,8 @@ def test_curated_edges_are_present() -> None:
         "team-sprint-start",
         "team-sprint-close",
         "slides-prompts-prepare",
+        "asd-ste100",
+        "eli5",
     ):
         assert (source, "humanize", "uses") in edges
     for edge in (

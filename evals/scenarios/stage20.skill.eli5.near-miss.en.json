@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "ec2281ad516829ca30ebaeb03828e7774e5bd0002ff6d4472086e9cf1aba593d",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:eli5"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.eli5.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "English: this is intentionally unrelated to eli5; do not route it to that skill."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.eli5.near-miss.source",
+      "path": ".build/skills/eli5/SKILL.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.eli5.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

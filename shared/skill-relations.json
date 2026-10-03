@@ -354,6 +354,18 @@
       "to": "humanize",
       "type": "uses",
       "reason": "applied to diagnosis and bug-report prose"
+    },
+    {
+      "from": "asd-ste100",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to rewritten technical prose"
+    },
+    {
+      "from": "eli5",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to explanation prose"
     }
   ]
 }

@@ -12,19 +12,19 @@ the current GitHub Release. The optional integration package is
 
 ## Active Portable Skills
 
-There are exactly 38 active portable skills:
+There are exactly 40 active portable skills:
 
-`agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
-`mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
-`skill-doctor`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
-`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
-`team-agreements`, `team-feedback`, `team-health`, `team-incident`,
+`agents-md`, `asd-ste100`, `askme`, `ast-grep`, `code-explain`, `code-review`,
+`commit-msg`, `docs-prepare`, `docs-review`, `eli5`, `goal`, `humanize`,
+`mattermost`, `mattermost-triage`, `mr-prepare`, `release-prepare`,
+`release-review`, `rtk`, `skill-doctor`, `slides-prompts-prepare`, `spec-manage`,
+`stopit`, `briefing`, `task-prepare`, `task-review`, `task-triage`, `taskmatic`,
+`team-1on1`, `team-agreements`, `team-feedback`, `team-health`, `team-incident`,
 `team-onboarding`, `team-people`, `team-performance`, `team-report`,
 `team-retro`, `team-roadmap`, `team-sprint-close`, and `team-sprint-start`.
 
 The authored inventory contains deduplicated definitions; build and distribution
-inventories contain the same 38 self-contained skills. Shared files are declared
+inventories contain the same 40 self-contained skills. Shared files are declared
 by `shared/manifest.json`, injected only into `.build/skills`, and checked
 byte-for-byte.
 
@@ -55,7 +55,7 @@ The OpenCode package does not inspect or remove portable skills.
 
 ## Current OpenCode Surface
 
-The current package inventory has 38 commands, one per active skill. The package
+The current package inventory has 40 commands, one per active skill. The package
 tool `route` remains available without a slash command.
 
 The six fixed agents are `manager`, `architect`, `mapper`, `worker`, `review`, and

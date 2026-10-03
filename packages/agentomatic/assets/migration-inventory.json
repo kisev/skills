@@ -11,6 +11,7 @@
   },
   "active_portable_skills": [
     "agents-md",
+    "asd-ste100",
     "askme",
     "ast-grep",
     "code-explain",
@@ -18,6 +19,7 @@
     "commit-msg",
     "docs-prepare",
     "docs-review",
+    "eli5",
     "goal",
     "humanize",
     "mattermost",
@@ -51,6 +53,7 @@
   ],
   "active_commands": [
     "agents-md",
+    "asd-ste100",
     "askme",
     "ast-grep",
     "code-explain",
@@ -58,6 +61,7 @@
     "commit-msg",
     "docs-prepare",
     "docs-review",
+    "eli5",
     "goal",
     "humanize",
     "mattermost",

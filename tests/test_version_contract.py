@@ -74,7 +74,7 @@ def version_root(root: Path) -> Path:
 def test_repository_version_contract_is_centralized() -> None:
     result = check_versions.validate(ROOT)
     assert result["status"] == "passed"
-    assert result["portable_skills"] == 38
+    assert result["portable_skills"] == 40
     assert result["skills_installer"] == "1.7.0"
 
 

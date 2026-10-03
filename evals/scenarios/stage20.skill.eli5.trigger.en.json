@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "19a0bceb20b3f82ae3c7a6aab728ed341cfb8600a3c86e64be4f12b4e5e2bb32",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:eli5"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.eli5.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:eli5"]
+    },
+    "prompt": "Select the eli5 skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.eli5.trigger.source",
+      "path": ".build/skills/eli5/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.eli5.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}
