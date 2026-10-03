@@ -93,7 +93,7 @@ back to stable.
 Update tracked global skills installed from Pages:
 
 ```shell
-npx --yes skills@latest update --global --yes
+npx --yes skills@latest update --global
 ```
 
 Omit `--global` for project scope. An installation created from a Git repository
@@ -101,8 +101,12 @@ or tag remains bound to that source. Repeat the matching `add` command with the
 Pages URL and the same scope to rebind it.
 
 `update` refreshes tracked skills, detects names deleted upstream, and offers to
-remove their local copies. OpenCode package assets have a separate update
-lifecycle described in the [OpenCode integration guide](opencode-integration.md#update).
+remove their local copies. The removal offer appears only when `update` runs in
+a terminal without its `--yes` flag; in non-interactive mode the CLI skips the
+offer and keeps retired copies, so remove them explicitly instead. `update`
+takes skill names, not source URLs, as positional arguments. OpenCode package
+assets have a separate update lifecycle described in the
+[OpenCode integration guide](opencode-integration.md#update).
 
 ## Remove Retired Names
 

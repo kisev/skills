@@ -79,7 +79,7 @@ packages; `--version` checks the CLI on PATH. npx does not install a global CLI;
 
 ## Guides
 
-- [Portable skills](docs/how-to/portable-skills.md): project installs, updates, cleanup, and troubleshooting. All `.agents/skills` hosts are selected by default; the picker preselects all skills. Use `--skill <name>` to limit selection. See the [tutorial](docs/tutorials/getting-started.md) and [catalog](docs/reference/skill-catalog.md).
+- [Portable skills](docs/how-to/portable-skills.md): project installs, updates, cleanup, and troubleshooting. All `.agents/skills` hosts are selected by default; the picker preselects all skills. Use `--skill <name>` to limit selection. Upgrade a global installation interactively with `npx --yes skills@latest update --global` so retired names are offered for removal. See the [tutorial](docs/tutorials/getting-started.md) and [catalog](docs/reference/skill-catalog.md).
 - [OpenCode integration](docs/how-to/opencode-integration.md): command adapters, six agent roles, routing, diagnostics, profiles, reconciliation, optional `rules-injector`/`zed-bell`, and default `rtk` with `/rtk-stats`.
   Confirmed global installs provision the dependency in `~/.config/opencode`, creating `package.json` if needed; for project scope, run from the project root without `--global`. Restart OpenCode after activation or asset changes.
 - [Documentation index](docs/README.md): Diataxis tutorials, how-to, reference, and explanation. The [site](https://kisev.github.io/skills) adds skill interaction examples and install instructions (`apps/docs-site`).

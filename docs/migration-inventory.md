@@ -50,7 +50,8 @@ does not contain a portable `multi-run` record.
 | `summary` | `briefing` |
 
 The `skills` CLI `update` operation detects names deleted upstream and offers to
-remove their local copies. Cleanup can also remove these exact names explicitly
+remove their local copies; the offer requires an interactive terminal run without
+`--yes`, otherwise it is skipped. Cleanup can also remove these exact names explicitly
 with stable `skills@latest` and the same agents and scope as the installation.
 The OpenCode package does not inspect or remove portable skills.
 

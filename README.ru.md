@@ -79,7 +79,7 @@ npx --yes skills@latest list --global
 
 ## Руководства
 
-- [Переносимые навыки](docs/ru/how-to/portable-skills.md): установка в проект, обновление, очистка и диагностика. По умолчанию выбраны все среды `.agents/skills` и все навыки в списке; `--skill <name>` ограничивает выбор. См. [учебное руководство](docs/ru/tutorials/getting-started.md) и [каталог](docs/ru/reference/skill-catalog.md).
+- [Переносимые навыки](docs/ru/how-to/portable-skills.md): установка в проект, обновление, очистка и диагностика. По умолчанию выбраны все среды `.agents/skills` и все навыки в списке; `--skill <name>` ограничивает выбор. Существующую глобальную установку обновляйте интерактивно командой `npx --yes skills@latest update --global`, чтобы появилось предложение удалить устаревшие имена. См. [учебное руководство](docs/ru/tutorials/getting-started.md) и [каталог](docs/ru/reference/skill-catalog.md).
 - [Интеграция OpenCode](docs/ru/how-to/opencode-integration.md): адаптеры команд, шесть ролей агентов, маршрутизация, диагностика, профили, сверка, необязательные `rules-injector`/`zed-bell` и стандартный `rtk` с `/rtk-stats`.
   Подтверждённая глобальная установка прописывает зависимость в `~/.config/opencode`, создавая `package.json` при необходимости; для области проекта запускайте из его корня без `--global`. Перезапустите OpenCode после активации или изменения компонентов.
 - [Индекс документации](docs/ru/README.md): учебные материалы, практические инструкции, справочник и пояснения по Diataxis. [Сайт](https://kisev.github.io/skills) добавляет примеры работы скиллов и инструкции установки (`apps/docs-site`).
