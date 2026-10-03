@@ -132,6 +132,36 @@ def test_distribution_check_rejects_unexpected_file(tmp_path: Path) -> None:
         raise AssertionError("expected unexpected artifact rejection")
 
 
+def test_distribution_check_pins_stored_provenance_across_new_commits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    built = tmp_path / "built-skills"
+    (built / "demo").mkdir(parents=True)
+    (built / "demo" / "SKILL.md").write_text(
+        "---\nname: demo\ndescription: >-\n  Demo skill.\n---\n# demo\n", encoding="utf-8"
+    )
+    inventory = tmp_path / "public-surfaces.json"
+    inventory.write_text(json.dumps({"skills": ["demo"]}), encoding="utf-8")
+    monkeypatch.setattr(build_distribution, "BUILT_SKILLS", built)
+    monkeypatch.setattr(build_distribution, "INVENTORY", inventory)
+    monkeypatch.setattr(build_distribution, "revision", lambda: "a" * 40)
+    output = tmp_path / "skills"
+    assert build_distribution.build(output, False, f"1.2.3-dev.7.g{'c' * 12}") == 0
+    stored = json.loads((output / "skills-lock.json").read_text(encoding="utf-8"))
+    assert stored["version"] == "1.2.3-dev.7.gcccccccccccc"
+    assert stored["source_revision"] == "a" * 40
+
+    monkeypatch.setattr(build_distribution, "revision", lambda: "b" * 40)
+    assert build_distribution.build(output, True) == 0
+    assert json.loads((output / "skills-lock.json").read_text(encoding="utf-8")) == stored
+
+    (built / "demo" / "SKILL.md").write_text(
+        "---\nname: demo\ndescription: >-\n  Changed skill.\n---\n# demo\n", encoding="utf-8"
+    )
+    with pytest.raises(build_distribution.DistributionError, match="drift"):
+        build_distribution.build(output, True)
+
+
 def test_well_known_http_add_and_update_use_pinned_skills_lock(tmp_path: Path) -> None:
     assert build_distribution.build(OUTPUT, False) == 0
     fixture = tmp_path / "site" / "skills"
