@@ -523,7 +523,7 @@ tasks:
       - task: locale:check
       - task: docs:check
       - task: site:build
-      - task: distribution:check
+      - task: distribution:build
       - task: skills:validate
       - task: eval:check
       - task: security

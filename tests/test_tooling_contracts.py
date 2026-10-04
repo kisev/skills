@@ -145,6 +145,23 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
         assert duplicated not in publish
 
 
+def test_push_gate_rebuilds_distribution_and_comparison_stays_elsewhere() -> None:
+    taskfile = (ROOT / "taskfile.yml").read_text(encoding="utf-8")
+    generate_check = taskfile.split("  generate:check:\n", 1)[1].split("\n  build:skills:\n", 1)[0]
+    check_core = taskfile.split("  check:core:\n", 1)[1].split("\n  check:\n", 1)[0]
+    # The local push gate refreshes the `.build` cache itself, so a skill edit
+    # without regeneration cannot fail a push with distribution artifact
+    # drift; the strict byte comparison of the stored distribution belongs to
+    # generate:check and to the CI matrix, which runs it on clean checkouts.
+    assert "- task: distribution:build" in check_core
+    assert "- task: distribution:check" not in check_core
+    assert "- task: distribution:check" in generate_check
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    quality_job = ci[ci.index("  quality:") : ci.index("  built-quality:")]
+    assert "task: distribution:check" in quality_job
+    assert "task: distribution:build" not in ci
+
+
 def test_root_npm_workspace_is_private_exact_and_python_stays_detached() -> None:
     root = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     assert set(root) == {"private", "workspaces"}

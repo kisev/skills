@@ -54,6 +54,16 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- The local `check:core` push gate now rebuilds the portable distribution
+  (`distribution:build`) instead of comparing it byte-for-byte with the
+  `.build/packages/skills/` cache (`distribution:check`), aligning the local
+  gate with actual CI behavior: the strict comparison already runs in the CI
+  matrix on clean checkouts, and Publish builds dev artifacts from Git
+  sources, so the cache has no consumer that needs a stale drift guard.
+  Editing skill sources without regenerating no longer fails pushes with
+  `distribution artifact drift`; the strict byte comparison of the stored
+  artifact stays in `generate:check` and the CI matrix.
+
 - The `handoff` skill now scopes every handoff to one session: the bundled
   runner resolves and writes
   `$XDG_STATE_HOME/agent-skills/handoff/<workspace-id>/<session-id>/handoff.md`
