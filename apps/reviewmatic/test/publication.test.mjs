@@ -21,7 +21,7 @@ test("direct commands preserve arguments and never evaluate shell content", () =
   assert.throws(() => commandArgv("reviewmatic publication apply --action old"), /historical/);
 });
 
-test("manual sends make one write and no GETs, can fail and repeat, and keep no publication state", async (t) => {
+test("manual sends verify the MR head, make one write, can fail and repeat, and keep no publication state", async (t) => {
   const fixture = reviewFixture(t);
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
   writeJson(result.draft_path, await completeDraft(readJson(result.draft_path), result));
@@ -38,7 +38,8 @@ test("manual sends make one write and no GETs, can fail and repeat, and keep no 
   assert.equal((await sendItem(bundle, item, null)).results[0].status, "sent");
   assert.equal((await sendItem(bundle, item, null)).results[0].status, "sent");
   assert.equal(readJson(fixture.configPath).publishedNotes.length, 2);
-  assert.equal(fixture.requestCount() - requests, 3);
+  // Each send performs its head check (one GET) plus exactly one write.
+  assert.equal(fixture.requestCount() - requests, 6);
   assert.equal(existsSync(join(result.artifact_root, "code-review-publication")), false);
   assert.equal(existsSync(join(result.artifact_root, "artifacts", "publication_actions")), false);
   const book = readFileSync(join(result.artifact_root, "runbook.md"), "utf8");

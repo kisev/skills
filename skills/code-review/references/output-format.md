@@ -81,22 +81,33 @@ shows `code-review: <skill version> · contract: <version>`, then contains:
    architecture, SemVer, and the manual-only warning. The summary is derived from
    the same effective findings and verdict, not an independently edited verdict.
 2. Compact MR metadata without a repeated labels recommendation.
-3. A project-label section beside metadata with only add/remove delta and its
+3. For a panel review, the review-panel section: each critic and the arbitrator
+   with the recorded name, profile, provider, and model, plus a note that this
+   composition stays private to the runbook and never enters published GitLab
+   texts.
+4. A project-label section beside metadata with only add/remove delta and its
    command. Keep current labels, unresolved labels, and exhaustive assessment in
    private JSON.
-4. A previous-finding table with a short finding name, localized result, and
+5. A previous-finding table with a short finding name, localized result, and
    short next action. One row per finding; no long rationale or internal ID.
-5. Open-thread actions.
-6. Closed-thread actions.
-7. Read-only local fixes for author mode.
-8. New reviewer findings and their actions; previous findings are not shown as new.
+6. Open-thread actions.
+7. Closed-thread actions.
+8. Read-only local fixes for author mode.
+9. New reviewer findings and their actions; previous findings are not shown as new.
    Each previous finding's detail and action stay together in their own section.
-9. Concise non-blocking follow-up proposals: problem and proof, solution,
-   importance, postponement risk, why outside the MR, existing task if known.
-   No issue templates or issue creation commands; full preparation is separate.
-10. Threads reviewed without publication.
-11. Checks; architecture and SemVer already appear at the beginning.
-12. No empty sections or separate manual-publication section: each command stays
+   Panel findings show who raised them and which duplicates the arbitrator
+   merged into them, without losing any author or opinion difference.
+10. For a panel review, the arbitration-verdicts section: every critic finding
+    with its verdict — accepted, accepted with a severity override, duplicate
+    of its canonical finding, or refuted — with the arbitrator's reason, plus
+    the arbitrator's merged findings. Every detected candidate stays visible,
+    including refuted and disputed ones.
+11. Concise non-blocking follow-up proposals: problem and proof, solution,
+    importance, postponement risk, why outside the MR, existing task if known.
+    No issue templates or issue creation commands; full preparation is separate.
+12. Threads reviewed without publication.
+13. Checks; architecture and SemVer already appear at the beginning.
+14. No empty sections or separate manual-publication section: each command stays
     beside its item. Keep exhaustive history and evidence in private JSON.
 
 For every actionable item, show its natural conclusion, publication preview,

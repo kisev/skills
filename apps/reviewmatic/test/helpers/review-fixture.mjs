@@ -15,8 +15,9 @@ const rest = argv.slice(apiIndex + 1);
 let endpoint = "";
 let method = "GET";
 for (let i = 0; i < rest.length; i += 1) {
-  if (rest[i] === "--hostname") i += 1;
-  else if (rest[i] === "--method") { method = rest[i + 1]; endpoint = rest[i + 2]; i += 2; }
+  if (rest[i] === "--method") { method = rest[i + 1]; endpoint = rest[i + 2]; i += 2; }
+  else if (rest[i] === "--hostname" || rest[i] === "-F" || rest[i] === "-f") i += 1;
+  else if (!rest[i].startsWith("-") && endpoint === "") endpoint = rest[i];
 }
 const clean = endpoint.split("?")[0];
 const config = JSON.parse(readFileSync(process.env.FAKE_GLAB_CONFIG, "utf8"));
@@ -62,7 +63,7 @@ else if (clean.startsWith("projects/19/labels")) value = [
   { name: "semver::patch", description: "Backward-compatible fix" },
 ];
 else if (clean === "projects/19/merge_requests/7") value = {
-  iid: 7, title: "Current merge request title", description: "Current description",
+  iid: 7, title: "Current merge request title", description: "Current description", sha: config.headSha,
   source_branch: "dev", target_branch: "main", web_url: "https://gitlab.example/group/project/-/merge_requests/7",
   author: { username: config.mrAuthor ?? "author" }, state: "opened", labels: config.labels ?? [], updated_at: "fresh",
   source_project_id: config.sourceProjectId ?? 19,
@@ -102,7 +103,8 @@ export function reviewFixture(t, overrides = {}) {
   git("config", "user.email", "reviewer@example.invalid");
   git("config", "user.name", "Example Reviewer");
   writeFileSync(join(repo, "review.txt"), "base\n");
-  git("add", "review.txt");
+  writeFileSync(join(repo, "index.txt"), "imports review.txt\n");
+  git("add", "review.txt", "index.txt");
   git("commit", "-qm", "base");
   const baseSha = git("rev-parse", "HEAD");
   writeFileSync(join(repo, "review.txt"), "base\nreviewed change\n");

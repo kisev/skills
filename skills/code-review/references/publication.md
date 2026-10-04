@@ -11,12 +11,19 @@ are explicit user choices; review agents never invoke them.
 The runbook keeps the exact body preview beside its command. Generated body files
 are private and immutable; a repair writes a new body and updates the runbook.
 Commands name the exact GitLab host, project, MR, and position. Raw refs may appear
-in executable position arguments, not in prose or chat. A reply and planned
-`resolve`/`reopen` appear in one `shell` block with a `#` explanation before each
-command and `&&` between them. State changes follow a successful reply only.
-For an ordinary comment, the POST returns a discussion: inspect its actual ID and
-resolvability and resolve it only for a completed assessment. Unresolved problems
-and questions stay open. The direct block uses `jq`; the backend parses JSON.
+in executable position arguments, not in prose or chat. Every `shell` block that
+creates a comment or discussion or changes thread state starts with a head check:
+it requests the current MR head, compares it with the reviewed head by digest, and
+stops the whole block before any write when the request fails, the response is
+malformed, or the head moved after the review. The check runs at manual execution
+time, never during runbook preparation, and needs `jq` and `sha256sum` beside
+`glab`. A reply and planned `resolve`/`reopen` appear in one `shell` block with
+a `#` explanation before each command and `&&` between them.
+State changes follow a successful reply only. For an ordinary comment, the POST returns a discussion:
+inspect its actual ID and resolvability and resolve it only for a completed
+assessment. Unresolved problems and questions stay open. The direct block uses
+`jq`; the backend parses JSON. The experimental TUI performs the same head check
+natively before sending and refuses to send on a mismatch or a failed request.
 
 ## Failure and repetition
 

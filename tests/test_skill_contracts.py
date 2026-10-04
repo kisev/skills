@@ -601,10 +601,10 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "finish-review",
         "resume-review",
         "without GitLab reads, publication artifacts, or progress changes",
-        "Set `critic_count` to the selected count",
+        "Record the panel with the returned `record-participants` action",
         "Absence of `critic` is not a blocker",
         "ordinary independent native subagent of the current agent",
-        "never replace the agent's semantic assessment",
+        "never replace the arbitrator's semantic assessment",
         "Every accepted non-low finding blocks `ready`",
         "Existing v2 artifacts and low-level",
     ):
@@ -624,6 +624,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "State changes follow a successful reply only",
         "actual ID",
         "direct block uses",
+        "stops the whole block before any write when the request fails",
     ):
         assert marker in publication
     assert "Local WIP always receives" not in incremental

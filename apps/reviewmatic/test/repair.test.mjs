@@ -281,22 +281,20 @@ test("changed fix needs targeted checks but not a new critic; changed decisions 
   assert.equal((await finishReview(decision.draft_path)).status, "ok");
 });
 
-test("CI-only refresh retains original critique and finishes after a targeted CI assessment", async (t) => {
+test("finalization stays local for CI-only drift; re-collection belongs to refresh-review", async (t) => {
   const fixture = reviewFixture(t, { resolved: true, pipelineStatus: "running" });
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
   const draft = await completeDraft(readJson(result.draft_path), result);
   writeJson(result.draft_path, draft);
   writeJson(fixture.configPath, { ...fixture.config, pipelineStatus: "success" });
-  assert.equal((await finishReview(result.draft_path)).status, "refresh_required");
-  const refreshed = readJson(result.draft_path);
-  assert.deepEqual(refreshed.critics, draft.critics);
-  assert.equal(refreshed.evidence_digest, draft.evidence_digest);
-  refreshed.content.checks = ["CI in the refreshed immutable snapshot is successful."];
-  writeJson(result.draft_path, refreshed);
+  const requests = fixture.requestCount();
   const final = await finishReview(result.draft_path);
   assert.equal(final.status, "ok", JSON.stringify(final));
-  assert.match(readFileSync(final.markdown_path, "utf8"), /CI in the assessed snapshot: success/);
-  assert.equal((await reportReview(result.artifact_root)).status, "ok");
+  assert.equal(fixture.requestCount(), requests);
+  assert.match(readFileSync(final.markdown_path, "utf8"), /CI in the assessed snapshot: running/);
+  const retained = readJson(result.draft_path);
+  assert.deepEqual(retained.critics, draft.critics);
+  assert.equal(retained.evidence_digest, draft.evidence_digest);
 });
 
 test("material refresh preserves findings and decisions without rebinding critic receipts", async (t) => {
@@ -335,13 +333,12 @@ test("real CE pipeline and build timestamps are CI-only; review inputs remain ma
     latestBuildStartedAt: "2026-10-01T22:01:00Z",
     latestBuildFinishedAt: "2026-10-01T22:01:10Z",
   });
-  assert.equal((await finishReview(started.draft_path)).status, "refresh_required");
+  const requests = fixture.requestCount();
+  assert.equal((await finishReview(started.draft_path)).status, "ok");
+  assert.equal(fixture.requestCount(), requests, "finalization is local-only");
   const retained = readJson(started.draft_path);
   assert.deepEqual(retained.critics, draft.critics);
   assert.equal(retained.evidence_digest, draft.evidence_digest);
-  retained.content.checks = ["Rechecked only the exact-head CI outcome."];
-  writeJson(started.draft_path, retained);
-  assert.equal((await finishReview(started.draft_path)).status, "ok");
   const original = {
     object: { title: "Bound retry", labels: [], sha: fixture.headSha, has_conflicts: false },
     pipelines: { items: [] },

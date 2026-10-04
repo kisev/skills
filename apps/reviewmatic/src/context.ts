@@ -314,6 +314,37 @@ function renderPatchCheck(context: Json, fix: Json): string {
   return `${command} <<'${delimiter}'\n${patch.replace(/\s+$/, "")}\n${delimiter}`;
 }
 
+// Every block that creates a comment or discussion or changes thread state
+// starts by verifying that the current MR head still matches the reviewed
+// head. A failed request, a malformed response, or a moved head stops the
+// block before anything is written; the check runs at manual execution time,
+// never during runbook preparation. The reviewed head itself stays out of
+// prose: the guard compares the SHA-256 digest of the head string.
+function headGuard(evidence: Json, locale: string): string {
+  const project = evidence.project as Json;
+  const target = evidence.target as Json;
+  const endpoint = `projects/${project.id}/merge_requests/${target.iid}`;
+  const expected = sha256Text(String(evidence.head_sha));
+  const ru = locale === "ru";
+  const label = ru
+    ? "Проверка head: блок останавливается до любой записи, если запрос не прошёл, ответ некорректен или head MR изменился после ревью"
+    : "Head check: this block stops before writing anything when the request fails, the response is malformed, or the MR head moved after the review";
+  const stop = ru
+    ? "head MR отличается от рассмотренного; ничего не опубликовано. Обновите ревью и возьмите команды из нового плана"
+    : "The MR head differs from the reviewed head; nothing was published. Refresh the review and use the new plan's commands";
+  return [
+    `# ${label}`,
+    `current_head=$(glab api ${shellQuote(endpoint)} | jq -r ".sha") &&`,
+    `[ "$(printf '%s' "$current_head" | sha256sum | cut -d' ' -f1)" = "${expected}" ] || { echo ${shellQuote(stop)} >&2; false; } &&`,
+  ].join("\n");
+}
+
+// Operations whose shell blocks must be head-guarded: anything that creates a
+// comment or discussion or changes thread state on the merge request.
+function operationIsHeadGuarded(operation: string): boolean {
+  return ["create_general", "create_line", "reply", "resolve", "reopen"].includes(operation);
+}
+
 export function renderPublicationPatchCommand(fix: Json): string {
   const patch = fix.patch as string;
   const patchDigest = sha256Text(patch);
@@ -3216,6 +3247,69 @@ export async function reviewMarkdown(
   }
   lines.push("");
 
+  const panelSource = content.review_source as Json | undefined;
+  const participants = isDict(panelSource?.participants)
+    ? (panelSource.participants as Json)
+    : null;
+  const arbitrationSource =
+    participants !== null && isDict(panelSource?.arbitration)
+      ? (panelSource.arbitration as Json)
+      : null;
+  const panelReceipts =
+    participants !== null && Array.isArray(panelSource?.critics)
+      ? (panelSource.critics as Json[])
+      : [];
+  const participantForReceipt = (receipt: Json): string | null => {
+    if (participants === null) return null;
+    const critic = ((participants.critics as Json[]) ?? []).find(
+      (item) =>
+        isDict(item.receipt) &&
+        String(item.receipt.run_id) === String(receipt.run_id) &&
+        String(item.receipt.session_id) === String(receipt.session_id),
+    );
+    return critic === undefined ? null : String(critic.name);
+  };
+  const raisedBy = (findingId: string): string | null => {
+    const receipt = panelReceipts.find((item) =>
+      (((item.findings as Json[]) ?? []) as Json[]).some(
+        (finding) => String(finding.id) === findingId,
+      ),
+    );
+    if (receipt === undefined) return null;
+    const name = participantForReceipt(receipt);
+    return name !== null
+      ? `${name} (${String(receipt.run_id)}/${String(receipt.session_id)})`
+      : `${String(receipt.run_id)}/${String(receipt.session_id)}`;
+  };
+  if (participants !== null) {
+    const ru = content.locale === "ru";
+    lines.push(`## ${ru ? "Состав ревью" : "Review panel"}`, "");
+    for (const critic of participants.critics as Json[]) {
+      const details = [
+        ...(critic.profile !== undefined ? [`profile: ${String(critic.profile)}`] : []),
+        ...(critic.provider !== undefined ? [`provider: ${String(critic.provider)}`] : []),
+        ...(critic.model !== undefined ? [`model: ${String(critic.model)}`] : []),
+      ].join(" · ");
+      lines.push(
+        `- ${ru ? "критик" : "critic"} \`${String(critic.name)}\`${details === "" ? "" : ` — ${details}`}`,
+      );
+    }
+    const arb = participants.arbitrator as Json;
+    const arbDetails = [
+      ...(arb.profile !== undefined ? [`profile: ${String(arb.profile)}`] : []),
+      ...(arb.provider !== undefined ? [`provider: ${String(arb.provider)}`] : []),
+      ...(arb.model !== undefined ? [`model: ${String(arb.model)}`] : []),
+    ].join(" · ");
+    lines.push(
+      `- ${ru ? "арбитр" : "arbitrator"} \`${String(arb.name)}\`${arbDetails === "" ? "" : ` — ${arbDetails}`}`,
+      "",
+      ru
+        ? "Состав и конфигурации участников приведены только в этом приватном ранбуке и никогда не попадают в публикуемые тексты GitLab."
+        : "The panel composition and configurations live only in this private runbook and never enter published GitLab texts.",
+      "",
+    );
+  }
+
   const labelReview = content.label_review as Json;
   const shownActions = new Set<string>();
   lines.push(`## ${presentation.labels_heading}`, "");
@@ -3329,7 +3423,10 @@ export async function reviewMarkdown(
     const thread = (content.thread_decisions as Json[]).find(
       (thread) => `thread-${thread.id}` === publicationId,
     );
-    let command = `# ${label}\n${action.command}`;
+    const guard = operationIsHeadGuarded(String(action.operation))
+      ? `${headGuard(evidence, String(content.locale))}\n`
+      : "";
+    let command = `${guard}# ${label}\n${action.command}`;
     if (stateAction && !["resolve", "reopen"].includes(String(action.operation))) {
       shownActions.add(String(stateAction.id));
       command += ` &&\n# ${reviewActionLabels(String(content.locale))[String(stateAction.operation)]}\n${stateAction.command}`;
@@ -3340,7 +3437,7 @@ export async function reviewMarkdown(
     ) {
       const project = evidence.project as Json;
       const endpoint = `projects/${project.id}/merge_requests/${(evidence.target as Json).iid}/discussions`;
-      command = `# ${label}\nresponse=$(${action.command}) &&\n# ${content.locale === "ru" ? "Проверить разрешимость нового discussion" : "Check the returned discussion's resolvability"}\nif printf '%s' "$response" | jq -e '.notes | any(.resolvable == true)' >/dev/null; then\n  # ${content.locale === "ru" ? "Получить реальный discussion ID" : "Read the actual discussion ID"}\n  discussion_id=$(printf '%s' "$response" | jq -er '.id | select(type == "string" and test("^[A-Za-z0-9_-]+$"))') &&\n  # ${content.locale === "ru" ? "Закрыть только завершённое обсуждение после ответа" : "Resolve only a completed discussion after its reply"}\n  glab api --hostname ${shellQuote(String(project.hostname))} --method PUT "${endpoint}/$discussion_id" --silent -F resolved=true\nfi`;
+      command = `${guard}# ${label}\nresponse=$(${action.command}) &&\n# ${content.locale === "ru" ? "Проверить разрешимость нового discussion" : "Check the returned discussion's resolvability"}\nif printf '%s' "$response" | jq -e '.notes | any(.resolvable == true)' >/dev/null; then\n  # ${content.locale === "ru" ? "Получить реальный discussion ID" : "Read the actual discussion ID"}\n  discussion_id=$(printf '%s' "$response" | jq -er '.id | select(type == "string" and test("^[A-Za-z0-9_-]+$"))') &&\n  # ${content.locale === "ru" ? "Закрыть только завершённое обсуждение после ответа" : "Resolve only a completed discussion after its reply"}\n  glab api --hostname ${shellQuote(String(project.hostname))} --method PUT "${endpoint}/$discussion_id" --silent -F resolved=true\nfi`;
     }
     lines.push(label, "", "```shell", command, "```");
     lines.push("");
@@ -3467,10 +3564,27 @@ export async function reviewMarkdown(
     lines.push(presentation.no_items as string, "");
   }
   for (const finding of reviewerFindings) {
+    const ru = content.locale === "ru";
+    const author = raisedBy(String(finding.id));
+    const mergedFrom =
+      arbitrationSource !== null
+        ? ((arbitrationSource.dispositions as Json[]) ?? [])
+            .filter(
+              (item) =>
+                item.duplicate_of !== undefined && String(item.duplicate_of) === String(finding.id),
+            )
+            .map((item) => String(item.id))
+        : [];
     lines.push(
       `### ${finding.summary}`,
       "",
-      `\`${finding.id}\` · ${(presentation.severity_labels as Json)[finding.severity as string]} · ${finding.severity === "low" ? (content.locale === "ru" ? "Не блокирует слияние" : "Does not block merge") : content.locale === "ru" ? "Блокирует слияние" : "Blocks merge"}`,
+      `\`${finding.id}\` · ${(presentation.severity_labels as Json)[finding.severity as string]} · ${finding.severity === "low" ? (ru ? "Не блокирует слияние" : "Does not block merge") : ru ? "Блокирует слияние" : "Blocks merge"}`,
+      ...(author !== null ? [`${ru ? "Автор" : "Raised by"}: ${author}`] : []),
+      ...(mergedFrom.length > 0
+        ? [
+            `${ru ? "Объединено арбитром из" : "Merged by the arbitrator from"}: ${mergedFrom.map((id) => `\`${id}\``).join(", ")}`,
+          ]
+        : []),
       "",
       finding.risk as string,
       "",
@@ -3494,12 +3608,69 @@ export async function reviewMarkdown(
           (thread) => thread.id === spec.thread_id,
         )!;
         lines.push(
-          `[${content.locale === "ru" ? "Фикс в исходном thread" : "Fix in the existing thread"}](${thread.url}): ${spec.body}`,
+          `[${ru ? "Фикс в исходном thread" : "Fix in the existing thread"}](${thread.url}): ${spec.body}`,
           "",
         );
       }
       addPublicationAction(String(finding.id));
     }
+  }
+
+  // Every detected candidate stays visible with the arbitrator's conclusion,
+  // including refuted and duplicate ones; a disagreement never hides a finding.
+  if (participants !== null) {
+    const ru = content.locale === "ru";
+    lines.push(`## ${ru ? "Вердикты арбитра" : "Arbitration verdicts"}`, "");
+    const verdicts = new Map(
+      (((arbitrationSource?.dispositions as Json[]) ?? []) as Json[]).map((item) => [
+        String(item.id),
+        item,
+      ]),
+    );
+    const verdictText = (findingId: string): string => {
+      const disposition = verdicts.get(findingId);
+      if (disposition === undefined) return ru ? "нет вердикта" : "no verdict";
+      const override = disposition.severity_override as Json | undefined;
+      if (disposition.decision === "accept")
+        return override === undefined
+          ? ru
+            ? "принято"
+            : "accepted"
+          : ru
+            ? `принято с изменением критичности на ${(presentation.severity_labels as Json)[String(override.severity)]} (было ${(presentation.severity_labels as Json)[String(override.original_severity)]})`
+            : `accepted with severity override to ${(presentation.severity_labels as Json)[String(override.severity)]} (was ${(presentation.severity_labels as Json)[String(override.original_severity)]})`;
+      if (disposition.duplicate_of !== undefined)
+        return `${ru ? "дубликат находки" : "duplicate of"} \`${String(disposition.duplicate_of)}\``;
+      return ru ? "опровергнуто" : "refuted";
+    };
+    const candidates: Array<{ id: string; summary: string; author: string | null }> = [];
+    for (const receipt of panelReceipts)
+      for (const item of ((receipt.findings as Json[]) ?? []) as Json[]) {
+        const author = raisedBy(String(item.id));
+        candidates.push({
+          id: String(item.id),
+          summary: String(item.summary ?? item.id),
+          author:
+            author === null ? `${String(receipt.run_id)}/${String(receipt.session_id)}` : author,
+        });
+      }
+    const mergedFindings = ((arbitrationSource?.findings as Json[]) ?? []) as Json[];
+    if (candidates.length === 0 && mergedFindings.length === 0) {
+      lines.push(presentation.no_items as string, "");
+    }
+    for (const candidate of candidates) {
+      const disposition = verdicts.get(candidate.id);
+      lines.push(
+        `- \`${candidate.id}\` · ${candidate.author}: **${verdictText(candidate.id)}** — ${candidate.summary}`,
+        `  ${String(disposition?.reason ?? (ru ? "основание не приведено" : "no reason recorded"))}`,
+      );
+    }
+    for (const finding of mergedFindings) {
+      lines.push(
+        `- \`${String(finding.id)}\` · ${ru ? "объединённая находка арбитра" : "arbitrator merged finding"}: **${ru ? "принято" : "accepted"}** — ${String(finding.summary)}`,
+      );
+    }
+    if (candidates.length > 0 || mergedFindings.length > 0) lines.push("");
   }
 
   const existingFindings =

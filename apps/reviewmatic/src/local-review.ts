@@ -9,6 +9,7 @@ import {
   digest,
   gitRead,
   isDigest,
+  privateDirectory,
   readJson,
   regularFile,
   rejectEnvelopeWrapper,
@@ -17,11 +18,13 @@ import {
   writeJson,
 } from "./contract.js";
 import { runnerAction } from "./context.js";
-import { schemaIssues, upsertByIdentity } from "./draft.js";
+import { participantSelectionIssues, schemaIssues, upsertByIdentity } from "./draft.js";
+import type { DraftIssue } from "./schema-issues.js";
 import { contentDigest } from "./state-artifacts.js";
 import {
   bindQuestionContexts,
   canonicalPackageDigest,
+  collectAnswers,
   extractSupersededResults,
   isCurrentResult,
   localSectionDigests,
@@ -654,21 +657,10 @@ export function validateReport(report: Record<string, unknown>): void {
     validateFinding(finding);
   }
   const checks = report.checks as Record<string, unknown>[];
-  const required = checks.filter((check) => truthy(check.required));
-  if (required.length === 0) {
+  if (checks.filter((check) => truthy(check.required)).length === 0) {
     throw new WorkflowError("local review must include required acceptance checks");
   }
-  let expected: string;
-  if (required.some((check) => check.status === "not_run")) {
-    expected = "blocked";
-  } else if (
-    required.some((check) => check.status === "failed") ||
-    findings.some((finding) => truthy(finding.blocking))
-  ) {
-    expected = "not_ready";
-  } else {
-    expected = "ready";
-  }
+  const expected = expectedLocalVerdict(findings, checks);
   if (report.verdict !== expected) {
     throw new WorkflowError(`local review verdict must be ${expected} for the recorded evidence`);
   }
@@ -976,6 +968,9 @@ export async function recordLocalPackage(
   const selection = selectLocalDraft(root, bundle, digestValue);
   const superseded = retireSupersededResults(selection.draft, previousPointer, input);
   selection.draft.context_package = { path: path, digest: packageDigest };
+  const panelTasks = isObject(selection.draft.participants)
+    ? localPanelCriticTasks(selection.draft, bundlePath)
+    : null;
   persistLocalDraft(root, digestValue, selection, selection.draft);
   return {
     status: "ok",
@@ -1012,6 +1007,13 @@ export async function recordLocalPackage(
       instructions:
         "Launch the independent local critic now, alongside primary inspection, and join before finalize-local. The critic reads the recorded package as its primary task context and the working tree exactly as committed/staged/unstaged in the snapshot.",
     },
+    ...(panelTasks !== null
+      ? {
+          critic_tasks: panelTasks,
+          arbitrator_task_hint:
+            "After every selected critic receipt is imported, the record-critic response returns the ready local arbitrator task; import its receipt with record-arbitration",
+        }
+      : {}),
     external_mutations: false,
   };
 }
@@ -1146,6 +1148,19 @@ export async function recordLocalInput(
   // malformed section can only produce addressed diagnostics, never a crash.
   const issues: Array<{ path: string; message: string }> = [];
   const sections: Array<[string, unknown]> = [];
+  const selection = selectLocalDraft(root, bundle, digestValue);
+  // In panel mode the orchestrating session owns no review semantics: the
+  // arbitrator's receipt carries findings, checks, assessment, verdict, and
+  // answer resolutions; record-input still carries the task boundary.
+  if (isObject(selection.draft.participants)) {
+    for (const key of Object.keys(input))
+      if (!["task", "task_change_reason"].includes(key))
+        issues.push({
+          path: `$.${key}`,
+          message:
+            "This local review runs as a panel: findings, checks, assessment, verdict, and answers belong to the arbitrator; import them with record-arbitration",
+        });
+  }
   for (const [key, value] of Object.entries(input)) {
     const field = `$.${key}`;
     const schema = properties[key];
@@ -1170,7 +1185,6 @@ export async function recordLocalInput(
       external_mutations: false,
     };
   }
-  const selection = selectLocalDraft(root, bundle, digestValue);
   const next = structuredClone(selection.draft);
   const applied: Record<string, unknown> = {};
   for (const [key, value] of sections) {
@@ -1212,6 +1226,615 @@ export async function recordLocalInput(
     applied,
     pending: localGaps(next),
     next_action: runnerAction("finalize-local", ["--bundle", bundlePath, "--report", draftPath]),
+    external_mutations: false,
+  };
+}
+
+// ---------- Local review panel ----------
+//
+// The local WIP flow runs the same panel process as the remote MR flow: one
+// recorded selection, parallel independent local critics, and one arbitrator
+// whose receipt carries the merged findings and the consolidated report
+// fields. The finalized report artifact stays schema-identical; receipts and
+// arbitration are preserved as companions under local-panel/.
+
+const LOCAL_PANEL_DIR = "local-panel";
+const localProperties = (
+  (artifactSchema().$defs as Record<string, unknown>).local_review_payload as Record<
+    string,
+    unknown
+  >
+).properties as Record<string, Record<string, unknown>>;
+const localFindingItems = (localProperties.findings as Record<string, unknown>).items as Record<
+  string,
+  unknown
+>;
+const localCheckItems = (localProperties.checks as Record<string, unknown>).items as Record<
+  string,
+  unknown
+>;
+const localCriticReceiptSchema: Record<string, unknown> = {
+  type: "object",
+  required: ["schema", "evidence_digest", "run_id", "session_id", "findings", "external_mutations"],
+  additionalProperties: false,
+  properties: {
+    schema: { const: "code-review/local-critic-receipt/v1" },
+    evidence_digest: { $ref: "#/$defs/digest" },
+    run_id: { type: "string", minLength: 1 },
+    session_id: { type: "string", minLength: 1 },
+    findings: { type: "array", items: localFindingItems },
+    question_answers: { type: "array", items: { $ref: "#/$defs/context_answer_ref" } },
+    external_mutations: { const: false },
+  },
+};
+const localArbitrationSchema: Record<string, unknown> = {
+  type: "object",
+  required: [
+    "schema",
+    "evidence_digest",
+    "run_id",
+    "session_id",
+    "external_mutations",
+    "findings",
+    "dispositions",
+    "checks",
+    "assessment",
+    "verdict",
+  ],
+  additionalProperties: false,
+  properties: {
+    schema: { const: "code-review/local-arbitration/v1" },
+    evidence_digest: { $ref: "#/$defs/digest" },
+    run_id: { type: "string", minLength: 1 },
+    session_id: { type: "string", minLength: 1 },
+    arbitrator: { type: "object" },
+    external_mutations: { const: false },
+    findings: { type: "array", items: localFindingItems },
+    dispositions: {
+      type: "array",
+      items: {
+        type: "object",
+        required: ["id", "decision", "reason"],
+        additionalProperties: false,
+        properties: {
+          id: { type: "string", minLength: 1 },
+          decision: { enum: ["accept", "reject"] },
+          reason: { type: "string", minLength: 1 },
+          duplicate_of: { type: "string", minLength: 1 },
+        },
+      },
+    },
+    question_verifications: { type: "array", items: { $ref: "#/$defs/context_verification" } },
+    checks: { type: "array", items: localCheckItems },
+    assessment: { type: "string", minLength: 1 },
+    verdict: { enum: ["ready", "not_ready", "blocked"] },
+  },
+};
+
+function localPanelComplete(draft: Record<string, unknown>): boolean {
+  if (!isObject(draft.participants)) return false;
+  const critics = (draft.participants as Record<string, unknown>).critics as
+    | Record<string, unknown>[]
+    | undefined;
+  if (!Array.isArray(critics)) return false;
+  const receipts = (draft.critics as Record<string, unknown>[] | undefined) ?? [];
+  return receipts.length === critics.length && critics.every((item) => isObject(item.receipt));
+}
+
+function localPanelCriticTasks(
+  draft: Record<string, unknown>,
+  bundlePath: string,
+): Record<string, unknown>[] {
+  const critics = ((draft.participants as Record<string, unknown>).critics ?? []) as Record<
+    string,
+    unknown
+  >[];
+  return critics.map((critic) => ({
+    participant: String(critic.name),
+    profile: critic.profile ?? null,
+    provider: critic.provider ?? null,
+    model: critic.model ?? null,
+    receipt_schema: "code-review/local-critic-receipt/v1",
+    template: {
+      schema: "code-review/local-critic-receipt/v1",
+      evidence_digest: draft.evidence_digest,
+      run_id: "",
+      session_id: "",
+      findings: [],
+      question_answers: [],
+      external_mutations: false,
+    },
+    import_command: runnerAction("record-critic", [
+      "--bundle",
+      bundlePath,
+      "--input",
+      "<local-critic-response.json>",
+      "--participant",
+      String(critic.name),
+    ]),
+    rules:
+      "One receipt per selected critic: a complete independent local review with findings in the local report shape and one question_answers entry per critic-assigned question, every answer copying that question's context_digest. Critics run in parallel, never see each other's output, and read the working tree exactly as committed, staged, and untracked in the recorded snapshot without recollecting anything.",
+  }));
+}
+
+// Materializes the local arbitrator's input and returns its launch task once
+// every selected critic receipt is imported and bound.
+function syncLocalArbitrationInput(
+  draft: Record<string, unknown>,
+  root: string,
+  bundlePath: string,
+): Record<string, unknown> | null {
+  if (!localPanelComplete(draft)) return null;
+  const binding = draft.context_package as Record<string, unknown> | null;
+  if (!isObject(binding)) return null;
+  const [, packagePayload] = artifactPayload(String(binding.path), "context_package");
+  const questions = (packagePayload.questions as Record<string, unknown>[]) ?? [];
+  const { answers, contradictions } = collectAnswers(
+    (draft.critics as Record<string, unknown>[]) ?? [],
+  );
+  const verifications = (draft.question_verifications as Record<string, unknown>[]) ?? [];
+  const inputPath = `${root}/local-arbitration-input.json`;
+  writeJson(inputPath, {
+    schema: "code-review/local-arbitration-input/v1",
+    evidence_digest: draft.evidence_digest,
+    context_package: {
+      path: binding.path,
+      digest: binding.digest,
+      question_context_versions: questionContextVersionList(packagePayload),
+    },
+    inputs: { bundle_path: bundlePath, repo_root: draft.repo_root ?? null },
+    participants: structuredClone(draft.participants),
+    previous_findings: structuredClone(draft.findings ?? []),
+    task: structuredClone(draft.task ?? null),
+    critic_receipts: structuredClone(draft.critics ?? []),
+    question_report: questionReport(questions, answers, verifications),
+    contradictions,
+    response_contract: {
+      receipt_schema: "code-review/local-arbitration/v1",
+      import_command: runnerAction("record-arbitration", [
+        "--bundle",
+        bundlePath,
+        "--input",
+        "<local-arbitration-receipt.json>",
+      ]),
+      rules:
+        "One receipt with a verdict for every critic finding and every merged finding, targeted evidence checks for contradictions, merged findings that retain prior stable IDs, and the consolidated checks, assessment, and verdict.",
+    },
+  });
+  return {
+    launch: "now_after_every_critic_receipt",
+    input_path: inputPath,
+    instructions:
+      "Launch the selected local arbitrator subagent now. It receives the arbitration input, the recorded package, and the snapshot's working-tree state. It confirms or refutes every critic finding with a concrete reason, resolves contradictions with targeted checks, merges duplicates without losing authors, keeps prior finding IDs stable, and records the consolidated checks, assessment, and verdict. It never starts a new defect search from scratch and never modifies the working tree.",
+  };
+}
+
+export async function recordLocalParticipants(
+  bundlePath: string,
+  inputPath: string,
+): Promise<Record<string, unknown>> {
+  const [, bundle] = artifactPayload(bundlePath, "local_wip_snapshot");
+  const envelope = readJson(bundlePath, "local evidence");
+  const digestValue = digest(envelope);
+  const root = String(bundle.artifact_root);
+  if (realpathSync(bundlePath) !== `${root}/artifacts/local_wip_snapshot/${digestValue}.json`) {
+    throw new WorkflowError(
+      "participant selection requires the canonical immutable local snapshot",
+    );
+  }
+  const input = readJson(regularFile(inputPath, "participant selection"), "participant selection");
+  rejectEnvelopeWrapper(input, "participant selection");
+  const selection = selectLocalDraft(root, bundle, digestValue);
+  const draft = selection.draft;
+  if (!["full", "incremental"].includes(String(draft.mode)))
+    throw new WorkflowError(
+      "record-participants applies to full and incremental local reviews; unchanged local evidence needs no panel",
+    );
+  if (((draft.critics as unknown[]) ?? []).length > 0)
+    throw new WorkflowError(
+      "Participants are fixed once critic receipts exist; prepare the snapshot again to select a new panel",
+    );
+  if (isObject(draft.arbitration))
+    throw new WorkflowError(
+      "An arbitration receipt is already recorded; prepare the snapshot again to select a new panel",
+    );
+  const errors = participantSelectionIssues(input);
+  if (errors.length > 0)
+    return {
+      status: "invalid",
+      draft_path: `${root}/local-review-draft.json`,
+      errors,
+      note: "The selection was not recorded and the local draft is unchanged.",
+      external_mutations: false,
+    };
+  draft.participants = structuredClone(input);
+  draft.critic_count = ((input.critics as unknown[]) ?? []).length;
+  draft.critics = [];
+  persistLocalDraft(root, digestValue, selection, draft);
+  const packageRecorded = isObject(draft.context_package);
+  return {
+    status: "ok",
+    draft_path: `${root}/local-review-draft.json`,
+    participants: draft.participants,
+    critic_count: draft.critic_count,
+    ...(packageRecorded
+      ? { critic_tasks: localPanelCriticTasks(draft, bundlePath) }
+      : {
+          critic_tasks_hint:
+            "Record the context package next; its response returns one ready critic task per selected participant",
+        }),
+    arbitrator_task_hint:
+      "After every critic receipt is imported, the record-critic response returns the ready local arbitrator task",
+    external_mutations: false,
+  };
+}
+
+export async function recordLocalCritic(
+  bundlePath: string,
+  inputPath: string,
+  participant: string | null = null,
+): Promise<Record<string, unknown>> {
+  const [, bundle] = artifactPayload(bundlePath, "local_wip_snapshot");
+  const envelope = readJson(bundlePath, "local evidence");
+  const digestValue = digest(envelope);
+  const root = String(bundle.artifact_root);
+  if (realpathSync(bundlePath) !== `${root}/artifacts/local_wip_snapshot/${digestValue}.json`) {
+    throw new WorkflowError("record-critic requires the canonical immutable local snapshot");
+  }
+  const input = readJson(
+    regularFile(inputPath, "local critic receipt input"),
+    "local critic receipt input",
+  );
+  rejectEnvelopeWrapper(input, "local critic receipt input");
+  const selection = selectLocalDraft(root, bundle, digestValue);
+  const draft = selection.draft;
+  if (!isObject(draft.participants))
+    throw new WorkflowError(
+      "record-critic requires a recorded panel; run record-participants first",
+    );
+  const critics = (draft.participants as Record<string, unknown>).critics as Record<
+    string,
+    unknown
+  >[];
+  const errors: DraftIssue[] = schemaIssues(localCriticReceiptSchema, input, "$", artifactSchema());
+  if (errors.length === 0) {
+    for (const field of ["run_id", "session_id"] as const)
+      if (typeof input[field] !== "string" || (input[field] as string) === "")
+        errors.push({
+          path: `$.${field}`,
+          message: `Expected the critic's real native ${field} identity; a fabricated identity is rejected`,
+        });
+    if (input.evidence_digest !== draft.evidence_digest)
+      errors.push({
+        path: "$.evidence_digest",
+        message: `The receipt binds different evidence; this snapshot requires ${String(draft.evidence_digest)}. Do not rebind the receipt`,
+      });
+  }
+  let selected: Record<string, unknown> | null = null;
+  if (participant === null) {
+    errors.push({
+      path: "$.participant",
+      message:
+        "This local review runs as a panel; pass --participant with the selected critic name so the receipt is bound to its participant",
+    });
+  } else {
+    selected = critics.find((item) => String(item.name) === participant) ?? null;
+    if (selected === null) {
+      errors.push({
+        path: "$.participant",
+        message: `Unknown participant ${participant}; the selected critics are ${critics
+          .map((item) => String(item.name))
+          .join(", ")}`,
+      });
+    } else if (isObject(selected.receipt)) {
+      errors.push({
+        path: "$.participant",
+        message: `Participant ${participant} already has an imported receipt; each selected critic is imported exactly once`,
+      });
+    } else if (
+      critics.some(
+        (item) =>
+          isObject(item.receipt) &&
+          (String((item.receipt as Record<string, unknown>).run_id) === String(input.run_id) ||
+            String((item.receipt as Record<string, unknown>).session_id) ===
+              String(input.session_id)),
+      )
+    ) {
+      errors.push({
+        path: "$.participant",
+        message: `This receipt identity is already bound to another selected critic; participant ${participant} needs its own subagent run`,
+      });
+    }
+  }
+  if (errors.length === 0 && isObject(draft.context_package)) {
+    const [, packagePayload] = artifactPayload(
+      String((draft.context_package as Record<string, unknown>).path),
+      "context_package",
+    );
+    const versions = questionContextVersions(packagePayload);
+    for (const [index, item] of (
+      (input.question_answers as Record<string, unknown>[]) ?? []
+    ).entries()) {
+      if (!isObject(item)) continue;
+      const id = String(item.question_id);
+      if (!versions.has(id))
+        errors.push({
+          path: `$.question_answers[${index}].question_id`,
+          message: `Unknown question ${id}; the recorded package contains questions ${[...versions.keys()].join(", ") || "none"}`,
+        });
+      else if (!isCurrentResult(item, versions))
+        errors.push({
+          path: `$.question_answers[${index}].context_digest`,
+          message: `Stale answer: it binds context version ${String(item.context_digest)} but the current package version of question ${id} is ${versions.get(id)}`,
+        });
+    }
+  }
+  if (errors.length === 0) {
+    const known = new Set([
+      ...((draft.findings as Record<string, unknown>[]) ?? []).map((item) => String(item.id)),
+      ...((draft.critics as Record<string, unknown>[]) ?? []).flatMap((receipt) =>
+        ((receipt.findings as Record<string, unknown>[]) ?? []).map((item) => String(item.id)),
+      ),
+    ]);
+    for (const [index, item] of ((input.findings as Record<string, unknown>[]) ?? []).entries())
+      if (isObject(item) && known.has(String(item.id)))
+        errors.push({
+          path: `$.findings[${index}].id`,
+          message: `Finding id ${String(item.id)} already exists in this review; use a distinct id`,
+        });
+  }
+  if (errors.length > 0)
+    return {
+      status: "invalid",
+      draft_path: `${root}/local-review-draft.json`,
+      errors,
+      note: "The receipt was not imported and the local draft is unchanged.",
+      external_mutations: false,
+    };
+  if (selected !== null)
+    selected.receipt = { run_id: String(input.run_id), session_id: String(input.session_id) };
+  draft.critics = [...((draft.critics as unknown[]) ?? []), structuredClone(input)];
+  persistLocalDraft(root, digestValue, selection, draft);
+  const arbitratorTask =
+    !isObject(draft.arbitration) && localPanelComplete(draft)
+      ? syncLocalArbitrationInput(draft, root, bundlePath)
+      : null;
+  return {
+    status: "ok",
+    draft_path: `${root}/local-review-draft.json`,
+    imported: {
+      findings: ((input.findings as unknown[]) ?? []).length,
+      answers: ((input.question_answers as unknown[]) ?? []).length,
+    },
+    critics_recorded: (draft.critics as unknown[]).length,
+    ...(arbitratorTask !== null ? { arbitrator_task: arbitratorTask } : {}),
+    next_action: runnerAction("record-arbitration", ["--bundle", bundlePath, "--input", "<file>"]),
+    external_mutations: false,
+  };
+}
+
+// The derived local verdict for a set of findings and checks; shared by the
+// report validator and the arbitration import so the arbitrator's verdict can
+// never disagree with the recorded evidence.
+function expectedLocalVerdict(
+  findings: Record<string, unknown>[],
+  checks: Record<string, unknown>[],
+): string {
+  const required = checks.filter((check) => truthy(check.required));
+  if (required.length === 0) return "blocked";
+  if (required.some((check) => check.status === "not_run")) return "blocked";
+  if (
+    required.some((check) => check.status === "failed") ||
+    findings.some((finding) => truthy(finding.blocking))
+  )
+    return "not_ready";
+  return "ready";
+}
+
+export async function recordLocalArbitration(
+  bundlePath: string,
+  inputPath: string,
+): Promise<Record<string, unknown>> {
+  const [, bundle] = artifactPayload(bundlePath, "local_wip_snapshot");
+  const envelope = readJson(bundlePath, "local evidence");
+  const digestValue = digest(envelope);
+  const root = String(bundle.artifact_root);
+  if (realpathSync(bundlePath) !== `${root}/artifacts/local_wip_snapshot/${digestValue}.json`) {
+    throw new WorkflowError("record-arbitration requires the canonical immutable local snapshot");
+  }
+  const input = readJson(
+    regularFile(inputPath, "local arbitration receipt input"),
+    "local arbitration receipt input",
+  );
+  rejectEnvelopeWrapper(input, "local arbitration receipt input");
+  const selection = selectLocalDraft(root, bundle, digestValue);
+  const draft = selection.draft;
+  if (!isObject(draft.participants))
+    throw new WorkflowError(
+      "record-arbitration requires a recorded panel; run record-participants first",
+    );
+  if (!localPanelComplete(draft))
+    throw new WorkflowError(
+      "Every selected critic receipt must be imported and bound before arbitration",
+    );
+  if (isObject(draft.arbitration))
+    throw new WorkflowError(
+      "An arbitration receipt is already recorded; prepare the snapshot again to change decisions",
+    );
+  const errors: DraftIssue[] = schemaIssues(localArbitrationSchema, input, "$", artifactSchema());
+  if (errors.length === 0) {
+    for (const field of ["run_id", "session_id"] as const)
+      if (typeof input[field] !== "string" || (input[field] as string) === "")
+        errors.push({
+          path: `$.${field}`,
+          message: `Expected the arbitrator's real native ${field} identity; a fabricated identity is rejected`,
+        });
+    if (input.evidence_digest !== draft.evidence_digest)
+      errors.push({
+        path: "$.evidence_digest",
+        message: `The receipt binds different evidence; this snapshot requires ${String(draft.evidence_digest)}. Do not rebind the receipt`,
+      });
+    const identities = new Set(
+      ((draft.critics as Record<string, unknown>[]) ?? []).flatMap((item) => [
+        String(item.run_id),
+        String(item.session_id),
+      ]),
+    );
+    if (identities.has(String(input.run_id)) || identities.has(String(input.session_id)))
+      errors.push({
+        path: "$.session_id",
+        message: "The arbitrator identity must differ from every critic",
+      });
+  }
+  if (errors.length === 0) {
+    // Coverage: one verdict per critic finding and per new arbitrator finding.
+    // A merged finding may carry an accepted critic finding's id forward; the
+    // report keeps stable IDs that way.
+    const criticIds = new Set<string>();
+    for (const receipt of (draft.critics as Record<string, unknown>[]) ?? [])
+      for (const item of ((receipt.findings as Record<string, unknown>[]) ?? []) as Record<
+        string,
+        unknown
+      >[]) {
+        if (criticIds.has(String(item.id)))
+          errors.push({
+            path: "$.dispositions",
+            message: `Finding id ${String(item.id)} appears in more than one critic receipt; use distinct ids`,
+          });
+        criticIds.add(String(item.id));
+      }
+    const dispositions = (input.dispositions as Record<string, unknown>[]) ?? [];
+    const accepted = new Set(
+      dispositions.filter((item) => item.decision === "accept").map((item) => String(item.id)),
+    );
+    const mergedIds: string[] = [];
+    for (const item of (input.findings as Record<string, unknown>[]) ?? []) {
+      const id = String(item.id);
+      if (mergedIds.includes(id))
+        errors.push({
+          path: "$.findings",
+          message: `Duplicate merged finding id ${id}; each report finding needs a distinct id`,
+        });
+      if (criticIds.has(id) && !accepted.has(id))
+        errors.push({
+          path: "$.findings",
+          message: `Finding id ${id} is a rejected critic finding; a merged report finding cannot carry it forward`,
+        });
+      mergedIds.push(id);
+    }
+    const candidates = new Set([...criticIds, ...mergedIds.filter((id) => !criticIds.has(id))]);
+    const verdictIds = dispositions.map((item) => String(item.id));
+    const missing = [...candidates].filter((id) => !verdictIds.includes(id));
+    const unknown = verdictIds.filter((id) => !candidates.has(id));
+    if (new Set(verdictIds).size !== verdictIds.length)
+      errors.push({
+        path: "$.dispositions",
+        message:
+          "Each candidate finding receives exactly one verdict; duplicate disposition ids are rejected",
+      });
+    if (missing.length > 0)
+      errors.push({
+        path: "$.dispositions",
+        message: `No verdict for finding ids ${missing.join(", ")}`,
+      });
+    if (unknown.length > 0)
+      errors.push({
+        path: "$.dispositions",
+        message: `Dispositions name unknown finding ids ${unknown.join(", ")}`,
+      });
+    for (const [index, item] of dispositions.entries())
+      if (
+        item.duplicate_of !== undefined &&
+        (item.decision !== "reject" ||
+          !accepted.has(String(item.duplicate_of)) ||
+          String(item.duplicate_of) === String(item.id))
+      )
+        errors.push({
+          path: `$.dispositions[${index}].duplicate_of`,
+          message: "duplicate_of must name an accepted canonical finding",
+        });
+    const derived = expectedLocalVerdict(
+      (input.findings as Record<string, unknown>[]) ?? [],
+      (input.checks as Record<string, unknown>[]) ?? [],
+    );
+    if (input.verdict !== derived)
+      errors.push({
+        path: "$.verdict",
+        message: `The verdict must be ${derived} for the recorded findings and checks`,
+      });
+  }
+  if (errors.length === 0 && isObject(draft.context_package)) {
+    const [, packagePayload] = artifactPayload(
+      String((draft.context_package as Record<string, unknown>).path),
+      "context_package",
+    );
+    const versions = questionContextVersions(packagePayload);
+    const questionIds = new Set(
+      ((packagePayload.questions as Record<string, unknown>[]) ?? []).map((item) =>
+        String(item.id),
+      ),
+    );
+    const { answers, contradictions } = collectAnswers(
+      (draft.critics as Record<string, unknown>[]) ?? [],
+    );
+    try {
+      validateVerifications(
+        (input.question_verifications as Record<string, unknown>[]) ?? [],
+        questionIds,
+        versions,
+        answers,
+      );
+    } catch (error) {
+      if (!(error instanceof WorkflowError)) throw error;
+      errors.push({ path: "$.question_verifications", message: error.message });
+    }
+    const resolved = new Set(
+      ((input.question_verifications as Record<string, unknown>[]) ?? []).map((item) =>
+        String(item.question_id),
+      ),
+    );
+    const unresolved = contradictions.filter((id) => !resolved.has(id));
+    if (unresolved.length > 0)
+      errors.push({
+        path: "$.question_verifications",
+        message: `Critics disagree on ${unresolved.join(", ")}; the arbitrator must resolve every contradiction with one targeted question_verifications entry each`,
+      });
+  }
+  if (errors.length > 0)
+    return {
+      status: "invalid",
+      draft_path: `${root}/local-review-draft.json`,
+      errors,
+      note: "The arbitration receipt was not imported and the local draft is unchanged.",
+      external_mutations: false,
+    };
+  const next = structuredClone(draft);
+  next.findings = structuredClone(input.findings);
+  next.checks = structuredClone(input.checks);
+  next.assessment = input.assessment;
+  next.verdict = input.verdict;
+  const mergeIssues: Array<{ path: string; message: string }> = [];
+  next.question_verifications = mergeResultEntries(
+    (next.question_verifications as Record<string, unknown>[]) ?? [],
+    (input.question_verifications as Record<string, unknown>[]) ?? [],
+    "question_verifications",
+    mergeIssues,
+  );
+  next.arbitration = structuredClone(input);
+  persistLocalDraft(root, digestValue, selection, next);
+  return {
+    status: "ok",
+    draft_path: `${root}/local-review-draft.json`,
+    imported: {
+      merged_findings: ((input.findings as unknown[]) ?? []).length,
+      verdicts: ((input.dispositions as unknown[]) ?? []).length,
+    },
+    next_action: runnerAction("finalize-local", [
+      "--bundle",
+      bundlePath,
+      "--report",
+      `${root}/local-review-draft.json`,
+    ]),
     external_mutations: false,
   };
 }
@@ -1351,7 +1974,41 @@ export async function recordReview(
   if (realpathSync(bundlePath) !== `${root}/artifacts/local_wip_snapshot/${digestValue}.json`) {
     throw new WorkflowError("local review requires its canonical immutable snapshot");
   }
-  const report = readJson(reportPath, "local review draft");
+  const draft = readJson(reportPath, "local review draft");
+  let report = draft;
+  // A local panel review finalizes only after arbitration. The report
+  // artifact stays schema-identical: receipt answers and the arbitrator's
+  // verifications merge in as coverage evidence, while the receipts, the
+  // selection, and the arbitration receipt itself are preserved verbatim as
+  // companions under local-panel/.
+  let panel = null;
+  if (isObject(draft.participants)) {
+    if (!localPanelComplete(draft))
+      throw new WorkflowError(
+        "Every selected local critic receipt must be imported and bound before finalization",
+      );
+    if (!isObject(draft.arbitration))
+      throw new WorkflowError(
+        "A local panel review requires the arbitration receipt; import it with record-arbitration before finalization",
+      );
+    panel = {
+      participants: draft.participants,
+      critics: draft.critics,
+      arbitration: draft.arbitration,
+    };
+    const { participants, critics, arbitration, critic_count, ...payload } = draft;
+    void participants;
+    void critics;
+    void arbitration;
+    void critic_count;
+    report = {
+      ...payload,
+      question_answers: collectAnswers(draft.critics as Record<string, unknown>[]).answers,
+      question_verifications: structuredClone(
+        (draft.arbitration as Record<string, unknown>).question_verifications ?? [],
+      ),
+    };
+  }
   validateReport(report);
   if (report.evidence_digest !== digestValue) {
     throw new WorkflowError("local review does not bind the current snapshot");
@@ -1374,6 +2031,13 @@ export async function recordReview(
   const questionSummary = validateLocalPackage(report, root, bundle, digestValue);
   if ((await finalizeLocal(bundlePath)).status !== "ok") {
     throw new WorkflowError("local evidence changed before report finalization");
+  }
+  if (panel !== null) {
+    const directory = await privateDirectory(`${root}/${LOCAL_PANEL_DIR}`);
+    const suffix = digestValue.slice(0, 16);
+    writeJson(`${directory}/participants-${suffix}.json`, panel.participants);
+    writeJson(`${directory}/critics-${suffix}.json`, panel.critics);
+    writeJson(`${directory}/arbitration-${suffix}.json`, panel.arbitration);
   }
   const [path, reportDigest] = await writeArtifact(root, "local_review_report", report);
   writeJson(`${root}/local-review.json`, { review_digest: reportDigest });

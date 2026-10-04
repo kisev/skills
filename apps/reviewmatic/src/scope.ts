@@ -118,6 +118,7 @@ function inspectionOverview(contextDigest: string, root: string): Json | null {
   const indexPath = join(root, "review-input", contextDigest, "inspection.json");
   if (!existsSync(indexPath)) return null;
   const index = readJson(regularFile(indexPath, "inspection index"), "inspection index");
+  const relations = isDict(index.file_relations) ? index.file_relations : null;
   return {
     index_path: indexPath,
     diff_path: index.diff_path ?? null,
@@ -127,6 +128,21 @@ function inspectionOverview(contextDigest: string, root: string): Json | null {
       snapshot_path: isDict(item) ? (item.snapshot_path ?? null) : null,
       ...(isDict(item) && typeof item.reason === "string" ? { reason: item.reason } : {}),
     })),
+    ...(relations !== null
+      ? {
+          file_relations: {
+            complete: relations.complete === true,
+            notice: relations.notice ?? null,
+            entries: ((relations.entries as Json[] | undefined) ?? []).map((item) => ({
+              path: isDict(item) ? (item.path ?? null) : null,
+              referenced_by: isDict(item) ? (item.referenced_by ?? []) : [],
+              referenced_by_count: isDict(item) ? (item.referenced_by_count ?? 0) : 0,
+              truncated: isDict(item) ? item.truncated === true : false,
+              ...(isDict(item) && typeof item.reason === "string" ? { reason: item.reason } : {}),
+            })),
+          },
+        }
+      : {}),
     notice: index.warning ?? null,
   };
 }

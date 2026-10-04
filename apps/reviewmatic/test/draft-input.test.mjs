@@ -459,7 +459,7 @@ test("the new interface completes the full MR cycle without manual machine assem
   const finished = await finishReview(draftPath);
   assert.equal(finished.status, "ok", JSON.stringify(finished));
   assert.match(finished.chat, /review/);
-  assert.ok(fixture.requestCount() - requests > 0, "one freshness cycle");
+  assert.equal(fixture.requestCount() - requests, 0, "finalization is local-only");
   assert.match(readFileSync(finished.markdown_path, "utf8"), /reviewed change|retry/);
 });
 

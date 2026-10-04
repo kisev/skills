@@ -19,8 +19,11 @@ import {
   localBundle,
   persistLocalDraft,
   prepareFollowup,
+  recordLocalArbitration,
+  recordLocalCritic,
   recordLocalInput,
   recordLocalPackage,
+  recordLocalParticipants,
   recordReview,
   selectLocalDraft,
 } from "./local-review.js";
@@ -37,9 +40,11 @@ import {
   resumeReview,
   checkReview,
   finishReview,
+  recordDraftArbitration,
   recordDraftCritic,
   recordDraftInput,
   recordDraftPackage,
+  recordDraftParticipants,
   repairReview,
   refreshReview,
 } from "./draft.js";
@@ -243,8 +248,31 @@ const definitions: CommandSpec[] = [
     signature: "record-critic",
     description: "Import one independent critic receipt into the draft verbatim",
     options: [
-      { name: "draft", description: "generated editable review draft", required: true },
+      { name: "draft", description: "generated editable review draft (remote MR mode)" },
+      { name: "bundle", description: "local WIP snapshot path (local mode)" },
       { name: "input", description: "critic receipt response file", required: true },
+      {
+        name: "participant",
+        description: "selected critic participant name this receipt binds to",
+      },
+    ],
+  },
+  {
+    signature: "record-participants",
+    description: "Record the selected critic panel and arbitrator once",
+    options: [
+      { name: "draft", description: "generated editable review draft (remote MR mode)" },
+      { name: "bundle", description: "local WIP snapshot path (local mode)" },
+      { name: "input", description: "participant selection input file", required: true },
+    ],
+  },
+  {
+    signature: "record-arbitration",
+    description: "Import one arbitrator receipt with a verdict over every critic finding",
+    options: [
+      { name: "draft", description: "generated editable review draft (remote MR mode)" },
+      { name: "bundle", description: "local WIP snapshot path (local mode)" },
+      { name: "input", description: "arbitration receipt response file", required: true },
     ],
   },
   {
@@ -554,7 +582,48 @@ async function runRecordInput(fields: Fields): Promise<void> {
 }
 
 async function runRecordCritic(fields: Fields): Promise<void> {
-  const result = await recordDraftCritic(String(fields.draft), String(fields.input));
+  const hasDraft = fields.draft !== undefined;
+  const hasBundle = fields.bundle !== undefined;
+  if (hasDraft === hasBundle) {
+    throw new WorkflowError(
+      "record-critic requires exactly one target: --draft for a remote MR review or --bundle for a local review",
+    );
+  }
+  const participant =
+    typeof fields.participant === "string" && fields.participant !== "" ? fields.participant : null;
+  const result = hasDraft
+    ? await recordDraftCritic(String(fields.draft), String(fields.input), participant)
+    : await recordLocalCritic(String(fields.bundle), String(fields.input), participant);
+  emit(result);
+  process.exitCode = result.status === "ok" ? 0 : 2;
+}
+
+async function runRecordParticipants(fields: Fields): Promise<void> {
+  const hasDraft = fields.draft !== undefined;
+  const hasBundle = fields.bundle !== undefined;
+  if (hasDraft === hasBundle) {
+    throw new WorkflowError(
+      "record-participants requires exactly one target: --draft for a remote MR review or --bundle for a local review",
+    );
+  }
+  const result = hasDraft
+    ? await recordDraftParticipants(String(fields.draft), String(fields.input))
+    : await recordLocalParticipants(String(fields.bundle), String(fields.input));
+  emit(result);
+  process.exitCode = result.status === "ok" ? 0 : 2;
+}
+
+async function runRecordArbitration(fields: Fields): Promise<void> {
+  const hasDraft = fields.draft !== undefined;
+  const hasBundle = fields.bundle !== undefined;
+  if (hasDraft === hasBundle) {
+    throw new WorkflowError(
+      "record-arbitration requires exactly one target: --draft for a remote MR review or --bundle for a local review",
+    );
+  }
+  const result = hasDraft
+    ? await recordDraftArbitration(String(fields.draft), String(fields.input))
+    : await recordLocalArbitration(String(fields.bundle), String(fields.input));
   emit(result);
   process.exitCode = result.status === "ok" ? 0 : 2;
 }
@@ -731,6 +800,8 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
     else if (command === "record-package") await runRecordPackage(fields);
     else if (command === "record-input") await runRecordInput(fields);
     else if (command === "record-critic") await runRecordCritic(fields);
+    else if (command === "record-participants") await runRecordParticipants(fields);
+    else if (command === "record-arbitration") await runRecordArbitration(fields);
     else if (command === "scope-review") await runScopeReview(fields);
     else if (command === "finalize-local") await runFinalizeLocal(fields);
     else if (command === "assess-mode") runAssessMode(fields);

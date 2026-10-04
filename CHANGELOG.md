@@ -10,6 +10,31 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- `reviewmatic` and the `code-review` skill now run reviews as an orchestrated
+  panel: `record-participants` records the critic count and composition plus
+  the arbitrator once (installed `critic-*` profiles or ordinary subagents
+  running the session's agent, provider, and model, never substituted
+  silently), `record-critic --participant` imports every parallel independent
+  receipt bound to its participant, and `record-arbitration` imports one
+  `code-review/arbitration/v1` receipt in which a separate arbitrator returns
+  a verdict for every critic finding, resolves every contradiction, merges
+  duplicates without losing authors, and records the consolidated decisions.
+  In panel mode the orchestrating agent adds no full review of its own and
+  `record-input` accepts only its identity fields. Runbooks gained a
+  review-panel section (participants with profile, provider, and model, never
+  inside published GitLab texts) and an arbitration-verdicts section that
+  keeps every candidate visible, including refuted and duplicate findings.
+  Local `full` and `incremental` reviews support the same panel through the
+  `--bundle` variants; the finalized local report stays schema-identical and
+  the receipts, selection, and arbitration are preserved under
+  `local-panel/`. The inspection index now carries a best-effort literal
+  file-relation map with explicit incompleteness markers.
+- Every runbook `shell` block that creates a comment or discussion or changes
+  thread state now starts with a head check that reads the current MR head,
+  compares it with the reviewed head by SHA-256 digest, and stops the block
+  before any write on a failed request, a malformed response, or a moved
+  head; the check runs at manual execution time and the experimental TUI
+  performs the same check natively before sending.
 - `reviewmatic` and the `code-review` skill now share one context package for
   GitLab MR and local WIP reviews. After snapshot preparation the agent records
   it with `record-package` — goal, claims with sources and separated
@@ -28,6 +53,14 @@ All notable changes to this project are documented in this file. Entries follow
   previous package as immutable history.
 
 ### Changed
+
+- `finish-review` finalizes locally: it no longer rechecks GitLab freshness,
+  no longer returns `refresh_required`, and never restarts analysis because
+  of new threads. Post-review drift is handled by the explicit
+  `refresh-review`, which keeps the recorded panel selection while expecting
+  fresh critic receipts and a fresh arbitration receipt, and by the manual
+  head check. Decision repair of a panel plan now requires a fresh
+  arbitration receipt from a new arbitrator session.
 
 - `humanize` now activates only on an explicit invocation: a direct user
   request including the `/humanize` command, or an explicit text-preparation

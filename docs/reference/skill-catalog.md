@@ -102,11 +102,13 @@ authorize a new contract.
 ## Review and Publication
 
 The OpenCode `review` agent can be selected directly or called by `manager`.
-It performs the primary review and calls independent critics when the selected
-skill requires them. Before any critic starts, the primary review records one
-context package per prepared snapshot: goal, claims with sources, constraints,
+It orchestrates the review panel and calls independent critics when the selected
+skill requires them: the critic composition and the arbitrator are recorded once
+per prepared snapshot, the selected critics run in parallel from one recorded
+context package — goal, claims with sources, constraints,
 prior decisions, and questions, stored privately outside the checkout and
-handed to critics as their primary context. Fixing project sources requires an
+handed to critics as their primary context — and a separate arbitrator imports
+one receipt with a verdict for every critic finding. Fixing project sources requires an
 explicit request and a
 separate fixing phase. Portable `code-review` also works without this agent layer.
 

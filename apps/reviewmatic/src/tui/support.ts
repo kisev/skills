@@ -702,6 +702,56 @@ export async function amendBody(
   return loadPlan(bundle.root);
 }
 
+// The same head check the runbook's shell blocks perform: before any note,
+// discussion, or thread-state mutation, verify the current MR head against
+// the reviewed evidence. A failed request, a malformed response, or a moved
+// head stops the send before anything is written.
+const HEAD_GUARDED_OPERATIONS = new Set([
+  "create_general",
+  "create_line",
+  "reply",
+  "resolve",
+  "reopen",
+]);
+
+async function verifyMrHead(bundle: PlanBundle, action: PlanAction, signal?: AbortSignal) {
+  if (!HEAD_GUARDED_OPERATIONS.has(action.operation)) return;
+  const source = bundle.plan.review_source;
+  const evidencePath =
+    typeof source === "object" && source !== null && "evidence_path" in source
+      ? String((source as Json).evidence_path)
+      : null;
+  if (evidencePath === null) return;
+  const [, evidence] = artifactPayload(evidencePath, "evidence_snapshot");
+  const argv = commandArgv(action.command);
+  const hostnameIndex = argv.indexOf("--hostname");
+  const match = argv.find((value) => /^projects\/\d+\/merge_requests\/\d+(?:\/|$)/.test(value));
+  if (hostnameIndex === -1 || match === undefined) return;
+  const endpoint = match.replace(/\/merge_requests\/(\d+)(?:\/.*)?$/, "/merge_requests/$1");
+  const result = await sendCommand(
+    shellJoin(["glab", "api", "--hostname", argv[hostnameIndex + 1], "--method", "GET", endpoint]),
+    signal,
+  );
+  if (result.code !== 0)
+    throw new WorkflowError(
+      "The MR head could not be verified before publishing; nothing was sent. Inspect GitLab, then use the runbook commands",
+    );
+  let current: unknown;
+  try {
+    current = JSON.parse(result.stdout.toString("utf8"));
+  } catch {
+    current = null;
+  }
+  const head =
+    typeof current === "object" && current !== null && "sha" in current
+      ? String((current as Json).sha)
+      : null;
+  if (head === null || head !== String(evidence.head_sha))
+    throw new WorkflowError(
+      "The MR head moved after the review; nothing was sent. Refresh the review and use the new plan",
+    );
+}
+
 export async function sendAction(
   bundle: PlanBundle,
   action: PlanAction,
@@ -714,6 +764,7 @@ export async function sendAction(
     throw new WorkflowError(
       "Send the planned reply successfully before changing discussion state in this manual session",
     );
+  await verifyMrHead(bundle, action, signal);
   const result = await sendCommand(action.command, signal);
   if (result.code === 0 && action.operation === "reply") successfulReplies.add(replyKey);
   if (result.code === 0 && action.operation === "reply") {

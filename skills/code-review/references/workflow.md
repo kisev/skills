@@ -53,20 +53,63 @@ with sources, requirements, constraints, prior decisions, and questions, and
 fill the thread registry from the collected discussions. Record it with the
 returned `reviewmatic record-package --draft <draft-path> --input <package>`
 action before anything else; `check-review` rejects an unrecorded package.
-The recording response returns the ready critic task: the recorded package
+
+## Review panel
+
+For `normal`, `deep`, and `incremental` reviews the review runs as a panel and
+you orchestrate it; you never add a full review pass of your own. First record
+the panel with `reviewmatic record-participants --draft <draft-path> --input <participants.json>`: the critic count and composition, then the arbitrator.
+Each role is either an installed specialist profile (`critic-*` agents) or one
+ordinary independent subagent running with the current session's agent,
+provider, and model. When this skill is invoked directly and the composition
+was not already fixed by the request, ask for the panel selection in the same
+single question round as any missing task context; an explicit skip is
+acceptable and defaults to one ordinary critic and one ordinary arbitrator,
+recorded as exactly that default. When the skill started automatically, do not
+stop for questions and record that default composition transparently. Never
+substitute a configuration silently: the recorded profile, provider, and model
+names appear in the runbook, and the arbitrator receipt must name the selected
+arbitrator.
+
+After the package is recorded, the runtime returns one ready critic task per
+selected participant with the exact receipt template and the exact
+`record-critic --participant <name>` import command. Launch every selected
+critic in parallel, in native background mode when supported. Each critic
+performs one complete independent review from the same recorded package and
+the exact snapshots: findings plus answers to its assigned questions. Critics
+never see each other's output, never recollect GitLab, never rebuild the
+prepared file map, and may read related code inside the review worktree.
+Import each receipt verbatim with its exact `--participant` name; the runtime
+binds the receipt identity to the participant and rejects a re-used identity.
+
+When the last critic receipt is imported, the response returns the ready
+arbitrator task with a complete arbitration input: the same package binding,
+every critic receipt verbatim, and the reported question contradictions.
+Launch the selected arbitrator as a separate subagent. It confirms or refutes
+every critic finding with a concrete reason, resolves every contradiction and
+`not_verified` answer through targeted evidence checks against the exact
+snapshots, merges duplicates without losing authors or opinion differences,
+and records the consolidated decisions — including thread outcomes, labels,
+CI classification, SemVer, and the metadata assessment — in one
+`code-review/arbitration/v1` receipt. It must not start a new defect search
+from scratch; majority agreement or a model's name never replaces a reason.
+Import the receipt verbatim with `reviewmatic record-arbitration --draft <draft-path> --input <receipt>`; the runtime rejects a receipt that leaves any
+critic finding or contradiction without a verdict and never rewrites
+arbitrator text. In panel mode `record-input` accepts only `run_id`,
+`session_id`, and `low_risk` from you: every other semantic decision belongs
+to the arbitration receipt.
+
+The recording response returns the recorded package
 path and digest, the question context versions, the exact evidence/context/
-inspection paths, the receipt template, and the exact `reviewmatic
-record-critic` import command. Launch the selected independent critic
-immediately after recording, in native background mode when supported,
-alongside primary inspection, and pass those exact paths — never manually
-transcribed evidence or duplicate collection requests. The critic returns one
-receipt file; import it with `reviewmatic record-critic --draft <draft-path> --input <receipt>` without rewriting findings, answers, or authorship. The
-runtime rejects stale answers that bind another package version instead of
-rebinding them. Join before validation. Report collection, package recording,
-analysis, critic waiting, fix checks, and freshness separately; do not promise
-a numerical SLA or reduce review depth. Follow `references/context-package.md`
-for the package content, the answer verdicts, the primary verification of
-`not_verified` questions, and the resume/refresh lifecycle.
+inspection paths, the receipt template, and the exact import command. Pass
+those exact paths — never manually transcribed evidence or duplicate
+collection requests. The runtime rejects stale answers that bind another
+package version instead of rebinding them. Join before validation. Report
+collection, package recording, critic waiting, arbitration, fix checks, and
+finalization separately; do not promise a numerical SLA or reduce review
+depth. Follow `references/context-package.md` for the package content, the
+answer verdicts, and the resume/refresh lifecycle, and
+`references/review-state-machine.md` for the full panel contract.
 
 For a remote MR, derive role only from `MR.author.username` and `GET /user`: equal means `author`, otherwise `reviewer`. If either identity is unavailable, stop rather than guess. A reviewer reports findings and proposed fixes without promising to edit another person's MR. An author receives concrete local fixes and must not be presented as an independent reviewer of their own MR.
 
@@ -99,7 +142,18 @@ use `no_publication` unless there are new facts. Give every `no_publication` a
 concrete rationale. Plain notifications may be omitted from prose, not from the
 complete discussion audit.
 
-If context selects `unchanged`, preserve that explicit mode, omit the critic, and still complete a fresh discussion audit, decision, content draft, and contract-7 publication plan; never reuse the previous plan as the result of a new review invocation. Targeted plan repairs follow `references/repair.md`, not a new invocation. If it selects `incremental`, review the delta-triggered scope, revalidate every previous finding and recommended issue, and require an independent critic receipt with a different run/session identity and the incremental-delta digest. Otherwise choose `fast`, `normal`, or `deep`; `fast` is only for a small confirmed low-risk change, while `normal` and `deep` require an independent critic. The primary reviewer must accept or reject every critic finding and unresolved thread with a reason. Reject a critic finding as a duplicate when it describes an already accepted primary finding; never accept the same structured finding under multiple IDs.
+If context selects `unchanged`, preserve that explicit mode, omit the critic
+and the arbitrator, and still complete a fresh discussion audit, decision,
+content draft, and contract-7 publication plan; never reuse the previous plan
+as the result of a new review invocation. Targeted plan repairs follow
+`references/repair.md`, not a new invocation. If it selects `incremental`,
+review the delta-triggered scope, revalidate every previous finding and recommended issue, and run the panel again: delta-scoped critic receipts
+with a different run/session identity and the incremental-delta digest, then a
+fresh arbitration receipt. Otherwise choose `fast`, `normal`, or `deep`; `fast`
+is only for a small confirmed low-risk change and runs without a panel, while
+`normal`, `deep`, and `incremental` require the recorded panel. The arbitrator
+must return a verdict for every critic finding and every merged finding; you
+never disposition a critic finding yourself in panel mode.
 
 An incremental critic receipt contains `target_finding_ids`. Include every
 previous finding assessed as `changed` or `unverified`, plus any disputed
@@ -108,7 +162,7 @@ primary or critic candidate with source, complete finding, rejection reason, and
 its path/thread/metadata/CI dependencies. Reconsider it only when those
 dependencies intersect `incremental_delta`.
 
-Every finding must contain a stable `id`, `severity`, `summary`, `risk`, concrete `evidence`, `consequence`, `relation_to_change`, and `minimum_fix`. Order findings by effective severity. Preserve original critic receipts. A disposition may carry `severity_override` with `original_severity`, `severity`, and the primary reviewer's concrete `reason`. Reject duplicates with `duplicate_of` naming the accepted canonical finding, never by dropping the defect. Provide one validated fix or an `existing_thread` publication record with `thread_id`, `fix_mode=not_required`, and null patch/positions; the accepted thread owns the validated fix and no duplicate publication is prepared. Existing-thread links never exempt a non-low defect from the verdict. An author uses `type=local_fix`, a unified patch, and no publication command. Do not raise severity for style, size, or missing tests without a concrete consequence. Always state architecture and reasoned SemVer, never finalize a remote review with `unknown`.
+Every finding must contain a stable `id`, `severity`, `summary`, `risk`, concrete `evidence`, `consequence`, `relation_to_change`, and `minimum_fix`. Order findings by effective severity. Preserve original critic receipts. A disposition may carry `severity_override` with `original_severity`, `severity`, and the arbitrator's concrete `reason`. Reject duplicates with `duplicate_of` naming the accepted canonical finding, never by dropping the defect; the runbook lists every candidate with its verdict, including refuted and duplicate ones, so a disagreement never hides a finding. Provide one validated fix or an `existing_thread` publication record with `thread_id`, `fix_mode=not_required`, and null patch/positions; the accepted thread owns the validated fix and no duplicate publication is prepared. Existing-thread links never exempt a non-low defect from the verdict. An author uses `type=local_fix`, a unified patch, and no publication command. Do not raise severity for style, size, or missing tests without a concrete consequence. Always state architecture and reasoned SemVer, never finalize a remote review with `unknown`.
 
 Before selecting compatibility labels, follow `references/semver.md`. Determine
 the actual publication policy and last release on the relevant line. Record the
@@ -141,7 +195,7 @@ If neither a valid suggestion nor an applicable patch can be prepared,
 stop before creating the final plan. Use `fix_mode=not_required` only for a thread
 that requires no code correction; findings and `local_fix` outcomes cannot use it.
 
-Use the one-draft workflow in `references/review-state-machine.md`. Apply your semantic decisions with `reviewmatic record-input --draft <draft-path> --input <sections-file>`: it accepts the `run_id`, `session_id`, `low_risk`, `findings`, `dispositions`, `ci_job_assessments`, `owner_decision_reasons`, `question_verifications`, and partial `content` sections, upserts list entries by identity, preserves every machine field and binding, and never invents a verdict — every finding, thread, label, and CI classification stays an explicit decision of yours. Update an existing thread decision by sending its `id` plus the semantic fields; the runtime preserves the prepared url, state, and note bindings. A malformed section — `null`, a non-array, or a `null` entry — returns the exact offending field, reason, and expected shape, and leaves the draft unchanged. Import each independent critic receipt with `reviewmatic record-critic` and preserve the selected `critic_count`; the runner validates and records receipts at finalization and keeps critic findings separate until you disposition them. The runtime owns artifact digests, decision/content transitions, accepted findings, rejected candidates, and verdict derivation. Changed MR facts, user identity, discussions, notes, local Git context, or incomplete evidence block finalization. Do not use standalone CLI sessions, hand-edit machine fields in the draft, or read the runtime source to work around errors; the full draft schema file is needed only for unusual repairs, not for standard input.
+Use the one-draft workflow in `references/review-state-machine.md`. Apply your identity decisions with `reviewmatic record-input --draft <draft-path> --input <sections-file>`: in panel mode it accepts only the `run_id`, `session_id`, and `low_risk` sections; every finding, disposition, and assessment arrives through the arbitration receipt. Outside panel mode it accepts the `run_id`, `session_id`, `low_risk`, `findings`, `dispositions`, `ci_job_assessments`, `owner_decision_reasons`, `question_verifications`, and partial `content` sections, upserts list entries by identity, preserves every machine field and binding, and never invents a verdict — every finding, thread, label, and CI classification stays an explicit decision of yours. Update an existing thread decision by sending its `id` plus the semantic fields; the runtime preserves the prepared url, state, and note bindings. A malformed section — `null`, a non-array, or a `null` entry — returns the exact offending field, reason, and expected shape, and leaves the draft unchanged. Import each independent critic receipt with `reviewmatic record-critic` and its `--participant` name; the runner validates and records receipts at finalization and keeps critic findings separate until the arbitrator dispositions them. The runtime owns artifact digests, decision/content transitions, accepted findings, rejected candidates, and verdict derivation. Do not use standalone CLI sessions, hand-edit machine fields in the draft, or read the runtime source to work around errors; the full draft schema file is needed only for unusual repairs, not for standard input.
 
 Complete generated `content` without derived artifact fields. `recommended_issues` contains concise proposals only: `id`, `title`, `problem`, `evidence`, `minimum_fix`, `importance`, `risk` of postponement, `reason_out_of_scope`, and `existing_task` or null. Do not fill issue templates or prepare creation commands here. Full preparation is a separate `task-prepare` invocation; mandatory MR fixes stay in findings. Preserve the legacy `issue_templates` binding without using it; `record-input` rejects it. `label_assessments` covers every exact catalog name once and prefers namespaced semantic equivalents. The runner owns observed metadata, exhaustive label ledger, SemVer invariant, delta, presentation and compact chat. Metadata input is a flat five-field assessment with status, rationale and optional recommendation. Run `reviewmatic check-review --draft <draft-path>`, repair its addressed fields with another `record-input`, then follow the returned `finish-review --draft <draft-path>` action.
 
@@ -149,8 +203,13 @@ Revalidate historical items in `previous_finding_assessments`, and put confirmed
 out-of-scope follow-ups in `recommended_issues`. Preserve their stable IDs and
 the existing incremental completion rules.
 
-Finalization writes body files and content-addressed `.patch` files, then atomically
-replaces `<artifact-root>/runbook.md` and the review baseline. After
+Finalization is local: `finish-review` validates the draft, checks every fix
+against the exact reviewed head, and writes the plan without any GitLab
+request and without a further LLM pass. Freshness after preparation is owned
+by an explicit `refresh-review` for a new run and by the head check that
+guards every manual publication block. Finalization writes body files and
+content-addressed `.patch` files, then atomically replaces
+`<artifact-root>/runbook.md` and the review baseline. After
 `finish-review`, print its `chat` field verbatim as the compact review summary and
 append exactly one fenced code block with the manual launch command
 `reviewmatic plan --artifact-root <artifact-root>`. The user copies and runs it

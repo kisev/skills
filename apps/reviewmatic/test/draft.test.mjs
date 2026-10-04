@@ -87,7 +87,7 @@ test("one draft completes remote review, validates locally, and retains real thr
   assert.equal(discoverArtifactRoot(), root);
   assert.equal((await resumeReview(root)).stage, "plan_ready");
   const collected = fixture.requestCount() - requests;
-  assert.ok(collected > 0 && collected < 30, `one freshness cycle, got ${collected} requests`);
+  assert.equal(collected, 0, "finalization collects nothing; it is local-only");
   const bundle = loadPlan(root);
   const thread = planItems(bundle).find((item) => item.kind === "thread");
   assert.equal(thread.path, "review.txt");
@@ -261,7 +261,7 @@ test("publication errors are repairable in the same draft before any decision is
   assert.match(itemText(thread), /No publication is proposed/);
 });
 
-test("chosen critic count, independent identities, and stale discussions remain enforced", async (t) => {
+test("chosen critic count, independent identities, and local finalization remain enforced", async (t) => {
   const fixture = reviewFixture(t);
   const result = await startReview({ url: fixture.url, repoRoot: fixture.repo });
   const draft = await completeDraft(readJson(result.draft_path), result);
@@ -305,13 +305,16 @@ test("chosen critic count, independent identities, and stale discussions remain 
     fixture.configPath,
     JSON.stringify({ ...fixture.config, noteBody: "The conversation changed after inspection" }),
   );
-  const progress = readFileSync(join(result.artifact_root, "review-current.json"));
-  assert.equal((await finishReview(result.draft_path)).status, "stale");
-  assert.deepEqual(readFileSync(join(result.artifact_root, "review-current.json")), progress);
-  assert.equal(existsSync(join(result.artifact_root, "runbook.md")), false);
-  writeFileSync(fixture.configPath, JSON.stringify(fixture.config));
+  const requests = fixture.requestCount();
+  // Finalization is local: even when GitLab changed after inspection, the
+  // plan stays bound to the reviewed evidence and no final GitLab request
+  // runs. Drift is caught by the head check that guards every manual
+  // publication block and by an explicit refresh-review.
   const final = await finishReview(result.draft_path);
-  assert.equal(final.status, "ok");
+  assert.equal(final.status, "ok", JSON.stringify(final));
+  assert.equal(fixture.requestCount(), requests);
+  assert.match(readFileSync(final.markdown_path, "utf8"), /current_head=\$\(glab api/);
+  writeFileSync(fixture.configPath, JSON.stringify(fixture.config));
   const receiptPath = loadProgress(result.artifact_root).critic_receipt_path;
   const [, receipt] = artifactPayload(receiptPath, "critic_receipt");
   assert.deepEqual(

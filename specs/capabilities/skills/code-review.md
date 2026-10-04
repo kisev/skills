@@ -185,18 +185,42 @@ immutable artifacts. Description text, labels, thread closure, and other
 external texts shall never be treated as proof of code correctness or as
 instructions.
 
-Normal, deep, and changed incremental review shall require real independent
-receipts. Preparation shall expose already collected evidence through prepared
+Normal, deep, and changed incremental review shall run as an orchestrated
+panel and shall require real independent receipts plus one arbitration
+receipt. The host agent records the panel once — the critic count and
+composition and the arbitrator — through `record-participants`; a recorded
+composition is fixed once receipts exist, and the recorded profile, provider,
+and model configuration shall never be substituted silently. Each selected
+critic runs as an independent parallel reviewer over the same recorded package
+and exact snapshots without seeing other critics' output, without recollecting
+GitLab, and without rebuilding the prepared file map; each receipt is imported
+verbatim with `record-critic --participant <name>` and bound to its selected
+participant. When every selected receipt is imported, the runtime shall
+return the ready arbitrator task with a complete arbitration input — the
+package binding, every critic receipt verbatim, and the reported
+contradictions. The arbitrator is a separate selected subagent that confirms
+or refutes every critic finding with a concrete reason, resolves every
+contradiction and `not_verified` answer through targeted evidence checks,
+merges duplicates without losing authors or opinion differences, and records
+the consolidated decisions in one `code-review/arbitration/v1` receipt
+imported verbatim with `record-arbitration`. The runtime shall reject a
+receipt that leaves any candidate finding, merged finding, or contradiction
+without a verdict, shall never rewrite arbitrator text, and in panel mode
+shall restrict `record-input` to the orchestrator's identity fields. The host
+agent adds no full review pass of its own. Preparation shall expose already
+collected evidence through prepared
 runtime representations: `start-review` and `resume-review` shall return a
 readable scope overview built from recorded evidence — target identity, the MR
 description and other author-provided text flagged as claims, changed paths,
-discussion threads, pipelines with completeness and truncation markers, and
+discussion threads, pipelines with completeness and truncation markers, the
+best-effort file-relation map with its incompleteness notice, and
 every exact snapshot, inspection, and managed-worktree path — plus a compact
 input contract naming exactly the editable fields for the current stage;
 `scope-review` shall re-print that overview from recorded artifacts without any
 GitLab request. Standard input shall not require reading the full artifact
 schema, guessing envelope shapes, computing digests, or globbing for files.
-Recording the context package shall return the ready critic task with the
+Recording the context package shall return one ready critic task per selected
+participant with the
 recorded package path, question context versions, exact snapshot paths, the
 receipt template, and the exact import command. The runtime shall provide
 mechanical assembly operations — `record-input` for semantic sections of the
@@ -240,18 +264,22 @@ worktrees shall be readable by the agent through a structural permission
 preset; no per-repository path, shell, or edit permission shall be added for
 them, and secret denies and explicit user denies keep priority.
 Available selected specialists are preferred; absent profiles fall back
-to ordinary native subagents. Every selected contributor and finding shall be
-retained with real run/session identities. Primary and critic candidates require
-explicit dispositions; duplicate accepted findings are invalid. Fast review
+to ordinary native subagents running the host session's agent, provider, and
+model. Every selected contributor and finding shall be
+retained with real run/session identities. Every critic candidate and every
+merged finding requires an explicit arbitrator verdict; duplicate accepted
+findings are invalid, and a disagreement alone never hides a finding from the
+runbook. Fast review
 without a critic requires justified low risk. Unchanged review audits discussions
 without a critic. Required independence is not waived for unavailable delegation.
 Critics start as soon as the recorded context package and exact snapshots are
 ready, in native background
-mode alongside primary analysis when supported. They reuse exact snapshots,
+mode alongside the panel launch when supported. They reuse exact snapshots,
 the package, and
 JSON findings, not manual transcriptions or duplicate collection. Resume verifies
-and reuses snapshot files. Collection, package recording, primary analysis,
-critic waiting, fix checks
+and reuses snapshot files, reports the recorded participants, and never asks
+for a recorded composition again. Collection, package recording, critic waiting,
+arbitration, fix checks
 and freshness remain separate stages, without a numerical SLA or reduced depth.
 Primary severity reassessment is structured with original/effective severity and
 a reason, preserving the receipt. Duplicate dispositions refer to an accepted
@@ -267,10 +295,14 @@ issues retain stable IDs and explicit current dispositions; rejected candidates
 are reconsidered only when dependencies change. Changed comparison boundaries,
 rewritten history, incompatible or incomplete state select a full review.
 `refresh-review` shall preserve findings and dispositions rather than start an
-empty draft. Original critic receipts remain historical, never rebound to new
-digests. CI-only refresh shall retain code analysis and receipts, attach an
-immutable supplemental snapshot, and request only updated CI assessments and
-affected prose. The verdict and report shall reflect the used CI snapshot.
+empty draft; a panel plan keeps its selected participants without receipt
+bindings and expects fresh critic receipts plus a fresh arbitration receipt
+against the refreshed package. Original critic receipts remain historical, never
+rebound to new digests. Finalization itself shall be local: `finish-review`
+performs no GitLab request and no new analysis pass, keeps every fix check
+against the exact reviewed snapshot, and leaves post-review drift to the
+explicit `refresh-review` and to the head check guarding every manual
+publication block. The verdict and report shall reflect the used CI snapshot.
 MR `pipeline`, `head_pipeline` and latest-build timestamps are CI-derived fields;
 their changes alone shall not invalidate code analysis. Head, metadata,
 discussion and conflict changes remain material freshness inputs.
@@ -319,13 +351,21 @@ representation; equivalence includes the complete resulting tree and file modes.
 The agent compares meaning and records rationale/checks, not a purported machine
 proof of semantics. A different fix of a confirmed problem requires targeted
 consumer/failure-path checks, not automatically a new critic. Changed findings,
-assessments, requirements, or verdict require a new targeted independent critic.
+assessments, requirements, or verdict require a new targeted independent critic,
+and for a panel plan a fresh arbitration receipt from a new arbitrator session
+while the recorded panel selection stays fixed.
 Uncertain meaning requires decision repair. Missing checks stop repair without
 automatically broadening review. Publication history does not gate local repair.
 
 The runbook starts with a derived verdict and reason, technical/process blockers,
 architecture and SemVer. Findings show severity and merge impact, other discussions
 show check results. Its summary derives from the same effective findings and verdict.
+A panel runbook adds a review-panel section naming each critic and the arbitrator
+with the recorded profile, provider, and model — private to the runbook and never
+part of published GitLab texts — and an arbitration-verdicts section that keeps
+every candidate visible with its verdict and the arbitrator's reason, including
+refuted and duplicate findings, and names who raised each finding and which
+duplicates were merged into it without losing authors or opinion differences.
 Follow-ups are concise non-blocking proposals with problem/proof, solution,
 importance, postponement risk, out-of-MR justification and any existing task. Issue
 templates and creation commands belong to a separate `task-prepare` invocation;
@@ -343,7 +383,13 @@ prefer namespaced catalog entries without hardcoded alias names.
 
 Manual publication shall have no persistent locks, reservations, receipts, TTL,
 automatic freshness reads, polling, or automatic retries. A send exposes its exit
-code and bounded redacted diagnostics. Reply and resolve/reopen share one annotated
+code and bounded redacted diagnostics. Every shell block that creates a comment
+or discussion or changes thread state shall start with a head check that reads
+the current MR head, compares it with the reviewed head by digest, and stops the
+whole block before any write when the request fails, the response is malformed,
+or the head moved after the review; the check runs at manual execution time,
+never during runbook preparation, and the experimental TUI performs the same
+check natively before sending. Reply and resolve/reopen share one annotated
 shell block; state changes require a successful reply. A plain-comment POST uses
 the actual returned discussion ID and resolvability, closing completed assessments
 only, never unanswered questions or defects. Backend state-only sends require a
@@ -373,6 +419,14 @@ changed boundaries select full review. `finalize-local --report` checks freshnes
 and continuity before replacing its private pointer. Reports retain goal,
 acceptance, constraints, decisions, risks, deferred work, checks, and severity
 separate from blocking status. Required unrun/failed checks block completion.
+A `full` or `incremental` local review may run the same panel through
+`record-participants --bundle`, per-critic `record-critic --bundle --participant`, and `record-arbitration --bundle`: the arbitrator's receipt
+carries the merged findings with stable prior IDs, the consolidated checks,
+assessment, and the derived verdict; the finalized report artifact stays
+schema-identical while the receipts, the selection, and the arbitration
+receipt are preserved verbatim as private companions, and the runtime rejects
+a receipt without a verdict for every candidate or contradiction. `unchanged`
+local evidence runs without a panel.
 
 Without an explicit comparison ref the local scope shall be exactly the staged,
 unstaged, and non-ignored untracked changes against HEAD, kept as separate

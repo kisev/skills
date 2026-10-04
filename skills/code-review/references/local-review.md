@@ -95,6 +95,30 @@ separate and a preserved `not_verified` answer keeps blocking a ready verdict
 until then. See
 `references/context-package.md`.
 
+## Local review panel
+
+`full` and `incremental` local reviews may run the same panel process as the
+remote flow. Record the selection once with `reviewmatic record-participants --bundle <snapshot> --input <participants.json>` (`critics` plus `arbitrator`);
+the recording response and the recorded package then return one ready critic
+task per participant with the exact `record-critic --bundle <snapshot> --participant <name>` import command. Local critics perform complete
+independent reviews of the working tree exactly as committed, staged, and
+untracked in the snapshot, returning findings in the local report shape plus
+answers to their assigned questions; they run in parallel, never see each
+other's output, and never recollect anything. When the last receipt is
+imported, the response returns the local arbitrator task; the arbitrator
+confirms or refutes every critic finding, resolves contradictions, merges
+duplicates while keeping prior finding IDs stable, and returns one
+`code-review/local-arbitration/v1` receipt with the consolidated checks,
+assessment, and derived verdict. Import it with the exact
+`record-arbitration --bundle <snapshot> --input <receipt>` action; the runtime rejects
+a receipt without a verdict for every candidate or contradiction and a verdict
+that disagrees with the recorded findings and checks. In panel mode
+`record-input` carries only the `task` boundary: findings, checks, assessment,
+verdict, and answer resolutions belong to the arbitration receipt.
+Finalization keeps the report artifact schema-identical and preserves the
+receipts, the selection, and the arbitration verbatim under
+`<root>/local-panel/`. `unchanged` mode runs without a panel.
+
 Compatibility requires the same checkout, comparison ref, base, HEAD, and
 complete snapshots. Changing HEAD, rewriting history, changing the comparison,
 or losing evidence selects a full review. Previous decisions remain visible in

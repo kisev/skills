@@ -433,9 +433,12 @@ use `critic-<safe-suffix>`; `agent remove` cannot remove a fixed role. Every mut
 same preview and confirmation contract.
 
 Specialist profiles are optional for skill-driven independent reviews.
-`code-review` asks which available critics and how many to use; if none are
-installed, the current agent launches ordinary independent native subagents.
-The core plugin applies routing receipts and structured-report checks to
+`code-review` asks once which available critics and how many to use and which
+arbitrator to select; if none are
+installed, the current agent launches ordinary independent native subagents
+running the session's agent, provider, and model, and the recorded selection
+is never substituted silently. The core plugin applies routing receipts and
+structured-report checks to
 package-managed profiles and explicitly routed calls, not ordinary native
 subagents. No standalone `opencode run` workaround or agent installation is
 required for that fallback.
@@ -443,8 +446,10 @@ Routed independent critics may return `review_report` or a code-review receipt;
 the caller retains real native invocation identities in reviewmatic's draft.
 Critics receive the recorded context package — goal, claims with sources,
 constraints, prior decisions, questions — as their primary task context and
-answer the questions assigned to them in their receipts; the primary review
-verifies every unanswered or unverified question afterwards. Parallel critic
+answer the questions assigned to them in their receipts; a separate arbitrator
+then returns one receipt with a verdict for every critic finding and the
+consolidated decisions, so the orchestrating agent adds no full review of its
+own. Parallel critic
 calls keep separate bindings. Receipts expire before launch;
 an already admitted review does not expire merely because the model took longer.
 The core plugin supplies actual current session identity to primary and child

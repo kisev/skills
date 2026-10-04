@@ -40,6 +40,10 @@ content files:
 
 ```bash
 reviewmatic start-review --url <mr-url> --review-mode normal --locale en
+reviewmatic record-participants --draft <draft-path> --input <participants.json>
+reviewmatic record-package --draft <draft-path> --input <package.json>
+reviewmatic record-critic --draft <draft-path> --input <receipt.json> --participant <name>
+reviewmatic record-arbitration --draft <draft-path> --input <arbitration.json>
 reviewmatic check-review --draft <draft-path>
 reviewmatic finish-review --draft <draft-path>
 ```
@@ -62,14 +66,25 @@ Missing revisions are fetched over Git from the remote matching the MR's source 
 target project (any remote name, forks included); the repository is never cloned,
 and the user's HEAD, branch, index, files, and local branches stay untouched.
 Read code from the worktree with local Git; file contents never come from GitLab.
-The host agent
-does the review and launches native subagents. Optional specialist critics can be
-selected by count and profile; without them, ordinary independent subagents are
-supported. `critic_count` records the chosen count, and `critics` contains their
-actual receipts. Primary findings and critic candidates receive one disposition
-each. The runner derives accepted findings, rejected candidates, verdicts, and
-artifact bindings; the agent supplies the semantic assessments, concrete fixes,
-label rationales, and thread outcomes.
+`normal`, `deep`, and `incremental` reviews run as an orchestrated panel: the
+host agent records the critic composition and the arbitrator once with
+`record-participants`, launches the selected critics in parallel, and imports
+each receipt verbatim with `record-critic --participant`; the runtime returns
+one ready critic task per participant, then the ready arbitrator task with a
+complete arbitration input. The arbitrator — a separate selected subagent —
+confirms or refutes every critic finding, resolves contradictions, merges
+duplicates without losing authors, and records the consolidated decisions in
+one `code-review/arbitration/v1` receipt imported with `record-arbitration`.
+The host agent adds no full review of its own; in panel mode `record-input`
+accepts only `run_id`, `session_id`, and `low_risk`. Optional specialist
+critics can be selected by count and profile; without them, ordinary
+independent subagents running the host session's agent, provider, and model
+are supported, and the recorded configuration is shown in the runbook instead
+of being substituted silently. `critic_count` follows the recorded selection,
+and `critics` contains their actual receipts, each bound to its participant.
+The runner derives accepted findings, rejected candidates, verdicts, and
+artifact bindings; the arbitrator supplies the semantic assessments, concrete
+fixes, label rationales, and thread outcomes.
 
 The input package includes `draft_schema_path`, `input_contract`, and valid field
 examples in `input_examples`, separately from final artifact envelopes. The
@@ -128,7 +143,11 @@ still needs their verification reply when somebody else resolved the thread.
 Later confirmation is bound by `user_confirmation.evidence_note_ids`.
 
 The runbook starts with the derived verdict and reason, blockers, architecture and
-SemVer. It shows merge impact for defects and check results for other discussions.
+SemVer. Panel runbooks add a review-panel section naming each critic and the
+arbitrator with the recorded profile, provider, and model — private to the
+runbook, never inside published GitLab texts — and an arbitration-verdicts
+section that keeps every candidate visible with its verdict and the
+arbitrator's reason, including refuted and duplicate findings. It shows merge impact for defects and check results for other discussions.
 Suggestions stay in the original thread when its position is suitable; otherwise
 a new positioned thread links back and the original receives a short routing reply.
 Each patch is preceded by `patch_reason`; an available safe bounded suggestion
@@ -140,14 +159,15 @@ outside this MR, and an existing task if known. Full preparation belongs to
 `task-prepare`; mandatory MR fixes cannot be deferred there.
 
 `check-review` is local: it returns field paths and errors without recollecting
-GitLab or freezing decisions. Edit the same draft and check again. `resume-review --artifact-root <root>` recovers that draft after interruption without remote
-collection. `finish-review` validates it, rechecks complete evidence and context
-once, and atomically updates the final plan, Markdown, and baseline. Stale inputs
-leave the draft and previous final plan intact; use `refresh-review --draft <draft-path>`
-to retain findings and reassess changed scope. CI-only drift returns
-`refresh_required` with an immutable CI snapshot; update CI assessments and prose
-in the same draft without another code review. Collection, validation, and finalization timings are returned
-separately from host model/subagent time. Existing v2 artifacts and the low-level
+GitLab or freezing decisions. Edit the same draft and check again. `resume-review --artifact-root <root>` recovers that draft, the recorded participants, and
+the pending panel steps after interruption without remote
+collection. `finish-review` validates the draft, rechecks every fix against the
+exact reviewed head, and writes the plan, Markdown, and baseline — all locally,
+with no final GitLab request and no further analysis pass. Post-review drift is
+caught by an explicit `refresh-review --draft <draft-path>`
+to retain the panel selection while collecting changed scope: the refreshed
+draft keeps the participants without receipt bindings and expects fresh critic
+receipts plus a fresh arbitration receipt. Existing v2 artifacts and the low-level
 `prepare`/`context`/`template-review` commands remain supported; do not mix the two
 workflows in one review.
 The legacy MR `pipeline` object and `latest_build_started_at`/`latest_build_finished_at`
@@ -156,7 +176,12 @@ discussions or conflicts remain material and must not reuse stale analysis.
 
 Local work-in-progress reviews use `prepare-local` and `finalize-local`;
 `status`, `next`, and `assess-mode` inspect progress. Every command prints a
-compact JSON result and never mutates GitLab or the checkout. Without `--ref`,
+compact JSON result and never mutates GitLab or the checkout. A `full` or
+`incremental` local review may run the same panel: `record-participants --bundle`, per-critic `record-critic --bundle --participant`, and
+`record-arbitration --bundle` carry the merged findings, checks, assessment,
+and verdict; the finalized report stays schema-identical and the receipts,
+selection, and arbitration receipt are preserved under
+`<root>/local-panel/`. Without `--ref`,
 the scope is the staged, unstaged, and non-ignored untracked work against HEAD;
 an explicit `--ref <revision>` adds the commits from its merge base with HEAD
 and is used exactly as it exists locally, without fetching. A missing,
@@ -233,10 +258,16 @@ walkthrough. Suggestions and git patches additionally offer local application:
 reviewmatic creates a dedicated git worktree at the exact reviewed head, shows
 the diff, and then asks for commit and push as two separate confirmations.
 
-Reply and state change share one annotated `shell` block, guarded by `&&`. Plain
+Reply and state change share one annotated `shell` block, guarded by `&&`. Every
+block that creates a comment or discussion or changes thread state starts with a
+head check: it reads the current MR head through `glab api`, compares it with the
+reviewed head by SHA-256 digest, and stops the whole block before any write when
+the request fails, the response is malformed, or the head moved after the review.
+The check runs at manual execution time — never during runbook preparation — and
+the experimental TUI performs the same check natively before sending. Plain
 comments use the real discussion ID and resolvability returned by POST: completed
 discussions can be resolved, unanswered questions and defects cannot. Direct
-plain-comment blocks require `jq`. If the reply succeeded but state update failed,
+plain-comment and head-check blocks require `jq` (and `sha256sum`). If the reply succeeded but state update failed,
 inspect GitLab and do not repeat the reply blindly.
 
 One send shows its exit code/output/error and changes state only after the reply
