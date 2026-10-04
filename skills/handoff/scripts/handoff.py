@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve and atomically write a workspace-scoped handoff."""
+"""Resolve and atomically write a workspace- and session-scoped handoff."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import errno
 import hashlib
 import importlib.util
 import os
+import re
 import secrets
 import stat
 import sys
@@ -31,6 +32,8 @@ except ImportError:
     fcntl = None
 
 if TYPE_CHECKING:
+    from types import ModuleType
+
     from shared.references.state_artifacts import versioned_markdown
 else:
     _state_path = Path(__file__).with_name("state_artifacts.py")
@@ -52,6 +55,7 @@ PRIVATE_DIRECTORY_MODE = 0o700
 PRIVATE_FILE_MODE = 0o600
 LOCK_TIMEOUT_SECONDS = 5.0
 LOCK_RETRY_SECONDS = 0.05
+SESSION_PATTERN = re.compile(r"ses_[A-Za-z0-9_-]+")
 
 
 class HandoffError(ValueError):
@@ -73,6 +77,15 @@ def canonical_workspace(value: str) -> Path:
     return workspace
 
 
+def canonical_session(value: str) -> str:
+    """Validate a session token; it is never a path, so reject anything ambiguous."""
+    if SESSION_PATTERN.fullmatch(value) is None:
+        raise HandoffError(
+            "session must be a nonempty ses_ token without path separators or relative components"
+        )
+    return value
+
+
 def state_root() -> Path:
     configured = os.environ.get("XDG_STATE_HOME")
     root = Path(configured) if configured else Path.home() / ".local" / "state"
@@ -81,10 +94,10 @@ def state_root() -> Path:
     return root
 
 
-def handoff_path(workspace: Path) -> tuple[Path, int]:
+def handoff_path(workspace: Path, session: str) -> tuple[Path, int]:
     workspace_id = hashlib.sha256(os.fsencode(workspace)).hexdigest()
     root = state_root()
-    path = root / "agent-skills" / "handoff" / workspace_id / "handoff.md"
+    path = root / "agent-skills" / "handoff" / workspace_id / session / "handoff.md"
     return path, len(root.parts) - 1
 
 
@@ -173,7 +186,7 @@ def require_locking() -> FileLocking:
     return fcntl
 
 
-def lock_workspace(directory: int) -> int:
+def lock_handoff_directory(directory: int) -> int:
     locking = require_locking()
     name = ".handoff.lock"
     flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
@@ -246,7 +259,7 @@ def atomic_write(path: Path, state_parts: int, content: bytes) -> None:
     descriptor = -1
     lock = -1
     try:
-        lock = lock_workspace(directory)
+        lock = lock_handoff_directory(directory)
         validate_existing_handoff(directory, path.name)
         content = versioned_markdown(path, content)
         flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -285,14 +298,23 @@ def parser() -> Parser:
     commands = result.add_subparsers(dest="command", required=True)
     path = commands.add_parser("path")
     path.add_argument("--workspace", required=True)
+    path.add_argument("--session", required=True)
     write = commands.add_parser("write")
     write.add_argument("--workspace", required=True)
+    write.add_argument("--session", required=True)
     write.add_argument("--expected-path", required=True)
     return result
 
 
-def _drop_memory_distillate(workspace: Path, content: bytes) -> None:
-    """Queue a transient memory distillate of the handoff; never fail the write."""
+def distillate_key(workspace: Path, session: str) -> str:
+    """Kebab-case supersede key scoped to one workspace and one session."""
+    workspace_key = hashlib.sha256(os.fsencode(workspace)).hexdigest()[:12]
+    session_key = hashlib.sha256(os.fsencode(session)).hexdigest()[:12]
+    return f"handoff-{workspace_key}-{session_key}"
+
+
+def _load_inbox() -> ModuleType | None:
+    """Locate the materialized memomatic inbox runtime; None when absent."""
     try:
         inbox_path = Path(__file__).with_name("memomatic_inbox.py")
         if not inbox_path.exists():
@@ -303,15 +325,25 @@ def _drop_memory_distillate(workspace: Path, content: bytes) -> None:
             )
         spec = importlib.util.spec_from_file_location("memomatic_inbox", inbox_path)
         if spec is None or spec.loader is None:
-            return
+            return None
         inbox = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(inbox)
+    except Exception:
+        return None
+    return inbox
+
+
+def _drop_memory_distillate(workspace: Path, session: str, content: bytes) -> None:
+    """Queue a transient memory distillate of the handoff; never fail the write."""
+    try:
+        inbox = _load_inbox()
+        if inbox is None:
+            return
         summary = " ".join(content.decode("utf-8", "replace").split())[:400]
-        workspace_key = hashlib.sha256(os.fsencode(workspace)).hexdigest()[:12]
         lines = inbox.entry_lines(
             [f"handoff for {{workspace}}: {summary}"],
             source="handoff",
-            key=f"handoff-{workspace_key}",
+            key=distillate_key(workspace, session),
         )
         inbox.drop_memory(lines, "handoff")
     except Exception:
@@ -322,7 +354,8 @@ def main() -> int:
     try:
         arguments = parser().parse_args()
         workspace = canonical_workspace(arguments.workspace)
-        path, state_parts = handoff_path(workspace)
+        session = canonical_session(arguments.session)
+        path, state_parts = handoff_path(workspace, session)
         if arguments.command == "path":
             inspect_path(path, state_parts)
         else:
@@ -330,7 +363,7 @@ def main() -> int:
                 raise HandoffError("handoff destination changed after resolution")
             content = read_handoff()
             atomic_write(path, state_parts, content)
-            _drop_memory_distillate(workspace, content)
+            _drop_memory_distillate(workspace, session, content)
     except HandoffError as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

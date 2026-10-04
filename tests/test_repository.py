@@ -169,7 +169,8 @@ WORKFLOW_CONTRACTS = {
         "this mode never edits the reviewed project",
     ),
     "handoff": (
-        "$xdg_state_home/agent-skills/handoff/<workspace-id>/handoff.md",
+        "$xdg_state_home/agent-skills/handoff/<workspace-id>/<session-id>/handoff.md",
+        "take `<session-id>` only from the current session id in the host metadata",
         "the body is a brief walkthrough of the whole conversation",
         "the initial goal, significant topics and direction changes",
         "mark context lost to compaction as a gap; never invent facts",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -159,7 +160,15 @@ def test_built_handoff_mirrors_the_inbox(inbox_env: Path, tmp_path: Path) -> Non
     helper = BUILT_HANDOFF.with_name("memomatic_inbox.py")
     assert helper.exists(), "memomatic_inbox.py must be materialized into the handoff archive"
     expected = subprocess.run(
-        [sys.executable, str(BUILT_HANDOFF), "path", "--workspace", str(workspace)],
+        [
+            sys.executable,
+            str(BUILT_HANDOFF),
+            "path",
+            "--workspace",
+            str(workspace),
+            "--session",
+            "ses_mirror",
+        ],
         capture_output=True,
         text=True,
         check=True,
@@ -172,6 +181,8 @@ def test_built_handoff_mirrors_the_inbox(inbox_env: Path, tmp_path: Path) -> Non
             "write",
             "--workspace",
             str(workspace),
+            "--session",
+            "ses_mirror",
             "--expected-path",
             expected,
         ],
@@ -186,3 +197,53 @@ def test_built_handoff_mirrors_the_inbox(inbox_env: Path, tmp_path: Path) -> Non
     body = drops[0].read_text(encoding="utf-8")
     assert "<!-- source: handoff -->" in body
     assert "verify inbox mirroring" in body
+    key = re.search(r"<!-- key: (handoff-[0-9a-f]{12}-[0-9a-f]{12}) -->", body)
+    assert key is not None
+    other_expected = subprocess.run(
+        [
+            sys.executable,
+            str(BUILT_HANDOFF),
+            "path",
+            "--workspace",
+            str(workspace),
+            "--session",
+            "ses_other",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    assert other_expected != expected
+    subprocess.run(
+        [
+            sys.executable,
+            str(BUILT_HANDOFF),
+            "write",
+            "--workspace",
+            str(workspace),
+            "--session",
+            "ses_other",
+            "--expected-path",
+            other_expected,
+        ],
+        input=handoff,
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "XDG_STATE_HOME": str(inbox_env.parents[1])},
+    )
+    drops = list(inbox_env.glob("handoff-*.md"))
+    assert len(drops) == 2
+    keys = {
+        match.group(1)
+        for drop in drops
+        for match in [
+            re.search(
+                r"<!-- key: (handoff-[0-9a-f]{12}-[0-9a-f]{12}) -->",
+                drop.read_text(encoding="utf-8"),
+            )
+        ]
+        if match is not None
+    }
+    assert len(keys) == 2
+    assert key.group(1) in keys

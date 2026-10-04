@@ -54,6 +54,20 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- The `handoff` skill now scopes every handoff to one session: the bundled
+  runner resolves and writes
+  `$XDG_STATE_HOME/agent-skills/handoff/<workspace-id>/<session-id>/handoff.md`
+  and requires an explicit `--session` token (a nonempty
+  `ses_[A-Za-z0-9_-]+` value without path separators) for both `path` and
+  `write`; a missing or invalid session ID fails without creating state.
+  Parallel sessions of one workspace therefore keep independent files and
+  independent `## History` snapshots instead of merging into one shared file,
+  the legacy workspace-level `handoff.md` is never read, written, or removed,
+  and the memomatic distillate is superseded per workspace and session.
+  Restoration uses the session's own path or a full path passed explicitly by
+  the user; there is no list or auto-discovery. Session directories accumulate
+  without retention; cleanup remains a separate task.
+
 - `finish-review` finalizes locally: it no longer rechecks GitLab freshness,
   no longer returns `refresh_required`, and never restarts analysis because
   of new threads. Post-review drift is handled by the explicit
