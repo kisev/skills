@@ -92,13 +92,35 @@ package name through the registry `latest` dist-tag, which can select an
 unrelated build. Any existing `@kisev/agentomatic` or legacy
 `@kisev/skills-opencode` entry — bare, stale-pinned, or with options — shall be
 replaced by that pinned spec in place instead of appending a duplicate, leaving
-unrelated user plugins untouched.
+unrelated user plugins untouched. The `skills-state-permissions` fragment shall
+add read and `external_directory` rules for the structural
+`*.worktrees/reviewmatic/**` review-worktree pattern — including the
+`*.worktrees/reviewmatic/*` directory boundary that V2 external access checks
+actually match and the catalog roots enumeration needs — without
+predetermining per-repository or per-MR paths, without adding shell or edit
+permissions, without opening sibling catalogs under `<repo>.worktrees`, and
+without matching typo'd sibling state directories. Because V2 resolves
+permissions by the last matching rule, a preset allow that can overlap a rule
+denied before the preset run shall be inserted before that deny instead of
+being appended after it, so recorded user and secret denies — including
+narrower glob denies — keep priority; an allow that overlaps a deny added
+earlier in the same batch (a deliberate exception such as `*.env.example`)
+stays appended, and an explicit user rule for the exact preset action and
+resource with a conflicting effect is reported as a conflict instead of being
+overwritten. Repeated application and joint updates of both fragments shall
+be verified no-ops that leave the configuration bytes identical.
 
 #### Verification
 
 `packages/agentomatic/test/config-setup.test.mjs` checks preserved user entries,
 stale and replayed receipts, non-mutating previews, pending recovery, dependency
-opt-out, and archived pre-images. CLI integration tests check core activation.
+opt-out, archived pre-images, and reviewmatic worktree rule ordering and scoping.
+An upgrade regression installs both fragments over a recorded narrower user deny
+and an already-configured `secrets-guard`, then evaluates the final ordered
+rules the way V2 does — by the last matching rule — for real worktree reads,
+the canonical `external_directory` boundary, sibling catalogs, typo'd state
+directories, and secret files inside the allowed trees, in both fragment
+orders and on repeated application. CLI integration tests check core activation.
 
 ## Example
 

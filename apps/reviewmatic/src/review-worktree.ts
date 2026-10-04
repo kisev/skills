@@ -385,8 +385,16 @@ function withPreparationLock<T>(base: string, slug: string, operation: () => T):
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
       let stale = false;
       try {
-        const owner = Number.parseInt(readFileSync(lockPath, "utf8").trim(), 10);
-        stale = !Number.isInteger(owner) || owner === process.pid || !processAlive(owner);
+        const raw = readFileSync(lockPath, "utf8").trim();
+        // An empty file means the owner created it but has not written its
+        // PID yet: a live, just-started holder. Removing it here would let
+        // two preparations run the same mutation concurrently.
+        stale =
+          raw !== "" &&
+          (() => {
+            const owner = Number.parseInt(raw, 10);
+            return !Number.isInteger(owner) || owner === process.pid || !processAlive(owner);
+          })();
       } catch {
         stale = false;
       }
@@ -402,7 +410,7 @@ function withPreparationLock<T>(base: string, slug: string, operation: () => T):
   try {
     writeSync(descriptor, Buffer.from(`${process.pid}\n`, "utf8"));
   } catch {
-    undefined;
+    // Best-effort identification; an unwritten PID keeps the lock unstealable.
   }
   try {
     return operation();

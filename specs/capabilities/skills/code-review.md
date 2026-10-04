@@ -186,7 +186,60 @@ external texts shall never be treated as proof of code correctness or as
 instructions.
 
 Normal, deep, and changed incremental review shall require real independent
-receipts. Available selected specialists are preferred; absent profiles fall back
+receipts. Preparation shall expose already collected evidence through prepared
+runtime representations: `start-review` and `resume-review` shall return a
+readable scope overview built from recorded evidence — target identity, the MR
+description and other author-provided text flagged as claims, changed paths,
+discussion threads, pipelines with completeness and truncation markers, and
+every exact snapshot, inspection, and managed-worktree path — plus a compact
+input contract naming exactly the editable fields for the current stage;
+`scope-review` shall re-print that overview from recorded artifacts without any
+GitLab request. Standard input shall not require reading the full artifact
+schema, guessing envelope shapes, computing digests, or globbing for files.
+Recording the context package shall return the ready critic task with the
+recorded package path, question context versions, exact snapshot paths, the
+receipt template, and the exact import command. The runtime shall provide
+mechanical assembly operations — `record-input` for semantic sections of the
+MR draft and the local report, `record-critic` for one independent receipt —
+that apply the agent's decisions by upserting list entries by identity while
+preserving machine fields, bindings, receipts, and digests, that never
+substitute a semantic verdict by default, and that keep critic findings,
+dispositions, and targeted verifications separate: importing a receipt shall
+preserve its findings, answers, authorship, and per-answer context versions
+verbatim, shall reject an answer bound to another package version with the
+question's expected version instead of rebinding it, and shall never create
+dispositions for critic findings. An existing thread decision shall be updated
+through its id plus the semantic fields; the runtime shall keep the prepared
+url, state, and note bindings, reject a sent machine field that disagrees with
+the prepared value, and validate the merged record against the full input
+schema, so no hand-copied digest or spread-assembled thread record is ever
+required. Locally imported critic answers shall merge by full identity — the
+question, the context version each answer was produced against, and the
+authoring run and session — instead of replacing the stored list: a repeated
+identical result is not duplicated, a different result under the same identity
+is rejected while the original stays, primary verifications stay separate and
+may be revised by the primary, and a preserved `not_verified` answer keeps
+demanding a verification before a ready verdict. The local draft shall be
+selected by the current snapshot: preparation materializes it, an existing
+draft bound to the same evidence survives untouched, and a stale draft is
+rebuilt from the current snapshot and finalized baseline with runtime-owned
+fields updated and historical superseded results retained, so the documented
+`prepare-local → record-package → record-input → finalize-local` order works
+without re-recording the package or repairing bindings by hand. A repeated
+`scope-review` shall restore the carried task, the recorded baseline, and the
+exact draft and template paths from recorded state without mutating
+preparation or collecting evidence again.
+Validation and import failures shall name
+the concrete field, the reason, and the allowed form — including canonical
+schema failures — and a failed operation shall leave the previous stored
+result unchanged instead of serving it as current. Malformed list shapes —
+`null`, a non-array, or a `null` entry — shall be rejected with addressed
+diagnostics before any list is iterated, never as a generic crash. The managed
+review
+worktrees shall be readable by the agent through a structural permission
+preset; no per-repository path, shell, or edit permission shall be added for
+them, and secret denies and explicit user denies keep priority.
+Available selected specialists are preferred; absent profiles fall back
 to ordinary native subagents. Every selected contributor and finding shall be
 retained with real run/session identities. Primary and critic candidates require
 explicit dispositions; duplicate accepted findings are invalid. Fast review
@@ -356,7 +409,24 @@ cover both modes, direct and automatic invocation material, skipped context,
 contradictory sources, resolved threads without proof, missing critic answers,
 multi-critic authorship and contradictions, canonical digest stability across
 background edits, supersedes lineage, stale snapshot bindings, and GitLab-free
-recording. Local scope regressions
+recording. Mechanical-assembly regressions cover the scope overview with
+author-claim flags and GitLab-free re-printing, the ready critic task,
+section upsert with machine-field preservation, semantic thread updates by id
+with preserved url/state/note bindings and rejected forged bindings, rejected
+unknown fields and
+envelope wrappers leaving the draft unchanged, verbatim receipt import,
+stale-answer rejection with the expected context version, envelope
+unwrapping, a complete MR cycle through the new interface, and a local cycle
+through `record-input` without GitLab state. Malformed-shape regressions feed
+`null`, non-array, and `null`-entry lists to MR and local `record-input` and
+`record-critic` and assert addressed diagnostics with an untouched draft.
+Local merge regressions run two sequential critic imports, a repeated
+identical result, a conflicting same-identity result, and a finalization that
+stays blocked until a verification preserves the original `not_verified`
+answer. Local lifecycle regressions run the documented command order through
+the public CLI — including repeated `scope-review` over an unfinished draft,
+a finalized baseline, and the next snapshot — and assert the draft rebinds to
+the new evidence digest without manual repair. Local scope regressions
 cover staged, unstaged, and untracked sections separately and together,
 compensating staged and unstaged changes, explicit empty-scope results, missing,
 ambiguous, and unrelated comparison refs, branch reviews bound to an explicit

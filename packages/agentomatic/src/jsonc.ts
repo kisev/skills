@@ -41,6 +41,7 @@ export type JsoncPath = Array<string | number>;
 
 export type JsoncEdit =
   | { kind: "append-unique"; path: JsoncPath; value: unknown }
+  | { kind: "insert-before"; path: JsoncPath; before: unknown; value: unknown }
   | { kind: "set-value"; path: JsoncPath; value: unknown }
   | { kind: "rename-key"; path: JsoncPath; to: string }
   | { kind: "remove-key"; path: JsoncPath }
@@ -48,7 +49,13 @@ export type JsoncEdit =
   | { kind: "set-if-absent"; path: JsoncPath; value: unknown }
   | { kind: "widen-scalar-map"; path: JsoncPath; entries: Record<string, string> };
 
-export type JsoncEditResult = "created" | "present" | "appended" | "replaced" | "widened";
+export type JsoncEditResult =
+  | "created"
+  | "present"
+  | "appended"
+  | "inserted"
+  | "replaced"
+  | "widened";
 
 function tokenize(text: string): Token[] {
   const tokens: Token[] = [];
@@ -404,6 +411,24 @@ function applyEdit(
     const at = target.empty ? target.start + 1 : target.items.at(-1)!.end;
     return { text: text.slice(0, at) + insertion + text.slice(at), result: "appended" };
   }
+  if (edit.kind === "insert-before") {
+    const target = resolve(root, edit.path);
+    if (!target || target.kind !== "array")
+      throw new JsoncError("conflict", "insert-before target is missing or not an array");
+    const items = target.items.map(nodeToValue);
+    if (items.some((value) => JSON.stringify(value) === JSON.stringify(edit.value)))
+      return { text, result: "present" };
+    const anchor = items.findIndex(
+      (value) => JSON.stringify(value) === JSON.stringify(edit.before),
+    );
+    if (anchor === -1)
+      throw new JsoncError("conflict", "insert-before anchor item is missing from the array");
+    const node = target.items[anchor];
+    return {
+      text: text.slice(0, node.start) + `${JSON.stringify(edit.value)}, ` + text.slice(node.start),
+      result: "inserted",
+    };
+  }
   if (edit.kind === "replace-array-value") {
     const target = resolve(root, edit.path);
     if (!target || target.kind !== "array")
@@ -509,6 +534,17 @@ function verifyEdit(before: unknown, after: unknown, edit: JsoncEdit): void {
       !target.some((value) => JSON.stringify(value) === JSON.stringify(edit.value))
     )
       throw new JsoncError("merge_validation_failed", "append-unique postcondition failed");
+    return;
+  }
+  if (edit.kind === "insert-before") {
+    const target = at(after, edit.path);
+    if (!Array.isArray(target))
+      throw new JsoncError("merge_validation_failed", "insert-before postcondition failed");
+    const serialized = target.map((value) => JSON.stringify(value));
+    const value = serialized.indexOf(JSON.stringify(edit.value));
+    const anchor = serialized.indexOf(JSON.stringify(edit.before));
+    if (value === -1 || anchor === -1 || value > anchor)
+      throw new JsoncError("merge_validation_failed", "insert-before postcondition failed");
     return;
   }
   if (edit.kind === "replace-array-value") {

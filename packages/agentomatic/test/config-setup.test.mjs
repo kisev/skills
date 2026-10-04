@@ -15,7 +15,7 @@ import {
   recoverConfigSetup,
 } from "../dist/config-setup.js";
 import { applyJsoncEdits, JsoncError, parseJsonc } from "../dist/jsonc.js";
-import { corePluginEdits, permissionEdits } from "../dist/opencode-config.js";
+import { corePluginEdits, matchesWildcard, permissionEdits } from "../dist/opencode-config.js";
 import { requirePackageVersion } from "../dist/package-metadata.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
@@ -265,6 +265,10 @@ test("config setup applies all fragments globally and stays idempotent", async (
     assertRule(opencode, "external_directory", "~/.agents/skills", "allow");
     assertRule(opencode, "external_directory", "~/.config/opencode/skills", "allow");
     assertRule(opencode, "external_directory", "~/.local/state/agent-skills", "allow");
+    assertRule(opencode, "read", "*.worktrees/reviewmatic/**", "allow");
+    assertRule(opencode, "external_directory", "*.worktrees/reviewmatic/*", "allow");
+    assertRule(opencode, "external_directory", "*.worktrees/reviewmatic", "allow");
+    assertRule(opencode, "external_directory", "*.worktrees", "allow");
     assert.equal(opencode.lsp, undefined);
 
     const cli = parseJsonc(readFileSync(join(root, ".config", "opencode", "cli.json"), "utf8"));
@@ -276,6 +280,10 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const kilo = parseJsonc(readFileSync(join(root, ".config", "kilo", "kilo.jsonc"), "utf8"));
     assert.equal(kilo.reasoning_display, "expanded");
     assert.equal(kilo.permission.read["~/.local/state/agent-skills/**"], "allow");
+    assert.equal(kilo.permission.read["*.worktrees/reviewmatic/**"], "allow");
+    assert.equal(kilo.permission.external_directory["*.worktrees/reviewmatic/*"], "allow");
+    assert.equal(kilo.permission.external_directory["*.worktrees/reviewmatic"], "allow");
+    assert.equal(kilo.permission.shell, undefined);
 
     const mimo = parseJsonc(
       readFileSync(join(root, ".config", "mimocode", "mimocode.jsonc"), "utf8"),
@@ -285,6 +293,207 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const second = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     assert.equal(second.confirmable, false);
     assert.ok(second.operations.every((item) => item.operation === "unchanged"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("reviewmatic worktree access stays read-only, structurally scoped, and below secrets denies", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  try {
+    const setup = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
+    await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: setup.receipt,
+    });
+    const config = parseJsonc(
+      readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8"),
+    );
+    // A user deny for the managed tree wins: it sits after the preset allow.
+    config.permissions.push({
+      action: "read",
+      resource: "*.worktrees/reviewmatic/**",
+      effect: "deny",
+    });
+    await writeFile(
+      join(root, ".config", "opencode", "opencode.jsonc"),
+      JSON.stringify(config, null, 2),
+      "utf8",
+    );
+    const preview = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
+    assert.ok(
+      preview.operations.some(
+        (item) => item.fragment === "skills-state-permissions" && item.operation === "conflict",
+      ),
+      "an explicit user deny for the managed tree is reported as a conflict, never overwritten",
+    );
+
+    const applied = parseJsonc(
+      readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8"),
+    );
+    const allowIndex = applied.permissions.findIndex(
+      (rule) =>
+        rule.action === "read" &&
+        rule.resource === "*.worktrees/reviewmatic/**" &&
+        rule.effect === "allow",
+    );
+    const denyIndex = applied.permissions.findIndex(
+      (rule) => rule.action === "read" && rule.resource === "**.pem" && rule.effect === "deny",
+    );
+    assert.ok(allowIndex >= 0 && denyIndex > allowIndex, "secrets-guard denies keep priority");
+    assert.deepEqual(
+      applied.permissions.filter(
+        (rule) =>
+          rule.resource.includes(".worktrees") &&
+          rule.action !== "read" &&
+          rule.action !== "external_directory",
+      ),
+      [],
+      "no shell or edit permission is added for the managed worktrees",
+    );
+    const managed =
+      "/repo-owner/project.worktrees/reviewmatic/mr-host-project-iid7-d8ac/commit.txt";
+    assert.equal(matchesWildcard("*.worktrees/reviewmatic/**", managed), true);
+    assert.equal(
+      matchesWildcard("*.worktrees/reviewmatic/**", "/repo-owner/project.worktrees/other/x"),
+      false,
+    );
+    assert.equal(
+      matchesWildcard("~/.local/state/agent-skills/**", "~/.local/state/agent-skill/draft.json"),
+      false,
+      "a typo'd sibling state directory stays outside the preset",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("upgrading skills-state over recorded user and secret denies preserves their priority", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  const file = join(root, ".config", "opencode", "opencode.jsonc");
+  const selection = (fragments) => ({ targets: ["opencode"], fragments });
+  const run = async (fragments) => {
+    const preview = await previewConfigSetup(selection(fragments), "global", directory, root);
+    const applied = await applyConfigSetup(selection(fragments), "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: preview.receipt,
+    });
+    return {
+      operations: applied.operations.map((item) => `${item.fragment}:${item.operation}`),
+      preview: preview.operations.map((item) => `${item.fragment}:${item.operation}`),
+    };
+  };
+  // V2 resolves permissions by the last matching rule.
+  const evaluate = (config, action, resource) =>
+    config.permissions
+      .filter(
+        (rule) => matchesWildcard(rule.action, action) && matchesWildcard(rule.resource, resource),
+      )
+      .at(-1)?.effect ?? "ask";
+  try {
+    // A narrower user deny inside the managed tree plus a secret deny, then an
+    // already-configured secrets-guard: the exact upgrade scenario.
+    await writeFile(
+      file,
+      JSON.stringify({
+        permissions: [
+          {
+            action: "read",
+            resource: "/repo/project.worktrees/reviewmatic/private/*",
+            effect: "deny",
+          },
+          { action: "read", resource: "*.env", effect: "deny" },
+        ],
+      }),
+    );
+    await run(["secrets-guard"]);
+    const joint = await run(["skills-state-permissions", "secrets-guard"]);
+    assert.ok(joint.operations.includes("skills-state-permissions:update"));
+    assert.ok(joint.operations.includes("secrets-guard:unchanged"));
+    const config = parseJsonc(readFileSync(file, "utf8"));
+    assert.equal(
+      evaluate(config, "read", "/repo/project.worktrees/reviewmatic/private/file.txt"),
+      "deny",
+    );
+    assert.equal(evaluate(config, "read", "/repo/project.worktrees/reviewmatic/mr-1/.env"), "deny");
+    assert.equal(
+      evaluate(config, "read", "/repo/project.worktrees/reviewmatic/mr-1/src/file.ts"),
+      "allow",
+    );
+    assert.equal(
+      evaluate(config, "external_directory", "/repo/project.worktrees/reviewmatic/mr-1/*"),
+      "allow",
+      "the canonical V2 worktree boundary is covered",
+    );
+    assert.equal(
+      evaluate(config, "external_directory", "/repo/project.worktrees/reviewmatic/*"),
+      "allow",
+    );
+    assert.equal(
+      evaluate(config, "external_directory", "/repo/project.worktrees/*"),
+      "ask",
+      "sibling catalogs under <repo>.worktrees stay unapproved",
+    );
+    assert.equal(evaluate(config, "read", "~/.agent-skill/state/report.json"), "ask");
+    assert.equal(
+      evaluate(config, "read", "~/.local/state/agent-skills/gitlab/abc/report.json"),
+      "allow",
+    );
+    assert.equal(evaluate(config, "read", "~/.local/state/agent-skills/.env"), "deny");
+    assert.equal(evaluate(config, "read", "~/notes/example.env.example"), "allow");
+
+    // Repeated application is a verified no-op that leaves the file identical.
+    const bytes = readFileSync(file);
+    const repeated = await run(["skills-state-permissions", "secrets-guard"]);
+    assert.deepEqual(repeated.operations, [
+      "skills-state-permissions:unchanged",
+      "secrets-guard:unchanged",
+    ]);
+    assert.deepEqual(readFileSync(file), bytes);
+
+    // The reversed fragment order reaches the same protections.
+    const reversedHome = await homeWithConfigs(directory);
+    const reversedFile = join(reversedHome, ".config", "opencode", "opencode.jsonc");
+    await writeFile(
+      reversedFile,
+      JSON.stringify({
+        permissions: [{ action: "read", resource: "*.env", effect: "deny" }],
+      }),
+    );
+    const reversedDirectory = mkdtempSync(join(tmpdir(), "skills-config-setup-test-"));
+    try {
+      const runReversed = async (fragments) => {
+        const preview = await previewConfigSetup(
+          selection(fragments),
+          "global",
+          reversedDirectory,
+          reversedHome,
+        );
+        await applyConfigSetup(selection(fragments), "global", reversedDirectory, reversedHome, {
+          dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+          receipt: preview.receipt,
+        });
+      };
+      await runReversed(["secrets-guard"]);
+      await runReversed(["secrets-guard", "skills-state-permissions"]);
+      const reversed = parseJsonc(readFileSync(reversedFile, "utf8"));
+      assert.equal(
+        evaluate(reversed, "read", "/repo/project.worktrees/reviewmatic/mr-1/.env"),
+        "deny",
+      );
+      assert.equal(
+        evaluate(reversed, "read", "/repo/project.worktrees/reviewmatic/mr-1/src/file.ts"),
+        "allow",
+      );
+      assert.equal(
+        evaluate(reversed, "external_directory", "/repo/project.worktrees/reviewmatic/mr-1/*"),
+        "allow",
+      );
+    } finally {
+      await rm(reversedDirectory, { recursive: true, force: true });
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

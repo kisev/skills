@@ -17,10 +17,14 @@ import {
   emptyScopeReason,
   finalizeLocal,
   localBundle,
+  persistLocalDraft,
   prepareFollowup,
+  recordLocalInput,
   recordLocalPackage,
   recordReview,
+  selectLocalDraft,
 } from "./local-review.js";
+import { localScope, scopeForRoot } from "./scope.js";
 import { markerRun, StateArtifactError } from "./state-artifacts.js";
 import { VERSION } from "./version.js";
 import { dispatch, prepared, type WorkflowArguments } from "./workflow.js";
@@ -33,6 +37,8 @@ import {
   resumeReview,
   checkReview,
   finishReview,
+  recordDraftCritic,
+  recordDraftInput,
   recordDraftPackage,
   repairReview,
   refreshReview,
@@ -222,6 +228,29 @@ const definitions: CommandSpec[] = [
       { name: "bundle", description: "local WIP snapshot path (local mode)" },
       { name: "input", description: "completed context package input", required: true },
     ],
+  },
+  {
+    signature: "record-input",
+    description:
+      "Apply semantic review sections to the prepared draft, preserving machine bindings",
+    options: [
+      { name: "draft", description: "generated editable review draft (remote MR mode)" },
+      { name: "bundle", description: "local WIP snapshot path (local mode)" },
+      { name: "input", description: "semantic sections input file", required: true },
+    ],
+  },
+  {
+    signature: "record-critic",
+    description: "Import one independent critic receipt into the draft verbatim",
+    options: [
+      { name: "draft", description: "generated editable review draft", required: true },
+      { name: "input", description: "critic receipt response file", required: true },
+    ],
+  },
+  {
+    signature: "scope-review",
+    description: "Print the prepared review scope overview from recorded evidence",
+    options: [{ name: "artifact-root", description: "artifact root", required: true }],
   },
   {
     signature: "prepare-local",
@@ -453,12 +482,14 @@ async function runPrepareLocal(fields: Fields): Promise<void> {
   }
   const root = await artifactRoot(String(bundle.artifact_root));
   const [path, digestValue] = await writeArtifact(root, "local_wip_snapshot", bundle);
-  const review = prepareFollowup(
-    root,
-    bundle,
-    digestValue,
-    (fields.incremental as string) ?? "auto",
-  );
+  const incremental = (fields.incremental as string) ?? "auto";
+  const review = prepareFollowup(root, bundle, digestValue, incremental);
+  // Materialize the draft for this snapshot at preparation time: an existing
+  // draft bound to the same evidence survives untouched, while a missing or
+  // stale draft is rebuilt from the current snapshot and baseline.
+  const draftSelection = selectLocalDraft(root, bundle, digestValue, incremental);
+  if (draftSelection.materialized)
+    persistLocalDraft(root, digestValue, draftSelection, draftSelection.draft);
   writeJson(`${root}/current-local.json`, {
     evidence_path: path,
     evidence_digest: digestValue,
@@ -484,6 +515,7 @@ async function runPrepareLocal(fields: Fields): Promise<void> {
       unstaged: (sections.unstaged.diff as string).length > 0,
       untracked_files: (sections.untracked.items as Record<string, unknown>[]).length,
     },
+    scope_overview: localScope(bundle, review, String(path)),
     complete: bundle.retrieval_complete,
     review: review,
     external_mutations: false,
@@ -504,6 +536,35 @@ async function runRecordPackage(fields: Fields): Promise<void> {
     return;
   }
   emit(await recordLocalPackage(String(fields.bundle), String(fields.input)));
+}
+
+async function runRecordInput(fields: Fields): Promise<void> {
+  const hasDraft = fields.draft !== undefined;
+  const hasBundle = fields.bundle !== undefined;
+  if (hasDraft === hasBundle) {
+    throw new WorkflowError(
+      "record-input requires exactly one target: --draft for a remote MR review or --bundle for a local review",
+    );
+  }
+  let result: Json;
+  if (hasDraft) result = await recordDraftInput(String(fields.draft), String(fields.input));
+  else result = await recordLocalInput(String(fields.bundle), String(fields.input));
+  emit(result);
+  process.exitCode = result.status === "ok" ? 0 : 2;
+}
+
+async function runRecordCritic(fields: Fields): Promise<void> {
+  const result = await recordDraftCritic(String(fields.draft), String(fields.input));
+  emit(result);
+  process.exitCode = result.status === "ok" ? 0 : 2;
+}
+
+async function runScopeReview(fields: Fields): Promise<void> {
+  emit({
+    status: "ok",
+    scope: scopeForRoot(String(fields.artifactRoot)),
+    external_mutations: false,
+  });
 }
 
 async function runFinalizeLocal(fields: Fields): Promise<void> {
@@ -668,6 +729,9 @@ async function runCommand(command: string, args: string[], fields: Fields): Prom
     if (command === "prepare") await runPrepare(fields);
     else if (command === "prepare-local") await runPrepareLocal(fields);
     else if (command === "record-package") await runRecordPackage(fields);
+    else if (command === "record-input") await runRecordInput(fields);
+    else if (command === "record-critic") await runRecordCritic(fields);
+    else if (command === "scope-review") await runScopeReview(fields);
     else if (command === "finalize-local") await runFinalizeLocal(fields);
     else if (command === "assess-mode") runAssessMode(fields);
     else process.exitCode = contractError("invalid_command", "a supported subcommand is required");

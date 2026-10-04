@@ -1196,11 +1196,11 @@ test("validate critic binds evidence and scope", () => {
   validateCritic(bare, DIGEST);
   assert.throws(
     () => validateCritic(receipt, "b".repeat(64)),
-    isWorkflowError(/schema-invalid or does not bind evidence/),
+    isWorkflowError(/\$\.evidence_digest: must bind the selected evidence digest/),
   );
   assert.throws(
     () => validateCritic({ ...receipt, scope_digest: "c".repeat(64) }, DIGEST, DIGEST),
-    isWorkflowError(/schema-invalid or does not bind evidence/),
+    isWorkflowError(/\$\.scope_digest: an incremental receipt must bind/),
   );
   assert.throws(
     () => validateCritic({ ...receipt, run_id: "" }, DIGEST),

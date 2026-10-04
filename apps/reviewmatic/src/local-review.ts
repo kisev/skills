@@ -11,12 +11,13 @@ import {
   isDigest,
   readJson,
   regularFile,
-  schemaValid,
+  rejectEnvelopeWrapper,
   stateDirectory,
   writeArtifact,
   writeJson,
 } from "./contract.js";
 import { runnerAction } from "./context.js";
+import { schemaIssues, upsertByIdentity } from "./draft.js";
 import { contentDigest } from "./state-artifacts.js";
 import {
   bindQuestionContexts,
@@ -385,7 +386,11 @@ function sectionDelta(
   return delta;
 }
 
-export function prepareFollowup(
+// Pure computation behind prepareFollowup: baseline selection, reuse mode,
+// section delta, and the report/package templates. No file is written, so
+// read-only consumers (scope-review) can reconstruct the exact prepared view
+// without mutating preparation state.
+export function localFollowupPlan(
   root: string,
   bundle: Record<string, unknown>,
   digestValue: string,
@@ -419,14 +424,6 @@ export function prepareFollowup(
     digestValue,
     retained as Record<string, unknown> | null,
   );
-  const packageTemplatePath = `${root}/local-context-package-input.json`;
-  writeJson(packageTemplatePath, packageTemplate);
-  const recorded = recordedPackage(root);
-  const packageCurrent =
-    recorded !== null &&
-    recorded.payload.mode === "local" &&
-    String((recorded.payload.binding as Record<string, unknown>).evidence_digest) === digestValue;
-  const snapshotPath = `${root}/artifacts/local_wip_snapshot/${digestValue}.json`;
   const template = {
     evidence_digest: digestValue,
     previous_review_digest: previousDigest,
@@ -451,6 +448,12 @@ export function prepareFollowup(
     verdict: "blocked",
     external_mutations: false,
   };
+  const recorded = recordedPackage(root);
+  const packageCurrent =
+    recorded !== null &&
+    recorded.payload.mode === "local" &&
+    String((recorded.payload.binding as Record<string, unknown>).evidence_digest) === digestValue;
+  const snapshotPath = `${root}/artifacts/local_wip_snapshot/${digestValue}.json`;
   return {
     mode: mode,
     reason: reason,
@@ -463,7 +466,7 @@ export function prepareFollowup(
     report_template: template,
     draft_path: `${root}/local-review-draft.json`,
     context_package: {
-      template_path: packageTemplatePath,
+      template_path: `${root}/local-context-package-input.json`,
       package_path: recorded === null ? null : recorded.path,
       package_digest: recorded === null ? null : recorded.digest,
       status: packageCurrent ? "recorded" : "pending",
@@ -473,10 +476,147 @@ export function prepareFollowup(
         "--bundle",
         snapshotPath,
         "--input",
-        packageTemplatePath,
+        `${root}/local-context-package-input.json`,
       ]).command,
     },
+    package_template_payload: packageTemplate,
   };
+}
+
+export function prepareFollowup(
+  root: string,
+  bundle: Record<string, unknown>,
+  digestValue: string,
+  incremental: string,
+): Record<string, unknown> {
+  const plan = localFollowupPlan(root, bundle, digestValue, incremental);
+  writeJson(
+    `${root}/local-context-package-input.json`,
+    plan.package_template_payload as Record<string, unknown>,
+  );
+  const { package_template_payload: _payload, ...followup } = plan;
+  return followup;
+}
+
+// Selects the local review draft for the current snapshot: an existing draft
+// bound to this exact evidence is reused verbatim (unfinished work survives),
+// while a missing or stale draft is re-materialized from the pure follow-up
+// plan, so runtime-owned fields always follow the current snapshot and
+// baseline instead of a previous cycle's mechanical bindings.
+export type LocalDraftSelection = {
+  draft: Record<string, unknown>;
+  materialized: boolean;
+  plan: Record<string, unknown>;
+};
+
+export function selectLocalDraft(
+  root: string,
+  bundle: Record<string, unknown>,
+  digestValue: string,
+  incremental = "auto",
+): LocalDraftSelection {
+  const plan = localFollowupPlan(root, bundle, digestValue, incremental);
+  const draftPath = `${root}/local-review-draft.json`;
+  if (existsSync(draftPath)) {
+    const draft = readJson(draftPath, "local review draft");
+    if (pythonGet(draft, "evidence_digest") === digestValue) {
+      return { draft: draft, materialized: false, plan: {} };
+    }
+    // A fresh preparation of identical evidence content (the envelope digest
+    // changes through its creation stamp alone) adopts the unfinished draft:
+    // runtime-owned fields follow the new snapshot while every agent section
+    // survives, and the recorded package's authored content is carried into
+    // the new template so re-recording stays mechanical.
+    const currentDigest = pythonGet(draft, "evidence_digest");
+    if (typeof currentDigest === "string" && isDigest(currentDigest)) {
+      try {
+        const prior = addressedPayload(root, "local_wip_snapshot", currentDigest);
+        const sameBoundary =
+          pythonGet(prior, "repo_root") === pythonGet(bundle, "repo_root") &&
+          pythonGet(prior, "base_sha") === pythonGet(bundle, "base_sha") &&
+          pythonGet(prior, "head_sha") === pythonGet(bundle, "head_sha") &&
+          pythonGet(prior, "ref") === pythonGet(bundle, "ref");
+        if (sameBoundary && Object.keys(sectionDelta(prior, bundle)).length === 0) {
+          const adopted = structuredClone(draft);
+          adopted.evidence_digest = digestValue;
+          adopted.previous_review_digest = plan.previous_review_digest;
+          adopted.mode = plan.mode;
+          adopted.context_package = null;
+          const recorded = recordedPackage(root);
+          if (
+            recorded !== null &&
+            String((recorded.payload.binding as Record<string, unknown>).evidence_digest) ===
+              currentDigest
+          ) {
+            const fresh = structuredClone(plan.package_template_payload as Record<string, unknown>);
+            for (const key of [
+              "goal",
+              "acceptance_criteria",
+              "background",
+              "claims",
+              "constraints",
+              "prior_decisions",
+              "questions",
+              "supersedes",
+            ])
+              fresh[key] = structuredClone(recorded.payload[key] ?? fresh[key]);
+            plan.package_template_payload = fresh;
+            writeJson(`${root}/local-context-package-input.json`, fresh as Record<string, unknown>);
+          }
+          return { draft: adopted, materialized: true, plan: plan };
+        }
+      } catch {
+        // A prior snapshot that cannot be read falls back to re-materializing.
+      }
+    }
+  }
+  const draft = structuredClone(plan.report_template) as Record<string, unknown>;
+  const contextPackage = plan.context_package as Record<string, unknown>;
+  if (contextPackage.status === "recorded") {
+    draft.context_package = {
+      path: contextPackage.package_path,
+      digest: contextPackage.package_digest,
+    };
+  }
+  // Historical superseded results are evidence, never mechanical bindings:
+  // a stale draft's history survives the snapshot change.
+  if (existsSync(draftPath)) {
+    try {
+      const stale = readJson(draftPath, "local review draft");
+      const history = stale.superseded_question_results;
+      if (Array.isArray(history) && history.length > 0) draft.superseded_question_results = history;
+    } catch {
+      // A unreadable stale draft is replaced, not trusted.
+    }
+  }
+  return { draft: draft, materialized: true, plan: plan };
+}
+
+// Persists a selected draft. A re-materialized draft also refreshes the
+// package template unless the on-disk template already binds this snapshot,
+// in which case agent edits to it are preserved.
+export function persistLocalDraft(
+  root: string,
+  digestValue: string,
+  selection: LocalDraftSelection,
+  draft: Record<string, unknown>,
+): void {
+  writeJson(`${root}/local-review-draft.json`, draft);
+  if (!selection.materialized) return;
+  const templatePath = `${root}/local-context-package-input.json`;
+  let keep = false;
+  if (existsSync(templatePath)) {
+    try {
+      const template = readJson(templatePath, "local context package template");
+      const binding = pythonGet(template, "binding");
+      keep = isObject(binding) && pythonGet(binding, "evidence_digest") === digestValue;
+    } catch {
+      keep = false;
+    }
+  }
+  if (!keep) {
+    writeJson(templatePath, selection.plan.package_template_payload as Record<string, unknown>);
+  }
 }
 
 function validateFinding(finding: Record<string, unknown>): void {
@@ -498,8 +638,12 @@ function validateFinding(finding: Record<string, unknown>): void {
 export function validateReport(report: Record<string, unknown>): void {
   const schema = artifactSchema();
   const defs = schema.$defs as Record<string, Record<string, unknown>>;
-  if (!schemaValid(defs.local_review_payload as Record<string, unknown>, report, schema)) {
-    throw new WorkflowError("local review report is schema-invalid");
+  const issues = schemaIssues(defs.local_review_payload as Record<string, unknown>, report, "$");
+  if (issues.length > 0) {
+    throw new WorkflowError(
+      "local review report is invalid:\n" +
+        issues.map((issue) => ` - ${issue.path}: ${issue.message}`).join("\n"),
+    );
   }
   const findings = report.findings as Record<string, unknown>[];
   const ids = findings.map((finding) => finding.id);
@@ -826,7 +970,13 @@ export async function recordLocalPackage(
   supersedesDigest(root, input.supersedes);
   const previousPointer = readPackagePointer(root);
   const [path, packageDigest] = await writeContextPackage(root, input);
-  const superseded = retireSupersededResults(root, previousPointer, input);
+  // Bind the recorded package into the draft selected for this snapshot,
+  // materializing it when needed; the agent never copies package paths or
+  // digests by hand, in either order of record-package and record-input.
+  const selection = selectLocalDraft(root, bundle, digestValue);
+  const superseded = retireSupersededResults(selection.draft, previousPointer, input);
+  selection.draft.context_package = { path: path, digest: packageDigest };
+  persistLocalDraft(root, digestValue, selection, selection.draft);
   return {
     status: "ok",
     artifact_path: path,
@@ -836,6 +986,232 @@ export async function recordLocalPackage(
     question_context_versions: questionContextVersionList(input),
     question_summary: questionReport((input.questions as Record<string, unknown>[]) ?? [], [], []),
     superseded_questions: superseded,
+    critic_task: {
+      launch: "now",
+      mode: "local",
+      context_package: {
+        path: path,
+        digest: packageDigest,
+        question_context_versions: questionContextVersionList(input),
+      },
+      inputs: {
+        repo_root: bundle.repo_root,
+        bundle_path: bundlePath,
+      },
+      response_contract: {
+        answers_field: "$.question_answers",
+        import_command: runnerAction("record-input", [
+          "--bundle",
+          bundlePath,
+          "--input",
+          "<local-review-input.json>",
+        ]),
+        rules:
+          "Every question_answer copies that question's context_digest listed above and carries the critic's real run/session identity. The primary imports answers (and any critic findings) with record-input without rewriting them.",
+      },
+      instructions:
+        "Launch the independent local critic now, alongside primary inspection, and join before finalize-local. The critic reads the recorded package as its primary task context and the working tree exactly as committed/staged/unstaged in the snapshot.",
+    },
+    external_mutations: false,
+  };
+}
+
+// Mechanical assembly for the local review draft. Works on the prepared local
+// report template exactly like record-input works on the MR draft: semantic
+// sections only, machine bindings preserved, no verdict invented.
+const LOCAL_SECTIONS = [
+  "task",
+  "task_change_reason",
+  "findings",
+  "checks",
+  "assessment",
+  "verdict",
+  "question_answers",
+  "question_verifications",
+] as const;
+
+function localGaps(report: Record<string, unknown>): Record<string, unknown> {
+  const checks = (report.checks as Record<string, unknown>[] | undefined) ?? [];
+  const required = checks.filter((check) => check.required === true);
+  const binding = report.context_package as Record<string, unknown> | null;
+  return {
+    checks_required_total: required.length,
+    checks_not_run: required.filter((check) => check.status === "not_run").length,
+    checks_failed: required.filter((check) => check.status === "failed").length,
+    assessment_empty:
+      typeof report.assessment !== "string" || report.assessment === "" ? ["$.assessment"] : [],
+    context_package:
+      binding === null ? ["not recorded; run record-package --bundle before finalize-local"] : [],
+    question_answers: ((report.question_answers as Record<string, unknown>[]) ?? []).length,
+    question_verifications: ((report.question_verifications as Record<string, unknown>[]) ?? [])
+      .length,
+  };
+}
+
+// Stable canonical form for comparing stored and resent results: object key
+// order must never decide whether a repeated result is a duplicate.
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (isObject(value)) {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort(compareCodePoints)
+        .map((key) => [key, stableValue(value[key])]),
+    );
+  }
+  return value;
+}
+
+// Full identity of one collected result: the question, the meaningful-context
+// version it was produced against, and the authoring run/session. Critic
+// answers additionally keep the critic's own identity, while a primary
+// verification is identified by the preserved original answer it verifies.
+function resultIdentity(
+  section: "question_answers" | "question_verifications",
+  item: unknown,
+): string | null {
+  if (!isObject(item)) return null;
+  const origin = section === "question_answers" ? item : item.original;
+  if (!isObject(origin)) return null;
+  const parts = [item.question_id, item.context_digest, origin.run_id, origin.session_id];
+  if (parts.some((part) => typeof part !== "string" || part.length === 0)) return null;
+  return parts.join("\u0000");
+}
+
+// Merges sequentially imported critic answers (and the primary's
+// verifications) into the stored list instead of replacing it: a repeated
+// identical result is not duplicated, a different result with the same critic
+// identity and context version is rejected while the original is preserved,
+// and the primary may revise its own verification in place. Every other entry
+// survives regardless of order or disagreement.
+function mergeResultEntries(
+  current: Record<string, unknown>[],
+  incoming: Record<string, unknown>[],
+  section: "question_answers" | "question_verifications",
+  issues: Array<{ path: string; message: string }>,
+): Record<string, unknown>[] {
+  const result = structuredClone(current);
+  const positions = new Map<string, number>();
+  for (const [index, item] of result.entries()) {
+    const identity = resultIdentity(section, item);
+    if (identity !== null && !positions.has(identity)) positions.set(identity, index);
+  }
+  for (const [index, item] of incoming.entries()) {
+    const identity = resultIdentity(section, item);
+    if (identity === null) continue; // the schema issues already name the entry
+    const stored = positions.has(identity) ? result[positions.get(identity) as number] : undefined;
+    if (stored === undefined) {
+      positions.set(identity, result.length);
+      result.push(item);
+      continue;
+    }
+    if (digest(stableValue(stored)) === digest(stableValue(item))) continue;
+    if (section === "question_verifications") {
+      result[positions.get(identity) as number] = item;
+      continue;
+    }
+    const question = String(item.question_id);
+    issues.push({
+      path: `$.question_answers[${index}]`,
+      message:
+        `An answer for question ${question} with this critic run/session identity and context ` +
+        "version is already recorded with a different result; the original is preserved. Import " +
+        "the other critic's result under its own identity, or record the primary resolution in " +
+        "question_verifications preserving the original answer",
+    });
+  }
+  return result;
+}
+
+export async function recordLocalInput(
+  bundlePath: string,
+  inputPath: string,
+): Promise<Record<string, unknown>> {
+  const [, bundle] = artifactPayload(bundlePath, "local_wip_snapshot");
+  const envelope = readJson(bundlePath, "local evidence");
+  const digestValue = digest(envelope);
+  const root = String(bundle.artifact_root);
+  if (realpathSync(bundlePath) !== `${root}/artifacts/local_wip_snapshot/${digestValue}.json`) {
+    throw new WorkflowError("record-input requires the canonical immutable local snapshot");
+  }
+  const draftPath = `${root}/local-review-draft.json`;
+  const input = readJson(regularFile(inputPath, "local draft input"), "local draft input");
+  rejectEnvelopeWrapper(input, "local draft input");
+  const defs = artifactSchema().$defs as Record<string, Record<string, unknown>>;
+  const properties = (defs.local_review_payload as Record<string, unknown>).properties as Record<
+    string,
+    Record<string, unknown>
+  >;
+  // Form is checked before any list is iterated or any field is read, so a
+  // malformed section can only produce addressed diagnostics, never a crash.
+  const issues: Array<{ path: string; message: string }> = [];
+  const sections: Array<[string, unknown]> = [];
+  for (const [key, value] of Object.entries(input)) {
+    const field = `$.${key}`;
+    const schema = properties[key];
+    if (schema === undefined || !(LOCAL_SECTIONS as readonly string[]).includes(key)) {
+      issues.push({
+        path: field,
+        message: `Unknown section; allowed sections are ${LOCAL_SECTIONS.join(", ")}`,
+      });
+      continue;
+    }
+    const sectionIssues = schemaIssues(schema, value, field);
+    issues.push(...sectionIssues);
+    // Shape must pass before any list is iterated or any entry field is read.
+    if (sectionIssues.length === 0) sections.push([key, value]);
+  }
+  if (issues.length > 0) {
+    return {
+      status: "invalid",
+      draft_path: draftPath,
+      errors: issues,
+      note: "Nothing was applied and the local draft is unchanged. Fix the named fields in the input file and run record-input again.",
+      external_mutations: false,
+    };
+  }
+  const selection = selectLocalDraft(root, bundle, digestValue);
+  const next = structuredClone(selection.draft);
+  const applied: Record<string, unknown> = {};
+  for (const [key, value] of sections) {
+    if (key === "findings")
+      next.findings = upsertByIdentity(
+        (next.findings as Record<string, unknown>[]) ?? [],
+        value as Record<string, unknown>[],
+        (item) => String(item.id),
+      );
+    else if (key === "checks")
+      next.checks = upsertByIdentity(
+        (next.checks as Record<string, unknown>[]) ?? [],
+        value as Record<string, unknown>[],
+        (item) => String(item.name),
+      );
+    else if (key === "question_answers" || key === "question_verifications")
+      next[key] = mergeResultEntries(
+        (next[key] as Record<string, unknown>[]) ?? [],
+        value as Record<string, unknown>[],
+        key,
+        issues,
+      );
+    else next[key] = value;
+    applied[key] = Array.isArray(value) ? value.length : value;
+  }
+  if (issues.length > 0) {
+    return {
+      status: "invalid",
+      draft_path: draftPath,
+      errors: issues,
+      note: "Nothing was applied and the local draft is unchanged. Fix the named fields in the input file and run record-input again.",
+      external_mutations: false,
+    };
+  }
+  persistLocalDraft(root, digestValue, selection, next);
+  return {
+    status: "ok",
+    draft_path: draftPath,
+    applied,
+    pending: localGaps(next),
+    next_action: runnerAction("finalize-local", ["--bundle", bundlePath, "--report", draftPath]),
     external_mutations: false,
   };
 }
@@ -847,19 +1223,10 @@ export async function recordLocalPackage(
 // entries selected by their own binding move; fresh results for the same
 // question stay in place.
 function retireSupersededResults(
-  root: string,
+  report: Record<string, unknown>,
   pointer: Record<string, unknown> | null,
   input: Record<string, unknown>,
 ): string[] {
-  const draftPath = `${root}/local-review-draft.json`;
-  if (!existsSync(draftPath)) return [];
-  let report: Record<string, unknown>;
-  try {
-    report = readJson(regularFile(draftPath, "local review draft"), "local review draft");
-  } catch (error) {
-    if (!(error instanceof WorkflowError)) throw error;
-    return [];
-  }
   let previous: { payload: Record<string, unknown>; digest: string } | null = null;
   if (pointer !== null) {
     try {
@@ -882,7 +1249,6 @@ function retireSupersededResults(
     ...((report.superseded_question_results as Record<string, unknown>[] | undefined) ?? []),
     superseded.entry,
   ];
-  writeJson(draftPath, report);
   return superseded.questionIds;
 }
 

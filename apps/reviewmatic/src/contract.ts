@@ -25,6 +25,7 @@ import {
 } from "./state-artifacts.js";
 import { ARTIFACT_SCHEMA, ARTIFACT_SCHEMA_ID } from "./artifact-schema.js";
 import { assessmentIsValid, evidenceIsValid } from "./review-semver.js";
+import { registerSchemaValidator, schemaIssues } from "./schema-issues.js";
 
 export const MAX_BYTES = 8 * 1024 * 1024;
 export const MAX_PAGES = 1_000;
@@ -582,6 +583,24 @@ export function readJson(path: string, label: string): Record<string, unknown> {
     throw new WorkflowError(`${label} must contain a JSON object`);
   }
   return value;
+}
+
+// Agent inputs often arrive wrapped in the artifact envelope the agent saw in
+// recorded state. The wrapper belongs to the runtime; name it instead of
+// failing on every inner field at once.
+export function rejectEnvelopeWrapper(value: unknown, label: string): void {
+  if (!isDict(value)) return;
+  const keys = Object.keys(value);
+  if (
+    keys.includes("payload") &&
+    isDict(value.payload) &&
+    keys.every((key) => key === "payload" || key === "schema" || key === "kind")
+  )
+    throw new WorkflowError(
+      `${label} must contain the artifact payload itself, not the ` +
+        `{schema, payload} envelope wrapper; pass the object stored in the payload field ` +
+        `(drop the envelope keys ${keys.filter((key) => key !== "payload").join(", ") || "schema"})`,
+    );
 }
 
 export function writeJson(path: string, value: unknown): void {
@@ -2274,6 +2293,10 @@ function fromIsoFormat(value: string): boolean {
   return true;
 }
 
+// The schema diagnostics walker is leaf-level and needs this canonical
+// validator as its oracle; register it once at module load.
+registerSchemaValidator(schemaValid);
+
 export function schemaValid(
   schema: Record<string, unknown>,
   value: unknown,
@@ -2367,7 +2390,15 @@ export function schemaValid(
 export function validateV2Artifact(value: Record<string, unknown>, kind: string): void {
   const schema = artifactSchema();
   if (!schemaValid(schema, value, schema)) {
-    throw new WorkflowError("artifact does not satisfy the canonical schema");
+    const located = schemaIssues(schema, value, "$", schema)
+      .slice(0, 8)
+      .map((issue) => ` - ${issue.path}: ${issue.message}`)
+      .join("\n");
+    throw new WorkflowError(
+      located.length > 0
+        ? `artifact does not satisfy the canonical schema:\n${located}`
+        : "artifact does not satisfy the canonical schema",
+    );
   }
   const envelope = exactKeys(
     value,
@@ -4243,26 +4274,55 @@ export function validateCritic(
   const keys = keySet(receipt);
   const targetFindingIds = receipt.target_finding_ids;
   const answers = receipt.question_answers;
+  const problems: string[] = [];
+  if (receipt.schema !== "portable-gitlab/critic-receipt/v2")
+    problems.push(
+      `$.schema: expected exactly "portable-gitlab/critic-receipt/v2", got ${JSON.stringify(receipt.schema)}`,
+    );
+  for (const key of required)
+    if (!keys.has(key)) problems.push(`$.${key}: required field is missing`);
+  for (const key of keys)
+    if (!allowed.has(key))
+      problems.push(`$.${key}: unknown field; allowed fields are ${[...allowed].join(", ")}`);
+  if (keys.has("evidence_digest") && receipt.evidence_digest !== evidenceDigest)
+    problems.push(`$.evidence_digest: must bind the selected evidence digest ${evidenceDigest}`);
+  if (scopeDigest !== null) {
+    if (receipt.scope_digest !== scopeDigest)
+      problems.push(
+        `$.scope_digest: an incremental receipt must bind the incremental delta digest ${scopeDigest}`,
+      );
+    if (!Array.isArray(targetFindingIds))
+      problems.push(
+        "$.target_finding_ids: an incremental receipt requires the assessed previous finding IDs",
+      );
+  }
+  if (scopeDigest === null && "scope_digest" in receipt && !isDigest(receipt.scope_digest))
+    problems.push("$.scope_digest: expected a SHA-256 digest");
+  if (keys.has("findings") && !findingsAreValid(receipt.findings))
+    problems.push(
+      "$.findings: every finding requires id, severity, summary, risk, evidence, consequence, relation_to_change, and minimum_fix",
+    );
   if (
-    receipt.schema !== "portable-gitlab/critic-receipt/v2" ||
-    ![...required].every((key) => keys.has(key)) ||
-    ![...keys].every((key) => allowed.has(key)) ||
-    receipt.evidence_digest !== evidenceDigest ||
-    (scopeDigest !== null && receipt.scope_digest !== scopeDigest) ||
-    (scopeDigest !== null && !Array.isArray(targetFindingIds)) ||
-    (scopeDigest === null && "scope_digest" in receipt && !isDigest(receipt.scope_digest)) ||
-    !findingsAreValid(receipt.findings) ||
-    ("target_finding_ids" in receipt &&
-      (!Array.isArray(targetFindingIds) ||
-        !(targetFindingIds as unknown[]).every((item) => nonemptyString(item)) ||
-        (targetFindingIds as string[]).length !== new Set(targetFindingIds as string[]).size)) ||
-    ("question_answers" in receipt && !answersAreValid(answers)) ||
-    receipt.external_mutations !== false
-  ) {
-    throw new WorkflowError("critic receipt is schema-invalid or does not bind evidence");
+    "target_finding_ids" in receipt &&
+    (!Array.isArray(targetFindingIds) ||
+      !(targetFindingIds as unknown[]).every((item) => nonemptyString(item)) ||
+      (targetFindingIds as string[]).length !== new Set(targetFindingIds as string[]).size)
+  )
+    problems.push("$.target_finding_ids: expected an array of distinct non-empty finding IDs");
+  if ("question_answers" in receipt && !answersAreValid(answers))
+    problems.push(
+      "$.question_answers: every answer requires question_id, verdict confirmed/refuted/not_verified, real run/session identity, evidence or reason for the verdict, and the question's context_digest",
+    );
+  if (receipt.external_mutations !== false) problems.push("$.external_mutations: must be false");
+  if (problems.length > 0) {
+    throw new WorkflowError(
+      `critic receipt is invalid:\n${problems.map((item) => ` - ${item}`).join("\n")}`,
+    );
   }
   if (!["run_id", "session_id"].every((key) => typeof receipt[key] === "string" && receipt[key])) {
-    throw new WorkflowError("critic receipt lacks independent run identity");
+    throw new WorkflowError(
+      "critic receipt lacks independent run identity: $.run_id and $.session_id must be non-empty real native identities",
+    );
   }
   if ("contributors" in receipt) {
     const contributors = receipt.contributors;

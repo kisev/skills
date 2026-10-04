@@ -31,6 +31,20 @@ import {
 const XDG_STATE_GLOB = "~/.local/state/agent-skills/**";
 const OPENCODE_SKILLS_GLOB = "~/.config/opencode/skills/**";
 const AGENTS_SKILLS_GLOB = "~/.agents/skills/**";
+// Structural pattern for reviewmatic-managed review worktrees: one managed
+// catalog per repository as a sibling of the checkout (`<repo>.worktrees/
+// reviewmatic/<hash>`). No per-repository or per-MR path is predetermined, and
+// a typo'd sibling state directory such as `agent-skill` never matches this
+// pattern or the state globs above.
+const WORKTREE_TREE_GLOB = "*.worktrees/reviewmatic/**";
+const WORKTREE_ROOT = "*.worktrees/reviewmatic";
+const WORKTREE_BASE = "*.worktrees";
+// V2 checks external paths against a canonical directory boundary that
+// normally ends in `/*`, so the exact roots above never match an actual
+// worktree access. This boundary pattern covers the managed reviewmatic
+// catalog and every managed worktree inside it, without opening sibling
+// directories of other tools under `<repo>.worktrees`.
+const WORKTREE_BOUNDARY_GLOB = "*.worktrees/reviewmatic/*";
 const SECRET_PATHS = [
   "**/.env",
   "**/.env.*",
@@ -76,7 +90,7 @@ export const CONFIG_FRAGMENTS = [
   {
     name: "skills-state-permissions",
     description:
-      "Allow the canonical ~/.agents/skills tree and legacy skills state paths without per-run prompts",
+      "Allow the canonical ~/.agents/skills tree, legacy skills state paths, and reviewmatic-managed review worktrees without per-run prompts",
     targets: ["opencode", "kilo", "mimo"],
     file: "main",
   },
@@ -322,6 +336,17 @@ function fragmentEdits(
           effect: "allow",
         })),
         { action: "external_directory", resource: "~/.agents", effect: "allow" },
+        // Read-only access to reviewmatic-managed review worktrees, including
+        // the directory boundaries external access is checked against. Read is
+        // scoped to the managed reviewmatic catalog, and pre-existing user or
+        // secret denies keep priority: the insertion rule in permissionEdits
+        // places each new allow before any overlapping recorded deny. No shell
+        // or edit permission is added, and sibling catalogs of other tools
+        // under `<repo>.worktrees` stay unapproved.
+        { action: "read", resource: WORKTREE_TREE_GLOB, effect: "allow" },
+        { action: "external_directory", resource: WORKTREE_BOUNDARY_GLOB, effect: "allow" },
+        { action: "external_directory", resource: WORKTREE_ROOT, effect: "allow" },
+        { action: "external_directory", resource: WORKTREE_BASE, effect: "allow" },
       ]);
     const edits: JsoncEdit[] = [];
     if (!mapAllowsAll(permission.read))
@@ -340,6 +365,14 @@ function fragmentEdits(
           Object.fromEntries(statePaths.map((glob) => [glob, "allow"])),
         ),
       );
+    edits.push(
+      ...permissionMapEdits(["permission", "read"], { [WORKTREE_TREE_GLOB]: "allow" }),
+      ...permissionMapEdits(["permission", "external_directory"], {
+        [WORKTREE_BOUNDARY_GLOB]: "allow",
+        [WORKTREE_ROOT]: "allow",
+        [WORKTREE_BASE]: "allow",
+      }),
+    );
     return edits;
   }
   if (fragment === "secrets-guard") {

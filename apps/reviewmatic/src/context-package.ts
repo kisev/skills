@@ -473,15 +473,26 @@ export function questionReport(questions: Json[], answers: Json[], verifications
   const assigned = questions.filter((item) => item.critic === true);
   const assignedIds = new Set(assigned.map((item) => String(item.id)));
   const answered = new Set(answers.map((answer) => String(answer.question_id)));
+  const answerKey = (answer: Json): string =>
+    `${answer.run_id ?? ""}:${answer.session_id ?? ""}:${answer.question_id}`;
   const notVerified = new Set(
-    answers
-      .filter((answer) => answer.verdict === "not_verified")
-      .map((answer) => `${answer.run_id}:${answer.session_id}:${answer.question_id}`),
+    answers.filter((answer) => answer.verdict === "not_verified").map(answerKey),
   );
   const verified = new Set(
     verifications
       .filter((item) => item.verdict !== "unresolved")
       .map((item) => String(item.question_id)),
+  );
+  // A not_verified critic answer stops counting as unverified exactly when a
+  // primary verification preserved that original answer; a verification of a
+  // different original never rescues it.
+  const resolved = new Set(
+    verifications
+      .filter((item) => item.verdict !== "unresolved" && isDict(item.original))
+      .map((item) => {
+        const original = item.original as Json;
+        return `${original.run_id ?? ""}:${original.session_id ?? ""}:${String(item.question_id)}`;
+      }),
   );
   const unresolved = new Set(
     verifications
@@ -500,7 +511,7 @@ export function questionReport(questions: Json[], answers: Json[], verifications
   return {
     assigned: assigned.length,
     answered: [...answered].filter((id) => assignedIds.has(id)).length,
-    unverified: notVerified.size,
+    unverified: [...notVerified].filter((key) => !resolved.has(key)).length,
     verified: verified.size,
     unresolved: unresolved.size,
     contradicted: contradictions,

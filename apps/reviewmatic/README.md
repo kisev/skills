@@ -48,7 +48,12 @@ reviewmatic finish-review --draft <draft-path>
 the current directory, and a subdirectory of the checkout works too.
 
 `start-review` collects evidence and context and returns the draft, exact-commit
-inspection snapshots, and an independent critic receipt template. It also prepares
+inspection snapshots, and an independent critic receipt template. Its `scope`
+overview summarizes the collected evidence — target identity, the MR description
+flagged as author claims, changed paths, discussion threads, pipelines with
+completeness markers — and names every exact snapshot, inspection, and worktree
+path; `scope-review --artifact-root <root>` prints it again without any GitLab
+request. It also prepares
 one managed review worktree per merge request under `<repo>.worktrees/reviewmatic/`:
 a detached checkout at the exact MR head, outside the user's working tree. The
 result's `review_worktree` names that path, the original `source_repo_root`, and
@@ -67,12 +72,31 @@ artifact bindings; the agent supplies the semantic assessments, concrete fixes,
 label rationales, and thread outcomes.
 
 The input package includes `draft_schema_path`, `input_contract`, and valid field
-examples in `input_examples`, separately from final artifact envelopes. After
+examples in `input_examples`, separately from final artifact envelopes. The
+agent applies its semantic decisions mechanically with
+`record-input --draft <draft> --input <sections>`: it accepts the `run_id`,
+`session_id`, `low_risk`, `findings`, `dispositions`, `ci_job_assessments`,
+`owner_decision_reasons`, `question_verifications`, and partial `content`
+sections, upserts list entries by identity, preserves every machine field and
+binding, and never invents a verdict. An existing thread decision is updated
+by its `id` plus the semantic fields; the runtime keeps the prepared url,
+state, and note bindings and rejects a sent value that disagrees with them. A
+malformed section — `null`, a non-array, or a `null` entry — returns the exact
+offending field, reason, and expected shape, and leaves the draft unchanged.
+Critic receipts are imported verbatim
+with `record-critic --draft <draft> --input <receipt>`; a wrapped
+`review_report` envelope is unwrapped automatically, an answer bound to another
+package version is rejected with the expected context version instead of being
+rebound, and the runtime never creates dispositions for critic findings.
+After
 snapshot preparation the agent completes and records one shared context package
 (`context-package` template plus `record-package --draft`): goal, claims with
 sources, constraints, prior decisions, and questions, stored privately outside
 the checkout and bound to the collected evidence. Recording and reading it
-never contacts GitLab. Critics start only after the package is recorded,
+never contacts GitLab, and the recording response returns the ready critic
+task: the recorded package path and digest, the question context versions, the
+exact snapshot paths, the receipt template, and the exact `record-critic`
+import command. Critics start only after the package is recorded,
 receive it as their primary task context, and answer the questions assigned to
 them in receipt `question_answers`; with several critics, each selected critic
 answers each assigned question, and one critic's answer never covers another's
@@ -145,7 +169,22 @@ review completes and records the same shared context package
 (`record-package --bundle`) bound to the prepared snapshot with its comparison
 ref and the committed, staged, unstaged, and untracked sections, and the
 report binds the recorded package at finalization; the returned
-`record_command` names the exact immutable snapshot path. Re-recording a
+`record_command` names the exact immutable snapshot path, and recording
+returns the ready local critic task with the `record-input` import command.
+The report is filled mechanically with
+`record-input --bundle <snapshot> --input <sections>` (`task`,
+`task_change_reason`, `findings`, `checks`, `assessment`, `verdict`,
+`question_answers`, `question_verifications`), which preserves the machine
+bindings and never invents a verdict. The draft follows the current snapshot:
+`prepare-local` materializes it, `record-package` binds the recorded package
+mechanically in either order, and the next snapshot rebuilds the runtime-owned
+fields from the current evidence and the finalized baseline while unfinished
+work on the same snapshot survives. Sequentially imported critic answers merge
+by the critic's run/session identity and the answer's context version: every
+original answer stays with its authorship, a repeated identical result is not
+duplicated, a different result under the same identity is rejected while the
+original is preserved, and a preserved `not_verified` answer keeps blocking a
+ready verdict until a verification preserves it. Re-recording a
 package with a changed question, requirement, or agreed prior decision
 retires exactly the report's stale answers
 for the previous wording into `superseded_question_results` — fresh results
@@ -153,7 +192,9 @@ for the same question stay in place — and requires
 fresh answers before finalization; report answers and verifications copy the
 question's `context_digest`, and finalization rejects a missing or superseded
 binding, so a late result for the previous wording cannot certify the changed
-question.
+question. A repeated `scope-review --artifact-root <root>` restores the
+carried task, the recorded baseline, and the exact draft and template paths
+from recorded state without collecting evidence again.
 
 ## Interactive plan walkthrough
 

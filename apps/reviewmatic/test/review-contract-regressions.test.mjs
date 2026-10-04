@@ -534,8 +534,18 @@ test("input package has the exact draft schema and examples; validation gathers 
           ? DRAFT_SCHEMA.properties.dispositions.items.properties.severity_override
           : name === "follow_up"
             ? DRAFT_SCHEMA.properties.content.properties.recommended_issues.items
-            : DRAFT_SCHEMA.properties.content.properties.finding_publications.items;
-    assert.deepEqual(schemaIssues(shape, value), [], name);
+            : name === "thread_decision"
+              ? DRAFT_SCHEMA.properties.content.properties.thread_decisions.items
+              : DRAFT_SCHEMA.properties.content.properties.finding_publications.items;
+    // A thread decision example is a semantic update of one prepared thread:
+    // it validates as the merged record the runtime assembles, never as a
+    // standalone full record with hand-copied machine bindings.
+    const preparedThread =
+      draft.content.thread_decisions.find((item) => item.id === value.id) ??
+      draft.content.thread_decisions[0];
+    const candidate =
+      name === "thread_decision" ? { ...preparedThread, ...value, id: preparedThread.id } : value;
+    assert.deepEqual(schemaIssues(shape, candidate), [], name);
   }
   writeJson(result.draft_path, draft);
   const count = fixture.requestCount();

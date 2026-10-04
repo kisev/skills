@@ -22,7 +22,9 @@ Retain the original `--ref <comparison-ref>` when one was supplied; the returned
 boundary on each invocation. The runner stores the immutable committed, staged,
 unstaged, and non-ignored untracked snapshot. It returns `review.mode`, the
 reason, the previous report, a section delta, and a `report_template` with the
-current evidence and previous-review digests.
+current evidence and previous-review digests. The response's `scope_overview`
+summarizes the section composition, the carried task, and the previous review
+without re-reading the snapshot; `reviewmatic scope-review --artifact-root <root>` prints it again later.
 
 An `empty_scope` result means the selected boundary contains no changes: without
 `--ref` there is no staged, unstaged, or untracked work; with `--ref` the commits
@@ -77,11 +79,20 @@ answers before finalization; editing the background keeps them. Every answer
 and verification in the report copies the question's `context_digest` from
 the recorded package, and finalization rejects a missing or superseded
 binding, so a late result for the previous wording never certifies the
-changed question. When local
+changed question. Recording returns the ready local critic task with the
+package path, question context versions, and the exact `record-input` import
+command. When local
 critics run, they receive the recorded package as their
 primary context and answer assigned questions in the report's
-`question_answers`; answer every `not_verified` result in
-`question_verifications`, preserving the original. See
+`question_answers`; import each critic's returned file with `reviewmatic
+record-input` without rewriting it. Sequential imports merge by the critic's
+own run/session identity and the answer's context version: every original
+answer stays with its authorship, a repeated identical result is not
+duplicated, and a different result under the same identity is rejected while
+the original is preserved. Answer every `not_verified` result in
+`question_verifications`, preserving the original; primary verifications stay
+separate and a preserved `not_verified` answer keeps blocking a ready verdict
+until then. See
 `references/context-package.md`.
 
 Compatibility requires the same checkout, comparison ref, base, HEAD, and
@@ -99,8 +110,20 @@ than inventing a defect. Incomplete current evidence blocks completion.
 
 ## Assess and retain decisions
 
-Complete the returned template at `review.draft_path`, outside the checkout.
-Use the latest user-approved decision boundary, including askme answers, for
+Fill the returned template at `review.draft_path` mechanically with
+`reviewmatic record-input --bundle <snapshot> --input <sections-file>`; it
+accepts the `task`, `task_change_reason`, `findings`, `checks`, `assessment`,
+`verdict`, `question_answers`, and `question_verifications` sections, upserts
+findings and checks by identity, merges critic answers and verifications by
+identity, preserves the machine bindings, and never
+invents a verdict or a decision. The draft is bound to the current snapshot:
+`prepare-local` materializes it, `record-package` binds the recorded package
+into it mechanically in either order, and the next snapshot rebuilds the
+runtime-owned fields from the current evidence and the finalized baseline
+while unfinished work on the same snapshot survives. A malformed section
+returns the exact offending field, reason, and expected shape, and leaves the
+draft unchanged. Use the latest user-approved decision
+boundary, including askme answers, for
 `task`. Record its conversation basis in `decision_evidence`; do not invent
 approval. `task_change_reason` explains an actual change to that boundary and
 its user decision or corrected evidence. Empty risk/deferred lists are valid.

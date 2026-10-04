@@ -17,7 +17,7 @@ import {
   privateDirectory,
   readJson,
   regularFile,
-  schemaValid,
+  rejectEnvelopeWrapper,
   validateCritic,
   validateDecision,
   validateV2Artifact,
@@ -55,6 +55,8 @@ import {
   validatePatchFallback,
 } from "./context.js";
 import { suggestionParts, suggestionsPatch } from "./fixes.js";
+import { mrScope } from "./scope.js";
+import { schemaIssues as locateSchemaIssues, type DraftIssue } from "./schema-issues.js";
 import {
   bindQuestionContexts,
   canonicalPackageDigest,
@@ -80,7 +82,6 @@ import { validate as validateSemver } from "./review-semver.js";
 import { checkoutRoot, prepareReviewWorktree, type ReviewWorktree } from "./review-worktree.js";
 
 type Json = Record<string, unknown>;
-export type DraftIssue = { path: string; message: string };
 const ZERO = "0".repeat(64);
 const text = { type: "string", minLength: 1 };
 const texts = { type: "array", items: text };
@@ -336,78 +337,19 @@ export const DRAFT_SCHEMA: Json = {
   },
 };
 
-// Use the canonical schema validator for decisions; this walker only locates failures.
+// The schema walker lives in schema-issues.ts (leaf-level); this module binds
+// it to the canonical schema document as the $ref resolution root and keeps
+// the default-root signature used across the draft workflow.
+export { expectation } from "./schema-issues.js";
+
 export function schemaIssues(
   schema: Json,
   value: unknown,
   path = "$",
-  root = artifactSchema(),
+  root: Json = artifactSchema(),
 ): DraftIssue[] {
-  if (schemaValid(schema, value, root)) return [];
-  if (typeof schema.$ref === "string") {
-    const definition = (root.$defs as Json)[schema.$ref.slice("#/$defs/".length)];
-    return isDict(definition)
-      ? schemaIssues(definition, value, path, root)
-      : [{ path, message: "Unknown schema reference" }];
-  }
-  const errors: DraftIssue[] = [];
-  if (isDict(value)) {
-    const properties = (schema.properties ?? {}) as Json;
-    for (const key of (schema.required ?? []) as string[])
-      if (!(key in value))
-        errors.push({
-          path: `${path}.${key}`,
-          message: `Required field is missing; expected ${JSON.stringify(properties[key] ?? "the field declared by the input schema")}`,
-        });
-    for (const [key, item] of Object.entries(value)) {
-      if (isDict(properties[key]))
-        errors.push(...schemaIssues(properties[key], item, `${path}.${key}`, root));
-      else if (schema.additionalProperties === false)
-        errors.push({
-          path: `${path}.${key}`,
-          message: "Unknown field; use the generated draft without adding derived artifact fields",
-        });
-    }
-  }
-  if (Array.isArray(value) && isDict(schema.items))
-    value.forEach((item, index) =>
-      errors.push(...schemaIssues(schema.items as Json, item, `${path}[${index}]`, root)),
-    );
-  for (const branch of (schema.allOf ?? []) as Json[])
-    errors.push(...schemaIssues(branch, value, path, root));
-  if (isDict(schema.if)) {
-    const branch = schemaValid(schema.if, value, root) ? schema.then : schema.else;
-    if (isDict(branch)) errors.push(...schemaIssues(branch, value, path, root));
-  }
-  for (const keyword of ["anyOf", "oneOf"]) {
-    const branches = schema[keyword];
-    if (Array.isArray(branches) && !branches.some((branch) => schemaValid(branch, value, root))) {
-      const alternatives = branches.map((branch) => schemaIssues(branch, value, path, root));
-      const compatible = branches.filter(
-        (branch) =>
-          isDict(branch) &&
-          (branch.type === undefined ||
-            (branch.type === "object" && isDict(value)) ||
-            (branch.type === "array" && Array.isArray(value)) ||
-            branch.type === typeof value ||
-            (branch.type === "null" && value === null)),
-      );
-      const candidates =
-        compatible.length > 0
-          ? compatible.map((branch) => schemaIssues(branch, value, path, root))
-          : alternatives;
-      candidates.sort((a, b) => a.length - b.length);
-      errors.push(...candidates[0]);
-    }
-  }
-  if (errors.length === 0)
-    errors.push({
-      path,
-      message: `Expected ${JSON.stringify(Object.fromEntries(Object.entries(schema).filter(([key]) => !["properties", "items", "allOf", "oneOf", "anyOf"].includes(key))))}`,
-    });
-  return errors;
+  return locateSchemaIssues(schema, value, path, root);
 }
-
 function criticReceipt(context: Json, mode: string): Json {
   const receipt: Json = {
     schema: "portable-gitlab/critic-receipt/v2",
@@ -507,6 +449,15 @@ export async function resumeReview(rootValue: string): Promise<Json> {
     critic_receipt_template: criticReceipt(context, String(progress.mode)),
     inspection_path: inspection,
     draft_schema_path: schemaPath,
+    scope: mrScope({
+      evidence,
+      evidencePath: String(progress.evidence_path),
+      contextPath,
+      contextDigest,
+      artifactRoot: root,
+      draftPath: draftPath,
+      repoRoot: typeof progress.repo_root === "string" ? progress.repo_root : null,
+    }),
     context_package: {
       template_path: packageTemplatePath,
       package_path: recorded === null ? null : recorded.path,
@@ -554,6 +505,16 @@ export async function resumeReview(rootValue: string): Promise<Json> {
         fix_mode: "not_required",
         patch: null,
       },
+      thread_decision: {
+        id: "discussion-42",
+        assessment: "fixed",
+        rationale: "The exact reviewed code already addresses the remark.",
+        outcome: "resolve",
+        proposed_response: "The exact reviewed code now handles this path.",
+        fix_mode: "not_required",
+        patch: null,
+        fixing_commit: null,
+      },
       follow_up: {
         id: "policy-doc",
         title: "Document the existing retry policy",
@@ -567,7 +528,7 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       },
     },
     input_contract:
-      "The schema describes editable draft input, not final v2 artifacts. Examples are field shapes, not receipts or code to copy blindly. Preserve generated bindings and use actual native run/session identities. Every question_answers and question_verifications entry copies the question context_digest of the recorded package it was produced against. Suggestion ranges use suggestion:-N+M, each 0..100, bounded by the exact head file. Run check-review once the analysis is complete.",
+      "Apply your semantic decisions with reviewmatic record-input --draft <path> --input <file>; it accepts the sections run_id, session_id, low_risk, findings, dispositions, ci_job_assessments, owner_decision_reasons, question_verifications, and partial content, preserves every machine field and binding, and never invents a verdict. Update an existing thread decision by sending its id plus the semantic fields (assessment, rationale, outcome, proposed_response, fix decision); the runtime keeps the prepared url, state, and note bindings and rejects a sent value that disagrees with them. Import each critic receipt with reviewmatic record-critic --draft <path> --input <file>; it preserves critic findings and answers verbatim. The schema file describes editable draft input, not final v2 artifacts; reading it is only needed for unusual repairs. Every question_answers and question_verifications entry copies the question context_digest of the recorded package it was produced against. Suggestion ranges use suggestion:-N+M, each 0..100, bounded by the exact head file. Run check-review once the analysis is complete.",
     critic_task: {
       required: ["normal", "deep", "incremental"].includes(String(progress.mode)),
       launch_when: "evidence_ready",
@@ -584,7 +545,7 @@ export async function resumeReview(rootValue: string): Promise<Json> {
       context_package_path: packageCurrent && recorded !== null ? recorded.path : null,
       scope: context.incremental,
       instructions:
-        "Record the agent-authored context package first with the returned record-package action; critics never start before it is recorded. Launch immediately after this evidence package is ready, in native background mode when supported, alongside primary inspection. Run an independent read-only subagent of the current agent, without primary findings. Pass these exact evidence/context/inspection snapshots, the recorded context package path, and the input schema, never manually transcribed evidence or duplicate collection requests. The critic reads the context package as its primary task context, consults the snapshots directly when details are unclear, and answers every question assigned to critics in receipt question_answers with verdict confirmed, refuted, or not_verified plus evidence or a concrete reason. Every question_answers entry copies that question's context_digest from the recorded package; results bound to a different version, or without a binding, are rejected as stale and never certify the current question. Prefer selected specialist profiles; their absence is normal. Return complete detailed findings in the selected locale and the host/profile's required envelope (review_report is supported). Preserve the returned JSON without rewriting findings, attach actual native run/session metadata, and use distinct finding ID prefixes. Never ask a child to guess identities, fabricate a receipt, or start an alternate CLI. Join before check-review. Report collection, primary analysis, critic waiting, fix validation and freshness separately, without a numerical SLA.",
+        "Record the agent-authored context package first with the returned record-package action; critics never start before it is recorded, and record-package returns the ready critic task with the recorded package path, question context versions, and the exact record-critic import command. Launch immediately after recording, in native background mode when supported, alongside primary inspection. Run an independent read-only subagent of the current agent, without primary findings. Pass these exact evidence/context/inspection snapshots, the recorded context package path, and the input schema, never manually transcribed evidence or duplicate collection requests. The critic reads the context package as its primary task context, consults the snapshots directly when details are unclear, and answers every question assigned to critics in receipt question_answers with verdict confirmed, refuted, or not_verified plus evidence or a concrete reason. Every question_answers entry copies that question's context_digest from the recorded package; results bound to a different version, or without a binding, are rejected as stale and never certify the current question. Prefer selected specialist profiles; their absence is normal. Return complete detailed findings in the selected locale as one receipt file with actual native run/session metadata and distinct finding ID prefixes; a review_report envelope is unwrapped during import, and the primary imports the receipt with record-critic without rewriting findings, answers, or authorship. Never ask a child to guess identities, fabricate a receipt, or start an alternate CLI. Join before check-review. Report collection, primary analysis, critic waiting, fix validation and freshness separately, without a numerical SLA.",
     },
     next_action: runnerAction("check-review", ["--draft", draftPath]),
     external_mutations: false,
@@ -620,6 +581,12 @@ export async function recordDraftPackage(path: string, inputPath: string): Promi
   draft.context_package_digest = packageDigest;
   const superseded = retireSupersededResults(draft, previousPointer, input);
   writeJson(path, draft);
+  const inspectionPath = join(
+    root,
+    "review-input",
+    String(progress.context_digest),
+    "inspection.json",
+  );
   return {
     status: "ok",
     artifact_path: packagePath,
@@ -631,6 +598,36 @@ export async function recordDraftPackage(path: string, inputPath: string): Promi
     thread_registry_size: ((input.thread_registry as Json[]) ?? []).length,
     question_summary: questionReport(input.questions as Json[], [], []),
     superseded_questions: superseded,
+    critic_task: {
+      launch: "now",
+      mode: progress.mode,
+      context_package: {
+        path: packagePath,
+        digest: packageDigest,
+        question_context_versions: questionContextVersionList(input),
+      },
+      inputs: {
+        evidence_path: progress.evidence_path,
+        context_path: draft.context_path,
+        inspection_path: existsSync(inspectionPath) ? inspectionPath : null,
+        repo_root: (context.exact_git as Json).repo_root ?? null,
+        draft_schema_path: join(root, "review-drafts", "draft-input.schema.json"),
+      },
+      response_contract: {
+        receipt_schema: "portable-gitlab/critic-receipt/v2",
+        template: criticReceipt(context, String(progress.mode)),
+        import_command: runnerAction("record-critic", [
+          "--draft",
+          resolve(path),
+          "--input",
+          "<critic-response.json>",
+        ]),
+        rules:
+          "One receipt file with complete findings and one question_answers entry per critic-assigned question; every answer copies that question's context_digest listed above. The primary imports the file with record-critic without rewriting findings, answers, or authorship.",
+      },
+      instructions:
+        "Launch the independent critic now, in native background mode when supported, alongside primary inspection, and join before check-review. Pass these exact paths; never manually transcribed evidence or duplicate collection requests.",
+    },
     next_action: runnerAction("check-review", ["--draft", resolve(path)]),
     timings: { recording_ms: Math.round(performance.now() - started) },
     external_mutations: false,
@@ -1792,6 +1789,571 @@ export async function refreshReview(path: string): Promise<Json> {
     },
     reason:
       "Findings and decisions were retained. Reassess the returned delta and affected consumers. Original critic receipts remain in the previous draft, never rebound to new evidence. The context package must be re-recorded for the refreshed evidence; the previous package stays immutable.",
+    external_mutations: false,
+  };
+}
+
+// ---------- Mechanical draft assembly ----------
+//
+// These operations apply the agent's semantic decisions to the prepared draft.
+// They are deliberately dumb: machine fields, bindings, receipts, and digests
+// are preserved, no semantic verdict is ever defaulted, and every rejection
+// names the exact field, the reason, and the allowed form.
+
+const INPUT_SECTIONS = [
+  "run_id",
+  "session_id",
+  "low_risk",
+  "findings",
+  "dispositions",
+  "ci_job_assessments",
+  "owner_decision_reasons",
+  "question_verifications",
+  "content",
+] as const;
+
+const CONTENT_IDENTITY: Record<string, (item: Json) => string> = {
+  label_assessments: (item) => String(item.name),
+  thread_decisions: (item) => String(item.id),
+  finding_publications: (item) => String(item.finding_id),
+  recommended_issues: (item) => String(item.id),
+  previous_finding_assessments: (item) => `${item.id}\u0000${item.kind ?? ""}`,
+  rejected_candidate_assessments: (item) => String(item.id),
+};
+
+// Upserts incoming entries into a list by identity: an entry with the same
+// identity replaces its previous version, every other entry is preserved.
+export function upsertByIdentity(
+  current: Json[],
+  incoming: Json[],
+  identity: (item: Json) => string,
+): Json[] {
+  const result = structuredClone(current);
+  const index = new Map(result.map((item, position) => [identity(item), position]));
+  for (const item of incoming) {
+    const key = identity(item);
+    if (index.has(key)) result[index.get(key) as number] = item;
+    else {
+      index.set(key, result.length);
+      result.push(item);
+    }
+  }
+  return result;
+}
+
+// Thread bindings the runtime prepared from the collected discussion. An
+// agent updates an existing thread decision semantically, by id; these fields
+// are never its input and are rejected when they disagree with the prepared
+// binding, so a replaced URL, state, or note digest cannot slip in.
+const THREAD_MACHINE_FIELDS = [
+  "url",
+  "state",
+  "last_note_id",
+  "last_note_body_sha256",
+  "thread_sha256",
+] as const;
+
+// Input schema for the semantic part of one existing thread decision: the id
+// plus any semantic fields. The merged record is validated afterwards against
+// the full thread_decision schema.
+function threadSemanticSchema(): Json {
+  const full = (contentProperties.thread_decisions as Json).items as Json;
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: Object.fromEntries(
+      Object.entries(full.properties as Json).filter(
+        ([key]) => !(THREAD_MACHINE_FIELDS as readonly string[]).includes(key),
+      ),
+    ),
+  };
+}
+
+// Applies semantic thread decisions onto the prepared thread entries. The
+// agent sends the thread id and the semantic fields; url/state/note bindings
+// stay with the runtime, an incompatible sent machine field is rejected, and
+// the merged record must satisfy the full input schema.
+function mergeThreadDecisions(current: Json[], incoming: Json[], issues: DraftIssue[]): Json[] {
+  const result = structuredClone(current);
+  const byId = new Map(result.map((item) => [String(item.id), item]));
+  const semantic = threadSemanticSchema();
+  const full = (contentProperties.thread_decisions as Json).items as Json;
+  for (const [index, raw] of incoming.entries()) {
+    const where = `$.content.thread_decisions[${index}]`;
+    if (!isDict(raw)) {
+      issues.push({
+        path: where,
+        message: `Expected an object; with required fields ${Object.keys(full.properties as Json).join(", ")}`,
+      });
+      continue;
+    }
+    const prepared = typeof raw.id === "string" && raw.id !== "" ? byId.get(raw.id) : undefined;
+    if (prepared === undefined) {
+      const itemIssues = schemaIssues(full, raw, where);
+      issues.push(...itemIssues);
+      if (itemIssues.length === 0) {
+        byId.set(String(raw.id), raw);
+        result.push(raw);
+      }
+      continue;
+    }
+    const semanticInput: Json = {};
+    let machineConflict = false;
+    for (const [key, value] of Object.entries(raw)) {
+      if ((THREAD_MACHINE_FIELDS as readonly string[]).includes(key)) {
+        if (digest(prepared[key] ?? null) !== digest(value ?? null)) {
+          issues.push({
+            path: `${where}.${key}`,
+            message:
+              `Runtime-owned thread binding: the prepared value is ${JSON.stringify(prepared[key] ?? null)}. ` +
+              "Resend the decision without this field, or copy the exact prepared value verbatim",
+          });
+          machineConflict = true;
+        }
+        continue;
+      }
+      semanticInput[key] = value;
+    }
+    const semanticIssues = schemaIssues(semantic, semanticInput, where);
+    issues.push(...semanticIssues);
+    if (machineConflict || semanticIssues.length > 0) continue;
+    const merged = { ...structuredClone(prepared), ...semanticInput };
+    const mergedIssues = schemaIssues(full, merged, where);
+    issues.push(...mergedIssues);
+    if (mergedIssues.length > 0) continue;
+    result[result.indexOf(prepared)] = merged;
+    byId.set(String(merged.id), merged);
+  }
+  return result;
+}
+
+function sectionIssues(section: string, value: unknown): DraftIssue[] {
+  const at = (index: number): string => `$.${section}[${index}]`;
+  if (section === "run_id" || section === "session_id")
+    return typeof value === "string" && value.length > 0
+      ? []
+      : [
+          {
+            path: `$.${section}`,
+            message:
+              `Expected non-empty string: the actual native ${section === "run_id" ? "run" : "session"} ` +
+              "identity of this review session; copy it from the environment, never invent it",
+          },
+        ];
+  if (section === "low_risk")
+    return typeof value === "boolean"
+      ? []
+      : [
+          {
+            path: "$.low_risk",
+            message: "Expected true or false: the explicit low-risk decision for the selected mode",
+          },
+        ];
+  if (
+    section === "findings" ||
+    section === "dispositions" ||
+    section === "question_verifications"
+  ) {
+    if (!Array.isArray(value))
+      return [{ path: `$.${section}`, message: `Expected an array of ${section} entries` }];
+    const schema =
+      section === "findings"
+        ? finding
+        : section === "dispositions"
+          ? disposition
+          : { $ref: "#/$defs/context_verification" };
+    return value.flatMap((item, index) => schemaIssues(schema, item, at(index)));
+  }
+  if (section === "owner_decision_reasons")
+    return !Array.isArray(value) ||
+      value.some((item) => typeof item !== "string" || item.length === 0)
+      ? [
+          {
+            path: "$.owner_decision_reasons",
+            message:
+              "Expected an array of non-empty strings; each entry explains an explicit owner decision that keeps the review blocked despite no blocking finding",
+          },
+        ]
+      : [];
+  if (section === "ci_job_assessments") {
+    if (!Array.isArray(value))
+      return [{ path: "$.ci_job_assessments", message: "Expected an array of job assessments" }];
+    return value.flatMap((item, index) => {
+      if (!isDict(item)) return [{ path: at(index), message: "Expected an object" }];
+      const missing = [
+        "project_id",
+        "pipeline_id",
+        "job_id",
+        "classification",
+        "rationale",
+        "trace_evidence",
+      ].filter((key) => !(key in item));
+      if (missing.length > 0)
+        return [
+          {
+            path: at(index),
+            message: `Missing fields ${missing.join(", ")}; every failed/canceled job needs its identity, classification, rationale, and trace evidence`,
+          },
+        ];
+      if (
+        !["process_gate", "code_failure", "infrastructure_failure", "unknown"].includes(
+          String(item.classification),
+        )
+      )
+        return [
+          {
+            path: `${at(index)}.classification`,
+            message:
+              "Expected one of process_gate, code_failure, infrastructure_failure, unknown; only a trace-proven manual policy gate is process_gate",
+          },
+        ];
+      return [];
+    });
+  }
+  return [];
+}
+
+function applyContent(current: Json, incoming: Json): { content: Json; issues: DraftIssue[] } {
+  const issues: DraftIssue[] = [];
+  const content = structuredClone(current);
+  for (const [key, value] of Object.entries(incoming)) {
+    const field = `$.content.${key}`;
+    if (key === "issue_templates") {
+      issues.push({
+        path: field,
+        message: "Preserved legacy binding; record-input never sets it and the runtime owns it",
+      });
+      continue;
+    }
+    if (!(key in contentProperties)) {
+      issues.push({
+        path: field,
+        message: `Unknown content field; allowed fields are ${Object.keys(contentProperties).join(", ")}`,
+      });
+      continue;
+    }
+    if (key === "thread_decisions") {
+      if (!Array.isArray(value)) {
+        issues.push({
+          path: field,
+          message:
+            "Expected an array of thread decisions; update an existing thread by its id plus the semantic fields",
+        });
+        continue;
+      }
+      content.thread_decisions = mergeThreadDecisions(
+        (content.thread_decisions as Json[]) ?? [],
+        value as Json[],
+        issues,
+      );
+      continue;
+    }
+    const fieldIssues = schemaIssues(contentProperties[key] as Json, value, field);
+    issues.push(...fieldIssues);
+    // Shape must pass before any list is iterated or entry fields are read.
+    if (fieldIssues.length > 0) continue;
+    const identity: ((item: Json) => string) | undefined = CONTENT_IDENTITY[key];
+    content[key] =
+      identity !== undefined && Array.isArray(value)
+        ? upsertByIdentity((content[key] as Json[]) ?? [], value as Json[], identity)
+        : value;
+  }
+  return { content, issues };
+}
+
+// Explicit decision inventory. Every listed gap demands a semantic decision by
+// the agent; the runtime never fills one and never counts a template
+// placeholder as a decision.
+export function draftGaps(draft: Json): Json {
+  const content = (draft.content ?? {}) as Json;
+  const candidates = [
+    ...(draft.findings as Json[]).map((item) => String(item.id)),
+    ...(draft.critics as Json[]).flatMap((receipt) =>
+      ((receipt.findings as Json[]) ?? []).map((item) => String(item.id)),
+    ),
+  ];
+  const decided = new Set((draft.dispositions as Json[]).map((item) => String(item.id)));
+  const metadata = Object.entries((content.mr_metadata_assessment ?? {}) as Json)
+    .filter(([, item]) => isDict(item) && item.status === "unverified")
+    .map(([key]) => `$.content.mr_metadata_assessment.${key}.status`);
+  const necessity = (content.chat_assessment as Json | undefined)?.necessity;
+  return {
+    dispositions_missing_for: [...new Set(candidates)].filter((id) => !decided.has(id)),
+    content_fields_empty: (
+      [
+        ["summary", content.summary],
+        ["architecture_assessment", content.architecture_assessment],
+        ["semver_rationale", content.semver_rationale],
+      ] as Array<[string, unknown]>
+    )
+      .filter(([, value]) => typeof value !== "string" || value.length === 0)
+      .map(([key]) => `$.content.${key}`)
+      .concat(metadata)
+      .concat(
+        ((content.thread_decisions as Json[]) ?? [])
+          .filter((item) => typeof item.rationale !== "string" || item.rationale.length === 0)
+          .map((item) => `$.content.thread_decisions[${String(item.id)}].rationale`),
+      )
+      .concat(
+        isDict(necessity) && necessity.status === "unconfirmed"
+          ? ["$.content.chat_assessment.necessity"]
+          : [],
+      ),
+    labels_unresolved: ((content.label_assessments as Json[]) ?? []).filter(
+      (item) => item.status === "unresolved",
+    ).length,
+    ci_jobs_unclassified: ((draft.ci_job_assessments as Json[]) ?? []).filter(
+      (item) => item.classification === "unknown",
+    ).length,
+    identity_missing: (
+      [
+        ["run_id", draft.run_id],
+        ["session_id", draft.session_id],
+      ] as Array<[string, unknown]>
+    )
+      .filter(([, value]) => typeof value !== "string" || value === "")
+      .map(([key]) => `$.${key}`),
+    context_package:
+      draft.context_package_path !== null && draft.context_package_path !== undefined
+        ? []
+        : ["not recorded; run record-package before launching critics and check-review"],
+    critics_expected:
+      Number(draft.critic_count) - (draft.critics as Json[]).length > 0
+        ? [
+            `${Number(draft.critic_count) - (draft.critics as Json[]).length} of ${String(draft.critic_count)} independent critic receipts are still expected`,
+          ]
+        : [],
+  };
+}
+
+// Applies one input file of semantic sections to the prepared draft. A list
+// entry replaces the entry with the same identity and keeps every other entry,
+// so decisions can be recorded incrementally without resending the whole draft.
+export async function recordDraftInput(path: string, inputPath: string): Promise<Json> {
+  const { draft } = await selectedDraft(path);
+  const input = readJson(regularFile(inputPath, "draft input"), "draft input");
+  rejectEnvelopeWrapper(input, "draft input");
+  const issues: DraftIssue[] = [];
+  const next = structuredClone(draft);
+  const applied: Json = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (key === "content") {
+      if (!isDict(value)) {
+        issues.push({ path: "$.content", message: "Expected an object of content fields" });
+        continue;
+      }
+      const result = applyContent(next.content as Json, value);
+      issues.push(...result.issues);
+      next.content = result.content;
+      applied.content = Object.keys(value);
+      continue;
+    }
+    if (!(INPUT_SECTIONS as readonly string[]).includes(key)) {
+      issues.push({
+        path: `$.${key}`,
+        message: `Unknown section; allowed sections are ${INPUT_SECTIONS.join(", ")}`,
+      });
+      continue;
+    }
+    const keyIssues = sectionIssues(key, value);
+    issues.push(...keyIssues);
+    // Section shape must pass before any list is iterated or fields are read;
+    // a malformed section only produces its addressed diagnostics.
+    if (keyIssues.length > 0) continue;
+    if (key === "findings")
+      next.findings = upsertByIdentity((next.findings as Json[]) ?? [], value as Json[], (item) =>
+        String(item.id),
+      );
+    else if (key === "dispositions")
+      next.dispositions = upsertByIdentity(
+        (next.dispositions as Json[]) ?? [],
+        value as Json[],
+        (item) => String(item.id),
+      );
+    else if (key === "ci_job_assessments")
+      next.ci_job_assessments = upsertByIdentity(
+        (next.ci_job_assessments as Json[]) ?? [],
+        value as Json[],
+        (item) => [item.project_id, item.pipeline_id, item.job_id].join("\u0000"),
+      );
+    else next[key] = value;
+    applied[key] = Array.isArray(value) ? value.length : value;
+  }
+  if (issues.length > 0)
+    return {
+      status: "invalid",
+      draft_path: resolve(path),
+      errors: issues,
+      note: "Nothing was applied and the draft is unchanged. Fix the named fields in the input file and run record-input again.",
+      external_mutations: false,
+    };
+  writeJson(path, next);
+  return {
+    status: "ok",
+    draft_path: resolve(path),
+    applied,
+    pending: draftGaps(next),
+    next_action: runnerAction("check-review", ["--draft", resolve(path)]),
+    external_mutations: false,
+  };
+}
+
+// A receipt may arrive wrapped in the host's required artifact envelope; the
+// wrapper is unwrapped mechanically and reported, never silently ignored.
+function unwrapReceipt(value: Json, label: string): { receipt: Json; unwrapped: boolean } {
+  const keys = Object.keys(value);
+  const wrapped =
+    keys.includes("payload") &&
+    isDict(value.payload) &&
+    keys.every((key) => key === "payload" || key === "schema" || key === "kind");
+  if (!wrapped)
+    return {
+      receipt: value,
+      unwrapped: false,
+    };
+  const payload = value.payload as Json;
+  if (payload.schema !== "portable-gitlab/critic-receipt/v2")
+    throw new WorkflowError(
+      `${label} payload schema is ${String(payload.schema)}; expected portable-gitlab/critic-receipt/v2 inside the envelope`,
+    );
+  return { receipt: payload, unwrapped: true };
+}
+
+// Imports one independent critic receipt verbatim. Findings, answers,
+// authorship identities, and the context version each answer was produced
+// against are preserved exactly; the runtime never rewrites critic text, never
+// creates dispositions for critic findings, and never rebinds an answer that
+// was produced against a different context package.
+export async function recordDraftCritic(path: string, inputPath: string): Promise<Json> {
+  const { draft, progress, context } = await selectedDraft(path);
+  const input = readJson(regularFile(inputPath, "critic receipt input"), "critic receipt input");
+  const { receipt, unwrapped } = unwrapReceipt(input, "critic receipt input");
+  const errors: DraftIssue[] = schemaIssues(criticInput, receipt);
+  const identityIssue = (field: string): DraftIssue => ({
+    path: `$.${field}`,
+    message: `Expected non-empty string: the critic's real native ${field} identity; a fabricated identity is rejected`,
+  });
+  if (typeof receipt.run_id !== "string" || receipt.run_id === "")
+    errors.push(identityIssue("run_id"));
+  if (typeof receipt.session_id !== "string" || receipt.session_id === "")
+    errors.push(identityIssue("session_id"));
+  if (
+    typeof receipt.evidence_digest === "string" &&
+    receipt.evidence_digest !== draft.evidence_digest
+  )
+    errors.push({
+      path: "$.evidence_digest",
+      message: `The receipt binds different evidence; this draft requires ${String(draft.evidence_digest)}. Do not rebind the receipt; have the critic read the current snapshots`,
+    });
+  if (
+    String(progress.mode) === "incremental" &&
+    receipt.scope_digest !== (context.incremental as Json).incremental_delta_digest
+  )
+    errors.push({
+      path: "$.scope_digest",
+      message: `An incremental receipt must bind the incremental delta digest ${String((context.incremental as Json).incremental_delta_digest)}`,
+    });
+  if (
+    (typeof draft.session_id === "string" &&
+      draft.session_id !== "" &&
+      receipt.session_id === draft.session_id) ||
+    (typeof draft.run_id === "string" && draft.run_id !== "" && receipt.run_id === draft.run_id)
+  )
+    errors.push({
+      path: "$.session_id",
+      message: "The critic identity must differ from the primary run and session",
+    });
+  if (
+    typeof receipt.session_id === "string" &&
+    (draft.critics as Json[]).some((entry) => entry.session_id === receipt.session_id)
+  )
+    errors.push({
+      path: "$.session_id",
+      message:
+        "A receipt from this critic session was already imported; each receipt is imported once",
+    });
+  let versions: Map<string, string> | null = null;
+  let assignedIds: string[] = [];
+  if (draft.context_package_path === null || draft.context_package_path === undefined) {
+    errors.push({
+      path: "$.question_answers",
+      message: "Record the context package with record-package before importing critic answers",
+    });
+  } else {
+    const [, recorded] = artifactPayload(String(draft.context_package_path), "context_package");
+    versions = questionContextVersions(recorded);
+    assignedIds = ((recorded.questions as Json[]) ?? [])
+      .filter((question) => question.critic === true)
+      .map((question) => String(question.id));
+    const answers = Array.isArray(receipt.question_answers)
+      ? (receipt.question_answers as Json[])
+      : [];
+    for (const [index, answer] of answers.entries()) {
+      if (!isDict(answer)) continue; // schemaIssues already named the entry
+      const where = `$.question_answers[${index}]`;
+      const id = String(answer.question_id);
+      if (!versions.has(id))
+        errors.push({
+          path: `${where}.question_id`,
+          message: `Unknown question ${id}; the recorded package contains questions ${[...versions.keys()].join(", ") || "none"}`,
+        });
+      else if (!isCurrentResult(answer, versions))
+        errors.push({
+          path: `${where}.context_digest`,
+          message: `Stale answer: it binds context version ${String(answer.context_digest)} but the current package version of question ${id} is ${versions.get(id)}. Do not rebind an old answer; the critic must answer the current package`,
+        });
+    }
+  }
+  const known = new Set([
+    ...(draft.findings as Json[]).map((item) => String(item.id)),
+    ...(draft.critics as Json[]).flatMap((entry) =>
+      ((entry.findings as Json[]) ?? []).map((item) => String(item.id)),
+    ),
+  ]);
+  // The receipt's shape is checked before any list is iterated or an entry
+  // field is read; a malformed receipt stops with its addressed errors.
+  if (errors.length === 0 && Array.isArray(receipt.findings))
+    for (const [index, item] of (receipt.findings as Json[]).entries()) {
+      if (!isDict(item)) continue; // schemaIssues already named the entry
+      if (known.has(String(item.id)))
+        errors.push({
+          path: `$.findings[${index}].id`,
+          message: `Finding id ${String(item.id)} already exists in this draft; use a distinct id`,
+        });
+    }
+  if (errors.length > 0)
+    return {
+      status: "invalid",
+      draft_path: resolve(path),
+      errors,
+      note: "The receipt was not imported and the draft is unchanged. Return the named fields to the critic or fix the response file, then run record-critic again.",
+      external_mutations: false,
+    };
+  (draft.critics as Json[]).push(structuredClone(receipt));
+  writeJson(path, draft);
+  const covered = new Set(
+    (draft.critics as Json[]).flatMap((entry) =>
+      ((entry.question_answers as Json[]) ?? []).map((answer) => String(answer.question_id)),
+    ),
+  );
+  const verified = new Set(
+    ((draft.question_verifications as Json[]) ?? []).map((item) => String(item.question_id)),
+  );
+  return {
+    status: "ok",
+    draft_path: resolve(path),
+    source_envelope_unwrapped: unwrapped,
+    imported: {
+      findings: ((receipt.findings as Json[]) ?? []).length,
+      answers: ((receipt.question_answers as Json[]) ?? []).length,
+    },
+    critics_recorded: (draft.critics as Json[]).length,
+    critic_count: draft.critic_count,
+    pending_critic_questions: assignedIds.filter((id) => !covered.has(id) && !verified.has(id)),
+    dispositions:
+      "Decide every critic finding explicitly through record-input $.dispositions; the runtime never accepts or rejects a critic finding by default",
+    pending: draftGaps(draft),
+    next_action: runnerAction("check-review", ["--draft", resolve(path)]),
     external_mutations: false,
   };
 }

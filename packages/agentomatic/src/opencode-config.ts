@@ -88,6 +88,18 @@ export function permissionEdits(
     edits.push({ kind: "set-value", path: ["permissions"], value: rules });
   } else if (!("permissions" in config))
     edits.push({ kind: "set-if-absent", path: ["permissions"], value: [] });
+  // Rules that existed before this preset run. V2 resolves by the last
+  // matching rule, so a new allow that can overlap a pre-existing deny is
+  // inserted before that deny instead of being appended after it: the user's
+  // prohibition keeps priority for every resource it matches. An allow that
+  // overlaps a deny added earlier in the same batch is a deliberate exception
+  // to that deny (the OpenCode "specific rule follows the broad rule" order)
+  // and is appended, and denies are always appended because a later deny can
+  // only strengthen the result. Batch membership is tracked by object
+  // identity: insertions shift array positions, so a length boundary would
+  // misclassify shifted pre-existing rules as batch additions.
+  const preexisting = rules;
+  const batchRules = new Set<PermissionRule>();
   for (const rule of additions) {
     const exact = rules.reduce(
       (last, existing, index) =>
@@ -112,8 +124,21 @@ export function permissionEdits(
         );
       continue;
     }
-    edits.push({ kind: "append-unique", path: ["permissions"], value: rule });
-    rules = [...rules, rule];
+    const overlapsDeny = (candidate: PermissionRule): boolean =>
+      candidate.effect === "deny" && rulesOverlap(candidate, rule);
+    const anchor =
+      rule.effect === "allow" && ![...batchRules].some((added) => overlapsDeny(added))
+        ? preexisting.find((existing) => overlapsDeny(existing))
+        : undefined;
+    if (anchor !== undefined) {
+      edits.push({ kind: "insert-before", path: ["permissions"], before: anchor, value: rule });
+      const position = rules.indexOf(anchor);
+      rules = [...rules.slice(0, position), rule, ...rules.slice(position)];
+    } else {
+      edits.push({ kind: "append-unique", path: ["permissions"], value: rule });
+      rules = [...rules, rule];
+    }
+    batchRules.add(rule);
   }
   return edits;
 }
@@ -125,6 +150,56 @@ export function matchesWildcard(pattern: string, value: string): boolean {
       .replace(/\\\*/g, ".*")
       .replace(/\\\?/g, ".")}$`,
   ).test(value);
+}
+
+// Decides whether two whole-value wildcard patterns (V2 semantics: `*` matches
+// zero or more characters including `/`, `?` exactly one) can match at least
+// one common resource. Ordered rules resolve by the last match, so an allow
+// overlapping a deny must be placed before it to preserve the deny.
+type PatternUnit = { kind: "star" } | { kind: "any" } | { kind: "char"; char: string };
+
+function patternUnits(pattern: string): PatternUnit[] {
+  return [...pattern].map((character): PatternUnit =>
+    character === "*"
+      ? { kind: "star" }
+      : character === "?"
+        ? { kind: "any" }
+        : { kind: "char", char: character },
+  );
+}
+
+export function patternsOverlap(left: string, right: string): boolean {
+  const a = patternUnits(left);
+  const b = patternUnits(right);
+  const memo = new Map<string, boolean>();
+  const overlap = (i: number, j: number): boolean => {
+    if (i === a.length && j === b.length) return true;
+    // A trailing wildcard run can still match the empty string, so exhaustion
+    // is compatible only with an all-star remainder on the other side.
+    if (i === a.length) return b.slice(j).every((unit) => unit.kind === "star");
+    if (j === b.length) return a.slice(i).every((unit) => unit.kind === "star");
+    const key = `${i}:${j}`;
+    const cached = memo.get(key);
+    if (cached !== undefined) return cached;
+    const unit = a[i] as PatternUnit;
+    const other = b[j] as PatternUnit;
+    let result: boolean;
+    if (unit.kind === "star" || other.kind === "star")
+      // A star consumes nothing from the other pattern or absorbs one unit of it.
+      result = overlap(i + 1, j) || overlap(i, j + 1);
+    else if (unit.kind === "any" || other.kind === "any") result = overlap(i + 1, j + 1);
+    else result = unit.char === other.char && overlap(i + 1, j + 1);
+    memo.set(key, result);
+    return result;
+  };
+  return overlap(0, 0);
+}
+
+function rulesOverlap(existing: PermissionRule, candidate: PermissionRule): boolean {
+  return (
+    patternsOverlap(existing.action, candidate.action) &&
+    patternsOverlap(existing.resource, candidate.resource)
+  );
 }
 
 function plugins(value: unknown, legacy: boolean): unknown[] {

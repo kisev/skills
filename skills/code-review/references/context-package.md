@@ -35,8 +35,11 @@ invent approval evidence.
 After the snapshot is prepared (`start-review` or `prepare-local`), complete
 the returned template and run the returned
 `reviewmatic record-package` action. Critics start only after the package is
-recorded. The common part is identical for both modes; GitLab data is an MR
-extension, never a mandatory field of local mode.
+recorded, and the recording response returns the ready critic task with the
+recorded package path and digest, the question context versions, the exact
+snapshot paths, and the exact import command for the primary. The common part
+is identical for both modes; GitLab data is an MR extension, never a mandatory
+field of local mode.
 
 - `goal` and `acceptance_criteria`: the agreed task boundary and its checks.
   Unknown stays explicit as above.
@@ -87,8 +90,10 @@ goal, acceptance criteria, claims, constraints, agreed prior decisions, and
 thread registry. Every
 answer and verification copies the `context_digest` of the recorded package
 it was produced against. The runtime recomputes the version and rejects a
-missing or different binding, so a result collected before the package
-changed can never certify the changed question, and a binding is never
+missing or different binding — at `record-critic` import it names the
+question, the bound version, and the current version instead of rebinding —
+so a result collected before the package changed can never certify the
+changed question, and a binding is never
 filled in silently from the current package. Move such a result into the
 draft's or report's `superseded_question_results` history — or re-record the
 package with `supersedes`, which retires exactly the unbound and stale-bound
