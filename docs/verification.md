@@ -88,12 +88,13 @@ and publication ledgers, is not source material. A force-added ignored file is
 tracked and remains in the worktree scan. The snapshot preserves symlink bytes
 without following links outside the checkout.
 
-The ordinary quality gate does not invoke a model, provider, or credential:
+The ordinary quality gate does not invoke a model, provider, or credential; the
+dependency audit and the docs-site contracts are part of it and of the CI
+matrix:
 
 ```shell
 task eval:check
 task check
-task dependency:audit
 ```
 
 The committed corpus has English trigger, English near-miss, Russian trigger, and

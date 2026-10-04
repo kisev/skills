@@ -10,6 +10,17 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- Quality-gate composition now has a single machine-readable source:
+  `gate-registry.json` maps every layer to its input paths and gate task, and
+  encodes the `build:skills` precondition plus the pre-push meta triggers.
+  `scripts/generate_gates.py` renders the CI `matrix.include` blocks and the
+  Lefthook pre-push glob lists from it, and the new `gates:check` task fails
+  every gate (it runs in `check:core` and a dedicated CI job) when a rendered
+  copy, the task graph, or a workflow skeleton drifts in either direction.
+  The dependency audit, documentation, docs-site build, and docs-site
+  contracts layers joined the CI matrix, and `site:test` joined the mandatory
+  gate, so CI literally repeats the complete local gate.
+
 - `reviewmatic` and the `code-review` skill now run reviews as an orchestrated
   panel: `record-participants` records the critic count and composition plus
   the arbitrator once (installed `critic-*` profiles or ordinary subagents
@@ -29,12 +40,14 @@ All notable changes to this project are documented in this file. Entries follow
   the receipts, selection, and arbitration are preserved under
   `local-panel/`. The inspection index now carries a best-effort literal
   file-relation map with explicit incompleteness markers.
+
 - Every runbook `shell` block that creates a comment or discussion or changes
   thread state now starts with a head check that reads the current MR head,
   compares it with the reviewed head by SHA-256 digest, and stops the block
   before any write on a failed request, a malformed response, or a moved
   head; the check runs at manual execution time and the experimental TUI
   performs the same check natively before sending.
+
 - `reviewmatic` and the `code-review` skill now share one context package for
   GitLab MR and local WIP reviews. After snapshot preparation the agent records
   it with `record-package` — goal, claims with sources and separated
@@ -53,6 +66,16 @@ All notable changes to this project are documented in this file. Entries follow
   previous package as immutable history.
 
 ### Changed
+
+- A full `task check` now runs every npm test suite exactly once
+  (`package:check` delegates the suites to `package:test`), the release path
+  verifies the tag and builds artifacts within one task invocation that shares
+  the gate's distribution build (`release:verify`, `release:verify:published`;
+  the dependency audit is folded into `check:core`), and the `dev` publication
+  trusts the terminal CI `success` of the exact revision through
+  `task dev:await-ci` (`actions: read`) and stops when that run failed, was
+  cancelled by a newer push, or is missing. A tagged commit keeps exactly one
+  automatic full check in `release:prepare`.
 
 - The local `check:core` push gate now rebuilds the portable distribution
   (`distribution:build`) instead of comparing it byte-for-byte with the

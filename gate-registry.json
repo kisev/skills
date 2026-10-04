@@ -1,0 +1,122 @@
+{
+  "schema": "kisev-skills/gate-registry/v1",
+  "description": "Single source of truth for quality-gate composition. One entry per layer maps input paths to its gate task. scripts/generate_gates.py renders the CI matrix.include blocks and the Lefthook pre-push glob lists from this registry, and `task gates:check` fails every gate when a rendered copy drifts. Core layers run in `check:core` on every local gate; scoped layers run only when the push delta touches their paths. Layers with requires_build run in the CI group whose handwritten skeleton executes build:skills first; ci_task names the strict clean-checkout variant used by CI when it differs from the local task; ci_job names a handwritten workflow job instead of a matrix entry.",
+  "build_precondition": "build:skills",
+  "meta_triggers": ["gate-registry.json", "lefthook.yml", "mise.toml", "taskfile.yml"],
+  "layers": [
+    {
+      "name": "version-contracts",
+      "title": "Version contracts",
+      "task": "version:check",
+      "core": true
+    },
+    {
+      "name": "lint",
+      "title": "Lint",
+      "task": "lint",
+      "core": true
+    },
+    {
+      "name": "typecheck",
+      "title": "Type checks",
+      "task": "typecheck",
+      "core": true
+    },
+    {
+      "name": "security",
+      "title": "Secret scanning",
+      "task": "security",
+      "core": true
+    },
+    {
+      "name": "docs",
+      "title": "Documentation",
+      "task": "docs:check",
+      "core": true
+    },
+    {
+      "name": "site-build",
+      "title": "Docs site build",
+      "task": "site:build",
+      "core": true
+    },
+    {
+      "name": "site-tests",
+      "title": "Docs site contracts",
+      "task": "site:test",
+      "core": true
+    },
+    {
+      "name": "dependency-audit",
+      "title": "Dependency audit",
+      "task": "dependency:audit",
+      "core": true
+    },
+    {
+      "name": "distribution",
+      "title": "Portable distribution",
+      "task": "distribution:build",
+      "ci_task": "distribution:check",
+      "core": true
+    },
+    {
+      "name": "npm-packages",
+      "title": "OpenCode package",
+      "task": "package:check",
+      "core": false,
+      "paths": [
+        "packages/**",
+        "apps/**",
+        "shared/**",
+        "scripts/**",
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
+      "name": "locales",
+      "title": "Locales",
+      "task": "locale:check",
+      "core": true,
+      "requires_build": true
+    },
+    {
+      "name": "skills-validation",
+      "title": "Skill validation",
+      "task": "skills:validate",
+      "core": true,
+      "requires_build": true
+    },
+    {
+      "name": "evaluations",
+      "title": "Offline evaluations",
+      "task": "eval:check",
+      "core": true,
+      "requires_build": true
+    },
+    {
+      "name": "python-tests",
+      "title": "Python tests",
+      "task": "test:python",
+      "core": false,
+      "requires_build": true,
+      "paths": [
+        "**/*.py",
+        "**/*.schema.json",
+        "skills/**",
+        "shared/**",
+        "scripts/**",
+        "tests/**",
+        "pyproject.toml",
+        "uv.lock"
+      ]
+    },
+    {
+      "name": "gate-registry",
+      "title": "Gate registry",
+      "task": "gates:check",
+      "core": true,
+      "ci_job": "gate-registry"
+    }
+  ]
+}

@@ -313,22 +313,34 @@ tasks:
 
   release:check:
     desc: Validate aligned release versions and built Pages provenance
+    deps: [distribution:build]
     cmds:
-      - task: distribution:build
       - mise exec -- uv run --locked python scripts/check_release.py {{.CLI_ARGS}}
+
+  release:verify:
+    internal: true
+    deps: [distribution:build]
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_release.py --require-clean
+
+  release:verify:published:
+    internal: true
+    deps: [distribution:build]
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_release.py --published --require-clean
 
   release:preflight:
     desc: Verify a release commit before creating its tag
+    deps: [pre-push]
     cmds:
-      - task release:check -- --require-clean
-      - task: pre-push
+      - task: release:verify
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:prepare:
     desc: Verify the published tag and build immutable release artifacts
+    deps: [pre-push]
     cmds:
-      - task release:check -- --published --require-clean
-      - task: pre-push
+      - task: release:verify:published
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:npm:
@@ -391,6 +403,11 @@ tasks:
         --site-dir apps/docs-site/dist
         --output .build/pages
 
+  dev:await-ci:
+    desc: Wait for the terminal CI success of the current revision
+    cmds:
+      - mise exec -- uv run --locked python scripts/await_ci_success.py
+
   dev:npm:
     desc: Publish or accept and verify the exact npm dev artifact
     cmds:
@@ -444,6 +461,16 @@ tasks:
       - task: build:skills
       - task: distribution:check
 
+  gates:write:
+    desc: Render CI matrix blocks and pre-push globs from the gate registry
+    cmds:
+      - mise exec -- uv run --locked python scripts/generate_gates.py
+
+  gates:check:
+    desc: Fail when a rendered gate copy drifts from the gate registry
+    cmds:
+      - mise exec -- uv run --locked python scripts/generate_gates.py --check
+
   build:skills:
     desc: Materialize portable skills
     run: once
@@ -453,6 +480,7 @@ tasks:
   distribution:build:
     desc: Build the GitHub Pages portable distribution
     deps: [build:skills]
+    run: once
     cmds:
       - mise exec -- uv run --locked python scripts/build_distribution.py
 
@@ -516,6 +544,7 @@ tasks:
   check:core:
     desc: Run the always-on core shared by every push gate
     cmds:
+      - task: gates:check
       - task: build:skills
       - task: version:check
       - task: lint
@@ -523,10 +552,12 @@ tasks:
       - task: locale:check
       - task: docs:check
       - task: site:build
+      - task: site:test
       - task: distribution:build
       - task: skills:validate
       - task: eval:check
       - task: security
+      - task: dependency:audit
 
   check:
     desc: Run the complete local and CI quality gate
@@ -537,7 +568,7 @@ tasks:
 
   pre-push:
     desc: Run the single complete local gate before push
-    deps: [check, dependency:audit]
+    deps: [check]
 
   package:check:
     desc: Verify the complete npm package lifecycle and tarballs
@@ -548,8 +579,6 @@ tasks:
       - mise exec -- npm run pack:check
       - mise exec -- npm --prefix ../../apps/reviewmatic run pack:check
       - mise exec -- npm --prefix ../../apps/taskmatic run pack:check
-      - mise exec -- npm test
-      - mise exec -- npm --prefix ../../apps/memomatic test
 
   package:test:
     internal: true

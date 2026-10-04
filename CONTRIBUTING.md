@@ -51,6 +51,7 @@ The main public tasks divide the checks as follows:
 | `eval:check` | Validate evaluation data and run the hostless offline suite. |
 | `dependency:audit` | Audit the locked Python and npm dependency graphs. |
 | `security` | Scan Git history and the working tree for secrets with gitleaks. |
+| `gates:check` | Fail when a rendered gate copy drifts from `gate-registry.json`. |
 | `check:core` | Run the always-on core shared by every push gate. |
 | `check` | Run the complete local and CI quality gate. |
 | `pre-push` | Run the complete unscoped local gate for manual and release use. |
@@ -68,9 +69,17 @@ Node.js tests, performs a smoke test through pinned OpenCode, and checks the npm
 pack allowlist. Root lint and type-check tasks own the corresponding source
 checks, so the package lifecycle does not repeat them.
 
-`dependency:audit` checks the locked Python and npm dependency graphs.
-`task pre-push` runs it concurrently with `task check`; it remains separate from
-ordinary CI because it depends on live vulnerability services.
+`dependency:audit` checks the locked Python and npm dependency graphs and
+belongs to `check:core`, so every full local gate and the CI matrix run it.
+It queries live vulnerability services over the network while doing so.
+
+`gate-registry.json` is the single source for gate composition: one entry per
+layer maps input paths to a gate task. `scripts/generate_gates.py` renders the
+CI `matrix.include` blocks and the Lefthook pre-push glob lists from the
+registry; branch policy, job skeletons, aggregation, and task calls stay
+hand-written. `task gates:check` runs in `check:core` and in CI and fails when
+a rendered copy, the task graph, or a skeleton drifts from the registry; after
+editing the registry, run `task gates:write`.
 
 ## Diagnostics
 
@@ -117,12 +126,14 @@ generation, and release checks do not run.
 
 `pre-push` scopes its jobs to the push delta: the delta resolves against the
 branch upstream and falls back to every tracked file when there is none, so
-first pushes run the complete gate. The always-on jobs run `task check:core`
-and `task dependency:audit`; `task test:python` and `task package:check` run
-only when the delta touches their stack inputs. CI reruns the complete gate on
-every push, so scoping never reduces verification, and `task pre-push` remains
-the unscoped gate for manual diagnosis and releases. Hooks do not apply fixes
-or run `git add`.
+first pushes run the complete gate. The always-on job runs `task check:core`,
+which includes the documentation, docs-site, and dependency-audit layers;
+`task test:python` and `task package:check` run only when the delta touches
+their stack inputs, and every scoped glob list carries the meta triggers, so
+tooling edits run every layer. CI reruns the complete gate on every push, so
+scoping never reduces verification, and `task pre-push` remains the unscoped
+gate for manual diagnosis and releases. Hooks do not apply fixes or run
+`git add`.
 
 ## Releases
 
@@ -167,7 +178,10 @@ The manifest records `@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomat
 with their own versions and exact dependency pins. Every member must finish
 publication and verification before the workflow declares success.
 
-For every push to `dev`, the same workflow runs the complete gate, then replaces
-only the Pages `/dev` channel and publishes a unique npm prerelease under dist-tag
-`dev`. Development snapshots do not choose a stable SemVer and create no GitHub
+For every push to `dev`, CI runs the complete gate on the pushed revision, and
+the publication workflow waits for its terminal `success` conclusion for the
+same revision before it rebuilds the exact artifacts, replaces only the Pages
+`/dev` channel, and publishes a unique npm prerelease under dist-tag `dev`. If
+that run failed, was cancelled by a newer push, or is missing, the publication
+stops. Development snapshots do not choose a stable SemVer and create no GitHub
 Release.

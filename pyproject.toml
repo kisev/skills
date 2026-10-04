@@ -109,6 +109,7 @@
       ]
       "scripts/build_stage20_corpus.py" = ["RUF001"]                        # Confusable characters are intentional corpus cases.
       "scripts/build_skills.py" = ["S105"]                                  # The value is a public build placeholder, not a credential.
+      "scripts/await_ci_success.py" = ["S310"]                              # Requests use the fixed GitHub HTTPS API origin.
       "scripts/create_github_release.py" = ["S310"]                         # Requests use the fixed GitHub HTTPS API origin.
       "scripts/eval_runner.py" = [
         "PLR0911",                                                          # The evaluator maps many explicit terminal states.

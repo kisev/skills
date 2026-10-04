@@ -137,14 +137,18 @@ verify exports, CLI help, and agent discovery without provider credentials.
 After the complete publication gate succeeds for a push to `dev`, publication
 shall update the moving
 portable distribution at `https://kisev.github.io/skills/dev` and publish one
-unique `@kisev/agentomatic` prerelease under npm dist-tag `dev`. The snapshot
+unique `@kisev/agentomatic` prerelease under npm dist-tag `dev`. Publication
+shall observe the complete gate only through the terminal `success` conclusion
+of CI runs for the exact source revision and shall refuse to publish when that
+run failed, was cancelled by a newer push, or is missing. The snapshot
 version shall combine the maintained stable base, workflow run number, and source
 revision without selecting a future stable SemVer. Development publication shall
 not create a GitHub Release or change npm `latest`.
 
 #### Verification
 
-Workflow and release tests verify the `dev` trigger, version derivation, npm
+Workflow and release tests verify the `dev` trigger, the terminal CI trust
+boundary, version derivation, npm
 dist-tag, Pages subpath, and isolation from stable publication.
 
 ### REQ-F-010 - Provision the persistent npm dependency

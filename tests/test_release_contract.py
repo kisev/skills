@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from scripts import (
+    await_ci_success,
     build_dev_artifacts,
     build_distribution,
     build_release_artifacts,
@@ -1341,6 +1342,21 @@ def test_release_environment_revision_must_match_head(monkeypatch: pytest.Monkey
         check_release.validate()
 
 
+def test_ci_trust_decides_only_on_terminal_success() -> None:
+    success = {"id": 1, "status": "completed", "conclusion": "success"}
+    assert await_ci_success.decide([success]) == "success"
+    assert await_ci_success.decide([]) is None
+    active = {"id": 2, "status": "in_progress", "conclusion": None}
+    assert await_ci_success.decide([active]) is None
+    # A cancelled attempt followed by an active re-run keeps waiting.
+    cancelled = {"id": 3, "status": "completed", "conclusion": "cancelled"}
+    assert await_ci_success.decide([cancelled, active]) is None
+    with pytest.raises(await_ci_success.TrustError, match="superseded"):
+        await_ci_success.decide([cancelled])
+    with pytest.raises(await_ci_success.TrustError, match="failed"):
+        await_ci_success.decide([{"id": 4, "status": "completed", "conclusion": "failure"}])
+
+
 def test_release_workflow_gates_publication_and_final_release() -> None:
     workflow = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
     assert (
@@ -1351,7 +1367,12 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     assert workflow.count("needs: stable-preflight") == 2
     assert "task release:prepare" in workflow
     assert "branches:\n      - dev" in workflow
-    assert "task check" in workflow
+    # The dev publication trusts the terminal CI success of the same revision
+    # instead of repeating the complete gate next to CI.
+    assert "task dev:await-ci" in workflow
+    assert "CI_REVISION: ${{ github.sha }}" in workflow
+    assert "actions: read" in workflow
+    assert "task check" not in workflow
     assert "workflow_run" not in workflow
     assert "DEV_REVISION: ${{ github.sha }}" in workflow
     assert "cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/v') }}" in workflow

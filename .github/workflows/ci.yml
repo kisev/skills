@@ -59,6 +59,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # @gates:begin matrix:quality
           - name: Version contracts
             task: version:check
           - name: Lint
@@ -67,10 +68,19 @@ jobs:
             task: typecheck
           - name: Secret scanning
             task: security
+          - name: Documentation
+            task: docs:check
+          - name: Docs site build
+            task: site:build
+          - name: Docs site contracts
+            task: site:test
+          - name: Dependency audit
+            task: dependency:audit
           - name: Portable distribution
             task: distribution:check
           - name: OpenCode package
             task: package:check
+          # @gates:end
     env:
       CHECK_TASK: ${{ matrix.task }}
     steps:
@@ -89,14 +99,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Python tests
-            task: test:python
+          # @gates:begin matrix:built-quality
           - name: Locales
             task: locale:check
           - name: Skill validation
             task: skills:validate
           - name: Offline evaluations
             task: eval:check
+          - name: Python tests
+            task: test:python
+          # @gates:end
     env:
       CHECK_TASK: ${{ matrix.task }}
     steps:
@@ -105,11 +117,22 @@ jobs:
       - run: task build:skills
       - run: task "$CHECK_TASK"
 
+  gate-registry:
+    name: Gate registry
+    if: ${{ github.event.deleted != true }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
+      - run: task gates:check
+
   check:
     name: check
     if: ${{ always() }}
     needs:
       - branch-policy
+      - gate-registry
       - quality
       - built-quality
     runs-on: ubuntu-24.04
@@ -119,6 +142,7 @@ jobs:
       QUALITY_RESULT: ${{ needs.quality.result }}
       BUILT_QUALITY_RESULT: ${{ needs.built-quality.result }}
       BRANCH_POLICY_RESULT: ${{ needs.branch-policy.result }}
+      GATE_REGISTRY_RESULT: ${{ needs.gate-registry.result }}
     steps:
       - name: Require every CI gate
         run: |
@@ -126,5 +150,6 @@ jobs:
             exit 0
           fi
           test "$BRANCH_POLICY_RESULT" = success
+          test "$GATE_REGISTRY_RESULT" = success
           test "$QUALITY_RESULT" = success
           test "$BUILT_QUALITY_RESULT" = success

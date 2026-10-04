@@ -4,6 +4,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import textwrap
 from pathlib import Path
 
@@ -35,13 +36,10 @@ def test_hooks_keep_precommit_fast_and_prepush_scoped() -> None:
     # falls back to every tracked file, so first pushes run the complete gate.
     assert pre_push.lstrip().startswith("parallel: false")
     assert "git diff --name-only @{upstream} HEAD 2>/dev/null || git ls-files" in pre_push
-    for job in (
-        "task check:core",
-        "task test:python",
-        "task package:check",
-        "task dependency:audit",
-    ):
+    for job in ("task check:core", "task test:python", "task package:check"):
         assert job in pre_push
+    assert "task dependency:audit" not in pre_push
+    assert "task gates:check" in pre_commit
     assert "task pre-push" not in hooks
 
 
@@ -100,6 +98,10 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
         "typecheck",
         "test:python",
         "locale:check",
+        "docs:check",
+        "site:build",
+        "site:test",
+        "dependency:audit",
         "distribution:check",
         "skills:validate",
         "eval:check",
@@ -108,6 +110,9 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     ):
         assert f"task: {task}" in ci
     assert "ci:" not in ci
+    # The drift gate owns its own handwritten job so a stale rendered copy
+    # fails the CI run conclusion instead of silently passing.
+    assert "task gates:check" in ci
     # CI artifacts do not preserve file modes, so every built-quality job
     # materializes `.build/skills` itself; byte-identical rebuilds are enforced
     # by distribution:check.
@@ -128,6 +133,12 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "id-token: write" in publish
     assert "name: github-pages" in publish
     assert "deploy-pages" in publish
+    # The dev publication trusts the terminal CI success of the same revision
+    # instead of repeating the full gate next to CI.
+    assert "actions: read" in publish
+    assert "task dev:await-ci" in publish
+    assert "CI_REVISION" in publish
+    assert "task check" not in publish
     assert "task eval:live" in live
     live_command = re.search(
         r"- name: Run explicitly trusted live suite\n\s+run: (?P<run>.+)", live
@@ -182,6 +193,10 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     taskfile = (ROOT / "taskfile.yml").read_text(encoding="utf-8")
     assert re.search(r"^  ci:", taskfile, flags=re.MULTILINE) is None
     assert "  build:skills:\n    desc: Materialize portable skills\n    run: once" in taskfile
+    assert (
+        "  distribution:build:\n    desc: Build the GitHub Pages portable distribution\n"
+        "    deps: [build:skills]\n    run: once" in taskfile
+    ), "one invocation must build the distribution once for the gate and the release check"
     assert "  distribution:build:" in taskfile
     assert "    deps: [build:skills]" in taskfile
     assert "deps: [package:test]" in taskfile
@@ -202,9 +217,17 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     assert "mise exec -- editorconfig-checker" in taskfile
     assert "mise exec -- ec" not in taskfile
     assert "      - task: build:skills\n      - task: version:check" in taskfile
-    assert "deps: [check, dependency:audit]" in taskfile
+    assert "deps: [check]" in taskfile
+    assert "deps: [check, dependency:audit]" not in taskfile
     assert "  release:preflight:" in taskfile
-    assert "task release:check -- --published" in taskfile
+    # The release path keeps exactly one full check per invocation and shares
+    # the built distribution between the release verification and the gate.
+    assert "  release:verify:\n    internal: true" in taskfile
+    assert "  release:verify:published:\n    internal: true" in taskfile
+    assert taskfile.count("deps: [pre-push]") == 2
+    assert "scripts/check_release.py --published --require-clean" in taskfile
+    assert "scripts/check_release.py --require-clean" in taskfile
+    assert "task release:check --" not in taskfile
     build_cmd = "mise exec -- npm run build --workspace @kisev/"
     assert (
         "  typecheck:typescript:\n    desc: Check types in typescript\n"
@@ -246,3 +269,65 @@ def test_every_workspace_package_is_wired_into_the_publication_graph() -> None:
             )
     distribution = (ROOT / "scripts/build_distribution.py").read_text(encoding="utf-8")
     assert "build_skills(BUILT_SKILLS" not in distribution
+
+
+def rendered_gate_root(tmp_path: Path) -> Path:
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    for name in ("gate-registry.json", "taskfile.yml", "lefthook.yml"):
+        (tmp_path / name).write_text((ROOT / name).read_text(encoding="utf-8"), encoding="utf-8")
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text(ci, encoding="utf-8")
+    return tmp_path
+
+
+def run_gate_drift_check(root: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "scripts/generate_gates.py"), "--check", "--root", str(root)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_gate_registry_renders_the_committed_gate_copies() -> None:
+    result = run_gate_drift_check(ROOT)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_gate_registry_drift_fails_the_gate(tmp_path: Path) -> None:
+    for surface, old, new in (
+        (
+            ".github/workflows/ci.yml",
+            "          - name: Documentation\n            task: docs:check\n",
+            "",
+        ),
+        ("taskfile.yml", "      - task: site:test\n", ""),
+        ("lefthook.yml", '        - "packages/**"\n', ""),
+        ("gate-registry.json", '"task": "docs:check"', '"task": "docs:check-renamed"'),
+    ):
+        root = rendered_gate_root(tmp_path / surface.replace("/", "_"))
+        content = (root / surface).read_text(encoding="utf-8")
+        assert old in content, surface
+        (root / surface).write_text(content.replace(old, new), encoding="utf-8")
+        result = run_gate_drift_check(root)
+        assert result.returncode == 1, (surface, result.stdout + result.stderr)
+
+
+def test_gate_registry_layers_stay_composed_into_every_surface() -> None:
+    registry = json.loads((ROOT / "gate-registry.json").read_text(encoding="utf-8"))
+    taskfile = (ROOT / "taskfile.yml").read_text(encoding="utf-8")
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    hooks = (ROOT / "lefthook.yml").read_text(encoding="utf-8")
+    pre_push = hooks.split("pre-push:\n", 1)[1]
+    for layer in registry["layers"]:
+        assert layer["task"] in taskfile
+        if layer.get("ci_job") is None:
+            assert f"task: {layer.get('ci_task', layer['task'])}" in ci
+        else:
+            assert f"task {layer['task']}" in ci
+        if not layer["core"]:
+            glob_block = pre_push.split(f"# @gates:begin glob:{layer['name']}\n", 1)[1]
+            # Meta triggers keep tooling edits running every scoped layer, the
+            # false-negative class behind the pinned distribution check fix.
+            for trigger in registry["meta_triggers"]:
+                assert f'"{trigger}"' in glob_block
