@@ -69,53 +69,32 @@ def test_exhaustive_matrix_requires_pager_and_all_role_evidence(missing: str | N
 
 
 @pytest.mark.parametrize(
-    "change",
-    [{"host": "external.invalid"}, {"project": 20}, {"role": 4}, {"kind": "merge_request"}],
+    ("block", "message"),
+    [
+        (
+            "(glab api --hostname external.invalid user | jq -e true >/dev/null) &&",
+            "localhost",
+        ),
+        (
+            (
+                "glab api --hostname localhost --method POST 'projects/20/issues' "
+                "--header 'Content-Type: application/json' --input - <<'TRIAGE_JSON_X'"
+                "\n{}\nTRIAGE_JSON_X"
+            ),
+            "fixture project",
+        ),
+        (
+            "triage_task.py apply-information --guard guard.json --stage message",
+            "helper",
+        ),
+    ],
 )
-def test_information_command_rejects_foreign_targets_before_dispatch(
-    local: Any, change: dict[str, Any]
-) -> None:
-    import shlex
+def test_copied_triage_blocks_reject_foreign_targets(local: Any, block: str, message: str) -> None:
+    from tests.integration.gitlab.scripts.publication_checks import validated_block
 
-    from tests.integration.gitlab.scripts.triage_lifecycle_checks import guarded_argv
-
-    local.manifest = {"fixtures": {"id": 19}, "users": {"reviewer": {"id": 3}}}
-    guard = local.state / "guard.json"
-    STAND.write_json(
-        guard,
-        {
-            "host": change.get("host", "localhost"),
-            "current_user": {"id": change.get("role", 3)},
-            "request": {
-                "target": {
-                    "kind": change.get("kind", "issue"),
-                    "project_id": change.get("project", 19),
-                }
-            },
-        },
-    )
-    runner = ROOT / ".build/skills/task-triage/scripts/triage_task.py"
-    argv = [
-        sys.executable,
-        "-I",
-        "-S",
-        "-B",
-        str(runner.parent / "portable_runtime/state_artifacts.py"),
-        "marker-run",
-        "--",
-        sys.executable,
-        "-I",
-        "-S",
-        "-B",
-        str(runner),
-        "apply-information",
-        "--guard",
-        str(guard),
-        "--stage",
-        "message",
-    ]
-    with pytest.raises(ValueError, match="fixture role/target"):
-        guarded_argv(local, shlex.join(argv))
+    local.manifest = {"fixtures": {"id": 19}}
+    with pytest.raises(ValueError, match=message):
+        validated_block(local, block)
 
 
 @pytest.fixture

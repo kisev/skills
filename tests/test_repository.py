@@ -679,6 +679,7 @@ class PortableSkillValidationTests(unittest.TestCase):
             (ROOT / "shared/references/work_item_runtime/triage.py").read_bytes(),
         )
         self.assertFalse((triage / "scripts/portable_runtime/contract.py").exists())
+        self.assertFalse((triage / "scripts/portable_runtime/mutation_process.py").exists())
         help_result = subprocess.run(
             [sys.executable, str(triage / "scripts/triage_task.py"), "--help"],
             capture_output=True,
@@ -688,6 +689,8 @@ class PortableSkillValidationTests(unittest.TestCase):
         self.assertEqual(help_result.returncode, 0, help_result.stderr)
         self.assertIn("collect", help_result.stdout)
         self.assertIn("publish", help_result.stdout)
+        self.assertNotIn("apply-information", help_result.stdout)
+        self.assertNotIn("apply-link", help_result.stdout)
 
         with tempfile.TemporaryDirectory() as temporary:
             isolated = Path(temporary) / "task-triage"
@@ -702,8 +705,8 @@ class PortableSkillValidationTests(unittest.TestCase):
                     (
                         "import sys; "
                         f"sys.path.insert(0, {str(isolated / 'scripts')!r}); "
-                        "from portable_runtime.triage import triage_runner; "
-                        "print(triage_runner())"
+                        "from portable_runtime import triage; "
+                        "print('user_guard' in dir(triage), 'apply_information' in dir(triage))"
                     ),
                 ],
                 cwd=temporary,
@@ -712,7 +715,7 @@ class PortableSkillValidationTests(unittest.TestCase):
                 check=False,
             )
             self.assertEqual(probe.returncode, 0, probe.stderr)
-            self.assertEqual(Path(probe.stdout.strip()), isolated / "scripts/triage_task.py")
+            self.assertIn("True False", probe.stdout)
 
         planning_runtime = (
             ROOT / "shared/references/work_item_runtime/release_planning.py"

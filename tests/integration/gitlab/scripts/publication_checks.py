@@ -22,6 +22,70 @@ def commands(markdown: str) -> list[str]:
     ]
 
 
+def blocks(markdown: str) -> list[str]:
+    """Whole executable shell blocks; copied and run verbatim, never line-by-line."""
+    return [
+        block
+        for block in re.findall(r"```(?:sh|shell)\n(.*?)\n```", markdown, re.DOTALL)
+        if block.strip()
+    ]
+
+
+def validated_block(stand: Stand, block: str) -> list[str]:
+    """Reject helper wrappers and any read or write outside the fixture project."""
+    for helper in ("marker-run", "apply-information", "apply-link", "execution-status"):
+        if helper in block:
+            raise ValueError(f"Triage block still references the {helper} helper")
+    pid = stand.manifest["fixtures"]["id"]
+    endpoints = []
+    for line in block.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped.lstrip("(").startswith("glab "):
+            continue
+        if "--hostname" not in line:
+            raise ValueError("Triage publication must target the hostname explicitly")
+        host = re.split(r"--hostname\s+", line, maxsplit=1)[1].split()[0].strip("'\"")
+        if host != "localhost":
+            raise ValueError("Triage publication must target localhost explicitly")
+        token = re.search(r"(?:--method\s+\S+\s+)?'?(projects/[^'\"]+)'?", line)
+        if token:
+            endpoints.append(token.group(1))
+        elif " user " not in line:
+            raise ValueError(f"Unrecognized triage read target: {line}")
+    for endpoint in endpoints:
+        if not endpoint.startswith(f"projects/{pid}/"):
+            raise ValueError("Triage publication outside the synthetic fixture project")
+        if any(part in (".", "..") for part in endpoint.split("/")):
+            raise ValueError("Triage publication outside the literal endpoint scope")
+    return endpoints
+
+
+def execute_block(
+    stand: Stand, block: str, directory: Path, name: str, actor: str = "reviewer"
+) -> dict[str, Any]:
+    """Run one copied block verbatim in the actor's isolated environment."""
+    validated_block(stand, block)
+    result = subprocess.run(
+        ["bash", "-ec", block + "\n"],
+        cwd=ROOT,
+        env=stand.isolated_env(actor),
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    observation = {
+        "block": block,
+        "exit_code": result.returncode,
+        "stdout": stand.redact(result.stdout),
+        "stderr": stand.redact(result.stderr),
+    }
+    write_json(directory / (name + ".json"), observation)
+    if result.returncode:
+        raise RuntimeError(f"Copied {name} block failed: {observation['stderr']}")
+    return observation
+
+
 def validated_argv(stand: Stand, text: str) -> tuple[list[str], str]:
     argv = shlex.split(text)
     # Marker wrappers are part of the copied command, not bypassed by the test.

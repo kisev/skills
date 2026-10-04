@@ -1,4 +1,4 @@
-"""Run actual task-triage collection/rendering and copy its CE publication commands."""
+"""Run actual task-triage collection/rendering and copy its CE publication blocks."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from tests.integration.gitlab.scripts.checks import verify
-from tests.integration.gitlab.scripts.publication_checks import commands, execute, helper
+from tests.integration.gitlab.scripts.publication_checks import blocks, execute_block, helper
 from tests.integration.gitlab.scripts.stand import ROOT, Stand, private_directory, write_json
 
 
@@ -89,6 +89,7 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
                         }
                     ],
                 }
+            created_title = f"v9.9.{f['issues'][2]['iid']}"
             items.append(
                 {
                     "evidence_digest": item["evidence_digest"],
@@ -115,21 +116,25 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
                         "release": {
                             "policy": "Synthetic test release policy, not a product release decision.",
                             "baseline_version": "1.0.0",
-                            "target_version": milestone["title"][1:],
+                            "target_version": (
+                                milestone["title"][1:] if selected else created_title[1:]
+                            ),
                             "impact": "major",
-                            "rationale": "Exercise an observed active milestone on a compatible future line.",
+                            "rationale": "Exercise an observed or proposed compatible future line.",
                             "confidence": "high",
                         },
                         "milestone": {
-                            "status": "selected",
+                            "status": "selected" if selected else "create",
                             "candidate": {
                                 "project_id": stand.manifest["fixtures"]["id"],
-                                "id": milestone["id"],
-                                "title": milestone["title"],
-                                "state": "active",
-                                "version": milestone["title"][1:],
+                                "id": milestone["id"] if selected else None,
+                                "title": milestone["title"] if selected else created_title,
+                                "state": "active" if selected else "proposed",
+                                "version": milestone["title"][1:]
+                                if selected
+                                else created_title[1:],
                             },
-                            "rationale": "Exact milestone was collected from this fixture project.",
+                            "rationale": "Milestone collected from this fixture project.",
                             "confidence": "high",
                         },
                     },
@@ -137,7 +142,7 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
                     "priority": "low",
                     "agent_recommendation": {
                         "proposal": "Publish the synthetic fixture metadata.",
-                        "rationale": "Exercise copied commands against the real CE server.",
+                        "rationale": "Exercise copied blocks against the real CE server.",
                         "assumptions": [
                             "These are fixture decisions, not a real agent assessment."
                         ],
@@ -182,14 +187,25 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
                 issue == stand.request("GET", f["prefix"] + f"/issues/{iid}", actor=actor),
                 "Triage preparation mutated an issue",
             )
-        copied = []
+        copied: list[str] = []
         for entry in prepared["reports"]:
             text = Path(entry["report"]).read_text()
             (directory / (actor + "-" + entry["iid"] + "-runbook.md")).write_text(text)
-            copied.extend(commands(text))
-        verify(bool(copied), "Triage produced no copied commands")
-        for index, text in enumerate(copied):
-            execute(stand, text, directory, f"{actor}-copied-{index}", actor)
+            copied.extend(blocks(text))
+        verify(bool(copied), "Triage produced no copied blocks")
+        for block in copied:
+            verify(
+                "marker-run" not in block
+                and "apply-information" not in block
+                and "apply-link" not in block,
+                "Triage block still wraps a runtime helper",
+            )
+            verify(
+                ".username == $username" in block,
+                "Triage block lacks the authenticated-user guard",
+            )
+        for index, block in enumerate(copied):
+            execute_block(stand, block, directory, f"{actor}-copied-{index}", actor)
         actual = stand.request("GET", f["prefix"] + f"/issues/{f['issue']['iid']}")
         desired = next(item["proposed_changes"] for item in items if item["proposed_changes"])
         verify(
@@ -206,10 +222,16 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
             ),
             "Copied CE relationship is missing",
         )
+        created = stand.request("GET", f["prefix"] + f"/issues/{f['issues'][2]['iid']}")
+        verify(
+            created["milestone"]["title"] == created_title,
+            "Triage create-milestone block did not attach the extracted ID",
+        )
         results[actor] = {
-            "commands": copied,
+            "blocks": copied,
             "issue": actual,
             "links": links,
+            "created_milestone": created["milestone"]["title"],
             "origin": "actual helpers with deterministic fixture decisions",
         }
     return results

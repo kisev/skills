@@ -486,10 +486,6 @@
       "destination": "team-sprint-start/scripts/memomatic_inbox.py"
     },
     {
-      "source": "references/mutation_process.py",
-      "destination": "task-triage/scripts/portable_runtime/mutation_process.py"
-    },
-    {
       "source": "references/necessity-doctrine.md",
       "destination": "askme/references/necessity-doctrine.md"
     },

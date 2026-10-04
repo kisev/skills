@@ -67,6 +67,21 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- The `task-triage` publication contract now generates direct `glab api`
+  commands with inline JSON heredoc bodies, `#` explanations, and `&&`
+  fail-fast blocks that depend only on `glab`, `jq`, and `sha256sum`. Every
+  writing block starts with an authenticated-user guard, the first writing
+  block of a task verifies the snapshot `updated_at`, later blocks verify
+  their own semantic preconditions against a fresh read, obsolete and
+  duplicate issues receive explanation-and-close blocks, a missing milestone
+  is created and attached in one guarded block, the stale closure publishes
+  its final message and closes the issue in one chain, and the summary lists
+  every action without a command together with its reason. The
+  `apply-information` and `apply-link` runtime helpers, their guard
+  and receipt state, and the task-triage consumption of the shared
+  `mutation_process.py` runtime were removed; legacy helper state stays
+  historical and is never executed.
+
 - A full `task check` now runs every npm test suite exactly once
   (`package:check` delegates the suites to `package:test`), the release path
   verifies the tag and builds artifacts within one task invocation that shares

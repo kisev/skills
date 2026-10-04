@@ -4,46 +4,14 @@ from __future__ import annotations
 
 import copy
 import json
-import shlex
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 from tests.integration.gitlab.scripts.checks import verify
-from tests.integration.gitlab.scripts.publication_checks import commands, execute, helper
+from tests.integration.gitlab.scripts.publication_checks import blocks, execute_block, helper
 from tests.integration.gitlab.scripts.stand import ROOT, Stand, private_directory, write_json
-
-
-def guarded_argv(stand: Stand, text: str) -> list[str]:
-    argv = shlex.split(text)
-    separator = argv.index("--") if "--" in argv else -1
-    runner = ROOT / ".build/skills/task-triage/scripts/triage_task.py"
-    if (
-        separator < 0
-        or argv[:4] != [sys.executable, "-I", "-S", "-B"]
-        or Path(argv[4]).resolve() != runner.parent / "portable_runtime/state_artifacts.py"
-        or argv[5] != "marker-run"
-        or argv[separator + 1 : separator + 6] != [sys.executable, "-I", "-S", "-B", str(runner)]
-        or argv[separator + 6 : separator + 8] != ["apply-information", "--guard"]
-        or len(argv[separator + 1 :]) != 10
-        or argv[-2] != "--stage"
-        or argv[-1] not in ("message", "close")
-    ):
-        raise ValueError("Unrecognized copied information command")
-    path = Path(argv[separator + 8])
-    if path.is_symlink() or not path.resolve().is_relative_to(stand.state):
-        raise ValueError("Information guard outside the isolated fixture state")
-    guard = json.loads(path.read_text())
-    target = guard["request"]["target"]
-    if (
-        guard["host"] != "localhost"
-        or target["kind"] != "issue"
-        or target["project_id"] != stand.manifest["fixtures"]["id"]
-        or guard["current_user"]["id"] != stand.manifest["users"]["reviewer"]["id"]
-    ):
-        raise ValueError("Information command outside fixture role/target")
-    return argv
 
 
 def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
@@ -124,43 +92,26 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
             and discussions_before == stand.request("GET", endpoint + "/discussions"),
             "Information preparation wrote to GitLab",
         )
-        copied = commands(Path(prepared["reports"][0]["report"]).read_text())
-        information = [text for text in copied if "apply-information" in shlex.split(text)]
+        copied = blocks(Path(prepared["reports"][0]["report"]).read_text())
+        lifecycle = [
+            block
+            for block in copied
+            if item["information_requests"][0]["body"] in block
+            or (action == "close" and '"state_event":"close"' in block)
+        ]
         verify(
-            len(information) == (2 if action == "close" else 1),
-            "Information runbook lost separate message/close commands",
+            len(lifecycle) == 1,
+            "Information runbook lost the single guarded lifecycle block",
         )
-        for index, text in enumerate(copied):
-            if text not in information:
-                execute(stand, text, directory, f"{action}-{index}-metadata")
-                continue
-            result = subprocess.run(
-                guarded_argv(stand, text),
-                cwd=ROOT,
-                env=stand.isolated_env("reviewer"),
-                capture_output=True,
-                text=True,
-                timeout=180,
-                check=False,
-            )
-            write_json(
-                directory / f"{action}-{index}-command.json",
-                {
-                    "command": text,
-                    "exit_code": result.returncode,
-                    "stdout": stand.redact(result.stdout),
-                    "stderr": stand.redact(result.stderr),
-                },
-            )
+        for index, block in enumerate(copied):
+            execute_block(stand, block, directory, f"{action}-{index}", "reviewer")
+        if action == "close":
             verify(
-                result.returncode == 0,
-                "Copied information command failed: " + stand.redact(result.stderr),
+                '"state_event":"close"' in lifecycle[0]
+                and lifecycle[0].index("--method POST")
+                < lifecycle[0].index('"state_event":"close"'),
+                "Closure block must publish the final message before the close event",
             )
-            if action == "close" and text == information[0]:
-                verify(
-                    stand.request("GET", endpoint)["state"] == "opened",
-                    "Closure message implicitly closed the issue",
-                )
         discussions = stand.request("GET", endpoint + "/discussions")
         matches = [
             thread
@@ -191,16 +142,39 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
             == ("closed" if action == "close" else "opened"),
             "Information state postcondition differs",
         )
+
+        # A repeated lifecycle block must stop on its own precondition.
+        result = execute_stopped(stand, lifecycle[0], directory, f"{action}-replay", "reviewer")
+        verify("regenerate" in result["stderr"], "Replay did not stop on a guard")
+
+        # Another authenticated actor must be stopped before any write.
+        result = execute_stopped(stand, lifecycle[0], directory, f"{action}-foreign", "author")
+        verify(
+            "user changed" in result["stderr"], "Foreign actor was not stopped by the user guard"
+        )
+
         cycles.append(
             {
                 "action": action,
                 "discussion": thread["id"],
                 "note_ids": list(prior),
-                "commands": copied,
+                "blocks": copied,
             }
         )
         last_analysis = source
     assert last_analysis is not None
+
+    # Two-actor current_user honesty: each actor's collection binds its own identity.
+    for actor in ("author", "reviewer"):
+        own = helper(stand, runner, ["collect", "--source", issue["web_url"]], actor)
+        context = json.loads(Path(own["collection_path"]).read_text())["context"][
+            f"localhost:{stand.manifest['fixtures']['id']}"
+        ]
+        verify(
+            context["current_user"]["id"] == stand.manifest["users"][actor]["id"],
+            "Collected current_user does not follow the authenticated actor",
+        )
+
     fresh = helper(stand, runner, ["collect", "--source", issue["web_url"]], "reviewer")
     before = stand.request("GET", endpoint + "/discussions")
     stale = subprocess.run(
@@ -279,9 +253,13 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
         ],
         "reviewer",
     )
-    copied = commands(Path(prepared["reports"][0]["report"]).read_text())
-    for index, text in enumerate(copied):
-        execute(stand, text, directory, f"recovery-{index}")
+    recovery = blocks(Path(prepared["reports"][0]["report"]).read_text())
+    verify(
+        any("/links" in block and "--method POST" in block for block in recovery),
+        "Recovery plan lost the link-creation block",
+    )
+    for index, block in enumerate(recovery):
+        execute_block(stand, block, directory, f"recovery-{index}")
     restored = stand.request("GET", f["prefix"] + f"/issues/{f['issue']['iid']}/links")
     verify(
         sum(
@@ -291,9 +269,48 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
         == 1,
         "CE relationship recovery missing or duplicated",
     )
+    # Recreating an existing relation must stop on the absence guard.
+    for index, block in enumerate(recovery):
+        if "/links" in block and "--method POST" in block:
+            result = execute_stopped(stand, block, directory, f"recovery-replay-{index}")
+            verify("issue links changed" in result["stderr"], "Link replay did not stop on a guard")
     return {
         "origin": "real server with deterministic fixture analysis",
         "cycles": cycles,
         "stale_analysis_rejected": True,
         "relationship_restored": True,
     }
+
+
+def execute_stopped(
+    stand: Stand,
+    block: str,
+    directory: Path,
+    name: str,
+    actor: str = "reviewer",
+) -> dict[str, Any]:
+    """Run one copied block expecting a guard stop, never raising on failure."""
+    from tests.integration.gitlab.scripts.publication_checks import validated_block
+
+    validated_block(stand, block)
+    result = subprocess.run(
+        ["bash", "-ec", block + "\n"],
+        cwd=ROOT,
+        env=stand.isolated_env(actor),
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    observation = {
+        "block": block,
+        "exit_code": result.returncode,
+        "stdout": stand.redact(result.stdout),
+        "stderr": stand.redact(result.stderr),
+    }
+    write_json(directory / (name + ".json"), observation)
+    verify(
+        result.returncode != 0,
+        f"Expected the {name} guard to stop the block",
+    )
+    return observation
