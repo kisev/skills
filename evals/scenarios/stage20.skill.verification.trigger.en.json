@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "2d2dfc7ff06fd88daeb09182f5de5f5df8aecf9d3080f59cd9495531aae2f780",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:verification"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.verification.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:verification"]
+    },
+    "prompt": "Before I tell the team the migration is done, run whatever actually proves it and show me the evidence."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.verification.trigger.source",
+      "path": ".build/skills/verification/SKILL.md"
+    },
+    {
+      "contains": "command: \"false\"",
+      "id": "verification-no-command-adapter",
+      "path": "skills/verification/SKILL.source.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.verification.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

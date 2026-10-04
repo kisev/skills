@@ -357,6 +357,18 @@
       "destination": "team-sprint-start/references/language-policy.md"
     },
     {
+      "source": "references/language-policy.md",
+      "destination": "tdd/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "debugging/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "verification/references/language-policy.md"
+    },
+    {
       "source": "references/memomatic_inbox.py",
       "destination": "docs-prepare/scripts/memomatic_inbox.py"
     },
@@ -879,6 +891,18 @@
     {
       "source": "references/question-guidelines.md",
       "destination": "team-sprint-start/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "tdd/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "debugging/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "verification/references/question-guidelines.md"
     },
     {
       "source": "references/state_artifacts.py",

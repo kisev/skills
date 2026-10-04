@@ -7,8 +7,9 @@ architecture. The inventory contract is `evals/contracts/public-surfaces.json`;
 
 ## Skills and Command Adapters
 
-Each row names one portable skill and its OpenCode command adapter. Package-only
-commands have a separate contract below.
+Each row names one portable skill and its OpenCode command adapter; skills
+that opt out of command ownership through their frontmatter `command: false`
+label show a dash. Package-only commands have a separate contract below.
 
 | Skill | Command adapter |
 | - | - |
@@ -21,6 +22,7 @@ commands have a separate contract below.
 | [code-review](skills/code-review.md) | [code-review](commands/code-review.md) |
 | [code-simplify](skills/code-simplify.md) | [code-simplify](commands/code-simplify.md) |
 | [commit-msg](skills/commit-msg.md) | [commit-msg](commands/commit-msg.md) |
+| [debugging](skills/debugging.md) | — |
 | [docs-prepare](skills/docs-prepare.md) | [docs-prepare](commands/docs-prepare.md) |
 | [docs-review](skills/docs-review.md) | [docs-review](commands/docs-review.md) |
 | [eli5](skills/eli5.md) | [eli5](commands/eli5.md) |
@@ -40,6 +42,7 @@ commands have a separate contract below.
 | [task-review](skills/task-review.md) | [task-review](commands/task-review.md) |
 | [task-triage](skills/task-triage.md) | [task-triage](commands/task-triage.md) |
 | [taskmatic](skills/taskmatic.md) | [taskmatic](commands/taskmatic.md) |
+| [tdd](skills/tdd.md) | — |
 | [team-1on1](skills/team-1on1.md) | [team-1on1](commands/team-1on1.md) |
 | [team-agreements](skills/team-agreements.md) | [team-agreements](commands/team-agreements.md) |
 | [team-feedback](skills/team-feedback.md) | [team-feedback](commands/team-feedback.md) |
@@ -53,6 +56,7 @@ commands have a separate contract below.
 | [team-roadmap](skills/team-roadmap.md) | [team-roadmap](commands/team-roadmap.md) |
 | [team-sprint-close](skills/team-sprint-close.md) | [team-sprint-close](commands/team-sprint-close.md) |
 | [team-sprint-start](skills/team-sprint-start.md) | [team-sprint-start](commands/team-sprint-start.md) |
+| [verification](skills/verification.md) | — |
 
 ## Agents, Plugins, and Package Surfaces
 

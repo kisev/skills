@@ -372,6 +372,18 @@
       "to": "humanize",
       "type": "uses",
       "reason": "applied to explanation prose"
+    },
+    {
+      "from": "debugging",
+      "to": "tdd",
+      "type": "recommends",
+      "reason": "the regression test lands at a seam agreed and grown the test-first way"
+    },
+    {
+      "from": "verification",
+      "to": "code-review",
+      "type": "recommends",
+      "reason": "a verified change is ready for review before publication"
     }
   ]
 }

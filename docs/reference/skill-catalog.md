@@ -2,7 +2,7 @@
 
 [Русский](../ru/reference/skill-catalog.md)
 
-The maintained catalog contains 41 portable Agent Skills. Its release
+The maintained catalog contains 44 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
 no version. Their workflows are self-contained and can be installed independently
 of `@kisev/agentomatic`.
@@ -45,6 +45,7 @@ are not included.
 | `code-review` | Review a GitLab MR or local WIP for defects and risks. |
 | `code-simplify` | Keep code necessary with a passive prevention ladder while coding, recording a SIMPLIFY debt marker on a conscious cut; on explicit request, audit a requested scope and report ranked, tagged, one-line simplification findings plus a debt-marker registry without changing files. |
 | `commit-msg` | Produce one concise English commit message from local changes. |
+| `debugging` | Debug with a feedback loop before hypotheses: one red-capable command, a minimized reproduction, ranked falsifiable hypotheses shown to the user, one fix, and a regression test. |
 | `docs-prepare` | Prepare one evidence-based user document directly in the project. |
 | `docs-review` | Review user documentation for accuracy and usability. |
 | `eli5` | Explain a complex concept in plain language calibrated to the reader, keeping essential constraints and uncertainty. |
@@ -65,6 +66,7 @@ are not included.
 | `task-review` | Review semantic quality and release-milestone compatibility standalone or inside other task workflows. |
 | `task-triage` | Triage GitLab issues into persistent decisions, release milestones, priorities, dependencies, and manual update commands. |
 | `taskmatic` | Run a local-first task board for people and agents with a markdown mirror, claims, and a read-only web board. |
+| `tdd` | Drive features and fixes through the red-green loop: seams agreed with the user, vertical slices, and the classic test-first anti-patterns to avoid. |
 | `team-1on1` | Prepare a private one-to-one conversation from people context. |
 | `team-agreements` | Maintain explicit team working agreements. |
 | `team-feedback` | Prepare evidence-based feedback and rehearse the conversation. |
@@ -78,6 +80,7 @@ are not included.
 | `team-roadmap` | Review or update an evidence-based roadmap from a private profile. |
 | `team-sprint-close` | Close one sprint cycle from a private profile or explicit context. |
 | `team-sprint-start` | Start one sprint cycle from a private profile or explicit context. |
+| `verification` | Gate completion claims behind fresh verification evidence; inside a repository, its own verification contracts take precedence. |
 
 Exact active and retired names are recorded in the
 [Migration Inventory](../migration-inventory.md).

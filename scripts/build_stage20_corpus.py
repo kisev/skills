@@ -120,6 +120,52 @@ PROMPT_OVERRIDES: dict[tuple[str, str, str], str] = {
     ("team-report", "trigger", "en"): (
         "English: select the team-report skill for its exact contract scenario."
     ),
+    ("tdd", "trigger", "en"): (
+        "Add pagination to the users list endpoint. Work test-first: agree the "
+        "seams with me, then take it one failing test at a time."
+    ),
+    ("tdd", "trigger", "ru"): (
+        "Добавь пагинацию в эндпоинт списка пользователей. Работай через тесты: "
+        "согласуй со мной швы и двигайся по одному падающему тесту за цикл."
+    ),
+    ("tdd", "near-miss", "en"): (
+        "Just run the existing test suite and tell me the totals; no new "
+        "behavior is being developed here."
+    ),
+    ("tdd", "near-miss", "ru"): (
+        "Просто прогони существующие тесты и сообщи итог; новую функциональность "
+        "здесь никто не разрабатывает."
+    ),
+    ("debugging", "trigger", "en"): (
+        "Since yesterday the checkout endpoint returns a 500 for guest carts. "
+        "Find the actual cause before touching anything."
+    ),
+    ("debugging", "trigger", "ru"): (
+        "Со вчерашнего дня эндпоинт оформления заказа отдаёт 500 для гостевых "
+        "корзин. Найди настоящую причину, ничего не трогая."
+    ),
+    ("debugging", "near-miss", "en"): (
+        "Refactor the checkout endpoint for readability; nothing is broken, "
+        "this is a cleanup, not a bug hunt."
+    ),
+    ("debugging", "near-miss", "ru"): (
+        "Отрефактори эндпоинт оформления заказа для читаемости; ничего не "
+        "сломано, это уборка, а не охота на баг."
+    ),
+    ("verification", "trigger", "en"): (
+        "Before I tell the team the migration is done, run whatever actually "
+        "proves it and show me the evidence."
+    ),
+    ("verification", "trigger", "ru"): (
+        "Прежде чем сообщать команде, что миграция готова, прогони то, что это "
+        "реально доказывает, и покажи мне доказательства."
+    ),
+    ("verification", "near-miss", "en"): (
+        "Summarize what changed on this branch; no completion is being claimed."
+    ),
+    ("verification", "near-miss", "ru"): (
+        "Сделай сводку изменений этой ветки; завершение никто не заявляет."
+    ),
 }
 REVISION_OVERRIDES: dict[tuple[str, str], int] = {
     ("humanize", "trigger"): 2,
@@ -152,6 +198,48 @@ EXTRA_INVARIANTS: dict[tuple[str, str], list[dict[str, str]]] = {
             "id": "code-simplify-text-boundary",
             "path": "skills/code-simplify/SKILL.source.md",
             "contains": "asd-ste100, humanize, and eli5",
+        }
+    ],
+    ("tdd", "trigger"): [
+        {
+            "id": "tdd-no-command-adapter",
+            "path": "skills/tdd/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("tdd", "near-miss"): [
+        {
+            "id": "tdd-no-command-adapter",
+            "path": "skills/tdd/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("debugging", "trigger"): [
+        {
+            "id": "debugging-no-command-adapter",
+            "path": "skills/debugging/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("debugging", "near-miss"): [
+        {
+            "id": "debugging-no-command-adapter",
+            "path": "skills/debugging/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("verification", "trigger"): [
+        {
+            "id": "verification-no-command-adapter",
+            "path": "skills/verification/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("verification", "near-miss"): [
+        {
+            "id": "verification-no-command-adapter",
+            "path": "skills/verification/SKILL.source.md",
+            "contains": 'command: "false"',
         }
     ],
 }

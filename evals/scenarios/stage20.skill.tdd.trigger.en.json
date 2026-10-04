@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "c2ea28ed73d4ac4fade7004efdfe856af0527a92f6da944348570ce510e1b7eb",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:tdd"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.tdd.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:tdd"]
+    },
+    "prompt": "Add pagination to the users list endpoint. Work test-first: agree the seams with me, then take it one failing test at a time."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.tdd.trigger.source",
+      "path": ".build/skills/tdd/SKILL.md"
+    },
+    {
+      "contains": "command: \"false\"",
+      "id": "tdd-no-command-adapter",
+      "path": "skills/tdd/SKILL.source.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.tdd.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

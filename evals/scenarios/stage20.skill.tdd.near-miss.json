@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "62845e12831c78d17a66f5cc72a2d78ebd7acb1a8d990cd9e1368980f27f9be0",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:tdd"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.tdd.near-miss",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "\u041f\u0440\u043e\u0441\u0442\u043e \u043f\u0440\u043e\u0433\u043e\u043d\u0438 \u0441\u0443\u0449\u0435\u0441\u0442\u0432\u0443\u044e\u0449\u0438\u0435 \u0442\u0435\u0441\u0442\u044b \u0438 \u0441\u043e\u043e\u0431\u0449\u0438 \u0438\u0442\u043e\u0433; \u043d\u043e\u0432\u0443\u044e \u0444\u0443\u043d\u043a\u0446\u0438\u043e\u043d\u0430\u043b\u044c\u043d\u043e\u0441\u0442\u044c \u0437\u0434\u0435\u0441\u044c \u043d\u0438\u043a\u0442\u043e \u043d\u0435 \u0440\u0430\u0437\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u0435\u0442."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.tdd.near-miss.source",
+      "path": ".build/skills/tdd/SKILL.md"
+    },
+    {
+      "contains": "command: \"false\"",
+      "id": "tdd-no-command-adapter",
+      "path": "skills/tdd/SKILL.source.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "stage20.skill.tdd.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

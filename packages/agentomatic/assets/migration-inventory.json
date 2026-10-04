@@ -18,6 +18,7 @@
     "code-review",
     "code-simplify",
     "commit-msg",
+    "debugging",
     "docs-prepare",
     "docs-review",
     "eli5",
@@ -38,6 +39,7 @@
     "task-review",
     "task-triage",
     "taskmatic",
+    "tdd",
     "team-1on1",
     "team-agreements",
     "team-feedback",
@@ -50,7 +52,8 @@
     "team-retro",
     "team-roadmap",
     "team-sprint-close",
-    "team-sprint-start"
+    "team-sprint-start",
+    "verification"
   ],
   "active_commands": [
     "agents-md",

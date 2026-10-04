@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "3f072ff6227b4372636631b3bb3fcd028848748f26bc60cf8456cc13d23e1655",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:debugging"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.debugging.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:debugging"]
+    },
+    "prompt": "Since yesterday the checkout endpoint returns a 500 for guest carts. Find the actual cause before touching anything."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.debugging.trigger.source",
+      "path": ".build/skills/debugging/SKILL.md"
+    },
+    {
+      "contains": "command: \"false\"",
+      "id": "debugging-no-command-adapter",
+      "path": "skills/debugging/SKILL.source.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.debugging.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

@@ -60,6 +60,13 @@ const SKILL_NAMES = [
   "team-sprint-start",
 ] as const;
 
+// Skills that opt out of command ownership through their frontmatter
+// `metadata.command: false` label (the inspired-by era). They are installed
+// like every other skill and load through the native Skill tool; only the
+// thin slash-command adapter is absent. Keep this list in sync with the
+// frontmatter labels; tests pin the two-way mapping.
+export const COMMANDLESS_SKILLS = ["debugging", "tdd", "verification"] as const;
+
 const COMMANDS: readonly CommandRegistration[] = [
   ...SKILL_NAMES.map((name) => ({
     name,

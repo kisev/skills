@@ -48,7 +48,25 @@ PORTABLE_SKILLS = (
     "team-roadmap",
     "team-sprint-close",
     "team-sprint-start",
+    "tdd",
+    "debugging",
+    "verification",
 )
+# Skills carrying the inspired-by convention: their frontmatter metadata opts
+# out of command ownership (`command: "false"`) and records upstream sources
+# with a pinned revision and license. agnix and the agentskills validators
+# require metadata values to be strings, so the label is one string per skill
+# listing `repo@revision (license)` entries separated by "; ". Parsed by the
+# command-label contract test below and mirrored by COMMANDLESS_SKILLS in the
+# package registry.
+INSPIRED_BY_LABELS = {
+    "tdd": "mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888 (MIT)",
+    "debugging": (
+        "mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888 (MIT); "
+        "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT)"
+    ),
+    "verification": "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT)",
+}
 FORBIDDEN_PORTABLE_MARKERS = (
     "../..",
     "catalog.yml",
@@ -247,6 +265,31 @@ WORKFLOW_CONTRACTS = {
         "never edits, deletes, moves, or reformats",
         "report-only",
     ),
+    "tdd": (
+        "confirm the seam list with the user",
+        "write no test at an unconfirmed seam",
+        "one test, one minimal implementation, repeat",
+        "red before green",
+        "tautological",
+        "horizontal slicing",
+        "implementation-coupled",
+        "test-first",
+    ),
+    "debugging": (
+        "no red-capable command, no phase 2",
+        "3-5 ranked falsifiable hypotheses",
+        "smallest scenario that still goes red",
+        "one fix",
+        "after three failed fixes, stop and question the architecture",
+        "watch it fail, apply the fix, watch it pass",
+    ),
+    "verification": (
+        "no completion claims without fresh verification evidence",
+        "those local contracts take precedence",
+        "red flags",
+        "rationalizations",
+        "never declare complete on partial evidence",
+    ),
 }
 CYRILLIC = re.compile(r"[А-Яа-яЁё]")
 RUNNERS = {
@@ -302,13 +345,50 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn('  source: "https://kisev.github.io/skills"', lines)
                 self.assertFalse(any(re.match(r"\s*version\s*:", line) for line in lines[1:end]))
                 metadata_start = lines.index("metadata:") + 1
+                metadata = lines[metadata_start:end]
                 self.assertEqual(
-                    lines[metadata_start:end],
+                    metadata[:2],
                     [
                         '  author: "Kirill Sevriugin"',
                         '  source: "https://kisev.github.io/skills"',
                     ],
                 )
+                extra = metadata[2:]
+                if name in INSPIRED_BY_LABELS:
+                    self.assertEqual(
+                        extra,
+                        [
+                            '  command: "false"',
+                            f'  inspired-by: "{INSPIRED_BY_LABELS[name]}"',
+                        ],
+                    )
+                else:
+                    self.assertEqual(extra, [])
+
+    def test_command_label_matches_command_ownership(self) -> None:
+        registry = (ROOT / "packages/agentomatic/src/registry.ts").read_text(encoding="utf-8")
+        names_block = re.search(r"const SKILL_NAMES = \[(.*?)\]", registry, re.DOTALL)
+        commandless_block = re.search(
+            r"export const COMMANDLESS_SKILLS = \[(.*?)\] as const;", registry, re.DOTALL
+        )
+        if names_block is None or commandless_block is None:
+            self.fail("command adapter registry blocks are missing")
+        owners = set(re.findall(r'"([a-z0-9-]+)"', names_block.group(1)))
+        commandless = set(re.findall(r'"([a-z0-9-]+)"', commandless_block.group(1)))
+        authored = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.source.md")}
+        labeled = set()
+        for path in sorted((ROOT / "skills").glob("*/SKILL.source.md")):
+            lines = path.read_text(encoding="utf-8").splitlines()
+            frontmatter = lines[1 : lines.index("---", 1)]
+            if '  command: "false"' in frontmatter:
+                labeled.add(path.parent.name)
+        self.assertEqual(labeled, set(INSPIRED_BY_LABELS))
+        self.assertEqual(commandless, labeled)
+        self.assertFalse(labeled & owners)
+        self.assertEqual(labeled | owners, authored)
+        # The check_documentation command derivation unions SKILL_NAMES with
+        # `name: "..."` literals; the three must never appear in such literals.
+        self.assertEqual(set(re.findall(r'name: "([a-z0-9-]+)"', registry)) - owners, {"rtk-stats"})
 
     def test_portable_workflows_preserve_source_contracts(self) -> None:
         for name, contracts in WORKFLOW_CONTRACTS.items():

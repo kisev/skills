@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "a1b9cca5bcdceb465b7793602c311769f67e36ccd8ac7b445c948882a087dabc",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:verification"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.verification.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Summarize what changed on this branch; no completion is being claimed."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.verification.near-miss.source",
+      "path": ".build/skills/verification/SKILL.md"
+    },
+    {
+      "contains": "command: \"false\"",
+      "id": "verification-no-command-adapter",
+      "path": "skills/verification/SKILL.source.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.verification.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}
