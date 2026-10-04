@@ -4,7 +4,7 @@
 
 Keep code necessary: a passive prevention ladder while coding; on an explicit
 request, a report-only audit of a requested scope with ranked, tagged, one-line
-findings.
+findings plus a debt-marker registry.
 
 ## Triggers and Near-Misses
 
@@ -23,9 +23,12 @@ ranked one-line findings; no files change.
 
 While coding, apply the ladder — necessity, existing code, standard library,
 native platform, installed dependency, one line, minimum — to the current
-change only, without scanning any repository. On an explicit request, agree on
-the scope, search usages including dynamic references before any delete,
-rank findings, and report.
+change only, without scanning any repository; a targeted caller search by
+exact name for the code being changed is part of the change, and a conscious
+cut records a `SIMPLIFY: <ceiling> -> <trigger>` marker on the added or
+changed code in the same edit. On an explicit request, agree on the scope,
+search usages including dynamic references before any delete, rank findings,
+collect markers into a separate registry section, and report.
 
 ## Dependencies
 
@@ -45,22 +48,29 @@ disagreement is reported as a question instead of a finding.
 ## Unique Constraints
 
 The audit is report-only. No simplification may cross or weaken a trust
-boundary, risk data loss, weaken security or accessibility, or remove behavior
-the user explicitly requested.
+boundary, risk data loss, weaken security or accessibility, cancel a
+clarification or confirmation gate, or remove behavior the user explicitly
+requested. The marker obligation binds only code the current diff adds or
+changes; markers on pre-existing code stay pre-existing debt, never findings.
 
 ## Requirement
 
 ### REQ-F-560 - Keep code necessary and simplification report-only
 
 The skill shall apply the prevention ladder silently to the code being written
-or changed without scanning the repository, and shall audit only on an explicit
-request inside the requested or agreed scope. Findings shall be ranked by
-expected benefit, one line each, and shall carry the exact location and exactly
-one tag of `delete`, `stdlib`, `native`, `reuse`, `yagni`, or `shrink` after a
-usage search including dynamic references before any `delete`. The skill shall
-never change files and shall never propose a simplification that crosses a
-trust boundary, risks data loss, weakens security or accessibility, or removes
-explicitly requested behavior.
+or changed without scanning the repository, search callers of an edited
+function by its exact name as part of the change, and record a SIMPLIFY debt
+marker with its ceiling and upgrade trigger on consciously cut code in the
+same edit. It shall audit only on an explicit request inside the requested or
+agreed scope. Findings shall be ranked by expected benefit, one line each, and
+shall carry the exact location and exactly one tag of `delete`, `stdlib`,
+`native`, `reuse`, `yagni`, or `shrink` after a usage search including dynamic
+references before any `delete`; markers in the scope shall be reported as a
+separate registry section, never as findings, with unfired triggers marked
+`no-trigger`. The skill shall never change files, shall never cancel a
+clarification or confirmation gate, and shall never propose a simplification
+that crosses a trust boundary, risks data loss, weakens security or
+accessibility, or removes explicitly requested behavior.
 
 #### Verification
 

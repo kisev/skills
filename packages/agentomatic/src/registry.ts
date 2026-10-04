@@ -118,8 +118,8 @@ export function renderCommand(command: CommandRegistration): string {
         ]
       : command.name === "code-simplify"
         ? [
-            "Prevention applies passively while coding: the ladder runs on the current change without scanning anything.",
-            "Audit is explicit and report-only: name the scope, receive ranked one-line tagged findings, and change nothing.",
+            "Prevention applies passively while coding: the ladder runs on the current change without scanning anything; a targeted caller search by exact name for the code being changed is not scanning, and a conscious cut records a SIMPLIFY debt marker in the same edit.",
+            "Audit is explicit and report-only: name the scope, receive ranked one-line tagged findings plus a separate debt-marker registry, and change nothing.",
           ]
         : [];
   return [

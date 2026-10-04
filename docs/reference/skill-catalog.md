@@ -43,7 +43,7 @@ are not included.
 | `ast-grep` | Run structural search or a safe direct AST rewrite through ast-grep. |
 | `code-explain` | Build a read-only guided map of current WIP, a Git range, branch, or MR history. |
 | `code-review` | Review a GitLab MR or local WIP for defects and risks. |
-| `code-simplify` | Keep code necessary with a passive prevention ladder while coding; on explicit request, audit a requested scope and report ranked, tagged, one-line simplification findings without changing files. |
+| `code-simplify` | Keep code necessary with a passive prevention ladder while coding, recording a SIMPLIFY debt marker on a conscious cut; on explicit request, audit a requested scope and report ranked, tagged, one-line simplification findings plus a debt-marker registry without changing files. |
 | `commit-msg` | Produce one concise English commit message from local changes. |
 | `docs-prepare` | Prepare one evidence-based user document directly in the project. |
 | `docs-review` | Review user documentation for accuracy and usability. |

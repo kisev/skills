@@ -40,11 +40,15 @@ Selectable plugin remains separate from core infrastructure.
 The package shall expose `code-simplify` as a selectable wrapper that injects
 compact prevention and audit rules through the session context hook, with the
 level selected only through plugin options (`lite`, `full` default, `ultra`;
-`off` disables), no new tools, commands, or events, and no mutable
-cross-session state.
+`off` disables), an optional `scope` option enumerating the six fixed roles
+(`manager`, `architect`, `mapper`, `worker`, `review`, `critic`; `critic-*`
+profiles count as `critic`) that restricts injection to the listed roles while
+the default injects every role, no new tools, commands, or events, and no
+mutable cross-session state.
 
 ## Example
 
 The host selects `code-simplify` at the default `full` level for a coding
-context.
+context, or with `"scope": ["worker", "review", "critic"]` to keep read-and-map
+roles uninjected while review panels see the same criteria.
 See [shared concepts](../../architecture/08-crosscutting-concepts/README.md).

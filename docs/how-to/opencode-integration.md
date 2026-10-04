@@ -169,11 +169,24 @@ replaces the saved component names before validation; the saved core connection
 choice stays unchanged unless `--core` or `--no-core` overrides it. Preview with
 `--dry-run`, then confirm the same selection. This does not migrate skill state.
 
-The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`; `rtk` is
-preselected by the installer. OpenCode loads deployed wrapper files from the
-`plugins` directory automatically, so they need no `plugin` array entry; that
-array stays reserved for the npm core package. Opt out explicitly with
-`--plugins none`.
+The selectable wrappers are `rules-injector`, `rtk`, `zed-bell`, and
+`code-simplify`; `rtk` is preselected by the installer. OpenCode loads deployed
+wrapper files from the `plugins` directory automatically, so they need no
+`plugin` array entry; that array stays reserved for the npm core package. Opt
+out explicitly with `--plugins none`.
+
+The `code-simplify` wrapper injects the compact prevention criteria into every
+session. Its options travel through a plugin array entry:
+`"plugins": [["@kisev/agentomatic/plugins/code-simplify", { "level": "full",
+"scope": ["worker", "review", "critic"] }]]`. The `level` option selects
+`lite` (ladder only), `full` (ladder plus the audit contract, the default),
+`ultra` (plus usage-search and safety-floor guards), or `off`. The optional
+`scope` array enumerates the fixed roles `manager`, `architect`, `mapper`,
+`worker`, `review`, and `critic` — `critic-*` specialist profiles count as
+`critic` — and restricts the injection to the listed roles; without the option
+every role is injected, as before the option existed. Keeping `worker`,
+`review`, and `critic` in the scope preserves the review panel's access to the
+same criteria.
 
 ## RTK Compression Observability
 

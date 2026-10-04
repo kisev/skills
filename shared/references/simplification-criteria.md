@@ -22,7 +22,42 @@ the first step that satisfies the current agreed need:
 
 The ladder is preventive and passive. It applies to the current change only; it
 never authorizes scanning a repository, unrelated files, or other people's
-code, and it never expands the agreed task.
+code, and it never expands the agreed task. A targeted mechanical search for
+callers of a function the current change edits, by its exact name, is part of
+that change and is not repository scanning.
+
+### Root cause before a smaller fix
+
+When a simplification edits a function, search its callers by the exact name
+before finalizing the change. When updating a caller is the smaller diff that
+keeps the behavior correct, fix the cause in the same change instead of
+shimming around the call site. The search is targeted and mechanical; it
+promises no completeness, and only the audit's usage check covers dynamic
+references.
+
+### Debt markers on conscious cuts
+
+When the agreed need is met while earlier ladder steps stay unsatisfied — the
+change consciously leaves known debt — record it as part of the same edit: a
+one-line marker comment on the added or changed code in the form
+`SIMPLIFY: <ceiling> -> <trigger>`, where `<ceiling>` names the accepted
+limitation and `<trigger>` names the observable condition that should upgrade
+the code, such as a threshold, scenario, or count. For example:
+`// SIMPLIFY: linear scan -> index the profiles once they exceed 1,000`.
+
+The marker obligation binds only code the current diff adds or changes. A
+missing, outdated, or `no-trigger` marker on pre-existing code is pre-existing
+debt under the necessity doctrine: it is never a new finding and never a
+`minimum_fix`. The one-line finding contract is unchanged; markers are a debt
+registry, not findings.
+
+### Proportionate verification
+
+After a simplification, size new verification to the remaining logic: logic
+whose correctness is not evident from a reachable scenario gets one runnable
+check; a trivial one-line change gets none. This never removes or weakens an
+existing check or gate; it only sizes new verification for the simplified
+code.
 
 ## Audit contract
 
@@ -53,6 +88,16 @@ dynamic references: string-built names, reflection, re-exports, configuration,
 templates, generated code, and callers inside the audited scope. An unresolved
 dynamic reference blocks the finding.
 
+### Debt-marker registry
+
+An audit also collects the `SIMPLIFY` markers inside the requested scope into
+a separate report section, never into the findings: one line per marker with
+the exact location, the ceiling, and the trigger. A marker whose upgrade
+trigger has not fired is marked `no-trigger` and needs no action; a fired
+trigger is reported in the same section as a question for the user's
+decision. A missing or outdated marker on pre-existing code stays pre-existing
+debt under the necessity doctrine.
+
 ## Safety floor
 
 Never propose a simplification that:
@@ -61,10 +106,14 @@ Never propose a simplification that:
 - removes or weakens authentication, authorization, or another security control;
 - risks data loss or corruption of persisted state;
 - removes an accessibility affordance;
-- drops error handling in a way that hides failures.
+- drops error handling in a way that hides failures;
+- cancels, bypasses, or answers on behalf of a clarification or confirmation
+  gate.
 
 Behavior that the user explicitly requested is never simplified away; report a
-disagreement as a question instead of applying it.
+disagreement as a question instead of applying it. This skill never cancels a
+clarification or confirmation gate: when a rule or contract requires the
+user's decision, the work stops until it is made.
 
 ## Complexity in reviews
 
@@ -72,4 +121,8 @@ Review critics treat an oversized or duplicating mechanism as an ordinary
 candidate: complete finding fields, a `minimum_fix` that is itself correct and
 minimal, and the necessity doctrine's separation of pre-existing debt from the
 current change. The arbitrator verdicts every complexity candidate, and a
-refuted candidate keeps its verdict visible like any other candidate.
+refuted candidate keeps its verdict visible like any other candidate. Debt
+markers follow the same separation: a marker on the current change is the
+author's recorded ceiling, and a missing or outdated marker on pre-existing
+code is pre-existing debt that never becomes a new finding or a
+`minimum_fix`.

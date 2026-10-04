@@ -14,7 +14,8 @@ specification audits.
 ## Inputs/Outputs
 
 An optional argument names the requested audit scope and is passed unchanged.
-Output is a ranked report of tagged one-line findings; no files change.
+Output is a ranked report of tagged one-line findings plus a debt-marker
+registry; no files change.
 
 ## Workflow Stages
 

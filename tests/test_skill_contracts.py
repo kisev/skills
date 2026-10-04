@@ -950,9 +950,13 @@ def test_code_simplify_prevention_and_audit_contract() -> None:
     for marker in (
         "passive prevention ladder",
         "without scanning any repository",
+        "a targeted caller search by exact name",
+        "SIMPLIFY debt marker",
         "On an explicit request",
         "report-only",
         "delete, stdlib, native, reuse, yagni, or shrink",
+        "debt-marker registry section",
+        "Never cancel a clarification or confirmation gate",
         "asd-ste100, humanize, and eli5",
     ):
         assert marker in normalized, marker
@@ -961,6 +965,14 @@ def test_code_simplify_prevention_and_audit_contract() -> None:
     for marker in (
         "references/simplification-criteria.md",
         "only on an explicit user request",
+        "is not repository scanning",
+        "`SIMPLIFY: <ceiling> -> <trigger>`",
+        "binds only code this diff adds or changes",
+        "is pre-existing debt, never a new",
+        "one runnable check",
+        "never cancels a clarification or",
+        "debt-marker registry",
+        "`no-trigger`",
         "including dynamic references",
         "merge-request review routes to `code-review`",
         "`spec-manage`",
@@ -985,6 +997,20 @@ def test_code_simplify_prevention_and_audit_contract() -> None:
         "security control",
         "accessibility",
         "never simplified away",
+        "targeted mechanical search for callers",
+        "is not repository scanning",
+        "`SIMPLIFY: <ceiling> -> <trigger>`",
+        "binds only code the current diff adds or changes",
+        "never a new finding and never a `minimum_fix`",
+        "markers are a debt registry, not findings",
+        "one runnable check",
+        "never removes or weakens an existing check or gate",
+        "cancels, bypasses, or answers on behalf of a clarification or confirmation gate",
+        "This skill never cancels a clarification or confirmation gate",
+        "Debt-marker registry",
+        "marked `no-trigger`",
+        "never into the findings",
+        "never becomes a new finding or a `minimum_fix`",
     ):
         assert marker in criteria, marker
 
