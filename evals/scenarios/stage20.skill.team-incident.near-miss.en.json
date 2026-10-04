@@ -1,27 +1,23 @@
 {
-  "id": "stage20.skill.team-incident.near-miss.en",
-  "pair_id": "stage20.skill.team-incident.near-miss",
-  "kind": "near-miss",
-  "surface": "skill",
-  "locale": "en",
-  "revision": 1,
-  "host": "any",
   "budgets": {
     "max_cost": 1,
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
+  "digest": "f5281622ad3af960fc61c98f02e6f2456206a7ed74d2dc885919c85f8c6df354",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:team-incident"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-incident.near-miss.en",
   "input": {
     "fixture": {
       "selected": []
     },
     "prompt": "English: this intentionally does not belong to the team-incident skill; do not route this request into it."
-  },
-  "expected": {
-    "selected": [],
-    "not_selected": ["skill:team-incident"],
-    "mutation_boundary": "no-writes",
-    "structured_outcome": "safe-escalation"
   },
   "invariants": [
     {
@@ -29,11 +25,15 @@
       "path": ".build/skills/team-incident/SKILL.md"
     }
   ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-incident.near-miss",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
   "schema": "eval-scenario/v1",
-  "digest": "f5281622ad3af960fc61c98f02e6f2456206a7ed74d2dc885919c85f8c6df354"
+  "surface": "skill"
 }

@@ -47,6 +47,79 @@ PROMPT_OVERRIDES: dict[tuple[str, str, str], str] = {
         "Упрости формулировки этого абзаца README; упрощение текста относится к "
         "asd-ste100, humanize и eli5, а не к аудиту кода."
     ),
+    ("taskmatic", "near-miss", "en"): (
+        "English: this intentionally does not belong to the taskmatic skill; do "
+        "not route the request into this skill."
+    ),
+    ("taskmatic", "trigger", "en"): (
+        "Select the taskmatic skill for its exact local task board contract scenario."
+    ),
+    ("taskmatic", "trigger", "ru"): (
+        "Выбери навык taskmatic для его точного контрактного сценария локальной доски задач."
+    ),
+    ("team-1on1", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-1on1 skill; do "
+        "not route this request into it."
+    ),
+    ("team-1on1", "trigger", "en"): (
+        "English: select the team-1on1 skill for its exact contract scenario."
+    ),
+    ("team-agreements", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-agreements "
+        "skill; do not route this request into it."
+    ),
+    ("team-agreements", "trigger", "en"): (
+        "English: select the team-agreements skill for its exact contract scenario."
+    ),
+    ("team-feedback", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-feedback "
+        "skill; do not route this request into it."
+    ),
+    ("team-feedback", "trigger", "en"): (
+        "English: select the team-feedback skill for its exact contract scenario."
+    ),
+    ("team-health", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-health skill; "
+        "do not route this request into it."
+    ),
+    ("team-health", "trigger", "en"): (
+        "English: select the team-health skill for its exact contract scenario."
+    ),
+    ("team-incident", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-incident "
+        "skill; do not route this request into it."
+    ),
+    ("team-incident", "trigger", "en"): (
+        "English: select the team-incident skill for its exact contract scenario."
+    ),
+    ("team-onboarding", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-onboarding "
+        "skill; do not route this request into it."
+    ),
+    ("team-onboarding", "trigger", "en"): (
+        "English: select the team-onboarding skill for its exact contract scenario."
+    ),
+    ("team-people", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-people skill; "
+        "do not route this request into it."
+    ),
+    ("team-people", "trigger", "en"): (
+        "English: select the team-people skill for its exact contract scenario."
+    ),
+    ("team-performance", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-performance "
+        "skill; do not route this request into it."
+    ),
+    ("team-performance", "trigger", "en"): (
+        "English: select the team-performance skill for its exact contract scenario."
+    ),
+    ("team-report", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-report skill; "
+        "do not route this request into it."
+    ),
+    ("team-report", "trigger", "en"): (
+        "English: select the team-report skill for its exact contract scenario."
+    ),
 }
 REVISION_OVERRIDES: dict[tuple[str, str], int] = {
     ("humanize", "trigger"): 2,
