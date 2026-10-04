@@ -21,6 +21,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
+    "apps/reviewmatic-py/src/reviewmatic/portable/portable_gitlab/artifact-contracts-v2.schema.json",
     "evals/schemas/result-v1.schema.json",
     "evals/schemas/scenario-v1.schema.json",
     "packages/agentomatic/contracts/critic-report-v1.schema.json",

@@ -1,0 +1,115 @@
+[project]
+  name = "reviewmatic"
+  version = "0.1.0"
+  description = "GitLab review backend and manual runbooks with a portable Python contract core."
+  readme = "README.md"
+  requires-python = ">=3.12"
+  license = "MIT"
+  dependencies = []
+
+  [project.scripts]
+    reviewmatic = "reviewmatic.cli:main"
+
+[dependency-groups]
+  dev = ["mypy==2.3.1", "pytest==9.0.3", "ruff==0.16.6"]
+
+[build-system]
+  requires = ["hatchling>=1.26"]
+  build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+  packages = ["src/reviewmatic"]
+
+[tool.hatch.build.targets.sdist]
+  include = ["src", "tests", "README.md", "README.ru.md", "pyproject.toml"]
+
+[tool.mypy]
+  python_version = "3.12"
+  strict = true
+  disallow_any_unimported = true
+  explicit_package_bases = true
+  mypy_path = "src"
+  files = ["src", "tests"]
+
+# Application-local lint configuration. It mirrors the root selection so the
+# package enforces the repository contract, and carries the per-file-ignores of
+# the materialized canonical modules (identical to their shared sources).
+[tool.ruff]
+  target-version = "py312"
+  line-length = 100
+
+  [tool.ruff.lint]
+    select = ["E4", "E7", "E9", "F"]
+    ignore = [
+      "PERF401",                      # Explicit diagnostic loops are clearer than generated extend expressions.
+      "PLR2004",                      # Protocol and schema literals are meaningful at their use sites.
+    ]
+    extend-select = [
+      "S",
+      "PLC",
+      "PLE",
+      "PLR",
+      "PLW",
+      "I",
+      "UP",
+      "B",
+      "C4",
+      "RUF",
+      "SIM",
+      "PERF",
+      "A",
+      "PT",
+      "RET",
+      "ISC",
+      "PIE",
+      "C901",
+      "TRY300",
+      "TC",
+    ]
+
+    [tool.ruff.lint.per-file-ignores]
+      "**/tests/**/*.py" = [
+        "A002",                                                                  # Framework callback names follow their inherited signatures.
+        "PLC0415",                                                               # Tests import isolated modules after fixture setup.
+        "PLR0911",                                                               # Fixture dispatch helpers intentionally model many outcomes.
+        "PLR0915",                                                               # Integration scenarios keep setup and assertions together.
+        "PT009",                                                                 # Existing suites intentionally use unittest.TestCase helpers.
+        "PT017",                                                                 # unittest exception assertions are part of that test style.
+        "PT018",                                                                 # Compound contract assertions retain useful failure context.
+        "PT027",                                                                 # unittest exception assertions are part of that test style.
+        "RUF001",                                                                # Confusable characters are intentional fixture data.
+        "S101",                                                                  # Assertions are the test contract.
+        "S105",                                                                  # Test tokens are inert fixtures.
+        "S108",                                                                  # Tests intentionally exercise temporary-path boundaries.
+        "S310",                                                                  # Tests intentionally exercise local HTTP fixtures.
+        "S603",                                                                  # Tests invoke bounded command vectors without a shell.
+        "S607",                                                                  # Tests exercise the same PATH-based CLI contract as production.
+        "SIM117",                                                                # Nested context setup keeps long integration fixtures readable.
+      ]
+      "src/reviewmatic/portable/portable_gitlab/contract.py" = [
+        "B904",                                                                  # Portable CLI errors preserve stable messages across Python versions.
+        "C901",                                                                  # The compatibility runtime is intentionally centralized and stateful.
+        "PLC0415",                                                               # Profile-specific modules load only for selected workflows.
+        "PLR0911",                                                               # Command dispatch returns explicit protocol outcomes.
+        "PLR0912",                                                               # Command dispatch covers the complete protocol matrix.
+        "PLR0915",                                                               # Splitting the dispatcher would duplicate transactional state.
+        "RUF001",                                                                # User-visible Cyrillic evidence is intentional.
+        "S101",                                                                  # Assertions narrow state validated immediately before use.
+        "S603",                                                                  # Portable GitLab calls use validated argument vectors.
+        "TRY300",                                                                # Return placement preserves the portable error boundary.
+      ]
+      "src/reviewmatic/portable/portable_gitlab/mr_publication.py" = [
+        "RUF001"
+      ]                                                                          # User-visible Cyrillic evidence is intentional.
+      "src/reviewmatic/cli.py" = ["PLR0911"]                                     # Dispatch mirrors the explicit TypeScript return chain.
+
+    [tool.ruff.lint.mccabe]
+      max-complexity = 40
+
+    [tool.ruff.lint.pylint]
+      max-args = 15
+      max-branches = 50
+      max-statements = 163
+
+  [tool.ruff.format]
+    quote-style = "double"

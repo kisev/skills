@@ -112,6 +112,21 @@
       ]
     },
     {
+      "name": "reviewmatic-python",
+      "title": "Reviewmatic Python package",
+      "task": "reviewmatic-py:check",
+      "core": false,
+      "paths": [
+        "apps/reviewmatic-py/**",
+        "apps/reviewmatic/scripts/generate-golden-fixtures.mjs",
+        "apps/reviewmatic/scripts/golden-ts-loader.mjs",
+        "shared/references/portable_gitlab/**",
+        "shared/references/state_artifacts.py",
+        "shared/references/mutation_process.py",
+        "shared/manifest.json"
+      ]
+    },
+    {
       "name": "gate-registry",
       "title": "Gate registry",
       "task": "gates:check",

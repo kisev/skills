@@ -1,0 +1,16 @@
+{
+  "name": "label-intent-valid",
+  "kind": "label_intent",
+  "input": {
+    "change_type": "bug",
+    "workflow_state": "review",
+    "urgency": "urgent",
+    "impact": "high",
+    "compatibility": "minor",
+    "origin": "external"
+  },
+  "expected": {
+    "digest": "3b88254d12abee6314073dbab2d15ef4ba384620e234139ce169be20f6793756",
+    "valid": true
+  }
+}

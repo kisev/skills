@@ -1,0 +1,87 @@
+{
+  "name": "artifact-evidence-snapshot-valid",
+  "kind": "artifact_validation_v2",
+  "input": {
+    "kind": "evidence_snapshot",
+    "artifact": {
+      "schema": "portable-gitlab/evidence_snapshot/v2",
+      "schema_version": 2,
+      "kind": "evidence_snapshot",
+      "created_at": "2026-10-05T00:00:00+00:00",
+      "payload": {
+        "schema_version": 2,
+        "profile": "code-review",
+        "external_mutations": false,
+        "target": {
+          "url": "https://gitlab.com/group/project/-/merge_requests/1",
+          "hostname": "gitlab.com",
+          "project_path": "group/project",
+          "kind": "merge_requests",
+          "iid": 1
+        },
+        "project": {
+          "id": 1,
+          "path": "group/project"
+        },
+        "object": {
+          "iid": 1,
+          "state": "opened"
+        },
+        "labels": {
+          "items": [],
+          "complete": true,
+          "errors": [],
+          "pages": 0,
+          "truncated": false
+        },
+        "changed_files": {
+          "items": [],
+          "complete": true,
+          "errors": [],
+          "pages": 0,
+          "truncated": false
+        },
+        "commits": {
+          "items": [],
+          "complete": true,
+          "errors": [],
+          "pages": 0,
+          "truncated": false
+        },
+        "pipelines": {
+          "items": [],
+          "complete": true,
+          "errors": [],
+          "pages": 0,
+          "truncated": false
+        },
+        "discussions": {
+          "items": [],
+          "complete": true,
+          "errors": [],
+          "pages": 0,
+          "truncated": false
+        },
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "start_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "artifact_root": "/tmp/reviewmatic-artifacts",
+        "prepared_at": "2026-10-05T00:00:00+00:00",
+        "components_complete": {
+          "project": true,
+          "labels": true,
+          "object": true,
+          "changed_files": true,
+          "commits": true,
+          "pipelines": true,
+          "discussions": true
+        },
+        "retrieval_complete": true
+      }
+    }
+  },
+  "expected": {
+    "digest": "9087a305b63c05e14d4199eabbe85bb9efd4088731e7d1835a3b62fdbc80e38e",
+    "valid": true
+  }
+}

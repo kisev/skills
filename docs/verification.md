@@ -80,6 +80,36 @@ workflows are storage-neutral; and
 `code-explain` accepts current WIP, an exact range, a branch, or an exact HTTPS MR
 link and presents history without a review verdict.
 
+## Python Port Packages
+
+The Python port of the reviewmatic family starts in `apps/reviewmatic-py`.
+Stage 1 ships the package skeleton and the complete command surface of the
+TypeScript CLI with the same exit-code contract; subcommands whose business
+logic has not landed answer an explicit not-implemented envelope with exit
+code 5. The canonical contract core is materialized byte-for-byte from
+`shared/references/` through the `pythonRuntime` section of
+`shared/manifest.json`; the copies in the package are not edited by hand.
+
+Digest parity with the TypeScript implementation is pinned by committed
+golden fixtures under `apps/reviewmatic-py/tests/golden/`. They cover
+canonical digests, v2 artifact validation, and semver and label assessments.
+The declared TypeScript task regenerates them from the real CLI sources, and
+the generation is byte-checked:
+
+```shell
+task reviewmatic-py:fixtures
+task generate:check
+```
+
+The same `generate:check` run byte-checks the materialized contract core
+through `scripts/materialize_cli_runtime.mjs --check`. The package gate runs
+the parity tests, application-local mypy, and the uv build of the sdist and
+wheel:
+
+```shell
+task reviewmatic-py:check
+```
+
 ## Deterministic Coverage
 
 The secret gate scans Git history plus the current tracked and non-ignored new

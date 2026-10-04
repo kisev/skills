@@ -1,0 +1,24 @@
+{
+  "name": "semver-assessment-release",
+  "kind": "semver_assessment",
+  "input": {
+    "mode": "release",
+    "policy": "Stable v1 tags are published by the documented release job.",
+    "sources": ["docs/releases.md at the target revision", "GitLab release v1.4.0"],
+    "baseline": {
+      "name": "v1.4.0",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source": "releases"
+    },
+    "target_branch": "main",
+    "target_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "target_revision": "current",
+    "fallback_reason": null,
+    "release_impact": "major",
+    "release_rationale": "Target already removes a released API; the MR fixes a compatible bug."
+  },
+  "expected": {
+    "digest": "4eb0e37c478ce5566c3447eeab34008f46b26c95c19a53c1658dcd5383f08a1c",
+    "valid": true
+  }
+}

@@ -80,6 +80,8 @@ jobs:
             task: distribution:check
           - name: OpenCode package
             task: package:check
+          - name: Reviewmatic Python package
+            task: reviewmatic-py:check
           # @gates:end
     env:
       CHECK_TASK: ${{ matrix.task }}

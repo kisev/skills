@@ -1,0 +1,43 @@
+{
+  "name": "artifact-local-review-report-legacy-version",
+  "kind": "artifact_validation_v2",
+  "input": {
+    "kind": "local_review_report",
+    "artifact": {
+      "schema": "portable-gitlab/local_review_report/v2",
+      "schema_version": 1,
+      "kind": "local_review_report",
+      "created_at": "2026-10-05T00:00:00+00:00",
+      "payload": {
+        "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "previous_review_digest": null,
+        "mode": "full",
+        "task": {
+          "goal": "Review the local WIP changes.",
+          "acceptance_criteria": ["No blocking findings remain."],
+          "constraints": [],
+          "accepted_risks": [],
+          "deferred": [],
+          "decision_evidence": "Recorded decision receipt."
+        },
+        "task_change_reason": null,
+        "findings": [],
+        "checks": [
+          {
+            "name": "Freshness",
+            "status": "passed",
+            "required": true,
+            "evidence": "HEAD digest matches the recorded bundle."
+          }
+        ],
+        "assessment": "Ready for review finalization.",
+        "verdict": "ready",
+        "external_mutations": false
+      }
+    }
+  },
+  "expected": {
+    "digest": "2215afbb0816e48dce3d6109708e990db6c4c705f3f7a1289e3be13576223192",
+    "valid": false
+  }
+}

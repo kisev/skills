@@ -36,7 +36,7 @@
     "--durations=10",
   ]
   pythonpath = ["."]
-  testpaths = ["tests", "skills/*/tests"]
+  testpaths = ["tests", "skills/*/tests", "apps/reviewmatic-py/tests"]
 
 [tool.ruff]
   target-version = "py312"

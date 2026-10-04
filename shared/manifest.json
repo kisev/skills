@@ -15,6 +15,43 @@
       "packages/agentomatic/src/generated/cli.ts"
     ]
   },
+  "pythonRuntime": {
+    "destination": "apps/reviewmatic-py/src/reviewmatic/portable",
+    "entries": [
+      {
+        "source": "references/portable_gitlab/__init__.py",
+        "target": "portable_gitlab/__init__.py"
+      },
+      {
+        "source": "references/portable_gitlab/contract.py",
+        "target": "portable_gitlab/contract.py"
+      },
+      {
+        "source": "references/portable_gitlab/label_assessment.py",
+        "target": "portable_gitlab/label_assessment.py"
+      },
+      {
+        "source": "references/portable_gitlab/mr_publication.py",
+        "target": "portable_gitlab/mr_publication.py"
+      },
+      {
+        "source": "references/portable_gitlab/review_semver.py",
+        "target": "portable_gitlab/review_semver.py"
+      },
+      {
+        "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+        "target": "portable_gitlab/artifact-contracts-v2.schema.json"
+      },
+      {
+        "source": "references/mutation_process.py",
+        "target": "mutation_process.py"
+      },
+      {
+        "source": "references/state_artifacts.py",
+        "target": "state_artifacts.py"
+      }
+    ]
+  },
   "files": [
     {
       "source": "references/clarity-rules.md",

@@ -90,6 +90,10 @@
       "ru": "apps/reviewmatic/README.ru.md"
     },
     {
+      "en": "apps/reviewmatic-py/README.md",
+      "ru": "apps/reviewmatic-py/README.ru.md"
+    },
+    {
       "en": "packages/safe-fs/README.md",
       "ru": "packages/safe-fs/README.ru.md"
     },
