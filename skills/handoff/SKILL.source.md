@@ -1,7 +1,7 @@
 ---
 name: handoff
 description: >-
-  Create a redacted handoff in workspace-scoped XDG state. Russian discovery terms: передача контекста.
+  Create a redacted handoff in workspace- and session-scoped XDG state. Russian discovery terms: передача контекста.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
