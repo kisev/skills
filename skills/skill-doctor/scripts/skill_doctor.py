@@ -152,7 +152,8 @@ HOST_DATABASES: dict[str, Callable[[], Path]] = {
     "kilo": lambda: xdg_data_home() / "kilo" / "kilo.db",
     "mimo": mimo_database,
 }
-REQUIRED_SESSION_TABLES = ("session", "message", "part")
+LEGACY_SESSION_TABLES = ("session", "message", "part")
+V2_SESSION_TABLES = ("session_v2", "session_message")
 DEFAULT_MAX_EXCERPT_CHARS = 1200
 DEFAULT_MAX_ACTIONS = 2000
 DEFAULT_MAX_MESSAGES = 2000
@@ -413,12 +414,20 @@ def open_database(path: Path) -> sqlite3.Connection:
     return connection
 
 
-def require_tables(connection: sqlite3.Connection, path: Path) -> None:
+def table_names(connection: sqlite3.Connection) -> set[str]:
     rows = connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
-    present = {row["name"] for row in rows}
-    missing = [table for table in REQUIRED_SESSION_TABLES if table not in present]
-    if missing:
-        raise DoctorError(f"session database {path} misses tables {', '.join(missing)}")
+    return {row["name"] for row in rows}
+
+
+def require_tables(connection: sqlite3.Connection, path: Path) -> None:
+    present = table_names(connection)
+    v2_missing = [table for table in V2_SESSION_TABLES if table not in present]
+    legacy_missing = [table for table in LEGACY_SESSION_TABLES if table not in present]
+    if v2_missing and legacy_missing:
+        raise DoctorError(
+            f"session database {path} misses session tables"
+            f" (v2: {', '.join(v2_missing)}; legacy: {', '.join(legacy_missing)})"
+        )
 
 
 def parse_part(data: object) -> dict[str, object] | None:
@@ -524,46 +533,104 @@ def skill_call(part: dict[str, object], time_created: int, limit: int) -> dict[s
     }
 
 
-def collect_session(
-    host: str,
-    path: Path,
-    session_id: str,
-    max_actions: int,
-    max_messages: int,
-    max_excerpt_chars: int,
-) -> dict[str, object]:
-    connection = open_database(path)
-    try:
-        require_tables(connection, path)
-        session_row = connection.execute(
-            "SELECT id, title, directory, time_created FROM session WHERE id = ?",
-            (session_id,),
-        ).fetchone()
-        if session_row is None:
-            raise SessionNotFound(f"session {session_id!r} does not exist in {path}")
-        part_rows = connection.execute(
-            "SELECT message_id, time_created, id, data FROM part"
-            " WHERE session_id = ? ORDER BY time_created, id",
-            (session_id,),
-        ).fetchall()
-        message_rows = connection.execute(
-            "SELECT id, data FROM message WHERE session_id = ?",
-            (session_id,),
-        ).fetchall()
-    finally:
-        connection.close()
+def read_legacy_records(
+    connection: sqlite3.Connection, session_id: str
+) -> list[tuple[int, str, dict[str, object] | None]]:
+    part_rows = connection.execute(
+        "SELECT message_id, time_created, id, data FROM part"
+        " WHERE session_id = ? ORDER BY time_created, id",
+        (session_id,),
+    ).fetchall()
+    message_rows = connection.execute(
+        "SELECT id, data FROM message WHERE session_id = ?",
+        (session_id,),
+    ).fetchall()
     roles: dict[str, str] = {}
     for row in message_rows:
         parsed = parse_part(row["data"])
         role = parsed.get("role") if parsed else None
         roles[row["id"]] = role if isinstance(role, str) else "unknown"
+    return [
+        (
+            row["time_created"] if isinstance(row["time_created"], int) else 0,
+            roles.get(row["message_id"], "unknown"),
+            parse_part(row["data"]),
+        )
+        for row in part_rows
+    ]
+
+
+def v2_part_stamp(part: object, fallback: int) -> int:
+    if isinstance(part, dict):
+        stamp = part.get("time")
+        if isinstance(stamp, dict):
+            created = stamp.get("created")
+            if isinstance(created, int):
+                return created
+    return fallback
+
+
+def normalize_v2_tool_part(part: dict[str, object]) -> dict[str, object]:
+    # V2 spells the tool name "name" and the call id "id"; legacy parts use
+    # "tool" and "callID". Normalize so one downstream path handles both.
+    normalized = dict(part)
+    if not isinstance(normalized.get("tool"), str) and isinstance(normalized.get("name"), str):
+        normalized["tool"] = normalized["name"]
+    if not isinstance(normalized.get("callID"), str) and isinstance(normalized.get("id"), str):
+        normalized["callID"] = normalized["id"]
+    return normalized
+
+
+def read_v2_records(
+    connection: sqlite3.Connection, session_id: str
+) -> list[tuple[int, str, dict[str, object] | None]]:
+    message_rows = connection.execute(
+        "SELECT type, time_created, data FROM session_message"
+        " WHERE session_id = ? AND type IN ('user', 'assistant') ORDER BY seq",
+        (session_id,),
+    ).fetchall()
+    records: list[tuple[int, str, dict[str, object] | None]] = []
+    for row in message_rows:
+        role = row["type"]
+        stamp = row["time_created"] if isinstance(row["time_created"], int) else 0
+        parsed = parse_part(row["data"])
+        if role == "user":
+            # The user text lives directly in data.text; treat the message as
+            # one legacy-style text part.
+            part = None
+            if parsed is not None:
+                part = {"type": "text", "text": parsed.get("text")}
+            records.append((v2_part_stamp(parsed, stamp), role, part))
+            continue
+        content = parsed.get("content") if parsed else None
+        if not isinstance(content, list):
+            records.append((stamp, role, None))
+            continue
+        for entry in content:
+            if not isinstance(entry, dict):
+                records.append((stamp, role, None))
+                continue
+            part = normalize_v2_tool_part(entry)
+            records.append((v2_part_stamp(part, stamp), role, part))
+    return records
+
+
+def collect_records(
+    host: str,
+    path: Path,
+    session_row: sqlite3.Row,
+    records: list[tuple[int, str, dict[str, object] | None]],
+    max_actions: int,
+    max_messages: int,
+    max_excerpt_chars: int,
+) -> dict[str, object]:
     title = session_row["title"]
     directory = session_row["directory"]
     time_created = session_row["time_created"]
     calls: list[dict[str, object]] = []
     messages: list[dict[str, object]] = []
     actions: list[dict[str, object]] = []
-    parts_total = len(part_rows)
+    parts_total = len(records)
     parts_skipped = 0
     actions_seen = 0
     messages_seen = 0
@@ -571,13 +638,10 @@ def collect_session(
     last_activity: int | None = None
     actions_truncated = False
     messages_truncated = False
-    for row in part_rows:
-        parsed = parse_part(row["data"])
+    for stamp_int, role, parsed in records:
         if parsed is None:
             parts_skipped += 1
             continue
-        stamp = row["time_created"]
-        stamp_int = stamp if isinstance(stamp, int) else 0
         first_activity = stamp_int if first_activity is None else min(first_activity, stamp_int)
         last_activity = stamp_int if last_activity is None else max(last_activity, stamp_int)
         part_type = parsed.get("type")
@@ -599,7 +663,7 @@ def collect_session(
                     )
                 else:
                     actions_truncated = True
-        elif part_type == "text" and roles.get(row["message_id"]) == "user":
+        elif part_type == "text" and role == "user":
             text = parsed.get("text")
             if isinstance(text, str) and text.strip():
                 messages_seen += 1
@@ -652,6 +716,56 @@ def collect_session(
         "user_messages": messages,
         "actions": actions,
     }
+
+
+def collect_session(
+    host: str,
+    path: Path,
+    session_id: str,
+    max_actions: int,
+    max_messages: int,
+    max_excerpt_chars: int,
+) -> dict[str, object]:
+    connection = open_database(path)
+    try:
+        require_tables(connection, path)
+        present = table_names(connection)
+        not_found = SessionNotFound(f"session {session_id!r} does not exist in {path}")
+        # The V2 schema is preferred; the legacy schema is still consulted when
+        # the session does not exist in session_v2.
+        if present.issuperset(V2_SESSION_TABLES):
+            session_row = connection.execute(
+                "SELECT id, title, directory, time_created FROM session_v2 WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if session_row is not None:
+                return collect_records(
+                    host,
+                    path,
+                    session_row,
+                    read_v2_records(connection, session_id),
+                    max_actions,
+                    max_messages,
+                    max_excerpt_chars,
+                )
+        if present.issuperset(LEGACY_SESSION_TABLES):
+            session_row = connection.execute(
+                "SELECT id, title, directory, time_created FROM session WHERE id = ?",
+                (session_id,),
+            ).fetchone()
+            if session_row is not None:
+                return collect_records(
+                    host,
+                    path,
+                    session_row,
+                    read_legacy_records(connection, session_id),
+                    max_actions,
+                    max_messages,
+                    max_excerpt_chars,
+                )
+        raise not_found
+    finally:
+        connection.close()
 
 
 def collect_command(arguments: argparse.Namespace) -> int:

@@ -154,6 +154,117 @@ def history(tmp_path: Path) -> Path:
     return database
 
 
+V2_ERROR_PART = {
+    "type": "tool",
+    "name": "skill",
+    "id": "c1",
+    "time": {"created": 200},
+    "state": {
+        "status": "error",
+        "input": {"name": "stopit"},
+        "error": "boom",
+    },
+}
+V2_BASH_PART = {
+    "type": "tool",
+    "name": "bash",
+    "id": "c2",
+    "time": {"created": 300},
+    "state": {"status": "completed", "input": {"command": "git status"}},
+}
+V2_REASONING_PART = {"type": "reasoning", "text": "internal reasoning is not an action"}
+
+# Rows of the mixed-schema database: SESSION_A exists only in the V2 schema,
+# SESSION_B only in the legacy schema, and SESSION_A additionally has a stale
+# legacy session row that must never win over session_v2.
+MIXED_V2_ROWS = [
+    ("session_v2", (SESSION_A, "Current V2", WORKSPACE, 100)),
+    (
+        "session_message",
+        ("v2-sys", SESSION_A, "system", 1, 5, json.dumps({"text": "internal system notice"})),
+    ),
+    (
+        "session_message",
+        (
+            "v2-m1",
+            SESSION_A,
+            "user",
+            2,
+            110,
+            json.dumps({"text": "stopit failed again after a retry", "time": {"created": 110}}),
+        ),
+    ),
+    (
+        "session_message",
+        (
+            "v2-m2",
+            SESSION_A,
+            "assistant",
+            3,
+            400,
+            json.dumps(
+                {
+                    "finish": "tool-calls",
+                    "content": [V2_ERROR_PART, V2_BASH_PART, V2_REASONING_PART],
+                }
+            ),
+        ),
+    ),
+    ("session_message", ("v2-m3", SESSION_A, "assistant", 4, 500, "not-json")),
+]
+MIXED_LEGACY_ROWS = [
+    ("session", (SESSION_A, "Current Legacy", WORKSPACE, 100)),
+    ("session", (SESSION_B, "Other Legacy", "/tmp/other", 500)),
+    ("message", ("m3", SESSION_B, json.dumps({"role": "user"}))),
+    ("part", ("p4", "m3", SESSION_B, 510, json.dumps({"type": "text", "text": "unrelated"}))),
+]
+
+
+def create_mixed_session_database(path: Path, *, include_legacy: bool = True) -> None:
+    connection = sqlite3.connect(path)
+    try:
+        script = [
+            """
+            CREATE TABLE session_v2 (
+                id TEXT PRIMARY KEY, title TEXT, directory TEXT, time_created INTEGER);
+            CREATE TABLE session_message (
+                id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER,
+                time_created INTEGER, data TEXT);
+            """
+        ]
+        if include_legacy:
+            script.append(
+                """
+                CREATE TABLE session (
+                    id TEXT PRIMARY KEY, title TEXT, directory TEXT, time_created INTEGER);
+                CREATE TABLE message (
+                    id TEXT PRIMARY KEY, session_id TEXT, data TEXT);
+                CREATE TABLE part (
+                    id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT,
+                    time_created INTEGER, data TEXT);
+                """
+            )
+        for statement in script:
+            connection.executescript(statement)
+        rows: list[tuple[str, tuple[object, ...]]] = list(MIXED_V2_ROWS)
+        if include_legacy:
+            rows += MIXED_LEGACY_ROWS
+        for table, values in rows:
+            placeholders = ",".join("?" * len(values))
+            statement = " ".join(["INSERT INTO " + table, "VALUES (" + placeholders + ")"])
+            connection.execute(statement, values)
+        connection.commit()
+    finally:
+        connection.close()
+
+
+@pytest.fixture
+def mixed_history(tmp_path: Path) -> Path:
+    database = tmp_path / "mixed.db"
+    create_mixed_session_database(database)
+    return database
+
+
 def diagnosis_for(session_id: str) -> dict[str, Any]:
     return {
         "schema": DIAGNOSIS_SCHEMA,
@@ -319,6 +430,103 @@ class TestSessionSelection:
 
         assert result.returncode == 2
         assert json.loads(result.stdout)["error"]["code"] == "collect_error"
+
+
+# ---------------------------------------------------------------------------
+# Session schema detection (V2 and legacy)
+# ---------------------------------------------------------------------------
+
+
+class TestSessionSchemaDetection:
+    def test_v2_schema_is_preferred_over_a_stale_legacy_row(
+        self, tmp_path: Path, mixed_history: Path
+    ) -> None:
+        state = tmp_path / "state"
+        payload = run_doctor_json(
+            "collect", "--session-id", SESSION_A, "--db", str(mixed_history), state=state
+        )
+
+        assert payload["session"]["title"] == "Current V2"
+        assert [call["name"] for call in payload["skill_calls"]] == ["stopit"]
+        assert payload["skill_calls"][0]["status"] == "error"
+        assert payload["skill_calls"][0]["error"] == "boom"
+        assert payload["skill_calls"][0]["time_created"] == 200
+        assert payload["user_messages"][0]["text"] == "stopit failed again after a retry"
+        assert [action["action"] for action in payload["actions"]] == ["bash:git status"]
+        # The system row, the reasoning part, and the unparseable assistant
+        # data are covered by the coverage counters.
+        assert payload["coverage"]["parts_total"] == 5
+        assert payload["coverage"]["parts_skipped"] == 1
+        assert payload["coverage"]["notes"] == ["1 of 5 parts could not be parsed"]
+        assert "internal system notice" not in json.dumps(payload)
+        assert "internal reasoning" not in json.dumps(payload)
+
+    def test_legacy_only_session_falls_back_to_legacy_tables(
+        self, tmp_path: Path, mixed_history: Path
+    ) -> None:
+        state = tmp_path / "state"
+        payload = run_doctor_json(
+            "collect", "--session-id", SESSION_B, "--db", str(mixed_history), state=state
+        )
+
+        assert payload["session"]["title"] == "Other Legacy"
+        assert payload["skill_calls"] == []
+        assert payload["user_messages"][0]["text"] == "unrelated"
+        assert payload["coverage"]["parts_skipped"] == 0
+
+    def test_v2_only_database_collects_without_legacy_tables(self, tmp_path: Path) -> None:
+        database = tmp_path / "v2-only.db"
+        create_mixed_session_database(database, include_legacy=False)
+        state = tmp_path / "state"
+        payload = run_doctor_json(
+            "collect", "--session-id", SESSION_A, "--db", str(database), state=state
+        )
+
+        assert payload["session"]["title"] == "Current V2"
+        assert [call["name"] for call in payload["skill_calls"]] == ["stopit"]
+
+    def test_unknown_session_stays_refused_on_a_mixed_database(
+        self, tmp_path: Path, mixed_history: Path
+    ) -> None:
+        state = tmp_path / "state"
+        result = run_doctor(
+            "collect",
+            "--session-id",
+            "ses_absent0000000000000000000000000000",
+            "--db",
+            str(mixed_history),
+            state=state,
+        )
+
+        assert result.returncode == 2
+        payload = json.loads(result.stdout)
+        assert payload["error"]["code"] == "collect_error"
+        assert "does not exist" in payload["error"]["message"]
+        assert "Current V2" not in result.stdout.decode()
+
+    def test_database_with_partial_schemas_is_refused(self, tmp_path: Path) -> None:
+        database = tmp_path / "partial.db"
+        connection = sqlite3.connect(database)
+        try:
+            connection.execute(
+                "CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, directory TEXT,"
+                " time_created INTEGER)"
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        result = run_doctor(
+            "collect",
+            "--session-id",
+            SESSION_A,
+            "--db",
+            str(database),
+            state=tmp_path / "state",
+        )
+
+        assert result.returncode == 2
+        message = json.loads(result.stdout)["error"]["message"]
+        assert "misses session tables" in message
 
 
 # ---------------------------------------------------------------------------
