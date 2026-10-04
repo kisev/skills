@@ -20,13 +20,6 @@ export const PACKAGE_POINTER_NAME = "context-package.json";
 const ZERO_DIGEST = "0".repeat(64);
 const VERDICTS = new Set(["confirmed", "refuted", "not_verified"]);
 const PRIMARY_VERDICTS = new Set(["confirmed", "refuted", "unresolved"]);
-const CLAIM_KINDS = new Set([
-  "author_claim",
-  "participant_opinion",
-  "agreed_requirement",
-  "accepted_risk",
-  "confirmed_fact",
-]);
 const CANONICAL_FIELDS = [
   "mode",
   "binding",

@@ -527,7 +527,7 @@ test("fast mode rejects a panel and the resume overview reports an unrecorded pa
 });
 
 test("refresh-review carries the panel selection without receipt bindings", async (t) => {
-  const { fixture, started, draftPath, recordedPackage } = await panelRunning(t);
+  const { fixture, draftPath, recordedPackage } = await panelRunning(t);
   const versions = recordedPackage.question_context_versions;
   const current = readJson(draftPath, "draft");
   const answers = [answer(versions, "confirmed", "The exact head binds writes behind the key.")];

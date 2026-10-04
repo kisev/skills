@@ -4,6 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
+  "digest": "7ad3e7eb77f616620f444beff0cf3fc177454ab8077a3d14395ac5494152ef29",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -34,6 +35,5 @@
     "writes": "sandbox-only"
   },
   "schema": "eval-scenario/v1",
-  "surface": "command",
-  "digest": "7ad3e7eb77f616620f444beff0cf3fc177454ab8077a3d14395ac5494152ef29"
+  "surface": "command"
 }

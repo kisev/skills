@@ -145,6 +145,19 @@ test("a dropped thread blocks recording and answers keep critic authorship", asy
     }),
     /disputes unknown claim/,
   );
+  await assert.rejects(
+    writeTemplate(started, base, {
+      claims: [
+        {
+          id: "claim-kind",
+          kind: "vibes",
+          statement: "s",
+          sources: ["MR description"],
+        },
+      ],
+    }),
+    /claims\[0\]\.kind: Expected one of "author_claim"/,
+  );
 
   await writeTemplate(started, base, {
     claims: [
