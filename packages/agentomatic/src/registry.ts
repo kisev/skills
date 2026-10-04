@@ -23,6 +23,7 @@ const SKILL_NAMES = [
   "ast-grep",
   "code-explain",
   "code-review",
+  "code-simplify",
   "commit-msg",
   "docs-prepare",
   "docs-review",
@@ -69,7 +70,12 @@ const COMMANDS: readonly CommandRegistration[] = [
             "Create greenfield specs, onboard an existing project, update target state, or review specs",
             "спецификация проекта",
           )
-        : description(`Run the ${name} Agent Skill`, name),
+        : name === "code-simplify"
+          ? description(
+              "Apply the passive prevention ladder while coding and audit a requested scope for unnecessary complexity on an explicit request",
+              "упростить код",
+            )
+          : description(`Run the ${name} Agent Skill`, name),
   })),
   {
     name: "rtk-stats",
@@ -110,7 +116,12 @@ export function renderCommand(command: CommandRegistration): string {
           "Natural requests are supported. Explicit mode and scope arguments are passed unchanged; the skill verifies safety preconditions and asks before writing if intent remains ambiguous.",
           "Examples: `Create canonical specs for this empty project`; `Document this existing service`; `Change the canonical timeout`; `Audit specs without changes`.",
         ]
-      : [];
+      : command.name === "code-simplify"
+        ? [
+            "Prevention applies passively while coding: the ladder runs on the current change without scanning anything.",
+            "Audit is explicit and report-only: name the scope, receive ranked one-line tagged findings, and change nothing.",
+          ]
+        : [];
   return [
     "---",
     `description: ${command.description}`,

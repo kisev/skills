@@ -942,3 +942,72 @@ def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
         )
     assert edit_ru["input"]["fixture"]["cases"][1].get("sample")
     assert edit_en["input"]["fixture"]["cases"][1].get("sample")
+
+
+def test_code_simplify_prevention_and_audit_contract() -> None:
+    entrypoint = (ROOT / "skills/code-simplify/SKILL.source.md").read_text(encoding="utf-8")
+    normalized = " ".join(entrypoint.split())
+    for marker in (
+        "passive prevention ladder",
+        "without scanning any repository",
+        "On an explicit request",
+        "report-only",
+        "delete, stdlib, native, reuse, yagni, or shrink",
+        "asd-ste100, humanize, and eli5",
+    ):
+        assert marker in normalized, marker
+
+    workflow = (ROOT / "skills/code-simplify/references/workflow.md").read_text(encoding="utf-8")
+    for marker in (
+        "references/simplification-criteria.md",
+        "only on an explicit user request",
+        "including dynamic references",
+        "merge-request review routes to `code-review`",
+        "`spec-manage`",
+    ):
+        assert marker in workflow, marker
+
+    canonical = (ROOT / "shared/references/simplification-criteria.md").read_bytes()
+    for skill in ("code-simplify", "code-review"):
+        built = BUILT_SKILLS / skill / "references/simplification-criteria.md"
+        assert built.read_bytes() == canonical, skill
+    criteria = " ".join(canonical.decode(encoding="utf-8").split())
+    for marker in (
+        "`delete`",
+        "`stdlib`",
+        "`native`",
+        "`reuse`",
+        "`yagni`",
+        "`shrink`",
+        "including dynamic references",
+        "trust boundary",
+        "data loss",
+        "security control",
+        "accessibility",
+        "never simplified away",
+    ):
+        assert marker in criteria, marker
+
+    relations = json.loads((ROOT / "shared/skill-relations.json").read_text(encoding="utf-8"))
+    assert any(
+        entry["from"] == "code-review"
+        and entry["to"] == "code-simplify"
+        and entry["type"] == "uses"
+        for entry in relations["relations"]
+    )
+
+    review = " ".join(
+        (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8").split()
+    )
+    for marker in (
+        "`references/simplification-criteria.md` path into every critic task and into the arbitrator task",
+        "complexity as normal findings with every required field",
+        "without dropping a refuted one",
+        "it becomes a `recommended_issue`",
+        "`references/architecture-checklist.md` decision groups",
+    ):
+        assert marker in review, marker
+    local = " ".join(
+        (ROOT / "skills/code-review/references/local-review.md").read_text(encoding="utf-8").split()
+    )
+    assert "`origin: pre_existing` and is never blocking" in local

@@ -11,15 +11,17 @@ import {
 import { rulesInjector, type RulesInjectorOptions } from "./plugins/rules-injector.js";
 import { rtk, type RtkOptions } from "./plugins/rtk.js";
 import { zedBell, type ZedBellOptions } from "./plugins/zed-bell.js";
+import { codeSimplify, type CodeSimplifyOptions } from "./plugins/code-simplify.js";
 import { resultText, toolInput } from "./plugins/events.js";
 import { digest } from "./lifecycle.js";
 import { matchesWildcard } from "./opencode-config.js";
 
-export { rulesInjector, rtk, zedBell };
+export { rulesInjector, rtk, zedBell, codeSimplify };
 export type OpenCodeOptions = {
   rulesInjector?: RulesInjectorOptions;
   rtk?: RtkOptions;
   zedBell?: ZedBellOptions;
+  codeSimplify?: CodeSimplifyOptions;
 };
 
 export default {

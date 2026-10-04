@@ -11,11 +11,11 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Активные переносимые навыки
 
-Активны ровно 40 переносимых навыков:
+Активны ровно 41 переносимый навык:
 
 `agents-md`, `asd-ste100`, `askme`, `ast-grep`, `code-explain`, `code-review`,
-`commit-msg`, `docs-prepare`, `docs-review`, `eli5`, `goal`, `humanize`,
-`mattermost`, `mattermost-triage`, `mr-prepare`, `release-prepare`,
+`code-simplify`, `commit-msg`, `docs-prepare`, `docs-review`, `eli5`, `goal`,
+`humanize`, `mattermost`, `mattermost-triage`, `mr-prepare`, `release-prepare`,
 `release-review`, `rtk`, `skill-doctor`, `slides-prompts-prepare`, `spec-manage`,
 `handoff`, `briefing`, `task-prepare`, `task-review`, `task-triage`, `taskmatic`,
 `team-1on1`, `team-agreements`, `team-feedback`, `team-health`, `team-incident`,
@@ -23,7 +23,7 @@ GitHub Release. Необязательный пакет интеграции - `
 `team-retro`, `team-roadmap`, `team-sprint-close` и `team-sprint-start`.
 
 Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
-те же 40 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+те же 41 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
 добавляются только в `.build/skills` и проверяются побайтово.
 
 ## Сведения об очистке переносимых навыков
@@ -56,7 +56,7 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Текущий состав интеграции OpenCode
 
-Текущий состав пакета содержит 40 команд: по одной для каждого активного навыка.
+Текущий состав пакета содержит 41 команду: по одной для каждого активного навыка.
 Инструмент пакета `route` доступен без слеш-команды.
 
 Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,

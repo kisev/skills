@@ -19,6 +19,7 @@ commands have a separate contract below.
 | [briefing](skills/briefing.md) | [briefing](commands/briefing.md) |
 | [code-explain](skills/code-explain.md) | [code-explain](commands/code-explain.md) |
 | [code-review](skills/code-review.md) | [code-review](commands/code-review.md) |
+| [code-simplify](skills/code-simplify.md) | [code-simplify](commands/code-simplify.md) |
 | [commit-msg](skills/commit-msg.md) | [commit-msg](commands/commit-msg.md) |
 | [docs-prepare](skills/docs-prepare.md) | [docs-prepare](commands/docs-prepare.md) |
 | [docs-review](skills/docs-review.md) | [docs-review](commands/docs-review.md) |
@@ -58,7 +59,8 @@ commands have a separate contract below.
 - Agents: [manager](agents/manager.md), [architect](agents/architect.md),
   [mapper](agents/mapper.md), [worker](agents/worker.md), [review](agents/review.md),
   and [critic](agents/critic.md).
-- Selectable plugins: [rules-injector](plugins/rules-injector.md), [rtk](plugins/rtk.md),
+- Selectable plugins: [code-simplify](plugins/code-simplify.md),
+  [rules-injector](plugins/rules-injector.md), [rtk](plugins/rtk.md),
   and [zed-bell](plugins/zed-bell.md).
 - Standalone application: [memomatic](applications/memomatic.md) (MCP and CLI).
 - Package tool: [route](package-tools/route.md).

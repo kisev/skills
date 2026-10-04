@@ -287,7 +287,12 @@ canonical finding. Existing-thread linkage suppresses duplicate publication only
 never the defect's contribution to readiness.
 Common scaffolding enforces this invariant for guided and low-level callers,
 including legacy decisions that omit optional thread-blocker metadata. A
-contradictory verdict is rejected before plan/body creation.
+contradictory verdict is rejected before plan/body creation. The orchestrator
+shall pass the materialized simplification criteria reference into every critic
+task and the arbitrator task; critics shall report complexity as ordinary
+findings with complete fields, a pre-existing bloat candidate shall become a
+recommended issue instead of a finding, and in local reviews it shall keep
+`origin: pre_existing` and never block.
 
 Incremental analysis shall follow changed code, conversations, metadata, and CI,
 including affected unchanged consumers. Previous accepted findings and recommended

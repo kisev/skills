@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evals" / "scenarios"
@@ -30,6 +31,22 @@ PROMPT_OVERRIDES: dict[tuple[str, str, str], str] = {
     ("humanize", "near-miss", "en"): (
         "Refactor the format_price function in src/pricing.py and update its docstring."
     ),
+    ("code-simplify", "trigger", "en"): (
+        "Before I add a caching helper to src/feed.py, walk the prevention ladder "
+        "and tell me whether an existing simpler option already covers this need."
+    ),
+    ("code-simplify", "trigger", "ru"): (
+        "Прежде чем добавлять хелпер кэширования в src/feed.py, пройди по лестнице "
+        "необходимости и скажи, есть ли более простой существующий вариант."
+    ),
+    ("code-simplify", "near-miss", "en"): (
+        "Simplify the wording of this README paragraph; text simplification "
+        "belongs to asd-ste100, humanize, and eli5, not to a code audit."
+    ),
+    ("code-simplify", "near-miss", "ru"): (
+        "Упрости формулировки этого абзаца README; упрощение текста относится к "
+        "asd-ste100, humanize и eli5, а не к аудиту кода."
+    ),
 }
 REVISION_OVERRIDES: dict[tuple[str, str], int] = {
     ("humanize", "trigger"): 2,
@@ -50,6 +67,70 @@ EXTRA_INVARIANTS: dict[tuple[str, str], list[dict[str, str]]] = {
             "contains": "never activates this skill by itself",
         }
     ],
+    ("code-simplify", "trigger"): [
+        {
+            "id": "code-simplify-passive-ladder",
+            "path": "skills/code-simplify/SKILL.source.md",
+            "contains": "passive prevention ladder",
+        }
+    ],
+    ("code-simplify", "near-miss"): [
+        {
+            "id": "code-simplify-text-boundary",
+            "path": "skills/code-simplify/SKILL.source.md",
+            "contains": "asd-ste100, humanize, and eli5",
+        }
+    ],
+}
+
+# Additional explicit-audit pairs for code-simplify: an audit trigger with the
+# report-only contract, and an audit near-miss that stays with the existing
+# review owner instead of starting a code-simplify audit.
+AUDIT_PAIRS: dict[str, dict[str, object]] = {
+    "skill.code-simplify.audit-trigger": {
+        "kind": "trigger",
+        "selected": ["skill:code-simplify"],
+        "not_selected": [],
+        "prompts": {
+            "en": (
+                "Audit the src/feed module for unnecessary complexity and rank the "
+                "findings; do not change anything."
+            ),
+            "ru": (
+                "Проведи аудит модуля src/feed на избыточную сложность и ранжируй "
+                "находки; ничего не меняй."
+            ),
+        },
+        "extra_invariants": [
+            {
+                "id": "code-simplify-audit-explicit-report-only",
+                "path": "skills/code-simplify/references/workflow.md",
+                "contains": "only on an explicit user request",
+            }
+        ],
+    },
+    "skill.code-simplify.audit-near-miss": {
+        "kind": "near-miss",
+        "selected": [],
+        "not_selected": ["skill:code-simplify"],
+        "prompts": {
+            "en": (
+                "Review this merge request for risks before merge; a full MR review "
+                "belongs to code-review, not to the code-simplify audit."
+            ),
+            "ru": (
+                "Проведи полное ревью этого MR на риски перед слиянием; ревью MR "
+                "относится к code-review, а не к аудиту code-simplify."
+            ),
+        },
+        "extra_invariants": [
+            {
+                "id": "code-simplify-audit-review-owner",
+                "path": "skills/code-simplify/references/workflow.md",
+                "contains": "merge-request review routes to `code-review`",
+            }
+        ],
+    },
 }
 
 
@@ -144,6 +225,30 @@ def main() -> None:
                         extra_invariants=EXTRA_INVARIANTS.get((name, kind)),
                     )
                 )
+
+    for pair_id, contract in AUDIT_PAIRS.items():
+        kind = cast("str", contract["kind"])
+        selected = cast("list[str]", contract["selected"])
+        not_selected = cast("list[str]", contract["not_selected"])
+        prompts = cast("dict[str, str]", contract["prompts"])
+        extra = cast("list[dict[str, str]]", contract["extra_invariants"])
+        for locale in ("en", "ru"):
+            suffix = "" if locale == "ru" else ".en"
+            write(
+                scenario(
+                    f"{pair_id}{suffix}",
+                    pair_id,
+                    locale,
+                    kind,
+                    prompts[locale],
+                    selected,
+                    not_selected,
+                    "skill",
+                    ".build/skills/code-simplify/SKILL.md",
+                    "no-writes",
+                    extra_invariants=extra,
+                )
+            )
 
     surfaces = {
         "command": (

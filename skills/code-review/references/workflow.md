@@ -12,7 +12,7 @@ Select every thread outcome explicitly after analysis. The draft's `reply` is
 not an instruction to publish. When no new information is needed, choose
 `no_publication` and explain that decision privately.
 
-Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/necessity-doctrine.md`, `references/context-package.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, and `references/semver.md`. Apply the necessity and completion doctrine to both targets. For local WIP follow `references/local-review.md`, then stop; the remote stages below do not apply. For a GitLab MR also read `references/incremental-review.md` and `references/review-state-machine.md`.
+Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/necessity-doctrine.md`, `references/simplification-criteria.md`, `references/context-package.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, and `references/semver.md`. Apply the necessity and completion doctrine to both targets. For local WIP follow `references/local-review.md`, then stop; the remote stages below do not apply. For a GitLab MR also read `references/incremental-review.md` and `references/review-state-machine.md`.
 
 `/code-review` distinguishes a remote-MR target from local-WIP input by the explicit request. One exact MR URL selects the remote-MR mode. An explicit local review request selects the local-WIP mode and uses the current checkout exactly as it is, including when that checkout is itself an existing Git worktree; never search for an MR by branch name for it. When the request does not clearly name one of these targets, stop and ask which one to review instead of assuming.
 
@@ -34,6 +34,14 @@ Apply the shared necessity and completion doctrine in
 `references/necessity-doctrine.md` to every candidate, remedy, and follow-up.
 Independent reviewers receive these decisions even when previous reviewer
 conclusions are withheld to avoid anchoring.
+
+Apply `references/simplification-criteria.md` to complexity candidates: an
+oversized or duplicating mechanism is an ordinary candidate with complete
+finding fields, a `minimum_fix` that is itself correct and minimal, and the
+doctrine's separation of pre-existing debt from the current change. On a remote
+MR, bloat that predates the change is never a finding: it becomes a
+`recommended_issue`. In a local review it is a finding with
+`origin: pre_existing` and is never blocking.
 
 ## Remote MR stages
 
@@ -76,7 +84,13 @@ selected participant with the exact receipt template and the exact
 `record-critic --participant <name>` import command. Launch every selected
 critic in parallel, in native background mode when supported. Each critic
 performs one complete independent review from the same recorded package and
-the exact snapshots: findings plus answers to its assigned questions. Critics
+the exact snapshots: findings plus answers to its assigned questions. Pass the
+materialized `references/simplification-criteria.md` path into every critic
+task and into the arbitrator task alongside the package and snapshot paths, so
+complexity candidates follow the shared tags, evidence, usage-check, and safety
+floor. Critics report complexity as normal findings with every required field,
+and the arbitrator verdicts each complexity candidate without dropping a
+refuted one. Critics
 never see each other's output, never recollect GitLab, never rebuild the
 prepared file map, and may read related code inside the review worktree.
 Import each receipt verbatim with its exact `--participant` name; the runtime
@@ -151,7 +165,9 @@ review the delta-triggered scope, revalidate every previous finding and recommen
 with a different run/session identity and the incremental-delta digest, then a
 fresh arbitration receipt. Otherwise choose `fast`, `normal`, or `deep`; `fast`
 is only for a small confirmed low-risk change and runs without a panel, while
-`normal`, `deep`, and `incremental` require the recorded panel. The arbitrator
+`normal`, `deep`, and `incremental` require the recorded panel. Fast mode keeps
+the full `references/architecture-checklist.md` decision groups and the
+`references/simplification-criteria.md` complexity rules without critics. The arbitrator
 must return a verdict for every critic finding and every merged finding; you
 never disposition a critic finding yourself in panel mode.
 

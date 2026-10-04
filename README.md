@@ -8,7 +8,7 @@ Portable Agent Skills for Codex and OpenCode, plus the independent `agentomatic`
 
 | Component | What it provides | Lifecycle |
 | - | - | - |
-| Portable Agent Skills | 40 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
+| Portable Agent Skills | 41 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
 | `@kisev/agentomatic` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
 The `skills` CLI owns portable skills; the npm integration does not contain, install, update, inspect, or remove them.

@@ -65,6 +65,14 @@
       "destination": "spec-manage/scripts/documentation_review.py"
     },
     {
+      "source": "references/simplification-criteria.md",
+      "destination": "code-review/references/simplification-criteria.md"
+    },
+    {
+      "source": "references/simplification-criteria.md",
+      "destination": "code-simplify/references/simplification-criteria.md"
+    },
+    {
       "source": "references/state_artifacts.py",
       "destination": "docs-review/scripts/state_artifacts.py"
     },
@@ -219,6 +227,10 @@
     {
       "source": "references/language-policy.md",
       "destination": "commit-msg/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "code-simplify/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -735,6 +747,10 @@
     {
       "source": "references/question-guidelines.md",
       "destination": "commit-msg/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "code-simplify/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",

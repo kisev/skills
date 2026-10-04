@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "bd5182dd9cc75d7a88f32fdd5fcfb5151e313245c191b453fa35dedc7bc65d6d",
+  "expected": {
+    "mutation_boundary": "enabled-option-only",
+    "not_selected": [],
+    "selected": ["plugin:code-simplify"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.plugin.code-simplify.contract",
+  "input": {
+    "fixture": {
+      "selected": ["plugin:code-simplify"]
+    },
+    "prompt": "Verify plugin code-simplify contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.plugin.code-simplify.contract.source",
+      "path": "packages/agentomatic/src/plugins/code-simplify.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "plugin"
+}

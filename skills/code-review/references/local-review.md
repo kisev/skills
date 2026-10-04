@@ -158,7 +158,10 @@ deferred, and accepted-risk entries. Use these fields:
 - `status`: `open`, `fixed`, `accepted_risk`, `deferred`, or `rejected`.
 - `origin`: `regression`, `missed_requirement`, `pre_existing`, or
   `new_requirement`. A report defect is not automatically High, and a newly
-  requested feature is not an implementation regression.
+  requested feature is not an implementation regression. Bloat or complexity
+  outside the diff scope is `origin: pre_existing` and is never blocking:
+  apply `references/simplification-criteria.md` to it and report it as
+  optional per the necessity doctrine.
 - `requirement`, `scenario`, `evidence`, `consequence`: name the actual contract,
   reachable conditions and assumptions, inspected code or reproduction, and user
   impact. Explain why a fault-injection probe represents a supported scenario.

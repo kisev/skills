@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import rootPlugin, { rulesInjector, rtk, zedBell } from "../dist/index.js";
+import rootPlugin, { codeSimplify, rulesInjector, rtk, zedBell } from "../dist/index.js";
 import { apply, preview } from "../dist/installer.js";
 import { archiveRoot } from "../dist/lifecycle.js";
 
@@ -231,8 +231,10 @@ test("2.0.0 public surface and CLI contracts exclude retired APIs", () => {
   assert.equal(typeof rulesInjector, "function");
   assert.equal(typeof rtk, "function");
   assert.equal(typeof zedBell, "function");
+  assert.equal(typeof codeSimplify, "function");
   assert.deepEqual(Object.keys(PACKAGE_METADATA.exports).sort(), [
     ".",
+    "./plugins/code-simplify",
     "./plugins/rtk",
     "./plugins/rules-injector",
     "./plugins/zed-bell",

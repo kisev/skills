@@ -291,13 +291,13 @@ test("single and multi selectors share visual controls and deterministic selecti
   const all = fakeTTY();
   const allResult = selectOptions(
     "Plugins",
-    ["rules-injector", "rtk", "zed-bell"],
+    ["code-simplify", "rules-injector", "rtk", "zed-bell"],
     [],
     all.stdin,
     all.stderr,
   );
   all.stdin.write("a\r");
-  assert.deepEqual(await allResult, ["rules-injector", "rtk", "zed-bell"]);
+  assert.deepEqual(await allResult, ["code-simplify", "rules-injector", "rtk", "zed-bell"]);
 
   const cancelled = fakeTTY();
   const cancelledResult = selectOptions(

@@ -24,6 +24,7 @@ PORTABLE_SKILLS = (
     "ast-grep",
     "code-explain",
     "code-review",
+    "code-simplify",
     "commit-msg",
     "docs-prepare",
     "docs-review",
@@ -225,6 +226,15 @@ WORKFLOW_CONTRACTS = {
         "simplify the wording, never the conditions",
         "preserve uncertainty as uncertainty",
         "never replaces exact conditions, numbers, or boundaries",
+    ),
+    "code-simplify": (
+        "apply the prevention ladder",
+        "no repository scanning",
+        "only on an explicit user request",
+        "`delete`, `stdlib`, `native`, `reuse`, `yagni`, or `shrink`",
+        "including dynamic references",
+        "never edits, deletes, moves, or reformats",
+        "report-only",
     ),
 }
 CYRILLIC = re.compile(r"[А-Яа-яЁё]")

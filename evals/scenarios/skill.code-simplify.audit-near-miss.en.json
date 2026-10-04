@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "06d5e61a33d3eb23a61da1c323a19fc0ee6df57133354a37f68deaba956c2bd1",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:code-simplify"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "skill.code-simplify.audit-near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Review this merge request for risks before merge; a full MR review belongs to code-review, not to the code-simplify audit."
+  },
+  "invariants": [
+    {
+      "id": "skill.code-simplify.audit-near-miss.source",
+      "path": ".build/skills/code-simplify/SKILL.md"
+    },
+    {
+      "contains": "merge-request review routes to `code-review`",
+      "id": "code-simplify-audit-review-owner",
+      "path": "skills/code-simplify/references/workflow.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "skill.code-simplify.audit-near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

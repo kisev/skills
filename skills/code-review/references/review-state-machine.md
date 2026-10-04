@@ -123,7 +123,8 @@ other critics' output, recollecting GitLab, or rebuilding the file map.
 If no specialist profiles are installed, launch an ordinary independent native
 subagent of the current agent; no profile-selection question is needed.
 Absence of `critic` is not a blocker. Supply the recorded context package
-path, the exact evidence/context/inspection paths, accepted scope and user
+path, the exact evidence/context/inspection paths, the materialized
+`references/simplification-criteria.md` path, accepted scope and user
 decisions, but no other reviewer's conclusions. The critic reads the package
 as its primary context and opens the snapshots directly when a detail is
 unclear; it answers every question assigned to critics in receipt

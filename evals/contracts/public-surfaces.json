@@ -8,6 +8,7 @@
     "briefing",
     "code-explain",
     "code-review",
+    "code-simplify",
     "commit-msg",
     "docs-prepare",
     "docs-review",
@@ -50,6 +51,7 @@
     "briefing",
     "code-explain",
     "code-review",
+    "code-simplify",
     "commit-msg",
     "docs-prepare",
     "docs-review",
@@ -86,7 +88,7 @@
     "team-sprint-start"
   ],
   "agents": ["manager", "architect", "mapper", "worker", "review", "critic"],
-  "plugins": ["rules-injector", "rtk", "zed-bell"],
+  "plugins": ["code-simplify", "rules-injector", "rtk", "zed-bell"],
   "package_tools": ["route"],
   "infrastructure": ["core"]
 }

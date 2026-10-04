@@ -56,6 +56,12 @@
       "reason": "applied to drafted thread replies before publication"
     },
     {
+      "from": "code-review",
+      "to": "code-simplify",
+      "type": "uses",
+      "reason": "panel critics and the arbitrator apply its shared simplification criteria"
+    },
+    {
       "from": "mr-prepare",
       "to": "humanize",
       "type": "uses",
