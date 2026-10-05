@@ -28,7 +28,7 @@
   strict = true
   disallow_any_unimported = true
   explicit_package_bases = true
-  mypy_path = "src"
+  mypy_path = ["src", "tests"]
   files = ["src", "tests"]
 
 # Application-local lint configuration. It mirrors the root selection so the

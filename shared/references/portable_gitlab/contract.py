@@ -208,6 +208,7 @@ PROFILES = {
     "task-review": {"issues", "merge_requests"},
     "task-prepare": {"issues"},
     "mr-prepare": {"merge_requests"},
+    "code-review": {"merge_requests", "local"},
     "release-prepare": {"merge_requests"},
     "release-review": {"merge_requests"},
 }
@@ -3598,8 +3599,31 @@ def collect(
                         truncated=True,
                     )
                 pipelines = paginated(
-                    hostname, f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}"
+                    hostname,
+                    (
+                        f"projects/{project_id}/merge_requests/{iid}/pipelines"
+                        if profile == "code-review"
+                        else f"projects/{project_id}/pipelines?sha={urlquote(head_sha, safe='')}"
+                    ),
                 )
+                if profile == "code-review" and pipelines["complete"] is True:
+                    selected_pipeline = select_exact_pipeline(pipelines, head_sha)
+                    if selected_pipeline is not None:
+                        job_evidence = collect_pipeline_jobs(
+                            hostname, project_id, selected_pipeline
+                        )
+                        selected_pipeline["job_evidence"] = job_evidence
+                        if job_evidence["complete"] is not True:
+                            pipelines = component(
+                                cast("list[object]", pipelines["items"]),
+                                complete=False,
+                                errors=[
+                                    *cast("list[str]", pipelines["errors"]),
+                                    *cast("list[str]", job_evidence["errors"]),
+                                ],
+                                pages=cast("int", pipelines["pages"]),
+                                truncated=bool(job_evidence["truncated"]),
+                            )
             else:
                 pipelines = component(
                     complete=False, errors=["exact head SHA is unavailable"], truncated=True

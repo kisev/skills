@@ -5265,7 +5265,8 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
     current = portable.collect(
         cast("dict[str, Any]", evidence["target"]), "code-review", persist=False
     )
-    _, plan_document = portable.artifact_payload(Path(str(status["plan_path"])), "review_plan")
+    baseline = baseline_pointer(root)
+    plan_document = baseline[1] if baseline is not None else {}
     review_source = plan_document.get("review_source")
     assessed = (
         portable.artifact_payload(
