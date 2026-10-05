@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from reviewmatic import __version__, local_review, scope, workflow, worktree
 from reviewmatic import draft as draft_module
+from reviewmatic import run as run_module
 from reviewmatic.portable import state_artifacts
 from reviewmatic.portable.portable_gitlab import contract
 
@@ -316,6 +317,57 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
             ),
             OptionSpec("evidence", "evidence snapshot path", required=True),
             OptionSpec("input", "artifact input path", required=True),
+        ),
+    ),
+    CommandSpec(
+        "run",
+        "Drive the whole review cycle in one process with resume and authoring callbacks",
+        (
+            OptionSpec("url", "exact HTTPS GitLab merge request URL", required=True),
+            OptionSpec("repo-root", "local checkout root; defaults to the current directory"),
+            OptionSpec(
+                "review-mode",
+                "review depth",
+                default="normal",
+                choices=("fast", "normal", "deep"),
+            ),
+            OptionSpec("locale", "response language", default="en", choices=("en", "ru")),
+            OptionSpec(
+                "incremental",
+                "incremental baseline policy",
+                default="auto",
+                choices=("auto", "off"),
+            ),
+            OptionSpec(
+                "critic-cmd",
+                "shell command filling the critic receipt; template and output paths arrive"
+                " as $1 and $2",
+            ),
+            OptionSpec(
+                "arbitrator-cmd",
+                "shell command authoring the review decision that arbitrates critic findings;"
+                " template and output paths arrive as $1 and $2",
+            ),
+            OptionSpec(
+                "content-cmd",
+                "shell command authoring the plan content; template and output paths arrive"
+                " as $1 and $2",
+            ),
+            OptionSpec("resume", "continue the existing review from its current stage", flag=True),
+        ),
+    ),
+    CommandSpec(
+        "replace-artifact",
+        "Replace one bound review artifact and rewind the review stage",
+        (
+            OptionSpec("artifact-root", "artifact root", required=True),
+            OptionSpec(
+                "kind",
+                "artifact kind",
+                required=True,
+                choices=("context", "critic_receipt", "finalize_report", "decision"),
+            ),
+            OptionSpec("path", "replacement artifact JSON path", required=True),
         ),
     ),
     CommandSpec(
@@ -787,6 +839,19 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
             }
         )
         return EXIT_OK
+    if name == "run":
+        return run_module.run(namespace)
+    if name == "replace-artifact":
+        contract.emit(
+            workflow.replace_artifact(
+                argparse.Namespace(
+                    artifact_root=_field(namespace, "artifactRoot"),
+                    kind=_field(namespace, "kind"),
+                    path=_field(namespace, "path"),
+                )
+            )
+        )
+        return EXIT_OK
     if name == "finalize-local":
         return _run_finalize_local(namespace)
     if name == "prepare":
@@ -823,6 +888,7 @@ def _workflow_namespace(name: str, namespace: argparse.Namespace) -> argparse.Na
         content=_field(namespace, "content"),
         critic_receipt=_field(namespace, "criticReceipt"),
         input=_field(namespace, "input"),
+        path=_field(namespace, "path"),
     )
 
 

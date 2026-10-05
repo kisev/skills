@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from reviewmatic import context
 
@@ -12,6 +13,30 @@ if TYPE_CHECKING:
     import argparse
 
 from reviewmatic.portable.portable_gitlab import contract as portable
+
+# replace-artifact contract: CLI kind -> (artifact store kind, progress prefix,
+# the stage that owns the artifact, downstream progress prefixes to clear).
+REPLACEMENT_KINDS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
+    "context": (
+        "review_context",
+        "context",
+        "context_ready",
+        ("critic_receipt", "finalize_report", "decision", "plan"),
+    ),
+    "critic_receipt": (
+        "critic_receipt",
+        "critic_receipt",
+        "finalize_missing",
+        ("finalize_report", "decision", "plan"),
+    ),
+    "finalize_report": (
+        "finalize_report",
+        "finalize_report",
+        "decision_missing",
+        ("decision", "plan"),
+    ),
+    "decision": ("review_decision", "decision", "content_missing", ("plan",)),
+}
 
 
 def prepared(args: argparse.Namespace, bundle: dict[str, Any]) -> dict[str, Any]:
@@ -50,6 +75,146 @@ def selected(root: Path, stages: set[str]) -> dict[str, Any]:
     if stage not in stages or progress is None:
         raise portable.WorkflowError(f"review command is out of order; current stage is {stage}")
     return progress
+
+
+def replace_artifact(args: argparse.Namespace) -> dict[str, Any]:
+    """Validate one replacement artifact, rebind it, and rewind the stage.
+
+    The replaced artifact stays in the content-addressed store; only the
+    progress pointer moves, and every artifact derived from the replaced one
+    is cleared so the machine never mixes old and new decisions.
+    """
+    kind = str(args.kind)
+    dir_kind, prefix, target_stage, downstream = REPLACEMENT_KINDS[kind]
+    root = portable.artifact_root(Path(args.artifact_root))
+    progress = context.load_progress(root)
+    if progress is None:
+        raise portable.WorkflowError("replace-artifact requires existing review progress")
+    if progress.get(f"{prefix}_path") is None:
+        raise portable.WorkflowError(f"no bound {kind.replace('_', ' ')} artifact to replace")
+    evidence_path, evidence = context.review_evidence_from_root(root)
+    evidence_digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+    replacement = portable.regular_file(Path(args.path), f"replacement {kind.replace('_', ' ')}")
+    value = portable.read_json(replacement, f"replacement {kind.replace('_', ' ')}")
+    _validate_replacement(
+        kind, value, replacement, root, progress, evidence_path, evidence, evidence_digest
+    )
+    path, digest = portable.write_artifact(root, dir_kind, value)
+    changes: dict[str, Any] = {f"{prefix}_path": str(path), f"{prefix}_digest": digest}
+    for item in downstream:
+        changes[f"{item}_path"] = None
+        changes[f"{item}_digest"] = None
+    context.advance_progress(root, target_stage, **changes)
+    return {
+        "status": "ok",
+        "kind": kind,
+        "artifact_path": str(path),
+        "digest": digest,
+        "previous_digest": progress.get(f"{prefix}_digest"),
+        "stage": target_stage,
+        "cleared": sorted(f"{item}_*" for item in downstream),
+        "external_mutations": False,
+    }
+
+
+def _validate_replacement(
+    kind: str,
+    value: dict[str, Any],
+    replacement: Path,
+    root: Path,
+    progress: dict[str, Any],
+    evidence_path: Path,
+    evidence: dict[str, Any],
+    evidence_digest: str,
+) -> None:
+    if kind == "context":
+        if (
+            value.get("evidence_digest") != evidence_digest
+            or value.get("target") != evidence.get("target")
+            or value.get("complete") is not True
+        ):
+            raise portable.WorkflowError(
+                "replacement review context does not bind the current evidence or is incomplete"
+            )
+        return
+    if kind == "critic_receipt":
+        context_artifact = context.progress_artifact(root, progress, "context", "review_context")
+        if context_artifact is None or progress.get("mode") not in context.REVIEW_MODES:
+            raise portable.WorkflowError(
+                "critic receipt replacement requires the selected review context and mode"
+            )
+        scope = (
+            cast("dict[str, Any]", context_artifact[1]["incremental"])["incremental_delta_digest"]
+            if progress["mode"] == "incremental"
+            else None
+        )
+        portable.validate_critic(value, evidence_digest, scope)
+        if not portable.detailed_findings_are_valid(value.get("findings")):
+            raise portable.WorkflowError("critic findings require complete structured evidence")
+        return
+    if kind == "finalize_report":
+        portable.validate_finalize_report(replacement, evidence_path, evidence)
+        return
+    _validate_decision_replacement(value, root, progress, evidence, evidence_digest)
+
+
+def _validate_decision_replacement(
+    value: dict[str, Any],
+    root: Path,
+    progress: dict[str, Any],
+    evidence: dict[str, Any],
+    evidence_digest: str,
+) -> None:
+    context_artifact = context.progress_artifact(root, progress, "context", "review_context")
+    finalize_artifact = context.progress_artifact(
+        root, progress, "finalize_report", "finalize_report"
+    )
+    if context_artifact is None or finalize_artifact is None:
+        raise portable.WorkflowError(
+            "decision replacement requires the bound context and finalize report"
+        )
+    _, _, context_digest = context_artifact
+    _, _, finalize_digest = finalize_artifact
+    critic_artifact = context.progress_artifact(root, progress, "critic_receipt", "critic_receipt")
+    receipt = critic_artifact[1] if critic_artifact is not None else None
+    critic_digest = critic_artifact[2] if critic_artifact is not None else None
+    mode = progress.get("mode")
+    if not isinstance(mode, str):
+        raise portable.WorkflowError("decision replacement requires the selected review mode")
+    if (
+        value.get("schema") != "portable-gitlab/review-decision/v2"
+        or value.get("evidence_digest") != evidence_digest
+        or value.get("context_digest") != context_digest
+        or value.get("finalize_digest") != finalize_digest
+        or value.get("critic_receipt_digest") != critic_digest
+        or value.get("mode") != mode
+    ):
+        raise portable.WorkflowError("replacement decision does not bind the current review state")
+    portable.validate_decision(value, evidence_digest, receipt, mode, context_digest, critic_digest)
+    if value.get("finalize_digest") != finalize_digest:
+        raise portable.WorkflowError("review decision does not bind exact finalize report")
+    if not portable.detailed_findings_are_valid(value.get("findings")):
+        raise portable.WorkflowError("review findings require complete structured evidence")
+    critic_findings = receipt["findings"] if receipt else []
+    candidates = [*value["findings"], *critic_findings]
+    ids = [item["id"] for item in candidates]
+    if len(ids) != len(set(ids)) or any(
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", str(item)) is None for item in ids
+    ):
+        raise portable.WorkflowError("primary and critic finding IDs must be unique")
+    responses = {item["id"]: item for item in value["responses"]}
+    if any(item["id"] not in responses for item in candidates):
+        raise portable.WorkflowError("every finding requires one response decision")
+    accepted = [item for item in candidates if responses[item["id"]]["decision"] == "accept"]
+    order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    accepted.sort(key=lambda item: order[item["severity"]])
+    context.validate_review_verdict(value, accepted, evidence)
+    if not evidence.get("retrieval_complete") or (
+        value.get("verdict") == "ready" and value.get("blocking_findings")
+    ):
+        raise portable.WorkflowError(
+            "incomplete evidence or unresolved blocking findings prohibit ready"
+        )
 
 
 def finalize(root_value: str) -> dict[str, Any]:

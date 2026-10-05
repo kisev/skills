@@ -110,6 +110,8 @@ def test_the_python_command_surface_is_explicit_and_contains_no_terminal_ui() ->
         "assess-mode",
         "finalize-review",
         "record-artifact",
+        "run",
+        "replace-artifact",
         "worktree list",
         "publication [mode]",
         "capabilities",

@@ -123,6 +123,11 @@
         "S603",                                                                  # Git receives validated structured arguments only.
         "S607",                                                                  # Git is an intentional PATH-resolved dependency.
       ]
+      "src/reviewmatic/run.py" = [
+        "S101",                                                                  # Assertions narrow state validated immediately before use.
+        "S603",                                                                  # Authoring callbacks run one user-supplied shell command through a fixed argument vector.
+        "S607",                                                                  # The callback shell is an intentional PATH-resolved dependency.
+      ]
 
     [tool.ruff.lint.mccabe]
       max-complexity = 40
