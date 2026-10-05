@@ -626,9 +626,9 @@ def preparation(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     record(report, "read-only-workflow-collection", results)
 
 
-def review_environment(stand: Stand) -> dict[str, str]:
-    environment = stand.isolated_env("reviewer")
-    user = stand.manifest["users"]["reviewer"]
+def review_environment(stand: Stand, actor: str = "reviewer") -> dict[str, str]:
+    environment = stand.isolated_env(actor)
+    user = stand.manifest["users"][actor]
     authorization = base64.b64encode((user["username"] + ":" + user["token"]).encode()).decode()
     environment.update(
         {
@@ -658,7 +658,7 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     author_collected = json.loads(
         command(
             ["node", str(APP / "scripts/collector_roles.mjs"), str(author_input)],
-            env=stand.isolated_env("author"),
+            env=review_environment(stand, "author"),
             timeout=240,
         ).stdout
     )
