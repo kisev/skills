@@ -80,7 +80,7 @@ installed runtime's source to discover input fields.
 Use `reviewmatic resume-review --artifact-root ROOT` after interruption. It
 returns the same editable draft, the recorded participants, and the pending
 panel steps without recollection. A recorded composition is never asked for
-again. Use `refresh-review --draft DRAFT` to collect changed evidence while
+again. Use `reviewmatic refresh-review --draft DRAFT` to collect changed evidence while
 retaining the panel selection: the refreshed draft keeps the participants
 without receipt bindings and expects fresh critic receipts plus a fresh
 arbitration receipt; the old final plan and draft are preserved. Finalized new

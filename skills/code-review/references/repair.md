@@ -32,7 +32,7 @@ receipts unchanged; record the actual comparison in `repair.checks`. Check the
 new body previews as well as commands, especially grouped suggestions. This path
 is local and needs no new full review. Do not edit immutable action artifacts.
 
-For changed MR facts use `refresh-review --draft DRAFT`, not a new empty review.
+For changed MR facts use `reviewmatic refresh-review --draft DRAFT`, not a new empty review.
 The runner retains findings and dispositions and updates current thread bindings;
 a panel plan keeps its selected participants without receipt bindings and expects
 fresh critic receipts plus a fresh arbitration receipt against the refreshed

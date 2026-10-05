@@ -48,6 +48,11 @@
 - Run `mise install` from the repository root before making changes.
 - Treat `taskfile.yml` as the full repository and CI task graph; the Lefthook pre-commit fast path may invoke pinned Mise tools directly for staged files, while workflows and pre-push must call public tasks.
 - Add focused contract or regression tests for observable behavior.
+- Finish every runtime UX/contract change together with its wiring into the
+  agent contract (the skill texts) in the same change; the verifiable form is
+  the repo contract test (`apps/reviewmatic/tests/test_skill_contract.py`),
+  which fails when a runtime surface loses its skill documentation or the
+  skill invokes a nonexistent runtime surface.
 - Run `task format` after maintained-source formatting changes; run `task check` before a non-push handoff, while Lefthook `pre-push` owns local verification for pushes.
 - Treat the Lefthook `pre-push` jobs as the scoped local push gate: hook-level `files:` resolves the push delta against the branch upstream and falls back to all tracked files when there is none, so first pushes run the complete gate; `task check:core` always runs, while `task test:python` and `task package:check` run only when the delta touches their stack inputs. `gate-registry.json` is the single source for gate composition: `scripts/generate_gates.py` renders the CI `matrix.include` blocks and the pre-push glob lists, and `task gates:check` fails every gate when a rendered copy, the task graph, or a workflow skeleton drifts from it. CI reruns the complete gate on every push, so scoping never reduces verification. Use `task pre-push` for the unscoped manual or release gate, and do not run gate tasks immediately before a push unless diagnosing a failure.
 - Preserve agentskills.io frontmatter constraints; every built skill archive stays self-contained, and cross-skill relations are declared only in `shared/skill-relations.json` (`requires`/`uses`/`recommends`) and materialized into built `SKILL.md` as a recommendational "Related skills" section, never as a runtime import of another archive.

@@ -315,6 +315,7 @@ def test_replace_artifact_rewinds_downstream_and_rejects_unbound_artifacts(
 
 def test_run_completes_the_cycle_with_callbacks(fixture: ReviewFixture, capsys: Any) -> None:
     callbacks = _write_callbacks(fixture)
+    participants = _write(fixture, "participants.json", ONE_MODEL_CRITIC)
     code = cli_main(
         [
             "run",
@@ -324,6 +325,8 @@ def test_run_completes_the_cycle_with_callbacks(fixture: ReviewFixture, capsys: 
             str(fixture.repo),
             "--review-mode",
             "normal",
+            "--participants",
+            str(participants),
             "--critic-cmd",
             callbacks["critic"],
             "--arbitrator-cmd",
@@ -342,9 +345,9 @@ def test_run_completes_the_cycle_with_callbacks(fixture: ReviewFixture, capsys: 
         "prepare",
         "begin",
         "context",
-        "critic-template",
-        "critic-callback",
-        "critic-record",
+        "panel-selection",
+        "critic-callback-critic-1",
+        "critic-record-critic-1",
         "finalize",
         "decision-template",
         "decision-callback",
@@ -356,29 +359,44 @@ def test_run_completes_the_cycle_with_callbacks(fixture: ReviewFixture, capsys: 
     ):
         assert expected in steps, f"{expected} must be logged with its timing"
     assert result["total_seconds"] > 0
-    report = result["report"]
-    assert report["status"] == "ok"
+    assert result["report"]["status"] == "ok"
     runbook = Path(str(_progress(Path(str(result["artifact_root"])), "plan_path")))
     assert runbook.exists()
     _print_timings("run with callbacks", result)
 
 
+ONE_MODEL_CRITIC: dict[str, Any] = {
+    "critics": [{"name": "critic-1", "engine": "model"}],
+    "arbitrator": {"name": "arbitrator-1"},
+}
+
+
 def test_run_waits_prints_manual_commands_and_resumes(fixture: ReviewFixture, capsys: Any) -> None:
     base = ["run", "--url", fixture.url, "--repo-root", str(fixture.repo), "--json"]
 
+    # The first stop is the panel poll: fill the selection template and resume.
     assert cli_main([*base]) == 0
     waiting = _stdout_json(capsys)
     assert waiting["status"] == "waiting"
     assert waiting["stage"] == "critic_missing"
-    assert "record-artifact" in waiting["manual_command"]
-    assert waiting["total_seconds"] >= 0
+    assert waiting["template_kind"] == "participants"
+    assert waiting["manual_argv"][0] == "reviewmatic"
+    contract.write_json(Path(waiting["template_path"]), ONE_MODEL_CRITIC)
+    participants = waiting["template_path"]
 
-    # The critic fills the printed template in place, then runs the printed
-    # manual command; resume continues from the last successful stage.
+    # The model critic fills its template in place, then runs the printed
+    # record-run-critic command; the completed panel merges into one receipt.
+    assert cli_main([*base[:-1], "--resume", "--participants", participants, "--json"]) == 0
+    waiting = _stdout_json(capsys)
+    assert waiting["status"] == "waiting"
+    assert waiting["stage"] == "critic_missing"
+    assert waiting["template_kind"] == "critic"
+    assert waiting["participant"] == "critic-1"
+    assert "record-run-critic" in waiting["manual_command"]
     _fill_template(waiting["template_path"], {"run_id": "critic-run", "session_id": "critic-s"})
     _run_manual(capsys, waiting["manual_argv"])
 
-    assert cli_main([*base, "--resume"]) == 0
+    assert cli_main([*base[:-1], "--resume", "--participants", participants, "--json"]) == 0
     waiting = _stdout_json(capsys)
     assert waiting["status"] == "waiting"
     assert waiting["stage"] == "decision_missing"

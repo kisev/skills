@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import context
+from reviewmatic import context, run_panel
 
 if TYPE_CHECKING:
     import argparse
@@ -305,28 +305,129 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
         "external_mutations": False,
     }
     if args.kind == "critic_receipt":
-        context.advance_progress(
-            root,
-            "finalize_missing",
-            expected_stages={"context_ready"},
-            expected={
-                key: progress[key]
-                for key in ("evidence_path", "evidence_digest", "context_path", "context_digest")
-            },
-            critic_receipt_path=str(path),
-            critic_receipt_digest=digest,
-            finalize_report_path=None,
-            finalize_report_digest=None,
-            decision_path=None,
-            decision_digest=None,
-            plan_path=None,
-            plan_digest=None,
-        )
+        bind_critic_receipt(root, progress, path, digest)
         response.update(
             stage="finalize_missing",
             next_action=context.runner_action("finalize", "--artifact-root", str(root)),
         )
     return response
+
+
+def bind_critic_receipt(root: Path, progress: dict[str, Any], path: Path, digest: str) -> None:
+    """Bind a recorded critic receipt and advance the state machine one stage."""
+    context.advance_progress(
+        root,
+        "finalize_missing",
+        expected_stages={"context_ready"},
+        expected={
+            key: progress[key]
+            for key in ("evidence_path", "evidence_digest", "context_path", "context_digest")
+        },
+        critic_receipt_path=str(path),
+        critic_receipt_digest=digest,
+        finalize_report_path=None,
+        finalize_report_digest=None,
+        decision_path=None,
+        decision_digest=None,
+        plan_path=None,
+        plan_digest=None,
+    )
+
+
+def record_run_critic(args: argparse.Namespace) -> dict[str, Any]:
+    """Import one run-panel model critic receipt; finish the panel when complete."""
+    root = portable.artifact_root(Path(args.artifact_root))
+    progress = selected(root, {"critic_missing"})
+    panel = run_panel.load(root)
+    if panel is None:
+        raise portable.WorkflowError(
+            "the run panel is not recorded; answer the panel poll and pass the selection "
+            "to reviewmatic run --participants"
+        )
+    receipt = portable.read_json(
+        portable.regular_file(Path(args.input), "critic receipt"), "critic receipt"
+    )
+    context_artifact = context.progress_artifact(root, progress, "context", "review_context")
+    if context_artifact is None:
+        raise portable.WorkflowError("the run panel requires the selected review context")
+    scope = (
+        context_artifact[1]["incremental"]["incremental_delta_digest"]
+        if progress["mode"] == "incremental"
+        else None
+    )
+    panel = run_panel.bind_receipt(
+        root,
+        panel,
+        str(args.participant),
+        receipt,
+        str(progress["evidence_digest"]),
+        scope,
+    )
+    pending = run_panel.pending_critics(panel)
+    if not pending:
+        return complete_run_panel(str(root))
+    participant = str(pending[0]["name"])
+    template_path = run_panel.critic_template(
+        root,
+        context_artifact[1],
+        str(progress["mode"]),
+        str(progress["context_digest"]),
+        participant,
+    )
+    return {
+        "status": "ok",
+        "stage": "critic_missing",
+        "artifact_root": str(root),
+        "participant": str(args.participant),
+        "panel": run_panel.summary(panel),
+        "next_action": context.runner_action(
+            "record-run-critic",
+            "--artifact-root",
+            str(root),
+            "--input",
+            str(template_path),
+            "--participant",
+            participant,
+        ),
+        "external_mutations": False,
+    }
+
+
+def complete_run_panel(root_value: str) -> dict[str, Any]:
+    """Merge the complete run panel into one aggregate critic receipt and bind it."""
+    root = portable.artifact_root(Path(root_value))
+    progress = selected(root, {"critic_missing"})
+    panel = run_panel.load(root)
+    if panel is None:
+        raise portable.WorkflowError(
+            "the run panel is not recorded; answer the panel poll and pass the selection "
+            "to reviewmatic run --participants"
+        )
+    pending = run_panel.pending_critics(panel)
+    if pending:
+        raise portable.WorkflowError(
+            "the run panel is still waiting for " + ", ".join(str(item["name"]) for item in pending)
+        )
+    context_artifact = context.progress_artifact(root, progress, "context", "review_context")
+    if context_artifact is None:
+        raise portable.WorkflowError("the run panel requires the selected review context")
+    scope = (
+        context_artifact[1]["incremental"]["incremental_delta_digest"]
+        if progress["mode"] == "incremental"
+        else None
+    )
+    merged = run_panel.aggregate(panel, str(progress["evidence_digest"]), scope)
+    path, digest = portable.write_artifact(root, "critic_receipt", merged)
+    bind_critic_receipt(root, progress, path, digest)
+    return {
+        "status": "ok",
+        "stage": "finalize_missing",
+        "artifact_path": str(path),
+        "digest": digest,
+        "panel": run_panel.summary(panel),
+        "next_action": context.runner_action("finalize", "--artifact-root", str(root)),
+        "external_mutations": False,
+    }
 
 
 def decide(args: argparse.Namespace) -> dict[str, Any]:

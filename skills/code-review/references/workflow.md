@@ -33,6 +33,16 @@ For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter
 
 For local WIP, use only the current existing checkout and `prepare-local --incremental auto`; do not clone, fetch, checkout, stash, reset, clean, or create a worktree. The role is `author`, there is no GitLab publication target, and unavailable remote context must remain explicit. A repeated review starts from the previous finalized local report and snapshot, not from a new zero-context audit.
 
+## Run path: the primary remote-MR review
+
+Drive a remote-MR review with one process: `reviewmatic run --url <mr-url> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto --repo-root <checkout>`. The checkout must contain the exact base and head objects of the MR; the run verifies them during context collection and stops with a concrete error otherwise. The run owns every mechanical step — evidence collection, context, finalization, scaffolding, and the final report — and stops only where an agent must author an artifact. Every stop prints the ready template path and the exact next command; execute each returned command as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`.
+
+The run stops once for the panel poll. Ask the user one question: the critic composition and the engine of every critic — a model subagent (`"engine": "model"`) or the mechanical OpenCodeReview CLI (`"engine": "ocr"`), with the arbitrator named separately. Attach your recommendation to the poll; the choice is the user's. Fill the returned selection template with the answer and run the printed `reviewmatic run --resume --url <mr-url> --participants <template>` command. A `fast` review never stops for the poll: it runs without a panel. Never substitute a configuration silently: the recorded names appear in the results, and the state machine rejects a substituted configuration.
+
+After the selection is recorded the run continues mechanically. OCR critics execute inside the run without any authoring stop: reviewmatic renders the background from the collected context, invokes the `ocr` CLI over the exact base..head range, maps the comments into one receipt, and binds it to the selected critic. Model critics stop the run once each: the stop names the participant, prints its ready receipt template, and the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command. Launch the model critic as an independent subagent over the collected context and the managed review worktree described below, fill its receipt template verbatim, and run the printed command; when the last receipt is imported, the panel merges into one aggregate critic receipt and the run continues by itself.
+
+The remaining stops are the decision and the content. At the decision stop, launch the selected arbitrator as a separate subagent: it arbitrates every critic finding (including the OCR findings) with a concrete reason per response, selects exactly one verdict, and fills the decision template, which you then import with the printed `reviewmatic finalize-review` command. At the content stop, complete the plan content template and run the printed `reviewmatic scaffold-review` command. The final run response prints the review report with the `runbook.md` path; follow `references/output-format.md` from there. Apply the discussion-audit, findings-discipline, suggestion, SemVer, and metadata doctrine of the stages below to the templates exactly as written — the templates carry the same contracts; the run changes only who assembles them.
+
 ## Necessity and completion
 
 Apply `references/documentation-review.md` to the changed behavior's contract,
@@ -53,6 +63,11 @@ MR, bloat that predates the change is never a finding: it becomes a
 `origin: pre_existing` and is never blocking.
 
 ## Remote MR stages
+
+This is the marked repair path: use it when the user asks for step-by-step
+control or when the run path needs repair. The run path above assembles the
+same stages in one process; this section spells out the per-stage doctrine and
+the `start-review`/`record-*` commands that drive them one at a time.
 
 Work from the runtime's prepared representations instead of re-reading raw
 evidence. The `start-review`/`resume-review` response already contains the
@@ -78,12 +93,14 @@ you orchestrate it; you never add a full review pass of your own. First record
 the panel with `reviewmatic record-participants --draft <draft-path> --input <participants.json>`: the critic count and composition, then the arbitrator.
 Each role is either an installed specialist profile (`critic-*` agents) or one
 ordinary independent subagent running with the current session's agent,
-provider, and model. When this skill is invoked directly and the composition
-was not already fixed by the request, ask for the panel selection in the same
-single question round as any missing task context; an explicit skip is
-acceptable and defaults to one ordinary critic and one ordinary arbitrator,
-recorded as exactly that default. When the skill started automatically, do not
-stop for questions and record that default composition transparently. Never
+provider, and model; a role may also be the mechanical `ocr` engine. Ask for
+the panel selection in one poll at the start of every panel review, in the
+same single question round as any missing task context: the critic
+composition, the engine of every critic, and the arbitrator. Attach your
+recommendation to the poll; the choice is the user's. An explicit user skip
+records exactly that answer — one ordinary model critic and one ordinary
+arbitrator — but an unanswered poll is never filled silently: wait for the
+answer. Never
 substitute a configuration silently: the recorded profile, provider, and model
 names appear in the runbook, and the arbitrator receipt must name the selected
 arbitrator.
@@ -117,8 +134,10 @@ Record it with `"engine": "ocr"` on the critic entry in the
 LLM for the run (without them the OCR CLI uses its own provider configuration).
 A panel can be mixed or purely OCR. After the package is recorded, the runtime
 returns one ready task per OCR critic with the exact
-`reviewmatic record-ocr-critic` command; run it like any returned action.
-reviewmatic renders the recorded package as a Markdown background file, invokes
+`reviewmatic record-ocr-critic` command; run it like any returned action. In
+the run path above there is no such stop: the runtime executes OCR critics
+itself, without an authoring stop. reviewmatic renders the recorded package as
+a Markdown background file, invokes
 `ocr review --format json --audience agent` over the exact reviewed range (the
 base..head range in the review worktree for a remote MR; workspace mode for a
 local review without a ref), maps every comment into one receipt carrying the

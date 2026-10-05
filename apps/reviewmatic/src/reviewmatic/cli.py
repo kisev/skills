@@ -227,6 +227,19 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        "record-run-critic",
+        "Import one run-panel model critic receipt and finish the panel when complete",
+        (
+            OptionSpec("artifact-root", "artifact root", required=True),
+            OptionSpec("input", "critic receipt response file", required=True),
+            OptionSpec(
+                "participant",
+                "selected model critic participant name this receipt binds to",
+                required=True,
+            ),
+        ),
+    ),
+    CommandSpec(
         "record-participants",
         "Record the selected critic panel and arbitrator once",
         (
@@ -357,8 +370,8 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
             ),
             OptionSpec(
                 "critic-cmd",
-                "shell command filling the critic receipt; template and output paths arrive"
-                " as $1 and $2",
+                "shell command filling one run-panel model critic receipt; the template and "
+                "output paths arrive as $1 and $2",
             ),
             OptionSpec(
                 "arbitrator-cmd",
@@ -371,6 +384,19 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 " as $1 and $2",
             ),
             OptionSpec("resume", "continue the existing review from its current stage", flag=True),
+            OptionSpec(
+                "participants",
+                "panel selection JSON answering the critic and engine poll; without it the "
+                "run stops and prints the selection template",
+            ),
+            OptionSpec(
+                "ocr-provider",
+                'LLM provider override recorded for every engine:"ocr" critic',
+            ),
+            OptionSpec(
+                "ocr-model",
+                'LLM model override recorded for every engine:"ocr" critic',
+            ),
         ),
     ),
     CommandSpec(
@@ -849,6 +875,17 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
         return _run_record_ocr(namespace)
     if name in {"record-input", "record-critic", "record-participants", "record-arbitration"}:
         return _run_record(name, namespace)
+    if name == "record-run-critic":
+        contract.emit(
+            workflow.record_run_critic(
+                argparse.Namespace(
+                    artifact_root=_field(namespace, "artifactRoot"),
+                    input=_field(namespace, "input"),
+                    participant=_field(namespace, "participant"),
+                )
+            )
+        )
+        return EXIT_OK
     if name == "scope-review":
         contract.emit(
             {

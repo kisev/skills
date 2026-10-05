@@ -646,7 +646,7 @@ def validate_shared_contract_instances() -> None:
             },
         }
     )
-    for receipt in [*critics, {**critics[0], "contributors": critics[:2]}]:
+    for receipt in [*critics, {**critics[2], "contributors": critics}]:
         artifact_validator.validate(
             {
                 "schema": "portable-gitlab/critic_receipt/v2",
@@ -654,6 +654,20 @@ def validate_shared_contract_instances() -> None:
                 "kind": "critic_receipt",
                 "created_at": "2026-10-01T00:00:00Z",
                 "payload": receipt,
+            }
+        )
+    # An aggregate contributor is a full receipt: an OCR contributor carries its
+    # engine metadata, and anything outside the receipt shape is rejected.
+    ocr_contributor = dict(critics[2])
+    ocr_contributor["engine"] = "model"
+    with pytest.raises(ValidationError):
+        artifact_validator.validate(
+            {
+                "schema": "portable-gitlab/critic_receipt/v2",
+                "schema_version": 2,
+                "kind": "critic_receipt",
+                "created_at": "2026-10-01T00:00:00Z",
+                "payload": {**critics[0], "contributors": [*critics[:2], ocr_contributor]},
             }
         )
 

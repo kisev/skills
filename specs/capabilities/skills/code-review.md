@@ -234,7 +234,22 @@ unreachability from a real entrypoint. The runtime shall reject a
 receipt that leaves any candidate finding, merged finding, or contradiction
 without a verdict, shall never rewrite arbitrator text, and in panel mode
 shall restrict `record-input` to the orchestrator's identity fields. The host
-agent adds no full review pass of its own. Preparation shall expose already
+agent adds no full review pass of its own. The one-process `run` path drives
+the same panel: the poll is the decision point, answered through
+`run --participants` with the same selection schema and the optional
+`--ocr-provider`/`--ocr-model` overrides; without the answer the run stops
+once and prints the selection template with the exact resume command. The run
+executes OCR critics mechanically inside the process without an authoring
+stop, stops once per model critic with that participant's ready receipt
+template and the exact `record-run-critic` import command, and merges the
+complete panel into one aggregate critic receipt through the contributors
+convention. An invalid selection is a loud refusal that records nothing, a
+selection without a panel stage (a fast or unchanged review) is refused, and
+the run results name the panel with every critic's engine and receipt
+identity. Context collection treats degraded discussions as a loud refusal:
+an unusable discussion entry or a note with an empty or missing body stops
+the review with an addressed error instead of writing a silently empty
+artifact. Preparation shall expose already
 collected evidence through prepared
 runtime representations: `start-review` and `resume-review` shall return a
 readable scope overview built from recorded evidence — target identity, the MR
@@ -491,8 +506,11 @@ fork sources under arbitrary remote names, unrelated or missing repositories,
 dirty source and occupied or foreign worktrees, new heads with active and
 finalized reviews, same branch names in different projects, concurrent runs,
 fetch failures with recovery, revision mismatch, preservation of the user's
-checkout, and the absence of per-file code fetches. Context package regressions
-cover both modes, direct and automatic invocation material, skipped context,
+checkout, and the absence of per-file code fetches. Discussion-integrity
+regressions feed an empty note body and a rootless discussion and assert
+addressed loud refusals that write no review context artifact. Context
+package regressions cover both modes, direct and automatic invocation
+material, skipped context,
 contradictory sources, resolved threads without proof, missing critic answers,
 multi-critic authorship and contradictions, canonical digest stability across
 background edits, supersedes lineage, stale snapshot bindings, and GitLab-free
@@ -504,7 +522,12 @@ unknown fields and
 envelope wrappers leaving the draft unchanged, verbatim receipt import,
 stale-answer rejection with the expected context version, envelope
 unwrapping, a complete MR cycle through the new interface, and a local cycle
-through `record-input` without GitLab state. Malformed-shape regressions feed
+through `record-input` without GitLab state. The run-panel composition runs
+through the public CLI: a mixed OCR and model panel completes from `run --participants` to `plan_ready`, the OCR critic executes mechanically with
+its recorded provider and model, the model receipt imports through
+`record-run-critic`, the aggregate receipt carries both contributors, the
+unanswered poll prints the selection template, and unknown, OCR, and reused
+participants are refused. Malformed-shape regressions feed
 `null`, non-array, and `null`-entry lists to MR and local `record-input` and
 `record-critic` and assert addressed diagnostics with an untouched draft.
 Local merge regressions run two sequential critic imports, a repeated

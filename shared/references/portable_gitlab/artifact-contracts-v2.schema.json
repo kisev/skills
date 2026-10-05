@@ -2333,7 +2333,9 @@
                       "question_answers": {
                         "type": "array",
                         "items": { "$ref": "#/$defs/context_answer_ref" }
-                      }
+                      },
+                      "engine": { "const": "ocr" },
+                      "ocr": { "$ref": "#/$defs/critic_receipt_ocr" }
                     }
                   }
                 },
@@ -2353,22 +2355,23 @@
                   "items": { "$ref": "#/$defs/context_answer_ref" }
                 },
                 "engine": { "const": "ocr" },
-                "ocr": {
-                  "type": "object",
-                  "required": ["provider", "model", "terminal_state", "comments"],
-                  "additionalProperties": false,
-                  "properties": {
-                    "provider": { "type": "string", "minLength": 1 },
-                    "model": { "type": "string", "minLength": 1 },
-                    "terminal_state": { "type": "string", "minLength": 1 },
-                    "comments": { "type": "integer", "minimum": 0 }
-                  }
-                }
+                "ocr": { "$ref": "#/$defs/critic_receipt_ocr" }
               }
             }
           }
         }
       ]
+    },
+    "critic_receipt_ocr": {
+      "type": "object",
+      "required": ["provider", "model", "terminal_state", "comments"],
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "terminal_state": { "type": "string", "minLength": 1 },
+        "comments": { "type": "integer", "minimum": 0 }
+      }
     },
     "context_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
     "context_claim": {

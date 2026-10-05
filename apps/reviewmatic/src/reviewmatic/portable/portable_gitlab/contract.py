@@ -2849,7 +2849,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         }
         payload_keys = set(payload)
         if kind == "critic_receipt":
-            payload_keys -= {"contributors", "question_answers"}
+            payload_keys -= {"contributors", "question_answers", "engine", "ocr"}
         if payload_keys not in (
             required_report,
             required_report | {"scope_digest"},

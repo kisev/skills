@@ -1068,25 +1068,28 @@ def collect_context(
             portable.redact(value)
             for value in cast("list[str]", discussions_component.get("errors", []))
         )
-    try:
-        discussions = [
-            annotate_discussion(value, web_url)
-            for value in deduplicate(
-                cast("list[object]", discussions_component.get("items", [])), "discussion"
-            )
-        ]
-        nested_notes = [
-            note
-            for discussion in discussions
-            for note in cast("list[object]", discussion.get("notes", []))
-        ]
-        notes = deduplicate(
-            [*nested_notes, *cast("list[object]", notes_component["items"])], "note"
+    # Degraded discussions are a loud refusal, never a silently empty artifact:
+    # an unusable discussion entry or an empty note body stops the review here
+    # instead of continuing with vacuous collections.
+    discussions = [
+        annotate_discussion(value, web_url)
+        for value in deduplicate(
+            cast("list[object]", discussions_component.get("items", [])), "discussion"
         )
-        notes = [{**note, "note_url": f"{web_url}#note_{note['id']}"} for note in notes]
-    except portable.WorkflowError as exc:
-        errors.append(str(exc))
-        discussions, notes = [], []
+    ]
+    nested_notes = [
+        note
+        for discussion in discussions
+        for note in cast("list[object]", discussion.get("notes", []))
+    ]
+    notes = deduplicate([*nested_notes, *cast("list[object]", notes_component["items"])], "note")
+    for note in notes:
+        if not portable.nonempty_string(note.get("body")):
+            raise portable.WorkflowError(
+                f"GitLab note {note.get('id')!r} has an empty or missing body; the discussion "
+                "evidence is unusable and the review stops instead of degrading silently"
+            )
+    notes = [{**note, "note_url": f"{web_url}#note_{note['id']}"} for note in notes]
     exact_git = exact_git_context(repo_root, evidence)
     errors.extend(cast("list[str]", exact_git["errors"]))
     try:
