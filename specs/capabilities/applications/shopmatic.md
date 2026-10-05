@@ -23,7 +23,7 @@ never performs.
 Input is an MCP tool call (`marketplace`, `query`, optional price cap and
 limit) or an equivalent CLI invocation; output is one unified JSON envelope
 per marketplace: `schema`, `marketplace`, `kind`, `query`, `items`
-(position, id, name, price, old_price, currency, rating, rating_votes, URL),
+(position, id, name, price, old\_price, currency, rating, rating\_votes, URL),
 and optional warnings. The Python application resolves the pinned
 `agent-browser` through `PATH` (or `SHOPMATIC_AGENT_BROWSER`) and keeps
 profiles under `$XDG_CONFIG_HOME/shopmatic` (or `SHOPMATIC_PROFILE_ROOT`).
