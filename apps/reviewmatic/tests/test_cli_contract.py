@@ -12,7 +12,13 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from reviewmatic import __version__
-from reviewmatic.cli import DEFINITIONS, all_specs, apply_config, build_parser
+from reviewmatic.cli import (
+    DEFINITIONS,
+    _workflow_namespace,
+    all_specs,
+    apply_config,
+    build_parser,
+)
 
 if TYPE_CHECKING:
     import argparse
@@ -340,3 +346,48 @@ def test_global_values_survive_subcommand_parsing() -> None:
 def test_console_module_entry_point_is_the_cli() -> None:
     namespace: argparse.Namespace = build_parser().parse_args(["capabilities"])
     assert namespace.command == "capabilities"
+
+
+def test_workflow_namespace_exposes_snake_case_attributes() -> None:
+    # workflow.dispatch and workflow.prepared read snake_case attributes.
+    namespace = build_parser().parse_args(
+        [
+            "context",
+            "--evidence",
+            "evidence.json",
+            "--repo-root",
+            ".",
+            "--review-mode",
+            "normal",
+            "--locale",
+            "ru",
+        ]
+    )
+    workflow_arguments = _workflow_namespace("context", namespace)
+    assert workflow_arguments.command == "context"
+    assert workflow_arguments.evidence == "evidence.json"
+    assert workflow_arguments.repo_root == "."
+    assert workflow_arguments.review_mode == "normal"
+    assert workflow_arguments.locale == "ru"
+    assert workflow_arguments.incremental == "auto"
+
+
+def test_collected_options_keep_every_occurrence() -> None:
+    # _AppendAction must not drop the first value of a collect=True option.
+    namespace = build_parser().parse_args(
+        ["prepare", "--url", "https://gitlab.example/a/-/merge_requests/1"]
+    )
+    assert namespace.url == ["https://gitlab.example/a/-/merge_requests/1"]
+    repeated = build_parser().parse_args(
+        [
+            "prepare",
+            "--url",
+            "https://gitlab.example/a/-/merge_requests/1",
+            "--url",
+            "https://gitlab.example/b/-/merge_requests/2",
+        ]
+    )
+    assert repeated.url == [
+        "https://gitlab.example/a/-/merge_requests/1",
+        "https://gitlab.example/b/-/merge_requests/2",
+    ]

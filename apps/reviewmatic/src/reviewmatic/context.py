@@ -837,19 +837,24 @@ def annotate_discussion(value: dict[str, Any], web_url: str) -> dict[str, Any]:
     return result
 
 
-def server_changed_paths(evidence: dict[str, Any]) -> set[str]:
+def server_changed_files(evidence: dict[str, Any]) -> tuple[set[str], set[tuple[str, str]]]:
     changed = evidence.get("changed_files")
     if not isinstance(changed, dict) or changed.get("complete") is not True:
         raise portable.WorkflowError("GitLab changed-files evidence is incomplete")
     paths: set[str] = set()
+    renames: set[tuple[str, str]] = set()
     for value in cast("list[object]", changed.get("items", [])):
         if not isinstance(value, dict):
             raise portable.WorkflowError("GitLab changed-files entry is invalid")
-        path = value.get("new_path") or value.get("old_path")
+        new_path = value.get("new_path")
+        old_path = value.get("old_path")
+        path = new_path or old_path
         if not isinstance(path, str) or not path:
             raise portable.WorkflowError("GitLab changed-files entry has no path")
         paths.add(path)
-    return paths
+        if isinstance(old_path, str) and old_path and old_path != path:
+            renames.add((old_path, path))
+    return paths, renames
 
 
 def exact_git_context(repo_root: str, evidence: dict[str, Any]) -> dict[str, Any]:
@@ -905,8 +910,14 @@ def exact_git_context(repo_root: str, evidence: dict[str, Any]) -> dict[str, Any
         if value
     )
     try:
-        expected_paths = server_changed_paths(evidence)
-        if set(changed_paths) != expected_paths:
+        expected_paths, server_renames = server_changed_files(evidence)
+        # GitLab records one entry per rename while the local --find-renames
+        # diff can report the old side too; drop an old side the server paired
+        # with its new path and does not list as a changed path itself.
+        collapsed = set(changed_paths) - {
+            old_path for old_path, _ in server_renames if old_path not in expected_paths
+        }
+        if collapsed != expected_paths:
             errors.append("local changed paths do not match GitLab evidence")
     except portable.WorkflowError as exc:
         errors.append(str(exc))

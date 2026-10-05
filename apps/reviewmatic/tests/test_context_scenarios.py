@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -764,3 +765,104 @@ def test_unchanged_second_run_does_not_republish_findings_or_issues(
                 "freshness_checked": True,
             },
         )
+
+
+def _git(root: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(root), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _exact_repo(tmp_path: Path, name: str) -> tuple[Path, str]:
+    repo = tmp_path / name
+    repo.mkdir()
+    _git(repo, "init", "--quiet", "--initial-branch=main")
+    _git(repo, "config", "user.email", "context@example.invalid")
+    _git(repo, "config", "user.name", "Context Fixture")
+    _git(repo, "config", "commit.gpgsign", "false")
+    (repo / "review.txt").write_text("one\ntwo\nthree\nfour\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "base")
+    return repo, _git(repo, "rev-parse", "HEAD")
+
+
+def _exact_evidence(base: str, head: str, items: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "base_sha": base,
+        "start_sha": base,
+        "head_sha": head,
+        "changed_files": {
+            "items": items,
+            "complete": True,
+            "errors": [],
+            "pages": 1,
+            "truncated": False,
+        },
+    }
+
+
+def test_exact_git_context_accepts_a_gitlab_rename_git_reports_as_delete_and_add(
+    tmp_path: Path,
+) -> None:
+    repo, base = _exact_repo(tmp_path, "pair-rename")
+    _git(repo, "mv", "review.txt", "renamed.txt")
+    (repo / "renamed.txt").write_text("alpha\nbeta\ngamma\ndelta\n")
+    _git(repo, "commit", "-qam", "rename with new content")
+    head = _git(repo, "rev-parse", "HEAD")
+    listed = _git(repo, "diff", "--name-only", "--find-renames", "-z", base, head)
+    assert sorted(filter(None, listed.split("\0"))) == ["renamed.txt", "review.txt"], (
+        "the scenario requires git to report both rename sides"
+    )
+    exact = review_context.exact_git_context(
+        str(repo),
+        _exact_evidence(base, head, [{"old_path": "review.txt", "new_path": "renamed.txt"}]),
+    )
+    assert exact["complete"] is True, exact["errors"]
+    assert exact["changed_paths"] == ["renamed.txt", "review.txt"]
+
+
+def test_exact_git_context_accepts_a_gitlab_rename_git_pairs_completely(tmp_path: Path) -> None:
+    repo, base = _exact_repo(tmp_path, "pure-rename")
+    _git(repo, "mv", "review.txt", "renamed.txt")
+    _git(repo, "commit", "-qam", "rename")
+    head = _git(repo, "rev-parse", "HEAD")
+    listed = _git(repo, "diff", "--name-only", "--find-renames", "-z", base, head)
+    assert listed.rstrip("\0").split("\0") == ["renamed.txt"]
+    exact = review_context.exact_git_context(
+        str(repo),
+        _exact_evidence(base, head, [{"old_path": "review.txt", "new_path": "renamed.txt"}]),
+    )
+    assert exact["complete"] is True, exact["errors"]
+    assert exact["changed_paths"] == ["renamed.txt"]
+
+
+def test_exact_git_context_matches_plain_modifications_without_renames(tmp_path: Path) -> None:
+    repo, base = _exact_repo(tmp_path, "plain")
+    (repo / "review.txt").write_text("one\ntwo\nthree\nedited\n")
+    _git(repo, "commit", "-qam", "edit")
+    head = _git(repo, "rev-parse", "HEAD")
+    exact = review_context.exact_git_context(
+        str(repo),
+        _exact_evidence(base, head, [{"old_path": "review.txt", "new_path": "review.txt"}]),
+    )
+    assert exact["complete"] is True, exact["errors"]
+    assert exact["changed_paths"] == ["review.txt"]
+
+
+def test_exact_git_context_still_flags_paths_the_server_did_not_report(tmp_path: Path) -> None:
+    repo, base = _exact_repo(tmp_path, "mismatch")
+    (repo / "extra.txt").write_text("absent from the server report\n")
+    _git(repo, "add", ".")
+    (repo / "review.txt").write_text("one\ntwo\nthree\nedited\n")
+    _git(repo, "commit", "-qam", "edit plus an unreported file")
+    head = _git(repo, "rev-parse", "HEAD")
+    exact = review_context.exact_git_context(
+        str(repo),
+        _exact_evidence(base, head, [{"old_path": "review.txt", "new_path": "review.txt"}]),
+    )
+    assert exact["complete"] is False
+    assert "local changed paths do not match GitLab evidence" in exact["errors"]

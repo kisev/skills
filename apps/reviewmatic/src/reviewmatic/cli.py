@@ -426,7 +426,7 @@ class _AppendAction(_TrackedAction):
         option_string: str | None = None,
     ) -> None:
         collected = getattr(namespace, self.dest, None)
-        collected = [] if collected is None else [*collected, values]
+        collected = [values] if collected is None else [*collected, values]
         setattr(namespace, self.dest, collected)
         self._record()
 
@@ -804,22 +804,24 @@ def _field(namespace: argparse.Namespace, name: str) -> Any:
 
 
 def _workflow_namespace(name: str, namespace: argparse.Namespace) -> argparse.Namespace:
+    # workflow.dispatch and workflow.prepared read snake_case attributes; the
+    # parsed namespace stores option dests in camelCase (see option_dest).
     return argparse.Namespace(
         command=name,
-        artifactRoot=_field(namespace, "artifactRoot"),
+        artifact_root=_field(namespace, "artifactRoot"),
         evidence=_field(namespace, "evidence"),
-        repoRoot=_field(namespace, "repoRoot"),
+        repo_root=_field(namespace, "repoRoot"),
         incremental=_field(namespace, "incremental"),
-        reviewMode=_field(namespace, "reviewMode"),
+        review_mode=_field(namespace, "reviewMode"),
         locale=_field(namespace, "locale"),
         kind=_field(namespace, "kind"),
         report=_field(namespace, "report"),
-        finalizeReport=_field(namespace, "finalizeReport"),
+        finalize_report=_field(namespace, "finalizeReport"),
         context=_field(namespace, "context"),
         mode=_field(namespace, "mode"),
         decision=_field(namespace, "decision"),
         content=_field(namespace, "content"),
-        criticReceipt=_field(namespace, "criticReceipt"),
+        critic_receipt=_field(namespace, "criticReceipt"),
         input=_field(namespace, "input"),
     )
 
