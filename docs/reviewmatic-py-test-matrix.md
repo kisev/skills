@@ -38,9 +38,9 @@ that introduced this file with the built `dist/` output.
 
 | TypeScript test file | TS tests | Status | Python seam |
 | - | - | - | - |
-| `cli.test.mjs` | 4 | planned (business dispatch) | `tests/test_cli_contract.py` keeps the stage-1 surface coverage |
+| `cli.test.mjs` | 4 | ported | `tests/test_cli_contract.py` (version/help/capabilities/publication/marker-run surface, now with the stage-2 business dispatch assertions) |
 | `context-package.test.mjs` | 15 | partial | `tests/test_context_package.py` (digests, versioning, retirement, answer/verification bindings, MR validation); the end-to-end record scenarios land with the draft port |
-| `context.test.mjs` | 6 | partial | `tests/test_context_report.py` carries the report regressions; collection regressions land with the context port |
+| `context.test.mjs` | 6 | partial | `tests/test_context_report.py` (report regressions), `tests/test_review_happy_path.py` (fake-glab state machine happy path with the incremental second run) |
 | `contract.test.mjs` | 38 | partial | `tests/test_contract_validators.py` (validators, labels, preview, critic/decision bindings), `tests/test_golden_parity.py` (canonical digests, artifact verdicts), `tests/test_cli_contract.py` (capabilities); transport/collection cases land with the local-review port |
 | `draft-input.test.mjs` | 13 | planned | `tests/test_draft_input.py` |
 | `draft.test.mjs` | 6 | planned | `tests/test_draft.py` |
@@ -50,7 +50,7 @@ that introduced this file with the built `dist/` output.
 | `mutation-process.test.mjs` | 6 | planned | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | planned | `tests/test_panel.py` |
 | `publication.test.mjs` | 3 | partial | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` and `::test_structured_preview_accepts_manual_actions` |
-| `repair.test.mjs` | 13 | partial | `tests/test_fixes_and_diagnostics.py` (schema diagnostics, suggestion synthesis); the end-to-end repair scenarios land with the draft port |
+| `repair.test.mjs` | 13 | partial | `tests/test_fixes_and_diagnostics.py` (schema diagnostics, suggestion synthesis); the draft state machine is ported in `reviewmatic.draft`, the end-to-end repair scenarios await the draft input fixtures |
 | `review-contract-regressions.test.mjs` | 15 | partial | `tests/test_contract_validators.py` carries the canon validator regressions |
 | `review-semver.test.mjs` | 11 | covered upstream | `tests/test_review_semver.py` (repository suite) plus the `semver_*` golden fixtures |
 | `review-worktree.test.mjs` | 17 | partial | `tests/test_review_worktree.py` (slugs, remote matching, checkout rejection, registry, locking); the end-to-end preparation scenarios land with the draft port and the fake-glab helper |

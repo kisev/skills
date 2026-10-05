@@ -38,9 +38,9 @@
 
 | Файл тестов TypeScript | Тестов TS | Статус | Python-шов |
 | - | - | - | - |
-| `cli.test.mjs` | 4 | план (бизнес-диспетчеризация) | `tests/test_cli_contract.py` держит покрытие поверхности этапа 1 |
+| `cli.test.mjs` | 4 | перенесено | `tests/test_cli_contract.py` (поверхность version/help/capabilities/publication/marker-run и утверждения бизнес-диспетчеризации этапа 2) |
 | `context-package.test.mjs` | 15 | частично | `tests/test_context_package.py` (дайджесты, версионирование, вывод из обращения, привязки ответов/проверок, валидация MR); сквозные сценарии записи приходят с портом черновиков |
-| `context.test.mjs` | 6 | частично | `tests/test_context_report.py` несёт регрессии отчёта; регрессии сборки контекста приходят с портом context |
+| `context.test.mjs` | 6 | частично | `tests/test_context_report.py` (регрессии отчёта), `tests/test_review_happy_path.py` (счастливый путь стейт-машины через fake-glab со вторым инкрементальным прогоном) |
 | `contract.test.mjs` | 38 | частично | `tests/test_contract_validators.py` (валидаторы, лейблы, предпросмотр, привязки critic/decision), `tests/test_golden_parity.py` (канонические дайджесты, вердикты артефактов), `tests/test_cli_contract.py` (capabilities); транспорт/сборка приходят с портом local-review |
 | `draft-input.test.mjs` | 13 | план | `tests/test_draft_input.py` |
 | `draft.test.mjs` | 6 | план | `tests/test_draft.py` |
@@ -50,7 +50,7 @@
 | `mutation-process.test.mjs` | 6 | план | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | план | `tests/test_panel.py` |
 | `publication.test.mjs` | 3 | частично | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` и `::test_structured_preview_accepts_manual_actions` |
-| `repair.test.mjs` | 13 | частично | `tests/test_fixes_and_diagnostics.py` (диагностика схемы, синтез предложений); сквозные сценарии ремонта приходят с портом черновиков |
+| `repair.test.mjs` | 13 | частично | `tests/test_fixes_and_diagnostics.py` (диагностика схемы, синтез предложений); стейт-машина черновиков перенесена в `reviewmatic.draft`, сквозные сценарии ремонта ждут входные фикстуры черновиков |
 | `review-contract-regressions.test.mjs` | 15 | частично | `tests/test_contract_validators.py` несёт регрессии валидаторов канона |
 | `review-semver.test.mjs` | 11 | покрыто выше | `tests/test_review_semver.py` (репозиторный набор) плюс golden-фикстуры `semver_*` |
 | `review-worktree.test.mjs` | 17 | частично | `tests/test_review_worktree.py` (слаги, сопоставление ремоутов, отказ чужого каталога, реестр, блокировки); сквозные сценарии подготовки приходят с портом черновиков и хелпером fake-glab |
