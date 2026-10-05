@@ -2,8 +2,8 @@
 
 [English version](../reviewmatic-py-test-matrix.md)
 
-Авторитетный счёт TypeScript на этой ревизии — `node --test
---test-reporter=tap` по `apps/reviewmatic/test/*.test.mjs`: **201 тест, 201
+Авторитетный счёт TypeScript на этой ревизии — `node --test --test-reporter=tap`
+по `apps/reviewmatic/test/*.test.mjs`: **201 тест, 201
 проходит, 0 падений, 0 пропусков** (26 файлов; на три TUI-файла `tui-app`,
 `tui-pty`, `tui-support` приходится 6 тестов). Бэкенд-выборка, которую
 запускает сам `apps/reviewmatic` (`scripts/test.mjs`, все файлы кроме TUI), —

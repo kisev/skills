@@ -62,6 +62,10 @@
       "ru": "docs/ru/verification.md"
     },
     {
+      "en": "docs/reviewmatic-py-test-matrix.md",
+      "ru": "docs/ru/reviewmatic-py-test-matrix.md"
+    },
+    {
       "en": "packages/agentomatic/README.md",
       "ru": "packages/agentomatic/README.ru.md"
     },
