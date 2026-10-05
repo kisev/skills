@@ -138,6 +138,7 @@ def gitlab_response(endpoint: str) -> Any:
             "description": "Retry behavior is ambiguous.",
             "state": "opened",
             "labels": [],
+            "milestone": {"id": 9, "title": "v1.1.0", "state": "active"},
             "updated_at": "2026-09-23T00:00:00Z",
             "web_url": "https://gitlab.example/group/project/-/issues/7",
         }
@@ -1161,7 +1162,7 @@ def test_missing_milestone_keeps_analysis_complete_and_marks_follow_up_pending(
         < create_block.index("--method POST")
         < create_block.index('{"milestone_id": $milestone_id}')
     )
-    assert ".milestone == null" in create_block
+    assert ".milestone.id == 9" in create_block
 
 
 def test_rejected_issue_removes_existing_milestone(
@@ -1907,7 +1908,7 @@ def test_generated_blocks_use_direct_glab_api_with_guards(
         labels_block
     )
     assert "= '[]' ]" in labels_block
-    assert ".milestone == null" in milestone_block
+    assert ".milestone.id == 9" in milestone_block
     assert ".iid == $i" in link_block
 
 
@@ -1972,9 +1973,9 @@ def test_obsolete_and_duplicate_issues_get_explanation_and_close_blocks(
         "confidence": "high",
     }
     item["release_plan"]["milestone"] = {
-        "status": "none",
+        "status": "remove",
         "candidate": None,
-        "rationale": "Unaccepted work is never planned.",
+        "rationale": "Unaccepted work leaves the active milestone.",
         "confidence": "high",
     }
     value["top_five"] = []
@@ -2109,7 +2110,7 @@ def test_blocks_execute_in_order_against_a_stateful_server(
                 "description": "Retry behavior is ambiguous.",
                 "state": "opened",
                 "labels": [],
-                "milestone": None,
+                "milestone": {"id": 9, "title": "v1.1.0", "state": "active"},
                 "updated_at": "2026-09-23T00:00:00Z",
             }
         )
@@ -2188,7 +2189,9 @@ esac
         }
     ]
 
-    # Every block stops on its own precondition when replayed after the first pass.
+    # Replays stop on their own preconditions; the milestone attach is an
+    # idempotent no-op when the candidate is already attached, so its replay
+    # may succeed but must leave the state unchanged.
     for index, block in enumerate(blocks):
         replayed = subprocess.run(
             ["bash", "-ec", block + "\n"],
@@ -2197,6 +2200,10 @@ esac
             text=True,
             check=False,
         )
+        if index == 2:
+            assert replayed.returncode == 0, replayed.stderr
+            assert json.loads((state / "issue.json").read_text())["milestone"]["id"] == 9
+            continue
         assert replayed.returncode != 0, f"replayed block {index} did not stop"
         assert "regenerate" in replayed.stderr
 

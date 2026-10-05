@@ -1937,13 +1937,16 @@ def commands_for(
     release_plan = item["release_plan"]
     decision = release_plan["decision"]["status"]
     milestone = release_plan["milestone"]
+    current = issue.get("milestone")
+    current_id = current.get("id") if isinstance(current, dict) else None
+    expected_milestone = current_id if isinstance(current_id, int) else None
     if decision == "accepted" and milestone["status"] == "selected":
         actions.append(
             {
                 "kind": "milestone",
                 "fresh_target": target,
                 "fresh_endpoint": issue_endpoint,
-                "semantic": [milestone_guard(host, issue_endpoint, None, locale)],
+                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
                 "segments": [
                     (
                         TEXT[locale]["action_milestone"],
@@ -1959,21 +1962,12 @@ def commands_for(
             }
         )
     elif decision != "accepted" and milestone["status"] == "remove":
-        current = issue.get("milestone")
-        current_id = current.get("id") if isinstance(current, dict) else None
         actions.append(
             {
                 "kind": "milestone",
                 "fresh_target": target,
                 "fresh_endpoint": issue_endpoint,
-                "semantic": [
-                    milestone_guard(
-                        host,
-                        issue_endpoint,
-                        current_id if isinstance(current_id, int) else None,
-                        locale,
-                    )
-                ],
+                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
                 "segments": [
                     (
                         TEXT[locale]["action_milestone"],
@@ -2029,7 +2023,7 @@ def commands_for(
                 "kind": "create_milestone",
                 "fresh_target": target,
                 "fresh_endpoint": issue_endpoint,
-                "semantic": [milestone_guard(host, issue_endpoint, None, locale)],
+                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
                 "segments": [("", create_block)],
                 "preview": json.dumps(
                     {"create": {"title": title}, "attach": {"milestone_id": "$milestone_id"}},
