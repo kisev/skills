@@ -56,9 +56,11 @@ PORTABLE_SKILLS = (
 # out of command ownership (`command: "false"`) and records upstream sources
 # with a pinned revision and license. agnix and the agentskills validators
 # require metadata values to be strings, so the label is one string per skill
-# listing `repo@revision (license)` entries separated by "; ". Parsed by the
-# command-label contract test below and mirrored by COMMANDLESS_SKILLS in the
-# package registry.
+# listing `repo@revision (license)` entries separated by "; "; a conceptual
+# adaptation that does not snapshot one revision names the repository without
+# a revision and appends its solution qualifier. Parsed by the command-label
+# contract test below and mirrored by COMMANDLESS_SKILLS in the package
+# registry for commandless skills.
 INSPIRED_BY_LABELS = {
     "tdd": "mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888 (MIT)",
     "debugging": (
@@ -66,6 +68,8 @@ INSPIRED_BY_LABELS = {
         "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT)"
     ),
     "verification": "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT)",
+    "code-review": "openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2",
+    "task-triage": "openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2",
 }
 FORBIDDEN_PORTABLE_MARKERS = (
     "../..",
@@ -354,13 +358,19 @@ class PortableSkillValidationTests(unittest.TestCase):
                     ],
                 )
                 extra = metadata[2:]
-                if name in INSPIRED_BY_LABELS:
+                if '  command: "false"' in extra:
+                    self.assertIn(name, INSPIRED_BY_LABELS, name)
                     self.assertEqual(
                         extra,
                         [
                             '  command: "false"',
                             f'  inspired-by: "{INSPIRED_BY_LABELS[name]}"',
                         ],
+                    )
+                elif name in INSPIRED_BY_LABELS:
+                    self.assertEqual(
+                        extra,
+                        [f'  inspired-by: "{INSPIRED_BY_LABELS[name]}"'],
                     )
                 else:
                     self.assertEqual(extra, [])
@@ -376,14 +386,18 @@ class PortableSkillValidationTests(unittest.TestCase):
         owners = set(re.findall(r'"([a-z0-9-]+)"', names_block.group(1)))
         commandless = set(re.findall(r'"([a-z0-9-]+)"', commandless_block.group(1)))
         authored = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.source.md")}
-        labeled = set()
+        labeled: set[str] = set()
+        inspired: set[str] = set()
         for path in sorted((ROOT / "skills").glob("*/SKILL.source.md")):
             lines = path.read_text(encoding="utf-8").splitlines()
             frontmatter = lines[1 : lines.index("---", 1)]
             if '  command: "false"' in frontmatter:
                 labeled.add(path.parent.name)
-        self.assertEqual(labeled, set(INSPIRED_BY_LABELS))
+            if any(line.startswith("  inspired-by: ") for line in frontmatter):
+                inspired.add(path.parent.name)
         self.assertEqual(commandless, labeled)
+        self.assertTrue(labeled <= inspired, "every commandless skill names its inspiration")
+        self.assertEqual(inspired, set(INSPIRED_BY_LABELS))
         self.assertFalse(labeled & owners)
         self.assertEqual(labeled | owners, authored)
         # The check_documentation command derivation unions SKILL_NAMES with

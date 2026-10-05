@@ -889,7 +889,8 @@ def exact_git_context(repo_root: str, evidence: dict[str, Any]) -> dict[str, Any
     merge_base = str(
         portable.git_read(root, "merge-base", refs["start_sha"], refs["head_sha"])
     ).strip()
-    if merge_base.lower() != refs["base_sha"].lower():
+    verified_merge_base = merge_base.lower() == refs["base_sha"].lower()
+    if not verified_merge_base:
         errors.append("local merge-base does not match evidence base_sha")
     raw_paths = portable.git_read(
         root,
@@ -938,11 +939,49 @@ def exact_git_context(repo_root: str, evidence: dict[str, Any]) -> dict[str, Any
         diff_digest = None
     else:
         diff_digest = hashlib.sha256(diff).hexdigest()
+    # The real merge-base delta size: measured locally from the verified merge
+    # base, never from the server's changed-file listing. Recorded only when
+    # the merge base itself is verified; otherwise the size would describe a
+    # different comparison.
+    delta: dict[str, Any] | None = None
+    if verified_merge_base:
+        numstat = portable.git_read(
+            root,
+            "diff",
+            "--numstat",
+            "--find-renames",
+            refs["base_sha"],
+            refs["head_sha"],
+            "--",
+            text=False,
+        )
+        if not isinstance(numstat, bytes):
+            raise portable.WorkflowError("local delta numstat is invalid")
+        files = insertions = deletions = binary_files = 0
+        for line in numstat.decode(errors="replace").splitlines():
+            counts = line.split("\t", 2)
+            if len(counts) < 3:
+                continue
+            files += 1
+            added, removed = counts[0], counts[1]
+            if added == "-" or removed == "-":
+                binary_files += 1
+                continue
+            insertions += int(added) if added.isdigit() else 0
+            deletions += int(removed) if removed.isdigit() else 0
+        delta = {
+            "merge_base": refs["base_sha"],
+            "files": files,
+            "insertions": insertions,
+            "deletions": deletions,
+            "binary_files": binary_files,
+        }
     return {
         "repo_root": str(root),
         "refs": refs,
         "changed_paths": changed_paths,
         "diff_sha256": diff_digest,
+        **({"delta": delta} if delta is not None else {}),
         "complete": not errors,
         "errors": errors,
     }
@@ -2993,6 +3032,17 @@ def review_markdown(
         f"- {presentation['target_label']}: {context['target'].get('url')}",
         f"- {presentation['role_label']}: {presentation['role_value']}",
         f"- {presentation['verdict_label']}: {presentation['verdict_value']}",
+        *(
+            [
+                (
+                    f"- {'Вердикт по слиянию' if locale == 'ru' else 'Merge verdict'}: "
+                    f"{MERGE_VERDICT_LABELS[str(content['merge_verdict'])]} — "
+                    f"{content['merge_verdict_rationale']}"
+                )
+            ]
+            if content.get("merge_verdict") is not None
+            else []
+        ),
         f"- code-review: {SKILL_VERSION} · contract: {REVIEW_CONTRACT_VERSION}",
         f"- {presentation['publication_warning']}",
         "",
@@ -4391,6 +4441,30 @@ def scaffold_review(
         )
         or ("Блокирующих находок нет." if content["locale"] == "ru" else "No blocking findings.")
     )
+    # The arbiter's verdict-ladder decision is optional: panel reviews carry it
+    # in the recorded arbitration receipt, fast reviews without a panel do not.
+    source_draft = cast("dict[str, Any] | None", (draft or {}).get("source"))
+    arbitration_receipt = (
+        cast("dict[str, Any] | None", source_draft.get("arbitration"))
+        if isinstance(source_draft, dict)
+        else None
+    )
+    merge_verdict = (
+        cast("str | None", arbitration_receipt.get("merge_verdict"))
+        if isinstance(arbitration_receipt, dict)
+        else None
+    )
+    merge_verdict_rationale = (
+        cast("str | None", arbitration_receipt.get("merge_verdict_rationale"))
+        if isinstance(arbitration_receipt, dict)
+        else None
+    )
+    if merge_verdict is not None:
+        content["summary"] = f"{content['summary']} " + (
+            f"Вердикт по слиянию: {MERGE_VERDICT_LABELS[merge_verdict]} — {merge_verdict_rationale}"
+            if content["locale"] == "ru"
+            else f"Merge verdict: {MERGE_VERDICT_LABELS[merge_verdict]} — {merge_verdict_rationale}"
+        )
     metadata = metadata_assessment(evidence, content["mr_metadata_assessment"])
     publication, enriched_publications, enriched_issues, enriched_threads = (
         structured_publication_preview(
@@ -4410,6 +4484,8 @@ def scaffold_review(
     render_content = {
         **content,
         "presentation": presentation,
+        "merge_verdict": merge_verdict,
+        "merge_verdict_rationale": merge_verdict_rationale,
         "label_review": label_review,
         "finding_publications": enriched_publications,
         "previous_finding_assessments": previous_assessments,
@@ -4448,6 +4524,14 @@ def scaffold_review(
         "locale": content["locale"],
         "incremental": incremental,
         "verdict": decision["verdict"],
+        **(
+            {
+                "merge_verdict": merge_verdict,
+                "merge_verdict_rationale": merge_verdict_rationale,
+            }
+            if merge_verdict is not None
+            else {}
+        ),
         "complete": evidence.get("retrieval_complete") is True and context.get("complete") is True,
         "summary": content["summary"],
         "architecture_assessment": content["architecture_assessment"],
@@ -5215,6 +5299,16 @@ def blocked_chat(locale: str, stage: str, reason: str, action: object) -> str:
     return "\n".join(lines)
 
 
+# The arbitration verdict ladder (openchamber solution 37): the arbiter must
+# select exactly one merge verdict; the labels are presentation-only.
+MERGE_VERDICT_LABELS = {
+    "decline": "DECLINE",
+    "push_back": "PUSH-BACK",
+    "merge_then_fix": "MERGE-THEN-FIX",
+    "merge": "MERGE",
+}
+
+
 def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -> str:
     assessment = validate_chat_assessment(plan.get("chat_assessment"))
     presentation = cast("dict[str, Any]", plan["presentation"])
@@ -5242,6 +5336,17 @@ def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -
             *review_semver.report_lines(plan, locale),
             f"- **{labels['metadata']}:** {metadata_values[metadata['status']]}",
             f"- **{labels['verdict']}:** {presentation['verdict_value']}",
+            *(
+                [
+                    (
+                        f"- **{labels['merge_verdict']}:** "
+                        f"{MERGE_VERDICT_LABELS[str(plan['merge_verdict'])]} — "
+                        f"{plan['merge_verdict_rationale']}"
+                    )
+                ]
+                if plan.get("merge_verdict") is not None
+                else []
+            ),
         ]
     )
     if not plan["findings"]:

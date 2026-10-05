@@ -8,6 +8,7 @@ license: MIT
 metadata:
   author: "Kirill Sevriugin"
   source: "https://kisev.github.io/skills"
+  inspired-by: "openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2"
 ---
 
 # task-triage

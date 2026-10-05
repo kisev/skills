@@ -78,7 +78,15 @@ remain unchanged. Metadata proposals apply independently of planning acceptance.
 Issue relationships use the issue-link API; MR relationships without a safe link
 API use contextual messages. Information requests are derived only from actual
 GitLab discussions by the authenticated user and advance strictly through a
-question, two pings, and one final message-then-close block. Replies
+question, two pings, and one final message-then-close block. A provably
+quiet-fixed issue takes the third closure path instead: the mandatory evidence
+chain anchors the symptom with `git log -L <file>:<line>`, re-runs the
+reproduction against the current trunk, searches the symptom in the repository
+log, CHANGELOG, and merge requests, and requires the fixing commit to be
+provably merged into the project's default branch through
+`git merge-base --is-ancestor`; `close_fixed` binds no prior notes, and when
+only the area was rebuilt the workflow publishes a separate "likely fixed"
+confirmation message instead of closing. Replies
 are reassessed before advancing, and an insufficient reply begins a new cycle.
 The runner generates direct `glab api` commands with inline JSON heredoc bodies,
 `#` explanations, and `&&` fail-fast blocks depending only on `glab`, `jq`, and
@@ -95,7 +103,12 @@ preconditions because the first execution changed the observed state.
 Equal-timestamp notes use numeric note-ID ordering; nonnumeric IDs
 retain their API order.
 Obsolete and duplicate issues receive one explanation-and-close block with
-`state_event=close`. A missing milestone is one block that finds or creates the
+`state_event=close`; an explicit `close_fixed` request replaces that bare close
+so the issue is never closed twice. Every close and every milestone block also
+carries the existing-MR guard: one read-only glab search over open merge
+requests referencing the issue stops the block before any write when a match
+exists, so an open merge request is proposed instead of closing or assigning a
+milestone. A missing milestone is one block that finds or creates the
 milestone, extracts its ID with `jq`, and attaches the task. The stale closure
 publishes the final message and closes the issue in one `&&` chain. A new
 relation is created only after a links GET proves the target absent; a
@@ -169,11 +182,17 @@ provide the replay protection, and the summary shall list every action without
 a command together with its reason, leaving none after a complete analysis.
 Information-request actions shall be derived
 from actual GitLab notes and advance without skipped stages through a question,
-two pings, and one final message-then-close block; any reply shall
+two pings, and one final message-then-close block; a provably quiet-fixed issue
+shall instead take `close_fixed` with the mandatory anchor, reproduction, and
+`merge-base --is-ancestor` evidence chain recorded in its body, and an
+unproven rebuilt area shall produce a "likely fixed" confirmation message
+instead of a closure; any reply shall
 be reassessed, and an insufficient reply shall start a new cycle. Every
 generated writing block shall stop before any write when the authenticated user
 differs from the snapshot, when the first block observes a changed
-`updated_at`, or when a later block's semantic precondition fails.
+`updated_at`, when a later block's semantic precondition fails, or — for every
+close and milestone block — when one read-only glab search finds an open merge
+request already referencing the issue.
 commands shall run under `python -I -S -B` before materialization while built
 archives remain self-contained. The stable summary shall separate analysis
 completeness from pending follow-up, group report links by planning decision,
@@ -186,7 +205,11 @@ complete analyzed value is plain text; values containing Markdown, code, HTML,
 URLs, any backslash, or reference-like syntax shall remain unchanged. Reference
 numbers followed by a word character shall remain plain, and conflicting
 `references.full` and `web_url` identities shall remain unresolved. Partial or stale evidence shall remain
-explicit and shall not be reported as complete. The workflow shall never execute
+explicit and shall not be reported as complete. The summary shall stay honest
+about its evidence: it shall state fetched versus expected collection counts
+with every collection error, quote ready actions verbatim, and give no priority
+weight to authority-free signals such as +1 comments, emoji reactions, or
+bot-set labels. The workflow shall never execute
 generated commands or mutate GitLab. Source-layout commands shall run under
 `python -I -S -B` before materialization while built archives remain
 self-contained.
@@ -195,8 +218,11 @@ self-contained.
 
 Triage tests cover collection completeness, retained item decisions, scoped
 release planning, stale evidence, direct-command guards, block coverage, and
-summary honesty. Final plans account for each selected issue and never publish
-automatically.
+summary honesty: the quietly-fixed closure publishes its evidence and closes in
+one block, refuses to abandon the agent's own unanswered question, requires a
+standalone reason, replaces the bare obsolete close, and the existing-MR guard
+search command precedes every close and milestone write. Final plans account
+for each selected issue and never publish automatically.
 
 ## Example
 

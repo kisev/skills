@@ -1277,7 +1277,20 @@
           "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }]
         },
         "complete": { "type": "boolean" },
-        "errors": { "type": "array", "items": { "type": "string" } }
+        "errors": { "type": "array", "items": { "type": "string" } },
+        "delta": { "$ref": "#/$defs/merge_base_delta" }
+      },
+      "additionalProperties": false
+    },
+    "merge_base_delta": {
+      "type": "object",
+      "required": ["merge_base", "files", "insertions", "deletions", "binary_files"],
+      "properties": {
+        "merge_base": { "$ref": "#/$defs/sha" },
+        "files": { "type": "integer", "minimum": 0 },
+        "insertions": { "type": "integer", "minimum": 0 },
+        "deletions": { "type": "integer", "minimum": 0 },
+        "binary_files": { "type": "integer", "minimum": 0 }
       },
       "additionalProperties": false
     },
@@ -2117,6 +2130,10 @@
                 "complete": { "type": "boolean" },
                 "summary": { "type": "string", "minLength": 1 },
                 "architecture_assessment": { "type": "string", "minLength": 1 },
+                "merge_verdict": {
+                  "enum": ["decline", "push_back", "merge_then_fix", "merge"]
+                },
+                "merge_verdict_rationale": { "type": "string", "minLength": 1 },
                 "semver_impact": {
                   "enum": ["major", "minor", "patch", "none", "not_applicable", "unknown"]
                 },

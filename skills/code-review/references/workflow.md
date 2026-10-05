@@ -102,7 +102,11 @@ and the arbitrator verdicts each complexity candidate without dropping a
 refuted one. Critics
 never see each other's output, never recollect GitLab, never rebuild the
 prepared file map, and may read related code inside the review worktree.
-Import each receipt verbatim with its exact `--participant` name; the runtime
+Every finding must trace its symptom to the changed lines: follow the failing
+path from the observed symptom through concrete code to the diff
+(symptom-path tracing), and a claim about unreachable or dead code requires
+proving unreachability by checking every caller from a real entrypoint
+(reachability from entrypoint). Import each receipt verbatim with its exact `--participant` name; the runtime
 binds the receipt identity to the participant and rejects a re-used identity.
 
 When the last critic receipt is imported, the response returns the ready
@@ -121,6 +125,33 @@ critic finding or contradiction without a verdict and never rewrites
 arbitrator text. In panel mode `record-input` accepts only `run_id`,
 `session_id`, and `low_risk` from you: every other semantic decision belongs
 to the arbitration receipt.
+
+### Verdict ladder
+
+The arbitration receipt must select exactly one merge verdict — `decline`,
+`push_back`, `merge_then_fix`, or `merge` — in the required `merge_verdict`
+field with an evidence-based `merge_verdict_rationale`; the runtime rejects a
+receipt without it and renders the verdict in the runbook, summary, and chat.
+The tie-breaker is whose knowledge survives the remainder: when the missing
+knowledge lives with the author — product intent or domain facts only they
+hold — choose `push_back`; when it lives with this review — the fix is local
+and the evidence is in the exact snapshots — choose `merge_then_fix`. An
+unresolved product question may carry a conditional verdict recorded in the
+rationale, for example "PUSH-BACK if the feature is needed, DECLINE if not".
+A `decline` still salvages the ache: the MR closes, but the pain it attempted
+to solve is recorded as a recommended issue so the problem outlives the
+rejected change.
+
+### Findings discipline
+
+The arbitrator filters; the critics never see the filter. A critic finding
+enters the runbook findings and the action list only when it moves the merge
+verdict or the readiness verdict, or joins the action list as a validated fix,
+a thread decision, or a recommended issue. Every other candidate stays in the
+ledger as a refuted or duplicate entry with its concrete reason — a
+disagreement never hides a finding, but it also never dilutes the action list.
+Each critic reports every finding it can support, without ranking it against
+the arbiter's gate.
 
 The recording response returns the recorded package
 path and digest, the question context versions, the exact evidence/context/
@@ -176,7 +207,10 @@ fresh arbitration receipt. Otherwise choose `fast`, `normal`, or `deep`; `fast`
 is only for a small confirmed low-risk change and runs without a panel, while
 `normal`, `deep`, and `incremental` require the recorded panel. Fast mode keeps
 the full `references/architecture-checklist.md` decision groups and the
-`references/simplification-criteria.md` complexity rules without critics. The arbitrator
+`references/simplification-criteria.md` complexity rules without critics. Size
+the change by the real merge-base delta in the context's `exact_git.delta` —
+the local `files`/`insertions`/`deletions` measured from the verified merge
+base — never by commit count or the server's changed-file listing. The arbitrator
 must return a verdict for every critic finding and every merged finding; you
 never disposition a critic finding yourself in panel mode.
 

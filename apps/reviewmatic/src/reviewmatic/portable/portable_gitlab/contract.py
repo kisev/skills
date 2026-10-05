@@ -1037,6 +1037,7 @@ def code_review_chat_labels(locale: str) -> dict[str, Any]:
             "semver": "SemVer",
             "metadata": "Оформление MR",
             "verdict": "Итог",
+            "merge_verdict": "Вердикт по слиянию",
             "checkout": "Checkout ревью",
             "plan": "План публикации",
             "findings": "Замечания",
@@ -1073,6 +1074,7 @@ def code_review_chat_labels(locale: str) -> dict[str, Any]:
         "semver": "SemVer",
         "metadata": "MR metadata",
         "verdict": "Verdict",
+        "merge_verdict": "Merge verdict",
         "checkout": "Review checkout",
         "plan": "Publication plan",
         "findings": "Findings",
@@ -2419,7 +2421,18 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not all(is_plain_int(item) and cast("int", item) >= 0 for item in counts.values())
             or not isinstance(exact_git, dict)
             or set(exact_git)
-            != {"repo_root", "refs", "changed_paths", "diff_sha256", "complete", "errors"}
+            not in (
+                {"repo_root", "refs", "changed_paths", "diff_sha256", "complete", "errors"},
+                {
+                    "repo_root",
+                    "refs",
+                    "changed_paths",
+                    "diff_sha256",
+                    "complete",
+                    "errors",
+                    "delta",
+                },
+            )
             or not nonempty_string(exact_git["repo_root"])
             or not isinstance(exact_git["refs"], dict)
             or not isinstance(exact_git["changed_paths"], list)
@@ -2428,6 +2441,26 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not isinstance(exact_git["complete"], bool)
             or not isinstance(exact_git["errors"], list)
             or not all(isinstance(item, str) for item in exact_git["errors"])
+            or (
+                "delta" in exact_git
+                and (
+                    not isinstance(exact_git["delta"], dict)
+                    or set(exact_git["delta"])
+                    != {
+                        "merge_base",
+                        "files",
+                        "insertions",
+                        "deletions",
+                        "binary_files",
+                    }
+                    or not is_sha(exact_git["delta"]["merge_base"])
+                    or not all(
+                        is_plain_int(exact_git["delta"][key])
+                        and cast("int", exact_git["delta"][key]) >= 0
+                        for key in ("files", "insertions", "deletions", "binary_files")
+                    )
+                )
+            )
         ):
             raise WorkflowError("review context payload is schema-invalid")
     elif kind == "release_inventory":
@@ -2668,7 +2701,13 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         structured_required = current_required | {"label_review"}
         final_required = structured_required | {"chat_assessment", "locale"}
         release_required = final_required | {"semver_assessment"}
-        actual_keys = set(payload) - {"review_source"}
+        # The arbiter's verdict-ladder decision travels as an optional matched
+        # pair on panel plans; older plans simply omit both fields.
+        optional_verdict_keys = {"merge_verdict", "merge_verdict_rationale"}
+        verdict_pair_present = optional_verdict_keys & set(payload)
+        if verdict_pair_present and verdict_pair_present != optional_verdict_keys:
+            raise WorkflowError("review plan merge verdict requires both fields")
+        actual_keys = set(payload) - {"review_source", *optional_verdict_keys}
         if actual_keys not in (
             minimal_required,
             legacy_required,
@@ -2689,6 +2728,12 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             release_required,
         )
         from . import review_semver as _review_semver
+
+        if "merge_verdict" in payload and (
+            payload["merge_verdict"] not in {"decline", "push_back", "merge_then_fix", "merge"}
+            or not nonempty_string(payload.get("merge_verdict_rationale"))
+        ):
+            raise WorkflowError("review plan merge verdict is invalid")
 
         if release_plan != (payload.get("review_contract_version") in (6, 7)) or (
             release_plan

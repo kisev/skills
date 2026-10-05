@@ -124,6 +124,34 @@ def validator(path: str) -> Validator:
                 "existing_task": None,
             },
         ),
+        (
+            "merge_base_delta",
+            {
+                "merge_base": "b" * 40,
+                "files": 3,
+                "insertions": 21,
+                "deletions": 4,
+                "binary_files": 0,
+            },
+        ),
+        (
+            "exact_git",
+            {
+                "repo_root": "/tmp/repository",
+                "refs": {"base_sha": "b" * 40, "start_sha": "c" * 40, "head_sha": "d" * 40},
+                "changed_paths": ["src/retry.py"],
+                "diff_sha256": DIGEST,
+                "complete": True,
+                "errors": [],
+                "delta": {
+                    "merge_base": "b" * 40,
+                    "files": 3,
+                    "insertions": 21,
+                    "deletions": 4,
+                    "binary_files": 0,
+                },
+            },
+        ),
     ],
 )
 def test_review_extensions_have_concrete_valid_instances(

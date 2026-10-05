@@ -261,6 +261,11 @@ def _arbitration_body(
         "session_id": "arb-session",
         "arbitrator": {"name": "arb-main", "provider": "zai", "model": "glm-x"},
         "external_mutations": False,
+        "merge_verdict": "merge_then_fix",
+        "merge_verdict_rationale": (
+            "The idempotency-key knowledge lives in this review: the fix is local and "
+            "the rest of the change is sound."
+        ),
         "findings": findings,
         "dispositions": dispositions,
         "ci_job_assessments": draft["ci_job_assessments"],
@@ -482,6 +487,24 @@ def test_panel_review_runs_selection_critics_arbitration_and_local_finalization(
         for issue in blocked["errors"]
     )
 
+    refused = _arbitration_body(_read_draft(draft_path), versions)
+    del refused["merge_verdict"]
+    refused_result = draft_module.record_draft_arbitration(
+        draft_path,
+        _write_input(fixture, refused, "refused-verdict.json"),
+    )
+    assert refused_result["status"] == "invalid"
+    assert any(issue["path"] == "$.merge_verdict" for issue in refused_result["errors"])
+
+    unknown_verdict = _arbitration_body(_read_draft(draft_path), versions)
+    unknown_verdict["merge_verdict"] = "ship_it"
+    unknown_result = draft_module.record_draft_arbitration(
+        draft_path,
+        _write_input(fixture, unknown_verdict, "unknown-verdict.json"),
+    )
+    assert unknown_result["status"] == "invalid"
+    assert any(issue["path"] == "$.merge_verdict" for issue in unknown_result["errors"])
+
     imported = draft_module.record_draft_arbitration(
         draft_path,
         _write_input(
@@ -524,6 +547,11 @@ def test_panel_review_runs_selection_critics_arbitration_and_local_finalization(
         critic.get("receipt") for critic in plan["review_source"]["participants"]["critics"]
     ), "participant receipt bindings survive into the plan"
     assert plan["review_source"]["arbitration"]["session_id"] == "arb-session"
+    assert plan["merge_verdict"] == "merge_then_fix"
+    assert plan["merge_verdict_rationale"].startswith("The idempotency-key knowledge")
+    assert "**Merge verdict:** MERGE-THEN-FIX" in finished["chat"]
+    assert "- Merge verdict: MERGE-THEN-FIX" in book
+    assert "Merge verdict: MERGE-THEN-FIX" in plan["summary"]
 
     # The head guard stops a publication block before any write when the MR
     # moved after the review.

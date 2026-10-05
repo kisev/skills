@@ -1743,7 +1743,9 @@ def test_stale_closure_has_separate_message_and_close_commands(
     closure_blocks = [block for block in shell_blocks(report) if '"state_event":"close"' in block]
     assert len(closure_blocks) == 1
     block = closure_blocks[0]
-    assert block.count("glab api --hostname") == 5
+    assert block.count("glab api --hostname") == 6
+    assert "merge_requests?state=opened&search=%237" in block
+    assert block.index("merge_requests?state=opened") < block.index("--method POST")
     assert "--method POST" in block
     assert "projects/19/issues/7/discussions/discussion-1/notes" in block
     assert (
@@ -1753,6 +1755,181 @@ def test_stale_closure_has_separate_message_and_close_commands(
     assert "<<'TRIAGE_JSON_" in block
     assert '.state == "opened"' in block
     assert '| sha256sum)" && [ "${note_digest%% *}"' in block
+
+
+def _close_fixed_analysis(
+    result: dict[str, Any], discussion_id: str | None, standalone_reason: str | None
+) -> dict[str, Any]:
+    value = analysis_for(result)
+    value["items"][0]["information_requests"] = [
+        {
+            "action": "close_fixed",
+            "target": {"kind": "issue", "project_id": 19, "iid": 7, "discussion_id": discussion_id},
+            "body": (
+                "Закрываю как тихо исправленную: симптом воспроизведён на 1.2 и не "
+                "воспроизводится на текущем стволе; якорь retry.py:42, фикс в коммите "
+                "abc1234, влит в default branch (merge-base --is-ancestor)."
+            ),
+            "prior_note_ids": [],
+            "rationale": (
+                "git log -L нашёл коммит, репро не воспроизводится, коммит доказуемо влит."
+            ),
+            "standalone_reason": standalone_reason,
+        }
+    ]
+    return value
+
+
+def test_quietly_fixed_closure_publishes_evidence_and_closes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+
+    def response(_host: str, endpoint: str) -> Any:
+        if endpoint.startswith("projects/19/issues/7/discussions?"):
+            return [
+                {
+                    "id": "discussion-1",
+                    "notes": [
+                        {
+                            "id": 201,
+                            "created_at": "2026-08-01T00:00:00Z",
+                            "author": {"id": 7, "username": "reporter"},
+                            "body": "Still broken in 1.2.",
+                        }
+                    ],
+                }
+            ]
+        return gitlab_response(endpoint)
+
+    monkeypatch.setattr(triage, "glab_json", response)
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    analysis_path = tmp_path / "close-fixed.json"
+    analysis_path.write_text(
+        json.dumps(_close_fixed_analysis(result, "discussion-1", None)), encoding="utf-8"
+    )
+    published = triage.publish(
+        argparse.Namespace(
+            collection=str(Path(result["artifact_root"]) / "current.json"),
+            analysis=str(analysis_path),
+        )
+    )
+    assert published["status"] == "ok"
+    report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
+    assert "### Publish quietly-fixed closure message" in report
+    closure_blocks = [block for block in shell_blocks(report) if '"state_event":"close"' in block]
+    assert len(closure_blocks) == 1
+    block = closure_blocks[0]
+    assert "merge_requests?state=opened&search=%237" in block
+    assert block.index("merge_requests?state=opened") < block.index("--method POST")
+    assert '{"body":"Закрываю как тихо исправленную: симптом воспроизведён на 1.2 и не ' in block
+    assert block.index("--method POST") < block.index('"state_event":"close"')
+    assert '.state == "opened"' in block
+    assert '| sha256sum)" && [ "${note_digest%% *}"' in block
+
+
+def test_quietly_fixed_closure_requires_standalone_reason_without_a_discussion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(triage, "glab_json", lambda _host, endpoint: gitlab_response(endpoint))
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    analysis_path = tmp_path / "close-fixed.json"
+    analysis_path.write_text(
+        json.dumps(_close_fixed_analysis(result, None, None)), encoding="utf-8"
+    )
+    with pytest.raises(triage.WorkflowError, match="standalone_reason"):
+        triage.publish(
+            argparse.Namespace(
+                collection=str(Path(result["artifact_root"]) / "current.json"),
+                analysis=str(analysis_path),
+            )
+        )
+
+
+def test_quietly_fixed_closure_rejects_own_unanswered_question(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+
+    def response(_host: str, endpoint: str) -> Any:
+        if endpoint.startswith("projects/19/issues/7/discussions?"):
+            return [
+                {
+                    "id": "discussion-1",
+                    "notes": [
+                        {
+                            "id": 301,
+                            "created_at": "2026-08-01T00:00:00Z",
+                            "author": {"id": 5, "username": "reviewer"},
+                            "body": "Which version reproduces this?",
+                        }
+                    ],
+                }
+            ]
+        return gitlab_response(endpoint)
+
+    monkeypatch.setattr(triage, "glab_json", response)
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    analysis_path = tmp_path / "close-fixed.json"
+    analysis_path.write_text(
+        json.dumps(_close_fixed_analysis(result, "discussion-1", None)), encoding="utf-8"
+    )
+    with pytest.raises(triage.WorkflowError, match="unanswered"):
+        triage.publish(
+            argparse.Namespace(
+                collection=str(Path(result["artifact_root"]) / "current.json"),
+                analysis=str(analysis_path),
+            )
+        )
+
+
+def test_quietly_fixed_closure_replaces_the_bare_obsolete_close(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(triage, "glab_json", lambda _host, endpoint: gitlab_response(endpoint))
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    value = _close_fixed_analysis(result, None, "No discussion carries the fix evidence yet.")
+    item = value["items"][0]
+    item["actuality"] = {
+        "status": "obsolete",
+        "rationale": "The reported symptom is fixed on the default branch.",
+        "confidence": "high",
+    }
+    item["release_plan"] = {
+        **item["release_plan"],
+        "decision": {
+            "status": "obsolete",
+            "rationale": "The fix is provably merged; no work remains.",
+            "confidence": "high",
+        },
+        "milestone": {
+            "status": "remove",
+            "candidate": None,
+            "rationale": "Obsolete work must not keep a milestone.",
+            "confidence": "high",
+        },
+    }
+    value["top_five"] = []
+    value["parallel_groups"] = []
+    analysis_path = tmp_path / "close-fixed.json"
+    analysis_path.write_text(json.dumps(value), encoding="utf-8")
+    published = triage.publish(
+        argparse.Namespace(
+            collection=str(Path(result["artifact_root"]) / "current.json"),
+            analysis=str(analysis_path),
+        )
+    )
+    assert published["status"] == "ok"
+    report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
+    closure_blocks = [block for block in shell_blocks(report) if '"state_event":"close"' in block]
+    assert len(closure_blocks) == 1, "the bare close must not duplicate the close_fixed block"
+    assert "merge_requests?state=opened&search=%237" in closure_blocks[0]
+    # The milestone removal block carries the same existing-MR guard.
+    milestone_blocks = [block for block in shell_blocks(report) if '"milestone_id":0}' in block]
+    assert len(milestone_blocks) == 1
+    assert "merge_requests?state=opened&search=%237" in milestone_blocks[0]
 
 
 def test_discussion_notes_break_equal_timestamp_ties_numerically() -> None:
@@ -2155,6 +2332,8 @@ case "$args" in
     jq -c '[.[] | select(.state == "active")]' "$state/milestones.json" ;;
   *issues/7/links\\?*)
     jq -c '[.[] | select(.link_type)]' "$state/links.json" ;;
+  *"merge_requests?state=opened"*)
+    printf '%s' '[]' ;;
   *"projects/19/issues/7"*)
     jq -c . "$state/issue.json" ;;
   *)

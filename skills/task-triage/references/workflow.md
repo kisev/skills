@@ -51,8 +51,9 @@ Every issue assessment must contain:
   confidence, alternatives, and the evidence that would change it, plus optional
   `proposed_changes` for title, description, labels, issue links, and role-authored
   issue or MR messages;
-- `information_requests` for questions, follow-up pings, and stale closure, each
-  bound to observed GitLab notes from the authenticated user.
+- `information_requests` for questions, follow-up pings, stale closure, and
+  provably quiet-fixed closure, each bound to observed GitLab notes from the
+  authenticated user.
 
 SemVer describes the externally observable release impact if the task is
 implemented, not task urgency. Apply the release-aware method from `code-review`:
@@ -81,6 +82,23 @@ the package analysis complete while marking follow-up pending until
 recollection observes the assignment. Use `remove` when a non-accepted task
 currently has a milestone. Never assign a milestone to non-accepted work.
 
+## Quietly fixed: the third closure path
+
+Before starting a ping cycle, check whether the issue was already fixed
+quietly. The evidence chain is mandatory and ordered: anchor the symptom with
+`git log -L <file>:<line>`, re-run the reproduction against the current
+trunk, and search the symptom in the repository log, CHANGELOG, and open or
+merged merge requests. Close through the `close_fixed` action only when the
+fixing commit is provably merged into the project's default branch —
+`git merge-base --is-ancestor <fix-commit> <default-branch>`; a feature
+branch, a fork, or an unmerged tag is never sufficient. The request body names
+the anchor, the fixing commit, and the reproduction result. `close_fixed`
+binds no prior notes, targets an open issue, and its block publishes the
+evidence message and closes the issue in one guarded `&&` chain. When the
+area was rebuilt but the exact fix cannot be proven, do not close: publish the
+separate "likely fixed" message template instead — name the rebuilt area and
+the candidate commit, ask the author to confirm, and leave the issue open.
+
 ## Collection analysis
 
 Recompute collection-level relationships whenever membership or project context
@@ -88,7 +106,9 @@ changes, even when every deep issue analysis is reusable. Identify thematic
 clusters, true duplicate candidates, dependency edges, and independent parallel
 groups. Select at most five first tasks from observed severity/priority labels,
 impact, urgency, risk, cost of delay, dependency unblocking, and confidence.
-Explain every ordering; SemVer alone never determines priority.
+Authority-free signals — +1 comments, emoji reactions, labels set by bots — carry
+no priority weight; explain every ordering with authoritative evidence, and
+SemVer alone never determines priority.
 `top_five[]` contains exactly `evidence_digest` and `rationale`;
 `parallel_groups[]` contains exactly a non-empty `evidence_digests` list and
 `rationale`. Digests are unique within each structure, bind collected items, and
@@ -126,9 +146,18 @@ gap between runs. Rough waiting guidance is 5 days before the first ping, 14 day
 before the second, and 30 days before closure, but context and run cadence take
 precedence over exact timing. Any substantive reply must be assessed before the
 next action. A sufficient answer ends the cycle; an insufficient answer starts a
-new question and a fresh two-ping cycle. Closure is one guarded block that
-publishes the final message and then closes the issue in the same `&&` chain.
-Never close an MR through this workflow.
+new question and a fresh two-ping cycle. A provably quiet-fixed issue takes the
+`close_fixed` path above instead of the ping sequence. Closure is one guarded
+block that publishes the final message and then closes the issue in the same
+`&&` chain. Never close an MR through this workflow.
+
+Before any closure and before any milestone change, run the existing-MR-first
+check: the runner's close and milestone blocks therefore carry one read-only
+glab search over open merge requests referencing the issue
+(`projects/<project_id>/merge_requests?state=opened&search=%23<iid>`). When an
+open merge request already references the issue, the guard stops the block
+before any write: assess that merge request and propose it as the vehicle for
+the fix instead of closing the issue or assigning a milestone.
 
 ## Stable artifacts
 
@@ -200,8 +229,9 @@ Each `proposed_changes.messages[]` contains exactly `target` and `body`. Each
 `prior_note_ids`, `rationale`, and `standalone_reason`. A target contains `kind` (`issue` or
 `merge_request`), observed numeric `project_id` and `iid`, and an observed
 `discussion_id` or `null` for a new standalone note. Actions are `none`, `new`,
-`ping_1`, `ping_2`, or `close`; they bind respectively zero, zero, one, two, or
-three current-user note IDs, except `none`, which has no publication data. All
+`ping_1`, `ping_2`, `close`, or `close_fixed`; they bind respectively zero, zero,
+one, two, three, or zero current-user note IDs, except `none`, which has no
+publication data. All
 bound notes must form the latest uninterrupted cycle and match the authenticated
 user's stable numeric ID; any intervening or later non-system note requires fresh
 assessment. Emit at most one lifecycle action for the same target and discussion
@@ -213,9 +243,10 @@ context; all other actions have `standalone_reason=null`.
 It may follow the latest non-system reply from another participant in an existing
 discussion and cannot reset an unanswered current-user question. Answer an
 already-addressed question before introducing a new one. All follow-ups target
-the observed discussion. `close` is valid only for an issue; its block publishes the final message and
-closes the issue in one guarded `&&` chain. Guards enforce freshness, identity,
-and replay checks at manual execution time: a repeated block stops on its own
+the observed discussion. `close` and `close_fixed` are valid only for an issue;
+their blocks publish the final message and close the issue in one guarded
+`&&` chain. Guards enforce freshness, identity, and replay checks at manual
+execution time: a repeated block stops on its own
 preconditions. Treat any guard stop as unresolved and never retry
 automatically. Read
 `references/publication-protocol.md` only when explaining or diagnosing the
@@ -236,7 +267,13 @@ The summary separates analysis completeness from follow-up state. Analysis is
 complete when collection evidence is complete and no user question remains;
 non-ready planning and prepared information requests are explicit pending
 follow-up, not incomplete analysis. State the counts and affected issues for every
-incomplete or pending reason.
+incomplete or pending reason. The summary stays honest about its evidence: state
+fetched versus expected counts — the real number of collected issues against the
+requested collection, naming every collection error — quote every ready action
+verbatim from its report, never paraphrased, and let no authority-free signal
+(+1 comments, emoji reactions, bot-set labels) influence priority; only observed
+severity and priority labels from authoritative participants move the ordering,
+and each ordering rationale names them.
 
 Group detailed reports by `accepted`, `deferred`, `rejected`, `duplicate`, and
 `obsolete`. Every row contains a Markdown-linked issue number and title, the

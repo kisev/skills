@@ -376,6 +376,8 @@ _ARBITRATION_RECEIPT = {
         "run_id",
         "session_id",
         "external_mutations",
+        "merge_verdict",
+        "merge_verdict_rationale",
         "findings",
         "dispositions",
         "ci_job_assessments",
@@ -391,6 +393,12 @@ _ARBITRATION_RECEIPT = {
         "session_id": _TEXT,
         "external_mutations": {"const": False},
         "arbitrator": _PARTICIPANT_BASE,
+        # The verdict ladder (openchamber solution 37): the arbitrator must
+        # select exactly one merge verdict and defend it with evidence.
+        "merge_verdict": {
+            "enum": ["decline", "push_back", "merge_then_fix", "merge"],
+        },
+        "merge_verdict_rationale": _TEXT,
         "findings": {"type": "array", "items": _FINDING},
         "dispositions": {"type": "array", "items": _DISPOSITION},
         "ci_job_assessments": {"type": "array"},
@@ -1058,7 +1066,12 @@ def _panel_critic_tasks(
                 "answer copying that question's context_digest. Critics run in parallel, never "
                 "see each other's output, never recollect GitLab or the prepared file map, and "
                 "may read related code in the review worktree. Import verbatim with the exact "
-                "--participant name."
+                "--participant name. Every finding must trace its symptom to the changed lines: "
+                "follow the failing path from the observed symptom through concrete code to the "
+                "diff (symptom-path tracing), and for any claim about unreachable or dead code "
+                "prove unreachability by checking every caller from a real entrypoint "
+                "(reachability from entrypoint). Report every finding you can support; the "
+                "arbitrator, not you, decides what reaches the runbook."
             ),
         }
         for critic in critics
@@ -1076,6 +1089,8 @@ def _arbitration_receipt_template(draft: dict[str, Any]) -> dict[str, Any]:
         "session_id": "",
         "external_mutations": False,
         **({"arbitrator": arbitrator} if isinstance(arbitrator, dict) else {}),
+        "merge_verdict": "",
+        "merge_verdict_rationale": "",
         "findings": [],
         "dispositions": [],
         "ci_job_assessments": copy.deepcopy(
@@ -1145,7 +1160,17 @@ def _sync_arbitration_input(
                     "finding, targeted evidence checks for contradictions and not_verified "
                     "answers, and the consolidated semantic decisions. Duplicates merge without "
                     "losing authors or opinion differences; a disagreement alone never hides a "
-                    "finding."
+                    "finding. The receipt must also select exactly one merge_verdict — decline, "
+                    "push_back, merge_then_fix, or merge — with an evidence-based rationale: "
+                    "when the missing knowledge lives with the author, choose push_back; when it "
+                    "lives with this review, choose merge_then_fix; for an unresolved product "
+                    "question record the conditional verdict in the rationale (for example, "
+                    "push_back if the feature is needed, decline if not). A decline keeps the "
+                    "salvaged pain: name the follow-up issue that preserves the problem the "
+                    "MR attempted to solve. Findings discipline: a finding enters the runbook "
+                    "findings and action list only when it moves the merge verdict or readiness "
+                    "or joins the action list; everything else stays a refuted or duplicate "
+                    "ledger entry with its reason."
                 ),
             },
         },

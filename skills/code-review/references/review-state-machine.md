@@ -118,7 +118,11 @@ and binds each receipt to its participant through the exact `record-critic --par
 context package and snapshots are ready; join their results before validation.
 Each critic performs one complete independent review: findings plus answers to
 its assigned questions, from the same package and snapshots, without seeing
-other critics' output, recollecting GitLab, or rebuilding the file map.
+other critics' output, recollecting GitLab, or rebuilding the file map. Every
+finding traces its symptom to the changed lines through concrete code
+(symptom-path tracing), and an unreachable or dead-code claim requires
+proving unreachability from a real entrypoint (reachability from
+entrypoint).
 
 If no specialist profiles are installed, launch an ordinary independent native
 subagent of the current agent; no profile-selection question is needed.
@@ -161,7 +165,15 @@ with a concrete reason grounded in targeted evidence checks, resolves every
 contradiction and `not_verified` answer, merges duplicates without losing
 authors or opinion differences, and records the consolidated decisions in one
 `code-review/arbitration/v1` receipt imported verbatim with
-`record-arbitration`. It must not start a new defect search from scratch;
+`record-arbitration`. The receipt must select exactly one `merge_verdict` —
+`decline`, `push_back`, `merge_then_fix`, or `merge` — with an evidence-based
+rationale (the ladder and its tie-breaker are defined in
+`references/workflow.md`), and a `decline` still salvages the attempted pain
+into a recommended issue. Findings discipline belongs to the arbitrator: only
+a finding that moves the merge verdict or readiness, or joins the action
+list, reaches the runbook findings; every other candidate stays a refuted or
+duplicate ledger entry with its reason, and the critics never see this
+filter. It must not start a new defect search from scratch;
 majority agreement or a model's name never replaces a reason. The runtime
 rejects a receipt that leaves any candidate finding, merged finding, or
 contradiction without a verdict, and never rewrites arbitrator text. Answers

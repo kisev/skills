@@ -54,7 +54,7 @@ MAX_PAGES = 100
 MAX_ITEMS = 500
 ACTUALITY = {"current", "implemented", "obsolete", "duplicate", "unknown"}
 VERDICTS = {"ready", "needs_clarification", "blocked"}
-INFORMATION_ACTIONS = {"none", "new", "ping_1", "ping_2", "close"}
+INFORMATION_ACTIONS = {"none", "new", "ping_1", "ping_2", "close", "close_fixed"}
 CONFIDENCE = {"low", "medium", "high"}
 DECISIONS = ("accepted", "deferred", "rejected", "duplicate", "obsolete")
 ANALYSIS_INDEX_SCHEMA = "task-triage/analysis-index/v4"
@@ -137,9 +137,12 @@ TEXT = {
         "action_information_ping_1": "Publish first follow-up",
         "action_information_ping_2": "Publish second follow-up",
         "action_information_close": "Publish stale closure message",
+        "action_information_close_fixed": "Publish quietly-fixed closure message",
         "action_close": "Close issue",
         "guard_user": "Verify the authenticated user still matches the triage snapshot",
         "guard_user_stop": "authenticated GitLab user changed; regenerate the triage plan",
+        "guard_open_mr": "Verify no open merge request already references this issue",
+        "guard_open_mr_stop": "an open merge request references this issue; assess it and propose it instead of closing the issue or assigning a milestone",
         "guard_fresh": "Verify the target is unchanged since triage",
         "guard_fresh_stop": "the target changed after triage; refresh the analysis and regenerate the plan",
         "guard_open": "Verify the target is still open",
@@ -238,9 +241,12 @@ TEXT = {
         "action_information_ping_1": "Опубликовать первый пинг",
         "action_information_ping_2": "Опубликовать второй пинг",
         "action_information_close": "Опубликовать финальное сообщение",
+        "action_information_close_fixed": "Опубликовать закрытие «тихо исправлено»",
         "action_close": "Закрыть задачу",
         "guard_user": "Проверить, что аутентифицированный пользователь совпадает со снимком триажа",  # noqa: RUF001
         "guard_user_stop": "пользователь GitLab изменился; перегенерируйте план триажа",
+        "guard_open_mr": "Проверить, что открытый MR ещё не ссылается на эту задачу",
+        "guard_open_mr_stop": "существует открытый MR, ссылающийся на задачу; разберите его вместо закрытия задачи или назначения майлстоуна",  # noqa: RUF001
         "guard_fresh": "Проверить, что цель не изменилась после триажа",
         "guard_fresh_stop": "цель изменилась после триажа; обновите анализ и перегенерируйте план",
         "guard_open": "Проверить, что цель всё ещё открыта",
@@ -929,11 +935,11 @@ def validate_information_request(
             raise WorkflowError(f"{label} target issue is not open")
     body = text(value["body"], f"{label} body")
     prior_note_ids = value["prior_note_ids"]
-    required = {"new": 0, "ping_1": 1, "ping_2": 2, "close": 3}[action]
-    if action != "new" and target["discussion_id"] is None:
+    required = {"new": 0, "ping_1": 1, "ping_2": 2, "close": 3, "close_fixed": 0}[action]
+    if action not in {"new", "close_fixed"} and target["discussion_id"] is None:
         raise WorkflowError(f"{label} follow-up must target the observed discussion")
     standalone_reason = value["standalone_reason"]
-    if action == "new" and target["discussion_id"] is None:
+    if action in {"new", "close_fixed"} and target["discussion_id"] is None:
         standalone_reason = text(standalone_reason, f"{label} standalone_reason")
     elif standalone_reason is not None:
         raise WorkflowError(f"{label} standalone_reason is valid only for a standalone new action")
@@ -944,7 +950,7 @@ def validate_information_request(
         or len(set(prior_note_ids)) != len(prior_note_ids)
     ):
         raise WorkflowError(f"{label} does not follow the information-request sequence")
-    if action == "close" and target["kind"] != "issue":
+    if action in {"close", "close_fixed"} and target["kind"] != "issue":
         raise WorkflowError(f"{label} may close only an issue")
     notes = discussion_notes(discussions, target["discussion_id"])
     if action == "new" and target["discussion_id"] is not None:
@@ -953,6 +959,16 @@ def validate_information_request(
         if not isinstance(author, dict) or author.get("id") == current_user["id"]:
             raise WorkflowError(
                 f"{label} new cycle in an existing discussion requires a latest participant reply"
+            )
+    if action == "close_fixed" and target["discussion_id"] is not None:
+        # Closing a quietly fixed issue must not silently abandon the agent's
+        # own unanswered question in the targeted discussion.
+        latest = next((note for note in reversed(notes) if note.get("system") is not True), None)
+        author = latest.get("author") if isinstance(latest, dict) else None
+        if isinstance(author, dict) and author.get("id") == current_user["id"]:
+            raise WorkflowError(
+                f"{label} may not close an issue whose latest note is the current user's "
+                "unanswered request; assess the reply first"
             )
     positions = {note.get("id"): index for index, note in enumerate(notes)}
     if any(note_id not in positions for note_id in prior_note_ids) or any(
@@ -1824,6 +1840,22 @@ def absent_link_guard(
     return "\n".join([f"# {TEXT[locale]['guard_links']}", check])
 
 
+def open_mr_guard(host: str, project_id: int, iid: int, locale: str) -> str:
+    """Stop the block when an open merge request already references the issue.
+
+    One glab search over open merge requests by the issue reference; a match,
+    a non-list answer, or a failed read stops the block before any write.
+    """
+    search = urllib.parse.quote(f"#{int(iid)}", safe="")
+    endpoint = f"projects/{int(project_id)}/merge_requests?state=opened&search={search}"
+    check = (
+        f"(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}"
+        " | jq -e 'type == \"array\" and length == 0' >/dev/null"
+        f" || {guard_stop('guard_open_mr_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_open_mr']}", check])
+
+
 def inline_write(
     host: str,
     method: str,
@@ -1946,7 +1978,10 @@ def commands_for(
                 "kind": "milestone",
                 "fresh_target": target,
                 "fresh_endpoint": issue_endpoint,
-                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
+                "semantic": [
+                    open_mr_guard(host, target["project_id"], target["iid"], locale),
+                    milestone_guard(host, issue_endpoint, expected_milestone, locale),
+                ],
                 "segments": [
                     (
                         TEXT[locale]["action_milestone"],
@@ -1967,7 +2002,10 @@ def commands_for(
                 "kind": "milestone",
                 "fresh_target": target,
                 "fresh_endpoint": issue_endpoint,
-                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
+                "semantic": [
+                    open_mr_guard(host, target["project_id"], target["iid"], locale),
+                    milestone_guard(host, issue_endpoint, expected_milestone, locale),
+                ],
                 "segments": [
                     (
                         TEXT[locale]["action_milestone"],
@@ -2023,7 +2061,10 @@ def commands_for(
                 "kind": "create_milestone",
                 "fresh_target": target,
                 "fresh_endpoint": issue_endpoint,
-                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
+                "semantic": [
+                    open_mr_guard(host, target["project_id"], target["iid"], locale),
+                    milestone_guard(host, issue_endpoint, expected_milestone, locale),
+                ],
                 "segments": [("", create_block)],
                 "preview": json.dumps(
                     {"create": {"title": title}, "attach": {"milestone_id": "$milestone_id"}},
@@ -2164,7 +2205,7 @@ def commands_for(
                 ),
             )
         ]
-        if request["action"] == "close":
+        if request["action"] in {"close", "close_fixed"}:
             segments.append(
                 (
                     TEXT[locale]["action_close"],
@@ -2180,42 +2221,61 @@ def commands_for(
             preview = f"{request['body']}\n\n{json.dumps({'state_event': 'close'}, indent=2)}"
         else:
             preview = request["body"]
+        semantic = notes_preconditions(request_target, discussions)
+        if request["action"] in {"close", "close_fixed"}:
+            semantic.insert(
+                0, open_mr_guard(host, request_target["project_id"], request_target["iid"], locale)
+            )
         actions.append(
             {
                 "kind": f"information_{request['action']}",
                 "fresh_target": request_target,
                 "fresh_endpoint": base,
-                "semantic": notes_preconditions(request_target, discussions),
+                "semantic": semantic,
                 "segments": segments,
                 "preview": preview,
             }
         )
 
     if item["actuality"]["status"] in {"obsolete", "duplicate"} and issue.get("state") == "opened":
-        actions.append(
-            {
-                "kind": "close",
-                "fresh_target": target,
-                "fresh_endpoint": issue_endpoint,
-                "semantic": [open_guard(host, issue_endpoint, locale)],
-                "segments": [
-                    (
-                        (
-                            f"{TEXT[locale]['action_close']}: "
-                            f"{oneline(item['actuality']['rationale'])}"
-                        ),
-                        inline_write(
-                            host,
-                            "PUT",
-                            issue_endpoint,
-                            inline_json({"state_event": "close"}),
-                            chain=False,
-                        ),
-                    )
-                ],
-                "preview": json.dumps({"state_event": "close"}, indent=2),
-            }
+        # An explicit information-request closure (stale or quietly fixed)
+        # already publishes an explanation and closes the issue; the bare
+        # close must not duplicate it.
+        requested = any(
+            request["action"] in {"close", "close_fixed"}
+            and request["target"]["kind"] == "issue"
+            and request["target"]["project_id"] == target["project_id"]
+            and request["target"]["iid"] == target["iid"]
+            for request in item["information_requests"]
         )
+        if not requested:
+            actions.append(
+                {
+                    "kind": "close",
+                    "fresh_target": target,
+                    "fresh_endpoint": issue_endpoint,
+                    "semantic": [
+                        open_mr_guard(host, target["project_id"], target["iid"], locale),
+                        open_guard(host, issue_endpoint, locale),
+                    ],
+                    "segments": [
+                        (
+                            (
+                                f"{TEXT[locale]['action_close']}: "
+                                f"{oneline(item['actuality']['rationale'])}"
+                            ),
+                            inline_write(
+                                host,
+                                "PUT",
+                                issue_endpoint,
+                                inline_json({"state_event": "close"}),
+                                chain=False,
+                            ),
+                        )
+                    ],
+                    "preview": json.dumps({"state_event": "close"}, indent=2),
+                }
+            )
 
     result: list[dict[str, Any]] = []
     fresh_pending = True

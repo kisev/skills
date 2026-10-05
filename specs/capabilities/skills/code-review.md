@@ -89,7 +89,11 @@ under any name, including fork remotes — points at the MR's source or target
 project; otherwise it shall stop and request the correct checkout without cloning.
 The MR's base/start/head and target revisions shall be fixed from the evidence;
 missing objects shall be fetched through Git and verified against those SHAs, and
-the current target tip shall never replace the MR diff base. Unavailable objects,
+the current target tip shall never replace the MR diff base. The local merge
+base shall be verified against the evidence base SHA, and the real merge-base
+delta size — local file, insertion, deletion, and binary-file counts measured
+from that verified merge base — shall be recorded in the review context so mode
+and size decisions use it instead of server counts. Unavailable objects,
 mismatched revisions, or incomplete evidence shall block preparation, and no
 per-file GitLab content request shall fetch reviewed code. The worktree shall be a
 detached checkout at the exact head whose identity binds the local repository,
@@ -205,7 +209,16 @@ or refutes every critic finding with a concrete reason, resolves every
 contradiction and `not_verified` answer through targeted evidence checks,
 merges duplicates without losing authors or opinion differences, and records
 the consolidated decisions in one `code-review/arbitration/v1` receipt
-imported verbatim with `record-arbitration`. The runtime shall reject a
+imported verbatim with `record-arbitration`. The receipt shall select exactly
+one merge verdict — `decline`, `push_back`, `merge_then_fix`, or `merge` —
+with an evidence-based rationale; the runtime shall reject a receipt without
+that verdict and render it in the plan, runbook, summary, and chat. Findings
+discipline belongs to the arbitrator: only a finding that moves the merge
+verdict or the readiness verdict, or joins the action list, enters the runbook
+findings; every other candidate stays a ledger entry with its reason, and the
+critics never see this filter. Every critic finding shall trace its symptom to
+the changed lines, and an unreachable-code claim requires proving
+unreachability from a real entrypoint. The runtime shall reject a
 receipt that leaves any candidate finding, merged finding, or contradiction
 without a verdict, shall never rewrite arbitrator text, and in panel mode
 shall restrict `record-input` to the orchestrator's identity fields. The host
@@ -364,7 +377,8 @@ while the recorded panel selection stays fixed.
 Uncertain meaning requires decision repair. Missing checks stop repair without
 automatically broadening review. Publication history does not gate local repair.
 
-The runbook starts with a derived verdict and reason, technical/process blockers,
+The runbook starts with a derived verdict and reason, the arbiter's merge
+verdict with its rationale, technical/process blockers,
 architecture and SemVer. Findings show severity and merge impact, other discussions
 show check results. Its summary derives from the same effective findings and verdict.
 A panel runbook adds a review-panel section naming each critic and the arbitrator
@@ -456,7 +470,11 @@ atomic rollback, cumulative findings, targeted repair, refresh without lost
 findings, original receipt preservation, CI-only refresh, grouped suggestions,
 Markdown fences, field diagnostics, manual head-guard failure modes, direct
 writes without extra GETs or publication state, errors and repetition, and review
-worktree preparation:
+worktree preparation: the arbitration receipt requires exactly one merge verdict
+from the decline/push-back/merge-then-fix/merge ladder and the plan, runbook,
+summary, and chat render it; a receipt without the verdict or with an unknown
+value is rejected; and the exact-git context measures the real merge-base delta
+locally and omits it when the merge base is unverified.
 fork sources under arbitrary remote names, unrelated or missing repositories,
 dirty source and occupied or foreign worktrees, new heads with active and
 finalized reviews, same branch names in different projects, concurrent runs,

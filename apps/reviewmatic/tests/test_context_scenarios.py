@@ -866,3 +866,52 @@ def test_exact_git_context_still_flags_paths_the_server_did_not_report(tmp_path:
     )
     assert exact["complete"] is False
     assert "local changed paths do not match GitLab evidence" in exact["errors"]
+
+
+def test_exact_git_context_measures_the_real_merge_base_delta(tmp_path: Path) -> None:
+    repo, base = _exact_repo(tmp_path, "delta")
+    (repo / "review.txt").write_text("one\ntwo\nthree\nedited\nfour\nfive\n")
+    (repo / "extra.bin").write_bytes(b"\x00\x01\x02\x03")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qam", "edit plus a binary file")
+    head = _git(repo, "rev-parse", "HEAD")
+    exact = review_context.exact_git_context(
+        str(repo),
+        _exact_evidence(
+            base,
+            head,
+            [
+                {"old_path": "review.txt", "new_path": "review.txt"},
+                {"old_path": "extra.bin", "new_path": "extra.bin"},
+            ],
+        ),
+    )
+    assert exact["complete"] is True, exact["errors"]
+    delta = exact["delta"]
+    assert delta["merge_base"] == base
+    assert delta["files"] == 2
+    assert delta["insertions"] == 2
+    assert delta["deletions"] == 0
+    assert delta["binary_files"] == 1
+
+
+def test_exact_git_context_omits_delta_when_the_merge_base_differs(tmp_path: Path) -> None:
+    repo, _base = _exact_repo(tmp_path, "unverified-base")
+    _git(repo, "checkout", "-q", "-b", "side")
+    (repo / "side.txt").write_text("divergent\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "side commit")
+    side_head = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "checkout", "-q", "main")
+    (repo / "review.txt").write_text("one\ntwo\nthree\nchanged\n")
+    _git(repo, "commit", "-qam", "main commit")
+    main_head = _git(repo, "rev-parse", "HEAD")
+    exact = review_context.exact_git_context(
+        str(repo),
+        _exact_evidence(
+            main_head, main_head, [{"old_path": "review.txt", "new_path": "review.txt"}]
+        )
+        | {"start_sha": side_head},
+    )
+    assert "local merge-base does not match evidence base_sha" in exact["errors"]
+    assert "delta" not in exact
