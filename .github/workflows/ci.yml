@@ -80,6 +80,8 @@ jobs:
             task: distribution:check
           - name: OpenCode package
             task: package:check
+          - name: Consumer smoke
+            task: package:consumer-smoke
           - name: Reviewmatic Python package
             task: reviewmatic-py:check
           - name: Shopmatic application

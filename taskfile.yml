@@ -568,6 +568,7 @@ tasks:
       - task: check:core
       - task: test:python
       - task: package:check
+      - task: package:consumer-smoke
       - task: reviewmatic-py:check
       - task: shopmatic:check
 
@@ -663,6 +664,12 @@ tasks:
     dir: .
     cmds:
       - mise exec -- npm ci
+
+  package:consumer-smoke:
+    desc: Install the packed workspace tarballs into a throwaway consumer and typecheck them
+    deps: [package:build]
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_consumer_smoke.py
 
   package:audit:
     internal: true

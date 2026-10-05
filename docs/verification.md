@@ -146,6 +146,33 @@ Marketplace selectors decay with storefront redesigns; a failing adapter
 answers an explicit error, and the spike stop conditions in the ADR govern
 whether support is paused, not bypassed.
 
+## Consumer Smoke
+
+The npm gates verify that the packages build and pack, but only a real consumer
+proves that a published tarball installs and typechecks. The consumer smoke
+gate derives the publishable set programmatically from the root `package.json`
+workspaces with `private != true`, packs it after `package:build`, and installs
+the fresh tarballs into one throwaway consumer project: the dependency-free
+foundation package first, then every dependent in a single install, so they
+typecheck against the tested copy instead of a healthy registry duplicate. The
+generated `consumer.ts` imports every declared typed entry of each package and
+must pass strict `tsc --noEmit` with `nodenext` resolution; a generated module
+import also proves each package loads under Node. npm does not install optional
+peer dependencies, so `@opencode/plugin` and `@types/node` are installed
+explicitly at their pinned versions, following the registry smoke precedent.
+The npm cache persists under `.build/`, so a warm run takes seconds; the first
+run pays the registry download cost.
+
+```shell
+task package:consumer-smoke
+```
+
+A broken tarball fails the gate even while the same version stays healthy in
+the public registry, which is the "broken package shipped" class that only a
+live consumer catches. The gate layer is registered in `gate-registry.json`,
+so the CI matrix and the scoped pre-push job run it when the npm surface
+changes.
+
 ## Deterministic Coverage
 
 The secret gate scans Git history plus the current tracked and non-ignored new

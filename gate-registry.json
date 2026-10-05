@@ -74,6 +74,20 @@
       ]
     },
     {
+      "name": "consumer-smoke",
+      "title": "Consumer smoke",
+      "task": "package:consumer-smoke",
+      "core": false,
+      "paths": [
+        "packages/**",
+        "apps/**",
+        "shared/**",
+        "scripts/**",
+        "package.json",
+        "package-lock.json"
+      ]
+    },
+    {
       "name": "locales",
       "title": "Locales",
       "task": "locale:check",
