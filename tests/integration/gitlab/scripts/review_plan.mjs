@@ -29,7 +29,7 @@ if (input.require_pagination) {
 }
 const draft = input.started
   ? readJson(result.draft_path)
-  : completeDraft(readJson(result.draft_path), result);
+  : await completeDraft(readJson(result.draft_path), result);
 draft.run_id = input.run;
 draft.session_id = "deterministic-harness-" + input.run;
 draft.critics[0].run_id = "deterministic-fixture-critic";
