@@ -8,6 +8,21 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+## \[12.0.1] - 2026-10-05
+
+### Fixed
+
+- The stable publication of `12.0.0` failed its registry verification:
+  `safe-fs`, `memomatic`, and `taskmatic` changed content during the `12.0.0`
+  cycle (the `memomatic` and `taskmatic` applications moved under `apps/`)
+  while keeping version `1.0.0`, and the stable publish gate compares every
+  already-published registry version against the exact release build.
+  `12.0.1` synchronizes all four npm packages and the `reviewmatic`
+  application version on the release version, so every tarball publishes as a
+  new version and the npm peer ranges resolve. The published `12.0.0`
+  `agentomatic` tarball and the Pages deployment stay valid; `12.0.1`
+  supersedes them.
+
 ## \[12.0.0] - 2026-10-05
 
 ### Added

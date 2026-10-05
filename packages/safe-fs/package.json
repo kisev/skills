@@ -1,6 +1,6 @@
 {
   "name": "@kisev/safe-fs",
-  "version": "1.0.0",
+  "version": "12.0.1",
   "description": "Safe filesystem primitives: private atomic writes and symlink-free path traversal.",
   "homepage": "https://github.com/kisev/skills#readme",
   "bugs": {

@@ -306,7 +306,7 @@ wheels = [
 
 [[package]]
 name = "reviewmatic"
-version = "12.0.0"
+version = "12.0.1"
 source = { editable = "." }
 
 [package.dev-dependencies]
