@@ -39,6 +39,51 @@ def test_security_policy_has_separate_english_and_russian_versions() -> None:
     assert "[English](SECURITY.md)" in russian
 
 
+def _missed_defect_registry(text: str, heading: str) -> str:
+    assert heading in text, "missed-defect registry section was removed"
+    start = text.index(heading)
+    end = text.find("\n## ", start + 1)
+    return text[start : end if end >= 0 else len(text)]
+
+
+def test_missed_defect_registry_exists_in_both_locales_and_lists_all_classes() -> None:
+    english = _missed_defect_registry(
+        (ROOT / "docs/verification.md").read_text(encoding="utf-8"),
+        "## Missed-defect Registry",
+    )
+    russian = _missed_defect_registry(
+        (ROOT / "docs/ru/verification.md").read_text(encoding="utf-8"),
+        "## Реестр пропущенных дефектов",
+    )
+
+    commits = ("b5cf464", "184327d", "204714f")
+    for commit in commits:
+        assert commit in english, commit
+        assert commit in russian, commit
+    for path in (
+        "tests/test_application_workflows.py",
+        "packages/agentomatic/test/command-cli.test.mjs",
+        "apps/reviewmatic/test/context-package.test.mjs",
+        "apps/reviewmatic/test/local-review.test.mjs",
+    ):
+        assert path in english, path
+        assert path in russian, path
+    for guard in ("streamed_glab_trace", "modelSelection", "sharedContextInputs"):
+        assert guard in english, guard
+        assert guard in russian, guard
+    for locale, covered, deferred, postpone in (
+        (english, "covered", "deferred", "PORT-2"),
+        (russian, "покрыт", "отложен", "PORT-2"),
+    ):
+        assert covered in locale
+        assert deferred in locale
+        assert postpone in locale
+        assert "prove-by-removing" in locale
+    for invariant in ("questionContextDigest", "questionContextVersion", "isCurrentResult"):
+        assert invariant in english, invariant
+        assert invariant in russian, invariant
+
+
 def test_project_spec_russian_templates_match_all_default_templates() -> None:
     templates = ROOT / "skills/spec-manage/templates"
     default_templates = [path for path in templates.rglob("*.md") if "/ru/" not in path.as_posix()]

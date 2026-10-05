@@ -1554,6 +1554,46 @@ print(json.dumps(value))
         self.assertFalse(trace["complete"])
         self.assertTrue(trace["truncated"])
 
+    def test_collect_pipeline_jobs_marks_trace_limit_overflow_truncated_without_fatal_error(
+        self,
+    ) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_trace_budget"
+        )
+        failed: list[object] = [
+            {"id": job, "name": f"job-{job}", "stage": "verify", "status": "failed"}
+            for job in range(1, module.MAX_CI_TRACES + 2)
+        ]
+
+        def paginated(_hostname: str, endpoint: str, **_kwargs: object) -> dict[str, object]:
+            items: list[object] = failed if endpoint.endswith("/jobs") else []
+            return {"items": items, "complete": True, "errors": [], "truncated": False}
+
+        with (
+            patch.object(module, "paginated", side_effect=paginated),
+            patch.object(module, "glab_text", return_value=("tail", False)),
+        ):
+            evidence = module.collect_pipeline_jobs("gitlab.example", 19, {"id": 41})
+
+        pipeline = evidence["pipelines"][0]
+        self.assertTrue(pipeline["complete"])
+        self.assertEqual(pipeline["errors"], [])
+        self.assertFalse(evidence["complete"])
+        self.assertTrue(evidence["truncated"])
+        self.assertEqual(
+            pipeline["jobs"][0]["trace"],
+            {
+                "complete": False,
+                "truncated": True,
+                "excerpt": "tail",
+                "sha256": hashlib.sha256(b"tail").hexdigest(),
+            },
+        )
+        self.assertEqual(
+            pipeline["jobs"][-1]["trace"],
+            {"complete": False, "truncated": True, "excerpt": "", "sha256": None},
+        )
+
     @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
     def test_gitlab_trace_streaming_preserves_other_separator_in_body(self) -> None:
         module = load_module(
@@ -1588,6 +1628,31 @@ print(json.dumps(value))
 
         self.assertEqual(module.split_glab_trace_response(stdout), (headers, body))
         self.assertFalse(tail_dropped)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process streaming test")
+    def test_gitlab_trace_streaming_keeps_the_last_bounded_tail_bytes(self) -> None:
+        module = load_module(
+            ROOT / "shared/references/portable_gitlab/contract.py", "canonical_gitlab_trace_tail"
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            executable = directory / "glab"
+            executable.write_text(
+                "#!/usr/bin/env python3\n"
+                "import sys\n"
+                "sys.stdout.buffer.write(\n"
+                "    b'HTTP/1.1 200 OK\\r\\n\\r\\nstale head\\n' + b'x' * 65540 + b'latest failure\\n'\n"
+                ")\n",
+                encoding="utf-8",
+            )
+            executable.chmod(0o755)
+            with patch.object(module.shutil, "which", return_value=str(executable)):
+                text, complete = module.glab_text("gitlab.example", "projects/19/jobs/7/trace")
+
+        self.assertFalse(complete)
+        self.assertEqual(len(text.encode()), module.MAX_TRACE_BYTES)
+        self.assertTrue(text.endswith("latest failure\n"))
+        self.assertFalse(text.startswith("stale"))
 
     @unittest.skipUnless(os.name == "posix", "POSIX process group test")
     def test_stop_process_group_kills_descendant_after_leader_exits(self) -> None:

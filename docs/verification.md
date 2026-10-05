@@ -219,6 +219,141 @@ Compatibility checks exercise OpenCode `2.0.19` inside
 server permission evaluation, and the memomatic V2 HTTP and read-only database
 contract.
 
+## Missed-defect Registry
+
+The testing audit found three defect classes that reached `dev` past every
+gate. Each fix landed with tests, but nothing proved those tests fail on the
+pre-fix behavior, and the decisions not to model some conditions stayed
+implicit. This registry makes both explicit: every class records the symptom,
+why the gates missed it, the guard that now owns it, the covering tests, and
+the proof status. Prove-by-removing means that in a disposable copy of the
+checkout the guard part of the fix was removed, the focused test failed with
+the expected pre-fix cause, the guard was restored, and the test passed again.
+
+### GitLab instances that ignore Range requests, fix `b5cf464` — covered
+
+Symptom: a failed CI job whose trace exceeded the 64 KiB streaming cap raised
+a fatal collection error and blocked the whole review at the prepared stage on
+instances that answer `Range` requests with the full trace.
+
+Why the gates missed it: environment divergence. Offline fixtures and mocked
+`glab` responses modeled only instances that honor `Range`; the full-trace
+response of range-ignoring instances exists only on real installs, which no
+offline gate talks to.
+
+Guard: `streamed_glab_trace` keeps the last bounded tail and marks the stream
+as tail-dropped; `parse_glab_trace` and `glab_text` propagate it as
+`complete=false`; `collect_pipeline_jobs` records the truncated tail as
+per-job trace evidence while metadata, depth, and trace-count protection stay
+fatal.
+
+Covering tests in `tests/test_application_workflows.py`:
+
+- `test_gitlab_trace_streaming_enforces_limit_and_cleans_up_timeout` — an
+  oversized response yields a bounded `complete=false` excerpt through
+  `glab_text` instead of a fatal error;
+- `test_gitlab_trace_streaming_keeps_the_last_bounded_tail_bytes` — the kept
+  excerpt is the last bounded tail, not the head;
+- `test_gitlab_trace_completeness_requires_confirmed_full_range` — the
+  tail-dropped flag propagates to `complete=false` and a truncated tail stays
+  non-fatal evidence in `collect_pipeline_jobs`;
+- `test_collect_pipeline_jobs_marks_trace_limit_overflow_truncated_without_fatal_error`
+  — the trace-count limit marks evidence truncated without a fatal pipeline
+  error;
+- `test_gitlab_trace_streaming_preserves_other_separator_in_body` and
+  `test_gitlab_trace_streaming_accepts_exact_header_body_and_crlf_limits` —
+  healthy responses are not marked truncated.
+
+Proof on 2026-10-05: removing the tail-retention branch failed
+`test_gitlab_trace_streaming_enforces_limit_and_cleans_up_timeout` and
+`test_gitlab_trace_streaming_keeps_the_last_bounded_tail_bytes` with
+`WorkflowError: GitLab job trace exceeds the response size limit`; restoring
+the branch turned both tests green. Restoring the fatal trace-limit error
+failed
+`test_collect_pipeline_jobs_marks_trace_limit_overflow_truncated_without_fatal_error`
+on the pipeline completeness assertion; removing it again turned the test
+green.
+
+### Unavailable model catalog in the wizard, fix `184327d` — covered
+
+Symptom: `install` aborted agent model setup with a fatal
+`catalog_unavailable` error whenever the OpenCode V2 model catalog could not
+be read, instead of accepting an explicitly typed provider/model.
+
+Why the gates missed it: unmodelable unavailability. TTY wizard tests drove
+only the healthy-catalog path backed by a working OpenCode runtime, and no
+offline harness simulated a failing runtime until the fix introduced a fake
+`opencode` executable that exits non-zero.
+
+Guard: `modelSelection` catches `catalog_unavailable`, warns on stderr, and
+prompts for an explicit model and an optional variant instead of failing.
+
+Covering tests in `packages/agentomatic/test/command-cli.test.mjs`:
+
+- `TTY install falls back to an explicit model entry when the catalog is unavailable` —
+  with a failing `opencode` executable the wizard completes and applies the
+  explicitly typed model;
+- `TTY install stages a critic model from the catalog and applies it with one confirmation` —
+  the healthy catalog path keeps its catalog pick flow.
+
+Proof on 2026-10-05: rethrowing `catalog_unavailable` from `modelSelection`
+aborted the wizard with `Error [catalog_unavailable]` before the
+explicit-model prompt and failed the fallback test; restoring the catch turned
+the test green.
+
+### `prior_decisions` outside the context version, fix `204714f` — deferred to PORT-2
+
+Symptom: a significant agreed-decision change kept the question context
+version, so a late answer collected under the withdrawn exception could still
+finalize the review as ready; documented recovery also removed fresh results
+of other critics that only shared the superseded question ID.
+
+Why the gates missed it: undocumented layer. The meaningful-context inputs
+were enumerated only in the digest function body; `prior_decisions` was absent
+from that list and from the guide, READMEs, and spec, so no contract test
+looked at decision churn.
+
+Guard: `sharedContextInputs` feeds `prior_decisions` into both
+`questionContextDigest` and `questionContextVersion`; retirement filters every
+collected answer and verification by its own context binding
+(`isCurrentResult`) instead of the question ID and moves only stale entries to
+history.
+
+Covering tests shipped with the fix:
+`apps/reviewmatic/test/context-package.test.mjs` proves that a significant
+prior-decision change supersedes answers for the same question and that
+mixed-version recovery keeps fresh results while retiring only the stale
+entry; `apps/reviewmatic/test/local-review.test.mjs` proves the same pair for
+the local review flow.
+
+Status: deferred. These files are being ported by PORT-2, so new tests here
+would collide with that port; the obligation to prove the covering tests
+red-capable moves to PORT-2. The invariants PORT-2 must keep covered:
+
+- `prior_decisions` participates in `questionContextDigest` and
+  `questionContextVersion`;
+- an agreed-decision change invalidates late answers bound to the earlier
+  version, so they cannot finalize the review as ready;
+- retirement keeps fresh results of other critics, moves only stale entries to
+  history with authorship and original bindings, keeps the question ID list as
+  diagnostics, and stays idempotent under repeated recovery.
+
+### Not modeled offline
+
+Two aspects stay unmodeled offline on purpose, with the risk owned by the
+repository owner:
+
+- the exact wire behavior of range-ignoring GitLab versions (header and
+  chunking variety) is modeled only synthetically; live behavior belongs to
+  the manual GitLab integration stand, not to a gate;
+- the real OpenCode V2 catalog and terminal rendering inside the wizard are
+  modeled by a fake executable and a forced TTY, so real runtime and terminal
+  diversity stay outside the gates.
+
+Weakening the covering tests to pass on unmodeled behavior is not allowed;
+new knowledge about these aspects lands as new guards with their own
+prove-by-removing evidence.
+
 ## Live Evaluation and Clean Checkout
 
 Live evaluation is not part of `task check`. It requires explicit trusted-live
