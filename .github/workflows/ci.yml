@@ -84,6 +84,8 @@ jobs:
             task: package:consumer-smoke
           - name: Reviewmatic Python application
             task: reviewmatic:check
+          - name: Reviewmatic install smoke
+            task: reviewmatic:install-smoke
           - name: Shopmatic application
             task: shopmatic:check
           # @gates:end

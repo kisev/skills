@@ -108,7 +108,9 @@ task reviewmatic:install-smoke
 assertions. The application gate runs pytest, mypy, the lock check, and builds
 the wheel and source distribution. The separate install smoke exercises a
 local Git ref and both built distributions outside the checkout, without Node,
-`PYTHONPATH`, or an installed `reviewmatic` tool.
+`PYTHONPATH`, or an installed `reviewmatic` tool. The smoke is a scoped gate
+layer: CI and the pre-push hook run it when the delta touches
+`apps/reviewmatic/**`, and `task check` includes it.
 
 ## shopmatic
 

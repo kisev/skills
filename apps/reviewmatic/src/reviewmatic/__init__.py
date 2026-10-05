@@ -1,4 +1,4 @@
-"""Reviewmatic Python port: stage 1 ships the CLI surface and the contract core."""
+"""Reviewmatic runtime: GitLab and local-WIP review workflows with private artifacts, a portable contract core, and manual runbooks."""
 
 from __future__ import annotations
 

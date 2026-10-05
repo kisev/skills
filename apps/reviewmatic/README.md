@@ -66,3 +66,15 @@ verdict, and transition output against those frozen expectations; it does not
 regenerate fixtures from Python or skip assertions. See
 [`docs/reviewmatic-test-matrix.md`](../../docs/reviewmatic-test-matrix.md) for
 the source test baseline and port mapping.
+
+## validateV2Artifact strictness
+
+The Python validator `validate_v2_artifact` is the strictness reference for the
+port. Timestamp validation is canonical and strict: the extended ISO-8601
+format with calendar, time-range, and offset checks (`_iso_format_is_valid`).
+This is an intentional fix relative to Python history: timestamps used to go
+through `datetime.fromisoformat`, which also accepts compact basic formats
+(`20261005T000000`); TypeScript rejected that input, and Python now rejects it
+too. The divergence was bounded to exactly this class; the committed golden
+fixtures lock the validator verdicts, so any drift from the TypeScript
+strictness fails the parity tests.

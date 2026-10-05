@@ -139,6 +139,13 @@
       ]
     },
     {
+      "name": "reviewmatic-install",
+      "title": "Reviewmatic install smoke",
+      "task": "reviewmatic:install-smoke",
+      "core": false,
+      "paths": ["apps/reviewmatic/**"]
+    },
+    {
       "name": "shopmatic",
       "title": "Shopmatic application",
       "task": "shopmatic:check",

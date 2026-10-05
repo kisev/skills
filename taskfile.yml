@@ -569,6 +569,7 @@ tasks:
       - task: package:check
       - task: package:consumer-smoke
       - task: reviewmatic:check
+      - task: reviewmatic:install-smoke
       - task: shopmatic:check
 
   pre-push:

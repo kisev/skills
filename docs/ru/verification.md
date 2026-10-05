@@ -112,7 +112,9 @@ task reviewmatic:install-smoke
 golden-утверждения. Гейт приложения запускает pytest, mypy, проверку lock-файла
 и сборку wheel/source distribution. Отдельная install-smoke проверяет локальный
 Git-ref и оба собранных дистрибутива вне checkout без Node, `PYTHONPATH` и
-установленного инструмента `reviewmatic`.
+установленного инструмента `reviewmatic`. Smoke входит в области гейтов как
+отдельный слой: CI и pre-push исполняют его при изменениях в
+`apps/reviewmatic/**`, полный `task check` тоже включает его.
 
 ## shopmatic
 
