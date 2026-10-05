@@ -7,7 +7,9 @@ import argparse
 import hashlib
 import json
 import shutil
+import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -22,6 +24,11 @@ STATIC_FILES = (
 )
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_DISTRIBUTION_BYTES = 256 * 1024 * 1024
+# One transient Pages 503 must not fail a publication; bounded retries keep
+# the gate (exhausted attempts still fail) while riding out short outages.
+FETCH_ATTEMPTS = 3
+FETCH_RETRY_PAUSE_SECONDS = 2.0
+TRANSIENT_HTTP_STATUSES = frozenset({429, 500, 502, 503, 504})
 
 
 SITE_RESERVED_NAMES = frozenset(
@@ -50,6 +57,28 @@ def fetch(base_url: str, relative: str) -> bytes:
     request = urllib.request.Request(  # noqa: S310
         url, headers={"User-Agent": "kisev-skills-pages-compose"}
     )
+    last: Exception = ComposeError("distribution fetch made no attempts")
+    for attempt in range(1, FETCH_ATTEMPTS + 1):
+        try:
+            return _fetch_attempt(request, parsed, relative)
+        except urllib.error.HTTPError as error:
+            last = error
+            if error.code not in TRANSIENT_HTTP_STATUSES or attempt == FETCH_ATTEMPTS:
+                raise
+            reason = f"HTTP {error.code}"
+        except urllib.error.URLError as error:
+            last = error
+            if attempt == FETCH_ATTEMPTS:
+                raise
+            reason = str(error.reason or error)
+        print(f"fetch {relative} attempt {attempt} failed ({reason}); retrying", file=sys.stderr)
+        time.sleep(FETCH_RETRY_PAUSE_SECONDS * attempt)
+    raise last
+
+
+def _fetch_attempt(
+    request: urllib.request.Request, parsed: urllib.parse.SplitResult, relative: str
+) -> bytes:
     with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
         final = urllib.parse.urlsplit(response.geturl())
         base_path = parsed.path.rstrip("/") + "/"

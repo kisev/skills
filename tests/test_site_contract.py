@@ -11,6 +11,8 @@ import yaml
 if TYPE_CHECKING:
     from types import ModuleType
 
+    import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 SITE = ROOT / "apps" / "docs-site"
@@ -73,6 +75,74 @@ def test_pilot_skills_have_examples_in_both_locales() -> None:
         examples = load_examples(locale)
         for skill in PILOT_SKILLS:
             assert skill in examples, f"missing {locale} example for {skill}"
+
+
+def test_fetch_retries_transient_pages_errors_and_keeps_permanent_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = load_module(ROOT / "scripts" / "compose_pages_site.py", "compose_pages_site_retry")
+    monkeypatch.setattr(module, "FETCH_RETRY_PAUSE_SECONDS", 0)
+    attempts: list[str] = []
+
+    class FakeResponse:
+        status = 200
+
+        def __enter__(self) -> FakeResponse:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def geturl(self) -> str:
+            return "https://pages.example/distribution/index.json"
+
+        def read(self, limit: int) -> bytes:
+            return b"{}"
+
+    def urlopen(request: Any, timeout: int) -> Any:
+        attempts.append(request.full_url)
+        count = len(attempts)
+        if count == 1:
+            raise module.urllib.error.HTTPError(
+                request.full_url, 503, "Service Unavailable", {}, None
+            )
+        if count == 2:
+            raise module.urllib.error.URLError(TimeoutError("connection timed out"))
+        return FakeResponse()
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", urlopen)
+    assert module.fetch("https://pages.example/distribution", "index.json") == b"{}"
+    assert len(attempts) == 3
+
+    attempts.clear()
+
+    def unavailable(request: Any, timeout: int) -> Any:
+        attempts.append(request.full_url)
+        raise module.urllib.error.HTTPError(request.full_url, 503, "Service Unavailable", {}, None)
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", unavailable)
+    try:
+        module.fetch("https://pages.example/distribution", "index.json")
+    except module.urllib.error.HTTPError as error:
+        assert error.code == 503
+    else:
+        raise AssertionError("an exhausted transient outage must fail the fetch")
+    assert len(attempts) == module.FETCH_ATTEMPTS
+
+    attempts.clear()
+
+    def forbidden(request: Any, timeout: int) -> Any:
+        attempts.append(request.full_url)
+        raise module.urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, None)
+
+    monkeypatch.setattr(module.urllib.request, "urlopen", forbidden)
+    try:
+        module.fetch("https://pages.example/distribution", "index.json")
+    except module.urllib.error.HTTPError as error:
+        assert error.code == 403
+    else:
+        raise AssertionError("a permanent client error must fail without retries")
+    assert len(attempts) == 1
 
 
 def test_compose_merges_site_and_rejects_reserved_collisions(tmp_path: Path) -> None:
