@@ -58,16 +58,16 @@ source, tests, schemas, configuration, CI, and deployment. If multiple modes
 remain possible, it asks one bounded question and performs no write; read-only
 intent cannot enter a writing lifecycle.
 
-Code-review preparation runs in the external `reviewmatic` application, which
-collects exact evidence/context and exposes one editable draft plus exact-commit
-inspection snapshots. Host-native subagents provide independent receipts,
-optionally through selected specialist profiles. Local draft validation shares
-the plan validators without writing publication artifacts. Finalization refreshes
+Code-review runs in the Python `apps/reviewmatic` application, invoked from an
+explicit stable or development Git ref through `uvx`. It collects exact
+evidence/context and exposes one editable draft plus exact-commit inspection
+snapshots. Host-native subagents provide independent receipts, optionally
+through selected specialist profiles. Local draft validation shares the plan
+validators without writing publication artifacts. Finalization refreshes
 complete evidence/context once and atomically publishes the plan state, avoiding
 an immutable decision before content validation. Legacy v2 artifacts and
 low-level commands remain readable. Finalization renders `runbook.md` with
-direct copy-ready `glab` commands and the interactive `reviewmatic plan` viewer
-owns the same operations behind explicit user actions; neither the runner nor
-the skill archive ever publishes, and local patches remain a separate manual
-operation. The manual publication contract is owned by
+direct copy-ready `glab` commands; neither the runner nor the skill archive
+publishes, and local patches remain a separate manual operation. The manual
+publication contract is owned by
 [the code-review requirement](../../capabilities/skills/code-review.md).

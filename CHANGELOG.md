@@ -45,8 +45,8 @@ All notable changes to this project are documented in this file. Entries follow
   thread state now starts with a head check that reads the current MR head,
   compares it with the reviewed head by SHA-256 digest, and stops the block
   before any write on a failed request, a malformed response, or a moved
-  head; the check runs at manual execution time and the experimental TUI
-  performs the same check natively before sending.
+  head. The GET targets the selected MR hostname and checks its exit status
+  before parsing JSON; the check runs only when the user executes the block.
 
 - `reviewmatic` and the `code-review` skill now share one context package for
   GitLab MR and local WIP reviews. After snapshot preparation the agent records
@@ -66,6 +66,13 @@ All notable changes to this project are documented in this file. Entries follow
   previous package as immutable history.
 
 ### Changed
+
+- `reviewmatic` now has one Python runtime in `apps/reviewmatic`, invoked with
+  `uvx --from` from the selected Git ref. Stable skills use an exact release
+  tag; development skills use `dev`. The TypeScript application and TUI are
+  removed, and the generated manual runbook remains the only publication
+  interface. The former npm package is not deprecated by this change; registry
+  deprecation needs separate confirmation.
 
 - The `task-triage` publication contract now generates direct `glab api`
   commands with inline JSON heredoc bodies, `#` explanations, and `&&`
@@ -197,12 +204,11 @@ All notable changes to this project are documented in this file. Entries follow
   read-only; pre-V2 databases fail with a start-V2 instruction instead of
   parsing legacy layouts.
 
-- The `code-review` skill is now a thin portable archive: its Python runners
-  are removed and the executable runtime is the external `@kisev/reviewmatic`
-  npm package (installed like `glab`). References invoke the `reviewmatic` CLI,
-  and after a review the skill prints the compact chat summary plus one manual
-  `reviewmatic plan --artifact-root <root>` command instead of per-action
-  publication commands.
+- The `code-review` skill remains a thin portable archive. It invokes the
+  Python runtime from a selected Git ref through `uvx --from`; stable skills use
+  an exact release tag and development skills use `dev`. After review the skill
+  prints the compact chat summary and the `runbook.md` path. The runbook's direct
+  `glab` commands are the only publication interface.
 
 - The shared GitLab contract drops the code-review-only local WIP branches and
   the `local_review` module; local reviews moved into `reviewmatic
@@ -211,11 +217,9 @@ All notable changes to this project are documented in this file. Entries follow
 
 - The shared GitLab contract also drops its now-dead code-review validation
   surface: review-plan/decision/critic artifacts and their validators, the
-  `code-review` profile, and the code-review-only presentation/label helpers
-  (TypeScript owns them in `@kisev/reviewmatic`). A repository-level
-  `TODO-ts-migration.md` records the remaining parity-tested duplication and
-  the staged plan to migrate mr-prepare, release-\*, and task-triage onto the
-  same runtime.
+  `code-review` profile, and the code-review-only presentation/label helpers.
+  The Python application in `apps/reviewmatic` owns those review behaviors;
+  other GitLab skills keep the shared portable contract.
 
 ### Added
 
@@ -232,18 +236,13 @@ All notable changes to this project are documented in this file. Entries follow
   read locally, never through per-file GitLab content requests, and `--repo-root`
   is now optional for `start-review`.
 
-- New workspace app `@kisev/reviewmatic` (`apps/reviewmatic`): the TypeScript
-  runtime of the code-review chain with byte-compatible artifacts and digests.
-  It ports evidence collection, the review state machine, immutable plans, and
-  direct manual publication (`runbook.md` with copy-ready `glab` commands; no
-  receipts, reservations, locks, expiry, polling, or automatic retries) and adds
-  `reviewmatic plan`, an interactive terminal walkthrough of a finished plan:
-  thread remarks with editable `$EDITOR` reply drafts and explicit send,
-  send-and-resolve, or skip choices, label updates, recommended issues, and
-  staged local application of suggestions and git patches in a dedicated git
-  worktree at the exact reviewed head with separate commit and push
-  confirmations. A worktree registry records every created worktree. The npm
-  publication graph now includes the package in dependency order.
+- The Python application `apps/reviewmatic` completes the review runtime: GitLab
+  evidence collection, MR and local-WIP review, the panel and arbitrator,
+  incremental state, repair, refresh, managed worktrees, and immutable runbooks.
+  It runs from Git with `uvx`; no npm/PyPI runtime or terminal UI is provided.
+  Runbooks keep copy-ready `glab` commands without publication receipts,
+  reservations, locks, expiry, polling, or automatic retries. Existing artifacts
+  and XDG state remain compatible; the former npm package is not deprecated.
 
 - New portable skills `eli5` and `asd-ste100`. `eli5` explains a complex
   concept in plain language calibrated to the available knowledge about the

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted, 2026-09-25. Publication decision amended 2026-10-01.
+Superseded 2026-10-05 by [ADR-0021](0021-run-reviewmatic-from-python-git-sources.md).
+Originally accepted 2026-09-25; publication decision amended 2026-10-01.
 
 ## Context and Problem Statement
 
@@ -25,11 +26,21 @@ interface equally useful, and avoid a second publication decision-maker.
 
 ## Outcome
 
-Use direct manual commands in `runbook.md` and an asynchronous TUI executor without
-a shell. Remove publication reservations, receipts, persistent locks, expiry,
-polling, and automatic freshness/replay decisions. One send reports command exit
-and diagnostics. The user checks GitLab and chooses repetition. Replies and thread
-state changes remain independently runnable. Cancellation only stops local waiting.
+The original outcome was direct manual commands in `runbook.md` plus an
+asynchronous TUI executor without a shell. It removed publication reservations,
+receipts, persistent locks, expiry, polling, and automatic freshness/replay
+decisions. One send reports command exit and diagnostics; the user checks GitLab
+and chooses repetition. Replies and thread-state changes remain independently
+runnable.
+
+## Supersession
+
+The TUI was an additional publication interface and is no longer part of the
+target system. The Python-only reviewmatic runtime creates the runbook, and the
+user copies its direct commands. The non-publishing review boundary and the
+manual command safety contract remain in force. The repository retains the
+historical TUI tests in the source-revision baseline, but does not ship or test
+the removed interface.
 
 Review preparation remains non-publishing and preserves exact analysis bindings.
 Targeted plan repair and changed-evidence refresh retain earlier work without
@@ -54,9 +65,11 @@ Other profiles keep their own guarded publication policies.
 
 ## Verification
 
-Tests cover command parity, no publication GETs/state, failures, repeated sends,
-cancellation, responsive UI, exact fixes, retained critique, atomic local repair,
-CI refresh, and historical read-only behavior. PTY smoke tests exercise the CLI.
+At the time of the original decision, tests covered command parity, publication
+state, failures, repeated sends, cancellation, responsive UI, exact fixes,
+retained critique, atomic local repair, CI refresh, and historical read-only
+behavior. The TUI-specific baseline and its TypeScript source revision are
+preserved in the code-review test matrix.
 
 ## Links
 
@@ -64,3 +77,4 @@ CI refresh, and historical read-only behavior. PTY smoke tests exercise the CLI.
 - [REQ-F-301](../../capabilities/agents/manager.md#req-f-301---bind-manager-orchestration)
 - [REQ-F-305](../../capabilities/agents/review.md#req-f-305---produce-structured-review-reports)
 - [ADR-0007](0007-make-administration-cli-only.md)
+- [ADR-0021](0021-run-reviewmatic-from-python-git-sources.md)

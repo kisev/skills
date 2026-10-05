@@ -118,9 +118,8 @@ separate fixing phase. Portable `code-review` also works without this agent laye
 
 1. Request a code review and read the resulting `runbook.md`.
 2. Inspect each proposed action and its exact body before running its command.
-3. Copy a direct `glab` command or launch `reviewmatic plan` for the same actions
-   interactively. Replies and thread state are separate choices. Reading and
-   navigation remain available during sends; `z` cancels waiting, `q` exits.
+3. Copy and run the selected direct `glab` command. Replies and thread state are
+   separate actions in the runbook; reviewmatic has no in-app publication UI.
 4. Read the command result/error and check GitLab in your browser. You decide
    whether to repeat; a timeout may have left an accepted request and a repeat
    may duplicate it. No publication ledger, lock, or automatic retry blocks you.

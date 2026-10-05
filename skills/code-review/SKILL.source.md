@@ -10,11 +10,11 @@ metadata:
 
 # code-review
 
-The executable runtime is the external npm package `@kisev/reviewmatic` (bin `reviewmatic`); install it once like `glab`. Every runner command in this archive is that bin.
+The runtime is the Python 3.12+ application in `apps/reviewmatic`, run ephemerally from Git with `uvx`; it is not published to npm or PyPI and needs no `uv tool install`. Select the same source channel as the skill: an exact `vX.Y.Z` release tag for stable, or the moving `dev` branch for development. Set `REVIEWMATIC_FROM='git+https://github.com/kisev/skills.git@<ref>#subdirectory=apps/reviewmatic'` once and run every CLI command, including returned continuation actions, as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`. Do not rely on a globally installed `reviewmatic` executable.
 
 Review preparation depends on the reviewmatic backend. Finished runbook commands
-execute directly through `glab` without reviewmatic. Only the interactive TUI is
-experimental; backend collection, repair, refresh and finalization remain supported.
+execute directly through `glab` without reviewmatic. Backend collection, repair,
+refresh and finalization remain supported; the runtime has no interactive TUI.
 
 Before asking the user, apply `references/question-guidelines.md`.
 

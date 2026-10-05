@@ -89,8 +89,8 @@ def run(stand: Stand, directory: Path) -> dict[str, Any]:
     outcomes = {}
     common = {"labels", "mr_commits", "mr_discussions", "head_pipelines", "jobs", "bridges"}
     for skill in ("code-review", "mr-prepare", "release-prepare", "release-review", "task-triage"):
-        # Python/TypeScript collectors share a pager across MR resources. Triage
-        # additionally owns issue/milestone catalogs; release-review owns tags/releases.
+        # Reviewmatic and the other GitLab skills share a pager across MR
+        # resources. Triage adds issue/milestone catalogs; release-review adds tags/releases.
         selected = {
             name: endpoint
             for name, endpoint in endpoints.items()
@@ -132,11 +132,7 @@ def run(stand: Stand, directory: Path) -> dict[str, Any]:
         for actor in ("author", "reviewer"):
             source = directory / f"pagination-{skill}-{actor}-input.json"
             write_json(source, {"skill": skill, "endpoints": selected})
-            argv = (
-                ["node", str(APP / "scripts/pagination_probe.mjs")]
-                if skill == "code-review"
-                else [sys.executable, str(APP / "scripts/pagination_probe.py")]
-            )
+            argv = [sys.executable, str(APP / "scripts/pagination_probe.py")]
             collected = json.loads(
                 command([*argv, str(source)], env=stand.isolated_env(actor), timeout=240).stdout
             )

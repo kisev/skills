@@ -59,7 +59,7 @@ def completed_coverage(report: dict[str, Any]) -> None:
         "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment": {
             "same-file-grouped-recovery",
         },
-        "non-TUI CLI faults, timeout and ambiguous-publication reconciliation": {
+        "CLI faults, timeout and ambiguous-publication reconciliation": {
             "transport-fault-and-retry",
         },
     }
@@ -672,7 +672,7 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     )
     author_collected = json.loads(
         command(
-            ["node", str(APP / "scripts/collector_roles.mjs"), str(author_input)],
+            [sys.executable, str(APP / "scripts/collector_roles.py"), str(author_input)],
             env=review_environment(stand, "author"),
             timeout=240,
         ).stdout
@@ -699,7 +699,7 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     )
     drafted = json.loads(
         command(
-            ["node", str(APP / "scripts/review_plan.mjs"), str(input_path)],
+            [sys.executable, str(APP / "scripts/review_plan.py"), str(input_path)],
             env=environment,
             timeout=240,
         ).stdout
@@ -710,7 +710,7 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     write_json(input_path, input_value)
     result = json.loads(
         command(
-            ["node", str(APP / "scripts/review_plan.mjs"), str(input_path)],
+            [sys.executable, str(APP / "scripts/review_plan.py"), str(input_path)],
             env=environment,
             timeout=240,
         ).stdout
@@ -852,7 +852,7 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     )
     refreshed = json.loads(
         command(
-            ["node", str(APP / "scripts/refresh_review.mjs"), str(material_input)],
+            [sys.executable, str(APP / "scripts/refresh_review.py"), str(material_input)],
             env=environment,
             timeout=240,
         ).stdout
@@ -898,7 +898,6 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
     report["coverage"] = {
         "status": "incomplete",
         "scope": "GitLab API/backend acceptance; browser behavior is deferred and unverified",
-        "excluded": ["experimental reviewmatic TUI (behavioral, Ink, PTY and server tests)"],
         "deferred": [
             "all GitLab browser scenarios, including exact-head UI remapping and application"
         ],
@@ -908,7 +907,7 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment",
             "task-triage information-request lifecycle, stale analysis and relationship recovery",
             "complete release inventory/readiness/publication roles and negative-outcome matrix",
-            "non-TUI CLI faults, timeout and ambiguous-publication reconciliation",
+            "CLI faults, timeout and ambiguous-publication reconciliation",
         ],
         "fault_injection": "synthetic CLI transport rejection and separate real-server read-only retry; not server behavior",
     }

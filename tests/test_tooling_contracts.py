@@ -173,17 +173,18 @@ def test_push_gate_rebuilds_distribution_and_comparison_stays_elsewhere() -> Non
     assert "task: distribution:build" not in ci
 
 
-def test_root_npm_workspace_is_private_exact_and_python_stays_detached() -> None:
+def test_root_npm_workspace_is_private_exact_and_reviewmatic_is_python_only() -> None:
     root = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
     assert set(root) == {"private", "workspaces"}
     assert root["private"] is True
     assert root["workspaces"] == [
+        "packages/safe-fs",
         "apps/memomatic",
-        "apps/reviewmatic",
         "apps/taskmatic",
         "packages/agentomatic",
-        "packages/safe-fs",
     ]
+    assert not (ROOT / "apps/reviewmatic/package.json").exists()
+    assert (ROOT / "apps/reviewmatic/pyproject.toml").is_file()
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "dependencies = []" in pyproject
     assert "skills-ref==0.1.1" in pyproject
@@ -236,7 +237,7 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     safe_fs_pos = taskfile.index(f"{build_cmd}safe-fs")
     assert "mise exec -- npm --prefix ../../apps/taskmatic test" in taskfile
     assert "mise exec -- npm --prefix ../../apps/taskmatic run pack:check" in taskfile
-    for consumer in ("memomatic", "reviewmatic", "taskmatic", "agentomatic"):
+    for consumer in ("memomatic", "taskmatic", "agentomatic"):
         assert taskfile.index(f"{build_cmd}{consumer}") > safe_fs_pos, (
             f"{consumer} must build after safe-fs"
         )

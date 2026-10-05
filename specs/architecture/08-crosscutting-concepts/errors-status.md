@@ -10,8 +10,8 @@ Normalized work-item validation and review distinguish `ready`,
 separate. Triage classifies evidence without issuing a quality verdict. JSON
 reports and CLI exit codes are stable within the package contracts.
 
-Code-review preparation does not execute publication commands. Direct manual
-commands and the TUI report process exit and bounded redacted diagnostics, not
-verified remote effects. There is no polling or persistent failure block; the user
-checks GitLab and decides whether to repeat. Cancellation does not undo an accepted
-request. Other profiles retain their own guarded recovery behavior.
+Code-review preparation does not execute publication commands. A manually run
+direct command reports its process exit and bounded redacted diagnostics, not a
+verified remote effect. There is no polling or persistent failure block; the user
+checks GitLab and decides whether to repeat. An interruption does not undo an
+accepted request. Other profiles retain their own guarded recovery behavior.

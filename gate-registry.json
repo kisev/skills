@@ -126,14 +126,12 @@
       ]
     },
     {
-      "name": "reviewmatic-python",
-      "title": "Reviewmatic Python package",
-      "task": "reviewmatic-py:check",
+      "name": "reviewmatic",
+      "title": "Reviewmatic Python application",
+      "task": "reviewmatic:check",
       "core": false,
       "paths": [
-        "apps/reviewmatic-py/**",
-        "apps/reviewmatic/scripts/generate-golden-fixtures.mjs",
-        "apps/reviewmatic/scripts/golden-ts-loader.mjs",
+        "apps/reviewmatic/**",
         "shared/references/portable_gitlab/**",
         "shared/references/state_artifacts.py",
         "shared/references/mutation_process.py",

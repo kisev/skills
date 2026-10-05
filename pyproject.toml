@@ -24,6 +24,7 @@
   strict = true
   disallow_any_unimported = true
   explicit_package_bases = true
+  mypy_path = ["apps/reviewmatic/src"]
   files = ["scripts", "dev", "shared/references", "tests", "skills/*/scripts/*.py"]
 
 [tool.pytest.ini_options]
@@ -36,7 +37,7 @@
     "--durations=10",
   ]
   pythonpath = ["."]
-  testpaths = ["tests", "skills/*/tests", "apps/reviewmatic-py/tests", "apps/shopmatic/tests"]
+  testpaths = ["tests", "skills/*/tests", "apps/reviewmatic/tests", "apps/shopmatic/tests"]
 
 [tool.ruff]
   target-version = "py312"
@@ -95,6 +96,10 @@
         "S607",                                                             # Git is a required PATH-resolved build dependency.
       ]
       "scripts/build_release_artifacts.py" = ["S603"]                       # Arguments are a fixed internal command vector.
+      "scripts/check_reviewmatic_install.py" = [
+        "S603",                                                             # Test commands use fixed vectors, the selected Git snapshot, and bounded local paths.
+        "S607",                                                             # Git and fake glab are resolved through the smoke's isolated PATH.
+      ]
       "scripts/check_agnix.py" = [
         "S603",                                                             # Arguments are generated from validated repository paths.
         "S607",                                                             # Agnix is provided by the pinned Mise toolchain.

@@ -1,22 +1,15 @@
 {
   "version": 1,
-  "npmSchemas": [
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "apps/reviewmatic/src/generated/artifact-schema.ts"
-    }
-  ],
   "npmRuntime": {
     "source": "references/cli_runtime.ts",
     "destinations": [
       "apps/memomatic/src/generated/cli.ts",
-      "apps/reviewmatic/src/generated/cli.ts",
       "apps/taskmatic/src/generated/cli.ts",
       "packages/agentomatic/src/generated/cli.ts"
     ]
   },
   "pythonRuntime": {
-    "destination": "apps/reviewmatic-py/src/reviewmatic/portable",
+    "destination": "apps/reviewmatic/src/reviewmatic/portable",
     "entries": [
       {
         "source": "references/portable_gitlab/__init__.py",

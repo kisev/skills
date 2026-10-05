@@ -696,7 +696,6 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
         [
             {"name": "@kisev/safe-fs", "version": RELEASE_VERSION},
             {"name": "@kisev/memomatic", "version": RELEASE_VERSION},
-            {"name": "@kisev/reviewmatic", "version": RELEASE_VERSION},
             {"name": "@kisev/taskmatic", "version": RELEASE_VERSION},
             {"name": "@kisev/agentomatic", "version": RELEASE_VERSION},
         ]
@@ -1081,7 +1080,6 @@ def test_release_manifest_rejects_tampered_tarball(
     for filename in (
         "safe-fs.tgz",
         "memomatic.tgz",
-        "reviewmatic.tgz",
         "taskmatic.tgz",
         "package.tgz",
     ):
@@ -1093,7 +1091,6 @@ def test_release_manifest_rejects_tampered_tarball(
                 "npm": [
                     entry("@kisev/safe-fs", "safe-fs.tgz"),
                     entry("@kisev/memomatic", "memomatic.tgz"),
-                    entry("@kisev/reviewmatic", "reviewmatic.tgz"),
                     entry("@kisev/taskmatic", "taskmatic.tgz"),
                     entry("@kisev/agentomatic", "package.tgz"),
                 ],

@@ -14,6 +14,11 @@ GitHub Release. Git contains deduplicated authored sources, not installable skil
 Runtime state is local to its declared global/project owner; ordinary tests and
 offline evals run without network or credentials.
 
+The reviewmatic application is not an npm release member. Users run its Python
+CLI from this repository with `uvx --from` and a selected Git ref: an exact
+release tag for stable skills or the moving `dev` branch for development. It is
+not published to PyPI and does not require a persistent `uv tool install`.
+
 The root `docker-compose.yml` supplies one persistent `skills-dev` project with
 service-scoped Taskfile lifecycle commands and grouped `env:*` dependencies.
 Infrastructure configuration lives under `dev/`; test scenarios and helpers live

@@ -51,9 +51,9 @@ export const ui = {
         memomatic: "@kisev/memomatic",
         memomaticProvides:
           "Personal learning memory for agents: a tiered Markdown corpus with a rebuildable search index, exposed to hosts through a local MCP server",
-        reviewmatic: "@kisev/reviewmatic",
+        reviewmatic: "reviewmatic (Python)",
         reviewmaticProvides:
-          "Executable runtime of the code-review skill: the GitLab review chain with immutable plans, a terminal walkthrough, and manual publication",
+          "Python runtime for the code-review skill: GitLab and local-WIP review workflows with private artifacts and copy-ready manual runbooks, launched from Git with uvx",
         taskmatic: "@kisev/taskmatic",
         taskmaticProvides:
           "Local-first task board for people and agents: SQLite cards with a Markdown mirror, agent claims with heartbeats, and a read-only web board",
@@ -141,9 +141,9 @@ export const ui = {
         memomatic: "@kisev/memomatic",
         memomaticProvides:
           "Личная обучающая память для агентов: многоуровневый Markdown-корпус с перестраиваемым поисковым индексом, доступная хостам через локальный MCP-сервер",
-        reviewmatic: "@kisev/reviewmatic",
+        reviewmatic: "reviewmatic (Python)",
         reviewmaticProvides:
-          "Исполняемая среда скилла code-review: цепочка ревью GitLab с неизменяемыми планами, терминальный просмотр и ручная публикация",
+          "Рантайм скилла code-review на Python: ревью GitLab и локального WIP с приватными артефактами и копируемыми ручными runbook, запуск из Git через uvx",
         taskmatic: "@kisev/taskmatic",
         taskmaticProvides:
           "Локальная доска задач для человека и агентов: карточки в SQLite с зеркалом в Markdown, захваты агентов с heartbeat и веб-доска только для чтения",

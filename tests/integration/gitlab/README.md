@@ -90,7 +90,7 @@ respond successfully. Startup failures remain failures; API writes are not retri
 | Accounts and reruns | Owned identities reused | Authenticated IDs, stable project IDs |
 | Pagination | Real glab follows multiple pages | All three run-specific issues present with `per_page=1` |
 | Helper catalog/roles | Real MR/release collectors run as author and reviewer; reviewmatic and triage consume a reused 101-label catalog | Every fixture label is present; MR/release collectors report at least two pages |
-| Helper resources | Shipped Python/TypeScript pagers read real multi-page catalogs as both roles | Complete IDs/counts for issues, labels, milestones, tags/releases, MR/CI, trees and relationships; issue links are tested at CE's 100-link boundary, a whole-collection API that ignores pagination |
+| Helper resources | Shipped Python pagers read real multi-page catalogs as both roles | Complete IDs/counts for issues, labels, milestones, tags/releases, MR/CI, trees and relationships; issue links are tested at CE's 100-link boundary, a whole-collection API that ignores pagination |
 | Issue metadata and links | CE accepts labels, milestones, `relates_to` | GET issues and links returns exact metadata and target |
 | Tags and releases | Release identifies fixture commit | GET release returns the exact SHA |
 | Shell CI | Success, allowed failure, child job execute | Exact-SHA terminal pipeline, real job states and trace markers |
@@ -102,7 +102,7 @@ respond successfully. Startup failures remain failures; API writes are not retri
 | MR publication | Copy the generated commands, as reviewer and author | Exact literal title/description/labels; human discussion notes unchanged |
 | Task publication | Execute copied marker-wrapped GraphQL commands as author and reviewer | Real issue title, labels, milestone and author ID match each role's plan |
 | Task preparation/triage | Local plan and actual collection | Issue catalog unchanged during preparation |
-| Reviewmatic | Prepare, presentation-repair, then copy runbook commands | Findings, suggestions and fixture receipts retained; real grouped suggestions and replies published |
+| Reviewmatic | Run the Python application, prepare, presentation-repair, then copy runbook commands | Findings, suggestions and fixture receipts retained; real grouped suggestions and replies published |
 | CI-only refresh | Rerun real shell CI on the same SHA, then finish the existing draft | Supplemental CI snapshot; original findings/evidence/receipts retained; no repeated `startReview` |
 | Material refresh | Collect changed conversations without publishing or rebinding receipts | Findings/dispositions and original draft preserved; new receipts empty; last finalized plan remains readable |
 | Same-file API/backend recovery | The real API applies two parts of one file sequentially | Exact SHAs, files and partial/full flags; backend reassessment retains findings without rebinding receipts; browser remapping is checked only separately |
@@ -137,10 +137,10 @@ MR diff refs may advance while the remaining discussion is inactive at its old
 position. The browser waits for an active exact-head position, selects the matching
 source-head `diff_id` (head-diff previews may use a synthetic merge SHA), then navigates once
 and waits for the scoped discussion, without repeated page loads or mutation retries.
-Only the reviewmatic TUI is experimental and excluded: behavioral, Ink, PTY and
-server TUI tests are not run or required by blocking acceptance. Backend reviewmatic,
-direct runbook publication remain mandatory. All GitLab browser scenarios are deferred.
-Reports distinguish that deferral from the TUI exclusion and missing mandatory backend coverage.
+Reviewmatic is the Python application; it has no TUI or in-app publication action.
+Backend preparation, repair, refresh, finalization and copied runbook commands
+remain mandatory. All GitLab browser scenarios are deferred and are reported
+separately from missing mandatory backend coverage.
 Release announcement commands keep their prompt attachment without the incompatible
 `--unique` flag. A missing response requires inspecting the actual discussion before
 repetition; an advisory marker is not proof of a write or duplicate protection.

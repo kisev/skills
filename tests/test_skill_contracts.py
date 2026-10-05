@@ -558,7 +558,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "reviewmatic start-review",
         "check-review --draft",
         "finish-review",
-        "reviewmatic plan --artifact-root",
+        'uvx --from "$REVIEWMATIC_FROM" reviewmatic',
         "never include local",
         "fix_mode=patch",
         "temporary index",
@@ -616,15 +616,18 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "independent critic",
     ):
         assert marker in incremental
-    publication = (ROOT / "skills/code-review/references/publication.md").read_text(
-        encoding="utf-8"
+    publication = " ".join(
+        (ROOT / "skills/code-review/references/publication.md").read_text(encoding="utf-8").split()
     )
     for marker in (
-        "reviewmatic plan",
+        "no terminal UI",
         "State changes follow a successful reply only",
         "actual ID",
         "direct block uses",
-        "stops the whole block before any write when the request fails",
+        "stops the block",
+        "nonzero `glab` exit",
+        "same MR hostname",
+        "set -o pipefail",
     ):
         assert marker in publication
     assert "Local WIP always receives" not in incremental

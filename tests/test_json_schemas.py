@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
-    "apps/reviewmatic-py/src/reviewmatic/portable/portable_gitlab/artifact-contracts-v2.schema.json",
+    "apps/reviewmatic/src/reviewmatic/portable/portable_gitlab/artifact-contracts-v2.schema.json",
     "evals/schemas/result-v1.schema.json",
     "evals/schemas/scenario-v1.schema.json",
     "packages/agentomatic/contracts/critic-report-v1.schema.json",
@@ -506,13 +506,14 @@ def artifact_instances() -> list[dict[str, Any]]:
 
 
 def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
-    paths = set(
+    listed_paths = set(
         subprocess.check_output(
             ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.schema.json"],
             cwd=ROOT,
             text=True,
         ).splitlines()
     )
+    paths = {path for path in listed_paths if (ROOT / path).is_file()}
     assert paths == SCHEMA_PATHS
     for path in sorted(paths):
         validator(path)

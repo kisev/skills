@@ -54,7 +54,7 @@ command. A prepared state command never stands alone without its explanation.
 
 Code-review contract 7 uses direct manual `glab` commands instead of this helper
 lifecycle. Preparation still validates exact fixes and never publishes. The user
-checks results in GitLab and chooses repetition; commands and the TUI do not use
+checks results in GitLab and chooses repetition; commands do not use
 reservations, persistent locks, receipts, expiry, polling, or automatic freshness
 checks. Errors and process exit codes remain visible. This exception does not
 change another profile's guarded publication contract.

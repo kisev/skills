@@ -15,7 +15,7 @@ The `skills` CLI owns portable skills; the npm integration does not contain, ins
 
 ## Install Everything
 
-Install portable skills, `agentomatic`, [memomatic](docs/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.md), and [taskmatic](docs/how-to/taskmatic.md); rerun the commands to update. The `update` pass after `add` also offers to remove retired skill names.
+Install portable skills, `agentomatic`, [memomatic](docs/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.md), and [taskmatic](docs/how-to/taskmatic.md); rerun the commands to update. Reviewmatic runs from the repository through `uvx`, not npm or PyPI. The `update` pass after `add` also offers to remove retired skill names.
 `install` and `configure` require terminal confirmation or explicit selections with `--yes`. Before a package's first stable release, `latest` can be a prerelease.
 Restart OpenCode, other running MCP hosts, and the taskmatic web service after updates.
 
@@ -26,7 +26,6 @@ Everything on `latest`:
 npm view --prefer-online skills@latest version
 npm view --prefer-online @kisev/agentomatic@latest version
 npm view --prefer-online @kisev/memomatic@latest version
-npm view --prefer-online @kisev/reviewmatic@latest version
 npm view --prefer-online @kisev/taskmatic@latest version
 
 # Install and configure
@@ -35,15 +34,16 @@ npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@latest install --global
 npx --yes @kisev/agentomatic@latest configure integration --global
 npm install --global @kisev/memomatic
-npm install --global @kisev/reviewmatic
 npm install --global @kisev/taskmatic
+REVIEWMATIC_REF='<ref>' # use the exact release tag for the stable skills channel
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 
 # Local installation and active CLIs
 npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
-npm list --global @kisev/memomatic @kisev/reviewmatic @kisev/taskmatic --depth=0
+npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
 memomatic --version
-reviewmatic --version
 taskmatic --version
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 npx --yes skills@latest list --global
 ```
 
@@ -54,7 +54,6 @@ Everything on `dev` (moves after every successful push to `dev`):
 npm view --prefer-online skills@latest version
 npm view --prefer-online @kisev/agentomatic@dev version
 npm view --prefer-online @kisev/memomatic@dev version
-npm view --prefer-online @kisev/reviewmatic@dev version
 npm view --prefer-online @kisev/taskmatic@dev version
 
 # Install and configure
@@ -63,21 +62,25 @@ npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@dev install --global
 npx --yes @kisev/agentomatic@dev configure integration --global
 npm install --global @kisev/memomatic@dev
-npm install --global @kisev/reviewmatic@dev
 npm install --global @kisev/taskmatic@dev
+REVIEWMATIC_REF=dev # moving development branch, matching the dev skills channel
+uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 
 # Local installation and active CLIs
 npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
-npm list --global @kisev/memomatic @kisev/reviewmatic @kisev/taskmatic --depth=0
+npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
 memomatic --version
-reviewmatic --version
 taskmatic --version
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 npx --yes skills@latest list --global
 ```
 
 Tags can move between preview and installation. `npm list` checks installed
-packages; `--version` checks the CLI on PATH. npx does not install a global CLI;
-`skills list` inspects installed skills, not the npm installer version.
+npm packages; `--version` checks their CLIs on PATH. `uvx` runs reviewmatic
+ephemerally from the selected Git ref and does not install a global tool.
+`skills list` inspects installed skills, not the npm installer version. The
+former `@kisev/reviewmatic` npm package is not deprecated by this change; any
+registry deprecation requires separate confirmation.
 
 ## Guides
 

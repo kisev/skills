@@ -84,35 +84,35 @@ Git нужно повторить `add` с URL Pages и той же област
 точный диапазон, ветку или точную HTTPS-ссылку на MR и показывает историю без
 итогового заключения проверки.
 
-## Пакеты Python-порта
+## Приложение reviewmatic на Python
 
-Python-порт семейства reviewmatic начинается в `apps/reviewmatic-py`. Этап 1
-поставляет каркас пакета и полную поверхность команд TypeScript-CLI с тем же
-контрактом кодов выхода; подкоманды, бизнес-логика которых ещё не перенесена,
-отвечают явным конвертом not-implemented с кодом выхода 5. Каноническое
-контрактное ядро материализуется байт-в-байт из `shared/references/` через
-секцию `pythonRuntime` файла `shared/manifest.json`; копии в пакете не
-редактируются вручную.
+`apps/reviewmatic` содержит единственный рантайм reviewmatic. Он обрабатывает GitLab
+MR, локальный WIP, панель/арбитраж, инкрементальное ревью, ремонт и refresh,
+приватное состояние XDG, управляемые worktree и прямые ручные runbook. Запуск
+выполняется из выбранного Git-ref через `uvx`; npm и PyPI-рантаймов и TUI нет.
+См. [руководство приложения](../../apps/reviewmatic/README.ru.md): выбор stable/dev
+ref, обновление кэша и восстановление runbook.
 
-Паритет дайджестов с TypeScript-реализацией закреплён закоммиченными golden-
-фикстурами в `apps/reviewmatic-py/tests/golden/`. Они покрывают канонические
-дайджесты, валидацию артефактов v2, оценки semver и меток. Объявленная
-TypeScript-задача перегенерирует их из реальных источников CLI, а генерация
-проверяется побайтово:
+Переносимое ядро `src/reviewmatic/portable/` материализуется байт-в-байт из
+`shared/references/` через `pythonRuntime` в `shared/manifest.json`. 33 golden-
+кейса сохраняют ожидания TypeScript-ревизии
+`3e409c217e94d643f77eb543caab9a2ed4b7288d`; старое приложение и генератор
+удалены. Python-тесты пересчитывают и проверяют каждый дайджест, вердикт и
+переход состояния, не генерируя ожидания из самого Python. Исторический
+TypeScript-baseline и карта соответствий приведены в
+[матрице тестов](../reviewmatic-test-matrix.md).
 
 ```shell
-task reviewmatic-py:fixtures
 task generate:check
+task reviewmatic:check
+task reviewmatic:install-smoke
 ```
 
-Тот же запуск `generate:check` проверяет побайтово материализованное
-контрактное ядро через `scripts/materialize_cli_runtime.mjs --check`. Гейт
-пакета запускает тесты паритета, локальный для приложения mypy и сборку
-sdist и wheel через uv:
-
-```shell
-task reviewmatic-py:check
-```
+`generate:check` проверяет материализованные общие источники и сохранённые
+golden-утверждения. Гейт приложения запускает pytest, mypy, проверку lock-файла
+и сборку wheel/source distribution. Отдельная install-smoke проверяет локальный
+Git-ref и оба собранных дистрибутива вне checkout без Node, `PYTHONPATH` и
+установленного инструмента `reviewmatic`.
 
 ## shopmatic
 
@@ -309,7 +309,7 @@ Guard: `modelSelection` ловит `catalog_unavailable`, предупрежда
 явной модели и краснил fallback-тест; восстановление catch снова делало тест
 зелёным.
 
-### `prior_decisions` вне версии контекста, фикс `204714f` — отложен до PORT-2
+### `prior_decisions` вне версии контекста, фикс `204714f` — закрыт в PORT-3
 
 Симптом: значимое изменение согласованных решений не меняло версию контекста
 вопроса, поэтому поздний ответ, собранный под отозванным исключением, мог
@@ -322,26 +322,27 @@ Guard: `modelSelection` ловит `catalog_unavailable`, предупрежда
 отсутствовал и в этом списке, и в руководстве, README и спеке, поэтому ни
 один контрактный тест не смотрел на смену решений.
 
-Guard: `sharedContextInputs` подаёт `prior_decisions` в оба дайджеста
-`questionContextDigest` и `questionContextVersion`; retirement фильтрует
-каждый собранный ответ и верификацию по его собственной привязке к контексту
-(`isCurrentResult`) вместо ID вопроса и переносит в историю только
-устаревшие записи.
+Guard: `_shared_context_inputs` подаёт `prior_decisions` в оба дайджеста
+`question_context_digest` и `question_context_version`; retirement фильтрует
+каждый ответ и верификацию по собственной привязке (`is_current_result`), а не
+только по ID вопроса, и переносит в историю только устаревшие записи.
 
-Покрывающие тесты поставлены с фиксом:
-`apps/reviewmatic/test/context-package.test.mjs` доказывает, что значимое
-изменение prior-decision устаревает ответы по тому же вопросу и что
-рековери смешанных версий сохраняет свежие результаты, перенося в историю
-только устаревшую запись; `apps/reviewmatic/test/local-review.test.mjs`
-доказывает ту же пару для локального потока проверки.
+Краснеющая проверка в
+`apps/reviewmatic/tests/test_context_package.py::test_prior_decisions_change_both_package_and_question_context_bindings`
+упадёт, если удалить `prior_decisions` из любого из двух дайджестов.
+`apps/reviewmatic/tests/test_context_package_records.py` доказывает, что
+изменение решения блокирует поздний ответ V1,
+сохраняет авторство и исходные привязки в истории, оставляет свежий ответ V2 и
+проверку другого критика и делает повторное восстановление идемпотентным.
+`apps/reviewmatic/tests/test_local_review_scenarios.py` проверяет тот же запрет
+устаревшего ответа и сохранение смешанных версий.
+Проверка удалением: временно убрать `prior_decisions` из
+`_shared_context_inputs`; прямой тест привязок должен упасть.
 
-Статус: отложен. Эти файлы сейчас портирует PORT-2, поэтому новые тесты здесь
-конфликтовали бы с портом; обязательство доказать краснеющую способность
-покрывающих тестов переходит к PORT-2. Инварианты, которые PORT-2 обязан
-держать покрытыми:
+Статус: закрыто в PORT-3. Остаются покрытыми инварианты:
 
-- `prior_decisions` участвует в `questionContextDigest` и
-  `questionContextVersion`;
+- `prior_decisions` участвует в `question_context_digest` и
+  `question_context_version`;
 - изменение согласованных решений устаревает поздние ответы, привязанные к
   прежней версии, поэтому они не могут завершить проверку как готовую;
 - retirement сохраняет свежие результаты других критиков, переносит в историю

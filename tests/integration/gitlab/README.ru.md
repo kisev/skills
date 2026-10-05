@@ -93,7 +93,7 @@ HTTP-отказ. Диагностируй изменения адресов/ма
 | Аккаунты и повтор | Собственные аккаунты переиспользуются | ID авторизованных пользователей и проектов |
 | Пагинация | Настоящий glab проходит несколько страниц | Все три issues прогона при `per_page=1` |
 | Каталог helpers и роли | Настоящие collectors MR/релиза работают от автора и ревьюера; reviewmatic и triage читают повторно используемый каталог из 101 label | Все fixture labels присутствуют; collectors MR/релиза подтверждают минимум две страницы |
-| Ресурсы helpers | Поставляемые Python/TypeScript pagers читают реальные многостраничные каталоги от обеих ролей | Полные ID/count для issues, labels, milestones, tags/releases, MR/CI, trees и связей; issue links проверяются на пределе CE в 100 связей, этот API не принимает пагинацию |
+| Ресурсы helpers | Поставляемые Python pagers читают реальные многостраничные каталоги от обеих ролей | Полные ID/count для issues, labels, milestones, tags/releases, MR/CI, trees и связей; issue links проверяются на пределе CE в 100 связей, этот API не принимает пагинацию |
 | Метаданные и связи | CE принимает labels, milestones, `relates_to` | GET issues и links возвращает точные значения |
 | Tags/releases | Релиз привязан к fixture commit | GET release возвращает точный SHA |
 | Shell CI | Выполняются success, allowed failure и child job | Состояния pipeline/jobs и маркеры настоящих traces на точном SHA |
@@ -105,7 +105,7 @@ HTTP-отказ. Диагностируй изменения адресов/ма
 | Публикация MR | Копируемые команды от ревьюера и автора | Точные title/description/labels, включая спецсимволы; пользовательские notes не изменились |
 | Публикация task | Копируемые GraphQL-команды с marker wrapper от автора и ревьюера | Title, labels, milestone и ID автора настоящего issue совпадают с планом выбранной роли |
 | Task prepare/triage | Локальный план и настоящая коллекция | Каталог issues не изменился при подготовке |
-| Reviewmatic | Подготовка, presentation repair, затем копируемые команды | Находки, suggestions и fixture receipts сохранены; grouped suggestions и ответы опубликованы |
+| Reviewmatic | Python-приложение: подготовка, presentation repair, затем копируемые команды | Находки, suggestions и fixture receipts сохранены; grouped suggestions и ответы опубликованы |
 | CI-only refresh | Повтор настоящего shell CI на прежнем SHA, затем финализация того же черновика | Дополнительный CI snapshot; исходные находки/evidence/receipts сохранены; повторного `startReview` нет |
 | Material refresh | Сбор изменившихся discussions без публикации и подмены receipts | Находки/dispositions и исходный черновик сохранены; новые receipts пусты; предыдущий план доступен |
 | Same-file API/backend recovery | Настоящий API применяет две части одного файла по очереди | Точные SHA, файлы и флаги partial/full; backend reassessment сохраняет находки без подмены receipts; browser remap проверяется только отдельно |
@@ -143,11 +143,10 @@ MR diff refs могут обновиться, пока оставшийся disc
 к старой позиции. Браузер ждёт активную позицию на точном head, выбирает соответствующий
 source-head `diff_id` (head-diff может использовать промежуточный merge SHA), затем один раз
 открывает diff и ждёт нужный discussion, без повторных загрузок и mutation retries.
-Экспериментальным объявлен и исключён только TUI reviewmatic: поведенческие,
-Ink, PTY и серверные TUI-тесты не запускаются и не требуются для блокирующей
-приёмки. Backend reviewmatic и прямые команды runbook остаются обязательными.
-Все GitLab browser-сценарии отложены. Отчёт отделяет их от исключения TUI
-и недостающих обязательных backend-проверок.
+Reviewmatic: Python-приложение без TUI и встроенной публикации. Обязательны
+backend-подготовка, repair, refresh, финализация и копируемые команды runbook.
+Все GitLab browser-сценарии отложены и в отчёте отделены от недостающих
+обязательных backend-проверок.
 Команда release announcement сохраняет attachment промпта без несовместимого
 флага `--unique`. При потерянном ответе перед повтором проверяют настоящий discussion;
 advisory marker не доказывает запись и не защищает от дубликата.

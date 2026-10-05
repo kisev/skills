@@ -62,8 +62,8 @@
       "ru": "docs/ru/verification.md"
     },
     {
-      "en": "docs/reviewmatic-py-test-matrix.md",
-      "ru": "docs/ru/reviewmatic-py-test-matrix.md"
+      "en": "docs/reviewmatic-test-matrix.md",
+      "ru": "docs/ru/reviewmatic-test-matrix.md"
     },
     {
       "en": "packages/agentomatic/README.md",
@@ -92,10 +92,6 @@
     {
       "en": "apps/reviewmatic/README.md",
       "ru": "apps/reviewmatic/README.ru.md"
-    },
-    {
-      "en": "apps/reviewmatic-py/README.md",
-      "ru": "apps/reviewmatic-py/README.ru.md"
     },
     {
       "en": "apps/shopmatic/README.md",

@@ -147,12 +147,10 @@ pre-push:
         task test:python
       fail_text: "The local push gate failed"
 
-    - name: reviewmatic-python
+    - name: reviewmatic
       glob:
-        # @gates:begin glob:reviewmatic-python
-        - "apps/reviewmatic-py/**"
-        - "apps/reviewmatic/scripts/generate-golden-fixtures.mjs"
-        - "apps/reviewmatic/scripts/golden-ts-loader.mjs"
+        # @gates:begin glob:reviewmatic
+        - "apps/reviewmatic/**"
         - "shared/references/portable_gitlab/**"
         - "shared/references/state_artifacts.py"
         - "shared/references/mutation_process.py"
@@ -166,7 +164,7 @@ pre-push:
         for variable in $(git rev-parse --local-env-vars); do
           unset "$variable"
         done
-        task reviewmatic-py:check
+        task reviewmatic:check
       fail_text: "The local push gate failed"
 
     - name: shopmatic

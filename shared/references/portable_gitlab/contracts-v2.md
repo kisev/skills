@@ -164,8 +164,8 @@ schema-readable for their original finalized workflow, but they have no
 `review_contract_version` and can never become an incremental baseline.
 
 Contract 7 supersedes the code-review publication behavior described above.
-Its stable result is `runbook.md`; direct `glab` commands are supported and the TUI
-remains experimental. No remote-operation ledger, reservation, persistent
+Its stable result is `runbook.md`; direct `glab` commands are the only publication
+interface. No remote-operation ledger, reservation, persistent
 lock, expiry, polling, or automatic freshness read is used for publication.
 The user verifies GitLab effects and chooses repetition. Old guarded actions are
 historical only, never automatically migrated or executed.

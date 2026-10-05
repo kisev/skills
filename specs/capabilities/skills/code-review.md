@@ -11,7 +11,7 @@ Release verdicts belong to `release-review` unless both reviews are requested.
 
 ## Inputs and Outputs
 
-Input is one exact MR URL or current local WIP. The external `reviewmatic` runtime
+Input is one exact MR URL or current local WIP. The Python `reviewmatic` runtime
 produces immutable evidence and decisions, a compact role-aware assessment, and
 `runbook.md`. The portable archive contains authored instructions and materialized
 references, not an embedded executable. Reviewer findings remain out of chat.
@@ -40,15 +40,17 @@ version without rerunning unrelated review. Publication is a separate user actio
 
 ## Dependencies
 
-Git, relevant tests, authenticated `glab`, exact GitLab evidence, and host-native
-independent subagents. Optional specialist profiles are not prerequisites.
+Python 3.12+, `uvx`, Git, relevant tests, authenticated `glab`, exact GitLab
+evidence, and host-native independent subagents. Optional specialist profiles
+are not prerequisites. The runtime is invoked from a selected Git ref as
+specified by [REQ-I-428](../../requirements/interfaces/README.md#req-i-428---run-reviewmatic-from-a-selected-git-ref).
 
 ## Remote/Local Effects
 
 Preparation writes private artifacts but never edits the reviewed checkout or
-publishes. Users can copy commands from `runbook.md` or launch `reviewmatic plan`.
-The TUI executes the same `glab` operations without a shell. Local application uses
-a separate worktree with separate commit and push confirmations.
+publishes. Users copy commands from `runbook.md`; no in-application send
+interface exists. Local application uses a separate worktree with separate
+commit and push confirmations.
 
 ## Errors, Partial, Escalation
 
@@ -389,29 +391,24 @@ prefer namespaced catalog entries without hardcoded alias names.
 Manual publication shall have no persistent locks, reservations, receipts, TTL,
 automatic freshness reads, polling, or automatic retries. A send exposes its exit
 code and bounded redacted diagnostics. Every shell block that creates a comment
-or discussion or changes thread state shall start with a head check that reads
-the current MR head, compares it with the reviewed head by digest, and stops the
+or discussion or changes thread state shall start with a head check that uses
+the selected MR hostname, requires a successful GET, validates the response,
+compares the current MR head with the reviewed head by digest, and stops the
 whole block before any write when the request fails, the response is malformed,
-or the head moved after the review; the check runs at manual execution time,
-never during runbook preparation, and the experimental TUI performs the same
-check natively before sending. Reply and resolve/reopen share one annotated
-shell block; state changes require a successful reply. A plain-comment POST uses
-the actual returned discussion ID and resolvability, closing completed assessments
-only, never unanswered questions or defects. Backend state-only sends require a
-successful reply in the same manual session. The user verifies GitLab and chooses repetition.
-Timeouts and cancellation may leave accepted remote requests and repetitions may
-duplicate them; this risk is visible but does not create a persisted block.
+or the head moved. The check runs at manual execution time, never during runbook
+preparation, and does not depend on `pipefail`. Reply and resolve/reopen share
+one annotated shell block; state changes require a successful reply. A
+plain-comment POST uses the actual returned discussion ID and resolvability,
+closing completed assessments only, never unanswered questions or defects.
+The user verifies GitLab and chooses repetition. Timeouts or interruption may
+leave accepted remote requests and repetitions may duplicate them; this risk is
+visible but does not create a persisted block.
 
-The TUI is experimental and outside blocking behavioral acceptance; see
+The Python runtime has no terminal UI or in-application publication action.
+Preparing a runbook requires the reviewmatic backend; its finished direct
+`glab` commands execute without reviewmatic. See
 [REQ-F-548](../../requirements/functional/README.md#req-f-548---verify-gitlab-workflows-against-a-persistent-local-ce-server)
-for the acceptance boundary. Preparing a runbook still requires the reviewmatic
-backend; its finished direct `glab` commands execute without reviewmatic.
-Opening/reading/navigating the TUI shall require no network. During sends, reading,
-navigation, exit, and cancellation remain available. The UI shows readable text,
-separate reply/context views, concrete errors rather than truncated JSON, and
-explicit action choices. Opening a detail never publishes. Human body edits save
-the plan/runbook without sending and preserve validated code. TUI statuses describe
-local command execution, never remotely verified publication.
+for the live-server acceptance boundary.
 Validation during editing follows the concrete publication: routing-only prose is
 editable without a suggestion block, while positioned suggestions retain exact-head
 tree equivalence checks. `routing_response` preserves edited routing prose through
@@ -457,8 +454,9 @@ user files.
 Runtime and fixture tests cover local validation, real critic identity contracts,
 atomic rollback, cumulative findings, targeted repair, refresh without lost
 findings, original receipt preservation, CI-only refresh, grouped suggestions,
-Markdown fences, field diagnostics, direct writes without GETs or publication
-state, errors, repetition and cancellation, and review worktree preparation:
+Markdown fences, field diagnostics, manual head-guard failure modes, direct
+writes without extra GETs or publication state, errors and repetition, and review
+worktree preparation:
 fork sources under arbitrary remote names, unrelated or missing repositories,
 dirty source and occupied or foreign worktrees, new heads with active and
 finalized reviews, same branch names in different projects, concurrent runs,
@@ -490,11 +488,11 @@ cover staged, unstaged, and untracked sections separately and together,
 compensating staged and unstaged changes, explicit empty-scope results, missing,
 ambiguous, and unrelated comparison refs, branch reviews bound to an explicit
 ref, repeated runs that retain the agreed boundary, linked-worktree checkouts,
-and preparation without any remote that preserves HEAD and the index. TUI
-behavioral, Ink and PTY suites
-remain separate experimental sources and are not run by the default gate.
-Backend worktree checks remain mandatory. Tests use synthetic GitLab responses,
-never live publication.
+and preparation without any remote that preserves HEAD and the index. Generated
+runbook blocks use fake glab to prove that a matching head permits reply plus
+resolve/reopen, while a moved head, malformed response, or failed GET permits no
+write; GET and writes stay on the selected MR hostname. Backend worktree checks
+remain mandatory. Tests use synthetic GitLab responses, never live publication.
 Structural tests do not prove the model's semantic judgment.
 
 Transport tests use real `glab` 1.120.0 with isolated configuration and a local
@@ -507,8 +505,9 @@ Exact duplicate check strings render once without discarding distinct evidence.
 Grouped suggestion parts with explanatory prose are complete publication bodies;
 bare blocks inherit shared prose for compatibility. The agent preserves necessary
 caveats in each complete part. Presentation repair regenerates contract-7 commands
-locally while preserving findings and original critic receipts. User-facing launch
-commands remain `reviewmatic plan`, without a `mise exec` wrapper.
+locally while preserving findings and original critic receipts. Runtime commands
+use the selected Git source through `uvx --from`; publication commands remain
+direct `glab` commands copied from the runbook.
 
 ## Example
 

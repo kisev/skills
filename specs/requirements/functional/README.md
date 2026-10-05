@@ -259,8 +259,9 @@ It shall verify `code-review`/reviewmatic, `mr-prepare`, `task-prepare`,
 `task-triage`, `release-prepare` and `release-review` against the pinned CE server
 and real glab, including pagination, author/reviewer roles, inline positions,
 single/grouped suggestions and partial application, manual publication commands
-without the experimental TUI, refresh/repair and CI-only drift, supported issue relationships,
-tags/releases and readiness. Real shell jobs shall provide exact-commit evidence,
+from the Python reviewmatic runbook, refresh/repair and CI-only drift, supported
+issue relationships, tags/releases and readiness. Reviewmatic has no terminal
+UI or in-application publication action. Real shell jobs shall provide exact-commit evidence,
 successful and failing traces and a child pipeline. Same-file suggestion application
 shall verify partial/full state and exact output through the real API and backend
 reassessment without depending on a browser. Browser checks shall remain separately
@@ -288,12 +289,11 @@ from actual server behavior. Optional live shall use existing host adapters,
 explicit provider/model/credentials and bounded execution with complete budget
 telemetry; it shall verify artifacts and the manual publication boundary.
 Neither a running stand nor a live provider shall be required by ordinary checks.
-Only reviewmatic's TUI is experimental and excluded from blocking acceptance:
-behavioral, Ink, PTY and server TUI tests shall not run in the default gate.
-Backend reviewmatic checks, including helpers under `tui/support.js`, and GitLab
-API/backend checks shall remain mandatory. Reports shall distinguish the TUI exclusion,
-deferred GitLab browser coverage and missing mandatory API/backend coverage. A deferred
-browser scenario shall not be reported as passed or used to claim verified UI behavior.
+Reviewmatic's Python backend and GitLab API/backend checks shall remain mandatory;
+there is no reviewmatic TUI test suite or in-application send interface. Reports
+shall distinguish deferred GitLab browser coverage from missing mandatory
+API/backend coverage. A deferred browser scenario shall not be reported as passed
+or used to claim verified UI behavior.
 Readiness shall establish a working Rails application and its dependencies, not
 only the proxy. Browser remap checks shall bind the pending discussion's active
 current position to the exact MR head before one diff navigation.

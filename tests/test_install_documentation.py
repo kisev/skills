@@ -9,7 +9,6 @@ ROOT = Path(__file__).resolve().parents[1]
 PAIRS = (
     ("README.md", "README.ru.md"),
     ("apps/memomatic/README.md", "apps/memomatic/README.ru.md"),
-    ("apps/reviewmatic/README.md", "apps/reviewmatic/README.ru.md"),
     ("apps/taskmatic/README.md", "apps/taskmatic/README.ru.md"),
     ("packages/agentomatic/README.md", "packages/agentomatic/README.ru.md"),
     ("packages/safe-fs/README.md", "packages/safe-fs/README.ru.md"),
@@ -57,12 +56,33 @@ def test_installation_examples_preview_run_and_verify_in_both_locales(
 
 def test_complete_setup_checks_every_installed_application() -> None:
     for block, channel in zip(installation_blocks("README.md"), ("latest", "dev"), strict=True):
-        for name in ("agentomatic", "memomatic", "reviewmatic", "taskmatic"):
+        for name in ("agentomatic", "memomatic", "taskmatic"):
             assert f"npm view --prefer-online @kisev/{name}@{channel} version" in block
-        for name in ("memomatic", "reviewmatic", "taskmatic"):
+        for name in ("memomatic", "taskmatic"):
             assert f"{name} --version" in block
+        assert "uvx --from" in block
+        assert "#subdirectory=apps/reviewmatic" in block
+        assert "npm view --prefer-online @kisev/reviewmatic" not in block
         assert 'npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0' in block
-        assert (
-            "npm list --global @kisev/memomatic @kisev/reviewmatic @kisev/taskmatic --depth=0"
-            in block
-        )
+        assert "npm list --global @kisev/memomatic @kisev/taskmatic --depth=0" in block
+
+
+def test_reviewmatic_git_install_is_mirrored_and_documents_ref_and_cache() -> None:
+    english = (ROOT / "apps/reviewmatic/README.md").read_text(encoding="utf-8")
+    russian = (ROOT / "apps/reviewmatic/README.ru.md").read_text(encoding="utf-8")
+    command = (
+        'uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}'
+        '#subdirectory=apps/reviewmatic" reviewmatic'
+    )
+    for document, stable_ref, dev_ref in (
+        (english, "exact release tag", "moving `dev` branch"),
+        (russian, "точный тег выпуска", "ветку `dev`"),
+    ):
+        normalized = " ".join(document.split())
+        assert command in normalized
+        assert stable_ref in normalized
+        assert dev_ref in normalized
+        assert "--refresh-package reviewmatic" in normalized
+        assert "uv cache clean" in normalized
+        assert "uv tool install" in normalized
+        assert "PyPI" in normalized

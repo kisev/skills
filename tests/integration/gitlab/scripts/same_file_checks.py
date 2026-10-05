@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +47,7 @@ def run(
     before = stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions")
     result = json.loads(
         command(
-            ["node", str(APP / "scripts/review_plan.mjs"), str(source)],
+            [sys.executable, str(APP / "scripts/review_plan.py"), str(source)],
             env=environment,
             timeout=240,
         ).stdout
@@ -128,8 +129,8 @@ def run(
             reassessed = json.loads(
                 command(
                     [
-                        "node",
-                        str(APP / "scripts/same_file_reassessment.mjs"),
+                        sys.executable,
+                        str(APP / "scripts/same_file_reassessment.py"),
                         str(reassessment_input),
                     ],
                     env=environment,

@@ -15,7 +15,7 @@ CLI `skills` управляет переносимыми навыками; npm-�
 
 ## Установка всего
 
-Установите переносимые навыки, `agentomatic`, [memomatic](docs/ru/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.ru.md) и [taskmatic](docs/ru/how-to/taskmatic.md); обновление - те же команды. Проход `update` после `add` также предлагает удалить устаревшие имена навыков.
+Установите переносимые навыки, `agentomatic`, [memomatic](docs/ru/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.ru.md) и [taskmatic](docs/ru/how-to/taskmatic.md); reviewmatic запускается через `uvx` из Git, не через npm или PyPI. Проход `update` после `add` также предлагает удалить устаревшие имена навыков.
 `install` и `configure` требуют подтверждения в терминале или явного выбора компонентов с `--yes`. До первого стабильного релиза пакета `latest` может быть пререлизом.
 После обновления перезапустите OpenCode, остальные работающие MCP-хосты и веб-сервис taskmatic.
 
@@ -26,7 +26,6 @@ CLI `skills` управляет переносимыми навыками; npm-�
 npm view --prefer-online skills@latest version
 npm view --prefer-online @kisev/agentomatic@latest version
 npm view --prefer-online @kisev/memomatic@latest version
-npm view --prefer-online @kisev/reviewmatic@latest version
 npm view --prefer-online @kisev/taskmatic@latest version
 
 # Install and configure
@@ -35,15 +34,16 @@ npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@latest install --global
 npx --yes @kisev/agentomatic@latest configure integration --global
 npm install --global @kisev/memomatic
-npm install --global @kisev/reviewmatic
 npm install --global @kisev/taskmatic
+REVIEWMATIC_REF='<ref>' # use the exact release tag for the stable skills channel
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 
 # Local installation and active CLIs
 npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
-npm list --global @kisev/memomatic @kisev/reviewmatic @kisev/taskmatic --depth=0
+npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
 memomatic --version
-reviewmatic --version
 taskmatic --version
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 npx --yes skills@latest list --global
 ```
 
@@ -54,7 +54,6 @@ npx --yes skills@latest list --global
 npm view --prefer-online skills@latest version
 npm view --prefer-online @kisev/agentomatic@dev version
 npm view --prefer-online @kisev/memomatic@dev version
-npm view --prefer-online @kisev/reviewmatic@dev version
 npm view --prefer-online @kisev/taskmatic@dev version
 
 # Install and configure
@@ -63,21 +62,25 @@ npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@dev install --global
 npx --yes @kisev/agentomatic@dev configure integration --global
 npm install --global @kisev/memomatic@dev
-npm install --global @kisev/reviewmatic@dev
 npm install --global @kisev/taskmatic@dev
+REVIEWMATIC_REF=dev # moving development branch, matching the dev skills channel
+uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 
 # Local installation and active CLIs
 npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
-npm list --global @kisev/memomatic @kisev/reviewmatic @kisev/taskmatic --depth=0
+npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
 memomatic --version
-reviewmatic --version
 taskmatic --version
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 npx --yes skills@latest list --global
 ```
 
 Теги могут сдвинуться между просмотром и установкой. `npm list` проверяет
-установленные пакеты, `--version` - CLI из PATH. npx не устанавливает CLI
-глобально; `skills list` показывает локальные навыки, а не версию npm-установщика.
+установленные npm-пакеты, `--version` показывает версию их CLI в PATH. `uvx` запускает
+reviewmatic временно из выбранного Git-ref и не устанавливает глобальный
+инструмент. `skills list` показывает локальные навыки, а не версию
+npm-установщика. Прежний npm-пакет `@kisev/reviewmatic` этим изменением не
+депрецируется; для этого потребуется отдельное подтверждение.
 
 ## Руководства
 

@@ -63,23 +63,26 @@ def test_missed_defect_registry_exists_in_both_locales_and_lists_all_classes() -
     for path in (
         "tests/test_application_workflows.py",
         "packages/agentomatic/test/command-cli.test.mjs",
-        "apps/reviewmatic/test/context-package.test.mjs",
-        "apps/reviewmatic/test/local-review.test.mjs",
+        "apps/reviewmatic/tests/test_context_package_records.py",
+        "apps/reviewmatic/tests/test_local_review_scenarios.py",
     ):
         assert path in english, path
         assert path in russian, path
-    for guard in ("streamed_glab_trace", "modelSelection", "sharedContextInputs"):
+    for guard in ("streamed_glab_trace", "modelSelection", "_shared_context_inputs"):
         assert guard in english, guard
         assert guard in russian, guard
-    for locale, covered, deferred, postpone in (
-        (english, "covered", "deferred", "PORT-2"),
-        (russian, "покрыт", "отложен", "PORT-2"),
+    for locale, covered, closed, mutation_check in (
+        (english, "covered", "closed by PORT-3", "Proof by removal"),
+        (russian, "покрыты", "закрыто в PORT-3", "Проверка удалением"),
     ):
         assert covered in locale
-        assert deferred in locale
-        assert postpone in locale
-        assert "prove-by-removing" in locale
-    for invariant in ("questionContextDigest", "questionContextVersion", "isCurrentResult"):
+        assert closed in locale
+        assert mutation_check in locale
+    for invariant in (
+        "question_context_digest",
+        "question_context_version",
+        "is_current_result",
+    ):
         assert invariant in english, invariant
         assert invariant in russian, invariant
 

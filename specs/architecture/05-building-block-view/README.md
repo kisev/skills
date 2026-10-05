@@ -27,12 +27,14 @@ public skill names, never on a portable installation tree. These boundaries prov
 [REQ-I-002](../../requirements/interfaces/README.md#req-i-002---command-interface).
 
 Code-review is a thin archive: authored prompt material plus materialized
-references, with no Python runner. Its executable runtime is the external
-`@kisev/reviewmatic` npm application (bin `reviewmatic`), which owns stage
-orchestration, review context, plan assembly, targeted repair, and a separate manual
-TUI executor for the same direct commands as `runbook.md`. The shared GitLab contract supplies evidence, artifact validation, and
-transport primitives for the other GitLab skills; it does not import review
-implementation modules. `mutation_process.py` supplies bounded process
-execution to task triage. These
-mechanisms provide [the code-review contract](../../capabilities/skills/code-review.md)
-and [REQ-Q-004](../../requirements/quality/README.md#req-q-004---evidence-completeness).
+references, with no embedded executable. Its only runtime is the Python
+application in `apps/reviewmatic`, invoked from a selected Git ref through
+`uvx`; it owns review orchestration, context, plan assembly, targeted repair,
+refresh, local WIP, and runbook generation. Publication remains a separate user
+action through the generated direct `glab` commands; there is no TUI or
+in-application send interface. The shared GitLab contract supplies evidence,
+artifact validation, and transport primitives for the other GitLab skills; it
+does not import review implementation modules. `mutation_process.py` supplies
+bounded process execution to task triage. These mechanisms provide
+[the code-review contract](../../capabilities/skills/code-review.md) and
+[REQ-Q-004](../../requirements/quality/README.md#req-q-004---evidence-completeness).

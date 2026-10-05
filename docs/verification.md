@@ -80,35 +80,35 @@ workflows are storage-neutral; and
 `code-explain` accepts current WIP, an exact range, a branch, or an exact HTTPS MR
 link and presents history without a review verdict.
 
-## Python Port Packages
+## Reviewmatic Python Application
 
-The Python port of the reviewmatic family starts in `apps/reviewmatic-py`.
-Stage 1 ships the package skeleton and the complete command surface of the
-TypeScript CLI with the same exit-code contract; subcommands whose business
-logic has not landed answer an explicit not-implemented envelope with exit
-code 5. The canonical contract core is materialized byte-for-byte from
-`shared/references/` through the `pythonRuntime` section of
-`shared/manifest.json`; the copies in the package are not edited by hand.
+`apps/reviewmatic` is the only reviewmatic runtime. It handles GitLab MRs,
+local WIP, panel/arbitration, incremental review, repair, refresh, private XDG
+state, managed worktrees, and direct manual runbooks. Run it ephemerally from a
+selected Git ref with `uvx`; there is no npm or PyPI runtime and no TUI. See the
+[application guide](../apps/reviewmatic/README.md) for stable/dev ref selection,
+cache refresh, and runbook recovery.
 
-Digest parity with the TypeScript implementation is pinned by committed
-golden fixtures under `apps/reviewmatic-py/tests/golden/`. They cover
-canonical digests, v2 artifact validation, and semver and label assessments.
-The declared TypeScript task regenerates them from the real CLI sources, and
-the generation is byte-checked:
+The portable contract core under `src/reviewmatic/portable/` is materialized
+byte-for-byte from `shared/references/` through `shared/manifest.json`
+(`pythonRuntime`). The 33 golden cases retain expectations generated from
+TypeScript revision `3e409c217e94d643f77eb543caab9a2ed4b7288d`; the old
+implementation and generator are removed. Python tests recompute and assert
+every expected digest, verdict, and state transition without regenerating
+expectations from Python. The historical TypeScript baseline and mapping are in
+the [test matrix](reviewmatic-test-matrix.md).
 
 ```shell
-task reviewmatic-py:fixtures
 task generate:check
+task reviewmatic:check
+task reviewmatic:install-smoke
 ```
 
-The same `generate:check` run byte-checks the materialized contract core
-through `scripts/materialize_cli_runtime.mjs --check`. The package gate runs
-the parity tests, application-local mypy, and the uv build of the sdist and
-wheel:
-
-```shell
-task reviewmatic-py:check
-```
+`generate:check` checks materialized shared sources and retained golden
+assertions. The application gate runs pytest, mypy, the lock check, and builds
+the wheel and source distribution. The separate install smoke exercises a
+local Git ref and both built distributions outside the checkout, without Node,
+`PYTHONPATH`, or an installed `reviewmatic` tool.
 
 ## shopmatic
 
@@ -301,7 +301,7 @@ aborted the wizard with `Error [catalog_unavailable]` before the
 explicit-model prompt and failed the fallback test; restoring the catch turned
 the test green.
 
-### `prior_decisions` outside the context version, fix `204714f` — deferred to PORT-2
+### `prior_decisions` outside the context version, fix `204714f` — closed by PORT-3
 
 Symptom: a significant agreed-decision change kept the question context
 version, so a late answer collected under the withdrawn exception could still
@@ -313,25 +313,27 @@ were enumerated only in the digest function body; `prior_decisions` was absent
 from that list and from the guide, READMEs, and spec, so no contract test
 looked at decision churn.
 
-Guard: `sharedContextInputs` feeds `prior_decisions` into both
-`questionContextDigest` and `questionContextVersion`; retirement filters every
-collected answer and verification by its own context binding
-(`isCurrentResult`) instead of the question ID and moves only stale entries to
-history.
+Guard: `_shared_context_inputs` feeds `prior_decisions` into both
+`question_context_digest` and `question_context_version`; retirement filters
+each answer and verification by its own binding (`is_current_result`), not
+only by question ID, and moves only stale entries to history.
 
-Covering tests shipped with the fix:
-`apps/reviewmatic/test/context-package.test.mjs` proves that a significant
-prior-decision change supersedes answers for the same question and that
-mixed-version recovery keeps fresh results while retiring only the stale
-entry; `apps/reviewmatic/test/local-review.test.mjs` proves the same pair for
-the local review flow.
+Red-capable Python coverage:
+`apps/reviewmatic/tests/test_context_package.py::test_prior_decisions_change_both_package_and_question_context_bindings`
+fails if `prior_decisions` is removed from either binding.
+`apps/reviewmatic/tests/test_context_package_records.py` proves that a changed
+decision blocks late V1 answers, preserves authorship and
+original bindings in history, keeps a fresh V2 answer and primary verification
+from another critic, and makes repeated recovery idempotent.
+`apps/reviewmatic/tests/test_local_review_scenarios.py` proves the same
+stale-answer rejection and mixed-version preservation.
+Proof by removal: temporarily omit `prior_decisions` from `_shared_context_inputs`;
+the direct binding test must fail.
 
-Status: deferred. These files are being ported by PORT-2, so new tests here
-would collide with that port; the obligation to prove the covering tests
-red-capable moves to PORT-2. The invariants PORT-2 must keep covered:
+Status: closed by PORT-3. These invariants remain covered:
 
-- `prior_decisions` participates in `questionContextDigest` and
-  `questionContextVersion`;
+- `prior_decisions` participates in `question_context_digest` and
+  `question_context_version`;
 - an agreed-decision change invalidates late answers bound to the earlier
   version, so they cannot finalize the review as ready;
 - retirement keeps fresh results of other critics, moves only stale entries to

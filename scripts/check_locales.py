@@ -16,7 +16,7 @@ FENCE = re.compile(r"^```([^\n]*)$", re.MULTILINE)
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.MULTILINE)
 CODE = re.compile(r"`([^`\n]+)`")
 COMMAND = re.compile(
-    r"^\s*((?:npx|npm|uv|python3?|task|mise|lefthook|git|node)\b[^\n]*)", re.MULTILINE
+    r"^\s*((?:npx|npm|uvx|uv|python3?|task|mise|lefthook|git|node)\b[^\n]*)", re.MULTILINE
 )
 PATH = re.compile(r"(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+")
 LIST_ITEM = re.compile(r"^\s*(?:[-+*]|\d+[.)])\s+")

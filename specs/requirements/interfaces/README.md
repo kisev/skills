@@ -240,3 +240,27 @@ conflicts, retained model selections, and idempotence. Installed-tarball tests
 load plugins and agents in the pinned V2 server and evaluate allow/deny rules
 without model calls or credentials; npm dependency provisioning may access the
 registry. Root and nested secret paths and allowed skills-state paths are covered.
+
+### REQ-I-428 - Run reviewmatic from a selected Git ref
+
+The code-review runtime shall be the Python application in `apps/reviewmatic`
+and shall run through this Git-sourced CLI:
+
+```shell
+uvx --from 'git+https://github.com/kisev/skills.git@<ref>#subdirectory=apps/reviewmatic' reviewmatic
+```
+
+Stable skills shall select an exact release tag; development
+skills shall select the moving `dev` branch. The skill shall use the same
+selected ref for returned continuation commands. The runtime shall use an
+ephemeral uv environment and shall not require `uv tool install`, an npm
+package, or a PyPI release. Existing XDG review state and artifacts shall remain
+readable across runtime versions.
+
+#### Verification
+
+Installation documentation tests check stable/dev source selection. The
+reviewmatic gate checks wheel, source distribution, CLI behavior, and retained
+artifact compatibility. `task reviewmatic:install-smoke` runs the local Git
+snapshot, wheel, and source distribution from outside the checkout without
+Node, `PYTHONPATH`, or an installed `reviewmatic` tool.

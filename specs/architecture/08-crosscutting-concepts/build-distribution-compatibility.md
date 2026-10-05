@@ -5,6 +5,10 @@ Generated outputs are checked for parity, reproducibility, and undeclared files.
 Portable Pages archives are content-addressed and self-contained; the npm package
 is an independent native OpenCode V2 adapter under
 [REQ-I-420](../../requirements/interfaces/README.md#req-i-420---native-opencode-v2-interface).
+The reviewmatic Python application is a separate Git-subdirectory source invoked
+with `uvx` under
+[REQ-I-428](../../requirements/interfaces/README.md#req-i-428---run-reviewmatic-from-a-selected-git-ref);
+it is not included in the npm release manifest.
 The compatibility inventory owns the supported ranges and exact verification
 samples separately. Default plugin objects expose only `setup`; hooks operate on
 native events and preserve structured tool results without a V1 adapter or host

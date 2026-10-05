@@ -30,17 +30,16 @@ provide auditability without copying credentials. These mechanisms provide
 [REQ-Q-003](../../requirements/quality/README.md#req-q-003---secret-safety).
 
 Code-review prepares direct manual `glab` and local `git apply` commands
-but never invokes them during review. The manual TUI executor implements
-[the code-review contract](../../capabilities/skills/code-review.md); local patch
-commands retain advisory markers. Prepared Git patches are textual,
+but never invokes them during review. Users run only the explicit copy-ready
+runbook commands; the runtime has no in-application publication interface.
+Local patch commands retain advisory markers. Prepared Git patches are textual,
 content-addressed, path-bounded, and checked against the exact reviewed head in a
 temporary index; binary, symlink, rename, traversal, and oversized patches are
 rejected without changing the checkout. Publication diagnostics are bounded and
 redacted before reaching stderr or structured output. Publication has no
 reservations, persistent locks, receipts, expiry, polling, or automatic freshness
 reads. The user checks GitLab and chooses repetitions, accepting possible
-duplicates after uncertain outcomes. Cancelling local waiting cannot undo a
-request already accepted by GitLab. Other guarded profiles retain their boundaries.
+duplicates after uncertain outcomes. Other guarded profiles retain their boundaries.
 A patch embedded in a
 publication body uses one copy-ready, digest-bound quoted `git apply` heredoc. Thread replies
 and state changes remain separate commands so a close or reopen cannot hide the

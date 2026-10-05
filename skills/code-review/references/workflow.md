@@ -14,6 +14,15 @@ not an instruction to publish. When no new information is needed, choose
 
 Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/language-policy.md`, `references/necessity-doctrine.md`, `references/simplification-criteria.md`, `references/context-package.md`, `references/architecture-checklist.md`, `references/finding-examples.md`, `references/output-format.md`, and `references/semver.md`. Apply the necessity and completion doctrine to both targets. For local WIP follow `references/local-review.md`, then stop; the remote stages below do not apply. For a GitLab MR also read `references/incremental-review.md` and `references/review-state-machine.md`.
 
+Select the runtime Git ref before starting: use the exact release tag that
+matches a stable skill, or `dev` for a development skill. If the channel is not
+clear, ask the user; do not silently choose a source. Keep
+`REVIEWMATIC_FROM='git+https://github.com/kisev/skills.git@<ref>#subdirectory=apps/reviewmatic'`
+for the whole review. Invoke every runtime command, including each returned
+continuation action, as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`; never
+depend on a globally installed binary. If the user requests a fresh checkout of
+the moving `dev` ref, add `--refresh-package reviewmatic` to the `uvx` command.
+
 `/code-review` distinguishes a remote-MR target from local-WIP input by the explicit request. One exact MR URL selects the remote-MR mode. An explicit local review request selects the local-WIP mode and uses the current checkout exactly as it is, including when that checkout is itself an existing Git worktree; never search for an MR by branch name for it. When the request does not clearly name one of these targets, stop and ask which one to review instead of assuming.
 
 When this skill is invoked directly and the request leaves the task goal, constraints, or acceptance criteria unclear, ask for the missing context once with `question-guidelines` and wait; a short answer or an explicit skip is acceptable and the topic is never raised again. When the skill started automatically (delegated, routed, or scheduled), do not stop for questions and build the context package from what is available. The invocation mode follows the actual invocation, never the MR contents. Remaining unknowns are recorded explicitly in the package as unknown goal or acceptance criteria, and review continues without claiming completeness for an unknown task.
@@ -227,17 +236,16 @@ guards every manual publication block. Finalization writes body files and
 content-addressed `.patch` files, then atomically replaces
 `<artifact-root>/runbook.md` and the review baseline. After
 `finish-review`, print its `chat` field verbatim as the compact review summary and
-append exactly one fenced code block with the manual launch command
-`reviewmatic plan --artifact-root <artifact-root>`. The user copies and runs it
-themselves. Identify that TUI as experimental and point to `<artifact-root>/runbook.md`
-for supported direct `glab` publication without reviewmatic. Preparing that runbook
-still requires the reviewmatic backend. Never execute it, and never publish, retry, or apply anything during
-review. The interactive plan walkthrough, thread replies with editable drafts,
-label and issue publication, and local patch application through a dedicated git
-worktree belong to that manual `reviewmatic plan` session; read
-`references/publication.md` for the direct manual command and error contract.
-State that nothing was executed. For local repair or changed evidence read
-`references/repair.md`; preserve existing analysis rather than restarting it.
+point to `<artifact-root>/runbook.md` for the supported copy-ready `glab`
+commands. There is no terminal plan viewer or in-app send interface. Never
+execute the runbook, and never publish, retry, or apply anything during review.
+The `uvx` cache stores the runtime, not XDG drafts or runbooks. After a cache
+cleanup, invoke the same selected ref again. To regenerate a runbook after a
+repair, run `repair-review` and then the returned `finish-review` continuation
+through the same `uvx --from "$REVIEWMATIC_FROM"` source. State that nothing was
+executed. For local repair or changed evidence read `references/repair.md`;
+preserve existing analysis rather than restarting it. Read
+`references/publication.md` for the manual command and error contract.
 
 Bind every local patch command to the managed review worktree and exact reviewed
 head. Show the read-only `git apply --check` command first. The marked `git apply`
