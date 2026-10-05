@@ -67,11 +67,22 @@ the user as a question, not as more patches.
 
 Turn the minimized repro into a failing test at a seam that exercises the
 real bug pattern, watch it fail, apply the fix, watch it pass, and re-run the
-phase 1 loop against the original scenario. If no correct seam exists, that
+phase 1 loop against the original scenario. When the fix landed before the
+test exists, the red step is prove by removing: revert the fix, watch the new
+test go red, restore it, and watch it go green. If no correct seam exists, that
 is itself a finding: record it and raise it with the user. Agreeing new test
 seams follows the `tdd` skill. The regression test then runs with the suite
 per this repository's local verification contracts, which take precedence
 over any generic checklist.
+
+## Measured bugs
+
+A bug reported as slow, heavy, or growing is a measurement problem before it
+is a code problem. Apply `references/measurement-doctrine.md`: zero is a
+measurement, so confirm the instrument fired and the workload ran before
+trusting a quiet profile; capture the before on the identical build and
+scenario; revert a "fix" you cannot measure; and treat the user-facing budget
+as the stop condition instead of optimizing toward zero.
 
 ## Cleanup
 
@@ -84,7 +95,9 @@ stated in the commit or report so the next debugger learns from it.
 
 Inspired by `mattpocock/skills` (`engineering/diagnosing-bugs`) and
 `obra/superpowers` (`systematic-debugging`), both MIT: Copyright (c) 2026
-Matt Pocock and Copyright (c) 2025 Jesse Vincent; pinned revisions are
-recorded in the frontmatter `metadata.inspired-by` field. This workflow is an
+Matt Pocock and Copyright (c) 2025 Jesse Vincent, and by the
+performance-engineering skill in `openchamber/openchamber` (MIT,
+Copyright (c) 2025 Bohdan Triapitsyn); pinned revisions are recorded in the
+frontmatter `metadata.inspired-by` field. This workflow is an
 original adaptation of those ideas for this collection, not a copy of the
 upstream text.

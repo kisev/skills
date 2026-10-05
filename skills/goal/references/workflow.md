@@ -1,6 +1,6 @@
 # Goal
 
-Read `references/work-item-contract.md` and formulate a goal that can be copied to another system. This skill is strictly read-only: do not create or modify files, XDG state, the repository, session, receipts, or external systems. OpenChamber Goal Mode as an external means of executing a goal is not part of this skill.
+Read `references/work-item-contract.md` and `references/writing-for-agents.md` and formulate a goal that can be copied to another system. This skill is strictly read-only: do not create or modify files, XDG state, the repository, session, receipts, or external systems. OpenChamber Goal Mode as an external means of executing a goal is not part of this skill.
 
 The goal is an assignment for an LLM agent. A human-facing work item, a local task plan, or GitLab publication selects the `task-prepare` skill instead.
 
@@ -25,6 +25,14 @@ Apply `references/clarity-rules.md` to every criterion and boundary: consistent
 terms; the actor, action, conditions, and scope wherever meaning depends on
 them; agreed requirements separated from new proposals; and a definite check
 sufficient to verify each acceptance criterion.
+
+Word each acceptance criterion as a completion criterion with both lever
+properties from `references/writing-for-agents.md`: clarity, an executing
+agent can tell done from not-done, and demand, the wording itself forces the
+legwork instead of trusting effort. Diagnose premature completion when a draft
+or a returned completion report claims done while a visible criterion, check,
+or step is unresolved: name the diagnosis, reject the claim, and require the
+exact evidence that separates done from not-done.
 
 A ready result is non-empty, at most 4000 characters, and has no blocking open
 questions. If material conditions do not fit, stop and propose splitting the

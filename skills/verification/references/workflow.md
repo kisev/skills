@@ -36,8 +36,26 @@ error, and the work stays open.
 | Build succeeds | Build command: exit 0 | Linter output alone |
 | Bug fixed | The original failing scenario now passes | Code changed, assumed fixed |
 | Regression test works | Red-green cycle observed | One green run |
+| Guard or fix protects | Removing it turns the check red, then restoring turns it green | The suite passing with the guard in place |
 | Agent task done | The repository diff inspected by you | The agent's success report |
 | Requirements met | Item-by-item check against each | Tests passing |
+
+## Measured claims
+
+A claim backed by a number follows `references/measurement-doctrine.md`:
+
+- Zero is a measurement: a zero or suspiciously quiet reading is a claim that
+  needs evidence, so confirm the instrument fired and the workload ran before
+  reporting it, and state which validity checks ran.
+- An "after" needs a "before" on the identical build and scenario; a remembered
+  number or a nearby baseline proves nothing.
+- Revert what you cannot measure: a change that does not move its target metric
+  is unvalidated complexity, not a small win; record the hypothesis as
+  rejected.
+- The budget is the stop condition: when the measured path sits inside budget,
+  further optimization trades real risk for an invisible gain; say so and stop.
+- Prove by removing: a new check proves protection only when removing the
+  protection turns it red and restoring turns it green again.
 
 ## Red flags — stop and verify
 
@@ -77,6 +95,8 @@ route the change to `code-review` before publication.
 ## Credits
 
 Inspired by `obra/superpowers` (`verification-before-completion`), MIT,
-Copyright (c) 2025 Jesse Vincent; the pinned revision is recorded in the
-frontmatter `metadata.inspired-by` field. This workflow is an original
-adaptation of that idea for this collection, not a copy of the upstream text.
+Copyright (c) 2025 Jesse Vincent, and by the performance-engineering skill in
+`openchamber/openchamber` (MIT, Copyright (c) 2025 Bohdan Triapitsyn); the
+pinned revisions are recorded in the frontmatter `metadata.inspired-by` field.
+This workflow is an original adaptation of those ideas for this collection,
+not a copy of the upstream text.

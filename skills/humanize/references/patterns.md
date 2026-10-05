@@ -27,9 +27,10 @@ passage that discusses the phrase rather than uses it.
 ### 1. Not X but Y
 
 Watch for: "not just X, but Y", "it's not X, it's Y", the reversed "X rather
-than Y", the same contrast split across sentences, a clipped negative tail.
-State the point directly. Keep a contrast only when the negative half corrects
-a belief the reader actually holds or both halves carry information.
+than Y", the appended "X, not Y" tail, the same contrast split across
+sentences, a clipped negative tail. State the point directly. Keep a contrast
+only when the negative half corrects a belief the reader actually holds or
+both halves carry information.
 
 **Before:**
 
@@ -39,6 +40,15 @@ a belief the reader actually holds or both halves carry information.
 **After:**
 
 > The beat rides under the vocals and adds to the aggression and atmosphere.
+
+**Before:**
+
+> The patch adds retry with backoff to the webhook client, not a rewrite of
+> the delivery pipeline.
+
+**After:**
+
+> The patch adds retry with backoff to the webhook client.
 
 ### 2. One-line closers and dramatic fragments
 

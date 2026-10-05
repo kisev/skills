@@ -67,6 +67,34 @@
       "destination": "task-prepare/references/clarity-rules.md"
     },
     {
+      "source": "references/changelog-register.md",
+      "destination": "release-prepare/references/changelog-register.md"
+    },
+    {
+      "source": "references/changelog-register.md",
+      "destination": "release-review/references/changelog-register.md"
+    },
+    {
+      "source": "references/measurement-doctrine.md",
+      "destination": "verification/references/measurement-doctrine.md"
+    },
+    {
+      "source": "references/measurement-doctrine.md",
+      "destination": "debugging/references/measurement-doctrine.md"
+    },
+    {
+      "source": "references/writing-for-agents.md",
+      "destination": "agents-md/references/writing-for-agents.md"
+    },
+    {
+      "source": "references/writing-for-agents.md",
+      "destination": "goal/references/writing-for-agents.md"
+    },
+    {
+      "source": "references/writing-for-agents.md",
+      "destination": "skill-doctor/references/writing-for-agents.md"
+    },
+    {
       "source": "references/documentation-review.md",
       "destination": "docs-review/references/documentation-review.md"
     },

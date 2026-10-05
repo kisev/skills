@@ -8,7 +8,10 @@ reconcile-and-validate workflow rather than mutually exclusive modes.
 Always read `references/agents-md-guidelines.md` before updating. It contains the
 standard shared section and fact-collection checklist. It is a self-contained
 skill resource; do not look for it in the working repository. Apply
-`references/language-policy.md` to all user-facing prose.
+`references/language-policy.md` to all user-facing prose. Apply
+`references/writing-for-agents.md` when wording rules and pointers: front-load
+the leading word, keep one trigger per branch, cache only what the environment
+cannot confess, and state the positive rule instead of steering by prohibition.
 
 ## Algorithm
 
@@ -33,7 +36,9 @@ skill resource; do not look for it in the working repository. Apply
 10. Add only verifiable commands, paths, versions, CI behavior, environment
     variables, and ownership constraints. Include branch, merge/pull-request, and
     deployment rules only when current repository configuration or canonical
-    documentation confirms them.
+    documentation confirms them. Restating an environment fact the checkout
+    already answers is a cache line: keep only the lookups that are expensive
+    or invisible to the environment.
 11. Remove stale, unconfirmed, and exact inherited duplicates. Do not replace
     user refinements with the template unless they conflict with repository facts.
 12. Preserve the language established by existing repository instructions. Do

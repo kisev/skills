@@ -6,7 +6,7 @@ license: MIT
 metadata:
   author: "Kirill Sevriugin"
   source: "https://kisev.github.io/skills"
-  inspired-by: "openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2"
+  inspired-by: "openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2; blocks 3-4 pinned at openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f"
 ---
 
 # code-review

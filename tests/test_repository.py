@@ -60,16 +60,49 @@ PORTABLE_SKILLS = (
 # adaptation that does not snapshot one revision names the repository without
 # a revision and appends its solution qualifier. Parsed by the command-label
 # contract test below and mirrored by COMMANDLESS_SKILLS in the package
-# registry for commandless skills.
+# registry for commandless skills; that registry set stays a subset of the
+# inspired-by set.
 INSPIRED_BY_LABELS = {
-    "tdd": "mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888 (MIT)",
+    "agents-md": (
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f "
+        "(MIT © Bohdan Triapitsyn, writing-for-agents by Matt Pocock)"
+    ),
+    "code-review": (
+        "openchamber/openchamber (MIT © Bohdan Triapitsyn); "
+        "solution 37, blocks 1-2; blocks 3-4 pinned at "
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f"
+    ),
     "debugging": (
         "mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888 (MIT); "
-        "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT)"
+        "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT); "
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f "
+        "(MIT © Bohdan Triapitsyn)"
     ),
-    "verification": "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT)",
-    "code-review": "openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2",
-    "task-triage": "openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2",
+    "goal": (
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f "
+        "(MIT © Bohdan Triapitsyn, writing-for-agents by Matt Pocock)"
+    ),
+    "humanize": (
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f "
+        "(MIT © Bohdan Triapitsyn, communication-style by poteto)"
+    ),
+    "release-prepare": (
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f (MIT © Bohdan Triapitsyn)"
+    ),
+    "release-review": (
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f (MIT © Bohdan Triapitsyn)"
+    ),
+    "skill-doctor": (
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f "
+        "(MIT © Bohdan Triapitsyn, writing-for-agents by Matt Pocock)"
+    ),
+    "task-triage": ("openchamber/openchamber (MIT © Bohdan Triapitsyn); solution 37, blocks 1-2"),
+    "tdd": "mattpocock/skills@24fe0ef7737efae15c87225755e9f6f5965e4888 (MIT)",
+    "verification": (
+        "obra/superpowers@8ca22dba9a94f28898bbce59f2537ff4d87c747d (MIT); "
+        "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f "
+        "(MIT © Bohdan Triapitsyn)"
+    ),
 }
 FORBIDDEN_PORTABLE_MARKERS = (
     "../..",

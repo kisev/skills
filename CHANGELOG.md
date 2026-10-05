@@ -8,6 +8,26 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+### Changed
+
+- Release preparation and release review now share one changelog register:
+  every item names user-visible behavior, stays short, folds follow-up
+  commits into its MR item, and claims only the surfaces its artifact
+  actually reaches; a review verifies the register item by item with a
+  done-when checklist.
+- `humanize` gains the positive half of editing: restore the author's voice
+  (opinion, rhythm, first person, specificity) after removing tells, then run
+  a final audit for what still reads as machine writing, including the
+  portability test for sentences that would fit any other document.
+- Agent-facing skills share two new portable references: writing for agents
+  (pointer wording, completion criteria, the no-op test, sediment as a named
+  diagnosis) for `agents-md`, `skill-doctor`, and `goal`, and the measurement
+  doctrine (zero is a measurement, before on the identical build, revert what
+  you cannot measure, prove by removing) for `verification` and `debugging`.
+- Code review critics must give every affected surface an explicit line, with
+  an "N/A" reason where a surface is out of reach; silence about a surface no
+  longer counts as an examined one.
+
 ## \[12.0.1] - 2026-10-05
 
 ### Fixed

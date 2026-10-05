@@ -113,6 +113,7 @@ For a direct commit, resolve a GitLab username only from an exact verified email
 
 ## Key rules
 
+- Apply `references/changelog-register.md` to every item: one user-visible behavior change at or below about 200 characters, no "X, not Y" contrast framing, follow-up commits folded into their component MR item, per-artifact reachability, and a 2-6 word bold heading.
 - Begin every item with a bold summary followed by a period.
 - State the verified change, impact, team action, and source.
 - For a fix, state the previous behavior, correction, and user-visible effect.

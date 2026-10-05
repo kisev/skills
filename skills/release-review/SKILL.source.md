@@ -6,6 +6,7 @@ license: MIT
 metadata:
   author: "Kirill Sevriugin"
   source: "https://kisev.github.io/skills"
+  inspired-by: "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f (MIT © Bohdan Triapitsyn)"
 ---
 
 # release-review

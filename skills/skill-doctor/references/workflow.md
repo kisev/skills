@@ -65,6 +65,15 @@ Authoring rules:
   for every skill defect; they are what later matching verifies.
 - Separate `conclusions` from `open_questions`. Write concrete proposals, and a
   known `workaround` when one was observed.
+- Apply `references/writing-for-agents.md` when naming causes and proposals.
+  Settle a claimed no-op instruction with the no-op test: does the flagged line
+  change behavior versus the default? A run of the document settles that; a
+  dispute about the wording never does. A line that changes nothing is dead
+  weight, not a defect.
+- Diagnose `sediment` by name when a skill's file has accreted stale layers:
+  lines that lost relevance, pointers whose material moved, or restatements of
+  environment facts that drifted. Cite the stale lines as evidence and keep
+  sediment separate from the defect that may sit underneath it.
 
 Incremental rules enforced by the runner:
 
@@ -93,6 +102,9 @@ python3 -I -S -B scripts/skill_doctor.py match --skills-root <SKILLS_DIR>
   insufficient: when the recorded origin is unknown, local to another tree, or
   differs from the current declared source, the verdict is
   `needs-clarification`, never a confirmed match.
+- When the current sources show accumulated stale layers around
+  still-matching fingerprints, report `sediment` as a named observation with
+  the stale lines as evidence, alongside the matched defects.
 - The ordinary result is analysis and proposals for the user; doctor does not
   modify skill sources in this mode.
 

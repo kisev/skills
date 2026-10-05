@@ -10,7 +10,7 @@
 6. Read the whole text before editing and identify structural patterns, not isolated words. Remove empty introductions, objections no reader raised, advertising exaggeration, decorative structure, conclusions that restate the ending, and retelling of context the reader already has. Do not keep such a pattern because the writing sample shares it. A single word, one passive clause, or a genuine list is not a defect by itself.
 7. Rewrite around the main point. Keep every supported claim and preserve uncertainty, qualifications, rankings, and relationships. Do not invent facts, names, numbers, dates, quotations, citations, opinions, reactions, or sources. Ask for a missing fact only when the task cannot be completed accurately without it.
 8. Reread the complete result aloud. Remove repetition, unnecessary structure, and unnatural phrasing, then compare the result with the source for lost or added meaning.
-9. Check every generated file and the final response before saving or publishing. Return the finished text; do not show intermediate drafts or narrate self-criticism unless the user asks for them.
+9. Check every generated file and the final response before saving or publishing, running the final audit below. Return the finished text; do not show intermediate drafts or narrate self-criticism unless the user asks for them.
 
 ## Priority
 
@@ -40,13 +40,45 @@ When rules conflict, resolve them in this order:
 - In personal writing, preserve supported opinions, uncertainty, mixed feelings, humor, and useful asides. Do not add a reaction that the source or user did not express.
 - Preserve deliberate rhetorical choices when they fit the audience and purpose. Natural prose need not be uniformly casual, short, or irregular.
 
+## Adding soul
+
+Removing tells is half of the edit; the other half is not leaving sterile,
+voiceless prose behind. Within the no-invention rule and the author's factual
+role, restore the human half:
+
+- State the opinion the author actually holds instead of listing trade-offs
+  from no point of view; an author writing in a personal or maintainer voice
+  may react to the facts rather than only report them.
+- Vary rhythm by meaning: a short verdict sentence after a longer explanatory
+  one is structure, not a defect to flatten.
+- Use first person where the author can own the claim; "I reverted the cache"
+  is ordinary writing, not a lapse.
+- Acknowledge real tension the source expresses, such as "works, but only
+  below the threshold", instead of compressing it into one flat adjective.
+- Be specific: name the concrete thing, the number, or the moment the reader
+  would recognize instead of the category it belongs to.
+
+These moves add no facts and no reactions the source lacks; they un-hide what
+the author already put there.
+
+## Final audit
+
+Before returning the text, run one pass over the complete result:
+
+- Ask what still gives it away as machine writing and fix the remaining
+  tells; the patterns above are the checklist for this pass.
+- Apply the portability test sentence by sentence: if a sentence would fit
+  unchanged into another author's document on another subject, it carries
+  nothing specific to this text. Replace it with the fact only this text can
+  state, or cut it.
+
 ## Patterns to check
 
 `references/patterns.md` maps the complete catalog of 26 categories with worked before/after examples; the same moves exist in every language, and the project documentation carries a bilingual example set. Apply these rules rather than a fixed vocabulary blacklist: model word habits change, while unsupported claims and templated structure remain concrete editing problems.
 
 Strong patterns justify an edit on one sighting:
 
-- A staged contrast such as "not just X, but Y" when the rejected alternative was never claimed. State the supported point directly. Keep a contrast that corrects a real belief or where both sides add information.
+- A staged contrast such as "not just X, but Y" or an appended "X, not Y" tail when the rejected alternative was never claimed. State the supported point directly. Keep a contrast that corrects a real belief or where both sides add information.
 - A dramatic fragment, slogan, or one-line closer that only repeats the preceding point.
 - A staged opener such as "Let's dive in," "Great question," or "Here's what you need to know" before routine content.
 - A fake-profound saying such as "the real question is" or "at its core" that dresses an ordinary point as a hidden truth.
@@ -97,4 +129,4 @@ Keep matches that belong to exact quotations, code, commands, paths, identifiers
 
 ## Source
 
-The structural pattern categories and strong-versus-weak safeguard were adapted from [blader/humanizer](https://github.com/blader/humanizer), which draws on Wikipedia's "Signs of AI writing." Apply the rules above rather than copying a fixed vocabulary blacklist: model word habits change, while unsupported claims and templated structure remain concrete editing problems. Unlike that source, a writing sample here never overrides the punctuation rule or any mandatory constraint, and no reaction is added that the author did not express.
+The structural pattern categories and strong-versus-weak safeguard were adapted from [blader/humanizer](https://github.com/blader/humanizer), which draws on Wikipedia's "Signs of AI writing." Apply the rules above rather than copying a fixed vocabulary blacklist: model word habits change, while unsupported claims and templated structure remain concrete editing problems. Unlike that source, a writing sample here never overrides the punctuation rule or any mandatory constraint, and no reaction is added that the author did not express. The "Adding soul" section and the final audit adapt the communication-style skill by poteto from `openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f` (MIT, Copyright (c) 2025 Bohdan Triapitsyn); the pinned revision is recorded in the frontmatter `metadata.inspired-by` field.

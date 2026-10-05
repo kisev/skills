@@ -11,6 +11,17 @@ Use only the groups relevant to the change, but make each group an explicit deci
 - Separate reachable contract failures from optional hardening and new features;
   reproduction alone does not establish that a remedy is proportionate.
 
+## Affected surfaces
+
+- Name every surface the change can touch: the owning package, other packages
+  and runtimes, user-visible states, persisted or external contracts, and
+  generated or published artifacts.
+- Give each surface one explicit line: the finding with evidence, or "N/A"
+  with the concrete reason this change cannot reach that surface.
+- Silence is not a line: an unnamed surface is an unexamined surface, and an
+  apparently applicable runtime or artifact is closed only by a written N/A
+  reason, never by omission.
+
 ## Ownership and boundaries
 
 - Confirm that responsibility belongs in the changed module and layer.
