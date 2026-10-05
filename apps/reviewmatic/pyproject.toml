@@ -1,6 +1,6 @@
 [project]
   name = "reviewmatic"
-  version = "0.1.0"
+  version = "12.0.0"
   description = "GitLab review backend and manual runbooks with a portable Python contract core."
   readme = "README.md"
   requires-python = ">=3.12"

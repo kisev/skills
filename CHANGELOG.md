@@ -8,6 +8,8 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+## \[12.0.0] - 2026-10-05
+
 ### Added
 
 - Quality-gate composition now has a single machine-readable source:

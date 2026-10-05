@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__version__ = "0.1.0"
+__version__ = "12.0.0"
 
 # The schema diagnostics walker needs the canonical validator as its oracle;
 # register it once at package import for consistent schema diagnostics.
