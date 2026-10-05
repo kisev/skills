@@ -188,7 +188,22 @@ function emptyConfig(): AgentProfileConfig {
 
 export function validateAgentName(name: string): string {
   if (NAME_PATTERN.test(name) || CRITIC_PATTERN.test(name)) return name;
-  throw new AgentProfileError("invalid_name", "Agent must be a fixed role or critic-<safe-suffix>");
+  throw new AgentProfileError(
+    "invalid_name",
+    "Agent must be a fixed role (manager, architect, mapper, worker, review, critic) or critic-<suffix> where suffix uses lowercase letters, digits, and hyphens between parts (for example critic-sonnet-5-5)",
+  );
+}
+
+// Convert free-form critic input such as "Sonnet 5.5" or "critic-sonnet-5.5" into a
+// safe critic name; null when no safe form exists.
+export function suggestCriticName(input: string): string | null {
+  const cleaned = input.trim().toLowerCase();
+  if (CRITIC_PATTERN.test(cleaned)) return cleaned;
+  const body = cleaned
+    .replace(/^critic-/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return body ? `critic-${body}` : null;
 }
 
 export function validateModel(model: string): string {

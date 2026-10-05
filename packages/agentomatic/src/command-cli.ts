@@ -8,6 +8,7 @@ import {
   validateAgentName,
   validateModel,
   validateVariant,
+  suggestCriticName,
   FIXED_AGENT_ROLES,
   type AgentProfileRequest,
   type AgentProfileRecord,
@@ -46,6 +47,7 @@ import { selectOption, selectOptions, promptText, confirmQuestion } from "./term
 import {
   renderPlan,
   renderInventory,
+  renderCriticsTable,
   renderDoctor,
   renderConfigSetup,
   renderReconcile,
@@ -92,12 +94,13 @@ const commands: Record<string, { description: string; options: string[]; name?: 
     options: ["commands", "agents", "plugins", "core", "dependency", "targets", "fragments"],
   },
   "configure agent": {
-    description: "Choose a model and variant, or supply --model provider/model directly.",
+    description:
+      "Open a staged editor for every agent, or set one model with a name and --model provider/model.",
     options: ["provider", "model", "variant", "clearVariant"],
     name: true,
   },
   "configure critics": {
-    description: "Add, configure, or remove additional critics interactively.",
+    description: "Alias of configure agent: staged agent models and critic management.",
     options: [],
   },
   "configure integration": {
@@ -174,6 +177,29 @@ function json(value: unknown): void {
 }
 function applyHint(args: string[]): string {
   return `${shellCommand(args)} (confirm interactively; add --yes outside a terminal)`;
+}
+
+// Prompt for a critic name, auto-converting unsafe input such as "sonnet-5.5" to
+// "critic-sonnet-5-5" after explicit confirmation; exact safe names pass untouched.
+async function promptCriticName(): Promise<string> {
+  for (;;) {
+    const input = value(await promptText("Critic name (critic-<suffix>)"));
+    const suggestion = suggestCriticName(input);
+    if (suggestion !== null && suggestion === input.trim().toLowerCase()) return suggestion;
+    if (suggestion) {
+      const accept = value(
+        await selectOption(`"${terminalSafe(input)}" is not a safe critic name`, [
+          `Use ${suggestion}`,
+          "Enter a different name",
+        ]),
+      );
+      if (accept === 0) return suggestion;
+      continue;
+    }
+    process.stderr.write(
+      "Invalid critic name: use a fixed role or critic-<suffix> with lowercase letters, digits, and hyphens between parts (for example critic-sonnet-5-5).\n",
+    );
+  }
 }
 
 function help(topic = ""): string {
@@ -454,14 +480,27 @@ async function modelSelection(
     const candidates = models.filter((model) => model.startsWith(`${provider}/`));
     const model = candidates[value(await selectOption("Model", candidates))];
     const variants = await availableModelVariants(model);
-    const variant = variants.length
-      ? [undefined, ...variants][value(await selectOption("Variant", ["(none)", ...variants]))]
-      : undefined;
-    return { action: "model-set", name, model, variant: variant ?? null };
+    let variant: string | null = null;
+    if (variants.length) {
+      const labels = variants.map((item) =>
+        item === current?.variant ? `${item} (default)` : item,
+      );
+      const choice = value(
+        await selectOption(
+          "Variant",
+          ["(none)", ...labels],
+          undefined,
+          undefined,
+          current?.variant ? variants.indexOf(current.variant) + 1 : 0,
+        ),
+      );
+      variant = choice === 0 ? null : (variants[choice - 1] ?? null);
+    }
+    return { action: "model-set", name, model, variant };
   } catch (error) {
     if (!(error instanceof LifecycleError && error.code === "catalog_unavailable")) throw error;
     process.stderr.write(
-      "Model catalog unavailable; enter an explicit model instead of a catalog pick.\n",
+      "Start opencode in another terminal to browse models, or enter provider/model manually\n",
     );
     const model = validateModel(value(await promptText("Model (provider/model)")));
     const answer = await promptText(
@@ -496,8 +535,7 @@ async function profileDraft(options: Options, names: string[]): Promise<AgentPro
       ];
     if (action === "Done") return changes;
     if (action === "Add critic") {
-      const suffix = value(await promptText("Critic name (critic-<suffix>)"));
-      const name = validateAgentName(suffix.startsWith("critic-") ? suffix : `critic-${suffix}`);
+      const name = await promptCriticName();
       if (records.has(name)) fail("profile_exists", `Profile already exists: ${name}`);
       const request = { ...(await modelSelection(options, name)), action: "critic-add" as const };
       changes.push(request);
@@ -1066,17 +1104,11 @@ async function run(args: string[]): Promise<void> {
   const options = parse(topic, args);
   if (topic === "configure") {
     requireApply(options);
-    const routes = [
-      "configure components",
-      "configure agent",
-      "configure critics",
-      "configure integration",
-    ];
+    const routes = ["configure components", "configure agent", "configure integration"];
     const selected = value(
       await selectOption("What would you like to configure?", [
         "Installed components",
-        "Agent models",
-        "Additional critics",
+        "Agent models and critics",
         "Application connection and presets",
       ]),
     );
@@ -1132,12 +1164,33 @@ async function run(args: string[]): Promise<void> {
     process.exitCode = doctorExitCode(report);
     return;
   }
-  if (topic === "configure agent" || topic === "agent add-critic") {
+  if (
+    topic === "configure critics" ||
+    topic === "configure agent" ||
+    topic === "agent add-critic"
+  ) {
     const inventory = await listAgentProfiles(options.scope);
+    // configure critics is an alias; a nameless configure agent opens the same staged editor.
+    if (topic === "configure critics" || (topic === "configure agent" && !options.name)) {
+      requireApply(options);
+      if (!options.json) process.stdout.write(renderCriticsTable(inventory));
+      const changes = await profileDraft(
+        options,
+        inventory.profiles
+          .filter((profile) => profile.ownership !== "user-owned")
+          .map((profile) => profile.name),
+      );
+      if (!changes.length) {
+        if (options.json) json({ status: "ok", applied: false });
+        else process.stdout.write("No profile changes selected.\n");
+        return;
+      }
+      await profileChange(options, { action: "model-set", changes });
+      return;
+    }
     let name = options.name;
     if (!name) {
-      if (topic === "agent add-critic")
-        name = value(await promptText("Critic name (critic-<suffix>)"));
+      if (topic === "agent add-critic") name = await promptCriticName();
       else {
         const names = inventory.profiles
           .filter((profile) => profile.ownership !== "user-owned")
@@ -1160,27 +1213,6 @@ async function run(args: string[]): Promise<void> {
   if (topic === "agent remove") {
     if (!options.name) fail("invalid_input", "agent remove requires an additional critic name");
     await profileChange(options, { action: "critic-remove", name: options.name });
-    return;
-  }
-  if (topic === "configure critics") {
-    requireApply(options);
-    const inventory = await listAgentProfiles(options.scope);
-    const changes = await profileDraft(
-      options,
-      inventory.profiles
-        .filter(
-          (profile) =>
-            (profile.name === "critic" || profile.name.startsWith("critic-")) &&
-            profile.ownership !== "user-owned",
-        )
-        .map((profile) => profile.name),
-    );
-    if (!changes.length) {
-      if (options.json) json({ status: "ok", applied: false });
-      else process.stdout.write("No profile changes selected.\n");
-      return;
-    }
-    await profileChange(options, { action: "model-set", changes });
     return;
   }
   if (topic === "maintenance recover") {

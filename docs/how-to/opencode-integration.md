@@ -445,6 +445,18 @@ Saving a model for an uninstalled fixed role does not install it. Additional cri
 use `critic-<safe-suffix>`; `agent remove` cannot remove a fixed role. Every mutation uses the
 same preview and confirmation contract.
 
+Nameless `configure agent` (and its alias `configure critics`) opens one staged
+editor over every agent: it first prints the additional-critic table
+(name, model, variant, provider, or `No critics`), then offers model changes,
+adding critics, and removal until `Done`, and applies the staged batch behind the
+usual preview and confirmation. Unsafe critic input such as `sonnet-5.5`
+converts to `critic-sonnet-5-5` after an explicit confirmation, rejected input
+re-prompts with the naming requirements, and the model cascade walks
+Provider → Model → Variant, marking the saved variant `(default)` and offering
+`(none)` for no variant. When the OpenCode host is not running, the wizard shows
+`Start opencode in another terminal to browse models, or enter provider/model
+manually` and accepts an explicit value; the CLI never starts the host itself.
+
 Specialist profiles are optional for skill-driven independent reviews.
 `code-review` asks once which available critics and how many to use and which
 arbitrator to select; if none are

@@ -209,6 +209,23 @@ function table(rows: string[][]): string[] {
   );
 }
 
+export function renderCriticsTable(inventory: AgentInventory): string {
+  const critics = inventory.profiles.filter(
+    (profile) => profile.name.startsWith("critic-") && profile.ownership !== "user-owned",
+  );
+  if (!critics.length) return "Critics:\n  No critics\n";
+  const rows = [
+    ["NAME", "MODEL", "VARIANT", "PROVIDER"],
+    ...critics.map((profile) => [
+      terminalSafe(profile.name),
+      terminalSafe(profile.model ?? "default"),
+      terminalSafe(profile.variant ?? "-"),
+      terminalSafe(profile.model?.split("/", 1)[0] ?? "-"),
+    ]),
+  ];
+  return `Critics:\n${table(rows).join("\n")}\n`;
+}
+
 export function renderInventory(inventory: AgentInventory): string {
   const rows = [
     ["NAME", "MODEL", "VARIANT", "OWNER", "STATE"],

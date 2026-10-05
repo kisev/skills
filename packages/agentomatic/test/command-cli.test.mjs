@@ -10,6 +10,7 @@ import {
   applyAgentProfileChange,
   listAgentProfiles,
   previewAgentProfileChange,
+  suggestCriticName,
 } from "../dist/agent-profiles.js";
 import { previewDependencyRemoval, removeDependency } from "../dist/self-install.js";
 import { applyTransaction, lifecycleRoot } from "../dist/lifecycle.js";
@@ -527,5 +528,155 @@ test("repeat TTY installation defaults to saved components, models, and disconne
   assert.equal(
     status.inventory.profiles.find((profile) => profile.name === "critic").variant,
     "high",
+  );
+});
+
+test("unsafe critic names convert to safe names with confirmation", () => {
+  // Already valid input passes through unchanged.
+  assert.equal(suggestCriticName("critic-security"), "critic-security");
+  // Unsafe input converts: dots and spaces collapse into single hyphens.
+  assert.equal(suggestCriticName("sonnet-5.5"), "critic-sonnet-5-5");
+  assert.equal(suggestCriticName("Sonnet 5.5"), "critic-sonnet-5-5");
+  // An existing critic- prefix is preserved, not duplicated.
+  assert.equal(suggestCriticName("critic-sonnet-5.5"), "critic-sonnet-5-5");
+  // Input without a safe form yields no suggestion.
+  assert.equal(suggestCriticName("###"), null);
+  assert.equal(suggestCriticName("critic-"), null);
+  assert.equal(suggestCriticName(""), null);
+});
+
+test("staged critic editing converts unsafe names and applies from the catalog", async (t) => {
+  const context = await sandbox(t);
+  context.ok(["install", ...subset, "--yes"]);
+  context.ok([
+    "agent",
+    "add-critic",
+    "security",
+    "--model",
+    "anthropic/claude",
+    "--variant",
+    "high",
+    "--yes",
+  ]);
+  const bin = join(context.base, "bin");
+  await mkdir(bin);
+  await writeFile(
+    join(bin, "opencode"),
+    '#!/bin/sh\nprintf \'%s\\n\' \'{"data":[{"providerID":"openai","id":"example","variants":[{"id":"low"},{"id":"high"}]}]}\'\n',
+  );
+  await chmod(join(bin, "opencode"), 0o755);
+  context.env.PATH = `${bin}:${context.env.PATH}`;
+  const result = await wizard(
+    context,
+    [
+      ["changes are staged", "\x1b[A\x1b[A"],
+      ["● Add critic", "\r"],
+      ["Critic name", "sonnet-5.5\r"],
+      ["not a safe critic name", "\r"],
+      ["Agent: critic-sonnet-5-5", "\r"],
+      ["Provider", "\r"],
+      ["Model", "\r"],
+      ["(none)", "\x1b[B"],
+      ["● low", "\r"],
+      ["changes are staged", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "critics"],
+  );
+  assert.equal(result.status, 0, result.output);
+  const clean = stripVTControlCharacters(result.output);
+  assert.match(clean, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
+  assert.match(clean, /critic-security\s+anthropic\/claude\s+high\s+anthropic/);
+  assert.match(
+    await readFile(join(context.root, "agents/critic-sonnet-5-5.md"), "utf8"),
+    /^model: openai\/example#low$/m,
+  );
+});
+
+test("invalid critic names re-prompt and an absent catalog points at the host instead of starting it", async (t) => {
+  const context = await sandbox(t);
+  context.ok(["install", ...subset, "--yes"]);
+  const bin = join(context.base, "bin");
+  await mkdir(bin);
+  await writeFile(join(bin, "opencode"), "#!/bin/sh\nexit 1\n");
+  await chmod(join(bin, "opencode"), 0o755);
+  context.env.PATH = `${bin}:${context.env.PATH}`;
+  const result = await wizard(
+    context,
+    [
+      ["changes are staged", "\x1b[A\x1b[A"],
+      ["● Add critic", "\r"],
+      ["Critic name", "###\r"],
+      ["Invalid critic name", "sonnet-5.5\r"],
+      ["not a safe critic name", "\r"],
+      ["Agent: critic-sonnet-5-5", "\r"],
+      ["another terminal", "openai/manual\r"],
+      ["Variant (optional)", "\r"],
+      ["changes are staged", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "critics"],
+  );
+  assert.equal(result.status, 0, result.output);
+  const clean = stripVTControlCharacters(result.output);
+  assert.match(clean, /Critics:\n  No critics/);
+  assert.match(
+    clean,
+    /Invalid critic name: use a fixed role or critic-<suffix> with lowercase letters, digits, and hyphens/,
+  );
+  assert.match(
+    clean,
+    /Start opencode in another terminal to browse models, or enter provider\/model manually/,
+  );
+  const profile = await readFile(join(context.root, "agents/critic-sonnet-5-5.md"), "utf8");
+  assert.match(profile, /^model: openai\/manual$/m);
+  assert.doesNotMatch(profile, /^variant:/m);
+});
+
+test("configure agent stages every agent and marks the saved variant as default", async (t) => {
+  const context = await sandbox(t);
+  context.ok(["install", ...subset, "--yes"]);
+  context.ok([
+    "configure",
+    "agent",
+    "critic",
+    "--model",
+    "openai/example",
+    "--variant",
+    "high",
+    "--yes",
+  ]);
+  const bin = join(context.base, "bin");
+  await mkdir(bin);
+  await writeFile(
+    join(bin, "opencode"),
+    '#!/bin/sh\nprintf \'%s\\n\' \'{"data":[{"providerID":"openai","id":"example","variants":[{"id":"low"},{"id":"high"}]}]}\'\n',
+  );
+  await chmod(join(bin, "opencode"), 0o755);
+  context.env.PATH = `${bin}:${context.env.PATH}`;
+  const result = await wizard(
+    context,
+    [
+      ["changes are staged", "\x1b[A\x1b[A\x1b[A"],
+      ["● Configure model", "\r"],
+      ["● architect", "\x1b[B"],
+      ["● critic", "\r"],
+      ["Agent: critic", "\x1b[B"],
+      ["● Change model", "\r"],
+      ["Provider", "\r"],
+      ["Model", "\r"],
+      ["(none)", "\x1b[A"],
+      ["● low", "\r"],
+      ["changes are staged", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "agent"],
+  );
+  assert.equal(result.status, 0, result.output);
+  const clean = stripVTControlCharacters(result.output);
+  assert.match(clean, /high \(default\)/);
+  assert.match(
+    await readFile(join(context.root, "agents/critic.md"), "utf8"),
+    /^model: openai\/example#low$/m,
   );
 });
