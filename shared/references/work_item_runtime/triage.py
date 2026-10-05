@@ -1766,7 +1766,8 @@ def description_guard(host: str, endpoint: str, value: object, locale: str) -> s
 def labels_guard(host: str, endpoint: str, expected: list[str], locale: str) -> str:
     check = (
         f'([ "$(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}'
-        f" | jq -c '[.labels[].name] | sort')\" = "
+        ' | jq -c \'[(.labels // [])[] | if type == "object" then .name else . end]'
+        " | sort')\" = "
         f"{shell_quote(inline_json(sorted(expected)))} ]"
         f" || {guard_stop('guard_labels_stop', locale)}) &&"
     )

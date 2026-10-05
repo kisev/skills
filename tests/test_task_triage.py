@@ -1903,7 +1903,9 @@ def test_generated_blocks_use_direct_glab_api_with_guards(
             assert tool not in block, (tool, block)
     for block in blocks[1:]:
         assert ".updated_at" not in block
-    assert "jq -c '[.labels[].name] | sort'" in labels_block
+    assert "jq -c '[(.labels // [])[] | if type == \"object\" then .name else . end] | sort'" in (
+        labels_block
+    )
     assert "= '[]' ]" in labels_block
     assert ".milestone == null" in milestone_block
     assert ".iid == $i" in link_block
@@ -2197,3 +2199,41 @@ esac
         )
         assert replayed.returncode != 0, f"replayed block {index} did not stop"
         assert "regenerate" in replayed.stderr
+
+
+def test_labels_guard_accepts_string_and_object_label_shapes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The live issue API returns label strings; the guard must also accept objects."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    guard = triage.labels_guard(
+        "gitlab.example",
+        "projects/19/issues/7",
+        ["priority::high", "type::bug"],
+        "en",
+    )
+    stub = tmp_path / "glab"
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+
+    def run(labels: Any) -> subprocess.CompletedProcess[str]:
+        script = tmp_path / "labels-guard.sh"
+        script.write_text(guard + "\ntrue\n")
+        assert subprocess.run(["bash", "-n", str(script)], check=False).returncode == 0
+        stub.write_text(
+            "#!/bin/sh\ncat > /dev/null\nprintf '%s' '" + json.dumps({"labels": labels}) + "'\n"
+        )
+        stub.chmod(0o700)
+        return subprocess.run(
+            ["bash", "-ec", guard + "\ntrue"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    assert run(["type::bug", "priority::high"]).returncode == 0
+    assert run([{"name": "priority::high"}, {"name": "type::bug"}]).returncode == 0
+    stopped = run(["priority::high"])
+    assert stopped.returncode != 0
+    assert "labels changed after triage" in stopped.stderr
+    assert run(None).returncode != 0
