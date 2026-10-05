@@ -650,8 +650,23 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
         ["git", "clone", stand.manifest["fixtures"]["http_url_to_repo"], str(repo)], env=environment
     )
     command(["git", "-C", str(repo), "checkout", "--detach", f["head"]], env=environment)
+    # The author collector prepares its own review worktrees next to its clone;
+    # a shared clone would put them beside the reviewer's worktrees, whose
+    # registry is per actor and would reject the unmanaged paths.
+    author_repo = stand.state / "repositories" / (directory.name + "-author")
+    private_directory(author_repo.parent)
+    command(
+        ["git", "clone", stand.manifest["fixtures"]["http_url_to_repo"], str(author_repo)],
+        env=review_environment(stand, "author"),
+    )
+    command(
+        ["git", "-C", str(author_repo), "checkout", "--detach", f["head"]],
+        env=review_environment(stand, "author"),
+    )
     author_input = directory / "author-collector-input.json"
-    write_json(author_input, {"url": f["mr"]["web_url"], "repo": str(repo), "head": f["head"]})
+    write_json(
+        author_input, {"url": f["mr"]["web_url"], "repo": str(author_repo), "head": f["head"]}
+    )
     author_before = stand.request(
         "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"
     )
