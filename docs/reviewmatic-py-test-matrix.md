@@ -42,11 +42,11 @@ that introduced this file with the built `dist/` output.
 | `context-package.test.mjs` | 15 | partial | `tests/test_context_package.py` (digests, versioning, retirement, answer/verification bindings, MR validation); the end-to-end record scenarios land with the draft port |
 | `context.test.mjs` | 6 | partial | `tests/test_context_report.py` (report regressions), `tests/test_review_happy_path.py` (fake-glab state machine happy path with the incremental second run) |
 | `contract.test.mjs` | 38 | partial | `tests/test_contract_validators.py` (validators, labels, preview, critic/decision bindings), `tests/test_golden_parity.py` (canonical digests, artifact verdicts), `tests/test_cli_contract.py` (capabilities); transport/collection cases land with the local-review port |
-| `draft-input.test.mjs` | 13 | planned | `tests/test_draft_input.py` |
-| `draft.test.mjs` | 6 | planned | `tests/test_draft.py` |
+| `draft-input.test.mjs` | 13 | partial | `tests/test_draft_lifecycle.py` (record-input addressed diagnostics, record-critic missing-binding rejection) plus `tests/test_contract_validators.py`; the full record-package/record-critic scenarios await the input fixtures |
+| `draft.test.mjs` | 6 | partial | `tests/test_draft_lifecycle.py` (full remote lifecycle through the fake glab: invalid check, complete-draft contract, zero-request finish, plan_ready; plan-inspection/sendItem assertions stay with the TUI-support row) |
 | `glab-transport.test.mjs` | 1 | planned | `tests/test_glab_transport.py` |
 | `local-panel.test.mjs` | 1 | planned | `tests/test_local_panel.py` |
-| `local-review.test.mjs` | 26 | planned | `tests/test_local_review.py` (ancestor `tests/test_local_review.py` at `320520a^` is the revival base) |
+| `local-review.test.mjs` | 26 | partial | `tests/test_local_review_cycle.py` (the full fix cycle with the incremental delta, unchanged reuse, ready transition, verdict derivation); the panel and arbitration scenarios await the local-panel fixtures |
 | `mutation-process.test.mjs` | 6 | planned | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | planned | `tests/test_panel.py` |
 | `publication.test.mjs` | 3 | partial | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` and `::test_structured_preview_accepts_manual_actions` |

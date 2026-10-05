@@ -42,11 +42,11 @@
 | `context-package.test.mjs` | 15 | частично | `tests/test_context_package.py` (дайджесты, версионирование, вывод из обращения, привязки ответов/проверок, валидация MR); сквозные сценарии записи приходят с портом черновиков |
 | `context.test.mjs` | 6 | частично | `tests/test_context_report.py` (регрессии отчёта), `tests/test_review_happy_path.py` (счастливый путь стейт-машины через fake-glab со вторым инкрементальным прогоном) |
 | `contract.test.mjs` | 38 | частично | `tests/test_contract_validators.py` (валидаторы, лейблы, предпросмотр, привязки critic/decision), `tests/test_golden_parity.py` (канонические дайджесты, вердикты артефактов), `tests/test_cli_contract.py` (capabilities); транспорт/сборка приходят с портом local-review |
-| `draft-input.test.mjs` | 13 | план | `tests/test_draft_input.py` |
-| `draft.test.mjs` | 6 | план | `tests/test_draft.py` |
+| `draft-input.test.mjs` | 13 | частично | `tests/test_draft_lifecycle.py` (адресная диагностика record-input, отказ record-critic без пакета) плюс `tests/test_contract_validators.py`; полные сценарии record-package/record-critic ждут входные фикстуры |
+| `draft.test.mjs` | 6 | частично | `tests/test_draft_lifecycle.py` (полный удалённый жизненный цикл через fake glab: invalid check, контракт complete-draft, finish без запросов, plan_ready; утверждения plan-inspection/sendItem остаются в строке TUI-support) |
 | `glab-transport.test.mjs` | 1 | план | `tests/test_glab_transport.py` |
 | `local-panel.test.mjs` | 1 | план | `tests/test_local_panel.py` |
-| `local-review.test.mjs` | 26 | план | `tests/test_local_review.py` (предок `tests/test_local_review.py` из `320520a^` — база возрождения) |
+| `local-review.test.mjs` | 26 | частично | `tests/test_local_review_cycle.py` (полный цикл исправлений с инкрементальной дельтой, повторным unchanged, переходом в ready, выводом вердикта); сценарии панели и арбитража ждут локальные panel-фикстуры |
 | `mutation-process.test.mjs` | 6 | план | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | план | `tests/test_panel.py` |
 | `publication.test.mjs` | 3 | частично | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` и `::test_structured_preview_accepts_manual_actions` |
