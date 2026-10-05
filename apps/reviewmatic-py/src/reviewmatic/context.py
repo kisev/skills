@@ -3033,8 +3033,8 @@ def review_markdown(
         participants = cast("dict[str, Any]", panel_source["participants"])
         if isinstance(panel_source.get("arbitration"), dict):
             arbitration_source = cast("dict[str, Any]", panel_source["arbitration"])
-        if isinstance(participants.get("critics"), list):
-            panel_receipts = cast("list[dict[str, Any]]", participants["critics"])
+        if isinstance(panel_source.get("critics"), list):
+            panel_receipts = cast("list[dict[str, Any]]", panel_source["critics"])
 
     def participant_for_receipt(receipt: dict[str, Any]) -> str | None:
         if participants is None:

@@ -10,12 +10,15 @@ fails here, which keeps the two ports honest without a live TS run.
 
 from __future__ import annotations
 
+import copy
 import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
+from reviewmatic import context_package
+from reviewmatic import draft as draft_module
 from reviewmatic.portable import state_artifacts
 from reviewmatic.portable.portable_gitlab import contract, review_semver
 from reviewmatic.portable.portable_gitlab.label_assessment import validate_label_assessments
@@ -37,6 +40,9 @@ def test_golden_fixtures_exist() -> None:
         "semver_evidence",
         "semver_assessment",
         "label_intent",
+        "draft_gaps",
+        "superseded_results",
+        "analysis_fingerprint",
     } <= kinds
 
 
@@ -69,9 +75,53 @@ def test_python_canon_matches_the_golden_digest_and_verdict(fixture: dict[str, A
     assert verdict(fixture) is fixture["expected"]["python_valid"]
 
 
+TRANSITION_KINDS = {"draft_gaps", "superseded_results", "analysis_fingerprint"}
+
+
+def transition_output(fixture: dict[str, Any]) -> Any:
+    """Run the Python state-machine function the fixture's kind names."""
+    kind, value = fixture["kind"], copy.deepcopy(fixture["input"])
+    if kind == "draft_gaps":
+        return draft_module.draft_gaps(value)
+    if kind == "analysis_fingerprint":
+        return draft_module.analysis_fingerprint(value)
+    if kind == "superseded_results":
+        result = context_package.extract_superseded_results(
+            value["previous"], value["next"], value["answers"], value["verifications"]
+        )
+        if result is None:
+            return None
+        return {
+            "entry": result.entry,
+            "question_ids": result.question_ids,
+            "answers": result.answers,
+            "verifications": result.verifications,
+        }
+    raise AssertionError(f"unknown transition kind: {kind}")
+
+
+@pytest.mark.parametrize(
+    "fixture",
+    [item for item in fixtures() if item["kind"] in TRANSITION_KINDS],
+    ids=lambda fixture: fixture.get("name", "?"),
+)
+def test_python_state_machine_reproduces_the_typescript_transition(
+    fixture: dict[str, Any],
+) -> None:
+    assert "output" in fixture["expected"], fixture["name"]
+    assert transition_output(fixture) == fixture["expected"]["output"]
+
+
+def test_only_transition_fixtures_carry_outputs() -> None:
+    for fixture in fixtures():
+        assert ("output" in fixture["expected"]) is (fixture["kind"] in TRANSITION_KINDS), fixture[
+            "name"
+        ]
+
+
 def verdict(fixture: dict[str, Any]) -> bool:
     kind, value = fixture["kind"], fixture["input"]
-    if kind == "canonical_digest":
+    if kind in {"canonical_digest", *TRANSITION_KINDS}:
         return True
     if kind == "artifact_validation_v2":
         try:

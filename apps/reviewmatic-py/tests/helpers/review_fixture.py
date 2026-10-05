@@ -14,7 +14,10 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+from reviewmatic import draft as draft_module
+from reviewmatic.portable.portable_gitlab import contract
 
 FAKE_GLAB = """#!/usr/bin/env python3
 import json
@@ -318,3 +321,74 @@ def cast_config(path: Path) -> dict[str, Any]:
 def make_review_fixture(overrides: dict[str, Any] | None = None) -> ReviewFixture:
     tmp = Path(tempfile.mkdtemp(prefix="reviewmatic-fixture-"))
     return ReviewFixture(tmp, overrides)
+
+
+def complete_draft(draft: dict[str, Any], started: dict[str, Any]) -> dict[str, Any]:
+    """The completeDraft helper from the TS fixture, in Python."""
+    template = contract.read_json(
+        Path(str(started["context_package"]["template_path"])), "context package template"
+    )
+    template["goal"] = {
+        "status": "known",
+        "text": "Bound the retry write behind an idempotency key without changing callers.",
+    }
+    template["acceptance_criteria"] = {"status": "unknown", "items": []}
+    for item in template["thread_registry"]:
+        item["summary"] = "A reviewer remarked on the retry path."
+        item["review_relevance"] = "The change touches this path; the remark is assessed directly."
+    contract.write_json(Path(str(started["context_package"]["template_path"])), template)
+    draft_module.record_draft_package(
+        str(started["draft_path"]), str(started["context_package"]["template_path"])
+    )
+    recorded = contract.read_json(Path(str(started["draft_path"])), "review draft")
+    draft["context_package_path"] = recorded["context_package_path"]
+    draft["context_package_digest"] = recorded["context_package_digest"]
+    draft["question_verifications"] = []
+    draft["run_id"] = "primary-run"
+    draft["session_id"] = "primary-session"
+    draft["critics"] = [
+        {
+            **started["critic_receipt_template"],
+            "run_id": "critic-run",
+            "session_id": "child-session",
+            "findings": [],
+        },
+    ]
+    content = cast("dict[str, Any]", draft["content"])
+    content["summary"] = "The bounded change meets the agreed contract."
+    content["architecture_assessment"] = "Existing ownership is preserved."
+    content["chat_assessment"] = {
+        "necessity": {"status": "supported", "rationale": "The existing timeout is unbounded."},
+        "relevance": {"status": "current", "rationale": "The current runner uses this path."},
+        "change": "Bound the check.",
+    }
+    content["semver_impact"] = "patch"
+    content["semver_rationale"] = "Backward-compatible correction."
+    content["checks"] = ["Inspected the exact committed diff; external tests were not run."]
+    for value in cast("dict[str, dict[str, Any]]", content["mr_metadata_assessment"]).values():
+        value["status"] = "ok"
+        value["rationale"] = "The observed metadata is sufficient."
+    for value in cast("list[dict[str, Any]]", content["label_assessments"]):
+        value["status"] = "applicable" if value["name"] == "semver::patch" else "inapplicable"
+        value["rationale"] = "Matches the assessed patch contribution."
+    semver = cast("dict[str, Any]", content["semver_assessment"])
+    semver["policy"] = "No publication configuration is available."
+    semver["sources"] = ["Fixture repository and empty release catalog"]
+    semver["fallback_reason"] = "No published release can be established."
+    for thread in cast("list[dict[str, Any]]", content["thread_decisions"]):
+        thread["assessment"] = "fixed"
+        thread["rationale"] = "The exact reviewed code already addresses the remark."
+        thread["outcome"] = (
+            "no_publication"
+            if thread["state"] == "resolved"
+            else "reply"
+            if thread["state"] == "plain"
+            else "resolve"
+        )
+        thread["proposed_response"] = (
+            None
+            if thread["state"] == "resolved"
+            else "The exact reviewed code now handles this path."
+        )
+    assert content["finding_publications"] == []
+    return draft

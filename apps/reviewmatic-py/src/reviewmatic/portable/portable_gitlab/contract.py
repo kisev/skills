@@ -21,9 +21,12 @@ import time
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NoReturn, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 from urllib.parse import quote as urlquote
 from urllib.parse import urlsplit
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 try:
     from ..state_artifacts import (
@@ -2208,11 +2211,33 @@ def _iso_format_is_valid(value: str) -> bool:
     return True
 
 
+_SCHEMA_ISSUE_LOCATORS: list[Callable[[dict[str, Any], Any], list[dict[str, str]]]] = []
+
+
+def register_schema_issue_locator(
+    locator: Callable[[dict[str, Any], Any], list[dict[str, str]]],
+) -> None:
+    """Let a host explain schema failures; the validator alone decides validity."""
+    _SCHEMA_ISSUE_LOCATORS[:] = [locator]
+
+
 def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
     """Enforce the canonical v2 schema without a runtime-only dependency."""
     schema = artifact_schema()
     if not schema_valid(schema, value, schema):
-        raise WorkflowError("artifact does not satisfy the canonical schema")
+        located = (
+            "\n".join(
+                f" - {issue['path']}: {issue['message']}"
+                for issue in _SCHEMA_ISSUE_LOCATORS[0](schema, value)[:8]
+            )
+            if _SCHEMA_ISSUE_LOCATORS
+            else ""
+        )
+        raise WorkflowError(
+            f"artifact does not satisfy the canonical schema:\n{located}"
+            if located
+            else "artifact does not satisfy the canonical schema"
+        )
     envelope = exact_keys(
         value, {"schema", "schema_version", "kind", "created_at", "payload"}, "artifact"
     )

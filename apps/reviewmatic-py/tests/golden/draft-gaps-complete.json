@@ -1,0 +1,58 @@
+{
+  "name": "draft-gaps-complete",
+  "kind": "draft_gaps",
+  "input": {
+    "findings": [
+      {
+        "id": "own-1",
+        "severity": "medium",
+        "summary": "Finding own-1"
+      }
+    ],
+    "critics": [],
+    "dispositions": [
+      {
+        "id": "own-1",
+        "decision": "accept"
+      }
+    ],
+    "critic_count": 1,
+    "ci_job_assessments": [],
+    "run_id": "primary-run",
+    "session_id": "primary-session",
+    "context_package_path": "/tmp/reviewmatic-artifacts/artifacts/context_package/package.json",
+    "content": {
+      "summary": "The bounded change meets the agreed contract.",
+      "architecture_assessment": "Existing ownership is preserved.",
+      "semver_rationale": "Backward-compatible correction.",
+      "chat_assessment": {
+        "necessity": {
+          "status": "supported",
+          "rationale": "Unbounded timeout."
+        }
+      },
+      "mr_metadata_assessment": {
+        "title": {
+          "status": "ok",
+          "rationale": "Sufficient."
+        }
+      },
+      "label_assessments": [],
+      "thread_decisions": []
+    }
+  },
+  "expected": {
+    "digest": "5f442d8a5ff9573e60275dbab7010e44570dfbac4dc765833b64a6a18669670f",
+    "valid": true,
+    "python_valid": true,
+    "output": {
+      "dispositions_missing_for": [],
+      "content_fields_empty": [],
+      "labels_unresolved": 0,
+      "ci_jobs_unclassified": 0,
+      "identity_missing": [],
+      "context_package": [],
+      "critics_expected": ["1 of 1 independent critic receipts are still expected"]
+    }
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "name": "draft-gaps-panel-awaiting-arbitration",
+  "kind": "draft_gaps",
+  "input": {
+    "findings": [
+      {
+        "id": "own-1",
+        "severity": "medium",
+        "summary": "Finding own-1"
+      }
+    ],
+    "critics": [
+      {
+        "run_id": "run-a",
+        "session_id": "session-a",
+        "findings": [
+          {
+            "id": "critic-a-1",
+            "severity": "medium",
+            "summary": "Finding critic-a-1"
+          }
+        ]
+      },
+      {
+        "run_id": "run-b",
+        "session_id": "session-b",
+        "findings": []
+      }
+    ],
+    "dispositions": [
+      {
+        "id": "own-1",
+        "decision": "accept"
+      }
+    ],
+    "critic_count": 2,
+    "ci_job_assessments": [],
+    "run_id": "primary-run",
+    "session_id": "primary-session",
+    "context_package_path": "/tmp/reviewmatic-artifacts/artifacts/context_package/package.json",
+    "content": {
+      "summary": "The bounded change meets the agreed contract.",
+      "architecture_assessment": "Existing ownership is preserved.",
+      "semver_rationale": "Backward-compatible correction.",
+      "chat_assessment": {
+        "necessity": {
+          "status": "supported",
+          "rationale": "Unbounded timeout."
+        }
+      },
+      "mr_metadata_assessment": {
+        "title": {
+          "status": "ok",
+          "rationale": "Sufficient."
+        }
+      },
+      "label_assessments": [],
+      "thread_decisions": []
+    },
+    "participants": {
+      "critics": [
+        {
+          "name": "critic-general",
+          "receipt": {
+            "run_id": "run-a",
+            "session_id": "session-a"
+          }
+        },
+        {
+          "name": "critic-plain",
+          "receipt": {
+            "run_id": "run-b",
+            "session_id": "session-b"
+          }
+        }
+      ],
+      "arbitrator": {
+        "name": "arb-main"
+      }
+    }
+  },
+  "expected": {
+    "digest": "f958722f7554772170da7eb7c6c941d8962d1627426c681ce18fc414faf41388",
+    "valid": true,
+    "python_valid": true,
+    "output": {
+      "dispositions_missing_for": ["critic-a-1"],
+      "content_fields_empty": [],
+      "labels_unresolved": 0,
+      "ci_jobs_unclassified": 0,
+      "identity_missing": [],
+      "context_package": [],
+      "critics_expected": [],
+      "panel": ["arbitration receipt not recorded; import it with record-arbitration"]
+    }
+  }
+}

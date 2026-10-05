@@ -22,11 +22,11 @@
 | `context.js` | `reviewmatic.context` (возрождён из докового эталона) |
 | `workflow.js` | `reviewmatic.workflow` (возрождён из докового эталона) |
 | `publication.js` | `reviewmatic.publication` (переведён из исходника TypeScript) |
-| `cli.js` | `reviewmatic.cli` (поверхность этапа 1; бизнес-диспетчеризация приходит вместе с каждым перенесённым модулем) |
-| `local-review.js` | план: `reviewmatic.local_review` |
-| `draft.js` | план: `reviewmatic.draft` |
-| `context-package.js` | `reviewmatic.context_package` (переведён из исходника TypeScript; проводка record-\* приходит с портом черновиков) |
-| `scope.js` | план: `reviewmatic.scope` |
+| `cli.js` | `reviewmatic.cli` (все бизнес-подкоманды подключены с кодами выхода TypeScript; `plan` сохраняет конверт exit 5 до этапа 3) |
+| `local-review.js` | `reviewmatic.local_review` (переведён из исходника TypeScript) |
+| `draft.js` | `reviewmatic.draft` (переведён из исходника TypeScript; полная стейт-машина) |
+| `context-package.js` | `reviewmatic.context_package` (переведён из исходника TypeScript) |
+| `scope.js` | `reviewmatic.scope` (переведён из исходника TypeScript) |
 | `fixes.js` | `reviewmatic.fixes` (переведён из исходника TypeScript) |
 | `schema-issues.js` | `reviewmatic.schema_issues` (переведён; канон регистрирует `schema_valid` как оракул при импорте пакета) |
 | `worktree.js` | `reviewmatic.worktree` (переведён из исходника TypeScript) |
@@ -39,18 +39,18 @@
 | Файл тестов TypeScript | Тестов TS | Статус | Python-шов |
 | - | - | - | - |
 | `cli.test.mjs` | 4 | перенесено | `tests/test_cli_contract.py` (поверхность version/help/capabilities/publication/marker-run и утверждения бизнес-диспетчеризации этапа 2) |
-| `context-package.test.mjs` | 15 | частично | `tests/test_context_package.py` (дайджесты, версионирование, вывод из обращения, привязки ответов/проверок, валидация MR); сквозные сценарии записи приходят с портом черновиков |
+| `context-package.test.mjs` | 15 | перенесено | `tests/test_context_package.py` (дайджесты, версионирование, вывод из обращения, привязки ответов/проверок, валидация MR) и `tests/test_context_package_records.py` (все пятнадцать сквозных сценариев записи через fake glab; адресные диагностики схемы дают локатор схемы канона, регистрируемый при импорте пакета) |
 | `context.test.mjs` | 6 | частично | `tests/test_context_report.py` (регрессии отчёта), `tests/test_review_happy_path.py` (счастливый путь стейт-машины через fake-glab со вторым инкрементальным прогоном) |
 | `contract.test.mjs` | 38 | частично | `tests/test_contract_validators.py` (валидаторы, лейблы, предпросмотр, привязки critic/decision), `tests/test_golden_parity.py` (канонические дайджесты, вердикты артефактов), `tests/test_cli_contract.py` (capabilities); транспорт/сборка приходят с портом local-review |
 | `draft-input.test.mjs` | 13 | частично | `tests/test_draft_lifecycle.py` (адресная диагностика record-input, отказ record-critic без пакета) плюс `tests/test_contract_validators.py`; полные сценарии record-package/record-critic ждут входные фикстуры |
-| `draft.test.mjs` | 6 | частично | `tests/test_draft_lifecycle.py` (полный удалённый жизненный цикл через fake glab: invalid check, контракт complete-draft, finish без запросов, plan_ready; утверждения plan-inspection/sendItem остаются в строке TUI-support) |
-| `glab-transport.test.mjs` | 1 | план | `tests/test_glab_transport.py` |
-| `local-panel.test.mjs` | 1 | план | `tests/test_local_panel.py` |
+| `draft.test.mjs` | 6 | частично | `tests/test_draft_lifecycle.py` (полный удалённый жизненный цикл через fake glab: invalid check, контракт complete-draft, finish без запросов, plan\_ready; утверждения plan-inspection/sendItem остаются в строке TUI-support) |
+| `glab-transport.test.mjs` | 1 | перенесено | `tests/test_glab_transport.py` (закреплённый настоящий glab против локального сервера; без пропусков) |
+| `local-panel.test.mjs` | 1 | перенесено | `tests/test_local_panel.py` |
 | `local-review.test.mjs` | 26 | частично | `tests/test_local_review_cycle.py` (полный цикл исправлений с инкрементальной дельтой, повторным unchanged, переходом в ready, выводом вердикта); сценарии панели и арбитража ждут локальные panel-фикстуры |
-| `mutation-process.test.mjs` | 6 | план | `tests/test_mutation_process.py` |
-| `panel.test.mjs` | 4 | план | `tests/test_panel.py` |
+| `mutation-process.test.mjs` | 6 | перенесено | `tests/test_mutation_process.py` |
+| `panel.test.mjs` | 4 | перенесено | `tests/test_panel.py` (TUI-хелпер `loadPlan` заменён чтением артефакта плана через указатель прогресса) |
 | `publication.test.mjs` | 3 | частично | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` и `::test_structured_preview_accepts_manual_actions` |
-| `repair.test.mjs` | 13 | частично | `tests/test_fixes_and_diagnostics.py` (диагностика схемы, синтез предложений); стейт-машина черновиков перенесена в `reviewmatic.draft`, сквозные сценарии ремонта ждут входные фикстуры черновиков |
+| `repair.test.mjs` | 13 | перенесено | `tests/test_fixes_and_diagnostics.py` (диагностика схемы, синтез предложений) и `tests/test_repair.py` (сквозные сценарии ремонта, refresh и дрейфа CI; утверждение TUI `planItems` сведено к действиям предпросмотра публикации, из которых оно выводится) |
 | `review-contract-regressions.test.mjs` | 15 | частично | `tests/test_contract_validators.py` несёт регрессии валидаторов канона |
 | `review-semver.test.mjs` | 11 | покрыто выше | `tests/test_review_semver.py` (репозиторный набор) плюс golden-фикстуры `semver_*` |
 | `review-worktree.test.mjs` | 17 | частично | `tests/test_review_worktree.py` (слаги, сопоставление ремоутов, отказ чужого каталога, реестр, блокировки); сквозные сценарии подготовки приходят с портом черновиков и хелпером fake-glab |
@@ -59,7 +59,7 @@
 | `tui-app.test.mjs` | 3 | намеренно сокращено | этап 3 (TUI); на этапе 2 команда `plan` отвечает конвертом not-implemented этапа 1 |
 | `tui-pty.test.mjs` | 1 | намеренно сокращено | этап 3 (TUI) |
 | `tui-support.test.mjs` | 2 | намеренно сокращено | этап 3 (TUI) |
-| `workflow.test.mjs` | 2 | частично | возрождённый `reviewmatic.workflow` проверяется через `tests/test_context_report.py`; регрессия диспетчера приходит с проводкой CLI |
+| `workflow.test.mjs` | 2 | перенесено | `tests/test_workflow_dispatch.py` |
 | `worktree.test.mjs` | 2 | перенесено | `tests/test_worktree.py` (оба сценария плюс защищённое удаление, которое набор TypeScript не покрывает) |
 
 Строки «план» — оставшаяся дельта этапа 2; указанные файлы-швы — согласованные

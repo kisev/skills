@@ -29,6 +29,12 @@ const { digest, labelIntentIsValid, validateV2Artifact } = await import(
 const { assessmentIsValid, evidenceIsValid } = await import(
   new URL("../src/review-semver.ts", import.meta.url).href
 );
+const { analysisFingerprint, draftGaps } = await import(
+  new URL("../src/draft.ts", import.meta.url).href
+);
+const { bindQuestionContexts, extractSupersededResults } = await import(
+  new URL("../src/context-package.ts", import.meta.url).href
+);
 
 const SHA_A = "a".repeat(64);
 const SHA_B = "b".repeat(64);
@@ -175,6 +181,121 @@ const contextPackage = (payload = contextPackagePayload()) => ({
   kind: "context_package",
   created_at: "2026-10-05T00:00:00+00:00",
   payload,
+});
+
+// Draft state-machine transitions. The inputs are plain data; the outputs are
+// emitted by the real TypeScript transition functions so the Python port
+// reproduces the exact gap report, the exact retirement of stale results into
+// history, and the exact CI-only versus material analysis fingerprint.
+const draftBase = (overrides = {}) => ({
+  findings: [],
+  critics: [],
+  dispositions: [],
+  critic_count: 1,
+  ci_job_assessments: [],
+  run_id: "primary-run",
+  session_id: "primary-session",
+  context_package_path: "/tmp/reviewmatic-artifacts/artifacts/context_package/package.json",
+  content: {
+    summary: "The bounded change meets the agreed contract.",
+    architecture_assessment: "Existing ownership is preserved.",
+    semver_rationale: "Backward-compatible correction.",
+    chat_assessment: { necessity: { status: "supported", rationale: "Unbounded timeout." } },
+    mr_metadata_assessment: { title: { status: "ok", rationale: "Sufficient." } },
+    label_assessments: [],
+    thread_decisions: [],
+  },
+  ...overrides,
+});
+
+const criticFinding = (id) => ({ id, severity: "medium", summary: `Finding ${id}` });
+
+const panelDraft = (overrides = {}) =>
+  draftBase({
+    critic_count: 2,
+    findings: [criticFinding("own-1")],
+    critics: [
+      { run_id: "run-a", session_id: "session-a", findings: [criticFinding("critic-a-1")] },
+    ],
+    dispositions: [{ id: "own-1", decision: "accept" }],
+    participants: {
+      critics: [
+        { name: "critic-general", receipt: { run_id: "run-a", session_id: "session-a" } },
+        { name: "critic-plain" },
+      ],
+      arbitrator: { name: "arb-main" },
+    },
+    ...overrides,
+  });
+
+const supersedeQuestion = (id, subject) => ({
+  id,
+  subject,
+  source: "Discussion 42 of the collected evidence",
+  critic: true,
+});
+
+const boundPackage = (questions, overrides = {}) => {
+  const payload = { ...contextPackagePayload(), questions, ...overrides };
+  bindQuestionContexts(payload);
+  return payload;
+};
+
+const boundResult = (payload, questionId, extra = {}) => ({
+  question_id: questionId,
+  verdict: "confirmed",
+  evidence: "Inspected the exact head.",
+  context_digest: payload.questions.find((item) => item.id === questionId).context_digest,
+  ...extra,
+});
+
+const retirementInput = (previousPayload, nextPayload, answers, verifications = []) => ({
+  previous:
+    previousPayload === null ? null : { payload: previousPayload, digest: digest(previousPayload) },
+  next: nextPayload,
+  answers,
+  verifications,
+});
+
+const retireBefore = boundPackage([supersedeQuestion("q-retry", "Does the head set the key?")]);
+const retireAfter = boundPackage([
+  supersedeQuestion("q-retry", "Is credential revocation enforced when a key is reused?"),
+]);
+const twoBefore = boundPackage([
+  supersedeQuestion("q-retry", "Does the head set the key?"),
+  supersedeQuestion("q-caller", "Do existing callers pass a stable key?"),
+]);
+const twoAfter = boundPackage([
+  supersedeQuestion("q-retry", "Is credential revocation enforced when a key is reused?"),
+  supersedeQuestion("q-caller", "Do existing callers pass a stable key?"),
+]);
+const decisionBefore = boundPackage([supersedeQuestion("q-stable", "Is the boundary kept?")], {
+  prior_decisions: [{ id: "deferral", decision: "Revocation is deferred.", source: "User" }],
+});
+const decisionAfter = boundPackage([supersedeQuestion("q-stable", "Is the boundary kept?")], {
+  prior_decisions: [
+    { id: "deferral", decision: "Revocation is deferred.", source: "User" },
+    { id: "correction", decision: "The deferral is withdrawn.", source: "User" },
+  ],
+});
+
+const analysisEvidence = (objectOverrides = {}, pipelines = { items: [] }) => ({
+  ...evidenceSnapshot().payload,
+  object: {
+    iid: 1,
+    state: "opened",
+    title: "Bound retry",
+    labels: [],
+    sha: SHA_A,
+    has_conflicts: false,
+    updated_at: "2026-10-05T00:00:00Z",
+    head_pipeline: { id: 1, status: "running" },
+    pipeline: { id: 1, status: "running" },
+    latest_build_started_at: "2026-10-05T00:00:00Z",
+    latest_build_finished_at: null,
+    ...objectOverrides,
+  },
+  pipelines: { ...component(), ...pipelines },
 });
 
 const artifactValidity = (artifact, kind) => {
@@ -356,6 +477,121 @@ const cases = [
     input: { ...labelIntent("bug"), priority: "urgent" },
     expectValid: false,
   },
+  {
+    name: "draft-gaps-fresh",
+    kind: "draft_gaps",
+    expectValid: true,
+    input: draftBase({
+      run_id: "",
+      session_id: "",
+      context_package_path: null,
+      critic_count: 2,
+      findings: [criticFinding("own-1")],
+      ci_job_assessments: [{ job: "build", classification: "unknown" }],
+      content: {
+        summary: "",
+        architecture_assessment: "",
+        semver_rationale: "",
+        chat_assessment: { necessity: { status: "unconfirmed", rationale: "" } },
+        mr_metadata_assessment: { title: { status: "unverified", rationale: "" } },
+        label_assessments: [{ name: "semver::patch", status: "unresolved", rationale: "" }],
+        thread_decisions: [{ id: "42", rationale: "" }],
+      },
+    }),
+  },
+  {
+    name: "draft-gaps-complete",
+    kind: "draft_gaps",
+    expectValid: true,
+    input: draftBase({
+      findings: [criticFinding("own-1")],
+      dispositions: [{ id: "own-1", decision: "accept" }],
+    }),
+  },
+  {
+    name: "draft-gaps-panel-awaiting-receipt",
+    kind: "draft_gaps",
+    expectValid: true,
+    input: panelDraft(),
+  },
+  {
+    name: "draft-gaps-panel-awaiting-arbitration",
+    kind: "draft_gaps",
+    expectValid: true,
+    input: panelDraft({
+      critics: [
+        { run_id: "run-a", session_id: "session-a", findings: [criticFinding("critic-a-1")] },
+        { run_id: "run-b", session_id: "session-b", findings: [] },
+      ],
+      participants: {
+        critics: [
+          { name: "critic-general", receipt: { run_id: "run-a", session_id: "session-a" } },
+          { name: "critic-plain", receipt: { run_id: "run-b", session_id: "session-b" } },
+        ],
+        arbitrator: { name: "arb-main" },
+      },
+    }),
+  },
+  {
+    name: "retirement-edited-question",
+    kind: "superseded_results",
+    expectValid: true,
+    input: retirementInput(retireBefore, retireAfter, [boundResult(retireBefore, "q-retry")]),
+  },
+  {
+    name: "retirement-keeps-unaffected-question",
+    kind: "superseded_results",
+    expectValid: true,
+    input: retirementInput(
+      twoBefore,
+      twoAfter,
+      [boundResult(twoBefore, "q-retry"), boundResult(twoBefore, "q-caller")],
+      [boundResult(twoBefore, "q-retry", { original: { run_id: "run-a", session_id: "s-a" } })],
+    ),
+  },
+  {
+    name: "retirement-prior-decision-change",
+    kind: "superseded_results",
+    expectValid: true,
+    input: retirementInput(decisionBefore, decisionAfter, [
+      boundResult(decisionBefore, "q-stable"),
+    ]),
+  },
+  {
+    name: "retirement-unbound-answer-without-previous",
+    kind: "superseded_results",
+    expectValid: true,
+    input: retirementInput(null, retireAfter, [
+      { question_id: "q-retry", verdict: "confirmed", evidence: "Collected before binding." },
+    ]),
+  },
+  {
+    name: "retirement-nothing-stale",
+    kind: "superseded_results",
+    expectValid: true,
+    input: retirementInput(retireAfter, retireAfter, [boundResult(retireAfter, "q-retry")]),
+  },
+  {
+    name: "analysis-fingerprint-ci-only-drift",
+    kind: "analysis_fingerprint",
+    expectValid: true,
+    input: analysisEvidence(
+      {
+        updated_at: "2026-10-05T01:00:00Z",
+        head_pipeline: { id: 2, status: "success" },
+        pipeline: { id: 2, status: "success" },
+        latest_build_started_at: "2026-10-05T01:00:00Z",
+        latest_build_finished_at: "2026-10-05T01:00:10Z",
+      },
+      { items: [{ id: 2, status: "success" }] },
+    ),
+  },
+  {
+    name: "analysis-fingerprint-material-change",
+    kind: "analysis_fingerprint",
+    expectValid: true,
+    input: analysisEvidence({ title: "Other scope", labels: ["blocking"], has_conflicts: true }),
+  },
 ];
 
 const validators = {
@@ -364,6 +600,31 @@ const validators = {
   semver_evidence: (input) => evidenceIsValid(input),
   semver_assessment: (input) => assessmentIsValid(input),
   label_intent: (input) => labelIntentIsValid(input),
+  draft_gaps: () => true,
+  superseded_results: () => true,
+  analysis_fingerprint: () => true,
+};
+
+// Transition outputs emitted by the TypeScript functions, keyed by fixture kind.
+const outputs = {
+  draft_gaps: (input) => draftGaps(structuredClone(input)),
+  superseded_results: (input) => {
+    const result = extractSupersededResults(
+      input.previous,
+      structuredClone(input.next),
+      structuredClone(input.answers),
+      structuredClone(input.verifications),
+    );
+    return result === null
+      ? null
+      : {
+          entry: result.entry,
+          question_ids: result.questionIds,
+          answers: result.answers,
+          verifications: result.verifications,
+        };
+  },
+  analysis_fingerprint: (input) => analysisFingerprint(structuredClone(input)),
 };
 
 const expectedDigest = (value) => {
@@ -389,6 +650,7 @@ const render = () =>
       }
       expected.divergence_reason = item.divergenceReason;
     }
+    if (outputs[item.kind] !== undefined) expected.output = outputs[item.kind](item.input);
     return {
       name: item.name,
       kind: item.kind,
