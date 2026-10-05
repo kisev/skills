@@ -169,6 +169,22 @@ pre-push:
         task reviewmatic-py:check
       fail_text: "The local push gate failed"
 
+    - name: shopmatic
+      glob:
+        # @gates:begin glob:shopmatic
+        - "apps/shopmatic/**"
+        - "gate-registry.json"
+        - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task shopmatic:check
+      fail_text: "The local push gate failed"
+
     - name: npm-packages
       glob:
         # @gates:begin glob:npm-packages

@@ -127,6 +127,13 @@
       ]
     },
     {
+      "name": "shopmatic",
+      "title": "Shopmatic application",
+      "task": "shopmatic:check",
+      "core": false,
+      "paths": ["apps/shopmatic/**"]
+    },
+    {
       "name": "gate-registry",
       "title": "Gate registry",
       "task": "gates:check",

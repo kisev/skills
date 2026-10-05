@@ -22,3 +22,4 @@ items.
 - [ADR-0016: Unify task runtime and explicit recall](0016-unify-task-runtime-and-explicit-recall.md) - accepted
 - [ADR-0017: Observable incremental CLI processing](0017-observable-incremental-cli-processing.md) - accepted
 - [ADR-0018: Unify the gate registry and trust one terminal CI success](0018-unify-gate-registry-and-ci-trust.md) - accepted
+- [ADR-0020: Drive marketplace storefronts through agent-browser](0020-drive-marketplace-storefronts-through-agent-browser.md) - accepted

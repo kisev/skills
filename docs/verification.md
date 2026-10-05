@@ -110,6 +110,42 @@ wheel:
 task reviewmatic-py:check
 ```
 
+## shopmatic
+
+The shopmatic application in `apps/shopmatic` is an MCP stdio server for
+marketplace shopping research through the pinned `agent-browser` CLI
+([ADR-0020](../specs/architecture/09-architecture-decisions/0020-drive-marketplace-storefronts-through-agent-browser.md)).
+Its automated gate is fully offline: a scripted fake `agent-browser`
+executable backs the browser driver, so no test or gate talks to a
+marketplace:
+
+```shell
+task shopmatic:check
+```
+
+The gate runs `uv lock --check`, the offline test suite, application-local
+strict mypy and ruff, the uv build, and the CLI version contract. The
+application layer is registered in `gate-registry.json`, so scoped CI matrix
+entries and pre-push globs cover the `apps/shopmatic` delta.
+
+Live storefront verification is a manual runbook, not a gate, because it
+depends on external sites and network reputation. It follows the acceptance
+evidence recorded on 2026-10-05: anonymous runs on Wildberries and Yandex
+Market must open a search with a price cap, wait for the SPA render, and
+print structured results (name, price, URL, rating) from a profile that was
+proven cookie-empty before the first navigation; Ozon is expected to answer
+its antibot challenge and stay blocked. Re-run the same scenario by hand:
+
+```shell
+uv run --locked shopmatic search wildberries "клавиатура" --max-price 5000 --limit 5
+uv run --locked shopmatic search yandex-market "клавиатура" --max-price 5000 --limit 5
+uv run --locked shopmatic compare "клавиатура" --limit 3
+```
+
+Marketplace selectors decay with storefront redesigns; a failing adapter
+answers an explicit error, and the spike stop conditions in the ADR govern
+whether support is paused, not bypassed.
+
 ## Deterministic Coverage
 
 The secret gate scans Git history plus the current tracked and non-ignored new

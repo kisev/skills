@@ -66,7 +66,8 @@ label show a dash. Package-only commands have a separate contract below.
 - Selectable plugins: [code-simplify](plugins/code-simplify.md),
   [rules-injector](plugins/rules-injector.md), [rtk](plugins/rtk.md),
   and [zed-bell](plugins/zed-bell.md).
-- Standalone application: [memomatic](applications/memomatic.md) (MCP and CLI).
+- Standalone applications: [memomatic](applications/memomatic.md) (MCP and CLI)
+  and [shopmatic](applications/shopmatic.md) (MCP and CLI).
 - Package tool: [route](package-tools/route.md).
 - Package command: [rtk-stats](commands/rtk-stats.md).
 - Administration: [scenario-oriented CLI](../requirements/interfaces/README.md#req-i-421---expose-scenario-oriented-integration-administration)

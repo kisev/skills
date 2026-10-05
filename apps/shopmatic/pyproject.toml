@@ -1,0 +1,96 @@
+[project]
+  name = "shopmatic"
+  version = "0.1.0"
+  description = "MCP stdio server for marketplace shopping research through agent-browser."
+  readme = "README.md"
+  requires-python = ">=3.12"
+  license = "MIT"
+  dependencies = []
+
+  [project.scripts]
+    shopmatic = "shopmatic.cli:main"
+
+[dependency-groups]
+  dev = ["mypy==2.3.1", "pytest==9.0.3", "ruff==0.16.6"]
+
+[build-system]
+  requires = ["hatchling>=1.26"]
+  build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+  packages = ["src/shopmatic"]
+
+[tool.hatch.build.targets.sdist]
+  include = ["src", "tests", "README.md", "README.ru.md", "pyproject.toml"]
+
+[tool.mypy]
+  python_version = "3.12"
+  strict = true
+  disallow_any_unimported = true
+  explicit_package_bases = true
+  mypy_path = "src"
+  files = ["src", "tests"]
+
+# Application-local lint configuration. It mirrors the root selection so the
+# package enforces the repository contract.
+[tool.ruff]
+  target-version = "py312"
+  line-length = 100
+
+  [tool.ruff.lint]
+    select = ["E4", "E7", "E9", "F"]
+    ignore = [
+      "PERF401",                      # Explicit diagnostic loops are clearer than generated extend expressions.
+      "PLR2004",                      # Protocol and schema literals are meaningful at their use sites.
+    ]
+    extend-select = [
+      "S",
+      "PLC",
+      "PLE",
+      "PLR",
+      "PLW",
+      "I",
+      "UP",
+      "B",
+      "C4",
+      "RUF",
+      "SIM",
+      "PERF",
+      "A",
+      "PT",
+      "RET",
+      "ISC",
+      "PIE",
+      "C901",
+      "TRY300",
+      "TC",
+    ]
+
+    [tool.ruff.lint.per-file-ignores]
+      "src/shopmatic/browser.py" = [
+        "S603",                            # Browser commands use fixed argument vectors without a shell.
+      ]
+      "src/shopmatic/marketplaces.py" = [
+        "RUF001",                          # Probe text matches the storefront's Cyrillic antibot page.
+      ]
+      "**/tests/**/*.py" = [
+        "PLC0415",                         # Tests import isolated modules after fixture setup.
+        "PT018",                           # Compound contract assertions retain useful failure context.
+        "RUF001",                          # Confusable characters are intentional fixture data.
+        "S101",                            # Assertions are the test contract.
+        "S105",                            # Test tokens are inert fixtures.
+        "S108",                            # Tests intentionally exercise temporary-path boundaries.
+        "S603",                            # Tests invoke bounded command vectors without a shell.
+        "S607",                            # Tests exercise the same PATH-based CLI contract as production.
+      ]
+
+    [tool.ruff.lint.mccabe]
+      max-complexity = 40
+
+    [tool.ruff.lint.pylint]
+      max-args = 15
+      max-branches = 50
+      max-statements = 163
+
+  [tool.ruff.format]
+    quote-style = "double"

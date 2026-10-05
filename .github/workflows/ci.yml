@@ -82,6 +82,8 @@ jobs:
             task: package:check
           - name: Reviewmatic Python package
             task: reviewmatic-py:check
+          - name: Shopmatic application
+            task: shopmatic:check
           # @gates:end
     env:
       CHECK_TASK: ${{ matrix.task }}

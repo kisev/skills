@@ -306,6 +306,7 @@ tasks:
     cmds:
       - mise exec -- uv run --locked mypy
       - task: reviewmatic-py:mypy
+      - task: shopmatic:mypy
 
   version:check:
     desc: Validate release, installer, compatibility, and documentation version authorities
@@ -568,6 +569,7 @@ tasks:
       - task: test:python
       - task: package:check
       - task: reviewmatic-py:check
+      - task: shopmatic:check
 
   pre-push:
     desc: Run the single complete local gate before push
@@ -601,6 +603,23 @@ tasks:
       - mise exec -- uv run --locked mypy
       - mise exec -- uv build
       - mise exec -- uv run --locked reviewmatic --version
+
+  shopmatic:mypy:
+    desc: Check types in the shopmatic package
+    dir: apps/shopmatic
+    cmds:
+      - mise exec -- uv run --locked mypy
+
+  shopmatic:check:
+    desc: "[group] Shopmatic package gate"
+    dir: apps/shopmatic
+    cmds:
+      - mise exec -- uv lock --check
+      - mise exec -- uv run --locked pytest
+      - mise exec -- uv run --locked mypy
+      - mise exec -- uv run --locked ruff check .
+      - mise exec -- uv build
+      - mise exec -- uv run --locked shopmatic --version
 
   package:check:
     desc: Verify the complete npm package lifecycle and tarballs

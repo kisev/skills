@@ -94,6 +94,10 @@
       "ru": "apps/reviewmatic-py/README.ru.md"
     },
     {
+      "en": "apps/shopmatic/README.md",
+      "ru": "apps/shopmatic/README.ru.md"
+    },
+    {
       "en": "packages/safe-fs/README.md",
       "ru": "packages/safe-fs/README.ru.md"
     },
