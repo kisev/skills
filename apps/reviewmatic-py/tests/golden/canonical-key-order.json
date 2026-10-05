@@ -21,6 +21,7 @@
   },
   "expected": {
     "digest": "eef4e53d527391e1c85994fd284e402a02a00029bc56de3904c9d06dc13f18e1",
-    "valid": true
+    "valid": true,
+    "python_valid": true
   }
 }

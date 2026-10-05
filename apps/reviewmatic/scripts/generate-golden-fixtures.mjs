@@ -143,6 +143,40 @@ const semverAssessment = (overrides = {}) => ({
   ...overrides,
 });
 
+const contextPackagePayload = (mode = "mr", includeRegistry = mode === "mr") => {
+  const payload = {
+    schema: "portable-gitlab/context-package/v2",
+    mode,
+    binding: {
+      evidence_digest: SHA_A,
+      artifact_root: "/tmp/reviewmatic-artifacts",
+      repo_root: "/tmp/reviewmatic-checkout",
+      base_sha: SHA_B,
+      head_sha: SHA_B,
+      start_sha: SHA_B,
+    },
+    goal: { status: "known", text: "Review the merge request delta." },
+    acceptance_criteria: { status: "known", items: ["No blocking findings remain."] },
+    background: "The MR fixes the recorded regression.",
+    claims: [],
+    constraints: [],
+    prior_decisions: [],
+    questions: [],
+    ...(includeRegistry ? { thread_registry: [] } : {}),
+    supersedes: null,
+    external_mutations: false,
+  };
+  return payload;
+};
+
+const contextPackage = (payload = contextPackagePayload()) => ({
+  schema: "portable-gitlab/context_package/v2",
+  schema_version: 2,
+  kind: "context_package",
+  created_at: "2026-10-05T00:00:00+00:00",
+  payload,
+});
+
 const artifactValidity = (artifact, kind) => {
   try {
     validateV2Artifact(artifact, kind);
@@ -234,6 +268,39 @@ const cases = [
     expectValid: false,
   },
   {
+    name: "artifact-context-package-valid",
+    kind: "artifact_validation_v2",
+    input: { kind: "context_package", artifact: contextPackage() },
+    expectValid: true,
+  },
+  {
+    name: "artifact-context-package-local-mode",
+    kind: "artifact_validation_v2",
+    input: { kind: "context_package", artifact: contextPackage(contextPackagePayload("local")) },
+    expectValid: true,
+  },
+  {
+    name: "artifact-context-package-mr-needs-registry",
+    kind: "artifact_validation_v2",
+    input: {
+      kind: "context_package",
+      artifact: contextPackage(contextPackagePayload("mr", false)),
+    },
+    expectValid: false,
+  },
+  {
+    name: "artifact-context-package-unbound-evidence",
+    kind: "artifact_validation_v2",
+    input: {
+      kind: "context_package",
+      artifact: contextPackage({
+        ...contextPackagePayload(),
+        binding: { ...contextPackagePayload().binding, evidence_digest: "not-a-digest" },
+      }),
+    },
+    expectValid: false,
+  },
+  {
     name: "semver-evidence-valid",
     kind: "semver_evidence",
     input: semverEvidence(),
@@ -310,11 +377,23 @@ const render = () =>
     const valid = validators[item.kind](item.input);
     if (valid !== item.expectValid)
       throw new Error(`fixture ${item.name}: TypeScript validity ${valid} contradicts the case`);
+    const pythonValid = item.expectPythonValid ?? item.expectValid;
+    const expected = {
+      digest: expectedDigest(item.input),
+      valid,
+      python_valid: pythonValid,
+    };
+    if (valid !== pythonValid) {
+      if (typeof item.divergenceReason !== "string" || item.divergenceReason.length === 0) {
+        throw new Error(`fixture ${item.name}: divergence requires a divergence_reason`);
+      }
+      expected.divergence_reason = item.divergenceReason;
+    }
     return {
       name: item.name,
       kind: item.kind,
       input: item.input,
-      expected: { digest: expectedDigest(item.input), valid },
+      expected,
     };
   });
 

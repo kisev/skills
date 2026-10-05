@@ -44,9 +44,15 @@ def test_golden_fixtures_carry_complete_expectations() -> None:
     for fixture in fixtures():
         assert set(fixture) == {"name", "kind", "input", "expected"}, fixture["name"]
         expected = fixture["expected"]
-        assert set(expected) == {"digest", "valid"}, fixture["name"]
+        assert {"digest", "valid", "python_valid"} <= set(expected), fixture["name"]
         assert contract.is_digest(expected["digest"]), fixture["name"]
         assert isinstance(expected["valid"], bool), fixture["name"]
+        assert isinstance(expected["python_valid"], bool), fixture["name"]
+        if expected["valid"] is not expected["python_valid"]:
+            reason = expected.get("divergence_reason")
+            assert isinstance(reason, str) and reason, fixture["name"]
+        else:
+            assert "divergence_reason" not in expected, fixture["name"]
 
 
 @pytest.mark.parametrize("fixture", fixtures(), ids=lambda fixture: fixture.get("name", "?"))
@@ -57,7 +63,10 @@ def test_python_canon_matches_the_golden_digest_and_verdict(fixture: dict[str, A
     assert state_artifacts.canonical_json(fixture["input"]) + b"\n" == contract.canonical(
         fixture["input"]
     )
-    assert verdict(fixture) is fixture["expected"]["valid"]
+    # The Python canon is the strictness reference (decision 33): its own
+    # verdict must match the declared python_valid expectation, and the
+    # TypeScript divergence stays an explicitly documented exception.
+    assert verdict(fixture) is fixture["expected"]["python_valid"]
 
 
 def verdict(fixture: dict[str, Any]) -> bool:

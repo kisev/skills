@@ -38,6 +38,7 @@
   },
   "expected": {
     "digest": "2215afbb0816e48dce3d6109708e990db6c4c705f3f7a1289e3be13576223192",
-    "valid": false
+    "valid": false,
+    "python_valid": false
   }
 }

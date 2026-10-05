@@ -82,6 +82,7 @@
   },
   "expected": {
     "digest": "9087a305b63c05e14d4199eabbe85bb9efd4088731e7d1835a3b62fdbc80e38e",
-    "valid": true
+    "valid": true,
+    "python_valid": true
   }
 }

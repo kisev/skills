@@ -13,6 +13,7 @@
   },
   "expected": {
     "digest": "427651eb3213dbe8ed7efc72af6f8f1efa9ae4bf99ba4f6ff7bbf50b4af7e584",
-    "valid": true
+    "valid": true,
+    "python_valid": true
   }
 }

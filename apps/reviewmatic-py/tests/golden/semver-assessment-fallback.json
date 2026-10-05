@@ -15,6 +15,7 @@
   },
   "expected": {
     "digest": "816aafd990e2fb85089ac8e3fe93e50159953a20a02423a4f85506a9ce441e20",
-    "valid": true
+    "valid": true,
+    "python_valid": true
   }
 }
