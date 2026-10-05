@@ -25,10 +25,10 @@
 | `cli.js` | `reviewmatic.cli` (поверхность этапа 1; бизнес-диспетчеризация приходит вместе с каждым перенесённым модулем) |
 | `local-review.js` | план: `reviewmatic.local_review` |
 | `draft.js` | план: `reviewmatic.draft` |
-| `context-package.js` | план: `reviewmatic.context_package` |
+| `context-package.js` | `reviewmatic.context_package` (переведён из исходника TypeScript; проводка record-\* приходит с портом черновиков) |
 | `scope.js` | план: `reviewmatic.scope` |
-| `fixes.js` | план: `reviewmatic.fixes` |
-| `schema-issues.js` | план: `reviewmatic.schema_issues` |
+| `fixes.js` | `reviewmatic.fixes` (переведён из исходника TypeScript) |
+| `schema-issues.js` | `reviewmatic.schema_issues` (переведён; канон регистрирует `schema_valid` как оракул при импорте пакета) |
 | `worktree.js` | план: `reviewmatic.worktree` |
 | `review-worktree.js` | план: `reviewmatic.review_worktree` |
 | `version.js` | `reviewmatic.__version__` (метаданные пакета) |
@@ -39,7 +39,7 @@
 | Файл тестов TypeScript | Тестов TS | Статус | Python-шов |
 | - | - | - | - |
 | `cli.test.mjs` | 4 | план (бизнес-диспетчеризация) | `tests/test_cli_contract.py` держит покрытие поверхности этапа 1 |
-| `context-package.test.mjs` | 15 | план | `tests/test_context_package.py` |
+| `context-package.test.mjs` | 15 | частично | `tests/test_context_package.py` (дайджесты, версионирование, вывод из обращения, привязки ответов/проверок, валидация MR); сквозные сценарии записи приходят с портом черновиков |
 | `context.test.mjs` | 6 | частично | `tests/test_context_report.py` несёт регрессии отчёта; регрессии сборки контекста приходят с портом context |
 | `contract.test.mjs` | 38 | частично | `tests/test_contract_validators.py` (валидаторы, лейблы, предпросмотр, привязки critic/decision), `tests/test_golden_parity.py` (канонические дайджесты, вердикты артефактов), `tests/test_cli_contract.py` (capabilities); транспорт/сборка приходят с портом local-review |
 | `draft-input.test.mjs` | 13 | план | `tests/test_draft_input.py` |
@@ -50,7 +50,7 @@
 | `mutation-process.test.mjs` | 6 | план | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | план | `tests/test_panel.py` |
 | `publication.test.mjs` | 3 | частично | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` и `::test_structured_preview_accepts_manual_actions` |
-| `repair.test.mjs` | 13 | план | `tests/test_repair.py` |
+| `repair.test.mjs` | 13 | частично | `tests/test_fixes_and_diagnostics.py` (диагностика схемы, синтез предложений); сквозные сценарии ремонта приходят с портом черновиков |
 | `review-contract-regressions.test.mjs` | 15 | частично | `tests/test_contract_validators.py` несёт регрессии валидаторов канона |
 | `review-semver.test.mjs` | 11 | покрыто выше | `tests/test_review_semver.py` (репозиторный набор) плюс golden-фикстуры `semver_*` |
 | `review-worktree.test.mjs` | 17 | план | `tests/test_review_worktree.py` |

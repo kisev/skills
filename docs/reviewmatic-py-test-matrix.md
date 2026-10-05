@@ -25,10 +25,10 @@ that introduced this file with the built `dist/` output.
 | `cli.js` | `reviewmatic.cli` (stage-1 surface; business dispatch lands with each ported module) |
 | `local-review.js` | planned: `reviewmatic.local_review` |
 | `draft.js` | planned: `reviewmatic.draft` |
-| `context-package.js` | planned: `reviewmatic.context_package` |
+| `context-package.js` | `reviewmatic.context_package` (translated from the TypeScript source; record-\* CLI wiring lands with the draft port) |
 | `scope.js` | planned: `reviewmatic.scope` |
-| `fixes.js` | planned: `reviewmatic.fixes` |
-| `schema-issues.js` | planned: `reviewmatic.schema_issues` |
+| `fixes.js` | `reviewmatic.fixes` (translated from the TypeScript source) |
+| `schema-issues.js` | `reviewmatic.schema_issues` (translated; the canon registers `schema_valid` as its oracle at package import) |
 | `worktree.js` | planned: `reviewmatic.worktree` |
 | `review-worktree.js` | planned: `reviewmatic.review_worktree` |
 | `version.js` | `reviewmatic.__version__` (package metadata) |
@@ -39,7 +39,7 @@ that introduced this file with the built `dist/` output.
 | TypeScript test file | TS tests | Status | Python seam |
 | - | - | - | - |
 | `cli.test.mjs` | 4 | planned (business dispatch) | `tests/test_cli_contract.py` keeps the stage-1 surface coverage |
-| `context-package.test.mjs` | 15 | planned | `tests/test_context_package.py` |
+| `context-package.test.mjs` | 15 | partial | `tests/test_context_package.py` (digests, versioning, retirement, answer/verification bindings, MR validation); the end-to-end record scenarios land with the draft port |
 | `context.test.mjs` | 6 | partial | `tests/test_context_report.py` carries the report regressions; collection regressions land with the context port |
 | `contract.test.mjs` | 38 | partial | `tests/test_contract_validators.py` (validators, labels, preview, critic/decision bindings), `tests/test_golden_parity.py` (canonical digests, artifact verdicts), `tests/test_cli_contract.py` (capabilities); transport/collection cases land with the local-review port |
 | `draft-input.test.mjs` | 13 | planned | `tests/test_draft_input.py` |
@@ -50,7 +50,7 @@ that introduced this file with the built `dist/` output.
 | `mutation-process.test.mjs` | 6 | planned | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | planned | `tests/test_panel.py` |
 | `publication.test.mjs` | 3 | partial | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` and `::test_structured_preview_accepts_manual_actions` |
-| `repair.test.mjs` | 13 | planned | `tests/test_repair.py` |
+| `repair.test.mjs` | 13 | partial | `tests/test_fixes_and_diagnostics.py` (schema diagnostics, suggestion synthesis); the end-to-end repair scenarios land with the draft port |
 | `review-contract-regressions.test.mjs` | 15 | partial | `tests/test_contract_validators.py` carries the canon validator regressions |
 | `review-semver.test.mjs` | 11 | covered upstream | `tests/test_review_semver.py` (repository suite) plus the `semver_*` golden fixtures |
 | `review-worktree.test.mjs` | 17 | planned | `tests/test_review_worktree.py` |
