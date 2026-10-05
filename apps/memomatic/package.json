@@ -1,6 +1,6 @@
 {
   "name": "@kisev/memomatic",
-  "version": "1.0.0",
+  "version": "12.0.1",
   "description": "Personal learning memory for agents: tiered Markdown corpus, rebuildable index, dream sweep.",
   "homepage": "https://github.com/kisev/skills#readme",
   "bugs": {
@@ -34,7 +34,7 @@
     "pack:check": "node test/pack-allowlist.mjs"
   },
   "dependencies": {
-    "@kisev/safe-fs": "^1.0.0",
+    "@kisev/safe-fs": "^12.0.1",
     "commander": "15.0.0",
     "jsonc-parser": "3.3.1"
   },

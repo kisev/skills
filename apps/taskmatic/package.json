@@ -1,6 +1,6 @@
 {
   "name": "@kisev/taskmatic",
-  "version": "1.0.0",
+  "version": "12.0.1",
   "description": "Local-first task board: SQLite, CLI, MCP, Markdown exports and a read-only web viewer.",
   "license": "MIT",
   "repository": {
@@ -31,7 +31,7 @@
     "pack:check": "node test/pack-allowlist.mjs"
   },
   "dependencies": {
-    "@kisev/safe-fs": "^1.0.0",
+    "@kisev/safe-fs": "^12.0.1",
     "commander": "15.0.0"
   },
   "devDependencies": {
