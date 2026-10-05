@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import __version__, publication
+from reviewmatic import __version__, fixes, publication
 from reviewmatic.portable.portable_gitlab import contract as portable
 from reviewmatic.portable.portable_gitlab import review_semver
 from reviewmatic.portable.portable_gitlab.label_assessment import (
@@ -61,6 +61,48 @@ def render_publication_patch_command(fix: dict[str, Any]) -> str:
     patch_digest = hashlib.sha256(patch.encode()).hexdigest()
     delimiter = f"PATCH_{patch_digest[:16].upper()}"
     return f"git apply <<'{delimiter}'\n{patch.rstrip()}\n{delimiter}"
+
+
+def code_fence(value: str, language: str = "") -> str:
+    runs = re.findall(r"`+", value)
+    fence = "`" * max([3, *(len(run) + 1 for run in runs)])
+    return f"{fence}{language}\n{value.rstrip()}\n{fence}"
+
+
+def head_guard(evidence: dict[str, Any], locale: str) -> str:
+    project = cast("dict[str, Any]", evidence["project"])
+    target = cast("dict[str, Any]", evidence["target"])
+    endpoint = f"projects/{project['id']}/merge_requests/{target['iid']}"
+    expected = hashlib.sha256(str(evidence["head_sha"]).encode()).hexdigest()
+    ru = locale == "ru"
+    label = (
+        "Проверка head: блок останавливается до любой записи, если запрос не прошёл, "
+        "ответ некорректен или head MR изменился после ревью"
+        if ru
+        else "Head check: this block stops before writing anything when the request fails, "
+        "the response is malformed, or the MR head moved after the review"
+    )
+    stop = (
+        "head MR отличается от рассмотренного; ничего не опубликовано. "
+        "Обновите ревью и возьмите команды из нового плана"
+        if ru
+        else "The MR head differs from the reviewed head; nothing was published. "
+        "Refresh the review and use the new plan's commands"
+    )
+    return "\n".join(
+        [
+            f"# {label}",
+            f'current_head=$(glab api {shlex.quote(endpoint)} | jq -r ".sha") &&',
+            (
+                f'[ "$(printf \'%s\' "$current_head" | sha256sum | cut -d\' \' -f1)" = "{expected}" ] '
+                f"|| {{ echo {shlex.quote(stop)} >&2; false; }} &&"
+            ),
+        ]
+    )
+
+
+def operation_is_head_guarded(operation: str) -> bool:
+    return operation in {"create_general", "create_line", "reply", "resolve", "reopen"}
 
 
 def render_patch_command(
@@ -438,13 +480,13 @@ def baseline_pointer(root: Path) -> tuple[dict[str, Any], dict[str, Any]] | None
         raise portable.WorkflowError("code-review baseline plan digest changed")
     if (
         plan.get("complete") is not True
-        or plan.get("review_contract_version") not in {1, 2, 3, 4, 5, REVIEW_CONTRACT_VERSION}
+        or plan.get("review_contract_version") not in {1, 2, 3, 4, 5, 6, REVIEW_CONTRACT_VERSION}
         or plan.get("target") != pointer.get("target")
     ):
         raise portable.WorkflowError("code-review baseline is incomplete or incompatible")
     markdown_path = Path(str(pointer.get("markdown_path", "")))
-    if markdown_path != root / "review-publication.md" or not portable.is_digest(
-        pointer.get("markdown_digest")
+    if markdown_path not in (root / "review-publication.md", root / "runbook.md") or (
+        not portable.is_digest(pointer.get("markdown_digest"))
     ):
         raise portable.WorkflowError("code-review baseline Markdown identity is invalid")
     source = portable.regular_file(markdown_path, "code-review baseline Markdown")
@@ -1506,7 +1548,12 @@ def patch_paths(patch: str) -> list[str]:
     return sorted(set(paths))
 
 
-def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
+def validate_git_patch(
+    repo_root: Path,
+    head_sha: str,
+    patch: str,
+    result: dict[str, str] | None = None,
+) -> list[str]:
     paths = patch_paths(patch)
     for path in paths:
         tree_entry = str(portable.git_read(repo_root, "ls-tree", head_sha, "--", path)).strip()
@@ -1589,7 +1636,22 @@ def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
             raise portable.WorkflowError("Git patch effective paths cannot be inspected") from exc
         if inspected.returncode:
             raise portable.WorkflowError("Git patch effective paths cannot be inspected")
-    values = inspected.stdout.split(b"\0")
+        if result is not None:
+            try:
+                tree = subprocess.run(
+                    ["git", "-C", str(repo_root), "write-tree"],
+                    env=environment,
+                    capture_output=True,
+                    check=False,
+                    timeout=45,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                raise portable.WorkflowError("Cannot compare complete fix result") from exc
+            if tree.returncode:
+                raise portable.WorkflowError("Cannot compare complete fix result")
+            result["tree"] = tree.stdout.decode().strip()
+        inspected_stdout = inspected.stdout
+    values = inspected_stdout.split(b"\0")
     effective_paths: list[str] = []
     index = 0
     while index < len(values) and values[index]:
@@ -1621,7 +1683,7 @@ def validate_git_patch(repo_root: Path, head_sha: str, patch: str) -> list[str]:
 def changed_diff_lines(
     repo_root: Path, base_sha: str, head_sha: str, path: str
 ) -> tuple[set[int], set[int]]:
-    diff = str(portable.git_read(repo_root, "diff", "--unified=0", base_sha, head_sha, "--", path))
+    diff = str(portable.git_read(repo_root, "diff", "--unified=3", base_sha, head_sha, "--", path))
     old_lines: set[int] = set()
     new_lines: set[int] = set()
     pattern = re.compile(
@@ -1709,17 +1771,61 @@ def validate_thread_fix(
     source: dict[str, Any],
     repo_root: Path,
     head_sha: str,
+    base_sha: str,
 ) -> None:
     fix_mode = item.get("fix_mode")
+    if "routing_response" in item and (
+        not isinstance(item.get("suggestions"), list)
+        or not portable.nonempty_string(item.get("routing_response"))
+        or re.search(
+            r"^```suggestion|^diff --git |git\s+apply\s*(?:<<|--)",
+            str(item.get("routing_response")),
+            re.MULTILINE,
+        )
+    ):
+        raise portable.WorkflowError("routing_response requires grouped suggestions and prose only")
     if fix_mode not in {"suggestion", "patch", "not_required"}:
         raise portable.WorkflowError("thread fix mode is invalid")
     response = item.get("proposed_response")
     suggestion_count = len(suggestion_blocks(response)) if isinstance(response, str) else 0
+    if "suggestions" in item:
+        if (
+            fix_mode != "suggestion"
+            or item.get("outcome") == "no_publication"
+            or item.get("outcome") == "local_fix"
+            or suggestion_count != 0
+            or item.get("patch") is not None
+        ):
+            raise portable.WorkflowError(
+                "Related thread suggestions require a published prose response and no patch"
+            )
+        parts = fixes.suggestion_parts(item)
+        for part in parts:
+            validate_suggestion(
+                part.body,
+                repo_root=repo_root,
+                head_sha=head_sha,
+                path=part.path,
+                line=part.line,
+            )
+            _, visible = changed_diff_lines(repo_root, base_sha, head_sha, part.path)
+            if part.line not in visible:
+                raise portable.WorkflowError(
+                    "Thread suggestion position is outside the exact visible diff"
+                )
+            validate_git_patch(
+                repo_root, head_sha, fixes.suggestions_patch(str(repo_root), head_sha, [part])
+            )
+        validate_git_patch(
+            repo_root, head_sha, fixes.suggestions_patch(str(repo_root), head_sha, parts)
+        )
+        return
     position = source.get("root_position")
     current_new_line = (
         isinstance(position, dict)
         and isinstance(position.get("new_path"), str)
         and isinstance(position.get("new_line"), int)
+        and not isinstance(position.get("new_line"), bool)
         and position.get("head_sha") == head_sha
     )
     if fix_mode == "suggestion" and (
@@ -1740,13 +1846,36 @@ def validate_thread_fix(
             path=cast("str", exact_position["new_path"]),
             line=cast("int", exact_position["new_line"]),
         )
+        validate_git_patch(
+            repo_root,
+            head_sha,
+            fixes.suggestions_patch(
+                str(repo_root),
+                head_sha,
+                [
+                    fixes.SuggestionPart(
+                        str(exact_position["new_path"]),
+                        int(cast("int", exact_position["new_line"])),
+                        str(response),
+                    )
+                ],
+            ),
+        )
     if fix_mode == "patch" and (
         item.get("outcome") == "no_publication"
         or not portable.nonempty_string(item.get("patch"))
-        or suggestion_count
+        or suggestion_count != 0
     ):
         raise portable.WorkflowError("thread patch fix is invalid")
     if fix_mode == "patch":
+        if not portable.nonempty_string(item.get("patch_reason")):
+            raise portable.WorkflowError("Thread patch fallback requires a concrete patch_reason")
+        if response is not None and re.search(
+            r"^diff --git |git\s+apply\s*(?:<<|--)", str(response), re.MULTILINE
+        ):
+            raise portable.WorkflowError(
+                "Thread patch response must be prose only; the runner owns the patch block"
+            )
         validate_git_patch(repo_root, head_sha, cast("str", item["patch"]))
     if fix_mode == "not_required" and (item.get("patch") is not None or suggestion_count):
         raise portable.WorkflowError(
@@ -1758,18 +1887,227 @@ def validate_thread_fix(
         raise portable.WorkflowError("a local thread fix requires a Git patch")
 
 
+def validate_patch_fallback(
+    fix: dict[str, Any], context_value: dict[str, Any], evidence: dict[str, Any]
+) -> None:
+    if (
+        fix.get("fix_mode") != "patch"
+        or fix.get("type") == "local_fix"
+        or fix.get("outcome") == "local_fix"
+    ):
+        return
+    if not portable.nonempty_string(fix.get("patch_reason")):
+        raise portable.WorkflowError(
+            "Expected a concrete patch_reason explaining technical impossibility or unsafe division"
+        )
+    repo = Path(str(cast("dict[str, Any]", context_value["exact_git"])["repo_root"]))
+    head = str(evidence["head_sha"])
+    tree_result: dict[str, str] = {}
+    validate_git_patch(repo, head, cast("str", fix["patch"]), tree_result)
+    paths = patch_paths(cast("str", fix["patch"]))
+    hunks = list(
+        re.finditer(
+            r"^@@ -([0-9]+)(?:,([0-9]+))? \+([0-9]+)(?:,([0-9]+))? @@[^\n]*\n([\s\S]*?)"
+            r"(?=^@@ |^diff --git |\Z)",
+            cast("str", fix["patch"]),
+            re.MULTILINE,
+        )
+    )
+    if len(paths) != 1 or len(hunks) != 1:
+        return
+    hunk = hunks[0]
+    count = int(hunk.group(2) or 1)
+    start = int(hunk.group(1))
+    if count > 201:
+        return
+    _, visible = changed_diff_lines(repo, str(evidence["base_sha"]), head, paths[0])
+    replacement = "\n".join(
+        row[1:] for row in hunk.group(5).split("\n") if row.startswith((" ", "+"))
+    )
+    line: int | None
+    before = 0
+    after = 0
+    if count == 0:
+        line = max(1, start)
+        if line not in visible:
+            return
+        try:
+            source = str(portable.git_read(repo, "show", f"{head}:{paths[0]}")).split("\n")[
+                line - 1
+            ]
+        except portable.WorkflowError:
+            return
+        replacement = f"{replacement}\n{source}" if start == 0 else f"{source}\n{replacement}"
+    else:
+        candidates = [
+            value
+            for value in sorted(visible)
+            if start <= value < start + count
+            and value - start <= 100
+            and start + count - value - 1 <= 100
+        ]
+        if not candidates:
+            return
+        line = candidates[0]
+        before = line - start
+        after = start + count - line - 1
+    suggestion = {
+        "path": paths[0],
+        "line": line,
+        "body": f"```suggestion:-{before}+{after}\n{replacement}\n```",
+    }
+    suggested: dict[str, str] = {}
+    try:
+        validate_git_patch(
+            repo,
+            head,
+            fixes.suggestions_patch(
+                str(repo),
+                head,
+                [
+                    fixes.SuggestionPart(
+                        str(suggestion["path"]),
+                        int(cast("int", suggestion["line"])),
+                        cast("str", suggestion["body"]),
+                    )
+                ],
+            ),
+            suggested,
+        )
+    except portable.WorkflowError:
+        return
+    if suggested.get("tree") == tree_result.get("tree"):
+        raise portable.WorkflowError(
+            "A safe bounded suggestion is available on the exact visible head; "
+            "use fix_mode=suggestion instead of patch"
+        )
+
+
+def _user_fix_proposal_index(source: dict[str, Any], context_value: dict[str, Any]) -> int:
+    notes = cast("list[dict[str, Any]]", source.get("notes") or [])
+    root = next((note for note in notes if note.get("id") == source.get("root_note_id")), None)
+    if root is None or username(root.get("author")) != context_value.get("current_user_username"):
+        return -1
+    last = -1
+    for index, note in enumerate(notes):
+        if (
+            note.get("system") is not True
+            and username(note.get("author")) == context_value.get("current_user_username")
+            and re.search(
+                r"```(?:suggestion|diff|patch)|git\s+apply\s*<<",
+                str(note.get("body")),
+                re.MULTILINE,
+            )
+        ):
+            last = index
+    return last
+
+
+def _user_proposed_fix(source: dict[str, Any], context_value: dict[str, Any]) -> bool:
+    return _user_fix_proposal_index(source, context_value) >= 0
+
+
+def validate_user_confirmation(
+    item: dict[str, Any], source: dict[str, Any], context_value: dict[str, Any]
+) -> None:
+    if not _user_proposed_fix(source, context_value):
+        return
+    confirmation = item.get("user_confirmation")
+    if isinstance(confirmation, dict) and confirmation.get("status") == "confirmed":
+        proposal_index = _user_fix_proposal_index(source, context_value)
+        notes = [
+            note
+            for note in cast("list[dict[str, Any]]", source.get("notes") or [])[
+                proposal_index + 1 :
+            ]
+            if note.get("system") is not True
+            and username(note.get("author")) == context_value.get("current_user_username")
+        ]
+        note_ids = [int(note["id"]) for note in notes if isinstance(note.get("id"), int)]
+        evidence_ids = confirmation.get("evidence_note_ids")
+        if (
+            not isinstance(evidence_ids, list)
+            or not evidence_ids
+            or any(note_id not in note_ids for note_id in evidence_ids)
+        ):
+            raise portable.WorkflowError(
+                "user_confirmation.evidence_note_ids must identify the user's later "
+                "confirmation in this complete discussion"
+            )
+        if (
+            item.get("assessment") == "fixed"
+            and item.get("outcome") != "no_publication"
+            and (not portable.nonempty_string(confirmation.get("new_circumstances")))
+        ):
+            raise portable.WorkflowError(
+                "An already confirmed fix requires no_publication unless "
+                "user_confirmation.new_circumstances explains new evidence"
+            )
+    elif item.get("outcome") == "no_publication" and item.get("assessment") == "fixed":
+        raise portable.WorkflowError(
+            "The user's proposed fix still needs their confirmation, even when another "
+            "participant resolved the thread; prepare a reply or bind their later "
+            "confirmation note"
+        )
+
+
+def blocking_thread_ids(
+    threads: list[dict[str, Any]], publications: list[dict[str, Any]]
+) -> list[str]:
+    return [
+        str(thread["id"])
+        for thread in threads
+        if thread.get("assessment") == "accepted"
+        and thread.get("severity") != "low"
+        and not any(
+            fix.get("type") == "existing_thread" and fix.get("thread_id") == thread.get("id")
+            for fix in publications
+        )
+    ]
+
+
 def validate_finding_publications(value: object, finding_ids: set[str]) -> list[dict[str, Any]]:
     keys = {"finding_id", "type", "path", "line", "old_line", "body", "fix_mode", "patch"}
+    extensible = {"suggestions", "split_rationale", "patch_reason", "thread_id"}
     if not isinstance(value, list):
         raise portable.WorkflowError("finding publications must be an array")
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
-    for item in value:
-        if not isinstance(item, dict) or set(item) != keys:
+    for entry in value:
+        if not isinstance(entry, dict):
+            raise portable.WorkflowError("finding publication is invalid")
+        item = entry
+        if set(item) - extensible != keys:
             raise portable.WorkflowError("finding publication is invalid")
         finding_id = item.get("finding_id")
         publication_type = item.get("type")
         path, line, old_line = item.get("path"), item.get("line"), item.get("old_line")
+        if publication_type != "existing_thread" and "thread_id" in item:
+            raise portable.WorkflowError(
+                "thread_id is valid only with type=existing_thread; other finding fixes must "
+                "omit it"
+            )
+        if publication_type == "existing_thread":
+            if (
+                not portable.nonempty_string(finding_id)
+                or str(finding_id) not in finding_ids
+                or str(finding_id) in seen
+                or not portable.nonempty_string(item.get("thread_id"))
+                or not portable.nonempty_string(item.get("body"))
+                or item.get("fix_mode") != "not_required"
+                or item.get("patch") is not None
+                or path is not None
+                or line is not None
+                or old_line is not None
+                or "suggestions" in item
+            ):
+                raise portable.WorkflowError(
+                    "existing_thread requires thread_id, prose body, not_required, and null "
+                    "patch/positions; the thread owns the fix"
+                )
+            seen.add(cast("str", finding_id))
+            result.append(cast("dict[str, Any]", item))
+            continue
         if (
             not portable.nonempty_string(finding_id)
             or finding_id not in finding_ids
@@ -1782,16 +2120,29 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
         fix_mode = cast("str", item["fix_mode"])
         patch = item.get("patch")
         suggestion_count = len(suggestion_blocks(cast("str", item["body"])))
+        grouped = "suggestions" in item
+        if grouped:
+            fixes.suggestion_parts(cast("dict[str, Any]", item))
+            if fix_mode != "suggestion" or suggestion_count != 0:
+                raise portable.WorkflowError(
+                    "Grouped suggestion body must be prose; parts own their blocks"
+                )
         if fix_mode == "patch":
             if not portable.nonempty_string(patch) or suggestion_count:
                 raise portable.WorkflowError("patch fix requires a patch and forbids suggestion")
             patch_paths(cast("str", patch))
-        elif patch is not None or suggestion_count != 1:
+            if re.search(
+                r"^diff --git |git\s+apply\s*(?:<<|--)", cast("str", item["body"]), re.MULTILINE
+            ):
+                raise portable.WorkflowError(
+                    "Patch body must be prose only; put the unified diff in patch"
+                )
+        elif patch is not None or (not grouped and suggestion_count != 1):
             raise portable.WorkflowError("suggestion fix requires one suggestion and no patch")
         if publication_type in {"general", "local_fix"}:
             if path is not None or line is not None or old_line is not None:
                 raise portable.WorkflowError("non-line finding fix cannot have a line")
-            if fix_mode != "patch":
+            if fix_mode != "patch" and not grouped:
                 raise portable.WorkflowError("general and local finding fixes require a Git patch")
         elif (
             not portable.nonempty_string(path)
@@ -1805,7 +2156,7 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             raise portable.WorkflowError("line finding publication position is invalid")
         elif old_line is not None and fix_mode != "patch":
             raise portable.WorkflowError("deleted-line finding fixes require a Git patch")
-        elif fix_mode == "suggestion":
+        elif fix_mode == "suggestion" and not grouped:
             validate_suggestion(cast("str", item["body"]))
         seen.add(cast("str", finding_id))
         result.append(cast("dict[str, Any]", item))
@@ -1876,7 +2227,7 @@ def validate_previous_assessments(
 
 
 def validate_recommended_issues(
-    value: object, issue_templates: list[dict[str, Any]]
+    value: object, issue_templates: list[dict[str, Any]] | None = None
 ) -> list[dict[str, Any]]:
     keys = {
         "id",
@@ -1886,15 +2237,16 @@ def validate_recommended_issues(
         "evidence",
         "reason_out_of_scope",
         "minimum_fix",
-        "body",
-        "template_path",
+        "importance",
+        "existing_task",
     }
+    legacy_keys = keys - {"importance", "existing_task"} | {"body", "template_path"}
     if not isinstance(value, list):
         raise portable.WorkflowError("recommended issues must be an array")
     result: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in value:
-        if not isinstance(item, dict) or set(item) != keys:
+        if not isinstance(item, dict) or set(item) not in (keys, legacy_keys):
             raise portable.WorkflowError("recommended issue is invalid")
         item_id = item.get("id")
         if (
@@ -1908,7 +2260,7 @@ def validate_recommended_issues(
                     "risk",
                     "reason_out_of_scope",
                     "minimum_fix",
-                    "body",
+                    "importance" if "importance" in item else "body",
                 )
             )
             or not isinstance(item.get("evidence"), list)
@@ -1916,16 +2268,15 @@ def validate_recommended_issues(
             or not all(portable.nonempty_string(entry) for entry in item["evidence"])
         ):
             raise portable.WorkflowError("recommended issue content is invalid")
-        template_path = item.get("template_path")
-        templates = {str(template["path"]): template for template in issue_templates}
-        if templates and template_path not in templates:
-            raise portable.WorkflowError("recommended issue must select a project issue template")
-        if not templates and template_path is not None:
-            raise portable.WorkflowError("recommended issue template is unavailable")
-        if template_path is not None and not all(
-            heading in item["body"] for heading in templates[cast("str", template_path)]["headings"]
+        if (
+            "existing_task" in item
+            and item.get("existing_task") is not None
+            and not portable.nonempty_string(item.get("existing_task"))
         ):
-            raise portable.WorkflowError("recommended issue does not fill its selected template")
+            raise portable.WorkflowError(
+                "recommended issue existing_task must be a task reference or null"
+            )
+        # Follow-ups are proposals only. Full task preparation is a separate skill.
         seen.add(cast("str", item_id))
         result.append(cast("dict[str, Any]", item))
     return result
@@ -2031,16 +2382,12 @@ def finding_revisions(
     incremental: dict[str, Any],
     assessments: list[dict[str, Any]],
     current_ids: set[str],
-    markers: dict[str, dict[str, Any]],
 ) -> dict[str, int]:
     previous = previous_revisions(incremental)
     assessment_by_id = {item["id"]: item for item in assessments}
     revisions: dict[str, int] = {}
     for finding_id in current_ids:
-        prior_revision = max(
-            previous.get(finding_id, 0),
-            int(markers[finding_id]["revision"]) if finding_id in markers else 0,
-        )
+        prior_revision = previous.get(finding_id, 0)
         if prior_revision == 0:
             revisions[finding_id] = 1
             continue
@@ -2059,21 +2406,22 @@ def structured_publication_preview(
     thread_decisions: list[dict[str, Any]],
     recommended_issues: list[dict[str, Any]],
     label_review: dict[str, Any],
+    dry_run: bool = False,
+    locale: str = "en",
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
-    body_directory = portable.private_directory(root / "artifacts" / "review_plan" / "bodies")
-    patch_directory = portable.private_directory(root / "artifacts" / "review_plan" / "patches")
+    body_directory = root / "artifacts" / "review_plan" / "bodies"
+    patch_directory = root / "artifacts" / "review_plan" / "patches"
+    if not dry_run:
+        portable.private_directory(body_directory)
+        portable.private_directory(patch_directory)
     body_files: list[dict[str, Any]] = []
     actions: list[dict[str, Any]] = []
-    markers: dict[str, dict[str, Any]] = {}
     incremental = cast("dict[str, Any]", context["incremental"])
     previous = previous_revisions(incremental)
     previous_allowed = set(previous)
     assessment_by_id = {str(item["id"]): item for item in assessments}
     finding_ids = {str(item["id"]) for item in findings}
-    revisions = finding_revisions(incremental, assessments, finding_ids, markers)
-    discussion_by_id = {
-        str(item["id"]): item for item in cast("list[dict[str, Any]]", context["discussions"])
-    }
+    revisions = finding_revisions(incremental, assessments, finding_ids)
     discussion_by_root = {
         str(item["root_note_id"]): item
         for item in cast("list[dict[str, Any]]", context["discussions"])
@@ -2091,6 +2439,8 @@ def structured_publication_preview(
     def marked_command(
         argv: list[str], action_id: str, value: object, *, stdin_sha256: str | None = None
     ) -> str:
+        if dry_run:
+            return publication.shell_join(argv)
         return publication.make_command(
             root,
             evidence,
@@ -2099,7 +2449,7 @@ def structured_publication_preview(
             argv,
             value,
             publication_dependencies,
-            stdin_sha256=stdin_sha256,
+            stdin_sha256,
         )
 
     def enrich_fix(owner_kind: str, owner_id: str, item: dict[str, Any]) -> dict[str, Any]:
@@ -2110,30 +2460,38 @@ def structured_publication_preview(
             raise portable.WorkflowError("patch fix content is unavailable")
         identity = hashlib.sha256(f"{owner_kind}:{owner_id}".encode()).hexdigest()[:12]
         patch_digest = hashlib.sha256(patch.encode()).hexdigest()
-        patch_path, actual_digest = portable.write_companion(
-            patch_directory / f"{identity}-{patch_digest}.patch", patch
-        )
+        destination = str(patch_directory / f"{identity}-{patch_digest}.patch")
+        if dry_run:
+            patch_path, actual_digest = destination, patch_digest
+        else:
+            written_path, actual_digest = portable.write_companion(Path(destination), patch)
+            patch_path = str(written_path)
         return {**item, "patch_path": str(patch_path), "patch_sha256": actual_digest}
 
     def body_with_fix(body: str, fix: dict[str, Any]) -> str:
         if fix.get("fix_mode") != "patch":
             return body
-        return f"{body.rstrip()}\n\n```sh\n{render_publication_patch_command(fix)}\n```"
+        return (
+            f"{re.sub(r'\s+$', '', body)}\n\n{fix.get('patch_reason')}\n\n"
+            f"{code_fence(render_publication_patch_command(fix), 'sh')}"
+        )
 
     enriched_threads = [enrich_fix("thread", str(item["id"]), item) for item in thread_decisions]
 
     def thread_expectation(source: dict[str, Any]) -> dict[str, Any]:
         meaningful = [
             note
-            for note in cast("list[dict[str, Any]]", source.get("notes", []))
-            if note.get("system") is not True and isinstance(note.get("body"), str)
+            for note in cast("list[dict[str, Any]]", source.get("notes") or [])
+            if isinstance(note, dict)
+            and note.get("system") is not True
+            and isinstance(note.get("body"), str)
         ]
         if not meaningful:
             raise portable.WorkflowError("publication thread has no meaningful note")
         latest = meaningful[-1]
         position = source.get("root_position")
         return {
-            "discussion_id": source["id"],
+            "discussion_id": source["id"] if source.get("root_resolvable") is True else None,
             "root_note_id": source["root_note_id"],
             "resolvable": source.get("root_resolvable") is True,
             "resolved": source.get("root_resolved") is True,
@@ -2141,12 +2499,16 @@ def structured_publication_preview(
             "last_note_body_sha256": hashlib.sha256(
                 cast("str", latest["body"]).encode()
             ).hexdigest(),
-            "path": position.get("new_path") or position.get("old_path")
-            if isinstance(position, dict)
-            else None,
-            "line": position.get("new_line") or position.get("old_line")
-            if isinstance(position, dict)
-            else None,
+            "path": (
+                position.get("new_path") or position.get("old_path")
+                if isinstance(position, dict)
+                else None
+            ),
+            "line": (
+                position.get("new_line") or position.get("old_line")
+                if isinstance(position, dict)
+                else None
+            ),
         }
 
     def add_body_action(
@@ -2159,27 +2521,31 @@ def structured_publication_preview(
         mutation: dict[str, Any] | None = None,
         thread: dict[str, Any] | None = None,
     ) -> None:
-        body = raw_body.rstrip() + "\n"
+        mutation_value = mutation if mutation is not None else {}
+        body = f"{re.sub(r'\s+$', '', raw_body)}\n"
         identity_digest = hashlib.sha256(publication_id.encode()).hexdigest()[:12]
         content_digest = hashlib.sha256(body.encode()).hexdigest()[:12]
-        body_path, body_digest = portable.write_companion(
-            body_directory / f"{identity_digest}-{content_digest}.md", body
+        destination = str(body_directory / f"{identity_digest}-{content_digest}.md")
+        if dry_run:
+            body_path, body_digest = destination, hashlib.sha256(body.encode()).hexdigest()
+        else:
+            written_path, body_digest = portable.write_companion(Path(destination), body)
+            body_path = str(written_path)
+        body_files.append(
+            {
+                "publication_id": publication_id,
+                "revision": revision,
+                "kind": kind,
+                "path": str(body_path),
+                "content": body,
+            }
         )
-        body_record = {
-            "publication_id": publication_id,
-            "revision": revision,
-            "kind": kind,
-            "path": str(body_path),
-            "content": body,
-        }
-        body_files.append(body_record)
-        mutation_value = mutation or {}
         publication_operation = "reply" if operation in {"resolve", "reopen"} else operation
         action_id = f"{kind}:{publication_id}:r{revision}:{publication_operation}"
         if publication_operation == "create_line":
-            path = cast("str", mutation_value["path"])
-            line = mutation_value["line"] or mutation_value["old_line"]
-            line_option = "--line" if mutation_value["line"] is not None else "--old-line"
+            line_path = cast("str", mutation_value.get("path"))
+            line = mutation_value.get("line") or mutation_value.get("old_line")
+            line_option = "--line" if mutation_value.get("line") is not None else "--old-line"
             command = marked_command(
                 [
                     "glab",
@@ -2190,7 +2556,7 @@ def structured_publication_preview(
                     "--repo",
                     repository_url,
                     "--file",
-                    path,
+                    line_path,
                     line_option,
                     str(line),
                 ],
@@ -2217,7 +2583,7 @@ def structured_publication_preview(
             )
         elif operation == "create_issue":
             issue_endpoint = f"projects/{project['id']}/issues"
-            issue_title = cast("str", cast("dict[str, Any]", mutation)["title"])
+            issue_title = cast("dict[str, Any]", mutation)["title"]
             command = marked_command(
                 [
                     "glab",
@@ -2239,19 +2605,21 @@ def structured_publication_preview(
         else:
             discussion_id = thread.get("discussion_id") if thread is not None else None
             if discussion_id is None:
-                argv = [
-                    "glab",
-                    "api",
-                    "--hostname",
-                    hostname,
-                    "--method",
-                    "POST",
-                    f"{endpoint}/notes",
-                    "--silent",
-                    "-F",
-                    f"body=@{body_path}",
-                ]
-                command = marked_command(argv, action_id, {"body_sha256": body_digest})
+                command = marked_command(
+                    [
+                        "glab",
+                        "api",
+                        "--hostname",
+                        hostname,
+                        "--method",
+                        "POST",
+                        f"{endpoint}/discussions",
+                        "-F",
+                        f"body=@{body_path}",
+                    ],
+                    action_id,
+                    {"body_sha256": body_digest},
+                )
             else:
                 discussion_endpoint = f"{endpoint}/discussions/{discussion_id}"
                 command = marked_command(
@@ -2277,11 +2645,13 @@ def structured_publication_preview(
                 "publication_id": publication_id,
                 "operation": publication_operation,
                 "command": command,
-                "path": mutation_value.get("path")
-                or (thread.get("path") if thread is not None else None),
-                "line": mutation_value.get("line")
-                or mutation_value.get("old_line")
-                or (thread.get("line") if thread is not None else None),
+                "path": mutation_value.get("path") or (thread or {}).get("path") or None,
+                "line": (
+                    mutation_value.get("line")
+                    or mutation_value.get("old_line")
+                    or (thread or {}).get("line")
+                    or None
+                ),
             }
         )
         if operation in {"resolve", "reopen"}:
@@ -2311,63 +2681,48 @@ def structured_publication_preview(
                         f"{kind}:{publication_id}:r{revision}:{operation}",
                         {"resolved": resolved},
                     ),
-                    "path": mutation_value.get("path") or thread.get("path"),
-                    "line": mutation_value.get("line")
-                    or mutation_value.get("old_line")
-                    or thread.get("line"),
+                    "path": mutation_value.get("path") or (thread or {}).get("path") or None,
+                    "line": (
+                        mutation_value.get("line")
+                        or mutation_value.get("old_line")
+                        or (thread or {}).get("line")
+                        or None
+                    ),
                 }
             )
 
-    enriched_findings: list[dict[str, Any]] = []
     spec_by_id = {
         str(item["finding_id"]): enrich_fix("finding", str(item["finding_id"]), item)
         for item in finding_specs
     }
+    enriched_findings: list[dict[str, Any]] = []
     for finding in findings:
         finding_id = str(finding["id"])
         revision = revisions[finding_id]
         publication_spec = spec_by_id.get(finding_id)
         if publication_spec is None:
             raise portable.WorkflowError("every actionable finding requires a concrete fix")
-        enriched = {**publication_spec, "revision": revision}
-        enriched_findings.append(enriched)
-        marker = markers.get(finding_id) if finding_id in previous_allowed else None
-        if marker is not None and marker.get("kind") != "finding":
-            raise portable.WorkflowError("finding publication marker kind is invalid")
+        enriched_findings.append({**publication_spec, "revision": revision})
         assessment = assessment_by_id.get(finding_id)
-        if marker is not None:
-            if assessment is None:
-                raise portable.WorkflowError("published baseline finding lacks an assessment")
-            operation = cast("str", assessment["publication_action"])
-            if operation == "no_publication":
-                continue
-            next_revision = max(revision, cast("int", marker["revision"]) + 1)
-            discussion = (
-                discussion_by_id.get(str(marker["discussion_id"]))
-                if marker.get("discussion_id") is not None
-                else None
-            )
-            if operation in {"resolve", "reopen"} and discussion is None:
-                raise portable.WorkflowError("a standalone finding cannot change thread state")
-            add_body_action(
-                finding_id,
-                next_revision,
-                "finding",
-                operation,
-                body_with_fix(cast("str", assessment["publication_body"]), publication_spec),
-                mutation={
-                    "desired_resolved": True
-                    if operation == "resolve"
-                    else False
-                    if operation == "reopen"
-                    else None
-                },
-                thread=thread_expectation(discussion) if discussion is not None else None,
-            )
+        if previous_allowed.issuperset([finding_id]) and (
+            (assessment or {}).get("publication_action") == "no_publication"
+        ):
             continue
-        if context["role"] == "author":
+        if context["role"] == "author" or publication_spec.get("type") == "existing_thread":
             continue
-        operation = "create_general" if publication_spec["type"] == "general" else "create_line"
+        if "suggestions" in publication_spec:
+            parts = fixes.suggestion_parts(publication_spec)
+            for index, part in enumerate(parts, start=1):
+                add_body_action(
+                    f"{finding_id}@suggestion-{index}",
+                    revision,
+                    "finding",
+                    "create_line",
+                    fixes.suggestion_body(str(publication_spec["body"]), part),
+                    mutation={"path": part.path, "line": part.line, "old_line": None},
+                )
+            continue
+        operation = "create_general" if publication_spec.get("type") == "general" else "create_line"
         add_body_action(
             finding_id,
             revision,
@@ -2375,91 +2730,43 @@ def structured_publication_preview(
             operation,
             body_with_fix(cast("str", publication_spec["body"]), publication_spec),
             mutation={
-                "path": publication_spec["path"],
-                "line": publication_spec["line"],
-                "old_line": publication_spec["old_line"],
+                "path": publication_spec.get("path"),
+                "line": publication_spec.get("line"),
+                "old_line": publication_spec.get("old_line"),
             },
         )
 
     previous_issue_by_id = {
-        str(item.get("id")): item
-        for item in cast("list[dict[str, Any]]", incremental.get("previous_recommended_issues", []))
+        str(item["id"]): item
+        for item in cast(
+            "list[dict[str, Any]]", incremental.get("previous_recommended_issues") or []
+        )
     }
     enriched_issues: list[dict[str, Any]] = []
+    for assessment in assessments:
+        if assessment.get("kind") == "issue" and (
+            assessment.get("publication_action") == "update_issue"
+        ):
+            raise portable.WorkflowError(
+                "a published recommended issue cannot be updated; record no_publication and "
+                "explain the outcome in the assessment rationale"
+            )
     for issue_value in recommended_issues:
         issue_id = str(issue_value["id"])
         prior = previous_issue_by_id.get(issue_id)
         assessment = assessment_by_id.get(issue_id)
-        marker = markers.get(issue_id) if issue_id in previous_allowed else None
         previous_revision = max(
             int(prior["revision"]) if prior is not None else 0,
-            int(marker["revision"]) if marker is not None else 0,
             previous.get(issue_id, 0),
         )
         revision = (
             1
             if previous_revision == 0
-            else previous_revision + (1 if assessment and assessment["status"] == "changed" else 0)
+            else previous_revision
+            + (1 if assessment is not None and assessment.get("status") == "changed" else 0)
         )
-        enriched = {**issue_value, "revision": revision}
-        enriched_issues.append(enriched)
-        if marker is not None and marker.get("kind") != "issue":
-            raise portable.WorkflowError("recommended issue marker kind is invalid")
-        if marker is not None:
-            if assessment is None:
-                continue
-            pending_update = previous.get(issue_id, 0) > int(marker["revision"])
-            if assessment["publication_action"] == "no_publication" and not pending_update:
-                continue
-            if assessment["publication_action"] != "update_issue" and not pending_update:
-                raise portable.WorkflowError("published recommended issue requires update_issue")
-            operation = "update_issue"
-        else:
-            if assessment is not None and assessment["publication_action"] == "update_issue":
-                raise portable.WorkflowError("an unpublished recommended issue cannot be updated")
-            operation = "create_issue"
-        add_body_action(
-            issue_id,
-            revision,
-            "issue",
-            operation,
-            cast("str", issue_value["body"]),
-            mutation={"title": issue_value["title"]},
-        )
-
-    for assessment in assessments:
-        assessment_id = str(assessment["id"])
-        if assessment["kind"] != "finding" or assessment_id in finding_ids:
-            continue
-        marker = markers.get(assessment_id)
-        operation = cast("str", assessment["publication_action"])
-        if marker is None or operation == "no_publication":
-            continue
-        if marker.get("kind") != "finding":
-            raise portable.WorkflowError("previous finding marker kind is invalid")
-        discussion = (
-            discussion_by_id.get(str(marker["discussion_id"]))
-            if marker.get("discussion_id") is not None
-            else None
-        )
-        if operation in {"resolve", "reopen"} and discussion is None:
-            raise portable.WorkflowError("a standalone finding cannot change thread state")
-        revision = max(previous.get(assessment_id, 0), int(marker["revision"])) + 1
-        add_body_action(
-            assessment_id,
-            revision,
-            "finding",
-            operation,
-            cast("str", assessment["publication_body"]),
-            mutation={
-                "desired_resolved": True
-                if operation == "resolve"
-                else False
-                if operation == "reopen"
-                else None
-            },
-            thread=thread_expectation(discussion) if discussion is not None else None,
-        )
+        enriched_issues.append({**issue_value, "revision": revision})
+        # Follow-ups are proposals only. Full task preparation is a separate skill.
 
     for decision in enriched_threads:
         operation = cast("str", decision["outcome"])
@@ -2467,36 +2774,87 @@ def structured_publication_preview(
             continue
         root_note_id = str(decision["id"])
         publication_id = f"thread-{root_note_id}"
-        marker = markers.get(publication_id)
-        if marker is not None and marker.get("kind") != "thread":
-            raise portable.WorkflowError("thread publication marker kind is invalid")
-        revision = (int(marker["revision"]) if marker is not None else 0) + 1
+        revision = 1
         discussion = discussion_by_root.get(root_note_id)
         if operation in {"resolve", "reopen"} and discussion is None:
             raise portable.WorkflowError("a plain note cannot change thread state")
+        response = cast("str", decision["proposed_response"])
+        if "suggestions" in decision:
+            position = (discussion or {}).get("root_position")
+            parts = fixes.suggestion_parts(decision)
+            matching = next(
+                (
+                    part
+                    for part in parts
+                    if isinstance(position, dict)
+                    and position.get("head_sha") == evidence.get("head_sha")
+                    and part.path == position.get("new_path")
+                    and part.line == position.get("new_line")
+                ),
+                None,
+            )
+            response = (
+                fixes.suggestion_body(response, matching)
+                if matching is not None
+                else str(
+                    decision.get("routing_response")
+                    or (
+                        "Исправление предложено отдельным positioned thread на актуальных строках."
+                        if locale == "ru"
+                        else "The fix is proposed in a separate positioned thread on the current lines."
+                    )
+                )
+            )
         add_body_action(
             publication_id,
             revision,
             "thread",
             operation,
-            body_with_fix(cast("str", decision["proposed_response"]), decision),
+            body_with_fix(response, decision),
             mutation={
-                "desired_resolved": True
-                if operation == "resolve"
-                else False
-                if operation == "reopen"
-                else None
+                "desired_resolved": (
+                    True if operation == "resolve" else False if operation == "reopen" else None
+                )
             },
             thread=thread_expectation(discussion) if discussion is not None else None,
         )
 
-    if label_review["add"] or label_review["remove"]:
+    for decision in enriched_threads:
+        if "suggestions" not in decision:
+            continue
+        parts = fixes.suggestion_parts(decision)
+        position = (discussion_by_root.get(str(decision["id"])) or {}).get("root_position")
+        for index, part in enumerate(parts, start=1):
+            if (
+                isinstance(position, dict)
+                and position.get("head_sha") == evidence.get("head_sha")
+                and part.path == position.get("new_path")
+                and part.line == position.get("new_line")
+            ):
+                continue
+            add_body_action(
+                f"thread-{decision['id']}@suggestion-{index}",
+                1,
+                "thread",
+                "create_line",
+                f"{fixes.suggestion_body(str(decision['proposed_response']), part)}\n\n"
+                + (
+                    f"Исходный thread: [{decision['id']}]({decision['url']})"
+                    if locale == "ru"
+                    else f"Original thread: [{decision['id']}]({decision['url']})"
+                ),
+                mutation={"path": part.path, "line": part.line, "old_line": None},
+            )
+
+    if label_review.get("add") or label_review.get("remove"):
         action_id = "labels:update"
         label_argv = ["glab", "mr", "update", str(target["iid"]), "--repo", repository_url]
-        if label_review["add"]:
-            label_argv.extend(["--label", ",".join(label_review["add"])])
-        if label_review["remove"]:
-            label_argv.extend(["--unlabel", ",".join(label_review["remove"])])
+        adds = cast("list[str]", label_review.get("add") or [])
+        removes = cast("list[str]", label_review.get("remove") or [])
+        if adds:
+            label_argv.extend(["--label", ",".join(adds)])
+        if removes:
+            label_argv.extend(["--unlabel", ",".join(removes)])
         label_command = marked_command(label_argv, action_id, label_review)
         actions.append(
             {
@@ -2545,11 +2903,69 @@ def review_markdown(
         for item in cast("list[dict[str, Any]]", publication["body_files"])
     }
     publication_actions = cast("list[dict[str, Any]]", publication["actions"])
+    blocking_threads = set(
+        blocking_thread_ids(
+            cast("list[dict[str, Any]]", content["thread_decisions"]),
+            cast("list[dict[str, Any]]", content["finding_publications"]),
+        )
+    )
     actions_by_publication: dict[str, list[dict[str, Any]]] = {}
     for item in publication_actions:
-        publication_id = item["publication_id"]
+        raw_id = item["publication_id"]
+        publication_id = str(raw_id).split("@suggestion-")[0] if isinstance(raw_id, str) else raw_id
         if publication_id is not None:
             actions_by_publication.setdefault(str(publication_id), []).append(item)
+    locale = cast("str", content["locale"])
+    ru_locale = locale == "ru"
+    findings = cast("list[dict[str, Any]]", content["findings"])
+
+    def impact(severity: object) -> str:
+        if severity == "low":
+            return "Не блокирует слияние" if ru_locale else "Does not block merge"
+        return "Блокирует слияние" if ru_locale else "Blocks merge"
+
+    assessments_text: dict[str, str] = (
+        {
+            "fixed": "Исправлено",
+            "false_positive": "Ложное срабатывание",
+            "duplicate": "Дубликат",
+            "not_related": "Вне изменений",
+            "question": "Вопрос",
+            "neutral": "Не требует действий",
+        }
+        if ru_locale
+        else {
+            "fixed": "Fixed",
+            "false_positive": "False positive",
+            "duplicate": "Duplicate",
+            "not_related": "Outside the change",
+            "question": "Question",
+            "neutral": "No action needed",
+        }
+    )
+    thread_decisions = cast("list[dict[str, Any]]", content["thread_decisions"])
+
+    def thread_result(item: dict[str, Any]) -> str:
+        linked = next(
+            (
+                finding
+                for finding in findings
+                if (finding_publications.get(str(finding["id"])) or {}).get("thread_id")
+                == item.get("id")
+            ),
+            None,
+        )
+        severity = (linked or {}).get("severity", item.get("severity", "medium"))
+        if item.get("assessment") == "accepted":
+            return (
+                f"{presentation['severity_labels'].get(str(severity), 'undefined')} · "
+                f"{impact(severity)}"
+            )
+        return (
+            f"{'Результат проверки' if ru_locale else 'Check result'}: "
+            f"{assessments_text.get(str(item.get('assessment')), 'undefined')}"
+        )
+
     lines = [
         f"# {presentation['title']}",
         "",
@@ -2562,15 +2978,131 @@ def review_markdown(
         "",
         content["summary"],
         "",
+        (
+            f"**{'Влияние на слияние' if ru_locale else 'Merge impact'}:** "
+            f"{sum(1 for finding in findings if finding['severity'] != 'low')} "
+            f"{'блокирующих находок' if ru_locale else 'blocking findings'}."
+        ),
+        f"**{'Технические блокеры' if ru_locale else 'Technical blockers'}:**",
+        *[
+            f"- {finding['summary']}: {presentation['severity_labels'][str(finding['severity'])]}"
+            for finding in findings
+            if finding["severity"] != "low"
+        ],
+        *[
+            f"- [{thread['id']}]({thread['url']}): {thread['rationale']}"
+            for thread in thread_decisions
+            if str(thread["id"]) in blocking_threads
+        ],
+        *[
+            f"- CI: {job['rationale']}"
+            for job in cast("list[dict[str, Any]]", decision.get("ci_job_assessments") or [])
+            if job["classification"] != "process_gate"
+        ],
+        (
+            f"**{'Процессные ограничения и решения владельца' if ru_locale else 'Process gates and owner decisions'}:**"
+        ),
+        *[
+            f"- {reason}"
+            for reason in cast("list[str]", decision.get("owner_decision_reasons") or [])
+        ],
+        *[
+            f"- CI: {job['rationale']}"
+            for job in cast("list[dict[str, Any]]", decision.get("ci_job_assessments") or [])
+            if job["classification"] == "process_gate"
+        ],
+        "",
+        f"**{presentation['architecture_heading']}:** {content['architecture_assessment']}",
+        *review_semver.report_lines(content, locale),
+        "",
         f"## {presentation['metadata_heading']}",
         "",
     ]
     for field in ("title", "description", "workflow_state", "overall"):
         item = assessment[field]
-        labels = portable.review_metadata_labels(content["locale"])
-        text = item["recommendation"] or item["rationale"]
-        lines.append(f"- **{labels[field]}:** {text}")
+        labels = portable.review_metadata_labels(locale)
+        text_value = item["recommendation"] or item["rationale"]
+        lines.append(f"- **{labels[field]}:** {text_value}")
     lines.append("")
+
+    panel_source = content.get("review_source")
+    participants: dict[str, Any] | None = None
+    arbitration_source: dict[str, Any] | None = None
+    panel_receipts: list[dict[str, Any]] = []
+    if isinstance(panel_source, dict) and isinstance(panel_source.get("participants"), dict):
+        participants = cast("dict[str, Any]", panel_source["participants"])
+        if isinstance(panel_source.get("arbitration"), dict):
+            arbitration_source = cast("dict[str, Any]", panel_source["arbitration"])
+        if isinstance(participants.get("critics"), list):
+            panel_receipts = cast("list[dict[str, Any]]", participants["critics"])
+
+    def participant_for_receipt(receipt: dict[str, Any]) -> str | None:
+        if participants is None:
+            return None
+        critic = next(
+            (
+                item
+                for item in cast("list[dict[str, Any]]", participants.get("critics") or [])
+                if isinstance(item.get("receipt"), dict)
+                and str(item["receipt"]["run_id"]) == str(receipt.get("run_id"))
+                and str(item["receipt"]["session_id"]) == str(receipt.get("session_id"))
+            ),
+            None,
+        )
+        return None if critic is None else str(critic["name"])
+
+    def raised_by(finding_id: str) -> str | None:
+        receipt = next(
+            (
+                item
+                for item in panel_receipts
+                if any(
+                    str(finding.get("id")) == finding_id
+                    for finding in cast("list[dict[str, Any]]", item.get("findings") or [])
+                )
+            ),
+            None,
+        )
+        if receipt is None:
+            return None
+        name = participant_for_receipt(receipt)
+        identity = f"{receipt.get('run_id')}/{receipt.get('session_id')}"
+        return f"{name} ({identity})" if name is not None else identity
+
+    if participants is not None:
+        lines.extend([f"## {'Состав ревью' if ru_locale else 'Review panel'}", ""])
+
+        def participant_details(member: dict[str, Any]) -> str:
+            details = [
+                *(["profile: " + str(member["profile"])] if "profile" in member else []),
+                *(["provider: " + str(member["provider"])] if "provider" in member else []),
+                *(["model: " + str(member["model"])] if "model" in member else []),
+            ]
+            return " · ".join(details)
+
+        for critic in cast("list[dict[str, Any]]", participants["critics"]):
+            details = participant_details(critic)
+            lines.append(
+                f"- {'критик' if ru_locale else 'critic'} `{critic['name']}`"
+                + (f" — {details}" if details else "")
+            )
+        arbiter = cast("dict[str, Any]", participants["arbitrator"])
+        arb_details = participant_details(arbiter)
+        lines.extend(
+            [
+                f"- {'арбитр' if ru_locale else 'arbitrator'} `{arbiter['name']}`"
+                + (f" — {arb_details}" if arb_details else ""),
+                "",
+                (
+                    "Состав и конфигурации участников приведены только в этом приватном ранбуке "
+                    "и никогда не попадают в публикуемые тексты GitLab."
+                    if ru_locale
+                    else "The panel composition and configurations live only in this private "
+                    "runbook and never enter published GitLab texts."
+                ),
+                "",
+            ]
+        )
 
     label_review = cast("dict[str, Any]", content["label_review"])
     shown_actions: set[str] = set()
@@ -2580,7 +3112,7 @@ def review_markdown(
         rendered = (
             ", ".join(f"`{value}`" for value in values) if values else presentation["no_items"]
         )
-        lines.append(f"- {portable.review_action_labels(content['locale'])[field]}: {rendered}")
+        lines.append(f"- {portable.review_action_labels(locale)[field]}: {rendered}")
     label_action = next((item for item in publication_actions if item["kind"] == "labels"), None)
     if label_action is not None:
         shown_actions.add(cast("str", label_action["id"]))
@@ -2591,29 +3123,75 @@ def review_markdown(
     if not previous:
         lines.extend([presentation["no_items"], ""])
     else:
-        headers = cast("list[str]", presentation["previous_table_headers"])
+        headers = (
+            ["Находка", "Результат", "Действие"] if ru_locale else ["Finding", "Result", "Action"]
+        )
         lines.extend(
             [
                 "| " + " | ".join(headers) + " |",
                 "|" + "|".join("---" for _ in headers) + "|",
             ]
         )
+        statuses = (
+            {
+                "active": "Актуально",
+                "changed": "Уточнено",
+                "fixed": "Исправлено",
+                "withdrawn": "Снято",
+                "unverified": "Не проверено",
+            }
+            if ru_locale
+            else {
+                "active": "Active",
+                "changed": "Updated",
+                "fixed": "Fixed",
+                "withdrawn": "Withdrawn",
+                "unverified": "Unverified",
+            }
+        )
+        action_names = (
+            {
+                "no_publication": "Нет",
+                "reply": "Ответ",
+                "resolve": "Закрыть",
+                "reopen": "Открыть",
+                "update_issue": "Обновить задачу",
+            }
+            if ru_locale
+            else {
+                "no_publication": "None",
+                "reply": "Reply",
+                "resolve": "Resolve",
+                "reopen": "Reopen",
+                "update_issue": "Update issue",
+            }
+        )
         for item in previous:
-            lines.append(
-                "| "
-                + " | ".join(
-                    markdown_cell(item[key])
-                    for key in (
-                        "id",
-                        "previous_status",
-                        "current_status",
-                        "rationale",
-                        "action",
+            record = next((finding for finding in findings if finding["id"] == item["id"]), None)
+            prior = next(
+                (
+                    finding
+                    for finding in cast(
+                        "list[dict[str, Any]]",
+                        (context.get("incremental") or {}).get("previous_findings") or [],
                     )
-                )
-                + " |"
+                    if finding["id"] == item["id"]
+                ),
+                None,
             )
+            name = str((record or prior or {}).get("summary", item["current_status"]))
+            cells = [
+                name if len(name) <= 80 else f"{name[:77]}...",
+                statuses[str(item["status"])],
+                action_names[str(item["publication_action"])],
+            ]
+            lines.append("| " + " | ".join(markdown_cell(value) for value in cells) + " |")
         lines.append("")
+        for item in previous:
+            if item["publication_action"] == "no_publication":
+                lines.append(f"- {item['current_status']}: {item['rationale']}")
+        if any(item["publication_action"] == "no_publication" for item in previous):
+            lines.append("")
 
     def add_fix(fix: dict[str, Any]) -> None:
         if fix["fix_mode"] == "suggestion":
@@ -2622,6 +3200,8 @@ def review_markdown(
             return
         lines.extend(
             [
+                str(fix.get("patch_reason")),
+                "",
                 "```sh",
                 render_patch_check(context, fix),
                 "```",
@@ -2636,8 +3216,8 @@ def review_markdown(
     def add_action(action: dict[str, Any]) -> None:
         if action["id"] in shown_actions:
             return
-        publication_id = action["publication_id"]
-        body = bodies.get(publication_id) if publication_id is not None else None
+        publication_id = action["publication_id"] if action["publication_id"] is not None else None
+        body = bodies.get(str(publication_id)) if publication_id is not None else None
         shown_actions.add(cast("str", action["id"]))
         if body is not None and action["operation"] not in {"resolve", "reopen"}:
             lines.extend(
@@ -2648,21 +3228,74 @@ def review_markdown(
                     "",
                 ]
             )
-        label = portable.review_action_labels(content["locale"])[
+        label = portable.review_action_labels(locale)[
             action["operation"] if action["operation"] in {"resolve", "reopen"} else "reply"
         ]
-        lines.extend([label, "", "```shell", cast("str", action["command"]), "```"])
+        state_action = next(
+            (
+                candidate
+                for candidate in actions_by_publication.get(str(publication_id), [])
+                if candidate["operation"] in {"resolve", "reopen"}
+                and str(candidate["id"]) not in shown_actions
+            ),
+            None,
+        )
+        thread = next(
+            (item for item in thread_decisions if f"thread-{item['id']}" == publication_id),
+            None,
+        )
+        guard = (
+            f"{head_guard(evidence, locale)}\n"
+            if operation_is_head_guarded(str(action["operation"]))
+            else ""
+        )
+        command = f"{guard}# {label}\n{action['command']}"
+        if state_action is not None and action["operation"] not in {"resolve", "reopen"}:
+            shown_actions.add(str(state_action["id"]))
+            command += (
+                f" &&\n# {portable.review_action_labels(locale)[str(state_action['operation'])]}"
+                f"\n{state_action['command']}"
+            )
+        elif (
+            thread is not None
+            and thread.get("state") == "plain"
+            and thread.get("assessment") in {"fixed", "false_positive", "duplicate", "not_related"}
+        ):
+            project = cast("dict[str, Any]", evidence["project"])
+            endpoint = (
+                f"projects/{project['id']}/merge_requests/"
+                f"{cast('dict[str, Any]', evidence['target'])['iid']}/discussions"
+            )
+            command = (
+                f"{guard}# {label}\nresponse=$({action['command']}) &&\n"
+                + (
+                    "# Проверить разрешимость нового discussion"
+                    if ru_locale
+                    else "# Check the returned discussion's resolvability"
+                )
+                + "\nif printf '%s' \"$response\" | jq -e '.notes | any(.resolvable == true)' "
+                ">/dev/null; then\n  "
+                + (
+                    "# Получить реальный discussion ID"
+                    if ru_locale
+                    else "# Read the actual discussion ID"
+                )
+                + "\n  discussion_id=$(printf '%s' \"$response\" | jq -er '.id | "
+                'select(type == "string" and test("^[A-Za-z0-9_-]+$"))\') &&\n  '
+                + (
+                    "# Закрыть только завершённое обсуждение после ответа"
+                    if ru_locale
+                    else "# Resolve only a completed discussion after its reply"
+                )
+                + f"\n  glab api --hostname {shlex.quote(str(project['hostname']))} --method PUT "
+                f'"{endpoint}/$discussion_id" --silent -F resolved=true\nfi'
+            )
+        lines.extend([label, "", "```shell", command, "```"])
         lines.append("")
 
     def add_publication_action(publication_id: str) -> None:
         for action in actions_by_publication.get(publication_id, []):
             add_action(action)
-
-    for item in previous:
-        if item["publication_action"] != "no_publication":
-            add_publication_action(cast("str", item["id"]))
-
-    thread_decisions = cast("list[dict[str, Any]]", content["thread_decisions"])
 
     def add_thread_section(heading: str, items: list[dict[str, Any]]) -> None:
         lines.extend([f"## {heading}", ""])
@@ -2670,7 +3303,16 @@ def review_markdown(
             lines.extend([presentation["no_items"], ""])
             return
         for item in items:
-            lines.extend([f"### [{item['id']}]({item['url']})", "", item["rationale"], ""])
+            lines.extend(
+                [
+                    f"### [{item['id']}]({item['url']})",
+                    "",
+                    thread_result(item),
+                    "",
+                    item["rationale"],
+                    "",
+                ]
+            )
             add_publication_action(f"thread-{item['id']}")
 
     add_thread_section(
@@ -2692,7 +3334,6 @@ def review_markdown(
         ],
     )
 
-    findings = cast("list[dict[str, Any]]", content["findings"])
     local_threads = [item for item in thread_decisions if item["outcome"] == "local_fix"]
     lines.extend([f"## {presentation['local_fixes_heading']}", ""])
     if not local_threads and (context["role"] != "author" or not findings):
@@ -2701,6 +3342,8 @@ def review_markdown(
         lines.extend(
             [
                 f"### [{item['id']}]({item['url']})",
+                "",
+                thread_result(item),
                 "",
                 item["rationale"],
                 "",
@@ -2716,7 +3359,10 @@ def review_markdown(
                 [
                     f"### {finding['summary']}",
                     "",
-                    f"`{finding['id']}` · {presentation['severity_labels'][finding['severity']]}",
+                    (
+                        f"`{finding['id']}` · {presentation['severity_labels'][finding['severity']]}"
+                        f" · {impact(finding['severity'])}"
+                    ),
                     "",
                     finding["risk"],
                     "",
@@ -2727,15 +3373,47 @@ def review_markdown(
             add_fix(publication_spec)
 
     lines.extend([f"## {presentation['new_findings_heading']}", ""])
-    reviewer_findings = findings if context["role"] == "reviewer" else []
+    previous_ids = {str(item["id"]) for item in previous}
+    reviewer_findings = (
+        [item for item in findings if str(item["id"]) not in previous_ids]
+        if context["role"] == "reviewer"
+        else []
+    )
     if not reviewer_findings:
         lines.extend([presentation["no_items"], ""])
     for finding in reviewer_findings:
+        author = raised_by(str(finding["id"]))
+        merged_from = (
+            [
+                str(item["id"])
+                for item in cast(
+                    "list[dict[str, Any]]", arbitration_source.get("dispositions") or []
+                )
+                if item.get("duplicate_of") is not None
+                and str(item["duplicate_of"]) == str(finding["id"])
+            ]
+            if arbitration_source is not None
+            else []
+        )
         lines.extend(
             [
                 f"### {finding['summary']}",
                 "",
-                f"`{finding['id']}` · {presentation['severity_labels'][finding['severity']]}",
+                (
+                    f"`{finding['id']}` · {presentation['severity_labels'][finding['severity']]}"
+                    f" · {impact(finding['severity'])}"
+                ),
+                *([f"{'Автор' if ru_locale else 'Raised by'}: {author}"] if author else []),
+                *(
+                    [
+                        (
+                            f"{'Объединено арбитром из' if ru_locale else 'Merged by the arbitrator from'}: "
+                            + ", ".join(f"`{item}`" for item in merged_from)
+                        )
+                    ]
+                    if merged_from
+                    else []
+                ),
                 "",
                 finding["risk"],
                 "",
@@ -2753,9 +3431,139 @@ def review_markdown(
                 "",
             ]
         )
-        publication_spec = finding_publications[finding["id"]]
-        if finding["id"] in finding_publications:
+        if str(finding["id"]) in finding_publications:
+            spec = finding_publications[str(finding["id"])]
+            if spec.get("type") == "existing_thread":
+                thread = next(
+                    (
+                        thread
+                        for thread in thread_decisions
+                        if thread["id"] == spec.get("thread_id")
+                    ),
+                    None,
+                )
+                if thread is not None:
+                    lines.extend(
+                        [
+                            (
+                                f"[{'Фикс в исходном thread' if ru_locale else 'Fix in the existing thread'}]"
+                                f"({thread['url']}): {spec['body']}"
+                            ),
+                            "",
+                        ]
+                    )
             add_publication_action(cast("str", finding["id"]))
+
+    # Every detected candidate stays visible with the arbitrator's conclusion,
+    # including refuted and duplicate ones; a disagreement never hides a finding.
+    if participants is not None:
+        lines.extend([f"## {'Вердикты арбитра' if ru_locale else 'Arbitration verdicts'}", ""])
+        verdicts = {
+            str(item["id"]): item
+            for item in cast(
+                "list[dict[str, Any]]", (arbitration_source or {}).get("dispositions") or []
+            )
+        }
+
+        def verdict_text(finding_id: str) -> str:
+            disposition = verdicts.get(finding_id)
+            if disposition is None:
+                return "нет вердикта" if ru_locale else "no verdict"
+            override = disposition.get("severity_override")
+            if disposition.get("decision") == "accept":
+                if override is None:
+                    return "принято" if ru_locale else "accepted"
+                if ru_locale:
+                    return (
+                        f"принято с изменением критичности на "
+                        f"{presentation['severity_labels'][str(override['severity'])]} "
+                        f"(было {presentation['severity_labels'][str(override['original_severity'])]})"
+                    )
+                return (
+                    f"accepted with severity override to "
+                    f"{presentation['severity_labels'][str(override['severity'])]} "
+                    f"(was {presentation['severity_labels'][str(override['original_severity'])]})"
+                )
+            if disposition.get("duplicate_of") is not None:
+                return (
+                    f"{'дубликат находки' if ru_locale else 'duplicate of'} "
+                    f"`{disposition['duplicate_of']}`"
+                )
+            return "опровергнуто" if ru_locale else "refuted"
+
+        candidates: list[dict[str, str | None]] = []
+        for receipt in panel_receipts:
+            for item in cast("list[dict[str, Any]]", receipt.get("findings") or []):
+                author = raised_by(str(item["id"]))
+                candidates.append(
+                    {
+                        "id": str(item["id"]),
+                        "summary": str(item.get("summary") or item["id"]),
+                        "author": (
+                            author
+                            if author is not None
+                            else f"{receipt.get('run_id')}/{receipt.get('session_id')}"
+                        ),
+                    }
+                )
+        merged_findings = cast(
+            "list[dict[str, Any]]", (arbitration_source or {}).get("findings") or []
+        )
+        if not candidates and not merged_findings:
+            lines.extend([presentation["no_items"], ""])
+        for candidate in candidates:
+            disposition = verdicts.get(cast("str", candidate["id"]))
+            lines.extend(
+                [
+                    (
+                        f"- `{candidate['id']}` · {candidate['author']}: "
+                        f"**{verdict_text(cast('str', candidate['id']))}** — {candidate['summary']}"
+                    ),
+                    f"  {disposition.get('reason') if disposition else None or ('основание не приведено' if ru_locale else 'no reason recorded')}",
+                ]
+            )
+        for finding in merged_findings:
+            lines.append(
+                f"- `{finding['id']}` · "
+                + ("объединённая находка арбитра" if ru_locale else "arbitrator merged finding")
+                + f": **{'принято' if ru_locale else 'accepted'}** — {finding['summary']}"
+            )
+        if candidates or merged_findings:
+            lines.append("")
+
+    existing_findings = (
+        [item for item in findings if str(item["id"]) in previous_ids]
+        if context["role"] == "reviewer"
+        else []
+    )
+    if existing_findings:
+        lines.extend(
+            [
+                f"## {'Действия по прежним находкам' if ru_locale else 'Previous finding actions'}",
+                "",
+            ]
+        )
+        for finding in existing_findings:
+            lines.extend(
+                [
+                    f"### {finding['summary']}",
+                    "",
+                    (
+                        f"{presentation['severity_labels'][str(finding['severity'])]} · "
+                        f"{impact(finding['severity'])}"
+                    ),
+                    "",
+                    finding["minimum_fix"],
+                    "",
+                ]
+            )
+            add_publication_action(str(finding["id"]))
+    for item in previous:
+        if not any(finding["id"] == item["id"] for finding in existing_findings) and (
+            item["publication_action"] != "no_publication"
+        ):
+            lines.extend([f"### {item['current_status']}", "", item["rationale"], ""])
+            add_publication_action(str(item["id"]))
 
     lines.extend([f"## {presentation['recommended_issues_heading']}", ""])
     if not recommended_issues:
@@ -2771,6 +3579,8 @@ def review_markdown(
                 "",
                 issue["risk"],
                 "",
+                str(issue.get("importance") or ""),
+                *([str(issue["existing_task"]), ""] if issue.get("existing_task") else []),
                 f"**{presentation['evidence_label']}**",
                 "",
                 *[f"- {value}" for value in issue["evidence"]],
@@ -2784,42 +3594,61 @@ def review_markdown(
         add_publication_action(cast("str", issue["id"]))
 
     lines.extend([f"## {presentation['checked_heading']}", ""])
-    without_publication = [
-        item
-        for item in cast("list[dict[str, Any]]", content["thread_decisions"])
-        if item["outcome"] == "no_publication"
-    ]
+    without_publication = [item for item in thread_decisions if item["outcome"] == "no_publication"]
     if not without_publication:
         lines.extend([presentation["no_items"], ""])
     else:
         lines.extend(
-            f"- [{item['id']}]({item['url']}): {item['rationale']}" for item in without_publication
+            f"- [{item['id']}]({item['url']}): {thread_result(item)}. {item['rationale']}"
+            for item in without_publication
         )
         lines.append("")
 
     lines.extend(
         [
-            f"## {presentation['architecture_heading']}",
-            "",
-            content["architecture_assessment"],
-            "",
-            f"## {presentation['semver_heading']}",
-            "",
-            *review_semver.report_lines(content, cast("str", content["locale"])),
-            "",
             f"## {presentation['checks_heading']}",
             "",
-            *[f"- {value}" for value in content["checks"]],
+            *[f"- {value}" for value in dict.fromkeys(cast("list[str]", content["checks"]))],
             "",
         ]
     )
+    source = content.get("review_source")
+    ci_evidence = (
+        portable.artifact_payload(Path(str(source["ci_snapshot"])), "evidence_snapshot")[1]
+        if isinstance(source, dict) and "ci_snapshot" in source
+        else evidence
+    )
+    pipeline = (
+        portable.select_exact_pipeline(
+            cast("dict[str, Any]", ci_evidence["pipelines"]),
+            cast("str", ci_evidence["head_sha"]),
+        )
+        if isinstance(ci_evidence.get("pipelines"), dict)
+        else None
+    )
+    if pipeline is not None:
+        lines.extend(
+            [
+                (
+                    f"{'CI использованного снимка' if ru_locale else 'CI in the assessed snapshot'}: "
+                    f"{pipeline['status']}."
+                ),
+                "",
+            ]
+        )
     for action in publication_actions:
         if action["id"] in shown_actions:
             continue
         if action["kind"] != "labels":
             lines.append("")
             add_action(action)
-    return "\n".join(lines) + "\n"
+    no_items = re.escape(str(presentation["no_items"]))
+    return re.sub(
+        rf"^## [^\n]+\n\n{no_items}\n\n",
+        "",
+        "\n".join(lines) + "\n",
+        flags=re.MULTILINE,
+    )
 
 
 @contextmanager
@@ -2857,8 +3686,9 @@ def publish_review_state(
     target: dict[str, Any],
     expected_incremental_baseline_state_digest: str | None,
     expected_progress: dict[str, object],
+    bindings: dict[str, Any] | None = None,
 ) -> tuple[Path, str]:
-    markdown_path = root / "review-publication.md"
+    markdown_path = root / "runbook.md"
     baseline_path = root / BASELINE_NAME
     current_progress_path = progress_path(root)
     markdown_digest = hashlib.sha256(markdown.encode()).hexdigest()
@@ -2886,6 +3716,7 @@ def publish_review_state(
             raise portable.WorkflowError("code-review baseline changed before publication")
         next_progress = {
             **current_progress,
+            **(bindings or {}),
             "stage": "plan_ready",
             "plan_path": str(plan_path),
             "plan_digest": plan_digest,
@@ -2961,6 +3792,8 @@ def reject_visible_raw_refs(
                 if isinstance(value, str) and len(value) >= 12 and value not in refs
             )
     for line in markdown.splitlines():
+        if line.startswith("glab api ") and ("position[" in line or "-F 'position={" in line):
+            continue
         visible = re.sub(r"\]\(https?://[^)]*\)", "](...)", line).casefold()
         for value in refs:
             normalized = value.casefold()
@@ -3088,12 +3921,17 @@ def scaffold_review(
     context_value: str,
     decision_value: str,
     content_value: str,
+    draft: dict[str, Any] | None = None,
 ) -> dict[str, object]:
     evidence_path, evidence, root, evidence_digest = evidence_context(evidence_value)
     _, context, context_digest = validate_context_binding(context_value, evidence_path)
-    _, decision, decision_digest = content_addressed_artifact(
-        decision_value, root, "review_decision"
-    )
+    if draft is not None and draft.get("dry_run") is True:
+        decision = cast("dict[str, Any]", draft["decision"])
+        decision_digest = "0" * 64
+    else:
+        _, decision, decision_digest = content_addressed_artifact(
+            decision_value, root, "review_decision"
+        )
     if (
         decision.get("evidence_digest") != evidence_digest
         or decision.get("context_digest") != context_digest
@@ -3102,18 +3940,23 @@ def scaffold_review(
     target = evidence.get("target")
     if not isinstance(target, dict):
         raise portable.WorkflowError("review evidence target is unavailable")
-    current_evidence = portable.collect(target, "code-review", persist=False)
-    current_context = refresh_context(context, evidence_path)
-    if (
-        current_evidence.get("retrieval_complete") is not True
-        or portable.fingerprint(evidence) != portable.fingerprint(current_evidence)
-        or context.get("complete") is not True
-        or current_context.get("complete") is not True
-        or not contexts_match(context, current_context)
-    ):
-        raise portable.WorkflowError("review evidence or context is stale before plan creation")
+    if draft is None or draft.get("freshness_checked") is not True:
+        current_evidence = portable.collect(target, "code-review", persist=False)
+        current_context = refresh_context(context, evidence_path)
+        if (
+            current_evidence.get("retrieval_complete") is not True
+            or portable.fingerprint(evidence) != portable.fingerprint(current_evidence)
+            or context.get("complete") is not True
+            or current_context.get("complete") is not True
+            or not contexts_match(context, current_context)
+        ):
+            raise portable.WorkflowError("review evidence or context is stale before plan creation")
     content = portable.exact_keys(
-        portable.read_json(Path(content_value), "review plan content"),
+        (
+            cast("dict[str, Any]", draft["content"])
+            if draft is not None and draft.get("content") is not None
+            else portable.read_json(Path(content_value), "review plan content")
+        ),
         {
             "locale",
             "chat_assessment",
@@ -3174,6 +4017,29 @@ def scaffold_review(
     )
     if accepted_findings != findings:
         raise portable.WorkflowError("review plan findings do not match the review decision")
+    # A thread that owns the fix inherits the linked finding's severity.
+    publications_for_threads = cast("list[dict[str, Any]]", content["finding_publications"])
+
+    def _thread_severity(thread: dict[str, Any]) -> dict[str, Any]:
+        linked = next(
+            (
+                finding
+                for finding in findings
+                if any(
+                    fix.get("type") == "existing_thread"
+                    and fix.get("thread_id") == thread.get("id")
+                    and fix.get("finding_id") == finding.get("id")
+                    for fix in publications_for_threads
+                )
+            ),
+            None,
+        )
+        return {**thread, "severity": linked["severity"]} if linked is not None else thread
+
+    content["thread_decisions"] = [
+        _thread_severity(thread)
+        for thread in cast("list[dict[str, Any]]", content["thread_decisions"])
+    ]
     incremental = cast("dict[str, Any]", context["incremental"])
     incremental_mode = str(incremental["mode"])
     if (incremental_mode == "incremental") != (decision.get("mode") == "incremental"):
@@ -3203,9 +4069,7 @@ def scaffold_review(
         content["rejected_candidate_assessments"], reconsidered_rejected
     )
     rejected_candidates = validate_rejected_candidates(content["rejected_candidates"], decision)
-    recommended_issues = validate_recommended_issues(
-        content["recommended_issues"], cast("list[dict[str, Any]]", context["issue_templates"])
-    )
+    recommended_issues = validate_recommended_issues(content["recommended_issues"])
     issue_ids = [str(item["id"]) for item in recommended_issues]
     if (
         len(issue_ids) != len(set(issue_ids))
@@ -3222,7 +4086,6 @@ def scaffold_review(
         str(item["id"]): item
         for item in cast("list[dict[str, Any]]", incremental["previous_finding_ledger"])
     }
-    observed_markers: dict[str, dict[str, Any]] = {}
     previous_finding_ids = {str(item["id"]) for item in previous_findings}
     previous_issue_ids = {str(item["id"]) for item in previous_issues}
     current_finding_ids = set(finding_ids)
@@ -3232,17 +4095,6 @@ def scaffold_review(
         **dict.fromkeys(previous_issue_ids, "issue"),
     }.items():
         assessment_item = assessment_by_id[item_id]
-        observed_marker = observed_markers.get(item_id)
-        if (
-            kind == "finding"
-            and observed_marker is not None
-            and previous_ledger_by_id[item_id]["revision"] > observed_marker["revision"]
-            and assessment_item["status"] in {"active", "changed", "unverified"}
-            and assessment_item["publication_action"] == "no_publication"
-        ):
-            raise portable.WorkflowError(
-                "a prepared but unpublished finding revision still requires publication"
-            )
         if (
             previous_ledger_by_id[item_id]["status"] in {"fixed", "withdrawn"}
             and assessment_item["status"] == "active"
@@ -3282,15 +4134,53 @@ def scaffold_review(
                 raise portable.WorkflowError("finding new-line position is not in the exact diff")
             if item["old_line"] is not None and item["old_line"] not in old_lines:
                 raise portable.WorkflowError("finding old-line position is not in the exact diff")
+        if item["type"] == "existing_thread":
+            thread = next(
+                (
+                    thread
+                    for thread in cast("list[dict[str, Any]]", content["thread_decisions"])
+                    if thread.get("id") == item.get("thread_id")
+                ),
+                None,
+            )
+            if (
+                thread is None
+                or thread.get("assessment") != "accepted"
+                or thread.get("fix_mode") not in {"suggestion", "patch"}
+            ):
+                raise portable.WorkflowError(
+                    "existing_thread must bind an accepted thread with its own validated fix"
+                )
+            continue
         if item["fix_mode"] == "patch":
+            if not portable.nonempty_string(item.get("patch_reason")):
+                raise portable.WorkflowError(
+                    "Patch fallback requires a concrete patch_reason; prefer suggestions"
+                )
             validate_git_patch(repo_root, head_sha, cast("str", item["patch"]))
+            validate_patch_fallback(item, context, evidence)
         else:
-            validate_suggestion(
-                cast("str", item["body"]),
-                repo_root=repo_root,
-                head_sha=head_sha,
-                path=cast("str", item["path"]),
-                line=cast("int", item["line"]),
+            parts = fixes.suggestion_parts(item)
+            for part in parts:
+                validate_suggestion(
+                    part.body,
+                    repo_root=repo_root,
+                    head_sha=head_sha,
+                    path=part.path,
+                    line=part.line,
+                )
+                _, visible = changed_diff_lines(repo_root, base_sha, head_sha, part.path)
+                if part.line not in visible:
+                    raise portable.WorkflowError(
+                        "Suggestion position is outside the exact visible diff"
+                    )
+                validate_git_patch(
+                    repo_root,
+                    head_sha,
+                    fixes.suggestions_patch(str(repo_root), head_sha, [part]),
+                )
+            validate_git_patch(
+                repo_root, head_sha, fixes.suggestions_patch(str(repo_root), head_sha, parts)
             )
     current_publication_by_id = {str(item["finding_id"]): item for item in finding_publications}
     current_issue_by_id = {str(item["id"]): item for item in recommended_issues}
@@ -3345,6 +4235,7 @@ def scaffold_review(
         raise portable.WorkflowError("review plan must account for every non-system thread")
     for thread_id, item in actual_threads.items():
         source = expected_threads[thread_id]
+        validate_user_confirmation(item, source, context)
         if item["state"] != source["state"]:
             raise portable.WorkflowError("thread decision state does not match review context")
         if source["state"] == "open" and item["outcome"] == "no_publication":
@@ -3359,6 +4250,14 @@ def scaffold_review(
         validate_fixing_commit(item["fixing_commit"])
         if (
             set(item)
+            - {
+                "suggestions",
+                "split_rationale",
+                "patch_reason",
+                "severity",
+                "user_confirmation",
+                "routing_response",
+            }
             != {
                 "id",
                 "url",
@@ -3379,7 +4278,8 @@ def scaffold_review(
             or item["thread_sha256"] != expected_threads[thread_id]["thread_sha256"]
         ):
             raise portable.WorkflowError("thread decision does not bind the complete discussion")
-        validate_thread_fix(item, source, repo_root, head_sha)
+        validate_thread_fix(item, source, repo_root, head_sha, base_sha)
+        validate_patch_fallback(item, context, evidence)
         assessment = cast("str", item["assessment"])
         outcome = cast("str", item["outcome"])
         if assessment == "accepted":
@@ -3429,6 +4329,48 @@ def scaffold_review(
         item["outcome"] == "local_fix" for item in thread_decisions
     ):
         raise portable.WorkflowError("reviewer thread decisions cannot promise local fixes")
+    expected_blockers = blocking_thread_ids(thread_decisions, finding_publications)
+    if "blocking_thread_ids" in decision and set(
+        cast("list[str]", decision.get("blocking_thread_ids") or [])
+    ) != set(expected_blockers):
+        raise portable.WorkflowError(
+            "blocking_thread_ids do not match the accepted non-low thread defects"
+        )
+    # Legacy decisions may omit the field, but cannot omit the actual readiness gate.
+    decision["blocking_thread_ids"] = expected_blockers
+    draft_source = cast("dict[str, Any] | None", (draft or {}).get("source"))
+    assessed_evidence = (
+        portable.artifact_payload(Path(str(draft_source["ci_snapshot"])), "evidence_snapshot")[1]
+        if draft_source is not None and "ci_snapshot" in draft_source
+        else evidence
+    )
+    validate_review_verdict(
+        {
+            **decision,
+            "blocking_findings": decision.get(
+                "blocking_findings",
+                any(finding["severity"] != "low" for finding in findings),
+            ),
+        },
+        findings,
+        assessed_evidence,
+    )
+    blocking_summaries = [
+        str(finding["summary"]) for finding in findings if finding["severity"] != "low"
+    ]
+    thread_blockers = [
+        thread for thread in thread_decisions if str(thread["id"]) in expected_blockers
+    ]
+    content["summary"] = f"{presentation['verdict_value']}. " + (
+        ". ".join(
+            [
+                *blocking_summaries,
+                *(str(thread["rationale"]) for thread in thread_blockers),
+                *cast("list[str]", decision.get("owner_decision_reasons") or []),
+            ]
+        )
+        or ("Блокирующих находок нет." if content["locale"] == "ru" else "No blocking findings.")
+    )
     metadata = metadata_assessment(evidence, content["mr_metadata_assessment"])
     publication, enriched_publications, enriched_issues, enriched_threads = (
         structured_publication_preview(
@@ -3441,6 +4383,8 @@ def scaffold_review(
             thread_decisions,
             recommended_issues,
             label_review,
+            dry_run=bool((draft or {}).get("dry_run")),
+            locale=cast("str", content["locale"]),
         )
     )
     render_content = {
@@ -3451,6 +4395,7 @@ def scaffold_review(
         "previous_finding_assessments": previous_assessments,
         "recommended_issues": enriched_issues,
         "thread_decisions": enriched_threads,
+        **({"review_source": draft["source"]} if draft is not None and draft.get("source") else {}),
     }
     markdown = review_markdown(evidence, context, decision, render_content, metadata, publication)
     reject_visible_raw_refs(markdown, evidence, context)
@@ -3471,6 +4416,7 @@ def scaffold_review(
     )
     payload = {
         "profile": "code-review",
+        **({"review_source": draft["source"]} if draft is not None and draft.get("source") else {}),
         "review_contract_version": REVIEW_CONTRACT_VERSION,
         "external_mutations": False,
         "evidence_digest": evidence_digest,
@@ -3506,6 +4452,8 @@ def scaffold_review(
         "thread_decisions": enriched_threads,
         "markdown": markdown,
     }
+    if draft is not None and draft.get("dry_run") is True:
+        return {"status": "ok", "payload": payload, "external_mutations": False}
     path, plan_digest = portable.write_artifact(root, "review_plan", payload)
     markdown_path, markdown_digest = publish_review_state(
         root,
@@ -3513,16 +4461,25 @@ def scaffold_review(
         path,
         plan_digest,
         cast("dict[str, Any]", context["target"]),
-        cast("str | None", incremental["incremental_baseline"]["state_digest"]),
-        {
-            "stage": "content_missing",
-            "evidence_path": str(evidence_path),
-            "evidence_digest": evidence_digest,
-            "context_path": str(Path(context_value).resolve()),
-            "context_digest": context_digest,
-            "decision_path": str(Path(decision_value).resolve()),
-            "decision_digest": decision_digest,
-        },
+        cast(
+            "str | None",
+            (draft or {}).get("baseline_state_digest")
+            or incremental["incremental_baseline"].get("state_digest"),
+        ),
+        cast(
+            "dict[str, Any]",
+            (draft or {}).get("progress")
+            or {
+                "stage": "content_missing",
+                "evidence_path": str(evidence_path),
+                "evidence_digest": evidence_digest,
+                "context_path": str(Path(context_value).resolve()),
+                "context_digest": context_digest,
+                "decision_path": str(Path(decision_value).resolve()),
+                "decision_digest": decision_digest,
+            },
+        ),
+        cast("dict[str, Any] | None", (draft or {}).get("bindings")),
     )
     return {
         "status": "ok" if payload["complete"] else "incomplete",
@@ -3572,6 +4529,12 @@ def progress_artifact(
 def next_action_for_stage(
     stage: str, root: Path, progress: dict[str, Any]
 ) -> dict[str, Any] | None:
+    if (
+        stage != "plan_ready"
+        and isinstance(progress.get("context_digest"), str)
+        and (root / "review-drafts" / f"review-{progress['context_digest']}.json").exists()
+    ):
+        return runner_action("resume-review", "--artifact-root", str(root))
     if stage == "prepared":
         repo_root = cast("str | None", progress.get("repo_root"))
         mode = cast("str", progress.get("mode") or "normal")
@@ -3744,9 +4707,7 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
         "context_path": progress.get("context_path"),
         "mode": progress.get("mode"),
         "locale": locale,
-        "publication_plan_path": str(root / "review-publication.md")
-        if actual_stage == "plan_ready"
-        else None,
+        "publication_plan_path": str(root / "runbook.md") if actual_stage == "plan_ready" else None,
         "plan_digest": progress.get("plan_digest") if plan is not None else None,
         "next_action": next_action_for_stage(next_stage, root, progress),
         "external_mutations": False,
@@ -3864,6 +4825,12 @@ def content_template(
                 "last_note_id": binding["last_note_id"],
                 "last_note_body_sha256": binding["last_note_body_sha256"],
                 "thread_sha256": binding["thread_sha256"],
+                "user_confirmation": {
+                    "status": "required"
+                    if _user_proposed_fix(binding, context)
+                    else "not_applicable",
+                    "evidence_note_ids": [],
+                },
             }
         )
     return {
@@ -4086,6 +5053,7 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
             "low_risk": mode == "fast",
             "blocking_findings": bool(blocking_ids),
             "blocking_finding_ids": blocking_ids,
+            "blocking_thread_ids": [],
             "ci_job_assessments": ci_assessments,
             "owner_decision_reasons": [
                 "Exact-head CI jobs are unsuccessful, incomplete, or not yet classified as process gates."
@@ -4187,12 +5155,21 @@ def validate_review_verdict(
     ):
         raise portable.WorkflowError("every accepted non-low finding must be blocking")
     reasons = report.get("owner_decision_reasons", [])
+    threads = report.get("blocking_thread_ids", [])
+    if (
+        not isinstance(threads, list)
+        or not all(portable.nonempty_string(item) for item in threads)
+        or len(set(cast("list[str]", threads))) != len(cast("list[str]", threads))
+    ):
+        raise portable.WorkflowError(
+            "blocking_thread_ids must be unique IDs of accepted non-low thread defects"
+        )
     if not isinstance(reasons, list) or not all(portable.nonempty_string(item) for item in reasons):
         raise portable.WorkflowError("owner decision reasons are invalid")
     ci_blocked = ci_blocks_ready(evidence, report.get("ci_job_assessments", []))
-    if ci_blocked and not blocking_ids and not reasons:
+    if ci_blocked and not blocking_ids and not threads and not reasons:
         raise portable.WorkflowError("blocking CI evidence requires an owner decision reason")
-    if blocking_ids:
+    if blocking_ids or threads:
         expected = "not_ready"
     elif ci_blocked or reasons:
         expected = "blocked"
@@ -4288,9 +5265,18 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
     current = portable.collect(
         cast("dict[str, Any]", evidence["target"]), "code-review", persist=False
     )
+    _, plan_document = portable.artifact_payload(Path(str(status["plan_path"])), "review_plan")
+    review_source = plan_document.get("review_source")
+    assessed = (
+        portable.artifact_payload(
+            Path(str(cast("dict[str, Any]", review_source)["ci_snapshot"])), "evidence_snapshot"
+        )[1]
+        if isinstance(review_source, dict) and "ci_snapshot" in review_source
+        else evidence
+    )
     if current.get("retrieval_complete") is not True or portable.fingerprint(
         current
-    ) != portable.fingerprint(evidence):
+    ) != portable.fingerprint(assessed):
         blocked = {**status, "stage": "stale", "reason": "review evidence changed before report"}
         return {
             "status": "blocked",

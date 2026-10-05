@@ -107,6 +107,7 @@
         "PLR0911",                                                               # Explicit exits represent distinct review states.
         "PLR0912",                                                               # Review scaffolding covers independent evidence branches.
         "PLR0915",                                                               # Splitting would duplicate the publication context.
+        "RUF001",                                                                # User-visible Russian runbook text is intentional.
         "S603",                                                                  # Git and GitLab commands use validated structured arguments.
         "S607",                                                                  # Host CLIs are intentional PATH-resolved dependencies.
       ]

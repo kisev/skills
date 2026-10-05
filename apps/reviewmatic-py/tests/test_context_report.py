@@ -129,7 +129,11 @@ def test_compact_report_keeps_one_decision_and_copyable_local_fix() -> None:
         }
     }
     report = review.review_markdown(
-        {"target": {"url": url}, "head_sha": "a" * 40},
+        {
+            "target": {"url": url, "iid": 1},
+            "project": {"id": 7, "hostname": "gitlab.example"},
+            "head_sha": "a" * 40,
+        },
         {
             "role": "author",
             "target": {"url": url},
@@ -196,7 +200,8 @@ def test_patch_markers_are_isolated_by_review_checkout(tmp_path: Path) -> None:
     first.mkdir()
     second.mkdir()
     evidence = {
-        "target": {"url": "https://gitlab.example/team/chart/-/merge_requests/1"},
+        "target": {"url": "https://gitlab.example/team/chart/-/merge_requests/1", "iid": 1},
+        "project": {"id": 7, "hostname": "gitlab.example"},
         "head_sha": "a" * 40,
     }
     fix = {"patch": "diff --git a/a b/a\n--- a/a\n+++ b/a\n@@ -1 +1 @@\n-old\n+new\n"}
@@ -207,7 +212,6 @@ def test_patch_markers_are_isolated_by_review_checkout(tmp_path: Path) -> None:
     second_command = review.render_patch_command(
         evidence, {"exact_git": {"repo_root": str(second)}}, fix
     )
-
     assert first_command != second_command
     assert str(first) in first_command and str(second) not in first_command
     assert str(second) in second_command and str(first) not in second_command
