@@ -214,9 +214,17 @@ PROFILES = {
 ARTIFACT_KINDS = {
     "evidence_snapshot",
     "release_inventory",
+    "review_context",
     "publication_plan",
+    "review_plan",
+    "analysis_report",
+    "context_package",
+    "critic_receipt",
+    "review_decision",
     "release_readiness",
     "finalize_report",
+    "local_wip_snapshot",
+    "local_review_report",
 }
 
 
@@ -441,6 +449,24 @@ def write_json(path: Path, value: object) -> None:
     write_bytes(path, canonical(value))
 
 
+def reject_envelope_wrapper(value: object, label: str) -> None:
+    """Agent inputs often arrive wrapped in the artifact envelope the agent saw in recorded state."""
+    if not isinstance(value, dict):
+        return
+    keys = set(value)
+    if (
+        "payload" in keys
+        and isinstance(value["payload"], dict)
+        and keys <= {"payload", "schema", "kind"}
+    ):
+        extra = ", ".join(sorted(keys - {"payload"})) or "schema"
+        raise WorkflowError(
+            f"{label} must contain the artifact payload itself, not the "
+            f"{{schema, payload}} envelope wrapper; pass the object stored in the payload field "
+            f"(drop the envelope keys {extra})"
+        )
+
+
 def write_bytes(path: Path, content: bytes) -> None:
     """Atomically replace a private mutable file."""
     if path.is_symlink() or (path.exists() and not path.is_file()):
@@ -564,6 +590,947 @@ def component_is_valid(value: object) -> bool:
         and isinstance(value["pages"], int)
         and value["pages"] >= 0
         and isinstance(value["truncated"], bool)
+    )
+
+
+def is_plain_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def key_set(value: dict[str, object]) -> set[str]:
+    return set(value)
+
+
+def sets_equal(left: set[object], right: set[object]) -> bool:
+    return left == right
+
+
+def equal_json(left: object, right: object) -> bool:
+    return canonical(left) == canonical(right)
+
+
+def full_match(pattern: str, value: str) -> bool:
+    return re.fullmatch(pattern, value) is not None
+
+
+def sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def findings_are_valid(value: object) -> bool:
+    if not isinstance(value, list):
+        return False
+    legacy = {"id"}
+    detailed = {
+        "id",
+        "severity",
+        "summary",
+        "risk",
+        "evidence",
+        "consequence",
+        "relation_to_change",
+        "minimum_fix",
+    }
+    detail_fields = detailed - {"id", "severity", "evidence"}
+    return all(
+        isinstance(item, dict)
+        and (set(item) == legacy or set(item) == detailed)
+        and nonempty_string(item.get("id"))
+        and (
+            set(item) == legacy
+            or (
+                item.get("severity") in {"critical", "high", "medium", "low"}
+                and all(nonempty_string(item.get(key)) for key in detail_fields)
+                and isinstance(item.get("evidence"), list)
+                and bool(item["evidence"])
+                and all(nonempty_string(entry) for entry in item["evidence"])
+            )
+        )
+        for item in value
+    )
+
+
+def detailed_findings_are_valid(value: object) -> bool:
+    return findings_are_valid(value) and all(
+        isinstance(item, dict) and set(item) != {"id"} for item in cast("list[object]", value)
+    )
+
+
+def duplicate_detailed_finding_ids(value: object) -> list[list[str]]:
+    if not detailed_findings_are_valid(value):
+        return []
+    groups: dict[str, list[str]] = {}
+    for finding in cast("list[dict[str, Any]]", value):
+        content = {key: item for key, item in finding.items() if key != "id"}
+        groups.setdefault(digest(content), []).append(cast("str", finding["id"]))
+    return [item_ids for item_ids in groups.values() if len(item_ids) > 1]
+
+
+def thread_decisions_are_valid(value: object) -> bool:
+    legacy = {"id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"}
+    current = legacy | {"last_note_id", "last_note_body_sha256", "thread_sha256"}
+    structured = current | {"suggestion_applicable"}
+    fix = current | {"fix_mode", "patch", "fixing_commit"}
+    materialized_fix = fix | {"patch_path", "patch_sha256"}
+    allowed = (legacy, current, structured, fix, materialized_fix)
+    extensible = {
+        "suggestions",
+        "split_rationale",
+        "patch_reason",
+        "severity",
+        "user_confirmation",
+        "routing_response",
+    }
+    if not isinstance(value, list):
+        return False
+    return all(
+        _thread_decision_is_valid(
+            item, allowed, extensible, legacy, structured, fix, materialized_fix
+        )
+        for item in value
+    )
+
+
+def _thread_decision_is_valid(
+    item: object,
+    allowed: tuple[set[str], set[str], set[str], set[str], set[str]],
+    extensible: set[str],
+    legacy: set[str],
+    structured: set[str],
+    fix: set[str],
+    materialized_fix: set[str],
+) -> bool:
+    if not isinstance(item, dict):
+        return False
+    keys = set(item) - extensible
+    if not any(keys == candidate for candidate in allowed):
+        return False
+    if not (
+        nonempty_string(item.get("id"))
+        and nonempty_string(item.get("url"))
+        and nonempty_string(item.get("rationale"))
+    ):
+        return False
+    if item.get("state") not in {"open", "resolved", "plain"}:
+        return False
+    if item.get("assessment") not in {
+        "accepted",
+        "fixed",
+        "false_positive",
+        "duplicate",
+        "not_related",
+        "question",
+        "neutral",
+    }:
+        return False
+    if item.get("outcome") not in {"no_publication", "local_fix", "reply", "resolve", "reopen"}:
+        return False
+    if item.get("state") == "open" and item.get("outcome") == "no_publication":
+        return False
+    if item.get("proposed_response") is not None and not nonempty_string(
+        item.get("proposed_response")
+    ):
+        return False
+    if keys != legacy and not (
+        item.get("last_note_id") is not None
+        and is_digest(item.get("last_note_body_sha256"))
+        and is_digest(item.get("thread_sha256"))
+    ):
+        return False
+    if keys == structured and not isinstance(item.get("suggestion_applicable"), bool):
+        return False
+    if keys in (fix, materialized_fix):
+        fixing_commit = item.get("fixing_commit")
+        fixing_commit_valid = fixing_commit is None or (
+            isinstance(fixing_commit, dict)
+            and set(fixing_commit) == {"title", "url"}
+            and all(nonempty_string(fixing_commit[key]) for key in ("title", "url"))
+        )
+        patch = item.get("patch")
+        patch_valid = (item.get("fix_mode") == "patch" and nonempty_string(patch)) or (
+            item.get("fix_mode") != "patch" and patch is None
+        )
+        if (
+            item.get("fix_mode") not in {"suggestion", "patch", "not_required"}
+            or not fixing_commit_valid
+            or not patch_valid
+        ):
+            return False
+    if keys == materialized_fix:
+        materialized_valid = (
+            item.get("fix_mode") == "patch"
+            and nonempty_string(item.get("patch_path"))
+            and isinstance(item.get("patch_path"), str)
+            and item["patch_path"].startswith("/")
+            and is_digest(item.get("patch_sha256"))
+            and isinstance(item.get("patch"), str)
+            and sha256_text(item["patch"]) == item["patch_sha256"]
+        ) or (
+            item.get("fix_mode") != "patch"
+            and item.get("patch_path") is None
+            and item.get("patch_sha256") is None
+        )
+        if not materialized_valid:
+            return False
+    return True
+
+
+def finding_publications_are_valid(value: object, require_fixes: bool = False) -> bool:
+    legacy = {"finding_id", "revision", "type", "path", "line", "old_line", "body"}
+    fixed = legacy | {"fix_mode", "patch", "patch_path", "patch_sha256"}
+    allowed = (fixed,) if require_fixes else (legacy, fixed)
+    extensible = {"suggestions", "split_rationale", "patch_reason", "thread_id"}
+    if not isinstance(value, list):
+        return False
+    return all(_finding_publication_is_valid(item, allowed, extensible, legacy) for item in value)
+
+
+def _finding_publication_is_valid(
+    item: object,
+    allowed: tuple[set[str], ...],
+    extensible: set[str],
+    legacy: set[str],
+) -> bool:
+    if not isinstance(item, dict):
+        return False
+    keys = set(item) - extensible
+    if not any(keys == candidate for candidate in allowed):
+        return False
+    if not nonempty_string(item.get("finding_id")) or not is_plain_int(item.get("revision")):
+        return False
+    if cast("int", item["revision"]) < 1:
+        return False
+    if item.get("type") == "existing_thread":
+        return (
+            nonempty_string(item.get("thread_id"))
+            and nonempty_string(item.get("body"))
+            and item.get("fix_mode") == "not_required"
+            and item.get("patch") is None
+            and item.get("patch_path") is None
+            and item.get("patch_sha256") is None
+            and item.get("path") is None
+            and item.get("line") is None
+            and item.get("old_line") is None
+        )
+    if item.get("type") not in {"general", "line", "local_fix"} or not nonempty_string(
+        item.get("body")
+    ):
+        return False
+    if keys == legacy:
+        return True
+    if item.get("fix_mode") not in {"suggestion", "patch"}:
+        return False
+    if item.get("fix_mode") == "patch":
+        return (
+            nonempty_string(item.get("patch"))
+            and nonempty_string(item.get("patch_path"))
+            and isinstance(item.get("patch_path"), str)
+            and item["patch_path"].startswith("/")
+            and is_digest(item.get("patch_sha256"))
+            and isinstance(item.get("patch"), str)
+            and sha256_text(item["patch"]) == item["patch_sha256"]
+        )
+    return (
+        item.get("patch") is None
+        and item.get("patch_path") is None
+        and item.get("patch_sha256") is None
+    )
+
+
+def metadata_assessment_item_is_valid(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and set(value) == {"status", "rationale", "recommendation"}
+        and value.get("status") in {"ok", "needs_change", "unverified"}
+        and nonempty_string(value.get("rationale"))
+        and (value.get("recommendation") is None or nonempty_string(value.get("recommendation")))
+    )
+
+
+def mr_metadata_assessment_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {"observed", "assessment"}:
+        return False
+    observed, assessment = value["observed"], value["assessment"]
+    fields = {"title", "description", "labels", "workflow_state"}
+    assessment_fields = fields | {"overall"}
+    return (
+        isinstance(observed, dict)
+        and set(observed) == fields
+        and isinstance(observed.get("title"), str)
+        and (observed.get("description") is None or isinstance(observed.get("description"), str))
+        and isinstance(observed.get("labels"), list)
+        and all(isinstance(item, str) for item in observed["labels"])
+        and nonempty_string(observed.get("workflow_state"))
+        and isinstance(assessment, dict)
+        and set(assessment) == assessment_fields
+        and all(metadata_assessment_item_is_valid(assessment[field]) for field in assessment_fields)
+    )
+
+
+def review_chat_assessment_is_valid(value: object) -> bool:
+    if not isinstance(value, dict) or set(value) != {"necessity", "relevance", "change"}:
+        return False
+    necessity, relevance = value["necessity"], value["relevance"]
+    return (
+        isinstance(necessity, dict)
+        and set(necessity) == {"status", "rationale"}
+        and necessity.get("status") in {"supported", "doubtful", "unconfirmed"}
+        and nonempty_string(necessity.get("rationale"))
+        and isinstance(relevance, dict)
+        and set(relevance) == {"status", "rationale"}
+        and relevance.get("status") in {"current", "partly_outdated", "outdated"}
+        and nonempty_string(relevance.get("rationale"))
+        and nonempty_string(value.get("change"))
+    )
+
+
+def review_metadata_labels(locale: str) -> dict[str, str]:
+    return (
+        {
+            "title": "Заголовок",
+            "description": "Описание",
+            "workflow_state": "Состояние",
+            "overall": "Итог оформления",
+        }
+        if locale == "ru"
+        else {
+            "title": "Title",
+            "description": "Description",
+            "workflow_state": "State",
+            "overall": "Metadata summary",
+        }
+    )
+
+
+def review_action_labels(locale: str) -> dict[str, str]:
+    return (
+        {
+            "add": "Добавить",
+            "remove": "Убрать",
+            "reply": "Опубликовать ответ:",
+            "resolve": "После успешной публикации закрыть тред:",
+            "reopen": "После успешной публикации переоткрыть тред:",
+        }
+        if locale == "ru"
+        else {
+            "add": "Add",
+            "remove": "Remove",
+            "reply": "Publish reply:",
+            "resolve": "After successful publication, resolve the thread:",
+            "reopen": "After successful publication, reopen the thread:",
+        }
+    )
+
+
+def code_review_presentation(
+    locale: str, role: str, verdict: str, incremental_mode: str
+) -> dict[str, Any]:
+    if locale not in {"en", "ru"}:
+        raise WorkflowError("review locale must be en or ru")
+    if role not in {"author", "reviewer"} or verdict not in {"ready", "not_ready", "blocked"}:
+        raise WorkflowError("review presentation identity is invalid")
+    if locale == "ru":
+        return {
+            "title": "План публикации ревью",
+            "incremental_notice": "Проведено инкрементальное ревью."
+            if incremental_mode == "incremental"
+            else None,
+            "target_label": "MR",
+            "role_label": "Роль",
+            "role_value": "автор MR" if role == "author" else "ревьюер чужого MR",
+            "verdict_label": "Итог",
+            "verdict_value": {
+                "ready": "можно сливать",
+                "not_ready": "нужны изменения",
+                "blocked": "нужно решение владельца",
+            }[verdict],
+            "metadata_heading": "Оформление MR",
+            "labels_heading": "Лейблы проекта",
+            "previous_findings_heading": "Сверка предыдущих обнаружений",
+            "open_threads_heading": "Открытые треды",
+            "closed_threads_heading": "Закрытые треды",
+            "local_fixes_heading": "Локальные исправления",
+            "new_findings_heading": "Новые обнаружения",
+            "recommended_issues_heading": "Рекомендуемые задачи",
+            "checked_heading": "Проверено без публикации",
+            "architecture_heading": "Архитектурная оценка",
+            "semver_heading": "Влияние на SemVer",
+            "checks_heading": "Проверки",
+            "publication_heading": "Ручная публикация",
+            "no_items": "Нет.",
+            "publication_warning": "Команды не выполнялись.",
+            "previous_table_headers": ["ID", "Было", "Стало", "Основание", "Действие"],
+            "evidence_label": "Доказательство",
+            "relation_label": "Связь с изменением",
+            "severity_labels": {
+                "critical": "Критическая",
+                "high": "Высокая",
+                "medium": "Средняя",
+                "low": "Низкая",
+            },
+            "recovery_label": "Если ответ опубликован, а состояние не изменилось, выполни только:",
+        }
+    return {
+        "title": "Code review publication plan",
+        "incremental_notice": "Incremental review completed."
+        if incremental_mode == "incremental"
+        else None,
+        "target_label": "Target",
+        "role_label": "Role",
+        "role_value": "author of this MR"
+        if role == "author"
+        else "reviewer of another author's MR",
+        "verdict_label": "Verdict",
+        "verdict_value": {
+            "ready": "ready to merge",
+            "not_ready": "changes required",
+            "blocked": "owner decision required",
+        }[verdict],
+        "metadata_heading": "MR metadata",
+        "labels_heading": "Project labels",
+        "previous_findings_heading": "Previous findings",
+        "open_threads_heading": "Open threads",
+        "closed_threads_heading": "Closed threads",
+        "local_fixes_heading": "Local fixes",
+        "new_findings_heading": "New findings",
+        "recommended_issues_heading": "Recommended issues",
+        "checked_heading": "Reviewed without publication",
+        "architecture_heading": "Architecture assessment",
+        "semver_heading": "SemVer impact",
+        "checks_heading": "Checks",
+        "publication_heading": "Manual publication preflight",
+        "no_items": "None.",
+        "publication_warning": "No command was executed.",
+        "previous_table_headers": [
+            "ID",
+            "Previous status",
+            "Current status",
+            "Rationale",
+            "Action",
+        ],
+        "evidence_label": "Evidence",
+        "relation_label": "Relation to change",
+        "severity_labels": {
+            "critical": "Critical",
+            "high": "High",
+            "medium": "Medium",
+            "low": "Low",
+        },
+        "recovery_label": "If the response succeeds but the state change fails, run only:",
+    }
+
+
+def code_review_chat_labels(locale: str) -> dict[str, Any]:
+    if locale == "ru":
+        return {
+            "title": "### Оценка MR",
+            "blocked_title": "### Ревью заблокировано",
+            "role": "Роль",
+            "necessity": "Необходимость",
+            "relevance": "Актуальность",
+            "change": "Изменение",
+            "architecture": "Архитектура",
+            "semver": "SemVer",
+            "metadata": "Оформление MR",
+            "verdict": "Итог",
+            "checkout": "Checkout ревью",
+            "plan": "План публикации",
+            "findings": "Замечания",
+            "none": "Замечаний нет.",
+            "stage": "Этап",
+            "reason": "Причина",
+            "next_action": "Следующее действие",
+            "metadata_values": {
+                "ok": "готово",
+                "needs_change": "нужны изменения",
+                "unverified": "нужен контекст",
+            },
+            "necessity_values": {
+                "supported": "обоснована",
+                "doubtful": "сомнительна",
+                "unconfirmed": "не подтверждена",
+            },
+            "relevance_values": {
+                "current": "актуально",
+                "partly_outdated": "частично устарело",
+                "outdated": "устарело",
+            },
+        }
+    if locale != "en":
+        raise WorkflowError("review locale must be en or ru")
+    return {
+        "title": "### MR assessment",
+        "blocked_title": "### Review blocked",
+        "role": "Role",
+        "necessity": "Necessity",
+        "relevance": "Relevance",
+        "change": "Change",
+        "architecture": "Architecture",
+        "semver": "SemVer",
+        "metadata": "MR metadata",
+        "verdict": "Verdict",
+        "checkout": "Review checkout",
+        "plan": "Publication plan",
+        "findings": "Findings",
+        "none": "No findings.",
+        "stage": "Stage",
+        "reason": "Reason",
+        "next_action": "Next action",
+        "metadata_values": {
+            "ok": "ready",
+            "needs_change": "changes needed",
+            "unverified": "context needed",
+        },
+        "necessity_values": {
+            "supported": "supported",
+            "doubtful": "doubtful",
+            "unconfirmed": "unconfirmed",
+        },
+        "relevance_values": {
+            "current": "current",
+            "partly_outdated": "partly outdated",
+            "outdated": "outdated",
+        },
+    }
+
+
+def _publication_bodies_valid(body_files: object, *, structured: bool) -> bool:
+    if not isinstance(body_files, list):
+        return False
+    keys = (
+        {"publication_id", "revision", "kind", "path", "sha256", "content"}
+        if structured
+        else {"publication_id", "revision", "kind", "path", "content"}
+    )
+    return all(
+        isinstance(item, dict)
+        and set(item) == keys
+        and nonempty_string(item.get("publication_id"))
+        and is_plain_int(item.get("revision"))
+        and cast("int", item["revision"]) >= 1
+        and item.get("kind") in {"finding", "thread", "issue"}
+        and nonempty_string(item.get("path"))
+        and isinstance(item.get("path"), str)
+        and item["path"].startswith("/")
+        and nonempty_string(item.get("content"))
+        and (
+            not structured
+            or (
+                is_digest(item.get("sha256"))
+                and isinstance(item.get("content"), str)
+                and sha256_text(item["content"]) == item["sha256"]
+            )
+        )
+        for item in body_files
+    )
+
+
+def review_publication_preview_is_valid(value: object) -> bool:
+    legacy_keys = {"mr_state", "warning", "preflight_command", "body_files", "commands"}
+    current_keys = legacy_keys | {"preflight_path", "preflight_sha256"}
+    structured_keys = {
+        "mr_state",
+        "warning",
+        "preflight_path",
+        "preflight_sha256",
+        "body_files",
+        "actions",
+    }
+    manual_keys = {"mr_state", "warning", "body_files", "actions"}
+    if not isinstance(value, dict):
+        return False
+    keys = set(value)
+    if keys == manual_keys:
+        return _manual_preview_is_valid(value)
+    if keys == structured_keys:
+        return _structured_preview_is_valid(value)
+    if keys not in (legacy_keys, current_keys):
+        return False
+    legacy = keys == legacy_keys
+    if (
+        not nonempty_string(value.get("mr_state"))
+        or not nonempty_string(value.get("warning"))
+        or not nonempty_string(value.get("preflight_command"))
+        or (
+            not legacy
+            and (
+                not nonempty_string(value.get("preflight_path"))
+                or not isinstance(value.get("preflight_path"), str)
+                or not value["preflight_path"].startswith("/")
+                or not is_digest(value.get("preflight_sha256"))
+            )
+        )
+        or not isinstance(value.get("body_files"), list)
+        or not isinstance(value.get("commands"), list)
+    ):
+        return False
+    body_files, commands = value["body_files"], value["commands"]
+    if legacy:
+        bodies_valid = all(
+            isinstance(item, dict)
+            and set(item) == {"finding_id", "path", "sha256", "content"}
+            and nonempty_string(item.get("finding_id"))
+            and nonempty_string(item.get("path"))
+            and isinstance(item.get("path"), str)
+            and item["path"].startswith("/")
+            and is_digest(item.get("sha256"))
+            and nonempty_string(item.get("content"))
+            and isinstance(item.get("content"), str)
+            and sha256_text(item["content"]) == item["sha256"]
+            for item in body_files
+        )
+        commands_valid = all(
+            isinstance(item, dict)
+            and set(item) == {"finding_id", "command"}
+            and nonempty_string(item.get("finding_id"))
+            and nonempty_string(item.get("command"))
+            for item in commands
+        )
+        if not bodies_valid or not commands_valid:
+            return False
+        body_ids = [item["finding_id"] for item in body_files if isinstance(item, dict)]
+        command_ids = [item["finding_id"] for item in commands if isinstance(item, dict)]
+        return (
+            len(body_ids) == len(set(body_ids))
+            and len(command_ids) == len(set(command_ids))
+            and equal_json(body_ids, command_ids)
+        )
+    if not _publication_bodies_valid(body_files, structured=True):
+        return False
+    outcomes = {
+        "create_general",
+        "create_line",
+        "create_issue",
+        "update_issue",
+        "reply",
+        "resolve",
+        "reopen",
+    }
+    commands_valid = all(
+        isinstance(item, dict)
+        and set(item)
+        == {"publication_id", "revision", "kind", "outcome", "command", "recovery_command"}
+        and nonempty_string(item.get("publication_id"))
+        and is_plain_int(item.get("revision"))
+        and cast("int", item["revision"]) >= 1
+        and item.get("kind") in {"finding", "thread", "issue"}
+        and item.get("outcome") in outcomes
+        and nonempty_string(item.get("command"))
+        and (item.get("recovery_command") is None or nonempty_string(item.get("recovery_command")))
+        for item in commands
+    )
+    if not commands_valid:
+        return False
+    body_ids = [item.get("publication_id") for item in body_files if isinstance(item, dict)]
+    command_ids = [item.get("publication_id") for item in commands if isinstance(item, dict)]
+    typed_bodies = [item for item in body_files if isinstance(item, dict)]
+    typed_commands = [item for item in commands if isinstance(item, dict)]
+    return (
+        len(body_ids) == len(set(body_ids))
+        and len(command_ids) == len(set(command_ids))
+        and equal_json(body_ids, command_ids)
+        and all(
+            body.get("revision") == command.get("revision")
+            and body.get("kind") == command.get("kind")
+            for body, command in zip(typed_bodies, typed_commands, strict=False)
+        )
+    )
+
+
+def _manual_preview_is_valid(value: dict[str, Any]) -> bool:
+    body_files, actions = value.get("body_files"), value.get("actions")
+    if (
+        not nonempty_string(value.get("mr_state"))
+        or not nonempty_string(value.get("warning"))
+        or not isinstance(body_files, list)
+        or not isinstance(actions, list)
+    ):
+        return False
+    bodies_valid = all(
+        isinstance(item, dict)
+        and set(item) == {"publication_id", "revision", "kind", "path", "content"}
+        and nonempty_string(item.get("publication_id"))
+        and is_plain_int(item.get("revision"))
+        and cast("int", item["revision"]) >= 1
+        and item.get("kind") in {"finding", "thread", "issue"}
+        and nonempty_string(item.get("path"))
+        and isinstance(item.get("path"), str)
+        and item["path"].startswith("/")
+        and nonempty_string(item.get("content"))
+        for item in body_files
+    )
+    actions_valid = all(
+        isinstance(item, dict)
+        and set(item) == {"id", "kind", "publication_id", "operation", "command", "path", "line"}
+        and nonempty_string(item.get("id"))
+        and item.get("kind") in {"finding", "thread", "issue", "labels"}
+        and item.get("operation")
+        in {
+            "create_general",
+            "create_line",
+            "create_issue",
+            "reply",
+            "resolve",
+            "reopen",
+            "update_labels",
+        }
+        and nonempty_string(item.get("command"))
+        for item in actions
+    )
+    if not bodies_valid or not actions_valid:
+        return False
+    action_ids = [item.get("id") for item in actions if isinstance(item, dict)]
+    manual_body_ids = {item.get("publication_id") for item in body_files if isinstance(item, dict)}
+    manual_action_body_ids = {
+        item.get("publication_id")
+        for item in actions
+        if isinstance(item, dict) and item.get("publication_id") is not None
+    }
+    return len(action_ids) == len(set(action_ids)) and manual_body_ids == manual_action_body_ids
+
+
+def _structured_preview_is_valid(value: dict[str, Any]) -> bool:
+    body_files, actions = value.get("body_files"), value.get("actions")
+    if (
+        not nonempty_string(value.get("mr_state"))
+        or not nonempty_string(value.get("warning"))
+        or not nonempty_string(value.get("preflight_path"))
+        or not isinstance(value.get("preflight_path"), str)
+        or not value["preflight_path"].startswith("/")
+        or not is_digest(value.get("preflight_sha256"))
+        or not isinstance(body_files, list)
+        or not isinstance(actions, list)
+    ):
+        return False
+    if not _publication_bodies_valid(body_files, structured=True):
+        return False
+    operations = {
+        "create_general",
+        "create_line",
+        "create_issue",
+        "update_issue",
+        "reply",
+        "resolve",
+        "reopen",
+        "update_labels",
+    }
+    for item in actions:
+        if (
+            not isinstance(item, dict)
+            or set(item)
+            != {
+                "id",
+                "sha256",
+                "kind",
+                "publication_id",
+                "revision",
+                "operation",
+                "command",
+                "spec",
+            }
+            or not nonempty_string(item.get("id"))
+            or not is_digest(item.get("sha256"))
+            or item.get("kind") not in {"finding", "thread", "issue", "labels"}
+            or item.get("operation") not in operations
+            or not nonempty_string(item.get("command"))
+        ):
+            return False
+        spec = item.get("spec")
+        if (
+            not isinstance(spec, dict)
+            or item["sha256"] != digest(spec)
+            or set(spec)
+            != {
+                "schema",
+                "preflight_sha256",
+                "operation",
+                "publication",
+                "body",
+                "expected",
+                "mutation",
+            }
+            or spec.get("schema") != "code-review/publication-action/v1"
+            or spec.get("preflight_sha256") != value.get("preflight_sha256")
+            or spec.get("operation") != item.get("operation")
+            or not isinstance(spec.get("expected"), dict)
+            or set(spec["expected"]) != {"thread", "note", "prior_marker", "issue"}
+            or not isinstance(spec.get("mutation"), dict)
+        ):
+            return False
+        mutation = spec["mutation"]
+        if item["kind"] == "labels":
+            if not (
+                item.get("publication_id") is None
+                and item.get("revision") is None
+                and item.get("operation") == "update_labels"
+                and spec.get("publication") is None
+                and spec.get("body") is None
+                and set(mutation) == {"add", "remove", "proposed"}
+                and all(
+                    isinstance(mutation.get(key), list)
+                    and all(isinstance(label, str) for label in mutation[key])
+                    for key in ("add", "remove", "proposed")
+                )
+            ):
+                return False
+            if set(mutation["add"]) & set(mutation["remove"]):
+                return False
+            continue
+        if item.get("kind") not in {"finding", "thread", "issue"}:
+            return False
+        if (
+            not nonempty_string(item.get("publication_id"))
+            or not is_plain_int(item.get("revision"))
+            or cast("int", item["revision"]) < 1
+            or not isinstance(spec.get("publication"), dict)
+            or not equal_json(
+                spec["publication"],
+                {
+                    "id": item["publication_id"],
+                    "revision": item["revision"],
+                    "kind": item["kind"],
+                },
+            )
+            or not isinstance(spec.get("body"), dict)
+            or set(spec["body"]) != {"path", "sha256"}
+            or not isinstance(spec["body"].get("path"), str)
+            or not spec["body"]["path"].startswith("/")
+            or not is_digest(spec["body"].get("sha256"))
+        ):
+            return False
+    action_ids = [item.get("id") for item in actions if isinstance(item, dict)]
+    body_identities = {
+        "\x00".join(
+            [
+                str(item.get("publication_id")),
+                str(item.get("revision")),
+                str(item.get("kind")),
+                str(item.get("path")),
+                str(item.get("sha256")),
+            ]
+        )
+        for item in body_files
+        if isinstance(item, dict)
+    }
+    action_identity_list = []
+    for item in actions:
+        if not isinstance(item, dict) or item.get("kind") == "labels":
+            continue
+        body = cast("dict[str, Any]", item["spec"])["body"]
+        action_identity_list.append(
+            "\x00".join(
+                [
+                    str(item.get("publication_id")),
+                    str(item.get("revision")),
+                    str(item.get("kind")),
+                    str(body.get("path")),
+                    str(body.get("sha256")),
+                ]
+            )
+        )
+    return (
+        len(action_ids) == len(set(action_ids))
+        and sum(1 for item in actions if isinstance(item, dict) and item.get("kind") == "labels")
+        <= 1
+        and body_identities == set(action_identity_list)
+    )
+
+
+def incremental_review_is_valid(value: object) -> bool:
+    required = {
+        "contract_version",
+        "requested",
+        "mode",
+        "reason",
+        "incremental_baseline",
+        "previous_findings",
+        "previous_finding_publications",
+        "previous_recommended_issues",
+        "previous_finding_ledger",
+        "previous_publication_ledger",
+        "previous_thread_decisions",
+        "previous_rejected_candidates",
+        "reconsidered_rejected_candidates",
+        "incremental_delta",
+        "incremental_delta_digest",
+        "critic_required",
+        "fallback_reasons",
+    }
+    if not isinstance(value, dict) or set(value) != required:
+        return False
+    mode = value["mode"]
+    delta = value["incremental_delta"]
+    baseline = value["incremental_baseline"]
+    list_keys = (
+        "previous_findings",
+        "previous_finding_publications",
+        "previous_recommended_issues",
+        "previous_finding_ledger",
+        "previous_publication_ledger",
+        "previous_thread_decisions",
+        "previous_rejected_candidates",
+        "reconsidered_rejected_candidates",
+    )
+    delta_list_keys = (
+        "changed_paths",
+        "changed_thread_ids",
+        "unchanged_thread_ids",
+        "changed_note_ids",
+        "unchanged_note_ids",
+        "metadata_fields",
+    )
+    if (
+        value["contract_version"] != 1
+        or value["requested"] not in {"auto", "off"}
+        or mode not in {"full", "incremental", "unchanged"}
+        or not nonempty_string(value.get("reason"))
+        or not isinstance(baseline, dict)
+        or set(baseline) != {"plan_path", "plan_digest", "state_digest"}
+        or (
+            baseline.get("state_digest") is not None and not is_digest(baseline.get("state_digest"))
+        )
+        or not isinstance(value.get("critic_required"), bool)
+        or not isinstance(value.get("fallback_reasons"), list)
+        or not all(isinstance(item, str) for item in value["fallback_reasons"])
+        or not all(isinstance(value.get(key), list) for key in list_keys)
+        or not isinstance(delta, dict)
+        or not is_digest(value.get("incremental_delta_digest"))
+        or set(delta)
+        != {
+            "from_head",
+            "to_head",
+            "changed_paths",
+            "changed_thread_ids",
+            "unchanged_thread_ids",
+            "changed_note_ids",
+            "unchanged_note_ids",
+            "metadata_fields",
+            "pipelines_changed",
+        }
+        or not is_sha(delta.get("from_head"), nullable=True)
+        or not is_sha(delta.get("to_head"), nullable=True)
+        or not all(
+            isinstance(delta.get(key), list) and all(isinstance(item, str) for item in delta[key])
+            for key in delta_list_keys
+        )
+        or not isinstance(delta.get("pipelines_changed"), bool)
+        or value["incremental_delta_digest"] != digest(delta)
+    ):
+        return False
+    has_baseline = nonempty_string(baseline.get("plan_path")) and is_digest(
+        baseline.get("plan_digest")
+    )
+    if mode == "full":
+        return (
+            baseline.get("plan_path") is None
+            and baseline.get("plan_digest") is None
+            and value["critic_required"] is False
+            and all(len(value[key]) == 0 for key in list_keys)
+        )
+    return (
+        has_baseline
+        and is_sha(delta.get("to_head"))
+        and value["critic_required"] == (mode == "incremental")
     )
 
 
@@ -1146,11 +2113,8 @@ def schema_valid(schema: dict[str, Any], value: object, root: dict[str, Any]) ->
             return False
         if isinstance(schema.get("minLength"), int) and len(value) < schema["minLength"]:
             return False
-        if schema.get("format") == "date-time":
-            try:
-                datetime.fromisoformat(value)
-            except ValueError:
-                return False
+        if schema.get("format") == "date-time" and not _iso_format_is_valid(value):
+            return False
     if (
         isinstance(value, int)
         and not isinstance(value, bool)
@@ -1189,6 +2153,60 @@ def schema_valid(schema: dict[str, Any], value: object, root: dict[str, Any]) ->
     return True
 
 
+def _ci_job_assessment_is_valid(item: object) -> bool:
+    return (
+        isinstance(item, dict)
+        and set(item)
+        == {"project_id", "pipeline_id", "job_id", "classification", "rationale", "trace_evidence"}
+        and all(is_plain_int(item[key]) for key in ("project_id", "pipeline_id", "job_id"))
+        and item["classification"]
+        in {"process_gate", "code_failure", "infrastructure_failure", "unknown"}
+        and nonempty_string(item["rationale"])
+        and nonempty_string(item["trace_evidence"])
+    )
+
+
+def _review_response_is_valid(item: object) -> bool:
+    return (
+        isinstance(item, dict)
+        and schema_valid({"$ref": "#/$defs/response"}, item, artifact_schema())
+        and nonempty_string(item.get("id"))
+        and item.get("decision") in {"accept", "reject"}
+        and nonempty_string(item.get("reason"))
+    )
+
+
+def _iso_format_is_valid(value: str) -> bool:
+    """Strict ISO-8601 calendar date-time check; the canonical timestamp contract."""
+    match = re.fullmatch(
+        r"^(\d{4})-(\d{2})-(\d{2})"
+        r"(?:([^0-9])(\d{2}):(\d{2})(?::(\d{2})(?:[.,](\d+))?)?"
+        r"(Z|[+-]\d{2}(?::?\d{2})?(?::\d{2}(?:\.\d+)?)?)?)?$",
+        value,
+    )
+    if match is None:
+        return False
+    year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
+    leap = (year % 4 == 0 and year % 100 != 0) or year % 400 == 0
+    days_in_month = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    if month < 1 or month > 12 or day < 1 or day > days_in_month[month - 1]:
+        return False
+    hour = int(match.group(5)) if match.group(5) is not None else 0
+    minute = int(match.group(6)) if match.group(6) is not None else 0
+    second = int(match.group(7)) if match.group(7) is not None else 0
+    if hour > 23 or minute > 59 or second > 59:
+        return False
+    zone = match.group(9)
+    if zone is not None and zone != "Z":
+        offset_hours = int(zone[1:3])
+        offset_minutes = int(zone[-2:]) if len(zone) >= 5 else 0
+        if offset_minutes > 59 or offset_hours >= 24:
+            return False
+        if offset_hours == 23 and offset_minutes > 0:
+            return False
+    return True
+
+
 def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
     """Enforce the canonical v2 schema without a runtime-only dependency."""
     schema = artifact_schema()
@@ -1205,10 +2223,8 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         or not isinstance(envelope["payload"], dict)
     ):
         raise WorkflowError("artifact schema is invalid")
-    try:
-        datetime.fromisoformat(cast("str", envelope["created_at"]))
-    except ValueError as exc:
-        raise WorkflowError("artifact timestamp is schema-invalid") from exc
+    if not _iso_format_is_valid(cast("str", envelope["created_at"])):
+        raise WorkflowError("artifact timestamp is schema-invalid")
     payload = cast("dict[str, Any]", envelope["payload"])
     if kind == "evidence_snapshot":
         exact_keys(
@@ -1264,6 +2280,130 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not isinstance(payload["retrieval_complete"], bool)
         ):
             raise WorkflowError("evidence payload is schema-invalid")
+    elif kind == "local_wip_snapshot":
+        exact_keys(
+            payload,
+            {
+                "schema_version",
+                "profile",
+                "external_mutations",
+                "repo_root",
+                "base_sha",
+                "head_sha",
+                "ref",
+                "sections",
+                "artifact_root",
+                "retrieval_complete",
+            },
+            "local WIP payload",
+        )
+        if (
+            payload["schema_version"] != ARTIFACT_VERSION
+            or payload["external_mutations"] is not False
+            or not nonempty_string(payload["profile"])
+            or not nonempty_string(payload["repo_root"])
+            or not is_sha(payload["base_sha"])
+            or not is_sha(payload["head_sha"])
+            or (payload["ref"] is not None and not nonempty_string(payload["ref"]))
+            or not isinstance(payload["sections"], dict)
+            or set(payload["sections"]) != {"committed", "staged", "unstaged", "untracked"}
+            or not nonempty_string(payload["artifact_root"])
+            or not isinstance(payload["retrieval_complete"], bool)
+        ):
+            raise WorkflowError("local WIP payload is schema-invalid")
+    elif kind == "review_context":
+        legacy_required = {
+            "schema_version",
+            "profile",
+            "external_mutations",
+            "evidence_digest",
+            "target",
+            "role",
+            "current_user_username",
+            "mr_author_username",
+            "discussions",
+            "notes",
+            "counts",
+            "exact_git",
+            "complete",
+            "errors",
+            "artifact_root",
+            "prepared_at",
+        }
+        current_required = legacy_required | {"incremental", "issue_templates"}
+        structured_required = current_required | {"current_user_id"}
+        release_required = structured_required | {"release_evidence"}
+        payload_keys = set(payload)
+        if payload_keys not in (
+            legacy_required,
+            current_required,
+            structured_required,
+            release_required,
+        ):
+            raise WorkflowError("review context payload has unknown or missing fields")
+        legacy_context = payload_keys == legacy_required
+        structured_context = payload_keys in (structured_required, release_required)
+        if payload_keys == release_required:
+            from . import review_semver as _review_semver
+
+            if not _review_semver.evidence_is_valid(payload["release_evidence"]):
+                raise WorkflowError("review release evidence is schema-invalid")
+        counts = payload["counts"]
+        exact_git = payload["exact_git"]
+        if (
+            payload["schema_version"] != ARTIFACT_VERSION
+            or payload["profile"] != "code-review"
+            or payload["external_mutations"] is not False
+            or not is_digest(payload["evidence_digest"])
+            or not isinstance(payload["target"], dict)
+            or payload["role"] not in {"author", "reviewer"}
+            or (
+                structured_context
+                and (
+                    not is_plain_int(payload["current_user_id"])
+                    or cast("int", payload["current_user_id"]) < 1
+                )
+            )
+            or not all(
+                nonempty_string(payload[key])
+                for key in (
+                    "current_user_username",
+                    "mr_author_username",
+                    "artifact_root",
+                    "prepared_at",
+                )
+            )
+            or (payload["current_user_username"] == payload["mr_author_username"])
+            != (payload["role"] == "author")
+            or not all(isinstance(payload[key], list) for key in ("discussions", "notes", "errors"))
+            or not all(isinstance(item, str) for item in payload["errors"])
+            or (not legacy_context and not incremental_review_is_valid(payload["incremental"]))
+            or not isinstance(payload["complete"], bool)
+            or not isinstance(counts, dict)
+            or set(counts)
+            != {
+                "discussions",
+                "notes",
+                "content_notes",
+                "system_notes",
+                "open_resolvable",
+                "resolved_resolvable",
+                "plain_discussions",
+            }
+            or not all(is_plain_int(item) and cast("int", item) >= 0 for item in counts.values())
+            or not isinstance(exact_git, dict)
+            or set(exact_git)
+            != {"repo_root", "refs", "changed_paths", "diff_sha256", "complete", "errors"}
+            or not nonempty_string(exact_git["repo_root"])
+            or not isinstance(exact_git["refs"], dict)
+            or not isinstance(exact_git["changed_paths"], list)
+            or not all(isinstance(item, str) for item in exact_git["changed_paths"])
+            or not (is_digest(exact_git["diff_sha256"]) or exact_git["diff_sha256"] is None)
+            or not isinstance(exact_git["complete"], bool)
+            or not isinstance(exact_git["errors"], list)
+            or not all(isinstance(item, str) for item in exact_git["errors"])
+        ):
+            raise WorkflowError("review context payload is schema-invalid")
     elif kind == "release_inventory":
         required = {
             "schema_version",
@@ -1458,6 +2598,213 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             )
         ):
             raise WorkflowError("publication plan payload is schema-invalid")
+    elif kind == "review_plan":
+        legacy_required = {
+            "profile",
+            "external_mutations",
+            "evidence_digest",
+            "context_digest",
+            "decision_digest",
+            "target",
+            "role",
+            "mode",
+            "verdict",
+            "complete",
+            "summary",
+            "architecture_assessment",
+            "semver_impact",
+            "semver_rationale",
+            "mr_metadata_assessment",
+            "publication_preview",
+            "checks",
+            "findings",
+            "thread_decisions",
+            "markdown",
+        }
+        minimal_required = legacy_required - {
+            "semver_rationale",
+            "mr_metadata_assessment",
+            "publication_preview",
+        }
+        current_required = legacy_required | {
+            "review_contract_version",
+            "incremental",
+            "presentation",
+            "finding_publications",
+            "previous_finding_assessments",
+            "recommended_issues",
+            "finding_ledger",
+            "publication_ledger",
+            "rejected_candidates",
+            "rejected_candidate_assessments",
+            "rejected_candidate_ledger",
+        }
+        structured_required = current_required | {"label_review"}
+        final_required = structured_required | {"chat_assessment", "locale"}
+        release_required = final_required | {"semver_assessment"}
+        actual_keys = set(payload) - {"review_source"}
+        if actual_keys not in (
+            minimal_required,
+            legacy_required,
+            current_required,
+            structured_required,
+            final_required,
+            release_required,
+        ):
+            raise WorkflowError("review plan payload has unknown or missing fields")
+        structured_plan = actual_keys in (structured_required, final_required, release_required)
+        final_plan = actual_keys in (final_required, release_required)
+        release_plan = actual_keys == release_required
+        minimal_plan = actual_keys == minimal_required
+        legacy_plan = actual_keys not in (
+            current_required,
+            structured_required,
+            final_required,
+            release_required,
+        )
+        from . import review_semver as _review_semver
+
+        if release_plan != (payload.get("review_contract_version") in (6, 7)) or (
+            release_plan
+            and (
+                not _review_semver.assessment_is_valid(payload.get("semver_assessment"))
+                or not code_review_label_review_is_valid(payload.get("label_review"))
+                or cast("dict[str, Any]", payload["label_review"])["semver"]["impact"]
+                != payload["semver_impact"]
+            )
+        ):
+            raise WorkflowError("review plan SemVer assessment is invalid")
+        list_keys = (
+            "finding_publications",
+            "previous_finding_assessments",
+            "recommended_issues",
+            "finding_ledger",
+            "publication_ledger",
+            "rejected_candidates",
+            "rejected_candidate_assessments",
+            "rejected_candidate_ledger",
+        )
+        version = payload.get("review_contract_version")
+        thread_decisions = cast("list[object]", payload.get("thread_decisions", []))
+        invalid = (
+            payload["profile"] != "code-review"
+            or (
+                not legacy_plan
+                and (version not in (2, 3, 4, 5, 6, 7) if structured_plan else version != 1)
+            )
+            or final_plan != (version in (4, 5, 6, 7))
+            or payload["external_mutations"] is not False
+            or not all(
+                is_digest(payload[key])
+                for key in ("evidence_digest", "context_digest", "decision_digest")
+            )
+            or not isinstance(payload["target"], dict)
+            or payload["role"] not in {"author", "reviewer"}
+            or not (
+                payload["mode"] in {"fast", "normal", "deep"}
+                if legacy_plan
+                else payload["mode"] in {"fast", "normal", "deep", "incremental", "unchanged"}
+            )
+            or (not legacy_plan and not incremental_review_is_valid(payload["incremental"]))
+            or payload["verdict"] not in {"ready", "not_ready", "blocked"}
+            or not isinstance(payload["complete"], bool)
+            or not all(
+                nonempty_string(payload[key]) for key in ("summary", "architecture_assessment")
+            )
+            or payload["semver_impact"]
+            not in {"major", "minor", "patch", "none", "not_applicable", "unknown"}
+            or not isinstance(payload["checks"], list)
+            or not all(nonempty_string(item) for item in payload["checks"])
+            or not (
+                findings_are_valid(payload["findings"])
+                if minimal_plan
+                else detailed_findings_are_valid(payload["findings"])
+            )
+            or not thread_decisions_are_valid(payload["thread_decisions"])
+            or (
+                structured_plan
+                and (
+                    not code_review_label_review_is_valid(payload.get("label_review"))
+                    or (
+                        version == 2
+                        and not all(
+                            isinstance(item, dict) and "suggestion_applicable" in item
+                            for item in thread_decisions
+                        )
+                    )
+                    or (
+                        version in (3, 4, 5, 6, 7)
+                        and (
+                            not finding_publications_are_valid(
+                                payload.get("finding_publications"), require_fixes=True
+                            )
+                            or not all(
+                                isinstance(item, dict)
+                                and {"fix_mode", "patch", "patch_path", "patch_sha256"} <= set(item)
+                                for item in thread_decisions
+                            )
+                        )
+                    )
+                )
+            )
+            or (
+                not legacy_plan and not all(isinstance(payload.get(key), list) for key in list_keys)
+            )
+            or (not legacy_plan and not isinstance(payload.get("presentation"), dict))
+            or (final_plan and not review_chat_assessment_is_valid(payload.get("chat_assessment")))
+            or (final_plan and payload.get("locale") not in {"en", "ru"})
+            or not isinstance(payload["markdown"], str)
+            or (not minimal_plan and payload["semver_impact"] == "unknown")
+            or (not minimal_plan and not nonempty_string(payload["semver_rationale"]))
+            or (
+                not minimal_plan
+                and not mr_metadata_assessment_is_valid(payload["mr_metadata_assessment"])
+            )
+            or (
+                not minimal_plan
+                and not review_publication_preview_is_valid(payload["publication_preview"])
+            )
+        )
+        if invalid:
+            raise WorkflowError("review plan payload is schema-invalid")
+    elif kind in {"analysis_report", "critic_receipt"}:
+        required_report = {
+            "schema",
+            "evidence_digest",
+            "run_id",
+            "session_id",
+            "findings",
+            "external_mutations",
+        }
+        payload_keys = set(payload)
+        if kind == "critic_receipt":
+            payload_keys -= {"contributors", "question_answers"}
+        if payload_keys not in (
+            required_report,
+            required_report | {"scope_digest"},
+            required_report | {"target_finding_ids"},
+            required_report | {"scope_digest", "target_finding_ids"},
+        ):
+            raise WorkflowError(f"{kind} payload has unknown or missing fields")
+        expected = "analysis-report" if kind == "analysis_report" else "critic-receipt"
+        if (
+            payload["schema"] != f"portable-gitlab/{expected}/v2"
+            or not is_digest(payload["evidence_digest"])
+            or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
+            or not findings_are_valid(payload["findings"])
+            or payload["external_mutations"] is not False
+            or ("scope_digest" in payload and not is_digest(payload["scope_digest"]))
+            or (
+                "target_finding_ids" in payload
+                and (
+                    not isinstance(payload["target_finding_ids"], list)
+                    or not all(nonempty_string(item) for item in payload["target_finding_ids"])
+                )
+            )
+        ):
+            raise WorkflowError(f"{kind} payload is schema-invalid")
+        if kind == "critic_receipt":
+            validate_critic(payload, cast("str", payload["evidence_digest"]))
     elif kind == "release_readiness":
         exact_keys(
             payload,
@@ -1571,6 +2918,104 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             )
         ):
             raise WorkflowError("context package goal or acceptance is schema-invalid")
+    elif kind == "review_decision":
+        required = {
+            "schema",
+            "evidence_digest",
+            "finalize_digest",
+            "mode",
+            "external_mutations",
+            "verdict",
+            "run_id",
+            "session_id",
+            "findings",
+            "unresolved_threads",
+            "responses",
+        }
+        optional = {
+            "context_digest",
+            "critic_receipt_digest",
+            "low_risk",
+            "blocking_findings",
+            "critic_findings",
+            "accepted_findings",
+            "critic_target_finding_ids",
+            "blocking_finding_ids",
+            "blocking_thread_ids",
+            "owner_decision_reasons",
+            "ci_job_assessments",
+        }
+        payload_keys = set(payload)
+        if not required <= payload_keys or not payload_keys <= required | optional:
+            raise WorkflowError("review decision payload has unknown or missing fields")
+        responses = payload["responses"]
+        if (
+            payload["schema"] != "portable-gitlab/review-decision/v2"
+            or not is_digest(payload["evidence_digest"])
+            or not is_digest(payload["finalize_digest"])
+            or ("context_digest" in payload and not is_digest(payload["context_digest"]))
+            or (
+                "critic_receipt_digest" in payload
+                and payload["critic_receipt_digest"] is not None
+                and not is_digest(payload["critic_receipt_digest"])
+            )
+            or payload["mode"] not in {"fast", "normal", "deep", "incremental", "unchanged"}
+            or payload["verdict"] not in {"ready", "not_ready", "blocked"}
+            or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
+            or not findings_are_valid(payload["findings"])
+            or (
+                "critic_findings" in payload
+                and not detailed_findings_are_valid(payload["critic_findings"])
+            )
+            or (
+                "accepted_findings" in payload
+                and not detailed_findings_are_valid(payload["accepted_findings"])
+            )
+            or (
+                "critic_target_finding_ids" in payload
+                and (
+                    not isinstance(payload["critic_target_finding_ids"], list)
+                    or not all(
+                        nonempty_string(item) for item in payload["critic_target_finding_ids"]
+                    )
+                )
+            )
+            or (
+                "blocking_finding_ids" in payload
+                and (
+                    not isinstance(payload["blocking_finding_ids"], list)
+                    or not all(nonempty_string(item) for item in payload["blocking_finding_ids"])
+                    or len(payload["blocking_finding_ids"])
+                    != len(set(payload["blocking_finding_ids"]))
+                )
+            )
+            or (
+                "owner_decision_reasons" in payload
+                and (
+                    not isinstance(payload["owner_decision_reasons"], list)
+                    or not all(nonempty_string(item) for item in payload["owner_decision_reasons"])
+                )
+            )
+            or (
+                "ci_job_assessments" in payload
+                and (
+                    not isinstance(payload["ci_job_assessments"], list)
+                    or not all(
+                        _ci_job_assessment_is_valid(item) for item in payload["ci_job_assessments"]
+                    )
+                )
+            )
+            or not findings_are_valid(payload["unresolved_threads"])
+            or not isinstance(responses, list)
+            or not all(_review_response_is_valid(item) for item in responses)
+            or ("low_risk" in payload and not isinstance(payload["low_risk"], bool))
+            or (
+                "blocking_findings" in payload
+                and not isinstance(payload["blocking_findings"], bool)
+            )
+            or ("external_mutations" in payload and payload["external_mutations"] is not False)
+        ):
+            raise WorkflowError("review decision payload is schema-invalid")
     else:
         raise WorkflowError("unknown artifact kind")
 
@@ -3586,6 +5031,245 @@ def git_read(root: Path, *args: str, text: bool = True) -> str | bytes:
     return cast("str | bytes", completed.stdout)
 
 
+def answers_are_valid(answers: object) -> bool:
+    return isinstance(answers, list) and all(
+        isinstance(item, dict)
+        and nonempty_string(item.get("question_id"))
+        and item.get("verdict") in {"confirmed", "refuted", "not_verified"}
+        and (nonempty_string(item.get("evidence")) or nonempty_string(item.get("reason")))
+        for item in answers
+    )
+
+
+def validate_critic(
+    receipt: dict[str, Any], evidence_digest: str, scope_digest: str | None = None
+) -> None:
+    required = {
+        "schema",
+        "evidence_digest",
+        "run_id",
+        "session_id",
+        "findings",
+        "external_mutations",
+    }
+    allowed = required | {"scope_digest", "target_finding_ids", "contributors", "question_answers"}
+    keys = set(receipt)
+    target_finding_ids = receipt.get("target_finding_ids")
+    answers = receipt.get("question_answers")
+    problems: list[str] = []
+    if receipt.get("schema") != "portable-gitlab/critic-receipt/v2":
+        problems.append(
+            f'$.schema: expected exactly "portable-gitlab/critic-receipt/v2", '
+            f"got {json.dumps(receipt.get('schema'))}"
+        )
+    for key in required:
+        if key not in keys:
+            problems.append(f"$.{key}: required field is missing")
+    for key in keys:
+        if key not in allowed:
+            problems.append(
+                f"$.{key}: unknown field; allowed fields are {', '.join(sorted(allowed))}"
+            )
+    if "evidence_digest" in keys and receipt["evidence_digest"] != evidence_digest:
+        problems.append(
+            f"$.evidence_digest: must bind the selected evidence digest {evidence_digest}"
+        )
+    if scope_digest is not None:
+        if receipt.get("scope_digest") != scope_digest:
+            problems.append(
+                f"$.scope_digest: an incremental receipt must bind the incremental delta "
+                f"digest {scope_digest}"
+            )
+        if not isinstance(target_finding_ids, list):
+            problems.append(
+                "$.target_finding_ids: an incremental receipt requires the assessed "
+                "previous finding IDs"
+            )
+    if (
+        scope_digest is None
+        and "scope_digest" in receipt
+        and not is_digest(receipt["scope_digest"])
+    ):
+        problems.append("$.scope_digest: expected a SHA-256 digest")
+    if "findings" in keys and not findings_are_valid(receipt["findings"]):
+        problems.append(
+            "$.findings: every finding requires id, severity, summary, risk, evidence, "
+            "consequence, relation_to_change, and minimum_fix"
+        )
+    if "target_finding_ids" in receipt and (
+        not isinstance(target_finding_ids, list)
+        or not all(nonempty_string(item) for item in target_finding_ids)
+        or len(target_finding_ids) != len(set(target_finding_ids))
+    ):
+        problems.append("$.target_finding_ids: expected an array of distinct non-empty finding IDs")
+    if "question_answers" in receipt and not answers_are_valid(answers):
+        problems.append(
+            "$.question_answers: every answer requires question_id, verdict "
+            "confirmed/refuted/not_verified, real run/session identity, evidence or reason "
+            "for the verdict, and the question's context_digest"
+        )
+    if receipt.get("external_mutations") is not False:
+        problems.append("$.external_mutations: must be false")
+    if problems:
+        raise WorkflowError(
+            "critic receipt is invalid:\n" + "\n".join(f" - {item}" for item in problems)
+        )
+    if not all(
+        isinstance(receipt.get(key), str) and receipt[key] for key in ("run_id", "session_id")
+    ):
+        raise WorkflowError(
+            "critic receipt lacks independent run identity: $.run_id and $.session_id "
+            "must be non-empty real native identities"
+        )
+    if "contributors" in receipt:
+        contributors = receipt["contributors"]
+        if (
+            not isinstance(contributors, list)
+            or len(contributors) < 2
+            or any(not isinstance(item, dict) or "contributors" in item for item in contributors)
+        ):
+            raise WorkflowError("critic contributors must be distinct individual receipts")
+        for item in cast("list[dict[str, Any]]", contributors):
+            validate_critic(item, evidence_digest, scope_digest)
+        if (
+            len({item.get("run_id") for item in contributors}) != len(contributors)
+            or len({item.get("session_id") for item in contributors}) != len(contributors)
+            or receipt["run_id"] != contributors[0]["run_id"]
+            or receipt["session_id"] != contributors[0]["session_id"]
+            or any(item.get("scope_digest") != receipt.get("scope_digest") for item in contributors)
+            or set(receipt.get("target_finding_ids") or [])
+            != {target for item in contributors for target in item.get("target_finding_ids") or []}
+            or not equal_json(
+                receipt["findings"],
+                [finding for item in contributors for finding in item["findings"]],
+            )
+        ):
+            raise WorkflowError("critic aggregate does not preserve independent contributors")
+
+
+def validate_decision(
+    report: dict[str, Any],
+    evidence_digest: str,
+    receipt: dict[str, Any] | None,
+    mode: str,
+    context_digest: str | None = None,
+    critic_receipt_digest: str | None = None,
+) -> None:
+    if receipt is not None and any(
+        critic.get("run_id") == report.get("run_id")
+        or critic.get("session_id") == report.get("session_id")
+        for critic in [receipt, *cast("list[dict[str, Any]]", receipt.get("contributors", []))]
+    ):
+        raise WorkflowError("critic receipt is not independent of the primary review")
+    if (
+        report.get("schema") != "portable-gitlab/review-decision/v2"
+        or report.get("evidence_digest") != evidence_digest
+        or (context_digest is not None and report.get("context_digest") != context_digest)
+        or (report.get("critic_receipt_digest") if "critic_receipt_digest" in report else None)
+        != critic_receipt_digest
+        or not is_digest(report.get("finalize_digest"))
+        or report.get("mode") != mode
+        or report.get("external_mutations") is not False
+        or report.get("verdict") not in {"ready", "not_ready", "blocked"}
+        or not isinstance(report.get("responses"), list)
+        or not isinstance(report.get("unresolved_threads"), list)
+    ):
+        raise WorkflowError("review decision is schema-invalid")
+    response_values = cast("list[dict[str, Any]]", report["responses"])
+    response_ids = {
+        item["id"]
+        for item in response_values
+        if isinstance(item, dict)
+        and item.get("decision") in {"accept", "reject"}
+        and isinstance(item.get("reason"), str)
+        and item["reason"]
+    }
+    finding_subjects = [
+        item
+        for item in [
+            *(
+                cast("list[object]", report["findings"])
+                if isinstance(report.get("findings"), list)
+                else []
+            ),
+            *(
+                cast("list[object]", receipt["findings"])
+                if receipt is not None and isinstance(receipt.get("findings"), list)
+                else []
+            ),
+        ]
+        if isinstance(item, dict)
+    ]
+    finding_ids = {item.get("id") for item in finding_subjects}
+    required = set(finding_ids)
+    if receipt is not None and isinstance(receipt.get("findings"), list):
+        for item in cast("list[object]", receipt["findings"]):
+            if isinstance(item, dict):
+                required.add(item.get("id"))
+    for item in cast("list[object]", report["unresolved_threads"]):
+        if isinstance(item, dict):
+            required.add(item.get("id"))
+    if context_digest is not None:
+        thread_ids = {
+            item.get("id")
+            for item in cast("list[object]", report["unresolved_threads"])
+            if isinstance(item, dict)
+        }
+        if (
+            len(finding_ids) != len(finding_subjects)
+            or any(
+                not isinstance(item_id, str)
+                or full_match("[A-Za-z0-9][A-Za-z0-9._-]{0,63}", item_id) is None
+                for item_id in finding_ids
+            )
+            or any(
+                not isinstance(item_id, str)
+                or full_match("thread:[A-Za-z0-9][A-Za-z0-9._-]{0,127}", item_id) is None
+                for item_id in thread_ids
+            )
+            or finding_ids & thread_ids
+        ):
+            raise WorkflowError("code-review finding and thread subjects are not namespace-safe")
+    if None in required or len(response_ids) != len(response_values) or response_ids != required:
+        raise WorkflowError(
+            "review decision does not account for every finding and unresolved thread"
+        )
+    response_by_id = {item["id"]: item for item in response_values}
+    accepted_findings = [
+        item for item in finding_subjects if response_by_id[item["id"]]["decision"] == "accept"
+    ]
+    for finding in finding_subjects:
+        response = response_by_id[finding["id"]]
+        override = response.get("severity_override")
+        if "severity_override" in response and (
+            not isinstance(override, dict)
+            or override.get("original_severity") != finding.get("severity")
+            or override.get("severity") not in {"critical", "high", "medium", "low"}
+            or not nonempty_string(override.get("reason"))
+            or response.get("decision") != "accept"
+        ):
+            raise WorkflowError(
+                "severity_override must preserve the original severity and explain the "
+                "accepted finding's reassessment"
+            )
+        if "duplicate_of" in response and (
+            response.get("decision") != "reject"
+            or response_by_id.get(response["duplicate_of"], {}).get("decision") != "accept"
+            or response["duplicate_of"] == finding["id"]
+        ):
+            raise WorkflowError("duplicate_of must refer to an accepted canonical finding")
+    if duplicate_detailed_finding_ids(accepted_findings):
+        raise WorkflowError("review decision accepts structurally duplicate findings")
+    if mode in {"normal", "deep", "incremental"} and receipt is None:
+        raise WorkflowError(
+            "normal, deep, and incremental review require an independent critic receipt"
+        )
+    if mode == "fast" and report.get("low_risk") is not True and receipt is None:
+        raise WorkflowError("fast review without critic requires confirmed low-risk scope")
+    if report.get("verdict") == "ready" and report.get("blocking_findings") is True:
+        raise WorkflowError("blocking findings prohibit ready")
+
+
 def validate_release_readiness(
     report: dict[str, Any], bundle: dict[str, Any], evidence_digest: str
 ) -> None:
@@ -3633,14 +5317,16 @@ def validate_release_readiness(
 
 
 def finalize_payload(
-    result: dict[str, object], source: Path, evidence: dict[str, Any]
+    result: dict[str, object], source: Path, evidence: dict[str, Any], kind: str
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         **result,
         "external_mutations": False,
         "evidence_digest": hashlib.sha256(source.read_bytes()).hexdigest(),
-        "evidence_kind": "evidence_snapshot",
-        "evidence_fingerprint_digest": digest(fingerprint(evidence)),
+        "evidence_kind": kind,
+        "evidence_fingerprint_digest": digest(
+            fingerprint(evidence) if kind == "evidence_snapshot" else evidence
+        ),
     }
     return payload
 
@@ -3858,7 +5544,7 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 result = finalize(args.artifact_root, pointer_name)
                 root = artifact_root(Path(args.artifact_root))
                 evidence_path, bundle = evidence_from_root(root, pointer_name)
-            result = finalize_payload(result, evidence_path, bundle)
+            result = finalize_payload(result, evidence_path, bundle, "evidence_snapshot")
             if profile == "release-review":
                 if not args.report:
                     raise WorkflowError("release review finalize requires --report")

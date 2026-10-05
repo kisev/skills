@@ -102,6 +102,14 @@
         "RUF001"
       ]                                                                          # User-visible Cyrillic evidence is intentional.
       "src/reviewmatic/cli.py" = ["PLR0911"]                                     # Dispatch mirrors the explicit TypeScript return chain.
+      "src/reviewmatic/context.py" = [
+        "C901",                                                                  # Review assembly keeps deterministic evidence ordering in one pass.
+        "PLR0911",                                                               # Explicit exits represent distinct review states.
+        "PLR0912",                                                               # Review scaffolding covers independent evidence branches.
+        "PLR0915",                                                               # Splitting would duplicate the publication context.
+        "S603",                                                                  # Git and GitLab commands use validated structured arguments.
+        "S607",                                                                  # Host CLIs are intentional PATH-resolved dependencies.
+      ]
 
     [tool.ruff.lint.mccabe]
       max-complexity = 40

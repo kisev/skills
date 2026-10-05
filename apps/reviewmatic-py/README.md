@@ -44,6 +44,20 @@ golden fixtures under `tests/golden/`. They are generated from the real
 TypeScript sources with `task reviewmatic-py:fixtures` and byte-checked in
 `task generate:check`; the Python parity tests fail on any divergence.
 
+## validateV2Artifact strictness
+
+The Python validator `validate_v2_artifact` is the strictness reference for
+the port. Timestamp validation is canonical and strict: the extended ISO-8601
+format with calendar, time-range, and offset checks
+(`_iso_format_is_valid`). This is an intentional fix relative to Python
+history: timestamps used to go through `datetime.fromisoformat`, which also
+accepts compact basic formats (`20261005T000000`); TypeScript rejects that
+input and Python now rejects it too. The divergence was bounded to exactly
+this class: the probe at
+`apps/reviewmatic/scripts/probe-v2-divergence.mjs` runs identical artifacts
+through both validators (envelope, timestamps, component snapshots,
+local-review reports, context packages), and the verdicts agree on every case.
+
 ## Development
 
 ```shell
