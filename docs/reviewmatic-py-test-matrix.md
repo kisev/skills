@@ -29,8 +29,8 @@ that introduced this file with the built `dist/` output.
 | `scope.js` | planned: `reviewmatic.scope` |
 | `fixes.js` | `reviewmatic.fixes` (translated from the TypeScript source) |
 | `schema-issues.js` | `reviewmatic.schema_issues` (translated; the canon registers `schema_valid` as its oracle at package import) |
-| `worktree.js` | planned: `reviewmatic.worktree` |
-| `review-worktree.js` | planned: `reviewmatic.review_worktree` |
+| `worktree.js` | `reviewmatic.worktree` (translated from the TypeScript source) |
+| `review-worktree.js` | `reviewmatic.review_worktree` (translated from the TypeScript source) |
 | `version.js` | `reviewmatic.__version__` (package metadata) |
 | `tui/*` | out of scope for stage 2 (stage 3 keeps the interface experimental) |
 
@@ -53,14 +53,14 @@ that introduced this file with the built `dist/` output.
 | `repair.test.mjs` | 13 | partial | `tests/test_fixes_and_diagnostics.py` (schema diagnostics, suggestion synthesis); the end-to-end repair scenarios land with the draft port |
 | `review-contract-regressions.test.mjs` | 15 | partial | `tests/test_contract_validators.py` carries the canon validator regressions |
 | `review-semver.test.mjs` | 11 | covered upstream | `tests/test_review_semver.py` (repository suite) plus the `semver_*` golden fixtures |
-| `review-worktree.test.mjs` | 17 | planned | `tests/test_review_worktree.py` |
+| `review-worktree.test.mjs` | 17 | partial | `tests/test_review_worktree.py` (slugs, remote matching, checkout rejection, registry, locking); the end-to-end preparation scenarios land with the draft port and the fake-glab helper |
 | `state-artifacts.test.mjs` | 11 | covered upstream | `tests/test_state_artifacts.py` (repository suite) plus the golden marker fixtures |
 | `test-selection.test.mjs` | 1 | not applicable | the backend selection is a TypeScript runner concern; the pytest suite has no TUI split |
 | `tui-app.test.mjs` | 3 | intentionally reduced | stage 3 (TUI); stage 2 keeps the `plan` command answering the stage-1 not-implemented envelope |
 | `tui-pty.test.mjs` | 1 | intentionally reduced | stage 3 (TUI) |
 | `tui-support.test.mjs` | 2 | intentionally reduced | stage 3 (TUI) |
 | `workflow.test.mjs` | 2 | partial | revived `reviewmatic.workflow` is exercised through `tests/test_context_report.py`; the dispatch regression lands with the CLI wiring |
-| `worktree.test.mjs` | 2 | planned | `tests/test_worktree.py` |
+| `worktree.test.mjs` | 2 | ported | `tests/test_worktree.py` (both scenarios plus guarded removal, which the TypeScript suite does not cover) |
 
 The "planned" rows are the remaining stage-2 delta; the seam files above are
 the agreed landing spots so no TypeScript test is lost silently. The matrix is

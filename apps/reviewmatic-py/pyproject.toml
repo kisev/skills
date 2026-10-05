@@ -110,6 +110,11 @@
         "S603",                                                                  # Git and GitLab commands use validated structured arguments.
         "S607",                                                                  # Host CLIs are intentional PATH-resolved dependencies.
       ]
+      "src/reviewmatic/worktree.py" = [
+        "PLW1510",                                                               # The git runner inspects returncode and stderr itself, like the TS runner.
+        "S603",                                                                  # Git receives validated structured arguments only.
+        "S607",                                                                  # Git is an intentional PATH-resolved dependency.
+      ]
 
     [tool.ruff.lint.mccabe]
       max-complexity = 40

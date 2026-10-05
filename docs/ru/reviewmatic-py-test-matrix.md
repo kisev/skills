@@ -29,8 +29,8 @@
 | `scope.js` | план: `reviewmatic.scope` |
 | `fixes.js` | `reviewmatic.fixes` (переведён из исходника TypeScript) |
 | `schema-issues.js` | `reviewmatic.schema_issues` (переведён; канон регистрирует `schema_valid` как оракул при импорте пакета) |
-| `worktree.js` | план: `reviewmatic.worktree` |
-| `review-worktree.js` | план: `reviewmatic.review_worktree` |
+| `worktree.js` | `reviewmatic.worktree` (переведён из исходника TypeScript) |
+| `review-worktree.js` | `reviewmatic.review_worktree` (переведён из исходника TypeScript) |
 | `version.js` | `reviewmatic.__version__` (метаданные пакета) |
 | `tui/*` | вне объёма этапа 2 (этап 3 сохраняет интерфейс экспериментальным) |
 
@@ -53,14 +53,14 @@
 | `repair.test.mjs` | 13 | частично | `tests/test_fixes_and_diagnostics.py` (диагностика схемы, синтез предложений); сквозные сценарии ремонта приходят с портом черновиков |
 | `review-contract-regressions.test.mjs` | 15 | частично | `tests/test_contract_validators.py` несёт регрессии валидаторов канона |
 | `review-semver.test.mjs` | 11 | покрыто выше | `tests/test_review_semver.py` (репозиторный набор) плюс golden-фикстуры `semver_*` |
-| `review-worktree.test.mjs` | 17 | план | `tests/test_review_worktree.py` |
+| `review-worktree.test.mjs` | 17 | частично | `tests/test_review_worktree.py` (слаги, сопоставление ремоутов, отказ чужого каталога, реестр, блокировки); сквозные сценарии подготовки приходят с портом черновиков и хелпером fake-glab |
 | `state-artifacts.test.mjs` | 11 | покрыто выше | `tests/test_state_artifacts.py` (репозиторный набор) плюс golden-фикстуры маркеров |
 | `test-selection.test.mjs` | 1 | не применимо | бэкенд-выборка — забота раннера TypeScript; у pytest-набора нет TUI-разделения |
 | `tui-app.test.mjs` | 3 | намеренно сокращено | этап 3 (TUI); на этапе 2 команда `plan` отвечает конвертом not-implemented этапа 1 |
 | `tui-pty.test.mjs` | 1 | намеренно сокращено | этап 3 (TUI) |
 | `tui-support.test.mjs` | 2 | намеренно сокращено | этап 3 (TUI) |
 | `workflow.test.mjs` | 2 | частично | возрождённый `reviewmatic.workflow` проверяется через `tests/test_context_report.py`; регрессия диспетчера приходит с проводкой CLI |
-| `worktree.test.mjs` | 2 | план | `tests/test_worktree.py` |
+| `worktree.test.mjs` | 2 | перенесено | `tests/test_worktree.py` (оба сценария плюс защищённое удаление, которое набор TypeScript не покрывает) |
 
 Строки «план» — оставшаяся дельта этапа 2; указанные файлы-швы — согласованные
 места приземления, чтобы ни один тест TypeScript не терялся молча. Матрица
