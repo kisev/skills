@@ -40,20 +40,20 @@ that introduced this file with the built `dist/` output.
 | - | - | - | - |
 | `cli.test.mjs` | 4 | ported | `tests/test_cli_contract.py` (version/help/capabilities/publication/marker-run surface, now with the stage-2 business dispatch assertions) |
 | `context-package.test.mjs` | 15 | ported | `tests/test_context_package.py` (digests, versioning, retirement, answer/verification bindings, MR validation) and `tests/test_context_package_records.py` (all fifteen end-to-end record scenarios through the fake glab; the located schema diagnostics come from the canon schema-issue locator registered at package import) |
-| `context.test.mjs` | 6 | partial | `tests/test_context_report.py` (report regressions), `tests/test_review_happy_path.py` (fake-glab state machine happy path with the incremental second run) |
-| `contract.test.mjs` | 38 | partial | `tests/test_contract_validators.py` (validators, labels, preview, critic/decision bindings), `tests/test_golden_parity.py` (canonical digests, artifact verdicts), `tests/test_cli_contract.py` (capabilities); transport/collection cases land with the local-review port |
-| `draft-input.test.mjs` | 13 | partial | `tests/test_draft_lifecycle.py` (record-input addressed diagnostics, record-critic missing-binding rejection) plus `tests/test_contract_validators.py`; the full record-package/record-critic scenarios await the input fixtures |
-| `draft.test.mjs` | 6 | partial | `tests/test_draft_lifecycle.py` (full remote lifecycle through the fake glab: invalid check, complete-draft contract, zero-request finish, plan\_ready; plan-inspection/sendItem assertions stay with the TUI-support row) |
+| `context.test.mjs` | 6 | ported | `tests/test_context_report.py` (report regressions), `tests/test_review_happy_path.py` (fake-glab state machine happy path), `tests/test_context_scenarios.py` (runner action, progress transitions, line publications, verdict gating, atomic state publication, and the unchanged second-run tail) |
+| `contract.test.mjs` | 38 | ported | `tests/test_contract_scenarios.py` (all thirty-eight scenarios, with inline Python fake glabs through `tests/helpers/contract_support.py`), `tests/test_contract_validators.py`, `tests/test_golden_parity.py`, `tests/test_cli_contract.py`; the `glab_text`, trace, and semver parsers return tuples in Python |
+| `draft-input.test.mjs` | 13 | ported | `tests/test_draft_input_scenarios.py` (all thirteen scenarios; the CLI-driven ones run `python -m reviewmatic`; TUI-only plan helpers are reduced to the plan artifact and its preview actions), plus `tests/test_draft_lifecycle.py` |
+| `draft.test.mjs` | 6 | ported | `tests/test_draft_scenarios.py` (all six scenarios; the `amendBody` and `itemText` TUI assertions are reduced to plan-level equivalents) plus `tests/test_draft_lifecycle.py` |
 | `glab-transport.test.mjs` | 1 | ported | `tests/test_glab_transport.py` (the pinned real glab against a loopback server; no skip) |
 | `local-panel.test.mjs` | 1 | ported | `tests/test_local_panel.py` |
-| `local-review.test.mjs` | 26 | partial | `tests/test_local_review_cycle.py` (the full fix cycle with the incremental delta, unchanged reuse, ready transition, verdict derivation); the panel and arbitration scenarios await the local-panel fixtures |
+| `local-review.test.mjs` | 26 | ported | `tests/test_local_review_cycle.py` (fix cycle, verdict), `tests/test_local_review_preparation.py` (eighteen preparation, boundary, and CLI scenarios), `tests/test_local_review_scenarios.py` (six package-binding scenarios; `finalize-local` rejects a stale answer for local snapshots after the canon `evidence_kind` fix) |
 | `mutation-process.test.mjs` | 6 | ported | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | ported | `tests/test_panel.py` (the TUI `loadPlan` helper is replaced by reading the plan artifact through the progress pointer) |
-| `publication.test.mjs` | 3 | partial | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` and `::test_structured_preview_accepts_manual_actions` |
+| `publication.test.mjs` | 3 | reduced | `tests/test_context_report.py` (command and preview contracts) and `tests/test_publication_scenarios.py`; the TUI send path (`sendItem`, head verification, `AbortSignal` cancellation) is reduced to the plan commands and the bounded mutation process (semantics intentionally reduced: TUI to stage 3) |
 | `repair.test.mjs` | 13 | ported | `tests/test_fixes_and_diagnostics.py` (schema diagnostics, suggestion synthesis) and `tests/test_repair.py` (end-to-end repair, refresh, and CI-drift scenarios; the TUI `planItems` assertion is reduced to the publication preview actions it derives from) |
-| `review-contract-regressions.test.mjs` | 15 | partial | `tests/test_contract_validators.py` carries the canon validator regressions |
+| `review-contract-regressions.test.mjs` | 15 | ported | `tests/test_review_contract_regressions.py` (all eleven definitions); routing-reply and send assertions that used the TUI helpers are reduced to the draft field and the plan shell blocks they derive from (TUI to stage 3) |
 | `review-semver.test.mjs` | 11 | covered upstream | `tests/test_review_semver.py` (repository suite) plus the `semver_*` golden fixtures |
-| `review-worktree.test.mjs` | 17 | partial | `tests/test_review_worktree.py` (slugs, remote matching, checkout rejection, registry, locking); the end-to-end preparation scenarios land with the draft port and the fake-glab helper |
+| `review-worktree.test.mjs` | 17 | ported | `tests/test_review_worktree.py` (unit rules) and `tests/test_review_worktree_scenarios.py` (all seventeen end-to-end scenarios with real subprocess concurrency) |
 | `state-artifacts.test.mjs` | 11 | covered upstream | `tests/test_state_artifacts.py` (repository suite) plus the golden marker fixtures |
 | `test-selection.test.mjs` | 1 | not applicable | the backend selection is a TypeScript runner concern; the pytest suite has no TUI split |
 | `tui-app.test.mjs` | 3 | intentionally reduced | stage 3 (TUI); stage 2 keeps the `plan` command answering the stage-1 not-implemented envelope |
@@ -62,9 +62,12 @@ that introduced this file with the built `dist/` output.
 | `workflow.test.mjs` | 2 | ported | `tests/test_workflow_dispatch.py` |
 | `worktree.test.mjs` | 2 | ported | `tests/test_worktree.py` (both scenarios plus guarded removal, which the TypeScript suite does not cover) |
 
-The "planned" rows are the remaining stage-2 delta; the seam files above are
-the agreed landing spots so no TypeScript test is lost silently. The matrix is
-updated in the same change that lands each row.
+Every non-TUI TypeScript test has a Python seam. The rows marked "reduced" or
+"intentionally reduced" keep the semantics that do not depend on the
+experimental TUI; their reductions are named in the row. Golden parity also
+covers the draft state-machine transitions (`draft_gaps`,
+`superseded_results`, `analysis_fingerprint`), emitted by the TypeScript
+generator and checked byte-for-byte in `tests/test_golden_parity.py`.
 
 ## Fake glab
 

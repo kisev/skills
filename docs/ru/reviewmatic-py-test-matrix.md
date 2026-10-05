@@ -40,20 +40,20 @@
 | - | - | - | - |
 | `cli.test.mjs` | 4 | перенесено | `tests/test_cli_contract.py` (поверхность version/help/capabilities/publication/marker-run и утверждения бизнес-диспетчеризации этапа 2) |
 | `context-package.test.mjs` | 15 | перенесено | `tests/test_context_package.py` (дайджесты, версионирование, вывод из обращения, привязки ответов/проверок, валидация MR) и `tests/test_context_package_records.py` (все пятнадцать сквозных сценариев записи через fake glab; адресные диагностики схемы дают локатор схемы канона, регистрируемый при импорте пакета) |
-| `context.test.mjs` | 6 | частично | `tests/test_context_report.py` (регрессии отчёта), `tests/test_review_happy_path.py` (счастливый путь стейт-машины через fake-glab со вторым инкрементальным прогоном) |
-| `contract.test.mjs` | 38 | частично | `tests/test_contract_validators.py` (валидаторы, лейблы, предпросмотр, привязки critic/decision), `tests/test_golden_parity.py` (канонические дайджесты, вердикты артефактов), `tests/test_cli_contract.py` (capabilities); транспорт/сборка приходят с портом local-review |
-| `draft-input.test.mjs` | 13 | частично | `tests/test_draft_lifecycle.py` (адресная диагностика record-input, отказ record-critic без пакета) плюс `tests/test_contract_validators.py`; полные сценарии record-package/record-critic ждут входные фикстуры |
-| `draft.test.mjs` | 6 | частично | `tests/test_draft_lifecycle.py` (полный удалённый жизненный цикл через fake glab: invalid check, контракт complete-draft, finish без запросов, plan\_ready; утверждения plan-inspection/sendItem остаются в строке TUI-support) |
+| `context.test.mjs` | 6 | перенесено | `tests/test_context_report.py` (регрессии отчёта), `tests/test_review_happy_path.py` (счастливый путь стейт-машины через fake glab), `tests/test_context_scenarios.py` (действие раннера, переходы прогресса, строковые публикации, гейтинг вердикта, атомарная публикация состояния и хвост неизменённого второго прогона) |
+| `contract.test.mjs` | 38 | перенесено | `tests/test_contract_scenarios.py` (все тридцать восемь сценариев со встроенными Python-фейками glab через `tests/helpers/contract_support.py`), `tests/test_contract_validators.py`, `tests/test_golden_parity.py`, `tests/test_cli_contract.py`; парсеры `glab_text`, трассы и semver возвращают в Python кортежи |
+| `draft-input.test.mjs` | 13 | перенесено | `tests/test_draft_input_scenarios.py` (все тринадцать сценариев; CLI-сценарии запускают `python -m reviewmatic`; TUI-хелперы плана сведены к артефакту плана и действиям его предпросмотра) и `tests/test_draft_lifecycle.py` |
+| `draft.test.mjs` | 6 | перенесено | `tests/test_draft_scenarios.py` (все шесть сценариев; утверждения TUI `amendBody` и `itemText` сведены к эквивалентам уровня плана) и `tests/test_draft_lifecycle.py` |
 | `glab-transport.test.mjs` | 1 | перенесено | `tests/test_glab_transport.py` (закреплённый настоящий glab против локального сервера; без пропусков) |
 | `local-panel.test.mjs` | 1 | перенесено | `tests/test_local_panel.py` |
-| `local-review.test.mjs` | 26 | частично | `tests/test_local_review_cycle.py` (полный цикл исправлений с инкрементальной дельтой, повторным unchanged, переходом в ready, выводом вердикта); сценарии панели и арбитража ждут локальные panel-фикстуры |
+| `local-review.test.mjs` | 26 | перенесено | `tests/test_local_review_cycle.py` (цикл исправлений, вердикт), `tests/test_local_review_preparation.py` (восемнадцать сценариев подготовки, границ и CLI), `tests/test_local_review_scenarios.py` (шесть сценариев привязки пакета; `finalize-local` отклоняет устаревший ответ для локальных снимков после исправления `evidence_kind` в каноне) |
 | `mutation-process.test.mjs` | 6 | перенесено | `tests/test_mutation_process.py` |
 | `panel.test.mjs` | 4 | перенесено | `tests/test_panel.py` (TUI-хелпер `loadPlan` заменён чтением артефакта плана через указатель прогресса) |
-| `publication.test.mjs` | 3 | частично | `tests/test_context_report.py::test_publication_make_command_keeps_plain_glab_commands` и `::test_structured_preview_accepts_manual_actions` |
+| `publication.test.mjs` | 3 | сокращено | `tests/test_context_report.py` (контракты команд и предпросмотра) и `tests/test_publication_scenarios.py`; TUI-путь отправки (`sendItem`, проверка головы, отмена `AbortSignal`) сведён к командам плана и ограниченному процессу мутации (семантика намеренно сокращена: TUI → этап 3) |
 | `repair.test.mjs` | 13 | перенесено | `tests/test_fixes_and_diagnostics.py` (диагностика схемы, синтез предложений) и `tests/test_repair.py` (сквозные сценарии ремонта, refresh и дрейфа CI; утверждение TUI `planItems` сведено к действиям предпросмотра публикации, из которых оно выводится) |
-| `review-contract-regressions.test.mjs` | 15 | частично | `tests/test_contract_validators.py` несёт регрессии валидаторов канона |
+| `review-contract-regressions.test.mjs` | 15 | перенесено | `tests/test_review_contract_regressions.py` (все одиннадцать определений); утверждения про routing-ответ и отправку, использовавшие TUI-хелперы, сведены к полю черновика и shell-блокам плана, из которых они выводятся (TUI → этап 3) |
 | `review-semver.test.mjs` | 11 | покрыто выше | `tests/test_review_semver.py` (репозиторный набор) плюс golden-фикстуры `semver_*` |
-| `review-worktree.test.mjs` | 17 | частично | `tests/test_review_worktree.py` (слаги, сопоставление ремоутов, отказ чужого каталога, реестр, блокировки); сквозные сценарии подготовки приходят с портом черновиков и хелпером fake-glab |
+| `review-worktree.test.mjs` | 17 | перенесено | `tests/test_review_worktree.py` (правила уровня модуля) и `tests/test_review_worktree_scenarios.py` (все семнадцать сквозных сценариев с настоящей параллельностью процессов) |
 | `state-artifacts.test.mjs` | 11 | покрыто выше | `tests/test_state_artifacts.py` (репозиторный набор) плюс golden-фикстуры маркеров |
 | `test-selection.test.mjs` | 1 | не применимо | бэкенд-выборка — забота раннера TypeScript; у pytest-набора нет TUI-разделения |
 | `tui-app.test.mjs` | 3 | намеренно сокращено | этап 3 (TUI); на этапе 2 команда `plan` отвечает конвертом not-implemented этапа 1 |
@@ -62,9 +62,12 @@
 | `workflow.test.mjs` | 2 | перенесено | `tests/test_workflow_dispatch.py` |
 | `worktree.test.mjs` | 2 | перенесено | `tests/test_worktree.py` (оба сценария плюс защищённое удаление, которое набор TypeScript не покрывает) |
 
-Строки «план» — оставшаяся дельта этапа 2; указанные файлы-швы — согласованные
-места приземления, чтобы ни один тест TypeScript не терялся молча. Матрица
-обновляется тем же изменением, которое приносит очередную строку.
+У каждого не-TUI теста TypeScript есть Python-шов. Строки «сокращено» и
+«намеренно сокращено» сохраняют семантику, не зависящую от экспериментального
+TUI; сокращения названы в самой строке. Golden-паритет также покрывает
+переходы стейт-машины черновиков (`draft_gaps`, `superseded_results`,
+`analysis_fingerprint`): их выдаёт TS-генератор, а
+`tests/test_golden_parity.py` проверяет их побайтово.
 
 ## Fake glab
 

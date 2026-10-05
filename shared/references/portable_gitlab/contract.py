@@ -2901,7 +2901,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or ("head_sha" in payload and not is_sha(payload["head_sha"], nullable=True))
             or not isinstance(payload["complete"], bool)
             or not is_digest(payload["evidence_digest"])
-            or payload["evidence_kind"] != "evidence_snapshot"
+            or payload["evidence_kind"] not in {"evidence_snapshot", "local_wip_snapshot"}
             or not is_digest(payload["evidence_fingerprint_digest"])
             or (
                 "publication_plan_digest" in payload

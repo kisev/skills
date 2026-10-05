@@ -566,7 +566,11 @@ def _prepare_locked(  # noqa: PLR0913
         (item for item in known["items"] if _same_identity(item, host, project_path, iid)),
         None,
     )
-    if existing is not None and _has_commit(main, str(existing["target_sha"])):
+    if (
+        existing is not None
+        and isinstance(existing.get("target_sha"), str)
+        and _has_commit(main, existing["target_sha"])
+    ):
         target_sha = str(existing["target_sha"])
         remote = str(existing["remote"])
     else:
@@ -655,7 +659,7 @@ def _prepare_locked(  # noqa: PLR0913
             "pid": os.getpid(),
             "started_at": now,
         },
-        "created_at": existing["created_at"] if existing else now,
+        "created_at": existing.get("created_at", now) if existing else now,
         "updated_at": now,
     }
 
