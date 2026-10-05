@@ -89,7 +89,10 @@ def run(stand: Stand, f: dict[str, Any], directory: Path) -> dict[str, Any]:
                         }
                     ],
                 }
-            created_title = f"v9.9.{f['issues'][2]['iid']}"
+            taken = {m["title"] for m in context["milestones"]}
+            created_title = next(
+                f"v9.9.{index}" for index in range(1000) if f"v9.9.{index}" not in taken
+            )
             items.append(
                 {
                     "evidence_digest": item["evidence_digest"],
