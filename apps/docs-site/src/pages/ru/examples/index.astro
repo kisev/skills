@@ -3,7 +3,7 @@ import { getCollection } from "astro:content";
 import Base from "../../../layouts/Base.astro";
 import { useUi } from "../../../i18n/ui";
 import { catalog, type SkillEntry } from "../../../generated/skills";
-import { withBase } from "../../../i18n/utils";
+import { localizedPath } from "../../../i18n/utils";
 
 const t = useUi("ru");
 const examples = (await getCollection("examples"))
@@ -21,10 +21,10 @@ const byName = new Map<string, SkillEntry>(catalog.skills.map((skill) => [skill.
         const skill = byName.get(entry.data.skill);
         return (
           skill && (
-            <a class="card" href={withBase(`/ru/skills/${entry.data.skill}/`)}>
+            <a class="card" href={localizedPath(`/skills/${entry.data.skill}/`, "ru")}>
               <h3>
                 {entry.data.skill}
-                <span class="badge">{skill.description.split(".")[0]}</span>
+                <span class="badge">{skill.descriptionRu.split(".")[0]}</span>
               </h3>
               <p>{entry.data.title}</p>
             </a>

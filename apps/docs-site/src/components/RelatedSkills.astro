@@ -1,6 +1,7 @@
 ---
 import { useUi, type Locale } from "../i18n/ui";
-import { withBase } from "../i18n/utils";
+import { localizedPath } from "../i18n/utils";
+import relationReasonsRu from "../i18n/relation-reasons.ru.json";
 import { catalog, type RelationEntry } from "../generated/skills";
 
 interface Props {
@@ -10,6 +11,11 @@ interface Props {
 
 const { name, locale } = Astro.props;
 const t = useUi(locale);
+const reasons = relationReasonsRu as Record<string, string>;
+const reasonText = (relation: RelationEntry) =>
+  locale === "ru"
+    ? (reasons[`${relation.from}|${relation.to}|${relation.type}`] ?? relation.reason)
+    : relation.reason;
 const related = catalog.relations.filter(
   (relation: RelationEntry) => relation.from === name || relation.to === name,
 );
@@ -35,8 +41,8 @@ const labels = {
                   const other = relation.from === name ? relation.to : relation.from;
                   return (
                     <dd>
-                      <a href={withBase(`/skills/${other}/`)}>{other}</a>
-                      {relation.reason !== "" && <span> — {relation.reason}</span>}
+                      <a href={localizedPath(`/skills/${other}/`, locale)}>{other}</a>
+                      {relation.reason !== "" && <span> — {reasonText(relation)}</span>}
                     </dd>
                   );
                 })}

@@ -32,6 +32,9 @@
 
 body {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
   background: var(--background);
   color: var(--text);
   font-family:
@@ -115,6 +118,7 @@ main,
 }
 
 main {
+  flex: 1;
   padding-top: 2.5rem;
   padding-bottom: 3.5rem;
 }

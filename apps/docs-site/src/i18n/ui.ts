@@ -22,7 +22,7 @@ export const ui = {
     },
     hero: {
       title: "Portable Agent Skills",
-      lead: "{count} self-contained workflows for engineering, documentation, delivery, and team operations. Install them into any host that reads .agents/skills, or add @kisev/agentomatic for a first-class OpenCode integration.",
+      lead: "Self-contained workflows for engineering, documentation, delivery, and team operations. Install them into any host that reads .agents/skills, or add @kisev/agentomatic for a first-class OpenCode integration.",
       browse: "Browse the catalog",
       examples: "See interaction examples",
     },
@@ -38,7 +38,7 @@ export const ui = {
     },
     components: {
       title: "Project components",
-      lead: "The two components are independent: use either one on its own or install both for the complete OpenCode experience.",
+      lead: "The components are independent: use any of them on its own or combine them for the complete setup.",
       table: {
         component: "Component",
         provides: "What it provides",
@@ -48,6 +48,15 @@ export const ui = {
         agentomatic: "@kisev/agentomatic",
         agentomaticProvides:
           "OpenCode slash-command adapters, fixed agents, capability routing, diagnostics, and optional plugin wrappers",
+        memomatic: "@kisev/memomatic",
+        memomaticProvides:
+          "Personal learning memory for agents: a tiered Markdown corpus with a rebuildable search index, exposed to hosts through a local MCP server",
+        reviewmatic: "@kisev/reviewmatic",
+        reviewmaticProvides:
+          "Executable runtime of the code-review skill: the GitLab review chain with immutable plans, a terminal walkthrough, and manual publication",
+        taskmatic: "@kisev/taskmatic",
+        taskmaticProvides:
+          "Local-first task board for people and agents: SQLite cards with a Markdown mirror, agent claims with heartbeats, and a read-only web board",
       },
     },
     catalog: {
@@ -103,7 +112,7 @@ export const ui = {
     },
     hero: {
       title: "Портативные Agent Skills",
-      lead: "{count} самодостаточных сценариев для инженерии, документации, поставки и работы с командой. Устанавливаются в любой хост, читающий .agents/skills, а @kisev/agentomatic добавляет полноценную интеграцию с OpenCode.",
+      lead: "Самодостаточные сценарии для инженерии, документации, поставки и работы с командой. Устанавливаются в любой хост, читающий .agents/skills, а @kisev/agentomatic добавляет полноценную интеграцию с OpenCode.",
       browse: "Открыть каталог",
       examples: "Посмотреть примеры",
     },
@@ -119,7 +128,7 @@ export const ui = {
     },
     components: {
       title: "Компоненты проекта",
-      lead: "Компоненты независимы: используйте любой отдельно или оба вместе ради полного опыта OpenCode.",
+      lead: "Компоненты независимы: используйте любой отдельно или соедините их ради полного опыта.",
       table: {
         component: "Компонент",
         provides: "Что даёт",
@@ -129,6 +138,15 @@ export const ui = {
         agentomatic: "@kisev/agentomatic",
         agentomaticProvides:
           "Slash-command адаптеры OpenCode, фиксированные агенты, маршрутизация возможностей, диагностика и опциональные обёртки-плагины",
+        memomatic: "@kisev/memomatic",
+        memomaticProvides:
+          "Личная обучающая память для агентов: многоуровневый Markdown-корпус с перестраиваемым поисковым индексом, доступная хостам через локальный MCP-сервер",
+        reviewmatic: "@kisev/reviewmatic",
+        reviewmaticProvides:
+          "Исполняемая среда скилла code-review: цепочка ревью GitLab с неизменяемыми планами, терминальный просмотр и ручная публикация",
+        taskmatic: "@kisev/taskmatic",
+        taskmaticProvides:
+          "Локальная доска задач для человека и агентов: карточки в SQLite с зеркалом в Markdown, захваты агентов с heartbeat и веб-доска только для чтения",
       },
     },
     catalog: {

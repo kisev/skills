@@ -1,24 +1,28 @@
 ---
 import Base from "../layouts/Base.astro";
 import { useUi } from "../i18n/ui";
-import { withBase } from "../i18n/utils";
-import { catalog } from "../generated/skills";
+import { localizedPath } from "../i18n/utils";
 import { integrationInstallCommands } from "../install-commands.mjs";
 
 const t = useUi("en");
-const count = catalog.skills.length;
-const lead = t.hero.lead.replace("{count}", String(count));
 const installLatest = integrationInstallCommands("latest");
 const installDev = integrationInstallCommands("dev");
+const components = [
+  { name: t.components.table.portable, provides: t.components.table.portableProvides },
+  { name: t.components.table.agentomatic, provides: t.components.table.agentomaticProvides },
+  { name: t.components.table.memomatic, provides: t.components.table.memomaticProvides },
+  { name: t.components.table.reviewmatic, provides: t.components.table.reviewmaticProvides },
+  { name: t.components.table.taskmatic, provides: t.components.table.taskmaticProvides },
+];
 ---
 
 <Base locale="en" title={t.hero.title} description={t.site.tagline}>
   <section class="hero">
     <h1>{t.hero.title}</h1>
-    <p class="lead">{lead}</p>
+    <p class="lead">{t.hero.lead}</p>
     <div class="actions">
-      <a class="button primary" href={withBase("/skills/")}>{t.hero.browse}</a>
-      <a class="button" href={withBase("/examples/")}>{t.hero.examples}</a>
+      <a class="button primary" href={localizedPath("/skills/", "en")}>{t.hero.browse}</a>
+      <a class="button" href={localizedPath("/examples/", "en")}>{t.hero.examples}</a>
     </div>
   </section>
 
@@ -43,14 +47,14 @@ const installDev = integrationInstallCommands("dev");
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <td>{t.components.table.portable}</td>
-          <td>{t.components.table.portableProvides}</td>
-        </tr>
-        <tr>
-          <td>{t.components.table.agentomatic}</td>
-          <td>{t.components.table.agentomaticProvides}</td>
-        </tr>
+        {
+          components.map((component) => (
+            <tr>
+              <td>{component.name}</td>
+              <td>{component.provides}</td>
+            </tr>
+          ))
+        }
       </tbody>
     </table>
   </section>

@@ -1,6 +1,6 @@
 ---
 import { localeNames, useUi, type Locale } from "../i18n/ui";
-import { alternateLocalePath, withBase } from "../i18n/utils";
+import { alternateLocalePath, localizedPath } from "../i18n/utils";
 
 interface Props {
   locale: Locale;
@@ -11,24 +11,29 @@ const { locale, hideLocaleSwitch = false } = Astro.props;
 const t = useUi(locale);
 const other: Locale = locale === "en" ? "ru" : "en";
 const path = Astro.url.pathname;
-const home = withBase("/");
 const routes = [
-  { href: withBase("/skills/"), label: t.nav.skills },
-  { href: withBase("/examples/"), label: t.nav.examples },
+  { path: "/skills/", label: t.nav.skills },
+  { path: "/examples/", label: t.nav.examples },
 ];
-const isActive = (href: string) => path === href || path.startsWith(href);
+const isActive = (route: string) => {
+  const href = localizedPath(route, locale);
+  return path === href || path.startsWith(href);
+};
 ---
 
 <div class="site-header">
   <div class="inner">
-    <a class="brand" href={home}>
+    <a class="brand" href={localizedPath("/", locale)}>
       {t.site.name}
       <small>{t.site.tagline}</small>
     </a>
     <nav>
       {
         routes.map((route) => (
-          <a href={route.href} class={isActive(route.href) ? "active" : undefined}>
+          <a
+            href={localizedPath(route.path, locale)}
+            class={isActive(route.path) ? "active" : undefined}
+          >
             {route.label}
           </a>
         ))
