@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 from typing import Any, cast
 
-from reviewmatic import context
+from reviewmatic import context, ocr_critic
 from reviewmatic import draft as draft_module
 from reviewmatic.context_package import (
     ExpectedPackage,
@@ -739,6 +739,18 @@ _LOCAL_CRITIC_RECEIPT_SCHEMA: dict[str, Any] = {
         "findings": {"type": "array", "items": _LOCAL_FINDING_ITEMS},
         "question_answers": {"type": "array", "items": {"$ref": "#/$defs/context_answer_ref"}},
         "external_mutations": {"const": False},
+        "engine": {"const": "ocr"},
+        "ocr": {
+            "type": "object",
+            "required": ["provider", "model", "terminal_state", "comments"],
+            "additionalProperties": False,
+            "properties": {
+                "provider": {"type": "string", "minLength": 1},
+                "model": {"type": "string", "minLength": 1},
+                "terminal_state": {"type": "string", "minLength": 1},
+                "comments": {"type": "integer", "minimum": 0},
+            },
+        },
     },
 }
 
@@ -929,42 +941,72 @@ def _panel_critic_tasks(local_draft: dict[str, Any], bundle_path: str) -> list[d
         "list[dict[str, Any]]",
         cast("dict[str, Any]", local_draft["participants"]).get("critics") or [],
     )
-    return [
-        {
+    tasks: list[dict[str, Any]] = []
+    for critic in critics:
+        shared = {
             "participant": str(critic["name"]),
             "profile": critic.get("profile"),
             "provider": critic.get("provider"),
             "model": critic.get("model"),
-            "receipt_schema": "code-review/local-critic-receipt/v1",
-            "template": {
-                "schema": "code-review/local-critic-receipt/v1",
-                "evidence_digest": local_draft["evidence_digest"],
-                "run_id": "",
-                "session_id": "",
-                "findings": [],
-                "question_answers": [],
-                "external_mutations": False,
-            },
-            "import_command": context.runner_action(
-                "record-critic",
-                "--bundle",
-                bundle_path,
-                "--input",
-                "<local-critic-response.json>",
-                "--participant",
-                str(critic["name"]),
-            ),
-            "rules": (
-                "One receipt per selected critic: a complete independent local review with "
-                "findings in the local report shape and one question_answers entry per "
-                "critic-assigned question, every answer copying that question's context_digest. "
-                "Critics run in parallel, never see each other's output, and read the working "
-                "tree exactly as committed, staged, and untracked in the recorded snapshot "
-                "without recollecting anything."
-            ),
         }
-        for critic in critics
-    ]
+        if ocr_critic.critic_engine(critic) == "ocr":
+            tasks.append(
+                {
+                    **shared,
+                    "engine": "ocr",
+                    "receipt_schema": "code-review/local-critic-receipt/v1",
+                    "run_command": context.runner_action(
+                        "record-ocr-critic",
+                        "--bundle",
+                        bundle_path,
+                        "--participant",
+                        str(critic["name"]),
+                    ),
+                    "rules": (
+                        "One mechanical OCR run per selected OCR critic: run the exact "
+                        "record-ocr-critic command after the context package is recorded. "
+                        "reviewmatic renders the background file from the recorded package, "
+                        "invokes the ocr CLI over the recorded local evidence with the "
+                        "selected provider and model, maps the comments into one receipt, and "
+                        "binds it to the participant. OCR produces findings only and never "
+                        "answers critic-assigned questions; no subagent is launched."
+                    ),
+                }
+            )
+            continue
+        tasks.append(
+            {
+                **shared,
+                "receipt_schema": "code-review/local-critic-receipt/v1",
+                "template": {
+                    "schema": "code-review/local-critic-receipt/v1",
+                    "evidence_digest": local_draft["evidence_digest"],
+                    "run_id": "",
+                    "session_id": "",
+                    "findings": [],
+                    "question_answers": [],
+                    "external_mutations": False,
+                },
+                "import_command": context.runner_action(
+                    "record-critic",
+                    "--bundle",
+                    bundle_path,
+                    "--input",
+                    "<local-critic-response.json>",
+                    "--participant",
+                    str(critic["name"]),
+                ),
+                "rules": (
+                    "One receipt per selected critic: a complete independent local review with "
+                    "findings in the local report shape and one question_answers entry per "
+                    "critic-assigned question, every answer copying that question's context_digest. "
+                    "Critics run in parallel, never see each other's output, and read the working "
+                    "tree exactly as committed, staged, and untracked in the recorded snapshot "
+                    "without recollecting anything."
+                ),
+            }
+        )
+    return tasks
 
 
 # Materializes the local arbitrator's input and returns its launch task once
@@ -1017,7 +1059,10 @@ def _sync_local_arbitration_input(
                 "rules": (
                     "One receipt with a verdict for every critic finding and every merged "
                     "finding, targeted evidence checks for contradictions, merged findings that "
-                    "retain prior stable IDs, and the consolidated checks, assessment, and verdict."
+                    "retain prior stable IDs, and the consolidated checks, assessment, and "
+                    "verdict. OCR critic receipts carry findings only; resolve every "
+                    "critic-assigned question that no model critic answered with one "
+                    "question_verifications entry."
                 ),
             },
         },
@@ -1242,7 +1287,12 @@ def record_local_input(bundle_path: str, input_path: str) -> dict[str, Any]:
     }
 
 
-def record_local_participants(bundle_path: str, input_path: str) -> dict[str, Any]:
+def record_local_participants(
+    bundle_path: str,
+    input_path: str,
+    ocr_provider: str | None = None,
+    ocr_model: str | None = None,
+) -> dict[str, Any]:
     bundle, digest_value = _snapshot_envelope(bundle_path)
     root = str(bundle["artifact_root"])
     _canonical_snapshot_check(bundle_path, root, digest_value, "participant selection requires")
@@ -1268,6 +1318,14 @@ def record_local_participants(bundle_path: str, input_path: str) -> dict[str, An
             "a new panel"
         )
     errors = draft_module.participant_selection_issues(user_input)
+    if not errors:
+        errors.extend(
+            ocr_critic.stamp_ocr_configuration(
+                cast("list[dict[str, Any]]", user_input.get("critics") or []),
+                ocr_provider,
+                ocr_model,
+            )
+        )
     if errors:
         return {
             "status": "invalid",
@@ -1492,6 +1550,93 @@ def record_local_critic(
             "record-arbitration", "--bundle", bundle_path, "--input", "<file>"
         ),
         "external_mutations": False,
+    }
+
+
+# Runs the selected OCR critic mechanically over the recorded local evidence
+# and imports its receipt: render the recorded package as the OCR background
+# file, invoke the ocr CLI in the snapshot's checkout, map the comments into
+# one local receipt, and bind it to the participant through record-critic.
+# Without an explicit ref the OCR run reviews the workspace (staged, unstaged,
+# and untracked changes); with a ref it reviews the recorded committed range.
+def record_local_ocr_critic(bundle_path: str, participant: str) -> dict[str, Any]:
+    bundle, digest_value = _snapshot_envelope(bundle_path)
+    root = str(bundle["artifact_root"])
+    _canonical_snapshot_check(bundle_path, root, digest_value, "record-ocr-critic requires")
+    selection = select_local_draft(root, bundle, digest_value)
+    selected_draft = cast("dict[str, Any]", selection["draft"])
+    if not isinstance(selected_draft.get("participants"), dict):
+        raise contract.WorkflowError(
+            "record-ocr-critic requires a recorded panel; run record-participants first"
+        )
+    if str(selected_draft.get("mode")) == "incremental":
+        raise contract.WorkflowError(
+            "OCR critics review the complete recorded change and do not produce "
+            "delta-scoped incremental receipts; run the panel without OCR critics for "
+            "incremental local reviews"
+        )
+    critics = cast(
+        "list[dict[str, Any]]",
+        cast("dict[str, Any]", selected_draft["participants"]).get("critics") or [],
+    )
+    selected = next((item for item in critics if str(item["name"]) == participant), None)
+    if selected is None:
+        raise contract.WorkflowError(
+            f"Unknown participant {participant}; the selected critics are "
+            + ", ".join(str(item["name"]) for item in critics)
+        )
+    if ocr_critic.critic_engine(selected) != "ocr":
+        raise contract.WorkflowError(
+            f"Participant {participant} is a model critic; import its receipt with "
+            "record-critic --participant"
+        )
+    if isinstance(selected.get("receipt"), dict):
+        raise contract.WorkflowError(
+            f"Participant {participant} already has an imported receipt; each selected "
+            "critic is imported exactly once"
+        )
+    binding = cast("dict[str, Any] | None", selected_draft.get("context_package"))
+    if not isinstance(binding, dict):
+        raise contract.WorkflowError(
+            "Record the context package with record-package --bundle before running the "
+            "OCR critic; the background file renders from the recorded package"
+        )
+    _, package_payload = contract.artifact_payload(Path(str(binding["path"])), "context_package")
+    panel_directory = contract.private_directory(Path(root) / LOCAL_PANEL_DIR)
+    background = ocr_critic.render_ocr_background(
+        package_payload, panel_directory, str(binding["digest"])
+    )
+    ref = _python_get(bundle, "ref")
+    base = str(bundle["base_sha"]) if ref is not None else None
+    head = str(bundle["head_sha"]) if ref is not None else None
+    output = ocr_critic.invoke_ocr_critic(
+        background,
+        base,
+        head,
+        selected.get("provider"),
+        selected.get("model"),
+        repo=str(bundle["repo_root"]),
+    )
+    receipt = ocr_critic.map_ocr_receipt(
+        output,
+        evidence_digest=digest_value,
+        kind="local",
+        package=package_payload,
+    )
+    receipt_path = panel_directory / (
+        f"ocr-critic-{ocr_critic.safe_id_fragment(participant)}-{digest_value[:16]}.json"
+    )
+    contract.write_json(receipt_path, receipt)
+    result = record_local_critic(bundle_path, str(receipt_path), participant)
+    return {
+        **result,
+        "ocr": {
+            **cast("dict[str, Any]", receipt["ocr"]),
+            "background_path": str(background),
+            "receipt_path": str(receipt_path),
+            "mode": "range" if ref is not None else "workspace",
+            "repo_root": str(bundle["repo_root"]),
+        },
     }
 
 

@@ -109,6 +109,26 @@ proving unreachability by checking every caller from a real entrypoint
 (reachability from entrypoint). Import each receipt verbatim with its exact `--participant` name; the runtime
 binds the receipt identity to the participant and rejects a re-used identity.
 
+### OCR critic
+
+A panel critic may also be the OpenCodeReview CLI instead of a model subagent.
+Record it with `"engine": "ocr"` on the critic entry in the
+`record-participants` input; pass `--ocr-provider` and `--ocr-model` to pin the
+LLM for the run (without them the OCR CLI uses its own provider configuration).
+A panel can be mixed or purely OCR. After the package is recorded, the runtime
+returns one ready task per OCR critic with the exact
+`reviewmatic record-ocr-critic` command; run it like any returned action.
+reviewmatic renders the recorded package as a Markdown background file, invokes
+`ocr review --format json --audience agent` over the exact reviewed range (the
+base..head range in the review worktree for a remote MR; workspace mode for a
+local review without a ref), maps every comment into one receipt carrying the
+OCR run identity, and binds it to the participant exactly like a model critic
+receipt. OCR produces findings only: it never answers critic-assigned
+questions, so when no model critic is selected the arbitrator resolves every
+assigned question through `question_verifications`. OCR receipts do not support
+incremental reviews; the bilingual runbook lives at
+`docs/how-to/ocr-critic.md` with its Russian mirror under `docs/ru/how-to/`.
+
 When the last critic receipt is imported, the response returns the ready
 arbitrator task with a complete arbitration input: the same package binding,
 every critic receipt verbatim, and the reported question contradictions.

@@ -103,6 +103,7 @@ def test_the_python_command_surface_is_explicit_and_contains_no_terminal_ui() ->
         "record-input",
         "record-critic",
         "record-participants",
+        "record-ocr-critic",
         "record-arbitration",
         "scope-review",
         "prepare-local",

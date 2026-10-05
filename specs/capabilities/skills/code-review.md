@@ -201,7 +201,19 @@ critic runs as an independent parallel reviewer over the same recorded package
 and exact snapshots without seeing other critics' output, without recollecting
 GitLab, and without rebuilding the prepared file map; each receipt is imported
 verbatim with `record-critic --participant <name>` and bound to its selected
-participant. When every selected receipt is imported, the runtime shall
+participant. A critic entry may declare `engine: "ocr"` to select the
+OpenCodeReview CLI instead of a model subagent, optionally with the
+`--ocr-provider` and `--ocr-model` overrides recorded at selection time
+(without them the OCR CLI uses its own provider configuration); panels may mix
+OCR and model critics freely. For an OCR critic the runtime shall return a
+ready `record-ocr-critic` command that renders the recorded package as a
+Markdown background file, invokes the OCR CLI with `--format json` over the
+exact reviewed range under a bounded timeout, maps the comments into one
+receipt carrying the OCR run identity and engine metadata, and binds it to the
+participant through the standard import path; an OCR receipt carries findings
+only, never answers critic-assigned questions, and never supports incremental
+reviews, so with no model critic selected the arbitrator resolves every
+assigned question through `question_verifications`. When every selected receipt is imported, the runtime shall
 return the ready arbitrator task with a complete arbitration input — the
 package binding, every critic receipt verbatim, and the reported
 contradictions. The arbitrator is a separate selected subagent that confirms

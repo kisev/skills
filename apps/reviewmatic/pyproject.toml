@@ -128,6 +128,10 @@
         "S603",                                                                  # Authoring callbacks run one user-supplied shell command through a fixed argument vector.
         "S607",                                                                  # The callback shell is an intentional PATH-resolved dependency.
       ]
+      "src/reviewmatic/ocr_critic.py" = [
+        "S603",                                                                  # The OCR critic runs the user-selected ocr CLI over a fixed argument vector.
+        "S607",                                                                  # The ocr CLI is an intentional PATH-resolved dependency.
+      ]
 
     [tool.ruff.lint.mccabe]
       max-complexity = 40

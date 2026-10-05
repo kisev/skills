@@ -5146,10 +5146,18 @@ def validate_critic(
         "findings",
         "external_mutations",
     }
-    allowed = required | {"scope_digest", "target_finding_ids", "contributors", "question_answers"}
+    allowed = required | {
+        "scope_digest",
+        "target_finding_ids",
+        "contributors",
+        "question_answers",
+        "engine",
+        "ocr",
+    }
     keys = set(receipt)
     target_finding_ids = receipt.get("target_finding_ids")
     answers = receipt.get("question_answers")
+    ocr = receipt.get("ocr")
     problems: list[str] = []
     if receipt.get("schema") != "portable-gitlab/critic-receipt/v2":
         problems.append(
@@ -5204,6 +5212,26 @@ def validate_critic(
         )
     if receipt.get("external_mutations") is not False:
         problems.append("$.external_mutations: must be false")
+    if "engine" in receipt and receipt["engine"] != "ocr":
+        problems.append('$.engine: expected exactly "ocr"')
+    if "ocr" in receipt:
+        if not isinstance(ocr, dict) or set(ocr) != {
+            "provider",
+            "model",
+            "terminal_state",
+            "comments",
+        }:
+            problems.append("$.ocr: expected exactly provider, model, terminal_state, and comments")
+        elif (
+            not all(nonempty_string(ocr[key]) for key in ("provider", "model", "terminal_state"))
+            or isinstance(ocr["comments"], bool)
+            or not isinstance(ocr["comments"], int)
+            or ocr["comments"] < 0
+        ):
+            problems.append(
+                "$.ocr: provider, model, and terminal_state must be non-empty strings and "
+                "comments a non-negative integer"
+            )
     if problems:
         raise WorkflowError(
             "critic receipt is invalid:\n" + "\n".join(f" - {item}" for item in problems)

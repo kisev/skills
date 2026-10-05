@@ -42,6 +42,10 @@
       "ru": "docs/ru/how-to/npm-package-lifecycle.md"
     },
     {
+      "en": "docs/how-to/ocr-critic.md",
+      "ru": "docs/ru/how-to/ocr-critic.md"
+    },
+    {
       "en": "docs/reference/skill-catalog.md",
       "ru": "docs/ru/reference/skill-catalog.md"
     },

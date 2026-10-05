@@ -233,6 +233,23 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
             OptionSpec("draft", "generated editable review draft (remote MR mode)"),
             OptionSpec("bundle", "local WIP snapshot path (local mode)"),
             OptionSpec("input", "participant selection input file", required=True),
+            OptionSpec(
+                "ocr-provider",
+                'LLM provider override recorded for every engine:"ocr" critic',
+            ),
+            OptionSpec(
+                "ocr-model",
+                'LLM model override recorded for every engine:"ocr" critic',
+            ),
+        ),
+    ),
+    CommandSpec(
+        "record-ocr-critic",
+        "Run one selected OCR critic mechanically and import its receipt",
+        (
+            OptionSpec("draft", "generated editable review draft (remote MR mode)"),
+            OptionSpec("bundle", "local WIP snapshot path (local mode)"),
+            OptionSpec("participant", "selected OCR critic participant name", required=True),
         ),
     ),
     CommandSpec(
@@ -828,6 +845,8 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
         )
         contract.emit(result)
         return EXIT_OK
+    if name == "record-ocr-critic":
+        return _run_record_ocr(namespace)
     if name in {"record-input", "record-critic", "record-participants", "record-arbitration"}:
         return _run_record(name, namespace)
     if name == "scope-review":
@@ -1050,6 +1069,8 @@ def _run_record(name: str, namespace: argparse.Namespace) -> int:
     }
     has_draft, _ = _one_target(namespace, labels[name])
     participant = _field(namespace, "participant") or None
+    ocr_provider = _field(namespace, "ocrProvider") or None
+    ocr_model = _field(namespace, "ocrModel") or None
     if name == "record-input":
         result = (
             draft_module.record_draft_input(str(draft_target), str(input_target))
@@ -1066,9 +1087,13 @@ def _run_record(name: str, namespace: argparse.Namespace) -> int:
         )
     elif name == "record-participants":
         result = (
-            draft_module.record_draft_participants(str(draft_target), str(input_target))
+            draft_module.record_draft_participants(
+                str(draft_target), str(input_target), ocr_provider, ocr_model
+            )
             if has_draft
-            else local_review.record_local_participants(str(bundle_target), str(input_target))
+            else local_review.record_local_participants(
+                str(bundle_target), str(input_target), ocr_provider, ocr_model
+            )
         )
     else:
         result = (
@@ -1076,6 +1101,18 @@ def _run_record(name: str, namespace: argparse.Namespace) -> int:
             if has_draft
             else local_review.record_local_arbitration(str(bundle_target), str(input_target))
         )
+    contract.emit(result)
+    return EXIT_OK if result["status"] == "ok" else EXIT_INVALID
+
+
+def _run_record_ocr(namespace: argparse.Namespace) -> int:
+    has_draft, _ = _one_target(namespace, "record-ocr-critic")
+    participant = str(_field(namespace, "participant"))
+    result = (
+        draft_module.record_ocr_critic(str(_field(namespace, "draft")), participant)
+        if has_draft
+        else local_review.record_local_ocr_critic(str(_field(namespace, "bundle")), participant)
+    )
     contract.emit(result)
     return EXIT_OK if result["status"] == "ok" else EXIT_INVALID
 

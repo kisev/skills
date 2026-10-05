@@ -628,7 +628,25 @@ def validate_shared_contract_instances() -> None:
         }
         for index in range(2)
     ]
-    for receipt in [*critics, {**critics[0], "contributors": critics}]:
+    critics.append(
+        {
+            "schema": "portable-gitlab/critic-receipt/v2",
+            "evidence_digest": "a" * 64,
+            "run_id": "ocr-run-1",
+            "session_id": "ocr-session-1",
+            "findings": [],
+            "question_answers": [],
+            "external_mutations": False,
+            "engine": "ocr",
+            "ocr": {
+                "provider": "openai",
+                "model": "gpt-x",
+                "terminal_state": "complete",
+                "comments": 2,
+            },
+        }
+    )
+    for receipt in [*critics, {**critics[0], "contributors": critics[:2]}]:
         artifact_validator.validate(
             {
                 "schema": "portable-gitlab/critic_receipt/v2",

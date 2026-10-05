@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import context, fixes, review_worktree, scope
+from reviewmatic import context, fixes, ocr_critic, review_worktree, scope
 from reviewmatic.context_package import (
     ExpectedPackage,
     bind_question_contexts,
@@ -288,6 +288,7 @@ _CRITIC_PARTICIPANT = {
     **_PARTICIPANT_BASE,
     "properties": {
         **cast("dict[str, Any]", _PARTICIPANT_BASE["properties"]),
+        "engine": {"enum": ["model", "ocr"]},
         "receipt": {
             "type": "object",
             "required": ["run_id", "session_id"],
@@ -933,6 +934,23 @@ def _panel_complete(draft: dict[str, Any]) -> bool:
     )
 
 
+# Imported receipts bound to OCR participants, identified by the runtime-owned
+# receipt binding. OCR receipts carry findings only and stay outside the
+# per-receipt question coverage duty.
+def _ocr_receipt_identities(draft: dict[str, Any]) -> set[tuple[str, str]]:
+    if "participants" not in draft:
+        return set()
+    critics = cast(
+        "list[dict[str, Any]]",
+        cast("dict[str, Any]", draft["participants"]).get("critics") or [],
+    )
+    return {
+        (str(critic["receipt"]["run_id"]), str(critic["receipt"]["session_id"]))
+        for critic in ocr_critic.ocr_critics(critics)
+        if isinstance(critic.get("receipt"), dict)
+    }
+
+
 # Selection identity without runtime-owned receipt bindings, so repair checks
 # compare the chosen configuration and never the import history.
 def _selection_identity(participants: dict[str, Any]) -> dict[str, Any]:
@@ -1038,44 +1056,77 @@ def _panel_contradiction_coverage(draft: dict[str, Any]) -> None:
 # Per-critic launch tasks for a recorded panel. Every task names the exact
 # participant, its selected configuration, the shared receipt contract, and
 # the exact import command that binds the returned receipt to the participant.
+# An OCR critic receives a mechanical run command instead of a subagent task:
+# reviewmatic itself renders the background file, invokes the configured OCR
+# CLI, maps the comments, and imports the receipt.
 def _panel_critic_tasks(
     draft: dict[str, Any], path: str, progress: dict[str, Any], review_context: dict[str, Any]
 ) -> list[dict[str, Any]]:
     critics = cast("list[dict[str, Any]]", cast("dict[str, Any]", draft["participants"])["critics"])
     resolved_draft = str(Path(path).resolve())
-    return [
-        {
+    tasks: list[dict[str, Any]] = []
+    for critic in critics:
+        shared = {
             "participant": str(critic["name"]),
             "profile": critic.get("profile"),
             "provider": critic.get("provider"),
             "model": critic.get("model"),
-            "receipt_schema": "portable-gitlab/critic-receipt/v2",
-            "template": _critic_receipt(review_context, str(progress["mode"])),
-            "import_command": context.runner_action(
-                "record-critic",
-                "--draft",
-                resolved_draft,
-                "--input",
-                "<critic-response.json>",
-                "--participant",
-                str(critic["name"]),
-            ),
-            "rules": (
-                "One receipt per selected critic: a complete independent review with detailed "
-                "findings and one question_answers entry per critic-assigned question, every "
-                "answer copying that question's context_digest. Critics run in parallel, never "
-                "see each other's output, never recollect GitLab or the prepared file map, and "
-                "may read related code in the review worktree. Import verbatim with the exact "
-                "--participant name. Every finding must trace its symptom to the changed lines: "
-                "follow the failing path from the observed symptom through concrete code to the "
-                "diff (symptom-path tracing), and for any claim about unreachable or dead code "
-                "prove unreachability by checking every caller from a real entrypoint "
-                "(reachability from entrypoint). Report every finding you can support; the "
-                "arbitrator, not you, decides what reaches the runbook."
-            ),
         }
-        for critic in critics
-    ]
+        if ocr_critic.critic_engine(critic) == "ocr":
+            tasks.append(
+                {
+                    **shared,
+                    "engine": "ocr",
+                    "receipt_schema": "portable-gitlab/critic-receipt/v2",
+                    "run_command": context.runner_action(
+                        "record-ocr-critic",
+                        "--draft",
+                        resolved_draft,
+                        "--participant",
+                        str(critic["name"]),
+                    ),
+                    "rules": (
+                        "One mechanical OCR run per selected OCR critic: run the exact "
+                        "record-ocr-critic command after the context package is recorded. "
+                        "reviewmatic renders the background file from the recorded package, "
+                        "invokes the ocr CLI with the selected provider and model, maps the "
+                        "comments into one receipt, and binds it to the participant. OCR "
+                        "produces findings only and never answers critic-assigned questions; "
+                        "no subagent is launched."
+                    ),
+                }
+            )
+            continue
+        tasks.append(
+            {
+                **shared,
+                "receipt_schema": "portable-gitlab/critic-receipt/v2",
+                "template": _critic_receipt(review_context, str(progress["mode"])),
+                "import_command": context.runner_action(
+                    "record-critic",
+                    "--draft",
+                    resolved_draft,
+                    "--input",
+                    "<critic-response.json>",
+                    "--participant",
+                    str(critic["name"]),
+                ),
+                "rules": (
+                    "One receipt per selected critic: a complete independent review with detailed "
+                    "findings and one question_answers entry per critic-assigned question, every "
+                    "answer copying that question's context_digest. Critics run in parallel, never "
+                    "see each other's output, never recollect GitLab or the prepared file map, and "
+                    "may read related code in the review worktree. Import verbatim with the exact "
+                    "--participant name. Every finding must trace its symptom to the changed lines: "
+                    "follow the failing path from the observed symptom through concrete code to the "
+                    "diff (symptom-path tracing), and for any claim about unreachable or dead code "
+                    "prove unreachability by checking every caller from a real entrypoint "
+                    "(reachability from entrypoint). Report every finding you can support; the "
+                    "arbitrator, not you, decides what reaches the runbook."
+                ),
+            }
+        )
+    return tasks
 
 
 def _arbitration_receipt_template(draft: dict[str, Any]) -> dict[str, Any]:
@@ -1170,7 +1221,9 @@ def _sync_arbitration_input(
                     "MR attempted to solve. Findings discipline: a finding enters the runbook "
                     "findings and action list only when it moves the merge verdict or readiness "
                     "or joins the action list; everything else stays a refuted or duplicate "
-                    "ledger entry with its reason."
+                    "ledger entry with its reason. OCR critic receipts carry findings only; "
+                    "resolve every critic-assigned question that no model critic answered with "
+                    "one question_verifications entry."
                 ),
             },
         },
@@ -1196,7 +1249,12 @@ def _sync_arbitration_input(
 # Records the one-time panel selection. The runtime never chooses participants
 # itself: the selection is an explicit decision, and a recorded selection is
 # never replaced silently.
-def record_draft_participants(path: str, input_path: str) -> dict[str, Any]:
+def record_draft_participants(
+    path: str,
+    input_path: str,
+    ocr_provider: str | None = None,
+    ocr_model: str | None = None,
+) -> dict[str, Any]:
     draft, _root, progress, _evidence, review_context = _selected_draft(path)
     mode = str(progress["mode"])
     if mode not in {"normal", "deep", "incremental"}:
@@ -1218,6 +1276,12 @@ def record_draft_participants(path: str, input_path: str) -> dict[str, Any]:
     )
     contract.reject_envelope_wrapper(user_input, "participant selection")
     errors = participant_selection_issues(user_input)
+    if not errors:
+        errors.extend(
+            ocr_critic.stamp_ocr_configuration(
+                cast("list[dict[str, Any]]", user_input["critics"]), ocr_provider, ocr_model
+            )
+        )
     resolved_draft = str(Path(path).resolve())
     if errors:
         return {
@@ -1355,6 +1419,86 @@ def _arbitration_coverage_issues(
                     }
                 )
     return issues
+
+
+# Runs the selected OCR critic mechanically and imports its receipt: render the
+# recorded package as the OCR background file, invoke the ocr CLI over the
+# exact base..head range in the review worktree, map the comments into one
+# receipt, and bind it to the participant through the standard record-critic
+# path. The OCR run identity comes from the CLI's own session, never from the
+# orchestrating session.
+def record_ocr_critic(path: str, participant: str) -> dict[str, Any]:
+    draft, root, progress, evidence, review_context = _selected_draft(path)
+    if "participants" not in draft:
+        raise contract.WorkflowError(
+            "record-ocr-critic requires a recorded panel; run record-participants first"
+        )
+    if str(progress["mode"]) == "incremental":
+        raise contract.WorkflowError(
+            "OCR critics review the complete base..head range and do not produce "
+            "delta-scoped incremental receipts; run the panel without OCR critics for "
+            "incremental reviews"
+        )
+    critics = cast("list[dict[str, Any]]", cast("dict[str, Any]", draft["participants"])["critics"])
+    selected = next((item for item in critics if str(item["name"]) == participant), None)
+    if selected is None:
+        raise contract.WorkflowError(
+            f"Unknown participant {participant}; the selected critics are "
+            + ", ".join(str(item["name"]) for item in critics)
+        )
+    if ocr_critic.critic_engine(selected) != "ocr":
+        raise contract.WorkflowError(
+            f"Participant {participant} is a model critic; import its receipt with "
+            "record-critic --participant"
+        )
+    if isinstance(selected.get("receipt"), dict):
+        raise contract.WorkflowError(
+            f"Participant {participant} already has an imported receipt; each selected "
+            "critic is imported exactly once"
+        )
+    if draft.get("context_package_path") is None:
+        raise contract.WorkflowError(
+            "Record the context package with record-package before running the OCR critic; "
+            "the background file renders from the recorded package"
+        )
+    _, package_payload = contract.artifact_payload(
+        Path(str(draft["context_package_path"])), "context_package"
+    )
+    drafts_directory = root / "review-drafts"
+    background = ocr_critic.render_ocr_background(
+        package_payload, drafts_directory, str(draft["context_package_digest"])
+    )
+    exact = cast("dict[str, Any]", review_context["exact_git"])
+    repo_root = str(progress.get("repo_root") or exact.get("repo_root"))
+    output = ocr_critic.invoke_ocr_critic(
+        background,
+        str(evidence["base_sha"]),
+        str(evidence["head_sha"]),
+        selected.get("provider"),
+        selected.get("model"),
+        repo=repo_root,
+    )
+    receipt = ocr_critic.map_ocr_receipt(
+        output,
+        evidence_digest=str(draft["evidence_digest"]),
+        kind="mr",
+        package=package_payload,
+    )
+    receipt_path = drafts_directory / (
+        f"ocr-critic-{ocr_critic.safe_id_fragment(participant)}.json"
+    )
+    contract.write_json(receipt_path, receipt)
+    result = record_draft_critic(path, str(receipt_path), participant)
+    return {
+        **result,
+        "ocr": {
+            **cast("dict[str, Any]", receipt["ocr"]),
+            "background_path": str(background),
+            "receipt_path": str(receipt_path),
+            "range": {"base": str(evidence["base_sha"]), "head": str(evidence["head_sha"])},
+            "repo_root": repo_root,
+        },
+    }
 
 
 # Imports one arbitration receipt verbatim and applies its decisions
@@ -1676,7 +1820,17 @@ def _validate_draft_package(
                     "verify it"
                 )
     if critic_count >= 1:
-        for receipt in _records(draft.get("critics")):
+        # OCR critics are mechanical findings providers: they never answer
+        # questions, so only model critic receipts carry the per-receipt
+        # coverage duty. With no model critic selected, the arbitrator must
+        # resolve every assigned question through question_verifications.
+        ocr_bound = _ocr_receipt_identities(draft)
+        model_receipts = [
+            receipt
+            for receipt in _records(draft.get("critics"))
+            if (str(receipt.get("run_id")), str(receipt.get("session_id"))) not in ocr_bound
+        ]
+        for receipt in model_receipts:
             own = {
                 str(item["question_id"])
                 for item in cast("list[dict[str, Any]]", receipt.get("question_answers") or [])
@@ -1687,6 +1841,14 @@ def _validate_draft_package(
                         f"Critic {receipt.get('run_id')}/{receipt.get('session_id')} did not "
                         f"answer critic-assigned question {question['id']}; one critic's answer "
                         "does not cover another critic's assignment"
+                    )
+        if not model_receipts:
+            for question in assigned:
+                if not covered(str(question["id"])):
+                    raise contract.WorkflowError(
+                        f"Question {question['id']} is assigned to critics but the panel "
+                        "selected only OCR critics; the arbitrator must resolve it with one "
+                        "question_verifications entry"
                     )
     else:
         for question in assigned:
