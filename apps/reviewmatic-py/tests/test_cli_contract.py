@@ -21,10 +21,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # Commands the materialized canonical runtime fully provides in stage 1.
 IMPLEMENTED = ("marker-run", "assess-mode", "capabilities", "publication")
-# Every other review-facing command waits for stage 2 (exit code 5).
-NOT_IMPLEMENTED = tuple(
-    spec.signature for spec in DEFINITIONS if spec.signature.split()[0] not in IMPLEMENTED
-)
+# Stage 2 implements every business subcommand; the TUI `plan` command keeps
+# the explicit not-implemented envelope (the terminal UI lands in stage 3).
+NOT_IMPLEMENTED = ("plan",)
 # marker-run intercepts its arguments before the parser, so it never answers
 # --help; the TypeScript CLI exits 2 there and the port keeps that contract.
 HELP_SIGNATURES = tuple(
@@ -172,11 +171,26 @@ def test_invalid_choice_exits_two() -> None:
 def test_unimplemented_commands_answer_the_explicit_stage1_contract(signature: str) -> None:
     result = run_cli(*unimplemented_arguments(signature))
     assert result.returncode == 5, (result.stdout, result.stderr)
-    assert "not implemented in stage 1" in result.stderr
+    assert "plan opens the experimental TUI, which lands in stage 3" in result.stderr
     envelope = json.loads(result.stdout)
     assert envelope["status"] == "error"
     assert envelope["error"]["code"] == "not_implemented"
     assert envelope["error"]["retryable"] is False
+
+
+@pytest.mark.parametrize(
+    "signature",
+    tuple(
+        spec.signature
+        for spec in DEFINITIONS
+        if spec.signature not in {"plan", "marker-run [mutation...]"}
+    ),
+    ids=lambda value: value.split()[0],
+)
+def test_business_commands_no_longer_answer_not_implemented(signature: str) -> None:
+    """Stage 2 removed exit-5 from every implemented business subcommand."""
+    result = run_cli(*unimplemented_arguments(signature))
+    assert result.returncode != 5, (result.stdout, result.stderr)
 
 
 def test_capabilities_prints_the_contract_envelope() -> None:
@@ -242,10 +256,13 @@ def test_worktree_without_list_is_invalid() -> None:
     assert json.loads(result.stdout)["error"]["code"] == "invalid_command"
 
 
-def test_worktree_list_waits_for_stage_2() -> None:
+def test_worktree_list_answers_the_registry_contract() -> None:
     result = run_cli("worktree", "list")
-    assert result.returncode == 5
-    assert "not implemented in stage 1" in result.stderr
+    assert result.returncode == 0
+    envelope = json.loads(result.stdout)
+    assert envelope["status"] == "ok"
+    assert envelope["items"] == []
+    assert envelope["external_mutations"] is False
 
 
 def test_marker_run_requires_the_mutation_command() -> None:

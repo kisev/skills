@@ -1,12 +1,11 @@
 """Reviewmatic command-line surface.
 
-Stage 1 of the Python port: the complete command surface of the TypeScript CLI
-(``apps/reviewmatic/src/cli.ts``) with the contract exit codes, implemented
-only for the operations that the materialized canonical runtime fully provides
-(``capabilities``, ``assess-mode``, the historical ``publication`` stub, and
-``marker-run``). Every other subcommand answers an explicit not-implemented
-envelope with exit code 5 instead of pretending to work; the business logic
-lands in stage 2.
+Stage 2 of the Python port: the complete command surface of the TypeScript CLI
+(``apps/reviewmatic/src/cli.ts``) with the contract exit codes and the
+business subcommands wired to the ported modules. Only the TUI ``plan``
+command keeps the explicit not-implemented envelope with exit 5 (the terminal
+interface lands in stage 3); every business subcommand answers with real
+results.
 """
 
 from __future__ import annotations
@@ -17,9 +16,10 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import __version__
+from reviewmatic import __version__, local_review, scope, workflow, worktree
+from reviewmatic import draft as draft_module
 from reviewmatic.portable import state_artifacts
 from reviewmatic.portable.portable_gitlab import contract
 
@@ -35,7 +35,7 @@ EXIT_INVALID = 2
 EXIT_UNSUPPORTED = 4
 EXIT_NOT_IMPLEMENTED = 5
 
-NOT_IMPLEMENTED_HINT = "is not implemented in stage 1; reviewmatic business logic lands in stage 2"
+NOT_IMPLEMENTED_HINT = "plan opens the experimental TUI, which lands in stage 3"
 INVALID_COMMAND = "a supported subcommand is required"
 
 
@@ -719,9 +719,356 @@ def dispatch(namespace: argparse.Namespace, tokens: Sequence[str]) -> int:
         return run_assess_mode(namespace)
     if name == "worktree":
         if getattr(namespace, "list", None) == "list":
-            return not_implemented("worktree list")
+            contract.emit(
+                {
+                    "status": "ok",
+                    "items": [
+                        {
+                            "path": record["path"],
+                            "branch": record["branch"],
+                            "head_sha": record["head_sha"],
+                            "mr_url": record["mr_url"],
+                            "created_at": record["created_at"],
+                            "commit_sha": record["commit_sha"],
+                            "pushed": record["pushed"],
+                        }
+                        for record in worktree.registry_summary()
+                    ],
+                    "external_mutations": False,
+                }
+            )
+            return EXIT_OK
         return contract.error("invalid_command", INVALID_COMMAND)
-    return not_implemented(name)
+    if name == "plan":
+        return not_implemented("plan")
+    try:
+        return _dispatch_business(name, namespace)
+    except contract.WorkflowError as error:
+        code = "tool_unavailable" if "unavailable" in str(error) else "invalid_input"
+        return contract.error(code, str(error), 3 if code == "tool_unavailable" else EXIT_INVALID)
+
+
+def _one_target(namespace: argparse.Namespace, label: str) -> tuple[bool, bool]:
+    has_draft = _field(namespace, "draft") is not None
+    has_bundle = _field(namespace, "bundle") is not None
+    if has_draft == has_bundle:
+        raise contract.WorkflowError(
+            f"{label} requires exactly one target: --draft for a remote MR review or --bundle "
+            "for a local review"
+        )
+    return has_draft, has_bundle
+
+
+def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
+    """Run one business subcommand against the ported modules."""
+    if name in {"repair-review", "refresh-review"}:
+        result = (
+            draft_module.repair_review(
+                str(_field(namespace, "artifactRoot")), str(_field(namespace, "kind"))
+            )
+            if name == "repair-review"
+            else draft_module.refresh_review(str(_field(namespace, "draft")))
+        )
+        contract.emit(result)
+        return EXIT_OK if str(result["status"]) in {"ok", "needs_reassessment"} else EXIT_INVALID
+    if name in {"start-review", "resume-review", "check-review", "finish-review"}:
+        if name == "start-review":
+            result = draft_module.start_review(
+                url=str(_field(namespace, "url")),
+                repo_root=_field(namespace, "repoRoot"),
+                review_mode=_field(namespace, "reviewMode"),
+                locale=_field(namespace, "locale"),
+                incremental=_field(namespace, "incremental"),
+            )
+        elif name == "resume-review":
+            result = draft_module.resume_review(str(_field(namespace, "artifactRoot")))
+        elif name == "check-review":
+            result = draft_module.check_review(str(_field(namespace, "draft")))
+        else:
+            result = draft_module.finish_review(str(_field(namespace, "draft")))
+        contract.emit(result)
+        return EXIT_OK if result["status"] == "ok" else EXIT_INVALID
+    if name == "prepare-local":
+        return _run_prepare_local(namespace)
+    if name == "record-package":
+        has_draft, _ = _one_target(namespace, "record-package")
+        result = (
+            draft_module.record_draft_package(
+                str(_field(namespace, "draft")), str(_field(namespace, "input"))
+            )
+            if has_draft
+            else local_review.record_local_package(
+                str(_field(namespace, "bundle")), str(_field(namespace, "input"))
+            )
+        )
+        contract.emit(result)
+        return EXIT_OK
+    if name in {"record-input", "record-critic", "record-participants", "record-arbitration"}:
+        return _run_record(name, namespace)
+    if name == "scope-review":
+        contract.emit(
+            {
+                "status": "ok",
+                "scope": scope.scope_for_root(str(_field(namespace, "artifactRoot"))),
+                "external_mutations": False,
+            }
+        )
+        return EXIT_OK
+    if name == "finalize-local":
+        return _run_finalize_local(namespace)
+    if name == "prepare":
+        return _run_prepare(namespace)
+    workflow_arguments = _workflow_namespace(name, namespace)
+    code = workflow.dispatch(workflow_arguments)
+    if code is not None:
+        return code
+    return contract.error("invalid_command", INVALID_COMMAND)
+
+
+def _field(namespace: argparse.Namespace, name: str) -> Any:
+    """Read one option by its CLI spelling; absent options read as None."""
+    return getattr(namespace, name, None)
+
+
+def _workflow_namespace(name: str, namespace: argparse.Namespace) -> argparse.Namespace:
+    return argparse.Namespace(
+        command=name,
+        artifactRoot=_field(namespace, "artifactRoot"),
+        evidence=_field(namespace, "evidence"),
+        repoRoot=_field(namespace, "repoRoot"),
+        incremental=_field(namespace, "incremental"),
+        reviewMode=_field(namespace, "reviewMode"),
+        locale=_field(namespace, "locale"),
+        kind=_field(namespace, "kind"),
+        report=_field(namespace, "report"),
+        finalizeReport=_field(namespace, "finalizeReport"),
+        context=_field(namespace, "context"),
+        mode=_field(namespace, "mode"),
+        decision=_field(namespace, "decision"),
+        content=_field(namespace, "content"),
+        criticReceipt=_field(namespace, "criticReceipt"),
+        input=_field(namespace, "input"),
+    )
+
+
+def _run_prepare(namespace: argparse.Namespace) -> int:
+    urls = _field(namespace, "url") or []
+    project_url = _field(namespace, "projectUrl")
+    if bool(urls) == (project_url is not None):
+        raise contract.WorkflowError("provide exact --url target or --project-url, but not both")
+    if project_url is not None:
+        raise contract.WorkflowError("project creation mode is only available for task preparation")
+    if len(urls) != 1:
+        raise contract.WorkflowError("code-review accepts exactly one --url target")
+    target = contract.parse_target(urls[0], {"merge_requests"})
+    results: list[dict[str, Any]] = []
+    try:
+        bundle = contract.collect(
+            target, "code-review", locale=getattr(namespace, "locale", None) or "en"
+        )
+        item: dict[str, Any] = {
+            "target": target["url"],
+            "status": "ok",
+            "artifact_path": bundle["preview_artifact_path"],
+            "digest": bundle["preview_digest"],
+            "artifact_root": bundle["artifact_root"],
+            "head_sha": bundle["head_sha"],
+            "base_sha": bundle.get("base_sha"),
+            "start_sha": bundle.get("start_sha"),
+            "complete": bundle["retrieval_complete"],
+            "components_complete": bundle["components_complete"],
+        }
+        item.update(
+            workflow.prepared(
+                argparse.Namespace(
+                    repo_root=_field(namespace, "repoRoot"),
+                    review_mode=_field(namespace, "reviewMode") or "normal",
+                    locale=_field(namespace, "locale") or "en",
+                    incremental=_field(namespace, "incremental") or "auto",
+                ),
+                bundle,
+            )
+        )
+        results.append(item)
+    except contract.WorkflowError as error:
+        results.append({"target": target["url"], "status": "error", "error": str(error)})
+    status = "ok" if all(item["status"] == "ok" for item in results) else "partial"
+    contract.emit(
+        {
+            "status": status,
+            "summary": {
+                "tldr": "Completed GET-only GitLab evidence preparation.",
+                "scope": [item["target"] for item in results],
+                "risks": [] if status == "ok" else ["one or more targets failed"],
+                "checks": [
+                    "exact target identity",
+                    "endpoint allowlist",
+                    "pagination completeness",
+                    "exact SHA",
+                ],
+            },
+            "items": results,
+            "external_mutations": False,
+        }
+    )
+    return EXIT_OK if status == "ok" else EXIT_ERROR
+
+
+def _run_prepare_local(namespace: argparse.Namespace) -> int:
+    bundle = local_review.local_bundle(
+        str(_field(namespace, "repoRoot")), "code-review", _field(namespace, "ref")
+    )
+    sections = cast("dict[str, dict[str, Any]]", bundle["sections"])
+    empty = local_review.empty_scope_reason(bundle)
+    if empty is not None:
+        contract.emit(
+            {
+                "status": "empty_scope",
+                "reason": empty,
+                "summary": {
+                    "tldr": "No reviewable local scope exists at the selected boundary.",
+                    "scope": [str(bundle["repo_root"])],
+                    "risks": [],
+                    "checks": ["HEAD", "staged", "unstaged", "non-ignored untracked", "merge base"],
+                },
+                "head_sha": bundle["head_sha"],
+                "base_sha": bundle["base_sha"],
+                "ref": bundle["ref"],
+                "complete": bundle["retrieval_complete"],
+                "external_mutations": False,
+            }
+        )
+        return EXIT_INVALID
+    root = contract.artifact_root(Path(str(bundle["artifact_root"])))
+    bundle_path, digest_value = contract.write_artifact(root, "local_wip_snapshot", bundle)
+    incremental = _field(namespace, "incremental") or "auto"
+    review = local_review.prepare_followup(str(root), bundle, digest_value, incremental)
+    # Materialize the draft for this snapshot at preparation time: an existing
+    # draft bound to the same evidence survives untouched, while a missing or
+    # stale draft is rebuilt from the current snapshot and baseline.
+    draft_selection = local_review.select_local_draft(str(root), bundle, digest_value, incremental)
+    if draft_selection["materialized"]:
+        local_review.persist_local_draft(
+            str(root),
+            digest_value,
+            draft_selection,
+            cast("dict[str, Any]", draft_selection["draft"]),
+        )
+    contract.write_json(
+        root / "current-local.json",
+        {"evidence_path": str(bundle_path), "evidence_digest": digest_value},
+    )
+    complete = bundle["retrieval_complete"] is True
+    contract.emit(
+        {
+            "status": "ok" if complete else "incomplete",
+            "summary": {
+                "tldr": "Collected local WIP evidence: staged, unstaged, and untracked.",
+                "scope": [str(bundle["repo_root"])],
+                "risks": [] if complete else ["local evidence incomplete"],
+                "checks": [
+                    "HEAD",
+                    "staged",
+                    "unstaged",
+                    "non-ignored untracked",
+                    "symlink/binary/size",
+                ],
+            },
+            "bundle": str(bundle_path),
+            "artifact_path": str(bundle_path),
+            "digest": digest_value,
+            "head_sha": bundle["head_sha"],
+            "base_sha": bundle["base_sha"],
+            "ref": bundle["ref"],
+            "scope": {
+                "committed": len(str(sections["committed"]["diff"])) > 0,
+                "staged": len(str(sections["staged"]["diff"])) > 0,
+                "unstaged": len(str(sections["unstaged"]["diff"])) > 0,
+                "untracked_files": len(
+                    cast("list[dict[str, Any]]", sections["untracked"]["items"])
+                ),
+            },
+            "scope_overview": scope.local_scope(bundle, review, str(bundle_path)),
+            "complete": bundle["retrieval_complete"],
+            "review": review,
+            "external_mutations": False,
+        }
+    )
+    return EXIT_OK if complete else EXIT_INVALID
+
+
+def _run_record(name: str, namespace: argparse.Namespace) -> int:
+    draft_target = _field(namespace, "draft")
+    bundle_target = _field(namespace, "bundle")
+    input_target = _field(namespace, "input")
+    labels = {
+        "record-input": "record-input",
+        "record-critic": "record-critic",
+        "record-participants": "record-participants",
+        "record-arbitration": "record-arbitration",
+    }
+    has_draft, _ = _one_target(namespace, labels[name])
+    participant = _field(namespace, "participant") or None
+    if name == "record-input":
+        result = (
+            draft_module.record_draft_input(str(draft_target), str(input_target))
+            if has_draft
+            else local_review.record_local_input(str(bundle_target), str(input_target))
+        )
+    elif name == "record-critic":
+        result = (
+            draft_module.record_draft_critic(str(draft_target), str(input_target), participant)
+            if has_draft
+            else local_review.record_local_critic(
+                str(bundle_target), str(input_target), participant
+            )
+        )
+    elif name == "record-participants":
+        result = (
+            draft_module.record_draft_participants(str(draft_target), str(input_target))
+            if has_draft
+            else local_review.record_local_participants(str(bundle_target), str(input_target))
+        )
+    else:
+        result = (
+            draft_module.record_draft_arbitration(str(draft_target), str(input_target))
+            if has_draft
+            else local_review.record_local_arbitration(str(bundle_target), str(input_target))
+        )
+    contract.emit(result)
+    return EXIT_OK if result["status"] == "ok" else EXIT_INVALID
+
+
+def _run_finalize_local(namespace: argparse.Namespace) -> int:
+    result = local_review.finalize_local(str(namespace.bundle))
+    _, bundle = contract.artifact_payload(Path(str(namespace.bundle)), "local_wip_snapshot")
+    root = contract.artifact_root(Path(str(bundle["artifact_root"])))
+    result = contract.finalize_payload(
+        result, Path(str(namespace.bundle)), bundle, "local_wip_snapshot"
+    )
+    report_path, report_digest = contract.write_artifact(root, "finalize_report", result)
+    review_result: dict[str, Any] | None = None
+    if getattr(namespace, "report", None) is not None and result["status"] == "ok":
+        review_result = local_review.record_review(
+            str(root), str(namespace.bundle), str(namespace.report)
+        )
+    contract.emit(
+        {
+            "status": result["status"],
+            "summary": {
+                "tldr": "Checked local WIP evidence freshness.",
+                "scope": [str(bundle["repo_root"])],
+                "risks": cast("list[str]", result.get("changed") or []),
+                "checks": ["HEAD", "all WIP sections"],
+            },
+            "artifact_path": str(report_path),
+            "digest": report_digest,
+            "result": result,
+            "review": review_result,
+            "external_mutations": False,
+        }
+    )
+    return EXIT_OK if result["status"] == "ok" else EXIT_INVALID
 
 
 def main(argv: Sequence[str] | None = None) -> int:
